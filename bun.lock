@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "amigo-patients-app",
+      "name": "matome-app",
       "dependencies": {
         "@eva-design/eva": "^2.2.0",
         "@expo/vector-icons": "^15.0.3",

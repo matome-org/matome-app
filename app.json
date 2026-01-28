@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "amigo-patients-app",
-    "slug": "amigo-patients-app",
+    "name": "matome-app",
+    "slug": "matome-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
