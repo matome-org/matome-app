@@ -93,6 +93,7 @@ export const fetchHomeData = async (): Promise<HomeData> => {
   // Simulate network delay
   await new Promise((resolve) => setTimeout(resolve, 500));
 
+  console.log('teste');
   // Return a copy of the mock data to avoid mutations
   return JSON.parse(JSON.stringify(mockData));
 };

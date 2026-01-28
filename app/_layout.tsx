@@ -39,7 +39,7 @@ const RootLayoutNav = () => {
     const inTabsGroup = segments[0] === '(tabs)';
 
     if (isAuthenticated && !inTabsGroup) {
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/explore/explore');
     } else if (!isAuthenticated && inTabsGroup) {
       router.replace('/');
     }
