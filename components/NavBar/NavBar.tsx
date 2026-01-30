@@ -1,7 +1,8 @@
 import { Icon, useTheme } from '@ui-kitten/components';
-import React from 'react';
+import React, { useState } from 'react';
 import { ImageProps, Pressable, Text, View } from 'react-native';
 
+import { RecordingModal } from '../RecordingModal';
 import { NavBarProps } from './NavBar.types';
 import { styles } from './NavBar.styles';
 
@@ -19,6 +20,7 @@ const MicIcon = (props: Partial<ImageProps>) => (
 
 export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   const theme = useTheme();
+  const [isRecordingModalVisible, setIsRecordingModalVisible] = useState(false);
 
   // Filter out routes that should be hidden from tab bar (dynamic routes like [id])
   const visibleRoutes = state.routes.filter((route) => {
@@ -27,9 +29,16 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   });
 
   const handleMicPress = () => {
-    // Handle microphone button press
-    console.log('Microphone button pressed');
-    // Add your recording logic here
+    setIsRecordingModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsRecordingModalVisible(false);
+  };
+
+  const handleRecordingComplete = (recordingId: string) => {
+    // Recording is saved, modal will close and navigate
+    console.log('Recording completed:', recordingId);
   };
 
   return (
@@ -167,6 +176,11 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
           </Pressable>
         );
       })}
+      <RecordingModal
+        visible={isRecordingModalVisible}
+        onClose={handleCloseModal}
+        onRecordingComplete={handleRecordingComplete}
+      />
     </View>
   );
 };

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
-import { fetchHomeData, RecordingCard } from '@/processes/homeData';
+import { RecordingCard } from '@/processes/homeData';
+import { getRecordingById, recordToCard } from '@/services/recordingService';
+import { initDatabase } from '@/utils/database';
 
 import { Details } from './Details';
 import { DetailsProps } from './Details.types';
@@ -16,20 +18,16 @@ export const DetailsContainer: React.FC = () => {
     const loadRecording = async () => {
       try {
         setIsLoading(true);
-        const homeData = await fetchHomeData();
         
-        // Find the recording by ID
-        let foundRecording: RecordingCard | null = null;
-        for (const section of homeData.sections) {
-          const found = section.recordings.find((r) => r.id === id);
-          if (found) {
-            foundRecording = found;
-            break;
-          }
-        }
-
-        if (foundRecording) {
-          setRecording(foundRecording);
+        // Initialize database if needed
+        await initDatabase();
+        
+        // Fetch recording directly from database
+        const record = await getRecordingById(id || '');
+        
+        if (record) {
+          const card = recordToCard(record);
+          setRecording(card);
         } else {
           // If not found, navigate back
           router.back();
