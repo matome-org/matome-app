@@ -1,5 +1,7 @@
 import * as SQLite from "expo-sqlite";
 
+import { migrations } from "./migrations";
+
 const DB_NAME = "matome.db";
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -34,7 +36,25 @@ export const initDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
     CREATE INDEX IF NOT EXISTS idx_recordings_createdAt ON recordings(createdAt DESC);
   `);
 
+  // Run migrations
+  await runMigrations(db);
+
   return db;
+};
+
+const runMigrations = async (db: SQLite.SQLiteDatabase) => {
+  const result = await db.getFirstAsync<{ user_version: number }>(
+    "PRAGMA user_version;"
+  );
+  const currentVersion = result?.user_version ?? 0;
+
+  for (let i = currentVersion; i < migrations.length; i++) {
+    await db.execAsync(migrations[i]);
+  }
+
+  if (currentVersion < migrations.length) {
+    await db.execAsync(`PRAGMA user_version = ${migrations.length};`);
+  }
 };
 
 /**

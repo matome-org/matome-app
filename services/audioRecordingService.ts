@@ -4,6 +4,7 @@ import * as FileSystem from "expo-file-system";
 import { configs } from "@/config/config";
 import { createRecording, updateRecording } from "./recordingService";
 import type { BadgeType } from "@/processes/homeData";
+import { Alert } from "react-native";
 
 // Transcribe API client - created from config to avoid module load order issues
 const transcribeConfig = configs.find(
@@ -294,16 +295,14 @@ export const saveRecording = async (
           title,
         });
       })
-      .catch(async (error) => {
-        console.error("Failed to transcribe audio:", error);
-        // Keep recording but mark as failed (or keep isProcessing true)
-        // Optionally update with error message
+      .catch(async () => {
+        Alert.alert("Failed to transcribe audio");
         await updateRecording(id, {});
       });
 
     return id;
   } catch (error) {
-    console.error("Error saving recording:", error);
+    Alert.alert("Failed to Save Audio");
     throw error;
   }
 };

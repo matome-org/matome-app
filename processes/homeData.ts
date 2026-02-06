@@ -8,6 +8,7 @@ export interface RecordingCard {
   summary?: string;
   timestamp: string;
   duration: string;
+  notes?: string;
   badge: BadgeType;
   isProcessing: boolean;
   isActive?: boolean;
