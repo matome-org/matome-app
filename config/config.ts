@@ -1,22 +1,15 @@
-import type { CreateAxiosDefaults } from 'axios';
-import qs from 'qs';
+import type { CreateAxiosDefaults } from "axios";
 
 // import { APP_ENV } from '../env/env';
 const APP_ENV = {
-	PATIENTS_API_URL: 'http://localhost:3000',
-	TRANSCRIBE_API_URL: 'http://localhost:8000',
+  TRANSCRIBE_API_URL: "https://9cf4fd2f1fcc.ngrok-free.app",
 };
 
-export const methods = ['get', 'post', 'put', 'delete'] as const;
+export const methods = ["get", "post", "put", "delete"] as const;
 
-const defaultParamsSerializer = (params: any) =>
-	qs.stringify(params, { arrayFormat: 'repeat', skipNulls: true });
-
-export const configs = [{
-	name: 'patientsApi' as const,
-	baseURL: APP_ENV.PATIENTS_API_URL,
-	paramsSerializer: defaultParamsSerializer
-}, {
-	name: 'transcribeApi' as const,
-	baseURL: APP_ENV.TRANSCRIBE_API_URL,
-}] satisfies (CreateAxiosDefaults & { name: string })[];
+export const configs = [
+  {
+    name: "transcribeApi" as const,
+    baseURL: APP_ENV.TRANSCRIBE_API_URL,
+  },
+] satisfies (CreateAxiosDefaults & { name: string })[];
