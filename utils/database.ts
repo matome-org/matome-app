@@ -1,7 +1,6 @@
-import * as SQLite from 'expo-sqlite';
+import * as SQLite from "expo-sqlite";
 
-const DB_NAME = 'matome.db';
-const DB_VERSION = 1;
+const DB_NAME = "matome.db";
 
 let db: SQLite.SQLiteDatabase | null = null;
 

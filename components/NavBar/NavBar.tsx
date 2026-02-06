@@ -2,7 +2,7 @@ import { Icon, useTheme } from '@ui-kitten/components';
 import React, { useState } from 'react';
 import { ImageProps, Pressable, Text, View } from 'react-native';
 
-import { RecordingModal } from '../RecordingModal';
+import RecordingModal from '../RecordingModal';
 import { NavBarProps } from './NavBar.types';
 import { styles } from './NavBar.styles';
 

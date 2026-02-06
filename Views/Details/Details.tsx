@@ -32,11 +32,8 @@ export const Details: React.FC<DetailsProps> = ({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [isPlaying, setIsPlaying] = useState(false);
-  const [transcript, setTranscript] = useState(
-    recording.summary ||
-      'Alright, so let\'s get started with the marketing brainstorm for Q4. I think the biggest opportunity we have right now is video.\n\nCompetitors are doubling down on short-form content, and our engagement numbers on static posts have been flat for three months.\n\nExactly, I was looking at the analytics yesterday. If we shift resources from the blog to video production, we could probably output 3 to 4 reels a week.\n\nWe might need to hire a freelance editor. Or maybe we can use some AI tools to speed up the process. Also, about the newsletter... it feels a bit stale. Maybe we should highlight more community stories?\n\nLove that idea. User-generated content usually performs well. Let\'s aim to have a mockup of the new newsletter format by next Tuesday.'
-  );
-  const [currentTime, setCurrentTime] = useState('04:32');
+  const [transcript, setTranscript] = useState(recording.summary ?? '');
+  const [currentTime, setCurrentTime] = useState('0:00');
   const waveform = generateWaveform(isPlaying ? 8 : 0);
 
   const getBadgeStyle = () => {
