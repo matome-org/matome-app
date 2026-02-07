@@ -8,7 +8,7 @@ export default function InboxStackLayout() {
       }}
     >
       <Stack.Screen
-        name="inbox"
+        name="index"
         options={{
           title: 'Inbox',
         }}

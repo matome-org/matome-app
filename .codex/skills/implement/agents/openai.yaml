@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement"
+  short_description: "Execute plan changes with tests and regression checks."
+  default_prompt: "Use $implement to apply workflow/plans/{task-name}.md, update tests, and report regression validation against workflow requirements."

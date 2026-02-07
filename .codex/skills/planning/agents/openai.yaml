@@ -1,0 +1,4 @@
+interface:
+  display_name: "Planning"
+  short_description: "Generate traceable implementation plans from requirements."
+  default_prompt: "Use $planning to convert workflow requirements into workflow/plans/{task-name}.md using .docs/plan_template.md with traceability and risk coverage."

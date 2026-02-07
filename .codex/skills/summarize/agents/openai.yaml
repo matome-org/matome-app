@@ -1,0 +1,4 @@
+interface:
+  display_name: "Summarize"
+  short_description: "Review delivery and author PR-ready summary."
+  default_prompt: "Use $summarize to compare implementation against workflow requirements and generate workflow/summaries/{task-name}.md from .docs/summary_template.md."

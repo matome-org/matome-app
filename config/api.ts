@@ -45,3 +45,4 @@ const apis = configs.reduce((acc, { name, ...config }) => {
 }, {} as Record<string, any>);
 
 export const patientsApi = apis.patientsApi as Omit<typeof axios, keyof ModifiedRequests> & ModifiedRequests;
+export const transcribeApi = apis.transcribeApi as Omit<typeof axios, keyof ModifiedRequests> & ModifiedRequests;
