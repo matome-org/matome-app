@@ -16,4 +16,9 @@ npx expo lint
 
 - Project architecture and data flow: [.docs/project-guide.md](.docs/project-guide.md)
 - Expo and Router references: [.docs/expo-resources.md](.docs/expo-resources.md)
+- Workflow guide: [workflow/README.md](workflow/README.md)
+- Workflow templates:
+  - [.docs/user_story_template.md](.docs/user_story_template.md)
+  - [.docs/plan_template.md](.docs/plan_template.md)
+  - [.docs/summary_template.md](.docs/summary_template.md)
 - Contribution and commit standards: [CONTRIBUTING.md](CONTRIBUTING.md)
