@@ -40,11 +40,12 @@ export const Details: React.FC<DetailsProps> = ({
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [transcript, setTranscript] = useState(recording.notes ?? "");
+  const getEditableText = () => recording.notes ?? recording.summary ?? "";
+  const [transcript, setTranscript] = useState(getEditableText);
 
   useEffect(() => {
-    setTranscript(recording.notes ?? "");
-  }, [recording.notes]);
+    setTranscript(getEditableText());
+  }, [recording.notes, recording.summary]);
 
   const getBadgeStyle = () => {
     if (recording.badge === "Work") {
