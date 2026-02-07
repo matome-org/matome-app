@@ -88,8 +88,13 @@ export const styles = StyleSheet.create({
   timeDisplay: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     fontSize: 13,
     fontVariant: ['tabular-nums'],
+  },
+  fileSize: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   section: {
     marginBottom: 24,

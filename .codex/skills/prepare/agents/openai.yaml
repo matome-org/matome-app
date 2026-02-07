@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prepare"
+  short_description: "Create issue and branch from requirements doc."
+  default_prompt: "Use $prepare to derive a GitHub issue from workflow requirements and prepare the implementation branch name and creation steps."

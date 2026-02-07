@@ -1,0 +1,4 @@
+interface:
+  display_name: "Commit"
+  short_description: "Create scoped commits that strictly follow CONTRIBUTING.md."
+  default_prompt: "Analyze pending changes, split commits by scope, and commit everything using English Conventional Commits from CONTRIBUTING.md."

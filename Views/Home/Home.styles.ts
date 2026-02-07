@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
   container: {
@@ -7,20 +7,20 @@ export const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   iconButton: {
     width: 40,
     height: 40,
     borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
     flex: 1,
@@ -29,11 +29,11 @@ export const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 24,
     marginBottom: 12,
     marginHorizontal: 4,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   cardList: {
@@ -42,13 +42,13 @@ export const styles = StyleSheet.create({
   recordCard: {
     borderRadius: 8,
     padding: 16,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
     borderWidth: 1,
-    borderColor: 'gray'
+    borderColor: "gray",
   },
   cardIconArea: {
-    alignItems: 'center',
+    alignItems: "center",
     minWidth: 40,
     gap: 8,
   },
@@ -56,8 +56,8 @@ export const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   playButtonActive: {
     // Active state handled by theme
@@ -68,12 +68,12 @@ export const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   cardTitle: {
-    fontWeight: '600',
+    fontWeight: "600",
     fontSize: 16,
     flex: 1,
   },
@@ -86,14 +86,14 @@ export const styles = StyleSheet.create({
   },
   processingText: {
     fontSize: 13,
-    fontStyle: 'italic',
-    flexDirection: 'row',
-    alignItems: 'center',
+    fontStyle: "italic",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginTop: 6,
   },
@@ -104,7 +104,7 @@ export const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   badgeWork: {
     // Work badge styling handled by theme
