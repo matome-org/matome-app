@@ -1,9 +1,23 @@
 import { RecordingCard } from '@/processes/homeData';
 
+export interface WaveformBar {
+  height: number;
+  active: boolean;
+}
+
 export interface DetailsProps {
   recording: RecordingCard;
   isLoading?: boolean;
-  onBack?: () => void;
-  onSave?: (transcript: string) => void;
+  // Audio playback
+  isPlaying: boolean;
+  currentTime: string;
+  duration: string;
+  fileSize: string;
+  waveformBars: WaveformBar[];
+  onPlayPause: () => void;
+  // Notes
+  onSave: (notes: string) => void;
+  // Navigation
+  onBack: () => void;
   onMoreOptions?: () => void;
 }

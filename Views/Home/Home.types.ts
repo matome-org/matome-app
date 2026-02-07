@@ -1,22 +1,11 @@
-import { HomeData } from '@/processes/homeData';
+import { HomeData } from "@/processes/homeData";
+import { RecordingCardProps } from "./RecordingCard/RecordCard.types";
 
 export interface HomeProps {
   data: HomeData;
   isLoading?: boolean;
   onCardPress?: (id: string) => void;
   onSearchPress?: () => void;
-}
-
-export interface RecordingCardProps {
-  id: string;
-  title: string;
-  summary?: string;
-  timestamp: string;
-  duration: string;
-  badge: 'Work' | 'Personal' | 'Inbox';
-  isProcessing: boolean;
-  isActive?: boolean;
-  onPress?: (id: string) => void;
 }
 
 export interface HomeSectionProps {
