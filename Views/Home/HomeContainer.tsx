@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 
-import { fetchHomeData, HomeData } from "@/processes/homeData";
+import { fetchHomeData, HomeData } from '@/processes/homeData';
 
-import { Home } from "./Home";
+import { Home } from './Home';
+import { HomeProps } from './Home.types';
 
 const HomeContainer: React.FC = () => {
-  const [data, setData] = useState<HomeData>({ sections: [] });
+  const [data, setData] = useState<HomeData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
@@ -17,7 +18,7 @@ const HomeContainer: React.FC = () => {
         const homeData = await fetchHomeData();
         setData(homeData);
       } catch (error) {
-        console.error("Error loading home data:", error);
+        console.error('Error loading home data:', error);
       } finally {
         setIsLoading(false);
       }
@@ -27,12 +28,12 @@ const HomeContainer: React.FC = () => {
   }, []);
 
   const handleCardPress = (id: string) => {
-    router.push(`/inbox/${id}`);
+    router.push(`/(tabs)/${id}`);
   };
 
   const handleSearchPress = () => {
     // Navigate to search screen when implemented
-    console.log("Search pressed");
+    console.log('Search pressed');
     // router.push('/search');
   };
 
@@ -40,14 +41,14 @@ const HomeContainer: React.FC = () => {
     return null;
   }
 
-  return (
-    <Home
-      data={data}
-      isLoading={isLoading}
-      onCardPress={handleCardPress}
-      onSearchPress={handleSearchPress}
-    />
-  );
+  const props: HomeProps = {
+    data: data || { sections: [] },
+    isLoading,
+    onCardPress: handleCardPress,
+    onSearchPress: handleSearchPress,
+  };
+
+  return <Home {...props} />;
 };
 
 export default HomeContainer;

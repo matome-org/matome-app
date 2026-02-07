@@ -1,5 +1,5 @@
 import HomeContainer from '@/Views/Home';
 
-export default function InboxListScreen() {
+export default function HomeScreen() {
   return <HomeContainer />;
 }
