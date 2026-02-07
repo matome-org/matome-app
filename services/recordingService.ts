@@ -1,6 +1,9 @@
 import { getDatabase } from "@/utils/database";
 import type { RecordingCard, BadgeType } from "@/processes/homeData";
 
+const DEFAULT_WORKSPACE_ID = "ws_default_personal";
+const DEFAULT_WORKSPACE_NAME = "Pessoal";
+
 export interface RecordingRecord {
   id: string;
   title: string;
@@ -11,20 +14,61 @@ export interface RecordingRecord {
   isProcessing: number; // SQLite stores as INTEGER (0 or 1)
   audioFilePath: string;
   createdAt: number;
+  workspaceId: string;
   notes?: string;
 }
+
+const getDefaultWorkspaceId = async (
+  db: Awaited<ReturnType<typeof getDatabase>>,
+): Promise<string> => {
+  const existingDefault = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM workspaces WHERE isDefault = 1 ORDER BY createdAt ASC LIMIT 1`,
+  );
+
+  if (existingDefault?.id) {
+    return existingDefault.id;
+  }
+
+  const existingByName = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM workspaces WHERE name = ? LIMIT 1`,
+    [DEFAULT_WORKSPACE_NAME],
+  );
+
+  if (existingByName?.id) {
+    await db.runAsync(`UPDATE workspaces SET isDefault = 1 WHERE id = ?`, [
+      existingByName.id,
+    ]);
+    return existingByName.id;
+  }
+
+  await db.runAsync(
+    `INSERT OR IGNORE INTO workspaces (id, name, isDefault, createdAt) VALUES (?, ?, 1, ?)`,
+    [DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME, Date.now()],
+  );
+
+  const insertedDefault = await db.getFirstAsync<{ id: string }>(
+    `SELECT id FROM workspaces WHERE name = ? LIMIT 1`,
+    [DEFAULT_WORKSPACE_NAME],
+  );
+
+  return insertedDefault?.id ?? DEFAULT_WORKSPACE_ID;
+};
 
 /**
  * Create a new recording in the database
  */
 export const createRecording = async (
-  recording: Omit<RecordingRecord, "isProcessing"> & { isProcessing?: boolean },
+  recording: Omit<RecordingRecord, "isProcessing" | "workspaceId"> & {
+    isProcessing?: boolean;
+    workspaceId?: string;
+  },
 ): Promise<void> => {
   const db = await getDatabase();
+  const workspaceId = recording.workspaceId ?? (await getDefaultWorkspaceId(db));
 
   await db.runAsync(
-    `INSERT INTO recordings (id, title, summary, timestamp, duration, badge, isProcessing, audioFilePath, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO recordings (id, title, summary, timestamp, duration, badge, isProcessing, audioFilePath, createdAt, workspaceId)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       recording.id,
       recording.title,
@@ -35,6 +79,7 @@ export const createRecording = async (
       recording.isProcessing ? 1 : 0,
       recording.audioFilePath,
       recording.createdAt,
+      workspaceId,
     ],
   );
 };
@@ -73,7 +118,9 @@ export const getRecordingById = async (
  */
 export const updateRecording = async (
   id: string,
-  updates: Partial<Pick<RecordingRecord, "summary" | "title" | "badge" | "notes">> & {
+  updates: Partial<
+    Pick<RecordingRecord, "summary" | "title" | "badge" | "notes" | "workspaceId">
+  > & {
     isProcessing?: boolean;
   },
 ): Promise<void> => {
@@ -105,6 +152,11 @@ export const updateRecording = async (
   if (updates.notes !== undefined) {
     fields.push("notes = ?");
     values.push(updates.notes);
+  }
+
+  if (updates.workspaceId !== undefined) {
+    fields.push("workspaceId = ?");
+    values.push(updates.workspaceId);
   }
 
   if (fields.length === 0) {
