@@ -1,4 +1,5 @@
 import { up as m001 } from "./001_add_notes_column";
+import { up as m002 } from "./002_workspace_foundation";
 
 /**
  * Ordered list of migrations. Each entry runs once, tracked by PRAGMA user_version.
@@ -7,4 +8,4 @@ import { up as m001 } from "./001_add_notes_column";
  *   2. Export `up` with the SQL string
  *   3. Import it here and append to this array
  */
-export const migrations: string[] = [m001];
+export const migrations: string[] = [m001, m002];
