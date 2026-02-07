@@ -95,11 +95,3 @@ yalc.lock
 *.tmp
 *.temp
 .cache/
-
-# Workflow artifacts
-workflow/requirements/*
-!workflow/requirements/.gitkeep
-workflow/plans/*
-!workflow/plans/.gitkeep
-workflow/summaries/*
-!workflow/summaries/.gitkeep
