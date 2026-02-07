@@ -1,5 +1,3 @@
-# {Item Number} - {Feature Name} - Summary
-
 ## Before
 - {Pain point 1}
 - {Pain point 2}
@@ -35,11 +33,6 @@
 - {Risk 3}
 
 ## References
-- [Requirements](../01-Requirements/{item-number}-{name}-Requirements.md)
-- [Plan](../02-Plans/{item-number}-{name}-Plan.md)
-- [Execution Plan](../03-Execution/{item-number}-{name}-Execution-Plan.md)
 - Main Commits: `{commit-hash}`, `{commit-hash}`
 - Issue: #{issue-number}
 - Branch: `{branch-name}`
-
-**Completed:** {YYYY-MM-DD}
