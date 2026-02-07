@@ -1,0 +1,4 @@
+interface:
+  display_name: "Requirements"
+  short_description: "Validate feasibility and author task requirements."
+  default_prompt: "Use $requirements to analyze feasibility, clarify scope, and produce workflow/requirements/{task-name}.md from .docs/user_story_template.md."
