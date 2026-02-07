@@ -134,6 +134,39 @@ export const formatDuration = (seconds: number): string => {
 };
 
 /**
+ * Read audio duration from file in seconds.
+ */
+const getAudioDurationSeconds = async (uri: string): Promise<number> => {
+  let sound: Audio.Sound | null = null;
+
+  try {
+    const { sound: loadedSound } = await Audio.Sound.createAsync(
+      { uri },
+      { shouldPlay: false },
+    );
+    sound = loadedSound;
+
+    const status = await sound.getStatusAsync();
+    if (status.isLoaded && status.durationMillis != null) {
+      return status.durationMillis / 1000;
+    }
+
+    return 0;
+  } catch (error) {
+    console.error("Failed to read recording duration:", error);
+    return 0;
+  } finally {
+    if (sound) {
+      try {
+        await sound.unloadAsync();
+      } catch (error) {
+        console.error("Failed to unload duration probe sound:", error);
+      }
+    }
+  }
+};
+
+/**
  * Convert audio file to MP3 format
  * Note: Expo doesn't have native MP3 conversion. We'll send the file as-is
  * and rely on the API to handle format conversion, or use the recorded format.
@@ -263,10 +296,9 @@ export const saveRecording = async (
     // Stop recording
     const uri = await stopRecording();
 
-    // Get duration
-    // Note: We need to get duration before stopping, so we'll calculate from file
-    // For now, we'll set a placeholder and update later if needed
-    const duration = "0s"; // Will be updated if we can get it from the file
+    // Get and format duration from the saved file (fallback to 0s on failure)
+    const durationSeconds = await getAudioDurationSeconds(uri);
+    const duration = formatDuration(durationSeconds);
 
     // Prepare audio file
     const audioFilePath = await prepareAudioForTranscription(uri);
@@ -286,19 +318,26 @@ export const saveRecording = async (
       createdAt: now.getTime(), // Store as milliseconds
     });
 
-    // Transcribe in background
-    transcribeAudio(audioFilePath)
-      .then(async (transcript) => {
+    // Transcribe in background and always finalize processing status.
+    void (async () => {
+      try {
+        const transcript = await transcribeAudio(audioFilePath);
         const title = generateTitle(transcript);
         await updateRecording(id, {
           summary: transcript,
           title,
         });
-      })
-      .catch(async () => {
+      } catch (error) {
+        console.error("Failed to transcribe recording:", error);
         Alert.alert("Failed to transcribe audio");
-        await updateRecording(id, {});
-      });
+      } finally {
+        try {
+          await updateRecording(id, { isProcessing: false });
+        } catch (error) {
+          console.error("Failed to finalize processing status:", error);
+        }
+      }
+    })();
 
     return id;
   } catch (error) {

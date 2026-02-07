@@ -73,12 +73,9 @@ export const getRecordingById = async (
  */
 export const updateRecording = async (
   id: string,
-  updates: Partial<
-    Pick<
-      RecordingRecord,
-      "summary" | "title" | "isProcessing" | "badge" | "notes"
-    >
-  >,
+  updates: Partial<Pick<RecordingRecord, "summary" | "title" | "badge" | "notes">> & {
+    isProcessing?: boolean;
+  },
 ): Promise<void> => {
   const db = await getDatabase();
 
@@ -95,7 +92,7 @@ export const updateRecording = async (
     values.push(updates.title);
   }
 
-  if (!!updates.isProcessing) {
+  if (updates.isProcessing !== undefined) {
     fields.push("isProcessing = ?");
     values.push(updates.isProcessing ? 1 : 0);
   }
