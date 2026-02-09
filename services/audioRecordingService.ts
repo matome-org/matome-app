@@ -17,6 +17,14 @@ const transcribeApi = transcribeConfig
 let recording: Audio.Recording | null = null;
 let recordingUri: string | null = null;
 
+const logRecordingOperationError = (
+  message: string,
+  context: { operation: string; recordingId?: string },
+  error: unknown,
+) => {
+  console.error(message, context, error);
+};
+
 /**
  * Request microphone permissions
  */
@@ -229,8 +237,8 @@ export const transcribeAudio = async (fileUri: string): Promise<string> => {
       //throw new Error('Transcribe API is not configured. Check config/config.ts.');
     } else {
       const response = await transcribeApi.post<{
-        text?: string;
-        transcript?: string;
+        text?: unknown;
+        transcript?: unknown;
       }>("/api/v1/transcribe", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -238,7 +246,10 @@ export const transcribeAudio = async (fileUri: string): Promise<string> => {
       });
 
       const data = response.data;
-      transcript = data?.text || data?.transcript || "";
+      const text = typeof data?.text === "string" ? data.text : "";
+      const transcriptValue =
+        typeof data?.transcript === "string" ? data.transcript : "";
+      transcript = text || transcriptValue || "";
     }
 
     if (!transcript) {
@@ -292,6 +303,8 @@ export const formatTimestamp = (date: Date): string => {
 export const saveRecording = async (
   badge: BadgeType = "Inbox",
 ): Promise<string> => {
+  let recordingId: string | undefined;
+
   try {
     // Stop recording
     const uri = await stopRecording();
@@ -305,42 +318,74 @@ export const saveRecording = async (
 
     // Create recording record with processing status
     const id = generateRecordingId();
+    recordingId = id;
     const now = new Date();
 
-    await createRecording({
-      id,
-      title: "New Recording",
-      timestamp: formatTimestamp(now),
-      duration,
-      badge,
-      isProcessing: true,
-      audioFilePath,
-      createdAt: now.getTime(), // Store as milliseconds
-    });
+    try {
+      await createRecording({
+        id,
+        title: "New Recording",
+        timestamp: formatTimestamp(now),
+        duration,
+        badge,
+        isProcessing: true,
+        audioFilePath,
+        createdAt: now.getTime(), // Store as milliseconds
+      });
+    } catch (error) {
+      logRecordingOperationError(
+        "Failed to persist recording on create",
+        { operation: "createRecording", recordingId: id },
+        error,
+      );
+      throw error;
+    }
 
     // Transcribe in background and always finalize processing status.
     void (async () => {
       try {
         const transcript = await transcribeAudio(audioFilePath);
         const title = generateTitle(transcript);
-        await updateRecording(id, {
-          summary: transcript,
-          title,
-        });
+        try {
+          await updateRecording(id, {
+            summary: transcript,
+            title,
+          });
+        } catch (error) {
+          logRecordingOperationError(
+            "Failed to persist transcription result",
+            { operation: "updateRecording.transcription", recordingId: id },
+            error,
+          );
+          throw error;
+        }
       } catch (error) {
-        console.error("Failed to transcribe recording:", error);
+        logRecordingOperationError(
+          "Failed to transcribe recording",
+          { operation: "transcribeAudio", recordingId: id },
+          error,
+        );
         Alert.alert("Failed to transcribe audio");
       } finally {
         try {
           await updateRecording(id, { isProcessing: false });
         } catch (error) {
-          console.error("Failed to finalize processing status:", error);
+          logRecordingOperationError(
+            "Failed to finalize processing status",
+            { operation: "updateRecording.finalizeProcessing", recordingId: id },
+            error,
+          );
         }
       }
     })();
 
     return id;
   } catch (error) {
+    logRecordingOperationError(
+      "Failed to save recording",
+      { operation: "saveRecording", recordingId },
+      error,
+    );
     Alert.alert("Failed to Save Audio");
     throw error;
   }
