@@ -1,7 +1,7 @@
 import { Button, Input, Layout, Spinner, Text } from '@ui-kitten/components';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { LoginProps } from './Login.types';
-import { styles } from './Login.styles';
+import { SignupProps } from './Signup.types';
+import { styles } from './Signup.styles';
 
 const LoadingIndicator = () => (
   <View style={styles.indicator}>
@@ -9,14 +9,19 @@ const LoadingIndicator = () => (
   </View>
 );
 
-const Login = ({
+const Signup = ({
+  name,
   email,
   password,
+  confirmPassword,
+  setName,
   setEmail,
   setPassword,
+  setConfirmPassword,
+  onSignupPress,
   onLoginPress,
   isLoading,
-}: LoginProps) => {
+}: SignupProps) => {
   return (
     <Layout style={styles.container}>
       <KeyboardAvoidingView
@@ -28,7 +33,16 @@ const Login = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text category="h1" style={styles.title}>Welcome to Matome</Text>
+          <Text category="h1" style={styles.title}>Create account</Text>
+
+          <Input
+            style={styles.input}
+            label="Name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Enter your name"
+            disabled={isLoading}
+          />
 
           <Input
             style={styles.input}
@@ -45,19 +59,40 @@ const Login = ({
             style={styles.input}
             label="Password"
             value={password}
-            disabled={isLoading}
             onChangeText={setPassword}
             placeholder="Enter your password"
             autoCapitalize="none"
             secureTextEntry
+            disabled={isLoading}
+          />
+
+          <Input
+            style={styles.input}
+            label="Confirm password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Confirm your password"
+            autoCapitalize="none"
+            secureTextEntry
+            disabled={isLoading}
           />
 
           <Button
-            onPress={onLoginPress}
+            onPress={onSignupPress}
             accessoryLeft={isLoading ? LoadingIndicator : undefined}
             disabled={isLoading}
           >
-            Sign in
+            Sign up
+          </Button>
+
+          <Button
+            appearance="ghost"
+            status="basic"
+            style={styles.loginButton}
+            onPress={onLoginPress}
+            disabled={isLoading}
+          >
+            Already have an account? Sign in
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -65,4 +100,4 @@ const Login = ({
   );
 };
 
-export default Login;
+export default Signup;

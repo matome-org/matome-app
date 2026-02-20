@@ -4,24 +4,25 @@ import { styles } from './Welcome.styles';
 
 const Welcome = ({
   onLoginPress,
+  onSignupPress,
 }: WelcomeProps) => {
   return (
     <Layout style={styles.container}>
-      <Text category="h1" style={styles.title}>Bem-vindo ao App</Text>
+      <Text category="h1" style={styles.title}>Welcome to Matome</Text>
 
       <Button
         onPress={onLoginPress}
         style={styles.button}
       >
-        Entrar
+        Sign in
       </Button>
 
       <Button
         appearance="ghost"
         status="basic"
-        onPress={onLoginPress}
+        onPress={onSignupPress}
       >
-        Cadastrar
+        Sign up
       </Button>
     </Layout>
   );

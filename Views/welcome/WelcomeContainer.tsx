@@ -7,9 +7,12 @@ const WelcomeContainer = () => {
         router.push('/login');
     }, []);
 
+    const onSignupPress = useCallback(() => {
+        router.push('/signup');
+    }, []);
 
     return (
-        <Welcome onLoginPress={onLoginPress} />
+        <Welcome onLoginPress={onLoginPress} onSignupPress={onSignupPress} />
     );
 }
 

@@ -6,6 +6,7 @@ export interface HomeProps {
   isLoading?: boolean;
   onCardPress?: (id: string) => void;
   onSearchPress?: () => void;
+  onSignOutPress?: () => void;
 }
 
 export interface HomeSectionProps {

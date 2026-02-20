@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 
 import { fetchHomeData, HomeData } from "@/processes/homeData";
+import { useAuthStore } from "@/stores/authStore";
 
 import { Home } from "./Home";
 
@@ -9,6 +10,7 @@ const HomeContainer: React.FC = () => {
   const [data, setData] = useState<HomeData>({ sections: [] });
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const signOut = useAuthStore((state) => state.signOut);
 
   useEffect(() => {
     const loadData = async () => {
@@ -36,6 +38,10 @@ const HomeContainer: React.FC = () => {
     // router.push('/search');
   };
 
+  const handleSignOutPress = async () => {
+    await signOut();
+  };
+
   if (!data && !isLoading) {
     return null;
   }
@@ -46,6 +52,7 @@ const HomeContainer: React.FC = () => {
       isLoading={isLoading}
       onCardPress={handleCardPress}
       onSearchPress={handleSearchPress}
+      onSignOutPress={handleSignOutPress}
     />
   );
 };

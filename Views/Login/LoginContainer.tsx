@@ -12,14 +12,14 @@ const LoginContainer = () => {
 
     const loginMutation = useMutation({
         mutationFn: (body: { email: string; password: string }) => login(body),
-        onSuccess: async (data) => {
-            await signIn(data.token);
+        onSuccess: async () => {
+            signIn();
             // Redirect is handled automatically by the auth store in _layout.tsx
         },
         onError: () => {
             Toast.show({
                 type: 'error',
-                text1: 'Erro ao fazer login. Tente novamente',
+                text1: 'Login failed. Please try again.',
                 autoHide: true,
             });
         }

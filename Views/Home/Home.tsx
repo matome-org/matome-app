@@ -39,6 +39,7 @@ export const Home: React.FC<HomeProps> = ({
   isLoading,
   onCardPress,
   onSearchPress,
+  onSignOutPress,
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -88,25 +89,48 @@ export const Home: React.FC<HomeProps> = ({
         >
           Inbox
         </Text>
-        <Button
-          appearance="ghost"
-          accessoryLeft={(props) => (
-            <Ionicons
-              name="search-outline"
-              size={20}
-              color={theme["color-basic-700"]}
-            />
-          )}
-          style={[
-            styles.iconButton,
-            {
-              backgroundColor: theme["color-basic-100"],
-              borderColor: theme["color-basic-500"],
-              borderWidth: 1,
-            },
-          ]}
-          onPress={onSearchPress}
-        />
+        <View
+          style={{ flexDirection: "row", gap: 8 }}
+        >
+          <Button
+            appearance="ghost"
+            accessoryLeft={() => (
+              <Ionicons
+                name="log-out-outline"
+                size={20}
+                color={theme["color-basic-700"]}
+              />
+            )}
+            style={[
+              styles.iconButton,
+              {
+                backgroundColor: theme["color-basic-100"],
+                borderColor: theme["color-basic-500"],
+                borderWidth: 1,
+              },
+            ]}
+            onPress={onSignOutPress}
+          />
+          <Button
+            appearance="ghost"
+            accessoryLeft={() => (
+              <Ionicons
+                name="search-outline"
+                size={16}
+                color={theme["color-basic-700"]}
+              />
+            )}
+            style={[
+              styles.iconButton,
+              {
+                backgroundColor: theme["color-basic-100"],
+                borderColor: theme["color-basic-500"],
+                borderWidth: 1,
+              },
+            ]}
+            onPress={onSearchPress}
+          />
+        </View>
       </View>
 
       {/* Content */}
