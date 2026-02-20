@@ -1,4 +1,4 @@
-import { Button, Input, Layout, Spinner, Text } from '@ui-kitten/components';
+import { Button, Input, Layout, Spinner, Text, useTheme } from '@ui-kitten/components';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { LoginProps } from './Login.types';
 import { styles } from './Login.styles';
@@ -17,8 +17,10 @@ const Login = ({
   onLoginPress,
   isLoading,
 }: LoginProps) => {
+  const theme = useTheme();
+
   return (
-    <Layout style={styles.container}>
+    <Layout style={[styles.container, { backgroundColor: theme['color-basic-200'] }]}>
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -28,7 +30,7 @@ const Login = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text category="h1" style={styles.title}>Welcome to Matome</Text>
+          <Text category="h1" style={[styles.title, { color: theme["color-basic-800"] }]}>Welcome to Matome</Text>
 
           <Input
             style={styles.input}

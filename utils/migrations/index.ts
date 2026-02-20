@@ -4,7 +4,7 @@ import { up as m002 } from "./002_workspace_foundation";
 /**
  * Ordered list of migrations. Each entry runs once, tracked by PRAGMA user_version.
  * To add a new migration:
- *   1. Create a new file: utils/migrations/002_description.ts
+ *   1. Create a new file: utils/migrations/00N_description.ts
  *   2. Export `up` with the SQL string
  *   3. Import it here and append to this array
  */

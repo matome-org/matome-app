@@ -1,4 +1,4 @@
-import { getAllRecordings, recordToCard } from "@/services/recordingService";
+import { getInboxRecordings, recordToCard } from "@/services/recordingService";
 
 export type BadgeType = "Work" | "Personal" | "Inbox";
 
@@ -59,8 +59,8 @@ const getSectionTitle = (date: Date): string => {
  */
 export const fetchHomeData = async (): Promise<HomeData> => {
   try {
-    // Get all recordings
-    const records = await getAllRecordings();
+    // Get inbox recordings (workspaceId IS NULL)
+    const records = await getInboxRecordings();
 
     console.log("RECORDS", JSON.stringify(records, null, 4));
 

@@ -15,6 +15,8 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
   isProcessing,
   isActive,
   onPress,
+  onLongPress,
+  handleLongPress,
 }) => {
   const theme = useTheme();
 
@@ -48,6 +50,7 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
         },
       ]}
       onPress={handlePress}
+      onLongPress={handleLongPress ?? (() => onLongPress?.(id))}
     >
       <View style={styles.cardIconArea}>
         <View

@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { AppHeader, AppHeaderIconButton } from "@/components/AppHeader";
 import { DetailsProps } from "./Details.types";
 import { styles } from "./Details.styles";
 
@@ -39,7 +39,6 @@ export const Details: React.FC<DetailsProps> = ({
   onMoreOptions,
 }) => {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const getEditableText = useMemo(() => recording.notes ?? recording.summary ?? "", [recording.notes, recording.summary]);
   const [transcript, setTranscript] = useState(getEditableText);
 
@@ -83,47 +82,19 @@ export const Details: React.FC<DetailsProps> = ({
     <Layout
       style={[styles.container, { backgroundColor: theme["color-basic-200"] }]}
     >
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme["color-basic-200"],
-            borderBottomColor: theme["color-basic-500"],
-            paddingTop: insets.top + 16,
-          },
-        ]}
-      >
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            onPress={onBack}
-            style={[styles.iconButton, { backgroundColor: "transparent" }]}
-          >
-            <Ionicons
-              name="chevron-back"
-              size={24}
-              color={theme["color-primary-500"]}
-            />
-          </TouchableOpacity>
-          <Text
-            category="s1"
-            style={[styles.headerTitle, { color: theme["color-basic-800"] }]}
-            numberOfLines={1}
-          >
-            {recording.title}
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={onMoreOptions}
-          style={[styles.iconButton, { backgroundColor: "transparent" }]}
-        >
-          <Ionicons
-            name="ellipsis-horizontal"
+      <AppHeader
+        title={recording.title}
+        onBack={onBack}
+        borderBottom
+        rightActions={
+          <AppHeaderIconButton
+            icon="ellipsis-horizontal"
+            variant="ghost"
+            onPress={onMoreOptions}
             size={24}
-            color={theme["color-primary-500"]}
           />
-        </TouchableOpacity>
-      </View>
+        }
+      />
 
       {/* Content */}
       <ScrollView

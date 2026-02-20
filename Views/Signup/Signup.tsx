@@ -1,4 +1,4 @@
-import { Button, Input, Layout, Spinner, Text } from '@ui-kitten/components';
+import { Button, Input, Layout, Spinner, Text, useTheme } from '@ui-kitten/components';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SignupProps } from './Signup.types';
 import { styles } from './Signup.styles';
@@ -22,8 +22,10 @@ const Signup = ({
   onLoginPress,
   isLoading,
 }: SignupProps) => {
+  const theme = useTheme();
+
   return (
-    <Layout style={styles.container}>
+    <Layout style={[styles.container, { backgroundColor: theme['color-basic-200'] }]}>
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

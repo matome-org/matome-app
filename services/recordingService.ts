@@ -1,9 +1,6 @@
 import { getDatabase } from "@/utils/database";
 import type { RecordingCard, BadgeType } from "@/processes/homeData";
 
-const DEFAULT_WORKSPACE_ID = "ws_default_personal";
-const DEFAULT_WORKSPACE_NAME = "Pessoal";
-
 export interface RecordingRecord {
   id: string;
   title: string;
@@ -111,66 +108,17 @@ const normalizeOptionalString = (
   return assertString(value, field);
 };
 
-const normalizeWorkspaceId = (value: unknown): string => {
-  const workspaceId = assertString(value, "workspaceId");
-  if (!workspaceId.trim()) {
-    throw new Error("Invalid workspaceId: expected non-empty string");
-  }
-  return workspaceId;
-};
-
-const getDefaultWorkspaceId = async (
-  db: Awaited<ReturnType<typeof getDatabase>>,
-): Promise<string> => {
-  const existingDefault = await db.getFirstAsync<{ id: string }>(
-    `SELECT id FROM workspaces WHERE isDefault = 1 ORDER BY createdAt ASC LIMIT 1`,
-  );
-
-  if (existingDefault?.id) {
-    return normalizeWorkspaceId(existingDefault.id);
-  }
-
-  const existingByName = await db.getFirstAsync<{ id: string }>(
-    `SELECT id FROM workspaces WHERE name = ? LIMIT 1`,
-    DEFAULT_WORKSPACE_NAME,
-  );
-
-  if (existingByName?.id) {
-    const existingId = normalizeWorkspaceId(existingByName.id);
-    await db.runAsync(`UPDATE workspaces SET isDefault = 1 WHERE id = ?`, ["" + existingId]);
-    return existingId;
-  }
-
-  await db.runAsync(
-    `INSERT OR IGNORE INTO workspaces (id, name, isDefault, createdAt) VALUES (?, ?, 1, ?)`,
-    ["" + DEFAULT_WORKSPACE_ID, "" + DEFAULT_WORKSPACE_NAME, +Date.now()],
-  );
-
-  const insertedDefault = await db.getFirstAsync<{ id: string }>(
-    `SELECT id FROM workspaces WHERE name = ? LIMIT 1`,
-    DEFAULT_WORKSPACE_NAME,
-  );
-
-  if (insertedDefault?.id) {
-    return normalizeWorkspaceId(insertedDefault.id);
-  }
-
-  return DEFAULT_WORKSPACE_ID;
-};
 
 /**
- * Create a new recording in the database
+ * Create a new recording in the database.
+ * New recordings start in the Inbox (workspaceId = NULL).
  */
 export const createRecording = async (
   recording: Omit<RecordingRecord, "isProcessing" | "workspaceId"> & {
     isProcessing?: boolean;
-    workspaceId?: string;
   },
 ): Promise<void> => {
   const db = await getDatabase();
-  const workspaceId = normalizeWorkspaceId(
-    recording.workspaceId ?? (await getDefaultWorkspaceId(db)),
-  );
   const recordId = assertString(recording.id, "id");
   const params: SQLitePrimitive[] = [
     coerceSqlitePrimitive(recordId, "id"),
@@ -182,13 +130,12 @@ export const createRecording = async (
     coerceSqlitePrimitive(recording.isProcessing ? 1 : 0, "isProcessing"),
     coerceSqlitePrimitive(assertString(recording.audioFilePath, "audioFilePath"), "audioFilePath"),
     coerceSqlitePrimitive(assertNumber(recording.createdAt, "createdAt"), "createdAt"),
-    coerceSqlitePrimitive(workspaceId, "workspaceId"),
   ];
 
   try {
     await db.runAsync(
-      `INSERT INTO recordings (id, title, summary, timestamp, duration, badge, isProcessing, audioFilePath, createdAt, workspaceId)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO recordings (id, title, summary, timestamp, duration, badge, isProcessing, audioFilePath, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params,
     );
   } catch (error) {
@@ -213,6 +160,19 @@ export const getAllRecordings = async (): Promise<RecordingRecord[]> => {
 
   const result = await db.getAllAsync<RecordingRecord>(
     `SELECT * FROM recordings ORDER BY createdAt DESC`,
+  );
+
+  return result;
+};
+
+/**
+ * Get inbox recordings (workspaceId IS NULL), ordered by creation date (newest first)
+ */
+export const getInboxRecordings = async (): Promise<RecordingRecord[]> => {
+  const db = await getDatabase();
+
+  const result = await db.getAllAsync<RecordingRecord>(
+    `SELECT * FROM recordings WHERE workspaceId IS NULL ORDER BY createdAt DESC`,
   );
 
   return result;

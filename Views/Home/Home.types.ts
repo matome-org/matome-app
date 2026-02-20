@@ -6,8 +6,9 @@ export interface HomeProps {
   isLoading?: boolean;
   isRefreshing?: boolean;
   onCardPress?: (id: string) => void;
+  onCardLongPress?: (id: string) => void;
   onSearchPress?: () => void;
-  onSignOutPress?: () => void;
+  onSettingsPress?: () => void;
   onRefresh?: () => void;
 }
 
@@ -15,4 +16,5 @@ export interface HomeSectionProps {
   title: string;
   recordings: RecordingCardProps[];
   onCardPress?: (id: string) => void;
+  onCardLongPress?: (id: string) => void;
 }

@@ -8,6 +8,8 @@ export interface RecordingCardProps {
   isProcessing: boolean;
   isActive?: boolean;
   onPress?: (id: string) => void;
+  onLongPress?: (id: string) => void;
   handlePress?: () => void;
+  handleLongPress?: () => void;
 }
 

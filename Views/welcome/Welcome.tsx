@@ -1,4 +1,4 @@
-import { Button, Layout, Text } from '@ui-kitten/components';
+import { Button, Layout, Text, useTheme } from '@ui-kitten/components';
 import { WelcomeProps } from './Welcome.types';
 import { styles } from './Welcome.styles';
 
@@ -6,8 +6,10 @@ const Welcome = ({
   onLoginPress,
   onSignupPress,
 }: WelcomeProps) => {
+  const theme = useTheme();
+
   return (
-    <Layout style={styles.container}>
+    <Layout style={[styles.container, { backgroundColor: theme['color-basic-200'] }]}>
       <Text category="h1" style={styles.title}>Welcome to Matome</Text>
 
       <Button

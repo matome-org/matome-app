@@ -109,6 +109,25 @@ const darkThemeColors = {
   'color-info-500': '#4da6ff',
   'color-info-600': '#4da6ff',
   'color-info-700': '#4da6ff',
+
+  // Eva's night-mode mapping resolves semantic tokens using high-numbered color-basic indices
+  // (e.g. background-basic-color-1 → color-basic-800, text-basic-color → color-basic-100).
+  // Our palette is inverted from Eva's convention, so those resolved values would be wrong.
+  // These overrides bypass the mapping and set the correct values directly.
+  'background-basic-color-1': '#333333',
+  'background-basic-color-2': '#2a2a2a',
+  'background-basic-color-3': '#363636',
+  'background-basic-color-4': '#3a3a3a',
+  'text-basic-color': '#ffffff',
+  'text-alternate-color': '#1a1a1a',
+  'text-hint-color': '#c0c0c0',
+  'text-disabled-color': '#555555',
+  'text-control-color': '#3d270e',
+  'border-basic-color-1': '#2a2a2a',
+  'border-basic-color-2': '#363636',
+  'border-basic-color-3': '#444444',
+  'border-basic-color-4': '#555555',
+  'border-basic-color-5': '#666666',
 };
 
 // Create custom light theme

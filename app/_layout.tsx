@@ -15,6 +15,8 @@ import { darkTheme, lightTheme } from '@/config/themes';
 import { useAuthStore } from '@/stores/authStore';
 import { useEffectiveTheme } from '@/stores/themeStore';
 
+const BACKGROUND_COLORS = { light: '#fdfdfd', dark: '#333333' };
+
 export const unstable_settings = {
   initialRouteName: 'index',
 };
@@ -27,6 +29,8 @@ const RootLayoutNav = () => {
   const { isAuthenticated, isLoading, checkAuth, setAuthenticated } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
+  const effectiveTheme = useEffectiveTheme();
+  const backgroundColor = BACKGROUND_COLORS[effectiveTheme];
 
   useEffect(() => {
     checkAuth();
@@ -61,11 +65,14 @@ const RootLayoutNav = () => {
   }
 
   return (
-    <Stack initialRouteName="index">
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="signup" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack
+      initialRouteName="index"
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="signup" />
+      <Stack.Screen name="(tabs)" />
     </Stack>
   );
 };
