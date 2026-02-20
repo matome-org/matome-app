@@ -1,6 +1,6 @@
 import { Button, Layout, Text, useTheme } from "@ui-kitten/components";
 import React, { useCallback } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -37,9 +37,11 @@ const HomeSection: React.FC<HomeSectionProps> = ({
 export const Home: React.FC<HomeProps> = ({
   data,
   isLoading,
+  isRefreshing,
   onCardPress,
   onSearchPress,
   onSignOutPress,
+  onRefresh,
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -134,7 +136,13 @@ export const Home: React.FC<HomeProps> = ({
       </View>
 
       {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={!!isRefreshing} onRefresh={onRefresh} />
+        }
+      >
         {data.sections.map(renderSection)}
       </ScrollView>
     </Layout>
