@@ -1,5 +1,5 @@
 import { Layout, Text, useTheme } from "@ui-kitten/components";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -40,12 +40,12 @@ export const Details: React.FC<DetailsProps> = ({
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const getEditableText = () => recording.notes ?? recording.summary ?? "";
+  const getEditableText = useMemo(() => recording.notes ?? recording.summary ?? "", [recording.notes, recording.summary]);
   const [transcript, setTranscript] = useState(getEditableText);
 
   useEffect(() => {
-    setTranscript(getEditableText());
-  }, [recording.notes, recording.summary]);
+    setTranscript(getEditableText);
+  }, [getEditableText, recording.notes, recording.summary]);
 
   const getBadgeStyle = () => {
     if (recording.badge === "Work") {
@@ -284,6 +284,7 @@ export const Details: React.FC<DetailsProps> = ({
               },
             ]}
             multiline
+            textAlignVertical="top"
             value={transcript}
             onChangeText={setTranscript}
             placeholder="Start typing your notes..."

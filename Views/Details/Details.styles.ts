@@ -123,6 +123,7 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     minHeight: 300,
+    textAlignVertical: 'top',
   },
   fab: {
     position: 'absolute',
