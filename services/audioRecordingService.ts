@@ -17,6 +17,8 @@ const transcribeApi = transcribeConfig
 
 let recording: Audio.Recording | null = null;
 let recordingUri: string | null = null;
+let lastMeteringValue: number | undefined = undefined;
+let lastDurationMillis: number = 0;
 
 const logRecordingOperationError = (
   message: string,
@@ -56,9 +58,22 @@ export const startRecording = async (): Promise<void> => {
       playsInSilentModeIOS: true,
     });
 
-    // Create and start recording
+    lastMeteringValue = undefined;
+    lastDurationMillis = 0;
+
+    // Create and start recording with metering pushed via status callback
     const { recording: newRecording } = await Audio.Recording.createAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      {
+        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        isMeteringEnabled: true,
+      },
+      (status) => {
+        if (status.isRecording) {
+          lastMeteringValue = status.metering;
+          lastDurationMillis = status.durationMillis ?? 0;
+        }
+      },
+      80, // push updates every 80ms
     );
 
     recording = newRecording;
@@ -86,6 +101,8 @@ export const stopRecording = async (): Promise<string> => {
 
     recording = null;
     recordingUri = uri;
+    lastMeteringValue = undefined;
+    lastDurationMillis = 0;
 
     return uri;
   } catch (error) {
@@ -96,37 +113,17 @@ export const stopRecording = async (): Promise<string> => {
 };
 
 /**
- * Get the duration of the recording in seconds
+ * Get the duration of the recording in seconds (from last status update callback).
  */
-export const getRecordingDuration = async (): Promise<number> => {
-  if (!recording) {
-    return 0;
-  }
-
-  try {
-    const status = await recording.getStatusAsync();
-    return status.durationMillis ? status.durationMillis / 1000 : 0;
-  } catch (error) {
-    console.error("Error getting recording duration:", error);
-    return 0;
-  }
+export const getRecordingDuration = (): number => {
+  return lastDurationMillis / 1000;
 };
 
 /**
- * Get current recording metering (dBFS, -160 to 0). Returns undefined if not recording or metering unavailable.
+ * Get current recording metering (dBFS, -160 to 0) from last status update callback.
  */
-export const getRecordingMetering = async (): Promise<number | undefined> => {
-  if (!recording) {
-    return undefined;
-  }
-
-  try {
-    const status = await recording.getStatusAsync();
-    return status.metering;
-  } catch (error) {
-    console.error(error);
-    return undefined;
-  }
+export const getRecordingMetering = (): number | undefined => {
+  return lastMeteringValue;
 };
 
 /**
@@ -472,6 +469,8 @@ export const cancelRecording = async (): Promise<void> => {
     } finally {
       recording = null;
       recordingUri = null;
+      lastMeteringValue = undefined;
+      lastDurationMillis = 0;
     }
   }
 };

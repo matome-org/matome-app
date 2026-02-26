@@ -21,6 +21,8 @@ export default {
   },
   inbox: {
     title: '受信箱',
+    searchPlaceholder: '録音を検索...',
+    noResults: '録音が見つかりません',
   },
   recording: {
     transcribing: '音声を文字起こし中...',

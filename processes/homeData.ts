@@ -63,8 +63,6 @@ export const fetchHomeData = async (): Promise<HomeData> => {
     // Get inbox recordings (workspaceId IS NULL)
     const records = await getInboxRecordings();
 
-    console.log("RECORDS", JSON.stringify(records, null, 4));
-
     // Convert to cards
     const cards = records.map(recordToCard);
 

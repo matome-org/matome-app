@@ -26,7 +26,6 @@ const LoginContainer = () => {
     });
 
     const onLoginPress = useCallback(async () => {
-        console.log('onLoginPress', email, password);
         await loginMutation.mutateAsync({ email, password });
     }, [email, password, loginMutation]);
 

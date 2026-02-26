@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 
 import { fetchHomeData, HomeData } from "@/processes/homeData";
@@ -16,6 +16,8 @@ const HomeContainer: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null);
   const [spaces, setSpaces] = useState<SpaceCard[]>([]);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
   const refreshKey = useRecordingsStore((state) => state.refreshKey);
   const triggerRefresh = useRecordingsStore((state) => state.triggerRefresh);
@@ -78,9 +80,35 @@ const HomeContainer: React.FC = () => {
     setSelectedRecordingId(null);
   }, []);
 
-  const handleSearchPress = () => {
-    console.log("Search pressed");
-  };
+  const filteredData = useMemo(() => {
+    if (!searchQuery.trim()) return data;
+    const q = searchQuery.toLowerCase();
+    const sections = data.sections
+      .map((section) => ({
+        ...section,
+        recordings: section.recordings.filter(
+          (r) =>
+            r.title.toLowerCase().includes(q) ||
+            r.summary?.toLowerCase().includes(q) ||
+            r.notes?.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((section) => section.recordings.length > 0);
+    return { sections };
+  }, [data, searchQuery]);
+
+  const handleSearchPress = useCallback(() => {
+    setIsSearchOpen(true);
+  }, []);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  const handleSearchClose = useCallback(() => {
+    setIsSearchOpen(false);
+    setSearchQuery("");
+  }, []);
 
   const handleSettingsPress = useCallback(() => {
     router.push('/inbox/settings');
@@ -93,12 +121,16 @@ const HomeContainer: React.FC = () => {
   return (
     <>
       <Home
-        data={data}
+        data={filteredData}
         isLoading={isLoading}
         isRefreshing={isRefreshing}
+        isSearchOpen={isSearchOpen}
+        searchQuery={searchQuery}
         onCardPress={handleCardPress}
         onCardLongPress={handleCardLongPress}
         onSearchPress={handleSearchPress}
+        onSearchChange={handleSearchChange}
+        onSearchClose={handleSearchClose}
         onSettingsPress={handleSettingsPress}
         onRefresh={handleRefresh}
       />

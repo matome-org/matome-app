@@ -33,14 +33,10 @@ const RecordingModalContainer: React.FC<RecordingModalContaierProps> = ({
   // Update duration and metering while recording
   useEffect(() => {
     if (isRecording) {
-      intervalRef.current = setInterval(async () => {
-        const [duration, metering] = await Promise.all([
-          getRecordingDuration(),
-          getRecordingMetering(),
-        ]);
+      intervalRef.current = setInterval(() => {
+        const duration = getRecordingDuration();
+        const metering = getRecordingMetering();
         setRecordingDuration(duration);
-
-        console.log("Metering value:", metering); // Debug log for metering values
 
         if (metering !== undefined) {
           // 1. Define the range. -60 is a good "floor" for speech.

@@ -39,7 +39,6 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   };
 
   const handleRecordingComplete = (recordingId: string) => {
-    console.log('Recording completed:', recordingId);
     triggerRefresh();
   };
 
