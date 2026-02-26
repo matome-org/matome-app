@@ -2,6 +2,7 @@ import React from "react";
 import { ActivityIndicator, ScrollView, TouchableOpacity, View } from "react-native";
 import { Layout, Text, useTheme } from "@ui-kitten/components";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 import { AppHeader, AppHeaderIconButton } from "@/components/AppHeader";
 import { SpaceCard } from "@/processes/spacesData";
@@ -63,6 +64,7 @@ export const Spaces: React.FC<SpacesProps> = ({
   onCreatePress,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
 
   if (isLoading) {
     return (
@@ -75,7 +77,7 @@ export const Spaces: React.FC<SpacesProps> = ({
   return (
     <Layout style={[styles.container, { backgroundColor: theme["color-basic-200"] }]}>
       <AppHeader
-        title="Spaces"
+        title={t("spaces.title")}
         rightActions={
           <AppHeaderIconButton icon="add" onPress={onCreatePress} size={22} />
         }
@@ -85,10 +87,10 @@ export const Spaces: React.FC<SpacesProps> = ({
         <View style={styles.emptyState}>
           <Ionicons name="folder-open-outline" size={48} color={theme["color-basic-500"]} />
           <Text style={[styles.emptyText, { color: theme["color-basic-700"] }]}>
-            No spaces yet
+            {t("spaces.empty")}
           </Text>
           <Text style={[styles.emptySubtext, { color: theme["color-basic-600"] }]}>
-            Tap + to create a space and organize your recordings
+            {t("spaces.emptyHint")}
           </Text>
         </View>
       ) : (

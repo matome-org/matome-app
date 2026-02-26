@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 import { AppHeader, AppHeaderIconButton } from "@/components/AppHeader";
 import { DetailsProps } from "./Details.types";
@@ -34,11 +35,20 @@ export const Details: React.FC<DetailsProps> = ({
   fileSize,
   waveformBars,
   onPlayPause,
+  isSummarizing,
+  onSummarize,
+  onRetry,
   onBack,
   onSave,
   onMoreOptions,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
+  const isTranscribing = recording.isProcessing;
+  const transcribeFailed =
+    !recording.isProcessing &&
+    !recording.notes &&
+    !(recording.summary?.trim());
   const getEditableText = useMemo(() => recording.notes ?? recording.summary ?? "", [recording.notes, recording.summary]);
   const [transcript, setTranscript] = useState(getEditableText);
 
@@ -193,9 +203,16 @@ export const Details: React.FC<DetailsProps> = ({
         </View>
 
         {/* Summary */}
-        {recording.summary && (
-          <View style={styles.section}>
-            <View style={styles.sectionLabel}>
+        <View style={styles.section}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 8,
+            }}
+          >
+            <View style={[styles.sectionLabel, { marginBottom: 0 }]}>
               <Ionicons
                 name="sparkles"
                 size={14}
@@ -204,63 +221,130 @@ export const Details: React.FC<DetailsProps> = ({
               <Text
                 style={[
                   styles.sectionLabel,
-                  { color: theme["color-basic-600"] },
+                  { color: theme["color-basic-600"], marginBottom: 0 },
                 ]}
               >
-                Summary
+                {t("details.summary")}
               </Text>
             </View>
-            <View
-              style={[
-                styles.summaryCard,
-                {
-                  backgroundColor: theme["color-basic-100"],
-                  borderColor: theme["color-basic-500"],
-                },
-              ]}
+            <TouchableOpacity
+              onPress={() => onSummarize?.(transcript)}
+              disabled={isSummarizing || isTranscribing || !transcript}
+              style={{ padding: 4 }}
             >
-              <Text
-                style={{
-                  color: theme["color-basic-800"],
-                  fontSize: 15,
-                  lineHeight: 24,
-                }}
-              >
-                {recording.summary}
-              </Text>
-            </View>
+              {isSummarizing ? (
+                <ActivityIndicator
+                  size="small"
+                  color={theme["color-primary-500"]}
+                />
+              ) : (
+                <Ionicons
+                  name="refresh"
+                  size={16}
+                  color={
+                    transcript
+                      ? theme["color-primary-500"]
+                      : theme["color-basic-400"]
+                  }
+                />
+              )}
+            </TouchableOpacity>
           </View>
-        )}
+          <View
+            style={[
+              styles.summaryCard,
+              {
+                backgroundColor: theme["color-basic-100"],
+                borderColor: theme["color-basic-500"],
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: recording.summary
+                  ? theme["color-basic-800"]
+                  : theme["color-basic-500"],
+                fontSize: 15,
+                lineHeight: 24,
+              }}
+            >
+              {recording.summary || t("details.noSummary")}
+            </Text>
+          </View>
+        </View>
 
         {/* Notes */}
         <View style={styles.transcriptContainer}>
-          <View style={styles.sectionLabel}>
-            <Ionicons
-              name="document-text"
-              size={14}
-              color={theme["color-basic-600"]}
-            />
-            <Text
-              style={[styles.sectionLabel, { color: theme["color-basic-600"] }]}
-            >
-              Notes
-            </Text>
+          <View style={[styles.sectionLabel, { justifyContent: "space-between" }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons
+                name="document-text"
+                size={14}
+                color={theme["color-basic-600"]}
+              />
+              <Text
+                style={[styles.sectionLabel, { color: theme["color-basic-600"], marginBottom: 0 }]}
+              >
+                {t("details.notes")}
+              </Text>
+            </View>
+            {transcribeFailed && (
+              <TouchableOpacity
+                onPress={onRetry}
+                style={[
+                  styles.retryButton,
+                  { backgroundColor: theme["color-primary-500"] },
+                ]}
+              >
+                <Ionicons name="refresh" size={14} color={theme["color-primary-900"]} />
+                <Text
+                  style={[styles.retryButtonText, { color: theme["color-primary-900"] }]}
+                >
+                  {t("common.retry")}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
-          <TextInput
-            style={[
-              styles.transcriptEditor,
-              {
-                color: theme["color-basic-800"],
-                backgroundColor: "transparent",
-              },
-            ]}
-            multiline
-            textAlignVertical="top"
-            value={transcript}
-            onChangeText={setTranscript}
-            placeholder="Start typing your notes..."
-            placeholderTextColor={theme["color-basic-500"]}
-          />
+
+          {isTranscribing ? (
+            <View style={styles.processingRow}>
+              <ActivityIndicator size="small" color={theme["color-primary-500"]} />
+              <Text
+                style={[styles.processingText, { color: theme["color-basic-600"] }]}
+              >
+                {t("recording.transcribing")}
+              </Text>
+            </View>
+          ) : transcribeFailed ? (
+            <View style={styles.errorRow}>
+              <Ionicons
+                name="alert-circle-outline"
+                size={20}
+                color={theme["color-danger-500"]}
+              />
+              <Text
+                style={[styles.errorText, { color: theme["color-danger-500"] }]}
+              >
+                {t("recording.transcriptionFailed")}
+              </Text>
+            </View>
+          ) : (
+            <TextInput
+              style={[
+                styles.transcriptEditor,
+                {
+                  color: theme["color-basic-800"],
+                  backgroundColor: "transparent",
+                },
+              ]}
+              multiline
+              textAlignVertical="top"
+              value={transcript}
+              onChangeText={setTranscript}
+              placeholder={t("details.notesPlaceholder")}
+              placeholderTextColor={theme["color-basic-500"]}
+            />
+          )}
         </View>
       </ScrollView>
 

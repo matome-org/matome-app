@@ -1,5 +1,6 @@
 import { Button, Input, Layout, Spinner, Text, useTheme } from '@ui-kitten/components';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SignupProps } from './Signup.types';
 import { styles } from './Signup.styles';
 
@@ -23,6 +24,7 @@ const Signup = ({
   isLoading,
 }: SignupProps) => {
   const theme = useTheme();
+  const { t } = useTranslation();
 
   return (
     <Layout style={[styles.container, { backgroundColor: theme['color-basic-200'] }]}>
@@ -35,23 +37,23 @@ const Signup = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text category="h1" style={styles.title}>Create account</Text>
+          <Text category="h1" style={styles.title}>{t('auth.createAccount')}</Text>
 
           <Input
             style={styles.input}
-            label="Name"
+            label={t('auth.name')}
             value={name}
             onChangeText={setName}
-            placeholder="Enter your name"
+            placeholder={t('auth.namePlaceholder')}
             disabled={isLoading}
           />
 
           <Input
             style={styles.input}
-            label="Email"
+            label={t('auth.email')}
             value={email}
             onChangeText={setEmail}
-            placeholder="Enter your email"
+            placeholder={t('auth.emailPlaceholder')}
             autoCapitalize="none"
             keyboardType="email-address"
             disabled={isLoading}
@@ -59,10 +61,10 @@ const Signup = ({
 
           <Input
             style={styles.input}
-            label="Password"
+            label={t('auth.password')}
             value={password}
             onChangeText={setPassword}
-            placeholder="Enter your password"
+            placeholder={t('auth.passwordPlaceholder')}
             autoCapitalize="none"
             secureTextEntry
             disabled={isLoading}
@@ -70,10 +72,10 @@ const Signup = ({
 
           <Input
             style={styles.input}
-            label="Confirm password"
+            label={t('auth.confirmPassword')}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
-            placeholder="Confirm your password"
+            placeholder={t('auth.confirmPasswordPlaceholder')}
             autoCapitalize="none"
             secureTextEntry
             disabled={isLoading}
@@ -84,7 +86,7 @@ const Signup = ({
             accessoryLeft={isLoading ? LoadingIndicator : undefined}
             disabled={isLoading}
           >
-            Sign up
+            {t('welcome.signUp')}
           </Button>
 
           <Button
@@ -94,7 +96,7 @@ const Signup = ({
             onPress={onLoginPress}
             disabled={isLoading}
           >
-            Already have an account? Sign in
+            {t('auth.alreadyHaveAccount')}
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>

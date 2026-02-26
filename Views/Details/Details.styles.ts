@@ -94,6 +94,39 @@ export const styles = StyleSheet.create({
   transcriptContainer: {
     paddingBottom: 40,
   },
+  processingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  processingText: {
+    fontSize: 15,
+    fontStyle: 'italic',
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingVertical: 16,
+  },
+  errorText: {
+    fontSize: 15,
+    flex: 1,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
   transcriptEditor: {
     fontSize: 16,
     lineHeight: 24,

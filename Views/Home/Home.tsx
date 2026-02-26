@@ -1,6 +1,7 @@
 import { Layout, Text, useTheme } from "@ui-kitten/components";
 import React, { useCallback } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 import { AppHeader, AppHeaderIconButton } from "@/components/AppHeader";
 import { HomeSectionProps, HomeProps } from "./Home.types";
@@ -46,6 +47,7 @@ export const Home: React.FC<HomeProps> = ({
   onRefresh,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
 
   const renderSection = useCallback(
     ({ title, recordings }: HomeSectionProps) => (
@@ -78,7 +80,7 @@ export const Home: React.FC<HomeProps> = ({
       style={[styles.container, { backgroundColor: theme["color-basic-200"] }]}
     >
       <AppHeader
-        title="Inbox"
+        title={t("inbox.title")}
         rightActions={
           <>
             <AppHeaderIconButton icon="search-outline" onPress={onSearchPress} />

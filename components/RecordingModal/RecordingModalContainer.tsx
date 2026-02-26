@@ -28,6 +28,7 @@ const RecordingModalContainer: React.FC<RecordingModalContaierProps> = ({
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const meteringBufferRef = useRef<number[]>(Array(20).fill(0));
+  const lastHeightRef = useRef<number>(5);
 
   // Update duration and metering while recording
   useEffect(() => {
@@ -39,20 +40,40 @@ const RecordingModalContainer: React.FC<RecordingModalContaierProps> = ({
         ]);
         setRecordingDuration(duration);
 
-        // Metering is dBFS from -160 (min) to 0 (max). Map to bar height (e.g. 5–45)
+        console.log("Metering value:", metering); // Debug log for metering values
+
         if (metering !== undefined) {
+          // 1. Define the range. -60 is a good "floor" for speech.
           const minDb = -60;
           const maxDb = 0;
-          const normalized = Math.max(
-            0,
-            Math.min(1, (metering - minDb) / (maxDb - minDb)),
-          );
-          const height = normalized * 40 + 5;
-          const buffer = [...meteringBufferRef.current.slice(1), height];
+
+          // 2. Normalize 0 to 1
+          let normalized = (metering - minDb) / (maxDb - minDb);
+          normalized = Math.max(0, Math.min(1, normalized));
+
+          // 3. Calculate target height
+          const targetHeight = normalized * 40 + 5;
+
+          // 4. DECAY LOGIC:
+          let finalHeight;
+          if (targetHeight > lastHeightRef.current) {
+            // If the sound is louder than the previous bar, jump up quickly
+            finalHeight = targetHeight;
+          } else {
+            // If the sound is quieter (like your -160 logs), 
+            // slowly glide down (70% of previous + 30% of target)
+            finalHeight = (lastHeightRef.current * 0.7) + (targetHeight * 0.3);
+          }
+
+          // Avoid tiny floating point numbers and keep a minimum
+          finalHeight = Math.max(5, finalHeight);
+          lastHeightRef.current = finalHeight;
+
+          const buffer = [...meteringBufferRef.current.slice(1), finalHeight];
           meteringBufferRef.current = buffer;
           setMeteringBars(buffer);
         }
-      }, 100); // Update every 100ms
+      }, 80); // Slightly faster interval makes it look smoother
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);

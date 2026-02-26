@@ -1,5 +1,6 @@
 import { Button, Input, Layout, Spinner, Text, useTheme } from '@ui-kitten/components';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { LoginProps } from './Login.types';
 import { styles } from './Login.styles';
 
@@ -18,6 +19,7 @@ const Login = ({
   isLoading,
 }: LoginProps) => {
   const theme = useTheme();
+  const { t } = useTranslation();
 
   return (
     <Layout style={[styles.container, { backgroundColor: theme['color-basic-200'] }]}>
@@ -30,14 +32,16 @@ const Login = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text category="h1" style={[styles.title, { color: theme["color-basic-800"] }]}>Welcome to Matome</Text>
+          <Text category="h1" style={[styles.title, { color: theme["color-basic-800"] }]}>
+            {t('welcome.title')}
+          </Text>
 
           <Input
             style={styles.input}
-            label="Email"
+            label={t('auth.email')}
             value={email}
             onChangeText={setEmail}
-            placeholder="Enter your email"
+            placeholder={t('auth.emailPlaceholder')}
             autoCapitalize="none"
             keyboardType="email-address"
             disabled={isLoading}
@@ -45,11 +49,11 @@ const Login = ({
 
           <Input
             style={styles.input}
-            label="Password"
+            label={t('auth.password')}
             value={password}
             disabled={isLoading}
             onChangeText={setPassword}
-            placeholder="Enter your password"
+            placeholder={t('auth.passwordPlaceholder')}
             autoCapitalize="none"
             secureTextEntry
           />
@@ -59,7 +63,7 @@ const Login = ({
             accessoryLeft={isLoading ? LoadingIndicator : undefined}
             disabled={isLoading}
           >
-            Sign in
+            {t('welcome.signIn')}
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>

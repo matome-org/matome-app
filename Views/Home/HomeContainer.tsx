@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { fetchHomeData, HomeData } from "@/processes/homeData";
 import { fetchSpacesData, SpaceCard } from "@/processes/spacesData";
 import { useRecordingsStore } from "@/stores/recordingsStore";
+import { useLanguageStore } from "@/stores/languageStore";
 import { updateRecording } from "@/services/recordingService";
 import { MoveToSpaceSheet } from "@/components/MoveToSpaceSheet";
 
@@ -18,6 +19,7 @@ const HomeContainer: React.FC = () => {
   const router = useRouter();
   const refreshKey = useRecordingsStore((state) => state.refreshKey);
   const triggerRefresh = useRecordingsStore((state) => state.triggerRefresh);
+  const language = useLanguageStore((state) => state.language);
 
   const loadData = useCallback(async (silent = false) => {
     try {
@@ -36,6 +38,11 @@ const HomeContainer: React.FC = () => {
   useEffect(() => {
     loadData(refreshKey > 0);
   }, [refreshKey, loadData]);
+
+  // Re-fetch when language changes so section titles (Today/Yesterday) update
+  useEffect(() => {
+    loadData(true);
+  }, [language, loadData]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);

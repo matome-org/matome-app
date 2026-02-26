@@ -1,4 +1,5 @@
 import { Button, Layout, Text, useTheme } from '@ui-kitten/components';
+import { useTranslation } from 'react-i18next';
 import { WelcomeProps } from './Welcome.types';
 import { styles } from './Welcome.styles';
 
@@ -7,16 +8,17 @@ const Welcome = ({
   onSignupPress,
 }: WelcomeProps) => {
   const theme = useTheme();
+  const { t } = useTranslation();
 
   return (
     <Layout style={[styles.container, { backgroundColor: theme['color-basic-200'] }]}>
-      <Text category="h1" style={styles.title}>Welcome to Matome</Text>
+      <Text category="h1" style={styles.title}>{t('welcome.title')}</Text>
 
       <Button
         onPress={onLoginPress}
         style={styles.button}
       >
-        Sign in
+        {t('welcome.signIn')}
       </Button>
 
       <Button
@@ -24,7 +26,7 @@ const Welcome = ({
         status="basic"
         onPress={onSignupPress}
       >
-        Sign up
+        {t('welcome.signUp')}
       </Button>
     </Layout>
   );

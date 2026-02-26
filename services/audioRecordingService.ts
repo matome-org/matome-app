@@ -3,6 +3,7 @@ import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import { configs } from "@/config/config";
 import { createRecording, updateRecording } from "./recordingService";
+import { summarizeText } from "./summarizeService";
 import type { BadgeType } from "@/processes/homeData";
 import { Alert } from "react-native";
 
@@ -341,14 +342,29 @@ export const saveRecording = async (
       throw error;
     }
 
-    // Transcribe in background and always finalize processing status.
+    // Transcribe and summarize in background, then finalize processing status.
     void (async () => {
       try {
         const transcript = await transcribeAudio(audioFilePath);
         const title = generateTitle(transcript);
+
+        // Summarize the transcript; fall back gracefully if it fails
+        let summary: string | undefined;
+        try {
+          summary = await summarizeText(transcript);
+        } catch (error) {
+          logRecordingOperationError(
+            "Failed to summarize transcript",
+            { operation: "summarizeText", recordingId: id },
+            error,
+          );
+          // summary remains undefined — user can regenerate from the Details view
+        }
+
         try {
           await updateRecording(id, {
-            summary: transcript,
+            summary,
+            notes: transcript,
             title,
           });
         } catch (error) {
@@ -389,6 +405,52 @@ export const saveRecording = async (
     Alert.alert("Failed to Save Audio");
     throw error;
   }
+};
+
+/**
+ * Retry transcription + summarization for an existing recording.
+ * Sets isProcessing: true in DB, runs the pipeline in the background,
+ * then sets isProcessing: false regardless of outcome.
+ */
+export const retryTranscription = async (
+  recordingId: string,
+  audioFilePath: string,
+): Promise<void> => {
+  await updateRecording(recordingId, { isProcessing: true });
+
+  void (async () => {
+    try {
+      const transcript = await transcribeAudio(audioFilePath);
+      const title = generateTitle(transcript);
+
+      let summary: string | undefined;
+      try {
+        summary = await summarizeText(transcript);
+      } catch (error) {
+        logRecordingOperationError(
+          "Failed to summarize transcript on retry",
+          { operation: "summarizeText", recordingId },
+          error,
+        );
+      }
+
+      await updateRecording(recordingId, { summary, notes: transcript, title });
+    } catch (error) {
+      logRecordingOperationError(
+        "Failed to transcribe on retry",
+        { operation: "retryTranscription", recordingId },
+        error,
+      );
+    } finally {
+      await updateRecording(recordingId, { isProcessing: false }).catch((e) => {
+        logRecordingOperationError(
+          "Failed to reset processing status after retry",
+          { operation: "retryTranscription.finalize", recordingId },
+          e,
+        );
+      });
+    }
+  })();
 };
 
 /**

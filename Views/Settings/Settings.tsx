@@ -2,44 +2,57 @@ import React from "react";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Layout, Text, useTheme } from "@ui-kitten/components";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 
 import { AppHeader } from "@/components/AppHeader";
 import { ThemeMode } from "@/stores/themeStore";
+import { Language } from "@/stores/languageStore";
 import { SettingsProps } from "./Settings.types";
-
-const THEME_OPTIONS: { mode: ThemeMode; label: string; icon: string }[] = [
-  { mode: "light", label: "Light", icon: "sunny-outline" },
-  { mode: "dark", label: "Dark", icon: "moon-outline" },
-  { mode: "system", label: "System", icon: "phone-portrait-outline" },
-];
 
 export const Settings: React.FC<SettingsProps> = ({
   themeMode,
   onThemeChange,
+  language,
+  onLanguageChange,
   onBack,
   onSignOut,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
+
+  const THEME_OPTIONS: { mode: ThemeMode; label: string; icon: string }[] = [
+    { mode: "light", label: t("settings.themeLight"), icon: "sunny-outline" },
+    { mode: "dark", label: t("settings.themeDark"), icon: "moon-outline" },
+    { mode: "system", label: t("settings.themeSystem"), icon: "phone-portrait-outline" },
+  ];
+
+  const LANGUAGE_OPTIONS: { lang: Language; label: string }[] = [
+    { lang: "en", label: t("settings.langEn") },
+    { lang: "ja", label: t("settings.langJa") },
+  ];
 
   return (
     <Layout style={[styles.container, { backgroundColor: theme["color-basic-200"] }]}>
-      <AppHeader title="Settings" onBack={onBack} borderBottom />
+      <AppHeader title={t("settings.title")} onBack={onBack} borderBottom />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Appearance */}
         <Text style={[styles.sectionLabel, { color: theme["color-basic-600"] }]}>
-          Appearance
+          {t("settings.appearance")}
         </Text>
         <View style={[styles.card, { backgroundColor: theme["color-basic-100"], borderColor: theme["color-basic-300"] }]}>
-          <Text style={[styles.rowLabel, { color: theme["color-basic-800"] }]}>Theme</Text>
-          <View style={styles.themeOptions}>
+          {/* Theme */}
+          <Text style={[styles.rowLabel, { color: theme["color-basic-800"] }]}>
+            {t("settings.theme")}
+          </Text>
+          <View style={styles.optionRow}>
             {THEME_OPTIONS.map((option) => {
               const active = themeMode === option.mode;
               return (
                 <TouchableOpacity
                   key={option.mode}
                   style={[
-                    styles.themeOption,
+                    styles.optionPill,
                     {
                       backgroundColor: active
                         ? theme["color-primary-500"]
@@ -58,7 +71,48 @@ export const Settings: React.FC<SettingsProps> = ({
                   />
                   <Text
                     style={[
-                      styles.themeOptionLabel,
+                      styles.optionLabel,
+                      {
+                        color: active
+                          ? theme["color-primary-900"]
+                          : theme["color-basic-600"],
+                        fontWeight: active ? "700" : "400",
+                      },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Language */}
+          <Text style={[styles.rowLabel, { color: theme["color-basic-800"] }]}>
+            {t("settings.language")}
+          </Text>
+          <View style={styles.optionRow}>
+            {LANGUAGE_OPTIONS.map((option) => {
+              const active = language === option.lang;
+              return (
+                <TouchableOpacity
+                  key={option.lang}
+                  style={[
+                    styles.optionPill,
+                    {
+                      backgroundColor: active
+                        ? theme["color-primary-500"]
+                        : theme["color-basic-300"],
+                      borderColor: active
+                        ? theme["color-primary-500"]
+                        : theme["color-basic-400"],
+                    },
+                  ]}
+                  onPress={() => onLanguageChange(option.lang)}
+                >
+                  <Text
+                    style={[
+                      styles.optionLabel,
                       {
                         color: active
                           ? theme["color-primary-900"]
@@ -77,13 +131,13 @@ export const Settings: React.FC<SettingsProps> = ({
 
         {/* Account */}
         <Text style={[styles.sectionLabel, { color: theme["color-basic-600"] }]}>
-          Account
+          {t("settings.account")}
         </Text>
         <View style={[styles.card, { backgroundColor: theme["color-basic-100"], borderColor: theme["color-basic-300"] }]}>
           <TouchableOpacity style={styles.row} onPress={onSignOut}>
             <Ionicons name="log-out-outline" size={20} color={theme["color-danger-500"]} />
             <Text style={[styles.rowLabel, { color: theme["color-danger-500"] }]}>
-              Sign out
+              {t("settings.signOut")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -121,11 +175,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
   },
-  themeOptions: {
+  optionRow: {
     flexDirection: "row",
     gap: 8,
   },
-  themeOption: {
+  optionPill: {
     flex: 1,
     flexDirection: "column",
     alignItems: "center",
@@ -135,7 +189,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: 12,
   },
-  themeOptionLabel: {
+  optionLabel: {
     fontSize: 12,
   },
   row: {

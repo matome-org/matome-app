@@ -1,5 +1,6 @@
 import React from "react";
 import { Modal, View, Text, Pressable, ActivityIndicator } from "react-native";
+import { useTranslation } from "react-i18next";
 import { formatDuration } from "@/services/audioRecordingService";
 import { RecordingModalProps } from "./RecordingModal.types";
 import { styles } from "./RecordingModal.styles";
@@ -16,6 +17,8 @@ export const RecordingModal: React.FC<RecordingModalProps> = ({
   generateWaveform,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
+
   return (
     <Modal
       visible={visible}
@@ -40,20 +43,20 @@ export const RecordingModal: React.FC<RecordingModalProps> = ({
                   { color: theme["color-basic-600"] },
                 ]}
               >
-                Processing recording...
+                {t("recording.processing")}
               </Text>
             </View>
           ) : (
             <>
               <Text style={[styles.title, { color: theme["color-basic-800"] }]}>
-                {isRecording ? "Recording" : "Ready to Record"}
+                {isRecording ? t("recording.title") : t("recording.ready")}
               </Text>
               <Text
                 style={[styles.subtitle, { color: theme["color-basic-600"] }]}
               >
                 {isRecording
-                  ? "Tap stop when finished"
-                  : "Tap the button to start recording"}
+                  ? t("recording.stopHint")
+                  : t("recording.startHint")}
               </Text>
 
               {isRecording && (
@@ -107,14 +110,14 @@ export const RecordingModal: React.FC<RecordingModalProps> = ({
                   style={[styles.button, styles.cancelButton]}
                   onPress={handleCancel}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Text style={styles.cancelButtonText}>{t("common.cancel")}</Text>
                 </Pressable>
                 {isRecording && (
                   <Pressable
                     style={[styles.button, styles.stopButton]}
                     onPress={handleStopRecording}
                   >
-                    <Text style={styles.stopButtonText}>Stop</Text>
+                    <Text style={styles.stopButtonText}>{t("recording.stop")}</Text>
                   </Pressable>
                 )}
               </View>

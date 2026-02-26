@@ -3,6 +3,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Audio, AVPlaybackStatus } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import Toast from "react-native-toast-message";
+import { useTranslation } from "react-i18next";
 
 import { RecordingCard } from "@/processes/homeData";
 import {
@@ -11,6 +12,8 @@ import {
   recordToCard,
   updateRecording,
 } from "@/services/recordingService";
+import { summarizeText } from "@/services/summarizeService";
+import { retryTranscription } from "@/services/audioRecordingService";
 import { initDatabase } from "@/utils/database";
 
 import { Details } from "./Details";
@@ -46,10 +49,12 @@ const generateWaveformFromBytes = (base64: string): number[] => {
 export const DetailsContainer: React.FC = () => {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { t } = useTranslation();
 
   const [recording, setRecording] = useState<RecordingCard | null>(null);
   const [record, setRecord] = useState<RecordingRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSummarizing, setIsSummarizing] = useState(false);
 
   // Audio state
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -79,7 +84,7 @@ export const DetailsContainer: React.FC = () => {
           router.back();
         }
       } catch (e) {
-        Toast.show({ type: "error", text1: "Recording not found" });
+        Toast.show({ type: "error", text1: t("toast.recordingNotFound") });
         router.back();
       } finally {
         setIsLoading(false);
@@ -89,7 +94,7 @@ export const DetailsContainer: React.FC = () => {
     if (id) {
       loadRecording();
     }
-  }, [id, router]);
+  }, [id, router, t]);
 
   // Load audio file info (waveform + file size)
   useEffect(() => {
@@ -116,6 +121,36 @@ export const DetailsContainer: React.FC = () => {
 
     loadFileInfo();
   }, [record?.audioFilePath]);
+
+  // Poll DB while transcription is running so the UI reacts when it finishes or fails
+  useEffect(() => {
+    if (!id || record?.isProcessing !== 1) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const updated = await getRecordingById(id);
+        if (!updated) return;
+        setRecord(updated);
+        setRecording(recordToCard(updated));
+      } catch {
+        // ignore transient polling errors
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [id, record?.isProcessing]);
+
+  const handleRetry = useCallback(async () => {
+    if (!record) return;
+    // Optimistically show processing state while the DB call goes through
+    setRecord((prev) => (prev ? { ...prev, isProcessing: 1 } : prev));
+    setRecording((prev) => (prev ? { ...prev, isProcessing: true } : prev));
+    try {
+      await retryTranscription(id, record.audioFilePath);
+    } catch {
+      // retryTranscription handles its own errors and always resets isProcessing
+    }
+  }, [id, record]);
 
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
     if (!status.isLoaded) return;
@@ -191,9 +226,9 @@ export const DetailsContainer: React.FC = () => {
         await soundRef.current.playAsync();
       }
     } catch (e) {
-      Toast.show({ type: "error", text1: "Failed to play audio" });
+      Toast.show({ type: "error", text1: t("toast.audioFailed") });
     }
-  }, []);
+  }, [t]);
 
   const handleBack = useCallback(() => {
     router.back();
@@ -203,12 +238,30 @@ export const DetailsContainer: React.FC = () => {
     async (notes: string) => {
       try {
         await updateRecording(id, { notes });
-        Toast.show({ type: "success", text1: "Notes saved" });
+        Toast.show({ type: "success", text1: t("toast.notesSaved") });
       } catch (e) {
-        Toast.show({ type: "error", text1: "Failed to save notes" });
+        Toast.show({ type: "error", text1: t("toast.notesFailed") });
       }
     },
-    [id],
+    [id, t],
+  );
+
+  const handleSummarize = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+      setIsSummarizing(true);
+      try {
+        const summary = await summarizeText(text);
+        await updateRecording(id, { summary });
+        setRecording((prev) => (prev ? { ...prev, summary } : prev));
+        Toast.show({ type: "success", text1: t("toast.summaryGenerated") });
+      } catch (e) {
+        Toast.show({ type: "error", text1: t("toast.summaryFailed") });
+      } finally {
+        setIsSummarizing(false);
+      }
+    },
+    [id, t],
   );
 
   const handleMoreOptions = useCallback(() => {
@@ -245,6 +298,9 @@ export const DetailsContainer: React.FC = () => {
       fileSize={fileSize}
       waveformBars={waveformBars}
       onPlayPause={handlePlayPause}
+      isSummarizing={isSummarizing}
+      onSummarize={handleSummarize}
+      onRetry={handleRetry}
       onBack={handleBack}
       onSave={handleSave}
       onMoreOptions={handleMoreOptions}
