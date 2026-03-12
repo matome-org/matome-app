@@ -229,7 +229,7 @@ export const updateRecording = async (
     values.push(coerceSqlitePrimitive(updates.isProcessing ? 1 : 0, "isProcessing"));
   }
 
-  if (updates.badge !== undefined && updates.badge !== null && updates.badge !== "") {
+  if (updates.badge !== undefined && updates.badge !== null) {
     fields.push("badge = ?");
     values.push(coerceSqlitePrimitive(assertBadge(updates.badge), "badge"));
   }

@@ -5,9 +5,8 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "amigopatientsapp",
+    "scheme": "matomeapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.matomeapp"
@@ -19,7 +18,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.matomeapp"
     },
@@ -41,7 +39,14 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font",
+      "expo-image",
+      "expo-sqlite",
+      "expo-web-browser",
+      "expo-audio",
+      "expo-asset",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
