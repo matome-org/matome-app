@@ -1,17 +1,13 @@
-interface User {
-  id: number;
-  name: string;
-  email: string;
-}
+import { Session, User } from '@supabase/supabase-js';
+
+export type { Session, User };
 
 export interface LoginResponse {
+  session: Session;
   user: User;
-  token: string;
 }
 
 export interface SignupResponse {
+  session: Session | null;
   user: User;
-  password: string;
-  token: string;
 }
-

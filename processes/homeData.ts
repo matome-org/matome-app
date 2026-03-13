@@ -1,4 +1,5 @@
-import { getAllRecordings, recordToCard } from "@/services/recordingService";
+import { getInboxRecordings, recordToCard } from "@/services/recordingService";
+import i18n from "@/config/i18n";
 
 export type BadgeType = "Work" | "Personal" | "Inbox";
 
@@ -37,9 +38,9 @@ const getSectionTitle = (date: Date): string => {
   recordDate.setHours(0, 0, 0, 0);
 
   if (recordDate.getTime() === today.getTime()) {
-    return "Today";
+    return i18n.t("common.today");
   } else if (recordDate.getTime() === yesterday.getTime()) {
-    return "Yesterday";
+    return i18n.t("common.yesterday");
   } else {
     // Format as "Mon DD, YYYY" or similar
     return recordDate.toLocaleDateString("en-US", {
@@ -59,10 +60,8 @@ const getSectionTitle = (date: Date): string => {
  */
 export const fetchHomeData = async (): Promise<HomeData> => {
   try {
-    // Get all recordings
-    const records = await getAllRecordings();
-
-    console.log("RECORDS", JSON.stringify(records, null, 4));
+    // Get inbox recordings (workspaceId IS NULL)
+    const records = await getInboxRecordings();
 
     // Convert to cards
     const cards = records.map(recordToCard);
@@ -93,10 +92,12 @@ export const fetchHomeData = async (): Promise<HomeData> => {
       }))
       .sort((a, b) => {
         // Sort sections: Today first, then Yesterday, then by date (newest first)
-        if (a.title === "Today") return -1;
-        if (b.title === "Today") return 1;
-        if (a.title === "Yesterday") return -1;
-        if (b.title === "Yesterday") return 1;
+        const todayLabel = i18n.t("common.today");
+        const yesterdayLabel = i18n.t("common.yesterday");
+        if (a.title === todayLabel) return -1;
+        if (b.title === todayLabel) return 1;
+        if (a.title === yesterdayLabel) return -1;
+        if (b.title === yesterdayLabel) return 1;
 
         // For other dates, compare the dates
         const dateA = new Date(a.title);

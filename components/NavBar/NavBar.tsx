@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { ImageProps, Pressable, Text, View } from 'react-native';
 
 import RecordingModal from '../RecordingModal';
+import { useRecordingsStore } from '@/stores/recordingsStore';
 import { NavBarProps } from './NavBar.types';
 import { styles } from './NavBar.styles';
 
@@ -21,6 +22,7 @@ const MicIcon = (props: Partial<ImageProps>) => (
 export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   const theme = useTheme();
   const [isRecordingModalVisible, setIsRecordingModalVisible] = useState(false);
+  const triggerRefresh = useRecordingsStore((state) => state.triggerRefresh);
 
   // Filter out routes that should be hidden from tab bar (dynamic routes like [id])
   const visibleRoutes = state.routes.filter((route) => {
@@ -37,8 +39,7 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   };
 
   const handleRecordingComplete = (recordingId: string) => {
-    // Recording is saved, modal will close and navigate
-    console.log('Recording completed:', recordingId);
+    triggerRefresh();
   };
 
   return (

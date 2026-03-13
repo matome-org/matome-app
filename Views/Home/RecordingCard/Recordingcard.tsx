@@ -1,4 +1,5 @@
 import { Text, useTheme } from "@ui-kitten/components";
+import { useTranslation } from "react-i18next";
 import { RecordingCardProps } from "./RecordCard.types";
 
 import { styles } from "../Home.styles";
@@ -15,11 +16,13 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
   isProcessing,
   isActive,
   onPress,
+  onLongPress,
+  handleLongPress,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation();
 
   const handlePress = () => {
-    console.log("RecordingCard pressed", id);
     onPress?.(id);
   };
 
@@ -48,6 +51,7 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
         },
       ]}
       onPress={handlePress}
+      onLongPress={handleLongPress ?? (() => onLongPress?.(id))}
     >
       <View style={styles.cardIconArea}>
         <View
@@ -90,7 +94,7 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
           <Text
             style={[styles.processingText, { color: theme["color-basic-600"] }]}
           >
-            Transcribing audio...
+            {t("recording.transcribing")}
           </Text>
         ) : (
           summary && (

@@ -1,3 +1,4 @@
+import '@/config/i18n';
 import * as eva from '@eva-design/eva';
 import { ApplicationProvider, IconRegistry } from '@ui-kitten/components';
 import { EvaIconsPack } from '@ui-kitten/eva-icons';
@@ -10,9 +11,12 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 import ToastContainer from 'react-native-toast-message';
 
+import { supabase } from '@/config/supabase';
 import { darkTheme, lightTheme } from '@/config/themes';
 import { useAuthStore } from '@/stores/authStore';
 import { useEffectiveTheme } from '@/stores/themeStore';
+
+const BACKGROUND_COLORS = { light: '#fdfdfd', dark: '#333333' };
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -23,13 +27,21 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 const RootLayoutNav = () => {
-  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { isAuthenticated, isLoading, checkAuth, setAuthenticated } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
+  const effectiveTheme = useEffectiveTheme();
+  const backgroundColor = BACKGROUND_COLORS[effectiveTheme];
 
   useEffect(() => {
     checkAuth();
-  }, [checkAuth]);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthenticated(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [checkAuth, setAuthenticated]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -54,10 +66,14 @@ const RootLayoutNav = () => {
   }
 
   return (
-    <Stack initialRouteName="index">
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack
+      initialRouteName="index"
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="signup" />
+      <Stack.Screen name="(tabs)" />
     </Stack>
   );
 };

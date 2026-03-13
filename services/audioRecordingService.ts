@@ -3,6 +3,7 @@ import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import { configs } from "@/config/config";
 import { createRecording, updateRecording } from "./recordingService";
+import { summarizeText } from "./summarizeService";
 import type { BadgeType } from "@/processes/homeData";
 import { Alert } from "react-native";
 
@@ -16,6 +17,16 @@ const transcribeApi = transcribeConfig
 
 let recording: Audio.Recording | null = null;
 let recordingUri: string | null = null;
+let lastMeteringValue: number | undefined = undefined;
+let lastDurationMillis: number = 0;
+
+const logRecordingOperationError = (
+  message: string,
+  context: { operation: string; recordingId?: string },
+  error: unknown,
+) => {
+  console.error(message, context, error);
+};
 
 /**
  * Request microphone permissions
@@ -47,9 +58,22 @@ export const startRecording = async (): Promise<void> => {
       playsInSilentModeIOS: true,
     });
 
-    // Create and start recording
+    lastMeteringValue = undefined;
+    lastDurationMillis = 0;
+
+    // Create and start recording with metering pushed via status callback
     const { recording: newRecording } = await Audio.Recording.createAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      {
+        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        isMeteringEnabled: true,
+      },
+      (status) => {
+        if (status.isRecording) {
+          lastMeteringValue = status.metering;
+          lastDurationMillis = status.durationMillis ?? 0;
+        }
+      },
+      80, // push updates every 80ms
     );
 
     recording = newRecording;
@@ -77,6 +101,8 @@ export const stopRecording = async (): Promise<string> => {
 
     recording = null;
     recordingUri = uri;
+    lastMeteringValue = undefined;
+    lastDurationMillis = 0;
 
     return uri;
   } catch (error) {
@@ -87,37 +113,17 @@ export const stopRecording = async (): Promise<string> => {
 };
 
 /**
- * Get the duration of the recording in seconds
+ * Get the duration of the recording in seconds (from last status update callback).
  */
-export const getRecordingDuration = async (): Promise<number> => {
-  if (!recording) {
-    return 0;
-  }
-
-  try {
-    const status = await recording.getStatusAsync();
-    return status.durationMillis ? status.durationMillis / 1000 : 0;
-  } catch (error) {
-    console.error("Error getting recording duration:", error);
-    return 0;
-  }
+export const getRecordingDuration = (): number => {
+  return lastDurationMillis / 1000;
 };
 
 /**
- * Get current recording metering (dBFS, -160 to 0). Returns undefined if not recording or metering unavailable.
+ * Get current recording metering (dBFS, -160 to 0) from last status update callback.
  */
-export const getRecordingMetering = async (): Promise<number | undefined> => {
-  if (!recording) {
-    return undefined;
-  }
-
-  try {
-    const status = await recording.getStatusAsync();
-    return status.metering;
-  } catch (error) {
-    console.error(error);
-    return undefined;
-  }
+export const getRecordingMetering = (): number | undefined => {
+  return lastMeteringValue;
 };
 
 /**
@@ -229,8 +235,8 @@ export const transcribeAudio = async (fileUri: string): Promise<string> => {
       //throw new Error('Transcribe API is not configured. Check config/config.ts.');
     } else {
       const response = await transcribeApi.post<{
-        text?: string;
-        transcript?: string;
+        text?: unknown;
+        transcript?: unknown;
       }>("/api/v1/transcribe", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -238,7 +244,10 @@ export const transcribeAudio = async (fileUri: string): Promise<string> => {
       });
 
       const data = response.data;
-      transcript = data?.text || data?.transcript || "";
+      const text = typeof data?.text === "string" ? data.text : "";
+      const transcriptValue =
+        typeof data?.transcript === "string" ? data.transcript : "";
+      transcript = text || transcriptValue || "";
     }
 
     if (!transcript) {
@@ -292,6 +301,8 @@ export const formatTimestamp = (date: Date): string => {
 export const saveRecording = async (
   badge: BadgeType = "Inbox",
 ): Promise<string> => {
+  let recordingId: string | undefined;
+
   try {
     // Stop recording
     const uri = await stopRecording();
@@ -305,45 +316,138 @@ export const saveRecording = async (
 
     // Create recording record with processing status
     const id = generateRecordingId();
+    recordingId = id;
     const now = new Date();
 
-    await createRecording({
-      id,
-      title: "New Recording",
-      timestamp: formatTimestamp(now),
-      duration,
-      badge,
-      isProcessing: true,
-      audioFilePath,
-      createdAt: now.getTime(), // Store as milliseconds
-    });
+    try {
+      await createRecording({
+        id,
+        title: "New Recording",
+        timestamp: formatTimestamp(now),
+        duration,
+        badge,
+        isProcessing: true,
+        audioFilePath,
+        createdAt: now.getTime(), // Store as milliseconds
+      });
+    } catch (error) {
+      logRecordingOperationError(
+        "Failed to persist recording on create",
+        { operation: "createRecording", recordingId: id },
+        error,
+      );
+      throw error;
+    }
 
-    // Transcribe in background and always finalize processing status.
+    // Transcribe and summarize in background, then finalize processing status.
     void (async () => {
       try {
         const transcript = await transcribeAudio(audioFilePath);
         const title = generateTitle(transcript);
-        await updateRecording(id, {
-          summary: transcript,
-          title,
-        });
+
+        // Summarize the transcript; fall back gracefully if it fails
+        let summary: string | undefined;
+        try {
+          summary = await summarizeText(transcript);
+        } catch (error) {
+          logRecordingOperationError(
+            "Failed to summarize transcript",
+            { operation: "summarizeText", recordingId: id },
+            error,
+          );
+          // summary remains undefined — user can regenerate from the Details view
+        }
+
+        try {
+          await updateRecording(id, {
+            summary,
+            notes: transcript,
+            title,
+          });
+        } catch (error) {
+          logRecordingOperationError(
+            "Failed to persist transcription result",
+            { operation: "updateRecording.transcription", recordingId: id },
+            error,
+          );
+          throw error;
+        }
       } catch (error) {
-        console.error("Failed to transcribe recording:", error);
+        logRecordingOperationError(
+          "Failed to transcribe recording",
+          { operation: "transcribeAudio", recordingId: id },
+          error,
+        );
         Alert.alert("Failed to transcribe audio");
       } finally {
         try {
           await updateRecording(id, { isProcessing: false });
         } catch (error) {
-          console.error("Failed to finalize processing status:", error);
+          logRecordingOperationError(
+            "Failed to finalize processing status",
+            { operation: "updateRecording.finalizeProcessing", recordingId: id },
+            error,
+          );
         }
       }
     })();
 
     return id;
   } catch (error) {
+    logRecordingOperationError(
+      "Failed to save recording",
+      { operation: "saveRecording", recordingId },
+      error,
+    );
     Alert.alert("Failed to Save Audio");
     throw error;
   }
+};
+
+/**
+ * Retry transcription + summarization for an existing recording.
+ * Sets isProcessing: true in DB, runs the pipeline in the background,
+ * then sets isProcessing: false regardless of outcome.
+ */
+export const retryTranscription = async (
+  recordingId: string,
+  audioFilePath: string,
+): Promise<void> => {
+  await updateRecording(recordingId, { isProcessing: true });
+
+  void (async () => {
+    try {
+      const transcript = await transcribeAudio(audioFilePath);
+      const title = generateTitle(transcript);
+
+      let summary: string | undefined;
+      try {
+        summary = await summarizeText(transcript);
+      } catch (error) {
+        logRecordingOperationError(
+          "Failed to summarize transcript on retry",
+          { operation: "summarizeText", recordingId },
+          error,
+        );
+      }
+
+      await updateRecording(recordingId, { summary, notes: transcript, title });
+    } catch (error) {
+      logRecordingOperationError(
+        "Failed to transcribe on retry",
+        { operation: "retryTranscription", recordingId },
+        error,
+      );
+    } finally {
+      await updateRecording(recordingId, { isProcessing: false }).catch((e) => {
+        logRecordingOperationError(
+          "Failed to reset processing status after retry",
+          { operation: "retryTranscription.finalize", recordingId },
+          e,
+        );
+      });
+    }
+  })();
 };
 
 /**
@@ -365,6 +469,8 @@ export const cancelRecording = async (): Promise<void> => {
     } finally {
       recording = null;
       recordingUri = null;
+      lastMeteringValue = undefined;
+      lastDurationMillis = 0;
     }
   }
 };

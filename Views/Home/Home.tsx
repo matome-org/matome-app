@@ -1,9 +1,10 @@
-import { Button, Layout, Text, useTheme } from "@ui-kitten/components";
-import React, { useCallback } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Layout, Text, useTheme } from "@ui-kitten/components";
+import React, { useCallback, useRef } from "react";
+import { ActivityIndicator, RefreshControl, ScrollView, TextInput, TouchableOpacity, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 
+import { AppHeader, AppHeaderIconButton } from "@/components/AppHeader";
 import { HomeSectionProps, HomeProps } from "./Home.types";
 import { styles } from "./Home.styles";
 
@@ -13,6 +14,7 @@ const HomeSection: React.FC<HomeSectionProps> = ({
   title,
   recordings,
   onCardPress,
+  onCardLongPress,
 }) => {
   const theme = useTheme();
 
@@ -27,6 +29,7 @@ const HomeSection: React.FC<HomeSectionProps> = ({
             key={recording.id}
             {...recording}
             onPress={onCardPress}
+            onLongPress={onCardLongPress}
           />
         ))}
       </View>
@@ -37,11 +40,20 @@ const HomeSection: React.FC<HomeSectionProps> = ({
 export const Home: React.FC<HomeProps> = ({
   data,
   isLoading,
+  isRefreshing,
+  isSearchOpen,
+  searchQuery = "",
   onCardPress,
+  onCardLongPress,
   onSearchPress,
+  onSearchChange,
+  onSearchClose,
+  onSettingsPress,
+  onRefresh,
 }) => {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const inputRef = useRef<TextInput>(null);
 
   const renderSection = useCallback(
     ({ title, recordings }: HomeSectionProps) => (
@@ -50,9 +62,10 @@ export const Home: React.FC<HomeProps> = ({
         key={title}
         recordings={recordings}
         onCardPress={onCardPress}
+        onCardLongPress={onCardLongPress}
       />
     ),
-    [onCardPress],
+    [onCardPress, onCardLongPress],
   );
 
   if (isLoading) {
@@ -68,51 +81,71 @@ export const Home: React.FC<HomeProps> = ({
     );
   }
 
+  const hasNoResults = isSearchOpen && searchQuery.trim().length > 0 && data.sections.length === 0;
+
   return (
     <Layout
       style={[styles.container, { backgroundColor: theme["color-basic-200"] }]}
     >
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: theme["color-basic-200"],
-            paddingTop: insets.top + 16,
-          },
-        ]}
-      >
-        <Text
-          category="h4"
-          style={[styles.headerTitle, { color: theme["color-basic-800"] }]}
-        >
-          Inbox
-        </Text>
-        <Button
-          appearance="ghost"
-          accessoryLeft={(props) => (
-            <Ionicons
-              name="search-outline"
-              size={20}
-              color={theme["color-basic-700"]}
+      <AppHeader
+        title={t("inbox.title")}
+        rightActions={
+          <>
+            <AppHeaderIconButton
+              icon={isSearchOpen ? "search" : "search-outline"}
+              onPress={onSearchPress}
             />
-          )}
+            <AppHeaderIconButton icon="settings-outline" onPress={onSettingsPress} />
+          </>
+        }
+      />
+
+      {isSearchOpen && (
+        <View
           style={[
-            styles.iconButton,
+            styles.searchBar,
             {
               backgroundColor: theme["color-basic-100"],
-              borderColor: theme["color-basic-500"],
-              borderWidth: 1,
+              borderColor: theme["color-basic-400"],
             },
           ]}
-          onPress={onSearchPress}
-        />
-      </View>
+        >
+          <Ionicons name="search-outline" size={18} color={theme["color-basic-600"]} />
+          <TextInput
+            ref={inputRef}
+            autoFocus
+            style={[styles.searchInput, { color: theme["color-basic-800"] }]}
+            placeholder={t("inbox.searchPlaceholder")}
+            placeholderTextColor={theme["color-basic-600"]}
+            value={searchQuery}
+            onChangeText={onSearchChange}
+            returnKeyType="search"
+            clearButtonMode="never"
+          />
+          <TouchableOpacity onPress={onSearchClose} hitSlop={8}>
+            <Ionicons name="close-circle" size={18} color={theme["color-basic-600"]} />
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {data.sections.map(renderSection)}
-      </ScrollView>
+      {hasNoResults ? (
+        <View style={styles.emptySearch}>
+          <Ionicons name="search-outline" size={40} color={theme["color-basic-500"]} />
+          <Text style={{ color: theme["color-basic-600"] }}>
+            {t("inbox.noResults")}
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={!!isRefreshing} onRefresh={onRefresh} />
+          }
+        >
+          {data.sections.map(renderSection)}
+        </ScrollView>
+      )}
     </Layout>
   );
 };

@@ -4,24 +4,6 @@ export const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 32,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   content: {
     flex: 1,
     paddingHorizontal: 16,
@@ -38,6 +20,29 @@ export const styles = StyleSheet.create({
   },
   cardList: {
     gap: 12,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    padding: 0,
+  },
+  emptySearch: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 80,
+    gap: 8,
   },
   recordCard: {
     borderRadius: 8,

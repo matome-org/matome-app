@@ -15,6 +15,11 @@ export interface DetailsProps {
   fileSize: string;
   waveformBars: WaveformBar[];
   onPlayPause: () => void;
+  // Summary
+  isSummarizing?: boolean;
+  onSummarize?: (text: string) => void;
+  // Retry transcription
+  onRetry?: () => void;
   // Notes
   onSave: (notes: string) => void;
   // Navigation
