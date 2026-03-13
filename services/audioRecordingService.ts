@@ -1,6 +1,13 @@
 import axios from "axios";
-import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
+import {
+  AudioModule,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  RecordingPresets,
+  createAudioPlayer,
+} from "expo-audio";
+import type { AudioStatus } from "expo-audio";
+import * as FileSystem from "expo-file-system/legacy";
 import { configs } from "@/config/config";
 import { createRecording, updateRecording } from "./recordingService";
 import { summarizeText } from "./summarizeService";
@@ -15,10 +22,11 @@ const transcribeApi = transcribeConfig
   ? axios.create({ baseURL: transcribeConfig.baseURL })
   : null;
 
-let recording: Audio.Recording | null = null;
+let recorder: InstanceType<typeof AudioModule.AudioRecorder> | null = null;
 let recordingUri: string | null = null;
 let lastMeteringValue: number | undefined = undefined;
 let lastDurationMillis: number = 0;
+let meteringInterval: ReturnType<typeof setInterval> | null = null;
 
 const logRecordingOperationError = (
   message: string,
@@ -33,8 +41,8 @@ const logRecordingOperationError = (
  */
 export const requestPermissions = async (): Promise<boolean> => {
   try {
-    const { status } = await Audio.requestPermissionsAsync();
-    return status === "granted";
+    const { granted } = await requestRecordingPermissionsAsync();
+    return granted;
   } catch (error) {
     console.error("Error requesting audio permissions:", error);
     return false;
@@ -53,30 +61,33 @@ export const startRecording = async (): Promise<void> => {
     }
 
     // Configure audio mode
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
+    await setAudioModeAsync({
+      allowsRecording: true,
+      playsInSilentMode: true,
     });
 
     lastMeteringValue = undefined;
     lastDurationMillis = 0;
 
-    // Create and start recording with metering pushed via status callback
-    const { recording: newRecording } = await Audio.Recording.createAsync(
-      {
-        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        isMeteringEnabled: true,
-      },
-      (status) => {
+    // Create and prepare recorder
+    recorder = new AudioModule.AudioRecorder({
+      ...RecordingPresets.HIGH_QUALITY,
+      isMeteringEnabled: true,
+    });
+
+    await recorder.prepareToRecordAsync();
+    recorder.record();
+
+    // Poll status every 80ms for metering and duration updates
+    meteringInterval = setInterval(() => {
+      if (recorder) {
+        const status = recorder.getStatus();
         if (status.isRecording) {
           lastMeteringValue = status.metering;
-          lastDurationMillis = status.durationMillis ?? 0;
+          lastDurationMillis = status.durationMillis;
         }
-      },
-      80, // push updates every 80ms
-    );
-
-    recording = newRecording;
+      }
+    }, 80);
   } catch (error) {
     console.error("Failed to start recording:", error);
     throw error;
@@ -87,19 +98,25 @@ export const startRecording = async (): Promise<void> => {
  * Stop audio recording and return the file URI
  */
 export const stopRecording = async (): Promise<string> => {
-  if (!recording) {
+  if (!recorder) {
     throw new Error("No recording in progress");
   }
 
+  if (meteringInterval) {
+    clearInterval(meteringInterval);
+    meteringInterval = null;
+  }
+
   try {
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
+    await recorder.stop();
+    const uri = recorder.uri;
 
     if (!uri) {
       throw new Error("Recording URI is null");
     }
 
-    recording = null;
+    recorder.release();
+    recorder = null;
     recordingUri = uri;
     lastMeteringValue = undefined;
     lastDurationMillis = 0;
@@ -107,20 +124,20 @@ export const stopRecording = async (): Promise<string> => {
     return uri;
   } catch (error) {
     console.error("Failed to stop recording:", error);
-    recording = null;
+    recorder = null;
     throw error;
   }
 };
 
 /**
- * Get the duration of the recording in seconds (from last status update callback).
+ * Get the duration of the recording in seconds (from last status poll).
  */
 export const getRecordingDuration = (): number => {
   return lastDurationMillis / 1000;
 };
 
 /**
- * Get current recording metering (dBFS, -160 to 0) from last status update callback.
+ * Get current recording metering (dBFS, -160 to 0) from last status poll.
  */
 export const getRecordingMetering = (): number | undefined => {
   return lastMeteringValue;
@@ -143,33 +160,31 @@ export const formatDuration = (seconds: number): string => {
  * Read audio duration from file in seconds.
  */
 const getAudioDurationSeconds = async (uri: string): Promise<number> => {
-  let sound: Audio.Sound | null = null;
+  return new Promise((resolve) => {
+    const player = createAudioPlayer({ uri }, { updateInterval: 100 });
 
-  try {
-    const { sound: loadedSound } = await Audio.Sound.createAsync(
-      { uri },
-      { shouldPlay: false },
+    const subscription = player.addListener(
+      "playbackStatusUpdate",
+      (status: AudioStatus) => {
+        if (status.isLoaded && status.duration > 0) {
+          subscription.remove();
+          player.remove();
+          resolve(status.duration);
+        }
+      },
     );
-    sound = loadedSound;
 
-    const status = await sound.getStatusAsync();
-    if (status.isLoaded && status.durationMillis != null) {
-      return status.durationMillis / 1000;
-    }
-
-    return 0;
-  } catch (error) {
-    console.error("Failed to read recording duration:", error);
-    return 0;
-  } finally {
-    if (sound) {
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      subscription.remove();
       try {
-        await sound.unloadAsync();
-      } catch (error) {
-        console.error("Failed to unload duration probe sound:", error);
+        player.remove();
+      } catch {
+        // ignore
       }
-    }
-  }
+      resolve(0);
+    }, 5000);
+  });
 };
 
 /**
@@ -454,9 +469,14 @@ export const retryTranscription = async (
  * Cancel current recording
  */
 export const cancelRecording = async (): Promise<void> => {
-  if (recording) {
+  if (meteringInterval) {
+    clearInterval(meteringInterval);
+    meteringInterval = null;
+  }
+
+  if (recorder) {
     try {
-      await recording.stopAndUnloadAsync();
+      await recorder.stop();
       if (recordingUri) {
         // Delete the temporary file
         const fileInfo = await FileSystem.getInfoAsync(recordingUri);
@@ -467,7 +487,8 @@ export const cancelRecording = async (): Promise<void> => {
     } catch (error) {
       console.error("Error canceling recording:", error);
     } finally {
-      recording = null;
+      recorder.release();
+      recorder = null;
       recordingUri = null;
       lastMeteringValue = undefined;
       lastDurationMillis = 0;

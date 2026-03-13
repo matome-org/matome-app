@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import * as SecureStore from 'expo-secure-store';
+import { getLocales } from 'expo-localization';
 
 import i18n from '@/config/i18n';
 
@@ -17,10 +18,15 @@ const secureStorage = {
   removeItem: (name: string) => SecureStore.deleteItemAsync(name),
 };
 
+function getDeviceLanguage(): Language {
+  const locale = getLocales()[0]?.languageCode;
+  return locale === 'ja' ? 'ja' : 'en';
+}
+
 export const useLanguageStore = create<LanguageState>()(
   persist(
     (set) => ({
-      language: 'en',
+      language: getDeviceLanguage(),
       setLanguage: (language: Language) => {
         i18n.changeLanguage(language);
         set({ language });

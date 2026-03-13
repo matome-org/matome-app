@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { Audio, AVPlaybackStatus } from "expo-av";
-import * as FileSystem from "expo-file-system";
+import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
+import type { AudioPlayer, AudioStatus } from "expo-audio";
+import * as FileSystem from "expo-file-system/legacy";
 import Toast from "react-native-toast-message";
 import { useTranslation } from "react-i18next";
 
@@ -57,7 +58,8 @@ export const DetailsContainer: React.FC = () => {
   const [isSummarizing, setIsSummarizing] = useState(false);
 
   // Audio state
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
+  const statusSubscriptionRef = useRef<{ remove: () => void } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState("0:00");
   const [duration, setDuration] = useState("0:00");
@@ -152,15 +154,15 @@ export const DetailsContainer: React.FC = () => {
     }
   }, [id, record]);
 
-  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+  const onPlaybackStatusUpdate = useCallback((status: AudioStatus) => {
     if (!status.isLoaded) return;
 
-    setIsPlaying(status.isPlaying);
-    setCurrentTime(formatTime(status.positionMillis));
+    setIsPlaying(status.playing);
+    setCurrentTime(formatTime(status.currentTime * 1000));
 
-    if (status.durationMillis) {
-      setDuration(formatTime(status.durationMillis));
-      setPlaybackProgress(status.positionMillis / status.durationMillis);
+    if (status.duration) {
+      setDuration(formatTime(status.duration * 1000));
+      setPlaybackProgress(status.currentTime / status.duration);
     }
 
     // Reset when playback finishes
@@ -171,59 +173,62 @@ export const DetailsContainer: React.FC = () => {
     }
   }, []);
 
-  // Load and configure audio sound
+  // Load and configure audio player
   useEffect(() => {
     if (!record?.audioFilePath) return;
 
     let mounted = true;
 
-    const loadSound = async () => {
+    const loadPlayer = async () => {
       try {
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+        await setAudioModeAsync({ playsInSilentMode: true });
 
-        const { sound } = await Audio.Sound.createAsync(
+        const player = createAudioPlayer(
           { uri: record.audioFilePath },
-          { shouldPlay: false },
+          { updateInterval: 100 },
+        );
+
+        const subscription = player.addListener(
+          "playbackStatusUpdate",
           onPlaybackStatusUpdate,
         );
 
         if (mounted) {
-          soundRef.current = sound;
+          playerRef.current = player;
+          statusSubscriptionRef.current = subscription;
         } else {
-          await sound.unloadAsync();
+          subscription.remove();
+          player.remove();
         }
       } catch (e) {
         // Audio file may not exist or be corrupted
       }
     };
 
-    loadSound();
+    loadPlayer();
 
     return () => {
       mounted = false;
-      soundRef.current?.unloadAsync();
-      soundRef.current = null;
+      statusSubscriptionRef.current?.remove();
+      statusSubscriptionRef.current = null;
+      playerRef.current?.remove();
+      playerRef.current = null;
     };
   }, [record?.audioFilePath, onPlaybackStatusUpdate]);
 
   const handlePlayPause = useCallback(async () => {
-    if (!soundRef.current) return;
+    const player = playerRef.current;
+    if (!player || !player.isLoaded) return;
 
     try {
-      const status = await soundRef.current.getStatusAsync();
-      if (!status.isLoaded) return;
-
-      if (status.isPlaying) {
-        await soundRef.current.pauseAsync();
+      if (player.playing) {
+        player.pause();
       } else {
         // If finished, replay from start
-        if (
-          status.didJustFinish ||
-          status.positionMillis === status.durationMillis
-        ) {
-          await soundRef.current.setPositionAsync(0);
+        if (player.currentTime >= player.duration && player.duration > 0) {
+          await player.seekTo(0);
         }
-        await soundRef.current.playAsync();
+        player.play();
       }
     } catch (e) {
       Toast.show({ type: "error", text1: t("toast.audioFailed") });

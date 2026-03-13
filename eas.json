@@ -1,0 +1,43 @@
+{
+  "cli": {
+    "version": ">= 18.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gaqkdsybmywgxabqajxa.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_P1vjQExq3DzaunobiIs5Sw_twpeHETX",
+        "EXPO_PUBLIC_TRANSCRIBE_API_URL": "http://187.77.228.183:8000/"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gaqkdsybmywgxabqajxa.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_P1vjQExq3DzaunobiIs5Sw_twpeHETX",
+        "EXPO_PUBLIC_TRANSCRIBE_API_URL": "http://187.77.228.183:8000/"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gaqkdsybmywgxabqajxa.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_P1vjQExq3DzaunobiIs5Sw_twpeHETX",
+        "EXPO_PUBLIC_TRANSCRIBE_API_URL": "http://187.77.228.183:8000/"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
