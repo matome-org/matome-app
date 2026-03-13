@@ -13,6 +13,7 @@ import ToastContainer from 'react-native-toast-message';
 
 import { supabase } from '@/config/supabase';
 import { darkTheme, lightTheme } from '@/config/themes';
+import { runUpdateFlow } from '@/services/updateService';
 import { useAuthStore } from '@/stores/authStore';
 import { useEffectiveTheme } from '@/stores/themeStore';
 
@@ -35,6 +36,7 @@ const RootLayoutNav = () => {
 
   useEffect(() => {
     checkAuth();
+    runUpdateFlow(); // fire-and-forget; never blocks auth or splash screen
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthenticated(!!session);
