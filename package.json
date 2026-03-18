@@ -8,7 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "postinstall": "node ./scripts/patch-expo-updates.js"
   },
   "dependencies": {
     "@eva-design/eva": "^2.2.0",
@@ -24,6 +25,7 @@
     "expo": "^55",
     "expo-asset": "~55.0.8",
     "expo-audio": "~55.0.8",
+    "expo-build-properties": "~55.0.9",
     "expo-file-system": "~55.0.10",
     "expo-font": "~55.0.4",
     "expo-image": "~55.0.6",
@@ -36,6 +38,7 @@
     "expo-status-bar": "~55.0.4",
     "expo-updates": "~0.26.0",
     "expo-web-browser": "~55.0.9",
+    "fs-extra": "^11.3.4",
     "i18next": "^25.8.13",
     "react": "19.2.0",
     "react-dom": "19.2.0",
