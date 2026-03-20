@@ -65,7 +65,8 @@
       "expo-web-browser",
       "expo-audio",
       "expo-asset",
-      "expo-localization"
+      "expo-localization",
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true,

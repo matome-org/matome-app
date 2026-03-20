@@ -19,24 +19,21 @@ import { useEffectiveTheme } from '@/stores/themeStore';
 
 const BACKGROUND_COLORS = { light: '#fdfdfd', dark: '#333333' };
 
-export const unstable_settings = {
-  initialRouteName: 'index',
-};
+export const unstable_settings = { initialRouteName: 'index' };
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-const RootLayoutNav = () => {
+// Handles auth redirects — lives inside navigation context
+const NavigationGuard = () => {
   const { isAuthenticated, isLoading, checkAuth, setAuthenticated } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
-  const effectiveTheme = useEffectiveTheme();
-  const backgroundColor = BACKGROUND_COLORS[effectiveTheme];
 
   useEffect(() => {
     checkAuth();
-    runUpdateFlow(); // fire-and-forget; never blocks auth or splash screen
+    runUpdateFlow();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthenticated(!!session);
@@ -61,11 +58,19 @@ const RootLayoutNav = () => {
 
   if (isLoading) {
     return (
-      <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" />
       </View>
     );
   }
+
+  return null;
+};
+
+// Handles theme + background — lives inside navigation context
+const ThemedStack = () => {
+  const effectiveTheme = useEffectiveTheme();
+  const backgroundColor = BACKGROUND_COLORS[effectiveTheme];
 
   return (
     <Stack
@@ -80,8 +85,9 @@ const RootLayoutNav = () => {
   );
 };
 
+// Root layout — NO custom hooks here at all
 const RootLayout = () => {
-  const effectiveTheme = useEffectiveTheme();
+  const effectiveTheme = useEffectiveTheme(); // ⚠️ still needed for ApplicationProvider
   const theme = effectiveTheme === 'dark' ? darkTheme : lightTheme;
 
   return (
@@ -89,7 +95,8 @@ const RootLayout = () => {
       <IconRegistry icons={EvaIconsPack} />
       <ApplicationProvider mapping={eva.mapping} theme={theme}>
         <QueryClientProvider client={queryClient}>
-          <RootLayoutNav />
+          <ThemedStack />
+          <NavigationGuard />
           <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
           <ToastContainer bottomOffset={130} position="bottom" />
         </QueryClientProvider>
