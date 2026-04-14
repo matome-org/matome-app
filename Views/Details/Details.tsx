@@ -495,6 +495,7 @@ export const Details: React.FC<DetailsProps> = ({
 
       {/* Floating Action Button */}
       <TouchableOpacity
+        testID="fab-save"
         onPress={onSave}
         style={[
           styles.fab,
@@ -506,7 +507,7 @@ export const Details: React.FC<DetailsProps> = ({
           size={24}
           color={theme["color-primary-900"]}
         />
-        {isDirty && <View style={styles.fabDirtyDot} />}
+        {isDirty && <View testID="fab-dirty-dot" style={styles.fabDirtyDot} />}
       </TouchableOpacity>
     </Layout>
   );

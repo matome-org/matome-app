@@ -158,11 +158,12 @@ export const DetailsContainer: React.FC = () => {
     return () => clearInterval(interval);
   }, [id, record?.isProcessing]);
 
-  // Back-navigation guard (M-02): show alert when dirty and in edit mode
+  // Back-navigation guard (M-02): show alert whenever there are unsaved changes,
+  // regardless of whether the user is currently in Edit or Preview mode.
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
-      if (!isDirty || !isEditing) {
-        // No unsaved changes or not editing — allow back
+      if (!isDirty) {
+        // No unsaved changes — allow back
         return;
       }
 
@@ -183,14 +184,20 @@ export const DetailsContainer: React.FC = () => {
           {
             text: "Discard",
             style: "destructive",
-            onPress: () => navigation.dispatch(e.data.action),
+            onPress: () => {
+              // Reset the saved-text ref before navigating so that if the
+              // component briefly re-renders on the way out it won't re-trigger
+              // the guard (W-02 avoidance).
+              savedTextRef.current = transcript;
+              navigation.dispatch(e.data.action);
+            },
           },
         ],
       );
     });
 
     return unsubscribe;
-  }, [navigation, isDirty, isEditing]);
+  }, [navigation, isDirty, transcript]);
 
   const handleRetry = useCallback(async () => {
     if (!record) return;
