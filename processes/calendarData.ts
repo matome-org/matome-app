@@ -1,5 +1,4 @@
-import { getDatabase } from "@/utils/database";
-import { getRecordingsByDay, getRecordingsByDateRange } from "@/services/recordingService";
+import { getRecordingsByDateRange, getRecordingsByDayWithWorkspace } from "@/services/recordingService";
 import type { BadgeType } from "@/processes/homeData";
 
 export type CalendarRecordingCard = {
@@ -8,34 +7,42 @@ export type CalendarRecordingCard = {
   duration: number;
   badge: BadgeType;
   workspaceName: string | null;
+  workspaceId: string | null;
   createdAt: number;
 };
 
-/**
- * Internal row type returned by the JOIN query.
- */
-type RecordingWithWorkspace = {
-  id: string;
-  title: string;
-  duration: string;
-  badge: string;
-  createdAt: number;
-  workspaceName: string | null;
-};
 
 /**
- * Parse duration string (e.g. "1:23" or "0:45") to total seconds.
+ * Parse a duration string produced by audioRecordingService.formatDuration.
+ *
+ * formatDuration outputs:
+ *   - "2m 14s"  (minutes + seconds)
+ *   - "45s"     (seconds only, when < 60)
+ *
  * Falls back to 0 for unrecognisable formats.
  */
 const parseDurationSeconds = (duration: string): number => {
   if (!duration || typeof duration !== "string") return 0;
-  const parts = duration.split(":").map(Number);
-  if (parts.length === 2) {
-    const [minutes, seconds] = parts;
+
+  // "Xm Ys" — e.g. "2m 14s"
+  const minsAndSecs = duration.match(/^(\d+)m\s+(\d+)s$/);
+  if (minsAndSecs) {
+    const minutes = Number(minsAndSecs[1]);
+    const seconds = Number(minsAndSecs[2]);
     if (Number.isFinite(minutes) && Number.isFinite(seconds)) {
       return minutes * 60 + seconds;
     }
   }
+
+  // "Xs" — e.g. "45s"
+  const secsOnly = duration.match(/^(\d+)s$/);
+  if (secsOnly) {
+    const seconds = Number(secsOnly[1]);
+    if (Number.isFinite(seconds)) {
+      return seconds;
+    }
+  }
+
   return 0;
 };
 
@@ -77,7 +84,8 @@ export const fetchDaysWithRecordings = async (
 
 /**
  * Fetch CalendarRecordingCard list for the given calendar day.
- * Joins recordings with workspaces to include workspace name.
+ * Delegates to getRecordingsByDayWithWorkspace so all SQL parameters are
+ * coerced through coerceSqlitePrimitive — avoids the Android Kotlin-type crash.
  */
 export const fetchDayRecordings = async (
   date: Date,
@@ -89,24 +97,7 @@ export const fetchDayRecordings = async (
     date.getDate(),
   ).setHours(0, 0, 0, 0);
 
-  const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1;
-
-  const db = await getDatabase();
-
-  const rows = await db.getAllAsync<RecordingWithWorkspace>(
-    `SELECT
-       r.id,
-       r.title,
-       r.duration,
-       r.badge,
-       r.createdAt,
-       w.name AS workspaceName
-     FROM recordings r
-     LEFT JOIN workspaces w ON r.workspaceId = w.id
-     WHERE r.createdAt >= ? AND r.createdAt <= ?
-     ORDER BY r.createdAt DESC`,
-    [dayStart, dayEnd],
-  );
+  const rows = await getRecordingsByDayWithWorkspace(dayStart);
 
   return rows.map((row) => ({
     id: typeof row.id === "string" ? row.id : String(row.id),
@@ -118,6 +109,12 @@ export const fetchDayRecordings = async (
         ? typeof row.workspaceName === "string"
           ? row.workspaceName
           : String(row.workspaceName)
+        : null,
+    workspaceId:
+      row.workspaceId != null
+        ? typeof row.workspaceId === "string"
+          ? row.workspaceId
+          : String(row.workspaceId)
         : null,
     createdAt:
       typeof row.createdAt === "number"

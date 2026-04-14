@@ -36,19 +36,10 @@ const CalendarContainer: React.FC = () => {
   // Apply space filter in state — no DB re-fetch
   const filteredDayRecordings = useMemo(() => {
     if (selectedSpaceId === null) return rawDayRecordings;
-    // Recordings in a workspace have workspaceName set; "Inbox" recordings have
-    // workspaceName null and workspaceId null. We need to match by ID, but
-    // CalendarRecordingCard only carries workspaceName. To support filtering by
-    // space ID we store raw data alongside and filter by matching workspaceName
-    // against the selected space's name. For a more robust approach we would
-    // include workspaceId in CalendarRecordingCard, but the current type spec
-    // uses workspaceName. We therefore filter by matching the selected space name.
-    const selectedSpace = spaces.find((s) => s.id === selectedSpaceId);
-    if (!selectedSpace) return rawDayRecordings;
-    return rawDayRecordings.filter(
-      (r) => r.workspaceName === selectedSpace.name,
-    );
-  }, [rawDayRecordings, selectedSpaceId, spaces]);
+    // Filter by workspaceId so that two spaces with identical names never bleed
+    // into each other's filtered list.
+    return rawDayRecordings.filter((r) => r.workspaceId === selectedSpaceId);
+  }, [rawDayRecordings, selectedSpaceId]);
 
   const loadMonthDots = useCallback(async (y: number, m: number) => {
     setIsMonthLoading(true);
@@ -104,14 +95,16 @@ const CalendarContainer: React.FC = () => {
       setYear(newYear);
       setMonth(newMonth);
 
-      // Reset selected day to 1 if the current selected day is not in the new month
+      // Clamp selected day to the last day of the new month if necessary
       // (e.g. navigating from March to February where day 31 doesn't exist)
       const daysInNewMonth = new Date(newYear, newMonth + 1, 0).getDate();
-      if (selectedDay > daysInNewMonth) {
-        setSelectedDay(1);
-        loadDayRecordings(new Date(newYear, newMonth, 1));
-      }
+      const targetDay = selectedDay > daysInNewMonth ? 1 : selectedDay;
+      if (selectedDay > daysInNewMonth) setSelectedDay(1);
 
+      // Always reload day recordings regardless of whether the day number is
+      // valid in both months — without this, navigating e.g. April→March on
+      // day 10 would leave the panel showing the previous month's recordings.
+      loadDayRecordings(new Date(newYear, newMonth, targetDay));
       loadMonthDots(newYear, newMonth);
     },
     [selectedDay, loadMonthDots, loadDayRecordings],

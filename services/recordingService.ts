@@ -323,6 +323,60 @@ export const getRecordingsByDay = async (
   return getRecordingsByDateRange(dayStart, dayEnd);
 };
 
+export interface RecordingWithWorkspaceName extends RecordingRecord {
+  workspaceName: string | null;
+}
+
+/**
+ * Get recordings for a single calendar day, LEFT JOINed with workspaces so
+ * that the workspace name is available for display and the workspaceId is
+ * available for ID-based filtering.
+ *
+ * Uses coerceSqlitePrimitive on every bound parameter to avoid the Android
+ * "Cannot convert to Kotlin type" crash that occurs with uncoerced values.
+ */
+export const getRecordingsByDayWithWorkspace = async (
+  dayEpoch: number,
+): Promise<RecordingWithWorkspaceName[]> => {
+  const db = await getDatabase();
+  const dayStart = coerceSqlitePrimitive(assertNumber(dayEpoch, "dayEpoch"), "dayEpoch");
+  const dayEnd = coerceSqlitePrimitive(
+    (dayStart as number) + 24 * 60 * 60 * 1000 - 1,
+    "dayEnd",
+  );
+
+  try {
+    const rows = await db.getAllAsync<RecordingWithWorkspaceName>(
+      `SELECT
+         r.id,
+         r.title,
+         r.summary,
+         r.timestamp,
+         r.duration,
+         r.badge,
+         r.isProcessing,
+         r.audioFilePath,
+         r.createdAt,
+         r.workspaceId,
+         r.notes,
+         w.name AS workspaceName
+       FROM recordings r
+       LEFT JOIN workspaces w ON r.workspaceId = w.id
+       WHERE r.createdAt >= ? AND r.createdAt <= ?
+       ORDER BY r.createdAt DESC`,
+      [dayStart, dayEnd],
+    );
+    return rows;
+  } catch (error) {
+    console.error(
+      "SQLite getRecordingsByDayWithWorkspace failed",
+      { operation: "getRecordingsByDayWithWorkspace", dayEpoch },
+      error,
+    );
+    throw error;
+  }
+};
+
 /**
  * Convert a RecordingRecord to RecordingCard format
  */

@@ -56,9 +56,9 @@ export default {
     emptyHint: '+ をタップしてスペースを作成し、録音を整理しましょう',
   },
   calendar: {
-    title: 'Calendar',
-    noRecordings: 'No recordings for this day',
-    allSpaces: 'All',
+    title: 'カレンダー',
+    noRecordings: 'この日の録音はありません',
+    allSpaces: 'すべて',
   },
   welcome: {
     title: 'Matomeへようこそ',
