@@ -1,5 +1,5 @@
 import { Layout, Text, useTheme } from "@ui-kitten/components";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useRef } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
+import Markdown from "react-native-markdown-display";
 
 import { AppHeader, AppHeaderIconButton } from "@/components/AppHeader";
 import { DetailsProps } from "./Details.types";
@@ -29,6 +30,11 @@ const formatDate = (timestamp: string) => {
 export const Details: React.FC<DetailsProps> = ({
   recording,
   isLoading,
+  isDirty,
+  isEditing,
+  transcript,
+  onTranscriptChange,
+  onEditingChange,
   isPlaying,
   currentTime,
   duration,
@@ -49,12 +55,18 @@ export const Details: React.FC<DetailsProps> = ({
     !recording.isProcessing &&
     !recording.notes &&
     !(recording.summary?.trim());
-  const getEditableText = useMemo(() => recording.notes ?? recording.summary ?? "", [recording.notes, recording.summary]);
-  const [transcript, setTranscript] = useState(getEditableText);
 
-  useEffect(() => {
-    setTranscript(getEditableText);
-  }, [getEditableText, recording.notes, recording.summary]);
+  const [selection, setSelection] = React.useState({ start: 0, end: 0 });
+  const inputRef = useRef<TextInput>(null);
+
+  const insertMarkdown = (prefix: string, suffix = "") => {
+    const before = transcript.slice(0, selection.start);
+    const selected = transcript.slice(selection.start, selection.end);
+    const after = transcript.slice(selection.end);
+    const newText = before + prefix + selected + suffix + after;
+    onTranscriptChange(newText);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
 
   const getBadgeStyle = () => {
     if (recording.badge === "Work") {
@@ -70,10 +82,6 @@ export const Details: React.FC<DetailsProps> = ({
   };
 
   const badgeStyle = getBadgeStyle();
-
-  const handleSave = () => {
-    onSave(transcript);
-  };
 
   if (isLoading) {
     return (
@@ -288,22 +296,55 @@ export const Details: React.FC<DetailsProps> = ({
                 {t("details.notes")}
               </Text>
             </View>
-            {transcribeFailed && (
-              <TouchableOpacity
-                onPress={onRetry}
-                style={[
-                  styles.retryButton,
-                  { backgroundColor: theme["color-primary-500"] },
-                ]}
-              >
-                <Ionicons name="refresh" size={14} color={theme["color-primary-900"]} />
-                <Text
-                  style={[styles.retryButtonText, { color: theme["color-primary-900"] }]}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {transcribeFailed && (
+                <TouchableOpacity
+                  onPress={onRetry}
+                  style={[
+                    styles.retryButton,
+                    { backgroundColor: theme["color-primary-500"] },
+                  ]}
                 >
-                  {t("common.retry")}
-                </Text>
-              </TouchableOpacity>
-            )}
+                  <Ionicons name="refresh" size={14} color={theme["color-primary-900"]} />
+                  <Text
+                    style={[styles.retryButtonText, { color: theme["color-primary-900"] }]}
+                  >
+                    {t("common.retry")}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {!isTranscribing && !transcribeFailed && (
+                <TouchableOpacity
+                  onPress={() => onEditingChange(!isEditing)}
+                  style={[
+                    styles.retryButton,
+                    {
+                      backgroundColor: isEditing
+                        ? theme["color-primary-500"]
+                        : theme["color-basic-300"],
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={isEditing ? "eye" : "pencil"}
+                    size={13}
+                    color={isEditing ? theme["color-primary-900"] : theme["color-basic-700"]}
+                  />
+                  <Text
+                    style={[
+                      styles.retryButtonText,
+                      {
+                        color: isEditing
+                          ? theme["color-primary-900"]
+                          : theme["color-basic-700"],
+                      },
+                    ]}
+                  >
+                    {isEditing ? t("details.preview") : t("details.edit")}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
           {isTranscribing ? (
@@ -328,29 +369,133 @@ export const Details: React.FC<DetailsProps> = ({
                 {t("recording.transcriptionFailed")}
               </Text>
             </View>
+          ) : isEditing ? (
+            <View>
+              {/* Formatting toolbar */}
+              <View
+                style={[
+                  styles.markdownToolbar,
+                  {
+                    backgroundColor: theme["color-basic-300"],
+                    borderColor: theme["color-basic-400"],
+                  },
+                ]}
+              >
+                {[
+                  { label: "B", action: () => insertMarkdown("**", "**"), bold: true },
+                  { label: "I", action: () => insertMarkdown("*", "*"), italic: true },
+                  { label: "H", action: () => insertMarkdown("\n# ") },
+                  { label: "•", action: () => insertMarkdown("\n- ") },
+                  { label: "[ ]", action: () => insertMarkdown("\n- [ ] ") },
+                ].map(({ label, action, bold, italic }) => (
+                  <TouchableOpacity
+                    key={label}
+                    onPress={action}
+                    style={[
+                      styles.toolbarButton,
+                      { borderColor: theme["color-basic-400"] },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: theme["color-basic-800"],
+                        fontSize: 13,
+                        fontWeight: bold ? "700" : "400",
+                        fontStyle: italic ? "italic" : "normal",
+                      }}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                ref={inputRef}
+                style={[
+                  styles.transcriptEditor,
+                  {
+                    color: theme["color-basic-800"],
+                    backgroundColor: "transparent",
+                  },
+                ]}
+                multiline
+                textAlignVertical="top"
+                value={transcript}
+                onChangeText={onTranscriptChange}
+                onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
+                placeholder={t("details.notesPlaceholder")}
+                placeholderTextColor={theme["color-basic-500"]}
+              />
+            </View>
           ) : (
-            <TextInput
-              style={[
-                styles.transcriptEditor,
-                {
+            <Markdown
+              style={{
+                body: {
                   color: theme["color-basic-800"],
-                  backgroundColor: "transparent",
+                  fontSize: 16,
+                  lineHeight: 24,
                 },
-              ]}
-              multiline
-              textAlignVertical="top"
-              value={transcript}
-              onChangeText={setTranscript}
-              placeholder={t("details.notesPlaceholder")}
-              placeholderTextColor={theme["color-basic-500"]}
-            />
+                heading1: {
+                  fontSize: 22,
+                  fontWeight: "700",
+                  color: theme["color-basic-900"],
+                  marginBottom: 8,
+                  marginTop: 16,
+                },
+                heading2: {
+                  fontSize: 18,
+                  fontWeight: "700",
+                  color: theme["color-basic-900"],
+                  marginBottom: 6,
+                  marginTop: 14,
+                },
+                heading3: {
+                  fontSize: 16,
+                  fontWeight: "600",
+                  color: theme["color-basic-900"],
+                  marginBottom: 4,
+                  marginTop: 12,
+                },
+                strong: { fontWeight: "700" },
+                em: { fontStyle: "italic" },
+                bullet_list: { marginTop: 4 },
+                ordered_list: { marginTop: 4 },
+                list_item: { marginBottom: 4 },
+                code_inline: {
+                  backgroundColor: theme["color-basic-300"],
+                  paddingHorizontal: 4,
+                  borderRadius: 4,
+                  fontFamily: "monospace",
+                  fontSize: 14,
+                },
+                fence: {
+                  backgroundColor: theme["color-basic-300"],
+                  borderRadius: 8,
+                  padding: 12,
+                  marginVertical: 8,
+                },
+                blockquote: {
+                  borderLeftWidth: 3,
+                  borderLeftColor: theme["color-primary-500"],
+                  paddingLeft: 12,
+                  marginVertical: 8,
+                  opacity: 0.85,
+                },
+                hr: {
+                  borderColor: theme["color-basic-400"],
+                  marginVertical: 12,
+                },
+              }}
+            >
+              {transcript || "*No notes yet. Tap Edit to add some.*"}
+            </Markdown>
           )}
         </View>
       </ScrollView>
 
       {/* Floating Action Button */}
       <TouchableOpacity
-        onPress={handleSave}
+        onPress={onSave}
         style={[
           styles.fab,
           { backgroundColor: theme["color-primary-500"] },
@@ -361,6 +506,7 @@ export const Details: React.FC<DetailsProps> = ({
           size={24}
           color={theme["color-primary-900"]}
         />
+        {isDirty && <View style={styles.fabDirtyDot} />}
       </TouchableOpacity>
     </Layout>
   );

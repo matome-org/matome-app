@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { Alert } from "react-native";
+import { useRouter, useLocalSearchParams, useNavigation } from "expo-router";
 import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import type { AudioPlayer, AudioStatus } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
@@ -49,6 +50,7 @@ const generateWaveformFromBytes = (base64: string): number[] => {
 
 export const DetailsContainer: React.FC = () => {
   const router = useRouter();
+  const navigation = useNavigation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation();
 
@@ -56,6 +58,14 @@ export const DetailsContainer: React.FC = () => {
   const [record, setRecord] = useState<RecordingRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSummarizing, setIsSummarizing] = useState(false);
+
+  // Lifted edit state
+  const [transcript, setTranscript] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  // The text that was last persisted to DB — used to compute isDirty
+  const savedTextRef = useRef("");
+
+  const isDirty = transcript !== savedTextRef.current;
 
   // Audio state
   const playerRef = useRef<AudioPlayer | null>(null);
@@ -82,6 +92,12 @@ export const DetailsContainer: React.FC = () => {
         if (dbRecord) {
           setRecord(dbRecord);
           setRecording(recordToCard(dbRecord));
+
+          const initialText = dbRecord.notes ?? dbRecord.summary ?? "";
+          setTranscript(initialText);
+          savedTextRef.current = initialText;
+          // Start in edit mode when there's no content yet
+          setIsEditing(!initialText);
         } else {
           router.back();
         }
@@ -141,6 +157,40 @@ export const DetailsContainer: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [id, record?.isProcessing]);
+
+  // Back-navigation guard (M-02): show alert when dirty and in edit mode
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (!isDirty || !isEditing) {
+        // No unsaved changes or not editing — allow back
+        return;
+      }
+
+      // Prevent the default back action
+      e.preventDefault();
+
+      Alert.alert(
+        "Unsaved changes",
+        "You have unsaved changes. Do you want to discard them?",
+        [
+          {
+            text: "Keep editing",
+            style: "cancel",
+            onPress: () => {
+              // Do nothing — stay on screen
+            },
+          },
+          {
+            text: "Discard",
+            style: "destructive",
+            onPress: () => navigation.dispatch(e.data.action),
+          },
+        ],
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation, isDirty, isEditing]);
 
   const handleRetry = useCallback(async () => {
     if (!record) return;
@@ -239,17 +289,16 @@ export const DetailsContainer: React.FC = () => {
     router.back();
   }, [router]);
 
-  const handleSave = useCallback(
-    async (notes: string) => {
-      try {
-        await updateRecording(id, { notes });
-        Toast.show({ type: "success", text1: t("toast.notesSaved") });
-      } catch (e) {
-        Toast.show({ type: "error", text1: t("toast.notesFailed") });
-      }
-    },
-    [id, t],
-  );
+  const handleSave = useCallback(async () => {
+    try {
+      await updateRecording(id, { notes: transcript });
+      // Update the saved reference so dirty resets to false
+      savedTextRef.current = transcript;
+      Toast.show({ type: "success", text1: t("toast.notesSaved") });
+    } catch (e) {
+      Toast.show({ type: "error", text1: t("toast.notesFailed") });
+    }
+  }, [id, transcript, t]);
 
   const handleSummarize = useCallback(
     async (text: string) => {
@@ -297,6 +346,11 @@ export const DetailsContainer: React.FC = () => {
         }
       }
       isLoading={isLoading}
+      isDirty={isDirty}
+      isEditing={isEditing}
+      transcript={transcript}
+      onTranscriptChange={setTranscript}
+      onEditingChange={setIsEditing}
       isPlaying={isPlaying}
       currentTime={currentTime}
       duration={duration}

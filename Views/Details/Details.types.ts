@@ -8,6 +8,12 @@ export interface WaveformBar {
 export interface DetailsProps {
   recording: RecordingCard;
   isLoading?: boolean;
+  // Dirty / edit state (lifted to container)
+  isDirty: boolean;
+  isEditing: boolean;
+  transcript: string;
+  onTranscriptChange: (text: string) => void;
+  onEditingChange: (editing: boolean) => void;
   // Audio playback
   isPlaying: boolean;
   currentTime: string;
@@ -21,7 +27,7 @@ export interface DetailsProps {
   // Retry transcription
   onRetry?: () => void;
   // Notes
-  onSave: (notes: string) => void;
+  onSave: () => void;
   // Navigation
   onBack: () => void;
   onMoreOptions?: () => void;
