@@ -1,6 +1,8 @@
 import { Icon, useTheme } from '@ui-kitten/components';
 import React, { useState } from 'react';
 import { ImageProps, Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 import RecordingModal from '../RecordingModal';
 import { useRecordingsStore } from '@/stores/recordingsStore';
@@ -21,12 +23,12 @@ const MicIcon = (props: Partial<ImageProps>) => (
 
 export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   const theme = useTheme();
+  const { t } = useTranslation();
   const [isRecordingModalVisible, setIsRecordingModalVisible] = useState(false);
   const triggerRefresh = useRecordingsStore((state) => state.triggerRefresh);
 
   // Filter out routes that should be hidden from tab bar (dynamic routes like [id])
   const visibleRoutes = state.routes.filter((route) => {
-    // Filter out dynamic routes (those starting with [) or routes explicitly hidden
     return !route.name.startsWith('[');
   });
 
@@ -38,7 +40,7 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
     setIsRecordingModalVisible(false);
   };
 
-  const handleRecordingComplete = (recordingId: string) => {
+  const handleRecordingComplete = (_recordingId: string) => {
     triggerRefresh();
   };
 
@@ -52,12 +54,11 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
         },
       ]}
     >
-      {visibleRoutes.map((route, index) => {
+      {visibleRoutes.map((route) => {
         const { options } = descriptors[route.key];
         const labelValue = options.tabBarLabel ?? options.title ?? route.name;
-        // Ensure label is a string (not a function)
         const label = typeof labelValue === 'string' ? labelValue : route.name;
-        // Find the actual index in the original state.routes array for focus check
+
         const actualIndex = state.routes.findIndex((r) => r.key === route.key);
         const isFocused = state.index === actualIndex;
 
@@ -80,11 +81,31 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
           });
         };
 
-        // Render microphone button in the center (between index 0 and 1)
-        if (index === 1) {
+        const tabColor = isFocused
+          ? theme['color-primary-500']
+          : theme['color-basic-600'];
+
+        // Inbox tab — always index 0 in our route order
+        if (route.name === 'inbox') {
           return (
             <React.Fragment key={route.key}>
-              {/* Microphone Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={isFocused ? { selected: true } : {}}
+                accessibilityLabel={options.tabBarAccessibilityLabel}
+                onPress={onPress}
+                onLongPress={onLongPress}
+                style={styles.tabItem}
+              >
+                <InboxIcon
+                  style={[styles.tabIcon, { tintColor: tabColor }]}
+                />
+                <Text style={[styles.tabLabel, { color: tabColor }]}>
+                  {label}
+                </Text>
+              </Pressable>
+
+              {/* Mic button injected immediately after the Inbox tab */}
               <Pressable
                 style={[
                   styles.micButton,
@@ -96,52 +117,38 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
                 onPress={handleMicPress}
               >
                 <MicIcon
-                  style={[
-                    styles.micIcon,
-                    {
-                      tintColor: '#ffffff',
-                    },
-                  ]}
+                  style={[styles.micIcon, { tintColor: '#ffffff' }]}
                 />
-              </Pressable>
-              {/* Spaces Tab */}
-              <Pressable
-                key={route.key}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                accessibilityLabel={options.tabBarAccessibilityLabel}
-                onPress={onPress}
-                onLongPress={onLongPress}
-                style={styles.tabItem}
-              >
-                <SpacesIcon
-                  style={[
-                    styles.tabIcon,
-                    {
-                      tintColor: isFocused
-                        ? theme['color-primary-500']
-                        : theme['color-basic-600'],
-                    },
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    {
-                      color: isFocused
-                        ? theme['color-primary-500']
-                        : theme['color-basic-600'],
-                    },
-                  ]}
-                >
-                  {label}
-                </Text>
               </Pressable>
             </React.Fragment>
           );
         }
 
-        // Render Inbox tab (index 0)
+        // Calendar tab
+        if (route.name === 'calendar') {
+          return (
+            <Pressable
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel}
+              onPress={onPress}
+              onLongPress={onLongPress}
+              style={styles.tabItem}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={24}
+                color={tabColor}
+              />
+              <Text style={[styles.tabLabel, { color: tabColor }]}>
+                {t('calendar.title')}
+              </Text>
+            </Pressable>
+          );
+        }
+
+        // Spaces / explore tab (and any other future tab)
         return (
           <Pressable
             key={route.key}
@@ -152,31 +159,16 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
             onLongPress={onLongPress}
             style={styles.tabItem}
           >
-            <InboxIcon
-              style={[
-                styles.tabIcon,
-                {
-                  tintColor: isFocused
-                    ? theme['color-primary-500']
-                    : theme['color-basic-600'],
-                },
-              ]}
+            <SpacesIcon
+              style={[styles.tabIcon, { tintColor: tabColor }]}
             />
-            <Text
-              style={[
-                styles.tabLabel,
-                {
-                  color: isFocused
-                    ? theme['color-primary-500']
-                    : theme['color-basic-600'],
-                },
-              ]}
-            >
+            <Text style={[styles.tabLabel, { color: tabColor }]}>
               {label}
             </Text>
           </Pressable>
         );
       })}
+
       <RecordingModal
         visible={isRecordingModalVisible}
         onClose={handleCloseModal}

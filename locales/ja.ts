@@ -38,7 +38,9 @@ export default {
     summary: '要約',
     notes: 'メモ',
     noSummary: 'まだ要約がありません。更新して生成してください。',
-    notesPlaceholder: 'メモを入力してください...',
+    notesPlaceholder: 'メモを入力してください... (**太字**、*斜体*、# 見出し、- リスト)',
+    edit: '編集',
+    preview: 'プレビュー',
   },
   toast: {
     recordingNotFound: '録音が見つかりません',
@@ -52,6 +54,11 @@ export default {
     title: 'スペース',
     empty: 'スペースがありません',
     emptyHint: '+ をタップしてスペースを作成し、録音を整理しましょう',
+  },
+  calendar: {
+    title: 'Calendar',
+    noRecordings: 'No recordings for this day',
+    allSpaces: 'All',
   },
   welcome: {
     title: 'Matomeへようこそ',

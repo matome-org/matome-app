@@ -38,7 +38,9 @@ export default {
     summary: 'Summary',
     notes: 'Notes',
     noSummary: 'No summary yet. Tap refresh to generate.',
-    notesPlaceholder: 'Start typing your notes...',
+    notesPlaceholder: 'Start typing your notes... (supports **bold**, *italic*, # heading, - lists)',
+    edit: 'Edit',
+    preview: 'Preview',
   },
   toast: {
     recordingNotFound: 'Recording not found',
@@ -52,6 +54,11 @@ export default {
     title: 'Spaces',
     empty: 'No spaces yet',
     emptyHint: 'Tap + to create a space and organize your recordings',
+  },
+  calendar: {
+    title: 'Calendar',
+    noRecordings: 'No recordings for this day',
+    allSpaces: 'All',
   },
   welcome: {
     title: 'Welcome to Matome',

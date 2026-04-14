@@ -288,6 +288,42 @@ export const deleteRecording = async (id: string): Promise<void> => {
 };
 
 /**
+ * Get recordings where createdAt is between startEpoch and endEpoch (inclusive),
+ * ordered by createdAt DESC.
+ */
+export const getRecordingsByDateRange = async (
+  startEpoch: number,
+  endEpoch: number,
+): Promise<RecordingRecord[]> => {
+  const db = await getDatabase();
+
+  const result = await db.getAllAsync<RecordingRecord>(
+    `SELECT * FROM recordings WHERE createdAt >= ? AND createdAt <= ? ORDER BY createdAt DESC`,
+    [
+      coerceSqlitePrimitive(assertNumber(startEpoch, "startEpoch"), "startEpoch"),
+      coerceSqlitePrimitive(assertNumber(endEpoch, "endEpoch"), "endEpoch"),
+    ],
+  );
+
+  return result;
+};
+
+/**
+ * Get recordings for a single calendar day (midnight to midnight local time),
+ * ordered by createdAt DESC.
+ * dayEpoch must be the start-of-day epoch (midnight local time) for the target day.
+ */
+export const getRecordingsByDay = async (
+  dayEpoch: number,
+): Promise<RecordingRecord[]> => {
+  const dayStart = assertNumber(dayEpoch, "dayEpoch");
+  // End of the same calendar day — next midnight minus 1 ms
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000 - 1;
+
+  return getRecordingsByDateRange(dayStart, dayEnd);
+};
+
+/**
  * Convert a RecordingRecord to RecordingCard format
  */
 export const recordToCard = (record: RecordingRecord): RecordingCard => {

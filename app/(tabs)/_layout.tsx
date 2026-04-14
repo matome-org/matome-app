@@ -10,11 +10,17 @@ export default function TabLayout() {
         headerShown: false,
       }}
       initialRouteName="inbox"
-      >
+    >
       <Tabs.Screen
         name="inbox"
         options={{
           title: 'Inbox',
+        }}
+      />
+      <Tabs.Screen
+        name="calendar"
+        options={{
+          title: 'Calendar',
         }}
       />
       <Tabs.Screen
