@@ -10,6 +10,8 @@ import { Layout, Text, useTheme } from "@ui-kitten/components";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 
+import { AppHeader } from "@/components/AppHeader";
+
 import { styles, CELL_SIZE } from "./Calendar.styles";
 import type { CalendarProps, CalendarRecordingCard } from "./Calendar.types";
 
@@ -456,6 +458,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         { backgroundColor: theme["color-basic-200"] },
       ]}
     >
+      <AppHeader title={t("calendar.title")} />
       <FlatList
         data={dayRecordings}
         keyExtractor={(item) => item.id}
