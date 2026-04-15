@@ -55,6 +55,11 @@ export default {
     empty: 'No spaces yet',
     emptyHint: 'Tap + to create a space and organize your recordings',
   },
+  satori: {
+    title: 'Satori',
+    comingSoon: 'Coming Soon',
+    comingSoonHint: 'This feature is under construction.',
+  },
   calendar: {
     title: 'Calendar',
     noRecordings: 'No recordings for this day',

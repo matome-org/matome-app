@@ -1,10 +1,10 @@
 import { Icon, useTheme } from '@ui-kitten/components';
-import React, { useState } from 'react';
+import React from 'react';
 import { ImageProps, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 
-import RecordingModal from '../RecordingModal';
 import { useRecordingsStore } from '@/stores/recordingsStore';
 import { NavBarProps } from './NavBar.types';
 import { styles } from './NavBar.styles';
@@ -21,27 +21,114 @@ const MicIcon = (props: Partial<ImageProps>) => (
   <Icon {...props} name="mic-outline" />
 );
 
+const SatoriIcon = (props: Partial<ImageProps>) => (
+  <Icon {...props} name="bulb-outline" />
+);
+
+// ---------------------------------------------------------------------------
+// Tab config — drives the 5-slot layout: Inbox | Calendar | [Mic] | Spaces | Satori
+// The mic FAB is the center slot and is NOT a real route.
+// ---------------------------------------------------------------------------
+interface TabConfig {
+  routeName: string;
+  labelKey: string;
+  renderIcon: (color: string) => React.ReactNode;
+}
+
+const TAB_CONFIGS: TabConfig[] = [
+  {
+    routeName: 'inbox',
+    labelKey: 'inbox.title',
+    renderIcon: (color) => (
+      <InboxIcon style={[styles.tabIcon, { tintColor: color }]} />
+    ),
+  },
+  {
+    routeName: 'calendar',
+    labelKey: 'calendar.title',
+    renderIcon: (color) => (
+      <Ionicons name="calendar-outline" size={24} color={color} />
+    ),
+  },
+  {
+    routeName: 'explore',
+    labelKey: 'spaces.title',
+    renderIcon: (color) => (
+      <SpacesIcon style={[styles.tabIcon, { tintColor: color }]} />
+    ),
+  },
+  {
+    routeName: 'satori',
+    labelKey: 'satori.title',
+    renderIcon: (color) => (
+      <SatoriIcon style={[styles.tabIcon, { tintColor: color }]} />
+    ),
+  },
+];
+
 export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const [isRecordingModalVisible, setIsRecordingModalVisible] = useState(false);
-  const triggerRefresh = useRecordingsStore((state) => state.triggerRefresh);
-
-  // Filter out routes that should be hidden from tab bar (dynamic routes like [id])
-  const visibleRoutes = state.routes.filter((route) => {
-    return !route.name.startsWith('[');
-  });
+  const router = useRouter();
+  const triggerRefresh = useRecordingsStore((s) => s.triggerRefresh);
 
   const handleMicPress = () => {
-    setIsRecordingModalVisible(true);
+    router.push('/recording');
   };
 
-  const handleCloseModal = () => {
-    setIsRecordingModalVisible(false);
-  };
+  // Build the 5-slot layout: [tab, tab, MicFAB, tab, tab]
+  // Slots 0-1 come from the first two TAB_CONFIGS, slot 2 is the mic FAB,
+  // slots 3-4 come from the remaining TAB_CONFIGS.
+  const leftTabs = TAB_CONFIGS.slice(0, 2);
+  const rightTabs = TAB_CONFIGS.slice(2);
 
-  const handleRecordingComplete = (_recordingId: string) => {
-    triggerRefresh();
+  const renderTabItem = (config: TabConfig) => {
+    const route = state.routes.find((r) => r.name === config.routeName);
+    if (!route) return null;
+
+    const { options } = descriptors[route.key];
+    const actualIndex = state.routes.findIndex((r) => r.key === route.key);
+    const isFocused = state.index === actualIndex;
+
+    const tabColor = isFocused
+      ? theme['color-primary-500']
+      : theme['color-basic-600'];
+
+    const onPress = () => {
+      const event = navigation.emit({
+        type: 'tabPress',
+        target: route.key,
+        canPreventDefault: true,
+      });
+
+      if (!isFocused && !event.defaultPrevented) {
+        navigation.navigate(route.name);
+      }
+    };
+
+    const onLongPress = () => {
+      navigation.emit({
+        type: 'tabLongPress',
+        target: route.key,
+      });
+    };
+
+    return (
+      <Pressable
+        key={route.key}
+        accessibilityRole="button"
+        accessibilityState={isFocused ? { selected: true } : {}}
+        accessibilityLabel={options.tabBarAccessibilityLabel}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        style={styles.tabItem}
+      >
+        {config.renderIcon(tabColor)}
+        <Text style={[styles.tabLabel, { color: tabColor }]}>
+          {t(config.labelKey as any)}
+        </Text>
+      </Pressable>
+    );
   };
 
   return (
@@ -54,126 +141,27 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
         },
       ]}
     >
-      {visibleRoutes.map((route) => {
-        const { options } = descriptors[route.key];
-        const labelValue = options.tabBarLabel ?? options.title ?? route.name;
-        const label = typeof labelValue === 'string' ? labelValue : route.name;
+      {/* Left tabs: Inbox + Calendar */}
+      {leftTabs.map(renderTabItem)}
 
-        const actualIndex = state.routes.findIndex((r) => r.key === route.key);
-        const isFocused = state.index === actualIndex;
+      {/* Center Mic FAB — not a real tab */}
+      <Pressable
+        style={[
+          styles.micButton,
+          {
+            backgroundColor: theme['color-primary-500'],
+            borderColor: theme['color-basic-100'],
+          },
+        ]}
+        onPress={handleMicPress}
+        accessibilityRole="button"
+        accessibilityLabel="Record"
+      >
+        <MicIcon style={[styles.micIcon, { tintColor: '#ffffff' }]} />
+      </Pressable>
 
-        const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
-          }
-        };
-
-        const onLongPress = () => {
-          navigation.emit({
-            type: 'tabLongPress',
-            target: route.key,
-          });
-        };
-
-        const tabColor = isFocused
-          ? theme['color-primary-500']
-          : theme['color-basic-600'];
-
-        // Inbox tab — always index 0 in our route order
-        if (route.name === 'inbox') {
-          return (
-            <React.Fragment key={route.key}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                accessibilityLabel={options.tabBarAccessibilityLabel}
-                onPress={onPress}
-                onLongPress={onLongPress}
-                style={styles.tabItem}
-              >
-                <InboxIcon
-                  style={[styles.tabIcon, { tintColor: tabColor }]}
-                />
-                <Text style={[styles.tabLabel, { color: tabColor }]}>
-                  {label}
-                </Text>
-              </Pressable>
-
-              {/* Mic button injected immediately after the Inbox tab */}
-              <Pressable
-                style={[
-                  styles.micButton,
-                  {
-                    backgroundColor: theme['color-primary-500'],
-                    borderColor: theme['color-basic-100'],
-                  },
-                ]}
-                onPress={handleMicPress}
-              >
-                <MicIcon
-                  style={[styles.micIcon, { tintColor: '#ffffff' }]}
-                />
-              </Pressable>
-            </React.Fragment>
-          );
-        }
-
-        // Calendar tab
-        if (route.name === 'calendar') {
-          return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-              onPress={onPress}
-              onLongPress={onLongPress}
-              style={styles.tabItem}
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={24}
-                color={tabColor}
-              />
-              <Text style={[styles.tabLabel, { color: tabColor }]}>
-                {t('calendar.title')}
-              </Text>
-            </Pressable>
-          );
-        }
-
-        // Spaces / explore tab (and any other future tab)
-        return (
-          <Pressable
-            key={route.key}
-            accessibilityRole="button"
-            accessibilityState={isFocused ? { selected: true } : {}}
-            accessibilityLabel={options.tabBarAccessibilityLabel}
-            onPress={onPress}
-            onLongPress={onLongPress}
-            style={styles.tabItem}
-          >
-            <SpacesIcon
-              style={[styles.tabIcon, { tintColor: tabColor }]}
-            />
-            <Text style={[styles.tabLabel, { color: tabColor }]}>
-              {label}
-            </Text>
-          </Pressable>
-        );
-      })}
-
-      <RecordingModal
-        visible={isRecordingModalVisible}
-        onClose={handleCloseModal}
-        onRecordingComplete={handleRecordingComplete}
-      />
+      {/* Right tabs: Spaces + Satori */}
+      {rightTabs.map(renderTabItem)}
     </View>
   );
 };

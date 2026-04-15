@@ -55,6 +55,11 @@ export default {
     empty: 'スペースがありません',
     emptyHint: '+ をタップしてスペースを作成し、録音を整理しましょう',
   },
+  satori: {
+    title: 'サトリ',
+    comingSoon: '近日公開',
+    comingSoonHint: 'この機能は準備中です。',
+  },
   calendar: {
     title: 'カレンダー',
     noRecordings: 'この日の録音はありません',
