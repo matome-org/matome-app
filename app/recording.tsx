@@ -20,6 +20,7 @@ import {
   startRecording,
   stopRecording,
 } from '@/services/audioRecordingService';
+import { saveDraft, deleteDraft } from '@/services/draftRecordingService';
 import { useRecordingsStore } from '@/stores/recordingsStore';
 
 // ---------------------------------------------------------------------------
@@ -129,14 +130,19 @@ export default function RecordingScreen() {
   }, []);
 
   /**
-   * Pause — stop the current segment and preserve it for later resumption.
+   * Pause — stop the current segment, preserve it, and auto-save draft state
+   * so the session can be recovered after an app restart.
    */
   const handlePause = useCallback(async () => {
     try {
       const segmentUri = await stopRecording();
-      segmentsRef.current = [...segmentsRef.current, segmentUri];
+      const updatedSegments = [...segmentsRef.current, segmentUri];
+      segmentsRef.current = updatedSegments;
       completedDurationRef.current = totalDuration;
       setPhase('paused');
+
+      // Auto-save draft so the session survives an app restart
+      await saveDraft(updatedSegments, Math.round(totalDuration * 1000));
     } catch (error) {
       console.error('RecordingScreen: Failed to pause recording', error);
     }
@@ -156,23 +162,22 @@ export default function RecordingScreen() {
   }, []);
 
   /**
-   * Cancel — discard all segments and navigate back.
+   * Cancel — discard all segments, delete the draft record, and navigate back.
    */
   const handleCancel = useCallback(async () => {
     if (phase === 'recording') {
       try {
+        // cancelRecording also calls discardSegments internally
         await cancelRecording();
       } catch (error) {
         console.error('RecordingScreen: Error canceling active recording', error);
       }
     }
-    // Segments collected so far were already stopped — they remain as temp
-    // files; the OS will clean them up. No explicit cleanup needed here
-    // because stopRecording (used in handlePause) returns URIs but the
-    // service already called recorder.release(). The URI files from
-    // expo-audio recorder land in the device cache/temp area by default.
     segmentsRef.current = [];
     completedDurationRef.current = 0;
+    await deleteDraft().catch((e) =>
+      console.error('RecordingScreen: Failed to delete draft on cancel', e),
+    );
     router.back();
   }, [phase, router]);
 
@@ -198,6 +203,11 @@ export default function RecordingScreen() {
       // For now, pass through the single-segment pipeline using saveRecording.
       // Multi-segment merge (Task 2C) will replace this with a merge step.
       const recordingId = await saveRecording('Inbox');
+
+      // Clean up draft record now that recording is saved
+      await deleteDraft().catch((e) =>
+        console.error('RecordingScreen: Failed to delete draft after finish', e),
+      );
 
       triggerRefresh();
 
