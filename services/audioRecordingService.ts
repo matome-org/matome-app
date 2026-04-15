@@ -28,6 +28,12 @@ let lastMeteringValue: number | undefined = undefined;
 let lastDurationMillis: number = 0;
 let meteringInterval: ReturnType<typeof setInterval> | null = null;
 
+// ---------------------------------------------------------------------------
+// Segment tracking — persists across pause/resume cycles within a session.
+// Segment files are written to documentDirectory so they survive app restarts.
+// ---------------------------------------------------------------------------
+let sessionSegments: string[] = [];
+
 const logRecordingOperationError = (
   message: string,
   context: { operation: string; recordingId?: string },
@@ -95,7 +101,9 @@ export const startRecording = async (): Promise<void> => {
 };
 
 /**
- * Stop audio recording and return the file URI
+ * Stop audio recording, persist the segment to documentDirectory, and return
+ * its URI. The segment is also appended to the module-level sessionSegments
+ * array so multi-segment sessions can be merged later.
  */
 export const stopRecording = async (): Promise<string> => {
   if (!recorder) {
@@ -117,11 +125,26 @@ export const stopRecording = async (): Promise<string> => {
 
     recorder.release();
     recorder = null;
-    recordingUri = uri;
     lastMeteringValue = undefined;
     lastDurationMillis = 0;
 
-    return uri;
+    // Copy to documentDirectory so the segment survives app restarts and is
+    // not subject to OS cache eviction. File name is timestamp + random suffix
+    // to guarantee uniqueness across sessions.
+    const segmentFileName = `segment_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 6)}.m4a`;
+    const documentsDir = FileSystem.documentDirectory;
+    if (!documentsDir) {
+      throw new Error("Document directory not available");
+    }
+    const segmentUri = `${documentsDir}${segmentFileName}`;
+    await FileSystem.copyAsync({ from: uri, to: segmentUri });
+
+    recordingUri = segmentUri;
+    sessionSegments = [...sessionSegments, segmentUri];
+
+    return segmentUri;
   } catch (error) {
     console.error("Failed to stop recording:", error);
     recorder = null;
@@ -466,7 +489,39 @@ export const retryTranscription = async (
 };
 
 /**
- * Cancel current recording
+ * Return all segment file URIs accumulated in the current session.
+ * Does not clear state — call discardSegments() to delete files and reset.
+ */
+export const getSegments = (): string[] => {
+  return [...sessionSegments];
+};
+
+/**
+ * Delete all segment files from disk and clear module-level segment state.
+ * Safe to call even if no segments exist.
+ */
+export const discardSegments = async (): Promise<void> => {
+  const toDelete = [...sessionSegments];
+  sessionSegments = [];
+  recordingUri = null;
+
+  await Promise.allSettled(
+    toDelete.map(async (uri) => {
+      try {
+        const info = await FileSystem.getInfoAsync(uri);
+        if (info.exists) {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        }
+      } catch (error) {
+        console.error("discardSegments: failed to delete segment file", uri, error);
+      }
+    }),
+  );
+};
+
+/**
+ * Cancel current recording — stops any active recorder, discards all
+ * accumulated segment files, and resets module state.
  */
 export const cancelRecording = async (): Promise<void> => {
   if (meteringInterval) {
@@ -477,21 +532,16 @@ export const cancelRecording = async (): Promise<void> => {
   if (recorder) {
     try {
       await recorder.stop();
-      if (recordingUri) {
-        // Delete the temporary file
-        const fileInfo = await FileSystem.getInfoAsync(recordingUri);
-        if (fileInfo.exists) {
-          await FileSystem.deleteAsync(recordingUri, { idempotent: true });
-        }
-      }
     } catch (error) {
-      console.error("Error canceling recording:", error);
+      console.error("Error stopping recorder during cancel:", error);
     } finally {
       recorder.release();
       recorder = null;
-      recordingUri = null;
       lastMeteringValue = undefined;
       lastDurationMillis = 0;
     }
   }
+
+  // Discard all accumulated segments (including any that were already stopped)
+  await discardSegments();
 };
