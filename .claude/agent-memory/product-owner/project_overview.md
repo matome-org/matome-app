@@ -55,8 +55,8 @@ workspaces: id, name, isDefault, createdAt
 Container/Presenter in Views/, thin route files in app/, processes/ for data transforms, services/ for business logic, stores/ for Zustand.
 
 ## Key Gaps / Opportunities
-- Calendar-first view: website promises "see your life on a timeline" — not yet built; high alignment with positioning
-- Satori AI assistant: website names an AI assistant that extracts tasks and sends reminders — not in codebase yet
+- Calendar tab: built and shipped (month grid, day list, space filter)
+- Satori AI assistant: website names an AI assistant that extracts tasks and sends reminders — not in codebase yet; Satori Config placeholder tab planned
 - Cloud sync / backup: all data is local SQLite; privacy model on website implies cloud with encryption is planned
 - No notification / reminder system (Satori feature gap)
 - Task extraction from transcripts: website promises this as a Satori capability
@@ -68,3 +68,13 @@ Container/Presenter in Views/, thin route files in app/, processes/ for data tra
 - No test framework configured
 - Spaces lack description, icon customisation, or search
 - Auth UX could be enhanced (social login, password reset)
+- Recording persistence: no crash/resume draft mechanism — planned next
+
+## Component Architecture Notes (April 2026)
+- NavBar: renders tab bar with hardcoded if-branches per route name (inbox → mic FAB injected after, calendar → Ionicons, others → folder). RecordingModal rendered inside NavBar. With 4 real tabs + mic, NavBar needs refactor to tab-config array.
+- RecordingModal: Container/Presenter pattern. Container manages audio state (startRecording/stopRecording/cancelRecording from audioRecordingService). On stop → saveRecording() → navigate to /inbox/:id.
+- audioRecordingService: module-level singleton (recorder, recordingUri, lastMeteringValue, lastDurationMillis). No draft/persist concept today.
+- Calendar screen: has no AppHeader — just starts with month nav row. Inbox and Spaces both use AppHeader. Pattern is broken for Calendar.
+- AppHeader component: two variants — large title (list screens) and detail (with back button). Used in Home.tsx and Spaces.tsx.
+- Migrations: utils/migrations/ — numbered SQL strings, run via PRAGMA user_version. Adding draft_recordings table would need a new migration file.
+- FileSystem: expo-file-system/legacy used for copy/delete operations. documentDirectory available for permanent storage.
