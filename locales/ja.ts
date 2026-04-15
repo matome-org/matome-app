@@ -30,9 +30,12 @@ export default {
     processing: '録音を処理中...',
     title: '録音中',
     ready: '録音準備完了',
-    stopHint: '終わったら停止してください',
+    paused: '一時停止中',
+    stopHint: '一時停止するにはポーズ、終了するには停止をタップしてください',
     startHint: 'ボタンを押して録音を開始してください',
+    resumeHint: 'タップして再開するか、完了を選んで保存してください',
     stop: '停止',
+    finish: '完了',
   },
   details: {
     summary: '要約',
