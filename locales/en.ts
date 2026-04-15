@@ -37,6 +37,11 @@ export default {
     resumeHint: 'Tap to resume, or finish to save',
     stop: 'Stop',
     finish: 'Finish',
+    loading: 'Loading...',
+    draftFound: 'Resume Recording?',
+    draftHint: 'You have an unfinished recording. Would you like to resume or start fresh?',
+    draftResume: 'Resume',
+    draftDiscard: 'Discard',
   },
   details: {
     summary: 'Summary',

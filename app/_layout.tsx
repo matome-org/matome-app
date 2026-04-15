@@ -14,6 +14,7 @@ import ToastContainer from 'react-native-toast-message';
 import { supabase } from '@/config/supabase';
 import { darkTheme, lightTheme } from '@/config/themes';
 import { runUpdateFlow } from '@/services/updateService';
+import { loadDraft } from '@/services/draftRecordingService';
 import { useAuthStore } from '@/stores/authStore';
 import { useEffectiveTheme } from '@/stores/themeStore';
 
@@ -55,6 +56,29 @@ const NavigationGuard = () => {
       router.replace('/');
     }
   }, [isAuthenticated, isLoading, segments, router]);
+
+  // After auth is resolved and the user is in the tabs group, check for an
+  // in-progress recording draft and route to the recording screen so they can
+  // resume or discard it.
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+
+    const checkForDraft = async () => {
+      try {
+        const draft = await loadDraft();
+        if (draft && draft.segments.length > 0) {
+          router.push('/recording?hasDraft=1');
+        }
+      } catch (error) {
+        console.error('NavigationGuard: Failed to check for recording draft', error);
+      }
+    };
+
+    checkForDraft();
+  // We intentionally run this only once after auth resolves, not on every
+  // re-render. The draft check is a one-shot startup concern.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isLoading]);
 
   if (isLoading) {
     return (
