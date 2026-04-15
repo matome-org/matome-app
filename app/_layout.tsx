@@ -81,6 +81,13 @@ const ThemedStack = () => {
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="recording"
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+        }}
+      />
     </Stack>
   );
 };
