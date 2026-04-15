@@ -36,6 +36,11 @@ export default {
     resumeHint: 'タップして再開するか、完了を選んで保存してください',
     stop: '停止',
     finish: '完了',
+    loading: '読み込み中...',
+    draftFound: '録音を再開しますか？',
+    draftHint: '未完了の録音があります。再開するか、新しく始めるか選択してください。',
+    draftResume: '再開',
+    draftDiscard: '破棄',
   },
   details: {
     summary: '要約',

@@ -6,31 +6,45 @@ import {
   View,
 } from 'react-native';
 import { Text, useTheme } from '@ui-kitten/components';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
   cancelRecording,
+  discardSegments,
   formatDuration,
   getRecordingDuration,
   getRecordingMetering,
-  saveRecording,
+  mergeSegments,
+  saveRecordingFromSegments,
   startRecording,
   stopRecording,
 } from '@/services/audioRecordingService';
-import { saveDraft, deleteDraft } from '@/services/draftRecordingService';
+import {
+  deleteDraft,
+  loadDraft,
+  saveDraft,
+} from '@/services/draftRecordingService';
 import { useRecordingsStore } from '@/stores/recordingsStore';
 
 // ---------------------------------------------------------------------------
 // Recording lifecycle:
-//   idle      — screen just opened, not yet recording
-//   recording — mic active, segment in progress
-//   paused    — segment stopped, audio preserved, can resume or finish
-//   processing — merging + saving in progress
+//   draft_check  — loading draft from DB on mount (brief)
+//   draft_prompt — draft found, showing Resume / Discard prompt
+//   idle         — screen opened fresh, not yet recording
+//   recording    — mic active, segment in progress
+//   paused       — segment stopped, audio preserved, can resume or finish
+//   processing   — merging + saving in progress
 // ---------------------------------------------------------------------------
-type RecordingPhase = 'idle' | 'recording' | 'paused' | 'processing';
+type RecordingPhase =
+  | 'draft_check'
+  | 'draft_prompt'
+  | 'idle'
+  | 'recording'
+  | 'paused'
+  | 'processing';
 
 const WAVEFORM_BARS = 20;
 
@@ -41,7 +55,12 @@ export default function RecordingScreen() {
   const { t } = useTranslation();
   const triggerRefresh = useRecordingsStore((s) => s.triggerRefresh);
 
-  const [phase, setPhase] = useState<RecordingPhase>('idle');
+  // hasDraft=1 is set by NavigationGuard when a draft is detected at startup
+  const { hasDraft } = useLocalSearchParams<{ hasDraft?: string }>();
+
+  const [phase, setPhase] = useState<RecordingPhase>(
+    hasDraft === '1' ? 'draft_check' : 'idle',
+  );
   const [totalDuration, setTotalDuration] = useState(0);
   const [meteringBars, setMeteringBars] = useState<number[]>(() =>
     Array(WAVEFORM_BARS).fill(0),
@@ -55,6 +74,34 @@ export default function RecordingScreen() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const meteringBufferRef = useRef<number[]>(Array(WAVEFORM_BARS).fill(0));
   const lastHeightRef = useRef<number>(5);
+
+  // ---------------------------------------------------------------------------
+  // Draft check on mount — only runs when hasDraft=1 param is present
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (hasDraft !== '1') return;
+
+    const checkDraft = async () => {
+      try {
+        const draft = await loadDraft();
+        if (draft && draft.segments.length > 0) {
+          // Load draft segments into ref and show the resume prompt
+          segmentsRef.current = draft.segments;
+          completedDurationRef.current = draft.durationMs / 1000;
+          setTotalDuration(draft.durationMs / 1000);
+          setPhase('draft_prompt');
+        } else {
+          // Draft was empty or deleted since the guard fired — proceed fresh
+          setPhase('idle');
+        }
+      } catch (error) {
+        console.error('RecordingScreen: Failed to load draft', error);
+        setPhase('idle');
+      }
+    };
+
+    checkDraft();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------------------
   // Metering interval — runs while phase === 'recording'
@@ -78,17 +125,13 @@ export default function RecordingScreen() {
           if (targetHeight > lastHeightRef.current) {
             finalHeight = targetHeight;
           } else {
-            finalHeight =
-              lastHeightRef.current * 0.7 + targetHeight * 0.3;
+            finalHeight = lastHeightRef.current * 0.7 + targetHeight * 0.3;
           }
 
           finalHeight = Math.max(5, finalHeight);
           lastHeightRef.current = finalHeight;
 
-          const buffer = [
-            ...meteringBufferRef.current.slice(1),
-            finalHeight,
-          ];
+          const buffer = [...meteringBufferRef.current.slice(1), finalHeight];
           meteringBufferRef.current = buffer;
           setMeteringBars(buffer);
         }
@@ -99,8 +142,7 @@ export default function RecordingScreen() {
         intervalRef.current = null;
       }
 
-      if (phase === 'idle' || phase === 'processing') {
-        // Reset waveform when idle or processing
+      if (phase === 'idle' || phase === 'processing' || phase === 'draft_check') {
         const empty = Array(WAVEFORM_BARS).fill(0);
         meteringBufferRef.current = empty;
         setMeteringBars(empty);
@@ -149,7 +191,7 @@ export default function RecordingScreen() {
   }, [totalDuration]);
 
   /**
-   * Resume — start a new segment. Duration accumulates.
+   * Resume — start a new segment. Duration accumulates from prior segments.
    */
   const handleResume = useCallback(async () => {
     try {
@@ -172,6 +214,11 @@ export default function RecordingScreen() {
       } catch (error) {
         console.error('RecordingScreen: Error canceling active recording', error);
       }
+    } else {
+      // Not actively recording — still need to discard any paused segments
+      await discardSegments().catch((e) =>
+        console.error('RecordingScreen: Failed to discard segments on cancel', e),
+      );
     }
     segmentsRef.current = [];
     completedDurationRef.current = 0;
@@ -182,36 +229,65 @@ export default function RecordingScreen() {
   }, [phase, router]);
 
   /**
-   * Finish — if currently recording, stop the active segment first, then
-   * trigger the save/upload pipeline with the last segment.
-   * For single-segment sessions this is equivalent to the original flow.
-   * Multi-segment merging (Task 2C) will extend this function.
+   * Draft — Resume: load prior segments and continue recording.
+   */
+  const handleDraftResume = useCallback(async () => {
+    // segmentsRef and completedDurationRef are already populated from the
+    // draft check. Simply transition to idle so the user can tap Start.
+    setPhase('idle');
+  }, []);
+
+  /**
+   * Draft — Discard: delete all segment files and the draft record, then
+   * transition to a fresh idle state.
+   */
+  const handleDraftDiscard = useCallback(async () => {
+    await discardSegments().catch((e) =>
+      console.error('RecordingScreen: Failed to discard draft segments', e),
+    );
+    await deleteDraft().catch((e) =>
+      console.error('RecordingScreen: Failed to delete draft record', e),
+    );
+    segmentsRef.current = [];
+    completedDurationRef.current = 0;
+    setTotalDuration(0);
+    setPhase('idle');
+  }, []);
+
+  /**
+   * Finish — stop the active segment if needed, merge all segments into one
+   * file, trigger the save/upload pipeline, then clean up.
+   *
+   * Merge strategy: see mergeSegments() in audioRecordingService for details.
+   * For multi-segment M4A sessions the last segment is used as the audio file
+   * while all segments are transcribed individually and their transcripts
+   * are joined. Full binary merge requires a native audio module (future work).
    */
   const handleFinish = useCallback(async () => {
     setPhase('processing');
 
     try {
-      let finalSegmentUri: string | null = null;
-
       if (phase === 'recording') {
-        // Stop the current active segment
-        finalSegmentUri = await stopRecording();
-        segmentsRef.current = [...segmentsRef.current, finalSegmentUri];
+        // Stop the current active segment — it will be added to sessionSegments
+        // inside stopRecording (which also appends to segmentsRef via side effect)
+        const segmentUri = await stopRecording();
+        segmentsRef.current = [...segmentsRef.current, segmentUri];
       }
 
-      // saveRecording uses the last file written by stopRecording internally.
-      // For now, pass through the single-segment pipeline using saveRecording.
-      // Multi-segment merge (Task 2C) will replace this with a merge step.
-      const recordingId = await saveRecording('Inbox');
+      // saveRecordingFromSegments reads sessionSegments from module state,
+      // merges them (or selects the last), transcribes all, and saves to DB.
+      const recordingId = await saveRecordingFromSegments('Inbox');
 
-      // Clean up draft record now that recording is saved
+      // Clean up segment files and draft record
+      await discardSegments().catch((e) =>
+        console.error('RecordingScreen: Failed to discard segments after finish', e),
+      );
       await deleteDraft().catch((e) =>
         console.error('RecordingScreen: Failed to delete draft after finish', e),
       );
 
       triggerRefresh();
 
-      // Navigate back to inbox and then into the detail view
       router.back();
       router.push(`/inbox/${recordingId}`);
     } catch (error) {
@@ -249,6 +325,9 @@ export default function RecordingScreen() {
   // ---------------------------------------------------------------------------
   const statusLabel = (() => {
     switch (phase) {
+      case 'draft_check':
+      case 'draft_prompt':
+        return t('recording.draftFound');
       case 'idle':
         return t('recording.ready');
       case 'recording':
@@ -262,6 +341,10 @@ export default function RecordingScreen() {
 
   const hintLabel = (() => {
     switch (phase) {
+      case 'draft_check':
+        return '';
+      case 'draft_prompt':
+        return t('recording.draftHint');
       case 'idle':
         return t('recording.startHint');
       case 'recording':
@@ -287,34 +370,101 @@ export default function RecordingScreen() {
         },
       ]}
     >
-      {/* Close / Cancel button */}
-      {phase !== 'processing' && (
+      {/* Close / Cancel button — hidden during processing and draft_check */}
+      {phase !== 'processing' && phase !== 'draft_check' && (
         <Pressable
           style={styles.closeButton}
           onPress={handleCancel}
           accessibilityLabel={t('common.cancel')}
         >
-          <Ionicons
-            name="close"
-            size={28}
-            color={theme['color-basic-700']}
-          />
+          <Ionicons name="close" size={28} color={theme['color-basic-700']} />
         </Pressable>
       )}
 
-      {phase === 'processing' ? (
-        // Processing state
+      {/* ------------------------------------------------------------------ */}
+      {/* Processing state                                                    */}
+      {/* ------------------------------------------------------------------ */}
+      {(phase === 'processing' || phase === 'draft_check') && (
         <View style={styles.processingContainer}>
           <ActivityIndicator size="large" color={theme['color-primary-500']} />
           <Text
             category="s1"
             style={[styles.processingText, { color: theme['color-basic-600'] }]}
           >
-            {t('recording.processing')}
+            {phase === 'draft_check'
+              ? t('recording.loading')
+              : t('recording.processing')}
           </Text>
         </View>
-      ) : (
-        // Active recording UI
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Draft recovery prompt                                               */}
+      {/* ------------------------------------------------------------------ */}
+      {phase === 'draft_prompt' && (
+        <View style={styles.content}>
+          <View
+            style={[
+              styles.draftIcon,
+              { backgroundColor: theme['color-warning-500'] + '20' },
+            ]}
+          >
+            <Ionicons
+              name="mic-circle-outline"
+              size={48}
+              color={theme['color-warning-500']}
+            />
+          </View>
+
+          <Text
+            category="h5"
+            style={[styles.title, { color: theme['color-basic-800'] }]}
+          >
+            {statusLabel}
+          </Text>
+
+          <Text
+            category="p1"
+            style={[styles.hint, { color: theme['color-basic-600'] }]}
+          >
+            {hintLabel}
+          </Text>
+
+          {totalDuration > 0 && (
+            <Text style={[styles.timer, { color: theme['color-basic-800'] }]}>
+              {formatDuration(totalDuration)}
+            </Text>
+          )}
+
+          <View style={styles.buttonRow}>
+            <Pressable
+              style={[styles.actionButton, styles.cancelButton]}
+              onPress={handleDraftDiscard}
+            >
+              <Text style={styles.cancelButtonText}>
+                {t('recording.draftDiscard')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.actionButton,
+                styles.finishButton,
+                { backgroundColor: theme['color-primary-500'] },
+              ]}
+              onPress={handleDraftResume}
+            >
+              <Text style={styles.finishButtonText}>
+                {t('recording.draftResume')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Active recording / paused / idle UI                                */}
+      {/* ------------------------------------------------------------------ */}
+      {(phase === 'idle' || phase === 'recording' || phase === 'paused') && (
         <View style={styles.content}>
           <Text
             category="h4"
@@ -332,9 +482,7 @@ export default function RecordingScreen() {
 
           {/* Timer — shown whenever there is accumulated duration */}
           {totalDuration > 0 && (
-            <Text
-              style={[styles.timer, { color: theme['color-basic-800'] }]}
-            >
+            <Text style={[styles.timer, { color: theme['color-basic-800'] }]}>
               {formatDuration(totalDuration)}
             </Text>
           )}
@@ -342,7 +490,7 @@ export default function RecordingScreen() {
           {/* Waveform */}
           <View style={styles.waveform}>{renderWaveform()}</View>
 
-          {/* Primary action button — pulsing ring around the central circle */}
+          {/* Primary action button */}
           <Pressable
             style={[
               styles.recordingIndicator,
@@ -386,7 +534,7 @@ export default function RecordingScreen() {
             </View>
           </Pressable>
 
-          {/* Secondary actions — only visible when paused or recording */}
+          {/* Secondary actions */}
           <View style={styles.buttonRow}>
             <Pressable
               style={[styles.actionButton, styles.cancelButton]}
@@ -395,7 +543,7 @@ export default function RecordingScreen() {
               <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
             </Pressable>
 
-            {(phase === 'paused') && (
+            {phase === 'paused' && (
               <Pressable
                 style={[
                   styles.actionButton,
@@ -461,6 +609,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
     gap: 8,
+  },
+  draftIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   title: {
     fontWeight: '700',
