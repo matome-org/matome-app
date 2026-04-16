@@ -12,7 +12,7 @@ import { configs } from "@/config/config";
 import { createRecording, updateRecording } from "./recordingService";
 import { summarizeText } from "./summarizeService";
 import type { BadgeType } from "@/processes/homeData";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 
 // Transcribe API client - created from config to avoid module load order issues
 const transcribeConfig = configs.find(
@@ -75,10 +75,23 @@ export const startRecording = async (): Promise<void> => {
     lastMeteringValue = undefined;
     lastDurationMillis = 0;
 
-    // Create and prepare recorder
+    // Create and prepare recorder.
+    // The native AudioRecorder expects a flat options object — platform-specific
+    // sub-objects (ios/android/web) must be spread to the top level.
+    const preset = RecordingPresets.HIGH_QUALITY;
+    const platformSpecific =
+      Platform.OS === "ios"
+        ? preset.ios
+        : Platform.OS === "android"
+          ? preset.android
+          : preset.web;
     recorder = new AudioModule.AudioRecorder({
-      ...RecordingPresets.HIGH_QUALITY,
+      extension: preset.extension,
+      sampleRate: preset.sampleRate,
+      numberOfChannels: preset.numberOfChannels,
+      bitRate: preset.bitRate,
       isMeteringEnabled: true,
+      ...platformSpecific,
     });
 
     await recorder.prepareToRecordAsync();

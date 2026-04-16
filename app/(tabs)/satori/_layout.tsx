@@ -3,7 +3,7 @@ import { useEffectiveTheme } from '@/stores/themeStore';
 
 const BACKGROUND_COLORS = { light: '#fdfdfd', dark: '#333333' };
 
-export default function CalendarStackLayout() {
+export default function SatoriStackLayout() {
   const effectiveTheme = useEffectiveTheme();
   const backgroundColor = BACKGROUND_COLORS[effectiveTheme];
 
@@ -14,8 +14,7 @@ export default function CalendarStackLayout() {
         contentStyle: { backgroundColor },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Calendar' }} />
-      <Stack.Screen name="[id]" options={{ title: 'Details' }} />
+      <Stack.Screen name="index" options={{ title: 'Satori' }} />
     </Stack>
   );
 }

@@ -34,6 +34,7 @@ export default {
     stopHint: 'Tap pause to add a break, or stop to finish',
     startHint: 'Tap the button to start recording',
     resumeHint: 'Tap to resume, or finish to save',
+    pause: 'Pause',
     stop: 'Stop',
     finish: 'Finish',
     loading: 'Loading...',

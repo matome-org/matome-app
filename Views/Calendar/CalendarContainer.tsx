@@ -121,8 +121,7 @@ const CalendarContainer: React.FC = () => {
 
   const handleRecordingPress = useCallback(
     (id: string) => {
-      // Navigate to details — same pattern as HomeContainer
-      router.push(`/inbox/${id}`);
+      router.push(`/(tabs)/calendar/${id}`);
     },
     [router],
   );

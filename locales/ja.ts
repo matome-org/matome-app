@@ -34,6 +34,7 @@ export default {
     stopHint: '一時停止するにはポーズ、終了するには停止をタップしてください',
     startHint: 'ボタンを押して録音を開始してください',
     resumeHint: 'タップして再開するか、完了を選んで保存してください',
+    pause: '一時停止',
     stop: '停止',
     finish: '完了',
     loading: '読み込み中...',

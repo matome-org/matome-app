@@ -49,8 +49,11 @@ const NavigationGuard = () => {
     SplashScreen.hideAsync();
 
     const inTabsGroup = segments[0] === '(tabs)';
+    // Allow routes that are intentionally outside the tabs group (e.g. the
+    // recording full-screen modal) without triggering an auth redirect.
+    const isAllowedOutsideTabs = segments[0] === 'recording';
 
-    if (isAuthenticated && !inTabsGroup) {
+    if (isAuthenticated && !inTabsGroup && !isAllowedOutsideTabs) {
       router.replace('/(tabs)/explore/explore');
     } else if (!isAuthenticated && inTabsGroup) {
       router.replace('/');
