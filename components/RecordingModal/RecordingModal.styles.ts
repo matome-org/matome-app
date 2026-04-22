@@ -1,115 +1,138 @@
 import { StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
-  overlay: {
+  fullScreen: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingTop: 60,
+    paddingBottom: 40,
+  },
+  processingContainer: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
+    gap: 16,
   },
-  modal: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 32,
-    width: '85%',
-    maxWidth: 400,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
+  processingText: {
+    fontSize: 16,
+    letterSpacing: 0.3,
   },
-  title: {
-    fontSize: 24,
+  // Top bar
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  destinationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  destinationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  destinationText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // Hero
+  hero: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+    paddingHorizontal: 24,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  recDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusText: {
+    fontSize: 11,
     fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  recordingIndicator: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  recordingButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recordingButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
+    letterSpacing: 1.5,
   },
   timer: {
-    fontSize: 32,
-    fontWeight: '600',
-    marginBottom: 16,
+    fontSize: 64,
+    fontWeight: '300',
+    letterSpacing: -2,
+    color: '#fff',
     fontVariant: ['tabular-nums'],
   },
   waveform: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
-    marginBottom: 24,
-    gap: 4,
-  },
-  waveBar: {
-    width: 4,
-    borderRadius: 2,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    gap: 12,
+    height: 64,
+    gap: 3,
     width: '100%',
   },
-  button: {
-    flex: 1,
-    paddingVertical: 14,
+  hint: {
+    fontSize: 13,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  // Controls row
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
     paddingHorizontal: 24,
-    borderRadius: 12,
+    paddingBottom: 16,
+  },
+  controlItem: {
+    alignItems: 'center',
+    gap: 8,
+    width: 60,
+  },
+  controlLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 11,
+  },
+  sideBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  cancelButtonText: {
-    color: '#333',
-  },
-  stopButton: {
-    backgroundColor: '#ff4444',
-  },
-  stopButtonText: {
-    color: '#fff',
-  },
-  loadingContainer: {
-    padding: 20,
+  mainBtn: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  loadingText: {
-    fontSize: 16,
-    marginTop: 16,
-    color: '#666',
+  stopSquare: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    backgroundColor: '#fff',
   },
 });

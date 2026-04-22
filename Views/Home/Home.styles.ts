@@ -4,120 +4,122 @@ export const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    flex: 1,
+  // Top bar
+  topBar: {
     paddingHorizontal: 16,
-    paddingBottom: 100,
+    paddingBottom: 0,
+    borderBottomWidth: 1,
   },
-  sectionTitle: {
+  topBarRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    paddingVertical: 10,
+  },
+  wordmark: {
     fontSize: 13,
-    fontWeight: "600",
-    marginTop: 24,
-    marginBottom: 12,
-    marginHorizontal: 4,
-    textTransform: "uppercase",
+    fontWeight: "800",
     letterSpacing: 0.5,
+    opacity: 0.55,
   },
-  cardList: {
-    gap: 12,
+  topBarTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+    marginTop: 2,
   },
+  topBarSubtitle: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  topBarActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingTop: 6,
+  },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Search bar — always visible
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 20,
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     gap: 8,
+    marginBottom: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     padding: 0,
   },
+  kbdHint: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  kbdHintText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  // Filter chips
+  chipsScroll: {
+    marginBottom: 8,
+  },
+  chipsContent: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  // Content
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  // Section header
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginTop: 20,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+  },
+  sectionCount: {
+    fontSize: 12,
+  },
+  cardList: {
+    gap: 8,
+  },
+  // Empty states
   emptySearch: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 80,
     gap: 8,
-  },
-  recordCard: {
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: "row",
-    gap: 16,
-    borderWidth: 1,
-    borderColor: "gray",
-  },
-  cardIconArea: {
-    alignItems: "center",
-    minWidth: 40,
-    gap: 8,
-  },
-  playButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  playButtonActive: {
-    // Active state handled by theme
-  },
-  cardContent: {
-    flex: 1,
-    gap: 6,
-    minWidth: 0,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  cardTitle: {
-    fontWeight: "600",
-    fontSize: 16,
-    flex: 1,
-  },
-  metaText: {
-    fontSize: 12,
-  },
-  cardSummary: {
-    fontSize: 14,
-    lineHeight: 19.6, // 1.4 * 14
-  },
-  processingText: {
-    fontSize: 13,
-    fontStyle: "italic",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: 6,
-  },
-  badge: {
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  badgeWork: {
-    // Work badge styling handled by theme
-  },
-  badgePersonal: {
-    // Personal badge styling handled by theme
-  },
-  badgeInbox: {
-    // Inbox badge styling handled by theme
   },
 });

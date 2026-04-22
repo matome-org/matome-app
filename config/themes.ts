@@ -20,7 +20,7 @@ const lightThemeColors = {
   'color-primary-transparent-600': 'rgba(225, 179, 70, 0.48)',
 
   'color-basic-100': '#ffffff', // Card
-  'color-basic-200': '#fdfdfd', // Background
+  'color-basic-200': '#FAF8F3', // Background — warm paper
   'color-basic-300': '#f5f5f5', // Secondary
   'color-basic-400': '#f0f0f0', // Muted
   'color-basic-500': '#e0e0e0', // Border
