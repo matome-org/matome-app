@@ -29,6 +29,12 @@ export default function TabLayout() {
           title: 'Spaces',
         }}
       />
+      <Tabs.Screen
+        name="satori"
+        options={{
+          title: 'Satori',
+        }}
+      />
     </Tabs>
   );
 }

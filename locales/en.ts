@@ -21,8 +21,9 @@ export default {
   },
   inbox: {
     title: 'Inbox',
-    searchPlaceholder: 'Search recordings...',
+    searchPlaceholder: 'Search transcripts, tags, spaces…',
     noResults: 'No recordings found',
+    recordings: 'recordings',
   },
   recording: {
     transcribing: 'Transcribing audio...',

@@ -27,7 +27,6 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   const [isRecordingModalVisible, setIsRecordingModalVisible] = useState(false);
   const triggerRefresh = useRecordingsStore((state) => state.triggerRefresh);
 
-  // Filter out routes that should be hidden from tab bar (dynamic routes like [id])
   const visibleRoutes = state.routes.filter((route) => {
     return !route.name.startsWith('[');
   });
@@ -44,6 +43,130 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
     triggerRefresh();
   };
 
+  const renderTab = (route: (typeof visibleRoutes)[0]) => {
+    const { options } = descriptors[route.key];
+    const labelValue = options.tabBarLabel ?? options.title ?? route.name;
+    const label = typeof labelValue === 'string' ? labelValue : route.name;
+
+    const actualIndex = state.routes.findIndex((r) => r.key === route.key);
+    const isFocused = state.index === actualIndex;
+
+    const onPress = () => {
+      const event = navigation.emit({
+        type: 'tabPress',
+        target: route.key,
+        canPreventDefault: true,
+      });
+      if (!isFocused && !event.defaultPrevented) {
+        navigation.navigate(route.name);
+      }
+    };
+
+    const onLongPress = () => {
+      navigation.emit({
+        type: 'tabLongPress',
+        target: route.key,
+      });
+    };
+
+    const tabColor = isFocused
+      ? theme['color-primary-500']
+      : theme['color-basic-600'];
+
+    if (route.name === 'inbox') {
+      return (
+        <Pressable
+          key={route.key}
+          accessibilityRole="button"
+          accessibilityState={isFocused ? { selected: true } : {}}
+          accessibilityLabel={options.tabBarAccessibilityLabel}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          style={styles.tabItem}
+        >
+          <InboxIcon style={[styles.tabIcon, { tintColor: tabColor }]} />
+          <Text style={[styles.tabLabel, { color: tabColor }]}>{label}</Text>
+        </Pressable>
+      );
+    }
+
+    if (route.name === 'calendar') {
+      return (
+        <Pressable
+          key={route.key}
+          accessibilityRole="button"
+          accessibilityState={isFocused ? { selected: true } : {}}
+          accessibilityLabel={options.tabBarAccessibilityLabel}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          style={styles.tabItem}
+        >
+          <Ionicons name="calendar-outline" size={24} color={tabColor} />
+          <Text style={[styles.tabLabel, { color: tabColor }]}>
+            {t('calendar.title')}
+          </Text>
+        </Pressable>
+      );
+    }
+
+    if (route.name === 'explore') {
+      return (
+        <Pressable
+          key={route.key}
+          accessibilityRole="button"
+          accessibilityState={isFocused ? { selected: true } : {}}
+          accessibilityLabel={options.tabBarAccessibilityLabel}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          style={styles.tabItem}
+        >
+          <SpacesIcon style={[styles.tabIcon, { tintColor: tabColor }]} />
+          <Text style={[styles.tabLabel, { color: tabColor }]}>{label}</Text>
+        </Pressable>
+      );
+    }
+
+    if (route.name === 'satori') {
+      return (
+        <Pressable
+          key={route.key}
+          accessibilityRole="button"
+          accessibilityState={isFocused ? { selected: true } : {}}
+          accessibilityLabel={options.tabBarAccessibilityLabel}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          style={styles.tabItem}
+        >
+          <Ionicons name="sparkles-outline" size={24} color={tabColor} />
+          <Text style={[styles.tabLabel, { color: tabColor }]}>Satori</Text>
+        </Pressable>
+      );
+    }
+
+    // Fallback for any unknown tab
+    return (
+      <Pressable
+        key={route.key}
+        accessibilityRole="button"
+        accessibilityState={isFocused ? { selected: true } : {}}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        style={styles.tabItem}
+      >
+        <SpacesIcon style={[styles.tabIcon, { tintColor: tabColor }]} />
+        <Text style={[styles.tabLabel, { color: tabColor }]}>{label}</Text>
+      </Pressable>
+    );
+  };
+
+  // Split routes: left of mic (inbox, calendar) and right of mic (explore, satori)
+  const leftRoutes = visibleRoutes.filter((r) =>
+    ['inbox', 'calendar'].includes(r.name)
+  );
+  const rightRoutes = visibleRoutes.filter((r) =>
+    ['explore', 'satori'].includes(r.name)
+  );
+
   return (
     <View
       style={[
@@ -54,120 +177,25 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
         },
       ]}
     >
-      {visibleRoutes.map((route) => {
-        const { options } = descriptors[route.key];
-        const labelValue = options.tabBarLabel ?? options.title ?? route.name;
-        const label = typeof labelValue === 'string' ? labelValue : route.name;
+      {leftRoutes.map(renderTab)}
 
-        const actualIndex = state.routes.findIndex((r) => r.key === route.key);
-        const isFocused = state.index === actualIndex;
+      {/* Center mic button */}
+      <View style={styles.micWrapper}>
+        <Pressable
+          style={[
+            styles.micButton,
+            {
+              backgroundColor: theme['color-primary-500'],
+              borderColor: theme['color-basic-100'],
+            },
+          ]}
+          onPress={handleMicPress}
+        >
+          <MicIcon style={[styles.micIcon, { tintColor: '#ffffff' }]} />
+        </Pressable>
+      </View>
 
-        const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
-          }
-        };
-
-        const onLongPress = () => {
-          navigation.emit({
-            type: 'tabLongPress',
-            target: route.key,
-          });
-        };
-
-        const tabColor = isFocused
-          ? theme['color-primary-500']
-          : theme['color-basic-600'];
-
-        // Inbox tab — always index 0 in our route order
-        if (route.name === 'inbox') {
-          return (
-            <React.Fragment key={route.key}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                accessibilityLabel={options.tabBarAccessibilityLabel}
-                onPress={onPress}
-                onLongPress={onLongPress}
-                style={styles.tabItem}
-              >
-                <InboxIcon
-                  style={[styles.tabIcon, { tintColor: tabColor }]}
-                />
-                <Text style={[styles.tabLabel, { color: tabColor }]}>
-                  {label}
-                </Text>
-              </Pressable>
-
-              {/* Mic button injected immediately after the Inbox tab */}
-              <Pressable
-                style={[
-                  styles.micButton,
-                  {
-                    backgroundColor: theme['color-primary-500'],
-                    borderColor: theme['color-basic-100'],
-                  },
-                ]}
-                onPress={handleMicPress}
-              >
-                <MicIcon
-                  style={[styles.micIcon, { tintColor: '#ffffff' }]}
-                />
-              </Pressable>
-            </React.Fragment>
-          );
-        }
-
-        // Calendar tab
-        if (route.name === 'calendar') {
-          return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-              onPress={onPress}
-              onLongPress={onLongPress}
-              style={styles.tabItem}
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={24}
-                color={tabColor}
-              />
-              <Text style={[styles.tabLabel, { color: tabColor }]}>
-                {t('calendar.title')}
-              </Text>
-            </Pressable>
-          );
-        }
-
-        // Spaces / explore tab (and any other future tab)
-        return (
-          <Pressable
-            key={route.key}
-            accessibilityRole="button"
-            accessibilityState={isFocused ? { selected: true } : {}}
-            accessibilityLabel={options.tabBarAccessibilityLabel}
-            onPress={onPress}
-            onLongPress={onLongPress}
-            style={styles.tabItem}
-          >
-            <SpacesIcon
-              style={[styles.tabIcon, { tintColor: tabColor }]}
-            />
-            <Text style={[styles.tabLabel, { color: tabColor }]}>
-              {label}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {rightRoutes.map(renderTab)}
 
       <RecordingModal
         visible={isRecordingModalVisible}

@@ -2,43 +2,64 @@ import { Dimensions, StyleSheet } from "react-native";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-export const CELL_SIZE = Math.floor(SCREEN_WIDTH / 7);
+// 7 cells across the grid card (16px margin each side + 14px padding each side)
+export const CELL_SIZE = Math.floor((SCREEN_WIDTH - 32 - 28) / 7);
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  // Month navigation header
+  listContent: {
+    paddingBottom: 100,
+  },
+  // Month navigation
   monthHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   monthTitle: {
-    fontSize: 17,
-    fontWeight: "600",
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: -0.4,
+    textAlign: "center",
+  },
+  yearLabel: {
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 1,
   },
   navButton: {
-    padding: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  // Day-of-week header row
+  // Heatmap grid card
+  gridCard: {
+    marginHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+  },
   weekdayRow: {
     flexDirection: "row",
+    marginBottom: 4,
   },
   weekdayCell: {
     width: CELL_SIZE,
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   weekdayLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    textTransform: "uppercase",
+    fontSize: 10,
+    fontWeight: "700",
     letterSpacing: 0.5,
   },
-  // Grid
   gridRow: {
     flexDirection: "row",
   },
@@ -49,20 +70,18 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dayCellInner: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: CELL_SIZE - 4,
+    height: CELL_SIZE - 4,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 8,
   },
   dayNumber: {
-    fontSize: 15,
-    fontWeight: "400",
+    fontSize: 12,
   },
   dayNumberSelected: {
     fontWeight: "700",
   },
-  // Dot indicator for days with recordings
   recordingDot: {
     width: 5,
     height: 5,
@@ -70,44 +89,72 @@ export const styles = StyleSheet.create({
     position: "absolute",
     bottom: 4,
   },
-  // Today underline (when not selected)
   todayUnderline: {
     position: "absolute",
-    bottom: 3,
-    width: 16,
+    bottom: 2,
+    width: 12,
     height: 2,
     borderRadius: 1,
   },
-  // Space filter strip
-  filterStrip: {
+  // Heatmap legend
+  legendRow: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+    marginTop: 10,
+  },
+  legendLabel: {
+    fontSize: 10,
+  },
+  legendDot: {
+    width: 11,
+    height: 11,
+    borderRadius: 3,
+  },
+  // Space filter
+  filterStrip: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
+    paddingVertical: 12,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
   filterChipText: {
     fontSize: 13,
     fontWeight: "600",
   },
-  // Day recordings list
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
+  // Day heading
+  dayHeading: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
   },
+  dayHeadingText: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  dayCountText: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  // Recording items
   recordingItem: {
-    borderRadius: 8,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
   },
   recordingInfo: {
     flex: 1,
@@ -121,13 +168,12 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 4,
+    marginTop: 5,
   },
-  // Badge pill — mirrors Home.styles badge
   badge: {
-    borderRadius: 4,
+    borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   badgeText: {
     fontSize: 11,
@@ -136,7 +182,6 @@ export const styles = StyleSheet.create({
   durationText: {
     fontSize: 12,
   },
-  // Empty state
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -146,12 +191,10 @@ export const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
   },
-  // Loading overlay for day list
   loadingContainer: {
     paddingTop: 32,
     alignItems: "center",
   },
-  // Separator between grid and list
   divider: {
     height: 1,
     marginHorizontal: 16,
