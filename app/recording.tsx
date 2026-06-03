@@ -18,6 +18,7 @@ import {
   getRecordingDuration,
   getRecordingMetering,
   mergeSegments,
+  releaseRecorder,
   saveRecordingFromSegments,
   startRecording,
   stopRecording,
@@ -74,6 +75,11 @@ export default function RecordingScreen() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const meteringBufferRef = useRef<number[]>(Array(WAVEFORM_BARS).fill(0));
   const lastHeightRef = useRef<number>(5);
+
+  // Mirror of `phase` so the unmount cleanup effect (empty-dep, fixed at mount)
+  // can read the LATEST phase instead of a stale closure value.
+  const phaseRef = useRef<RecordingPhase>(phase);
+  phaseRef.current = phase;
 
   // ---------------------------------------------------------------------------
   // Draft check on mount — only runs when hasDraft=1 param is present
@@ -156,6 +162,54 @@ export default function RecordingScreen() {
       }
     };
   }, [phase]);
+
+  // ---------------------------------------------------------------------------
+  // Unmount cleanup — release leaked native resources if the screen is torn
+  // down mid-session (app backgrounded/killed, gesture dismiss, navigation away).
+  //
+  // Reads phaseRef (not `phase`) so the empty-dep closure sees the LATEST phase.
+  //
+  //   • recording: the mic is live → stop the recorder + clear the service's
+  //     80ms metering interval to release the native mic session. Segment files
+  //     accumulated so far are left on disk (recoverable; not discarded here).
+  //   • paused: a draft was intentionally auto-saved on pause. The live recorder
+  //     is already stopped, but call releaseRecorder() defensively to clear any
+  //     dangling interval — it does NOT discard segments, so the draft + its
+  //     segment files survive for recovery.
+  //   • idle / other: no live recorder; releaseRecorder() is a safe no-op that
+  //     still guarantees no metering interval is left running.
+  //
+  // releaseRecorder() never deletes segment files or the draft (unlike
+  // cancelRecording), so draft-on-pause recovery is preserved.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    return () => {
+      // Always clear the local UI metering interval.
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+
+      // Read the LATEST phase via the ref (the empty-dep closure would otherwise
+      // capture a stale 'idle'/'draft_check' value from mount time).
+      const livePhase = phaseRef.current;
+
+      // releaseRecorder() stops the native recorder + service metering interval
+      // WITHOUT discarding segments or the draft. For 'recording' this frees the
+      // live mic; for 'paused' it just clears any dangling interval while the
+      // saved draft + segment files are preserved for recovery; for any other
+      // phase it is a safe no-op. We call it whenever a session may be live or
+      // a timer may be dangling.
+      if (livePhase !== 'processing') {
+        void releaseRecorder().catch((e) =>
+          console.error(
+            'RecordingScreen: Failed to release recorder on unmount',
+            e,
+          ),
+        );
+      }
+    };
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Action handlers

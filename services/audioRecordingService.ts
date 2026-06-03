@@ -807,6 +807,37 @@ export const discardSegments = async (): Promise<void> => {
 };
 
 /**
+ * Release the live recorder + metering interval WITHOUT touching any persisted
+ * segment files or the saved draft. Use this on screen unmount to free the
+ * native mic session and stop the 80ms polling timer while leaving the
+ * accumulated session segments (and any auto-saved draft) intact for recovery.
+ *
+ * Unlike cancelRecording(), this does NOT call discardSegments(), so paused
+ * sessions with a saved draft survive.
+ *
+ * Idempotent and safe to call when nothing is active.
+ */
+export const releaseRecorder = async (): Promise<void> => {
+  if (meteringInterval) {
+    clearInterval(meteringInterval);
+    meteringInterval = null;
+  }
+
+  if (recorder) {
+    try {
+      await recorder.stop();
+    } catch (error) {
+      console.error("Error stopping recorder during release:", error);
+    } finally {
+      recorder.release();
+      recorder = null;
+      lastMeteringValue = undefined;
+      lastDurationMillis = 0;
+    }
+  }
+};
+
+/**
  * Cancel current recording — stops any active recorder, discards all
  * accumulated segment files, and resets module state.
  */
