@@ -49,10 +49,11 @@ const NavigationGuard = () => {
     SplashScreen.hideAsync();
 
     const inTabsGroup = segments[0] === '(tabs)';
+    const inRecording = segments[0] === 'recording';
 
     if (isAuthenticated && !inTabsGroup) {
       router.replace('/(tabs)/explore/explore');
-    } else if (!isAuthenticated && inTabsGroup) {
+    } else if (!isAuthenticated && (inTabsGroup || inRecording)) {
       router.replace('/');
     }
   }, [isAuthenticated, isLoading, segments, router]);
