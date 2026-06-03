@@ -221,12 +221,33 @@ export default function RecordingScreen() {
   const handleStart = useCallback(async () => {
     try {
       await startRecording();
+
+      // Draft-recovery seed — THE real recovery path. After an app restart the
+      // recovered draft's prior spans live in segmentsRef.current (loaded by the
+      // mount draft-check), but the module-level sessionSegments is empty (fresh
+      // JS process) and startRecording() above just RESET it to []. Re-seed the
+      // recovered spans NOW, AFTER startRecording's reset, so the subsequent
+      // stopRecording() APPENDS the new span → sessionSegments = [...priorSpans,
+      // newSpan], yielding a complete multi-span transcript and a discardSegments
+      // that cleans EVERY file (no leak).
+      //
+      // ORDERING (critical): startRecording() → restoreSegments([prior]) →
+      // (later) stopRecording() appends. Skip entirely when segmentsRef is empty
+      // (normal live record) so that path stays a single continuous file.
+      const priorSpans = [...segmentsRef.current];
+      if (priorSpans.length > 0) {
+        restoreSegments(priorSpans);
+        // Carry the recovered elapsed time so the on-screen timer continues from
+        // the pre-restart duration instead of resetting to 0.
+        completedDurationRef.current = totalDuration;
+      }
+
       setPhase('recording');
     } catch (error) {
       console.error('RecordingScreen: Failed to start recording', error);
       alert(t('recording.startFailed'));
     }
-  }, [t]);
+  }, [totalDuration, t]);
 
   /**
    * Pause — natively suspend the SINGLE live recorder (no segment split, so no
