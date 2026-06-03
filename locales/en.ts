@@ -32,6 +32,7 @@ export default {
     title: 'Recording',
     ready: 'Ready to Record',
     paused: 'Paused',
+    pause: 'Pause',
     stopHint: 'Tap pause to add a break, or stop to finish',
     startHint: 'Tap the button to start recording',
     resumeHint: 'Tap to resume, or finish to save',
