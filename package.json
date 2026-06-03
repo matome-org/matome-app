@@ -12,6 +12,7 @@
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci",
     "e2e": "maestro test .maestro",
     "e2e:smoke": "maestro test .maestro/smoke.yaml",
     "postinstall": "node ./scripts/patch-expo-updates.js"

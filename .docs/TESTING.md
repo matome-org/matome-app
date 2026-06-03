@@ -297,8 +297,55 @@ Add coverage in this order — highest blast-radius / audit-flagged first:
 5. `services/recordingService.ts` — CRUD + row mapping (extend the existing
    `recordingService.calendar.test.ts`).
 
-## Current baseline
+## Coverage baseline (2026-06-03)
 
-100 / 135 passing, ~55% statements (after the SDK 55 harness fix in `49dbeb4`).
-The 35 failures are **real logic / stale-test issues, not harness crashes**, and
-are tracked separately — do not treat them as a reason to revert `jest.setup.js`.
+Captured via `npx jest --coverage` at the close of the test-suite plan (T11).
+**No threshold gate yet** (per decision) — this is the future **ratchet floor**:
+new work should not drop these numbers, and the next pass should raise them.
+
+**Overall:** statements **67.57%** (769/1138) · branches **58.36%** (314/538) ·
+functions **65.07%** (123/189) · lines **68.13%** (744/1092).
+
+Per critical module (the risk-priority targets above):
+
+| Module | Stmts | Branch | Funcs | Lines |
+| --- | --- | --- | --- | --- |
+| `services/audioRecordingService.ts` | 55.61% | 37.86% | 61.36% | 55.39% |
+| `services/draftRecordingService.ts` | 100% | 100% | 100% | 100% |
+| `services/recordingService.ts` | 85.15% | 71.25% | 100% | 85.60% |
+| `utils/database.ts` | 82.05% | 64.28% | 60% | 81.57% |
+| `utils/migrations/001_add_notes_column.ts` | 100% | 100% | 100% | 100% |
+| `utils/migrations/002_workspace_foundation.ts` | 100% | 100% | 100% | 100% |
+| `utils/migrations/003_recording_drafts.ts` | 100% | 100% | 100% | 100% |
+| `utils/migrations/index.ts` | 100% | 100% | 100% | 100% |
+| `app/navigationGuard.ts` | 100% | 100% | 100% | 100% |
+| `app/recording.tsx` | 68.26% | 86.20% | 67.85% | 67.87% |
+
+`audioRecordingService.ts` is the lowest-covered critical module and the
+highest-risk one (the three audits found the most defects there) — it is the
+top ratchet target.
+
+**Run totals:** 180 passed / 36 failed (216 total) across 13 suites
+(7 passed, 6 failed). The failures are **real logic / stale-test issues, not
+harness crashes** — do not treat them as a reason to revert `jest.setup.js`.
+
+### KNOWN FOLLOWUP — 36 pre-existing failing tests
+
+These failures pre-date / are out of scope for the test-suite plan and are left
+**unfixed here** by decision. They should be triaged to green the baseline in a
+future task. Failing suites:
+
+- `__tests__/unit/insertMarkdown.unit.test.ts` — string-transform edge cases
+  (unicode emoji boundary, whitespace-only transcript).
+- `__tests__/unit/calendarData.test.ts` — `fetchDayRecordings` maps an
+  undefined result (`processes/calendarData.ts:102`).
+- `__tests__/unit/Calendar.test.tsx` — V2 Calendar component assertions stale.
+- `__tests__/unit/CalendarContainer.test.tsx` — Calendar container wiring stale.
+- `__tests__/integration/DetailsContainer.integration.test.tsx` — details
+  container integration stale.
+- `__tests__/unit/audioRecordingService.unit.test.ts` — one case
+  (per-session temp-snapshot concurrent-tracker cleanup) asserts a count that
+  is now 0; the rest of the suite passes.
+
+Triaging these to green is the **ratchet entry point**: green the baseline,
+then turn the numbers above into a `coverageThreshold` gate.
