@@ -1,0 +1,54 @@
+# AUTHORED — not yet validated on device. Do not run directly: use
+# `bun run e2e` or `mise run e2e` so scripts/e2e-preflight.sh can block unsafe
+# production transcription URLs and missing deterministic local auth.
+#
+# Flow: record -> pause -> resume -> finish -> recording appears in inbox detail.
+# Covers the device-only happy path the static audits could not verify (the
+# single-file pause/resume span model in app/recording.tsx + the finish->detail
+# nav fixed in task 487).
+#
+# appId = Android package / iOS bundle id from app.json (com.anonymous.matomeapp).
+# Selectors are the en-locale literals rendered by app/recording.tsx via t()
+# (locales/en.ts `recording.*`) plus three minimal testIDs added in app source:
+#   - navbar-mic-fab        (components/NavBar/NavBar.tsx — opens /recording)
+#   - record-primary-button (app/recording.tsx — the record/pause/resume Pressable)
+#   - fab-save              (Views/Details/Details.tsx — pre-existing, marks detail)
+#
+# PREREQUISITE: local Supabase + local transcription stub + deterministic local
+# authenticated session confirmed by MATOME_E2E_AUTH_READY=local-seeded.
+appId: com.anonymous.matomeapp
+---
+- launchApp:
+    clearState: false
+# Land in the inbox tab (V2 NavBar visible). Open the recording modal via the
+# center mic FAB.
+- assertVisible: "Inbox"
+- tapOn:
+    id: "navbar-mic-fab"
+
+# Idle recording screen.
+- assertVisible: "Ready to Record"
+# Start recording — primary button (idle -> handleStart).
+- tapOn:
+    id: "record-primary-button"
+- assertVisible: "Recording"
+- assertNotVisible: "Ready to Record"
+
+# Pause — auto-saves a draft (recording -> handlePause).
+- tapOn: "Pause"
+- assertVisible: "Paused"
+- assertNotVisible: "Recording"
+
+# Resume — continues the same native recorder (paused -> handleResume).
+- tapOn:
+    id: "record-primary-button"
+- assertVisible: "Recording"
+- assertNotVisible: "Paused"
+
+# Finish — finalize + save, then router.replace -> /(tabs)/inbox/[id].
+- tapOn: "Finish"
+# Detail screen marker: the segmented control tab + the save FAB testID.
+- assertVisible: "Summary"
+- assertVisible:
+    id: "fab-save"
+- assertNotVisible: "Ready to Record"

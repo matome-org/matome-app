@@ -47,6 +47,32 @@ sleep 1
 exec ./node_modules/.bin/expo start --dev-client
 """
 
+[tasks.e2e]
+description = "Run Maestro E2E flows against the running emulator (requires `mise run up` + app installed)"
+run = """
+set -e
+
+# Preconditions: emulator online + app installed; scripts/e2e-preflight.sh also
+# checks Maestro plus recording-flow safety boundaries before Maestro launches.
+if ! adb devices | grep -qE '^emulator-[0-9]+\\s+device$'; then
+  echo '✗ no emulator online. Boot the stack first: mise run up'
+  exit 1
+fi
+
+# The app (com.anonymous.matomeapp) must already be installed on the emulator.
+# `mise run up` runs `expo start --dev-client`, which serves the JS bundle to a
+# DEV-CLIENT build that must be installed separately (expo run:android or an EAS
+# dev build) — Expo Go cannot host this project's native modules. See TESTING.md.
+if ! adb shell pm list packages 2>/dev/null | grep -q 'com.anonymous.matomeapp'; then
+  echo '✗ com.anonymous.matomeapp not installed on the emulator.'
+  echo '  Build + install a dev-client first:  expo run:android   (or an EAS dev build)'
+  exit 1
+fi
+
+sh ./scripts/e2e-preflight.sh all
+exec maestro test .maestro
+"""
+
 [tasks.down]
 description = "Stop Metro, Supabase, and emulator"
 run = """

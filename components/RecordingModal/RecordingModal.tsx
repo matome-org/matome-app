@@ -5,7 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { formatDuration } from "@/services/audioRecordingService";
 import { RecordingModalProps } from "./RecordingModal.types";
 import { styles } from "./RecordingModal.styles";
-import { useTheme } from "@ui-kitten/components";
 
 const NIGHT = "#0B0C0E";
 const ACCENT = "#E1B346";
@@ -21,7 +20,6 @@ export const RecordingModal: React.FC<RecordingModalProps> = ({
   recordingDuration,
   generateWaveform,
 }) => {
-  const theme = useTheme();
   const { t } = useTranslation();
 
   return (

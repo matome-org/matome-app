@@ -53,8 +53,12 @@ function makeCard(overrides: Partial<{
     title: "Team meeting",
     duration: 300,
     badge: overrides.badge ?? "Work",
-    workspaceName: overrides.workspaceName ?? "Engineering",
-    workspaceId: overrides.workspaceId ?? "ws-eng",
+    workspaceName: Object.prototype.hasOwnProperty.call(overrides, "workspaceName")
+      ? overrides.workspaceName ?? null
+      : "Engineering",
+    workspaceId: Object.prototype.hasOwnProperty.call(overrides, "workspaceId")
+      ? overrides.workspaceId ?? null
+      : "ws-eng",
     createdAt: Date.now(),
   };
 }
@@ -157,8 +161,8 @@ describe("CalendarContainer — space filter logic", () => {
   });
 
   it("should filter to only Engineering recordings when Engineering chip is pressed", async () => {
-    const { findByText, findAllByText } = renderContainer();
-    const engineeringChip = await findByText("Engineering");
+    const { findAllByText } = renderContainer();
+    const engineeringChip = (await findAllByText("Engineering"))[0];
 
     await act(async () => {
       fireEvent.press(engineeringChip);
@@ -171,11 +175,11 @@ describe("CalendarContainer — space filter logic", () => {
   });
 
   it("should restore all recordings when the active chip is pressed again (toggle off)", async () => {
-    const { findByText, findAllByText } = renderContainer();
-    const engineeringChip = await findByText("Engineering");
+    const { findAllByText } = renderContainer();
+    const engineeringChip = (await findAllByText("Engineering"))[0];
 
     await act(async () => { fireEvent.press(engineeringChip); });
-    await act(async () => { fireEvent.press(await findByText("Engineering")); });
+    await act(async () => { fireEvent.press((await findAllByText("Engineering"))[0]); });
 
     await waitFor(async () => {
       const items = await findAllByText("Team meeting");

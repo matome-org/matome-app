@@ -12,12 +12,17 @@
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci",
+    "e2e": "sh ./scripts/e2e-preflight.sh all && maestro test .maestro",
+    "e2e:preflight": "sh ./scripts/e2e-preflight.sh all",
+    "e2e:smoke": "sh ./scripts/e2e-preflight.sh smoke && maestro test .maestro/smoke.yaml",
     "postinstall": "node ./scripts/patch-expo-updates.js"
   },
   "jest": {
     "preset": "jest-expo",
-    "setupFilesAfterEnv": [],
-    "setupFiles": [],
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
+    ],
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@ui-kitten|@eva-design|@testing-library)"
     ],

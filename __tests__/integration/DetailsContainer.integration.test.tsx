@@ -92,9 +92,11 @@ jest.mock("react-native-toast-message", () => ({
   show: jest.fn(),
 }));
 
+const mockT = (key: string) => key;
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: mockT,
     i18n: { language: "en" },
   }),
 }));
@@ -225,6 +227,16 @@ function setupMocks(recordOverride?: Partial<typeof MOCK_RECORDING_RECORD>) {
   return { record, routerMock };
 }
 
+async function waitForRecordingLoaded() {
+  await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+  await waitFor(() => {
+    expect(
+      screen.queryByText("details.edit") ??
+        screen.queryByPlaceholderText("details.notesPlaceholder"),
+    ).toBeTruthy();
+  });
+}
+
 // ─── beforeRemove guard ───────────────────────────────────────────────────────
 
 describe("DetailsContainer — beforeRemove navigation guard", () => {
@@ -245,7 +257,7 @@ describe("DetailsContainer — beforeRemove navigation guard", () => {
     setupMocks();
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     nav.fireBeforeRemove();
 
@@ -258,7 +270,7 @@ describe("DetailsContainer — beforeRemove navigation guard", () => {
     setupMocks({ notes: "Original notes" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     const textInput = screen.getByPlaceholderText("details.notesPlaceholder");
@@ -295,7 +307,7 @@ describe("DetailsContainer — beforeRemove navigation guard", () => {
     setupMocks({ notes: "Saved notes" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     const textInput = screen.getByPlaceholderText("details.notesPlaceholder");
@@ -318,7 +330,7 @@ describe("DetailsContainer — beforeRemove navigation guard", () => {
     setupMocks({ notes: "Original" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     fireEvent.changeText(
@@ -342,7 +354,7 @@ describe("DetailsContainer — beforeRemove navigation guard", () => {
     setupMocks({ notes: "Original" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     fireEvent.changeText(
@@ -366,7 +378,7 @@ describe("DetailsContainer — beforeRemove navigation guard", () => {
     setupMocks({ notes: "Original" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     fireEvent.changeText(
@@ -402,7 +414,7 @@ describe("DetailsContainer — isDirty dirty dot on FAB", () => {
     setupMocks({ notes: "Clean notes" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     expect(screen.queryByTestId("fab-dirty-dot")).toBeNull();
   });
@@ -413,7 +425,7 @@ describe("DetailsContainer — isDirty dirty dot on FAB", () => {
     setupMocks({ notes: "Original" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     fireEvent.changeText(
@@ -430,7 +442,7 @@ describe("DetailsContainer — isDirty dirty dot on FAB", () => {
     setupMocks({ notes: "Original" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     fireEvent.changeText(
@@ -457,7 +469,7 @@ describe("DetailsContainer — Edit/Preview toggle", () => {
     setupMocks({ notes: "Existing notes" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     expect(screen.getByTestId("markdown-display")).toBeTruthy();
     expect(screen.queryByPlaceholderText("details.notesPlaceholder")).toBeNull();
@@ -470,7 +482,7 @@ describe("DetailsContainer — Edit/Preview toggle", () => {
     setupMocks({ notes: undefined, summary: undefined });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     expect(screen.getByPlaceholderText("details.notesPlaceholder")).toBeTruthy();
     expect(screen.queryByTestId("markdown-display")).toBeNull();
@@ -483,7 +495,7 @@ describe("DetailsContainer — Edit/Preview toggle", () => {
     setupMocks({ notes: "Some notes" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
 
@@ -497,7 +509,7 @@ describe("DetailsContainer — Edit/Preview toggle", () => {
     setupMocks({ notes: undefined, summary: undefined });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.preview"));
 
@@ -511,7 +523,7 @@ describe("DetailsContainer — Edit/Preview toggle", () => {
     setupMocks({ notes: "Initial notes" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     fireEvent.changeText(
@@ -534,7 +546,7 @@ describe("DetailsContainer — Edit/Preview toggle", () => {
     setupMocks({ notes: "Some notes" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     // Preview mode — toolbar not visible
     expect(screen.queryByText("B")).toBeNull();
@@ -560,7 +572,7 @@ describe("DetailsContainer — initial load", () => {
     setupMocks({ notes: "Explicit user notes", summary: "AI-generated summary" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     fireEvent.press(screen.getByText("details.edit"));
     expect(screen.getByPlaceholderText("details.notesPlaceholder").props.value).toBe(
@@ -574,7 +586,7 @@ describe("DetailsContainer — initial load", () => {
     setupMocks({ notes: undefined, summary: "AI summary only" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     expect(screen.getByTestId("markdown-display").props.children).toBe("AI summary only");
   });
@@ -597,7 +609,7 @@ describe("DetailsContainer — initial load", () => {
     setupMocks({ notes: "Pre-existing notes" });
 
     render(<DetailsContainer />);
-    await waitFor(() => expect(recordingService.getRecordingById).toHaveBeenCalled());
+    await waitForRecordingLoaded();
 
     expect(screen.queryByTestId("fab-dirty-dot")).toBeNull();
   });

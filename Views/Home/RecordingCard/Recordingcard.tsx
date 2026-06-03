@@ -38,6 +38,7 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
 
   return (
     <TouchableOpacity
+      testID="recording-card"
       style={[
         cardStyles.card,
         {

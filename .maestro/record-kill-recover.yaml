@@ -1,0 +1,61 @@
+# AUTHORED — not yet validated on device. Do not run directly: use
+# `bun run e2e` or `mise run e2e` so scripts/e2e-preflight.sh can block unsafe
+# production transcription URLs and missing deterministic local auth.
+#
+# Flow: record -> pause (draft auto-saved) -> KILL app -> relaunch -> draft prompt
+#       -> Resume -> record more -> finish -> lands on detail.
+# This is the crash-recovery path flagged by audit#1 / audit#3 (the
+# NavigationGuard draft check pushing /recording?hasDraft=1, draft_prompt UI, and
+# the restoreSegments seed on the real Resume path fixed in task 489). Static
+# analysis could not exercise killApp/relaunch — only a device run can.
+#
+# Selectors: en-locale literals from app/recording.tsx (recording.draftFound =
+# "Resume Recording?", recording.draftResume = "Resume", recording.finish =
+# "Finish") + testIDs navbar-mic-fab / record-primary-button / fab-save.
+#
+# PREREQUISITE: local Supabase + local transcription stub + deterministic local
+# authenticated session confirmed by MATOME_E2E_AUTH_READY=local-seeded. The
+# draft-recovery push in NavigationGuard only fires when isAuthenticated.
+appId: com.anonymous.matomeapp
+---
+- launchApp:
+    clearState: false
+- assertVisible: "Inbox"
+- tapOn:
+    id: "navbar-mic-fab"
+
+# Record then pause so a draft row is written (draftRecordingService.saveDraft).
+- assertVisible: "Ready to Record"
+- tapOn:
+    id: "record-primary-button"
+- assertVisible: "Recording"
+- tapOn: "Pause"
+- assertVisible: "Paused"
+
+# Hard-kill the app while the draft is persisted on disk + in DB.
+- killApp
+
+# Relaunch — NavigationGuard detects the draft after auth and pushes
+# /recording?hasDraft=1, which renders the draft_prompt.
+- launchApp:
+    clearState: false
+# Draft recovery prompt (recording.draftFound).
+- assertVisible: "Resume Recording?"
+- assertNotVisible: "Inbox"
+
+# Resume the recovered draft (handleDraftResume -> phase idle).
+- tapOn: "Resume"
+- assertVisible: "Ready to Record"
+- assertNotVisible: "Resume Recording?"
+
+# Record a new span on the recovered session (handleStart seeds restoreSegments).
+- tapOn:
+    id: "record-primary-button"
+- assertVisible: "Recording"
+
+# Finish — saves the full multi-span session and lands on detail.
+- tapOn: "Finish"
+- assertVisible: "Summary"
+- assertVisible:
+    id: "fab-save"
+- assertNotVisible: "Resume Recording?"

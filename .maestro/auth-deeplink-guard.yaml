@@ -1,0 +1,37 @@
+# AUTHORED — not yet validated on device; run via `mise run up` + dev-client build,
+# then `maestro test .maestro`.
+#
+# Flow: UNAUTHENTICATED deep-link to the recording route -> bounced to welcome.
+# This is the audit#3 [A01] gate: `recording` is a root-Stack sibling of
+# `(tabs)`, so a pre-auth deep-link to /recording must be redirected to `/` by
+# NavigationGuard (app/navigationGuard.ts: `!isAuthenticated && inRecording -> /`).
+# Only a real deep-link launch into a logged-out app exercises this — static
+# analysis can read the pure decideRedirect fn but not the live nav bounce.
+#
+# Deep-link: app.json `scheme` = "matomeapp", and the route is the top-level
+# Stack screen `recording` (app/_layout.tsx), so the URL is matomeapp://recording.
+#
+# Selectors: the HARDCODED welcome-screen literals (Views/welcome/Welcome.tsx) —
+# "MATOME" wordmark + "Finally organized." headline accent — locale-independent
+# and identical to the smoke flow's anchors. The recording.* status labels
+# ("Ready to Record", "Recording") must NOT appear, proving the bounce.
+#
+# PREREQUISITE: app is LOGGED OUT. clearState: true guarantees no auth session
+# so the guard's unauthenticated branch fires.
+appId: com.anonymous.matomeapp
+---
+# Fresh, logged-out state.
+- launchApp:
+    clearState: true
+# Confirm we are on the unauthenticated Welcome screen.
+- assertVisible: "MATOME"
+- assertVisible: "Finally organized."
+
+# Deep-link straight at the gated recording route while logged out.
+- openLink: matomeapp://recording
+
+# NavigationGuard bounces unauthenticated /recording -> / (Welcome). The mic
+# screen must NOT be reachable.
+- assertVisible: "Finally organized."
+- assertNotVisible: "Ready to Record"
+- assertNotVisible: "Recording"

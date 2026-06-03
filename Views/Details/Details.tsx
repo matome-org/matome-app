@@ -60,6 +60,8 @@ export const Details: React.FC<DetailsProps> = ({
   const isTranscribing = recording.isProcessing;
   const transcribeFailed =
     !recording.isProcessing &&
+    !isEditing &&
+    transcript.length > 0 &&
     !recording.notes &&
     !(recording.summary?.trim());
 

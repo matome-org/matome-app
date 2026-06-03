@@ -62,6 +62,7 @@ export const DetailsContainer: React.FC = () => {
   // Lifted edit state
   const [transcript, setTranscript] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [, forceDirtyRecheck] = useState(0);
   // The text that was last persisted to DB — used to compute isDirty
   const savedTextRef = useRef("");
 
@@ -301,6 +302,7 @@ export const DetailsContainer: React.FC = () => {
       await updateRecording(id, { notes: transcript });
       // Update the saved reference so dirty resets to false
       savedTextRef.current = transcript;
+      forceDirtyRecheck((value) => value + 1);
       Toast.show({ type: "success", text1: t("toast.notesSaved") });
     } catch (e) {
       Toast.show({ type: "error", text1: t("toast.notesFailed") });

@@ -31,13 +31,17 @@ function makeCard(overrides: Partial<{
   duration: number;
   badge: "Work" | "Personal" | "Inbox";
   workspaceName: string | null;
+  workspaceId: string;
 }> = {}) {
   return {
     id: overrides.id ?? "rec-1",
     title: overrides.title ?? "Team standup",
     duration: overrides.duration ?? 180,
     badge: overrides.badge ?? "Work",
-    workspaceName: overrides.workspaceName ?? "Engineering",
+    workspaceName: Object.prototype.hasOwnProperty.call(overrides, "workspaceName")
+      ? overrides.workspaceName ?? null
+      : "Engineering",
+    workspaceId: overrides.workspaceId ?? "ws-1",
     createdAt: new Date(2026, 3, 10, 9, 0, 0).getTime(),
   };
 }
@@ -73,17 +77,20 @@ function renderCalendar(props: Partial<CalendarProps> = {}) {
 describe("Calendar — month header", () => {
   it("should display the correct month name and year", () => {
     const { getByText } = renderCalendar({ year: 2026, month: 3 });
-    expect(getByText("April 2026")).toBeTruthy();
+    expect(getByText("April")).toBeTruthy();
+    expect(getByText("2026")).toBeTruthy();
   });
 
   it("should display January correctly (month 0)", () => {
     const { getByText } = renderCalendar({ year: 2025, month: 0 });
-    expect(getByText("January 2025")).toBeTruthy();
+    expect(getByText("January")).toBeTruthy();
+    expect(getByText("2025")).toBeTruthy();
   });
 
   it("should display December correctly (month 11)", () => {
     const { getByText } = renderCalendar({ year: 2026, month: 11 });
-    expect(getByText("December 2026")).toBeTruthy();
+    expect(getByText("December")).toBeTruthy();
+    expect(getByText("2026")).toBeTruthy();
   });
 });
 
@@ -111,10 +118,12 @@ describe("Calendar — day grid", () => {
   });
 
   it("should render all 7 weekday header labels", () => {
-    const { getByText } = renderCalendar();
-    ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach((label) => {
-      expect(getByText(label)).toBeTruthy();
-    });
+    const { getAllByText, getByText } = renderCalendar();
+    expect(getAllByText("S").length).toBeGreaterThanOrEqual(2);
+    expect(getByText("M")).toBeTruthy();
+    expect(getAllByText("T").length).toBeGreaterThanOrEqual(2);
+    expect(getByText("W")).toBeTruthy();
+    expect(getByText("F")).toBeTruthy();
   });
 });
 

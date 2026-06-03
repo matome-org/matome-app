@@ -16,7 +16,15 @@ npx expo start --android # Run on Android emulator
 npx expo lint            # Run ESLint
 ```
 
-No test framework is configured yet.
+### Testing
+
+Tests run on **Jest 30** with the **jest-expo 55** preset and
+**@testing-library/react-native 13**. Suites live in `__tests__/unit/` and
+`__tests__/integration/`. Run with `bun run test`, `bun run test:watch`, or
+`bun run test:coverage`. An Expo SDK 55 winter-runtime shim in `jest.setup.js`
+is required — **do not remove it** or every suite crashes on import. Maestro E2E
+is planned but not yet configured. See `.docs/TESTING.md` for conventions,
+structure, mock patterns, and the risk-priority order.
 
 ## Architecture
 

@@ -10,7 +10,7 @@ export type UpdateStatus =
 
 export interface UpdateCheckResult {
   status: UpdateStatus;
-  manifest?: Updates.UpdateManifest;
+  manifest?: Updates.Manifest;
   error?: Error;
 }
 

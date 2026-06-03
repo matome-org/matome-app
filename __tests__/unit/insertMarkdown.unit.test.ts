@@ -155,7 +155,7 @@ describe("insertMarkdown — edge cases", () => {
 
   it("should handle unicode emoji without corrupting surrounding text", () => {
     const text = "Hello 🌍 world";
-    const result = applyInsertMarkdown(text, { start: 10, end: 15 }, "**", "**");
+    const result = applyInsertMarkdown(text, { start: 9, end: 14 }, "**", "**");
     expect(result).toBe("Hello 🌍 **world**");
   });
 
@@ -172,7 +172,7 @@ describe("insertMarkdown — edge cases", () => {
 
   it("should handle whitespace-only transcript", () => {
     const result = applyInsertMarkdown("   ", { start: 1, end: 2 }, "**", "**");
-    expect(result).toBe(" ** **");
+    expect(result).toBe(" ** ** ");
   });
 
   it("should produce correct output for all 5 toolbar actions on the same input", () => {
