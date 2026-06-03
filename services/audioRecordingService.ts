@@ -52,10 +52,14 @@ let sessionSegments: string[] = [];
 // persisted to the recordings table) must NOT be tracked here, so it is never
 // swept by the cleanup routines below.
 //
-// Every output path is recorded in `transcriptionTempFiles`. After a save
-// completes we delete every tracked temp file except the canonical saved path
-// (see cleanupTranscriptionTempFiles). On cancel/discard of an UNSAVED session
-// we delete all tracked temp files, leaving nothing behind (privacy).
+// Every output path is recorded in `transcriptionTempFiles`. On cancel/discard
+// of an UNSAVED session we delete all tracked temp files, leaving nothing behind
+// (privacy). On SAVE, the flow snapshots this list into a LOCAL const at save
+// start and cleans up via that snapshot (NOT this global) once the background
+// pipeline finishes — see cleanupTranscriptionTempFiles. This global is reset
+// (cleared) only at the top of startRecording(); the save-flow cleanup
+// deliberately does NOT mutate it, so a back-to-back Session-2 owns a fresh
+// global while Session-1's in-flight cleanup works off its own local snapshot.
 // ---------------------------------------------------------------------------
 let transcriptionTempFiles: string[] = [];
 
@@ -64,8 +68,10 @@ let transcriptionTempFiles: string[] = [];
 // triggered after Finish (recording.tsx calls discardSegments() right after
 // saveRecordingFromSegments returns, while background transcription is still
 // running) does NOT delete the saved file or the in-flight temp copies the
-// background pipeline is still uploading. Reset to null by
-// cleanupTranscriptionTempFiles() once the save pipeline finishes.
+// background pipeline is still uploading. Reset to null only at the top of
+// startRecording(); the save-flow cleanup captures the saved path locally
+// (sessionSavedPath) and does NOT clear this global, so a concurrent Session-2
+// can own/reset it without Session-1's cleanup interfering.
 let savedAudioFilePath: string | null = null;
 
 /**
@@ -101,21 +107,25 @@ const safeDeleteFile = async (uri: string): Promise<void> => {
 };
 
 /**
- * Delete tracked transcription temp files, optionally preserving one canonical
- * path (the saved recording's audioFilePath). All other tracked temp files are
- * removed from disk and from the tracker. After this runs the session's temp
- * state is cleared: the saved file (if any) survives on disk but is no longer
- * tracked here — it is owned by the recordings table going forward.
+ * Delete a list of transcription temp files, optionally preserving one canonical
+ * path (the saved recording's audioFilePath). All other files in `tempFiles` are
+ * removed from disk. The saved file (if any) survives on disk but is no longer
+ * tracked anywhere by this service — it is owned by the recordings table forward.
+ *
+ * IMPORTANT (cross-session safety): this operates ONLY on the `tempFiles` list it
+ * is given — it does NOT read or mutate the module-global `transcriptionTempFiles`
+ * / `savedAudioFilePath`. The save flows snapshot their per-session temp list into
+ * a LOCAL const at save start and pass THAT snapshot here. This is what closes the
+ * async-callback race: when Session-1's background pipeline finishes WHILE
+ * Session-2 is mid-recording, S1's cleanup deletes only the files in S1's own
+ * snapshot and never touches the live module array (now owned by S2). Without this
+ * the global wipe would erase S2's tracker → S2 temps leak or S2 discard no-ops.
  */
 const cleanupTranscriptionTempFiles = async (
+  tempFiles: string[],
   preservePath?: string,
 ): Promise<void> => {
-  const toDelete = transcriptionTempFiles.filter(
-    (uri) => uri !== preservePath,
-  );
-  transcriptionTempFiles = [];
-  savedAudioFilePath = null;
-
+  const toDelete = tempFiles.filter((uri) => uri !== preservePath);
   await Promise.allSettled(toDelete.map((uri) => safeDeleteFile(uri)));
 };
 
@@ -624,6 +634,16 @@ export const saveRecording = async (
     const audioFilePath = await prepareAudioForTranscription(uri);
     savedAudioFilePath = audioFilePath;
 
+    // Snapshot THIS session's temp-file tracker into a local the moment the save
+    // flow begins. The background callback below cleans up via this LOCAL snapshot
+    // (not the module global), so if a back-to-back Session-2 starts and resets
+    // the module-global transcriptionTempFiles while this pipeline is still
+    // running, our cleanup still targets exactly S1's own files and never wipes
+    // S2's live tracker. (No further prepareAudioForTranscription calls happen on
+    // this path after this point, so the snapshot is complete.)
+    const sessionTempFiles = [...transcriptionTempFiles];
+    const sessionSavedPath = audioFilePath;
+
     // Create recording record with processing status
     const id = generateRecordingId();
     recordingId = id;
@@ -692,7 +712,9 @@ export const saveRecording = async (
       } finally {
         // Transcription done — remove every temp transcription copy EXCEPT the
         // canonical saved audioFilePath (kept for playback in the detail view).
-        await cleanupTranscriptionTempFiles(audioFilePath);
+        // Operate on the LOCAL snapshot, never the module global, so a concurrent
+        // Session-2 that reset the global is unaffected.
+        await cleanupTranscriptionTempFiles(sessionTempFiles, sessionSavedPath);
         try {
           await updateRecording(id, { isProcessing: false });
         } catch (error) {
@@ -754,6 +776,15 @@ export const saveRecordingFromSegments = async (
     const audioFilePath = await prepareAudioForTranscription(uri);
     savedAudioFilePath = audioFilePath;
 
+    // Snapshot THIS session's temp tracker + saved path into locals at save start.
+    // The per-segment loop below produces MORE temps inside the async callback; it
+    // appends them to its OWN local list (sessionTempFiles) rather than relying on
+    // the module global, so cleanup targets exactly this session's files. If a
+    // back-to-back Session-2 resets the module-global tracker mid-flight, this
+    // pipeline is unaffected and never wipes S2's live tracker.
+    const sessionTempFiles = [...transcriptionTempFiles];
+    const sessionSavedPath = audioFilePath;
+
     const id = generateRecordingId();
     recordingId = id;
     const now = new Date();
@@ -790,6 +821,10 @@ export const saveRecordingFromSegments = async (
         for (const segUri of segmentsSnapshot) {
           try {
             const segPath = await prepareAudioForTranscription(segUri);
+            // Record this per-segment temp into the LOCAL snapshot so the cleanup
+            // in `finally` sweeps it without ever reading the module global (which
+            // a concurrent Session-2 may have reset).
+            sessionTempFiles.push(segPath);
             const part = await transcribeAudio(segPath);
             if (part) transcriptParts.push(part);
           } catch (segError) {
@@ -841,9 +876,12 @@ export const saveRecordingFromSegments = async (
       } finally {
         // Transcription done — delete every per-segment temp transcription copy
         // produced above, preserving only the canonical saved audioFilePath.
-        // Finish therefore leaves exactly one audio file on disk for this
-        // session (segment .m4a files are removed separately by discardSegments).
-        await cleanupTranscriptionTempFiles(audioFilePath);
+        // Operate on the LOCAL snapshot (start temps + the per-segment temps the
+        // loop pushed), never the module global, so a concurrent Session-2 that
+        // reset the global is unaffected. Finish therefore leaves exactly one
+        // audio file on disk for this session (segment .m4a files are removed
+        // separately by discardSegments).
+        await cleanupTranscriptionTempFiles(sessionTempFiles, sessionSavedPath);
         try {
           await updateRecording(id, { isProcessing: false });
         } catch (error) {
