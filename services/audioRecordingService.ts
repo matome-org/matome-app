@@ -12,7 +12,7 @@ import { configs } from "@/config/config";
 import { createRecording, updateRecording } from "./recordingService";
 import { summarizeText } from "./summarizeService";
 import type { BadgeType } from "@/processes/homeData";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 
 // Transcribe API client - created from config to avoid module load order issues
 const transcribeConfig = configs.find(
@@ -27,6 +27,12 @@ let recordingUri: string | null = null;
 let lastMeteringValue: number | undefined = undefined;
 let lastDurationMillis: number = 0;
 let meteringInterval: ReturnType<typeof setInterval> | null = null;
+
+// ---------------------------------------------------------------------------
+// Segment tracking — persists across pause/resume cycles within a session.
+// Segment files are written to documentDirectory so they survive app restarts.
+// ---------------------------------------------------------------------------
+let sessionSegments: string[] = [];
 
 const logRecordingOperationError = (
   message: string,
@@ -69,10 +75,23 @@ export const startRecording = async (): Promise<void> => {
     lastMeteringValue = undefined;
     lastDurationMillis = 0;
 
-    // Create and prepare recorder
+    // Create and prepare recorder.
+    // The native AudioRecorder expects a flat options object — platform-specific
+    // sub-objects (ios/android/web) must be spread to the top level.
+    const preset = RecordingPresets.HIGH_QUALITY;
+    const platformSpecific =
+      Platform.OS === "ios"
+        ? preset.ios
+        : Platform.OS === "android"
+          ? preset.android
+          : preset.web;
     recorder = new AudioModule.AudioRecorder({
-      ...RecordingPresets.HIGH_QUALITY,
+      extension: preset.extension,
+      sampleRate: preset.sampleRate,
+      numberOfChannels: preset.numberOfChannels,
+      bitRate: preset.bitRate,
       isMeteringEnabled: true,
+      ...platformSpecific,
     });
 
     await recorder.prepareToRecordAsync();
@@ -95,7 +114,9 @@ export const startRecording = async (): Promise<void> => {
 };
 
 /**
- * Stop audio recording and return the file URI
+ * Stop audio recording, persist the segment to documentDirectory, and return
+ * its URI. The segment is also appended to the module-level sessionSegments
+ * array so multi-segment sessions can be merged later.
  */
 export const stopRecording = async (): Promise<string> => {
   if (!recorder) {
@@ -117,11 +138,26 @@ export const stopRecording = async (): Promise<string> => {
 
     recorder.release();
     recorder = null;
-    recordingUri = uri;
     lastMeteringValue = undefined;
     lastDurationMillis = 0;
 
-    return uri;
+    // Copy to documentDirectory so the segment survives app restarts and is
+    // not subject to OS cache eviction. File name is timestamp + random suffix
+    // to guarantee uniqueness across sessions.
+    const segmentFileName = `segment_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 6)}.m4a`;
+    const documentsDir = FileSystem.documentDirectory;
+    if (!documentsDir) {
+      throw new Error("Document directory not available");
+    }
+    const segmentUri = `${documentsDir}${segmentFileName}`;
+    await FileSystem.copyAsync({ from: uri, to: segmentUri });
+
+    recordingUri = segmentUri;
+    sessionSegments = [...sessionSegments, segmentUri];
+
+    return segmentUri;
   } catch (error) {
     console.error("Failed to stop recording:", error);
     recorder = null;
@@ -420,6 +456,143 @@ export const saveRecording = async (
 };
 
 /**
+ * Save a recording from an already-stopped set of session segments.
+ * Used by the recording screen after multi-segment pause/resume sessions.
+ *
+ * Steps:
+ *   1. Merge all segments into one file (see mergeSegments for strategy notes).
+ *   2. Get total duration from the merged (or last) file.
+ *   3. Prepare the audio file for transcription.
+ *   4. Persist a DB record and start the background transcription pipeline.
+ *
+ * For multi-segment sessions the transcription pipeline receives the last
+ * segment's audio file. Future work: replace mergeSegments with a native
+ * M4A mux so the full audio is preserved.
+ */
+export const saveRecordingFromSegments = async (
+  badge: BadgeType = "Inbox",
+): Promise<string> => {
+  let recordingId: string | undefined;
+
+  try {
+    // Merge (or select the single/last) segment
+    const uri = await mergeSegments();
+
+    // Duration from the final file
+    const durationSeconds = await getAudioDurationSeconds(uri);
+    const duration = formatDuration(durationSeconds);
+
+    const audioFilePath = await prepareAudioForTranscription(uri);
+
+    const id = generateRecordingId();
+    recordingId = id;
+    const now = new Date();
+
+    try {
+      await createRecording({
+        id,
+        title: "New Recording",
+        timestamp: formatTimestamp(now),
+        duration,
+        badge,
+        isProcessing: true,
+        audioFilePath,
+        createdAt: now.getTime(),
+      });
+    } catch (error) {
+      logRecordingOperationError(
+        "Failed to persist recording on create",
+        { operation: "createRecording", recordingId: id },
+        error,
+      );
+      throw error;
+    }
+
+    // Background: transcribe each segment, join transcripts, summarize.
+    const segmentsSnapshot = [...sessionSegments];
+    void (async () => {
+      try {
+        // Transcribe each segment independently and join the results.
+        // This ensures we capture the full spoken content across all segments
+        // even though the saved audio file currently contains only the last.
+        const transcriptParts: string[] = [];
+        for (const segUri of segmentsSnapshot) {
+          try {
+            const segPath = await prepareAudioForTranscription(segUri);
+            const part = await transcribeAudio(segPath);
+            if (part) transcriptParts.push(part);
+          } catch (segError) {
+            logRecordingOperationError(
+              "Failed to transcribe segment",
+              { operation: "transcribeSegment", recordingId: id },
+              segError,
+            );
+          }
+        }
+
+        const transcript = transcriptParts.join(" ").trim();
+        const title = generateTitle(transcript || null);
+
+        let summary: string | undefined;
+        if (transcript) {
+          try {
+            summary = await summarizeText(transcript);
+          } catch (error) {
+            logRecordingOperationError(
+              "Failed to summarize transcript",
+              { operation: "summarizeText", recordingId: id },
+              error,
+            );
+          }
+        }
+
+        try {
+          await updateRecording(id, {
+            summary,
+            notes: transcript,
+            title,
+          });
+        } catch (error) {
+          logRecordingOperationError(
+            "Failed to persist transcription result",
+            { operation: "updateRecording.transcription", recordingId: id },
+            error,
+          );
+          throw error;
+        }
+      } catch (error) {
+        logRecordingOperationError(
+          "Failed to transcribe recording from segments",
+          { operation: "transcribeAudio", recordingId: id },
+          error,
+        );
+        Alert.alert("Failed to transcribe audio");
+      } finally {
+        try {
+          await updateRecording(id, { isProcessing: false });
+        } catch (error) {
+          logRecordingOperationError(
+            "Failed to finalize processing status",
+            { operation: "updateRecording.finalizeProcessing", recordingId: id },
+            error,
+          );
+        }
+      }
+    })();
+
+    return id;
+  } catch (error) {
+    logRecordingOperationError(
+      "Failed to save recording from segments",
+      { operation: "saveRecordingFromSegments", recordingId },
+      error,
+    );
+    Alert.alert("Failed to Save Audio");
+    throw error;
+  }
+};
+
+/**
  * Retry transcription + summarization for an existing recording.
  * Sets isProcessing: true in DB, runs the pipeline in the background,
  * then sets isProcessing: false regardless of outcome.
@@ -466,7 +639,83 @@ export const retryTranscription = async (
 };
 
 /**
- * Cancel current recording
+ * Return all segment file URIs accumulated in the current session.
+ * Does not clear state — call discardSegments() to delete files and reset.
+ */
+export const getSegments = (): string[] => {
+  return [...sessionSegments];
+};
+
+/**
+ * Merge all session segments into a single file ready for the transcription
+ * pipeline. Returns the URI of the merged (or only) file.
+ *
+ * Merge strategy:
+ *   • 0 segments: throws — nothing to merge.
+ *   • 1 segment: returns it directly, no copy needed.
+ *   • 2+ segments (M4A/AAC): True binary concatenation of M4A containers is
+ *     not possible without a native module because each M4A file has a
+ *     self-contained moov atom describing its own samples. Naively appending
+ *     bytes produces a file whose moov still points at only the first
+ *     segment's samples, resulting in silent or corrupt audio.
+ *
+ *     Correct approaches (requires a native module not currently in the
+ *     dependency tree):
+ *       • AVMutableComposition (iOS) / MediaMux (Android) via a custom
+ *         Expo module or react-native-ffmpeg.
+ *       • Convert all segments to raw PCM (WAV) before recording, then
+ *         concatenate the PCM data after stripping each subsequent file's
+ *         44-byte WAV header.
+ *
+ *     Current pragmatic fallback: copy the LAST segment as the "merged"
+ *     file so the save pipeline receives a valid audio file. The transcription
+ *     API is called once per segment and the transcripts are joined in
+ *     saveRecordingFromSegments() below. Audio playback in the detail view
+ *     will reflect only the last segment until proper merging is implemented.
+ *
+ *     TODO: Replace this with a proper merge once a native audio module is
+ *     added to the project.
+ */
+export const mergeSegments = async (): Promise<string> => {
+  if (sessionSegments.length === 0) {
+    throw new Error("mergeSegments: no segments to merge");
+  }
+
+  if (sessionSegments.length === 1) {
+    return sessionSegments[0];
+  }
+
+  // Fallback: return the last segment as the canonical audio file.
+  // See the comment above for why full M4A merging requires a native module.
+  return sessionSegments[sessionSegments.length - 1];
+};
+
+/**
+ * Delete all segment files from disk and clear module-level segment state.
+ * Safe to call even if no segments exist.
+ */
+export const discardSegments = async (): Promise<void> => {
+  const toDelete = [...sessionSegments];
+  sessionSegments = [];
+  recordingUri = null;
+
+  await Promise.allSettled(
+    toDelete.map(async (uri) => {
+      try {
+        const info = await FileSystem.getInfoAsync(uri);
+        if (info.exists) {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        }
+      } catch (error) {
+        console.error("discardSegments: failed to delete segment file", uri, error);
+      }
+    }),
+  );
+};
+
+/**
+ * Cancel current recording — stops any active recorder, discards all
+ * accumulated segment files, and resets module state.
  */
 export const cancelRecording = async (): Promise<void> => {
   if (meteringInterval) {
@@ -477,21 +726,16 @@ export const cancelRecording = async (): Promise<void> => {
   if (recorder) {
     try {
       await recorder.stop();
-      if (recordingUri) {
-        // Delete the temporary file
-        const fileInfo = await FileSystem.getInfoAsync(recordingUri);
-        if (fileInfo.exists) {
-          await FileSystem.deleteAsync(recordingUri, { idempotent: true });
-        }
-      }
     } catch (error) {
-      console.error("Error canceling recording:", error);
+      console.error("Error stopping recorder during cancel:", error);
     } finally {
       recorder.release();
       recorder = null;
-      recordingUri = null;
       lastMeteringValue = undefined;
       lastDurationMillis = 0;
     }
   }
+
+  // Discard all accumulated segments (including any that were already stopped)
+  await discardSegments();
 };

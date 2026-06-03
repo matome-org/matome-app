@@ -1,11 +1,10 @@
 import { Icon, useTheme } from '@ui-kitten/components';
-import React, { useState } from 'react';
+import React from 'react';
 import { ImageProps, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { router } from 'expo-router';
 
-import RecordingModal from '../RecordingModal';
-import { useRecordingsStore } from '@/stores/recordingsStore';
 import { NavBarProps } from './NavBar.types';
 import { styles } from './NavBar.styles';
 
@@ -24,23 +23,13 @@ const MicIcon = (props: Partial<ImageProps>) => (
 export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const [isRecordingModalVisible, setIsRecordingModalVisible] = useState(false);
-  const triggerRefresh = useRecordingsStore((state) => state.triggerRefresh);
 
   const visibleRoutes = state.routes.filter((route) => {
     return !route.name.startsWith('[');
   });
 
   const handleMicPress = () => {
-    setIsRecordingModalVisible(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsRecordingModalVisible(false);
-  };
-
-  const handleRecordingComplete = (_recordingId: string) => {
-    triggerRefresh();
+    router.push('/recording');
   };
 
   const renderTab = (route: (typeof visibleRoutes)[0]) => {
@@ -196,12 +185,6 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
       </View>
 
       {rightRoutes.map(renderTab)}
-
-      <RecordingModal
-        visible={isRecordingModalVisible}
-        onClose={handleCloseModal}
-        onRecordingComplete={handleRecordingComplete}
-      />
     </View>
   );
 };

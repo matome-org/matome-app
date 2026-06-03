@@ -15,6 +15,7 @@ export default function CalendarStackLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Calendar' }} />
+      <Stack.Screen name="[id]" options={{ title: 'Details' }} />
     </Stack>
   );
 }
