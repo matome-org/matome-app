@@ -11,6 +11,7 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 import ToastContainer from 'react-native-toast-message';
 
+import { decideRedirect } from '@/app/navigationGuard';
 import { supabase } from '@/config/supabase';
 import { darkTheme, lightTheme } from '@/config/themes';
 import { runUpdateFlow } from '@/services/updateService';
@@ -48,13 +49,9 @@ const NavigationGuard = () => {
 
     SplashScreen.hideAsync();
 
-    const inTabsGroup = segments[0] === '(tabs)';
-    const inRecording = segments[0] === 'recording';
-
-    if (isAuthenticated && !inTabsGroup) {
-      router.replace('/(tabs)/explore/explore');
-    } else if (!isAuthenticated && (inTabsGroup || inRecording)) {
-      router.replace('/');
+    const target = decideRedirect({ isAuthenticated, isLoading, segments });
+    if (target) {
+      router.replace(target);
     }
   }, [isAuthenticated, isLoading, segments, router]);
 
