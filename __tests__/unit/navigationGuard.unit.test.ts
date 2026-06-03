@@ -12,8 +12,8 @@
  *
  * Coverage (mirrors task T8):
  *   (a) unauthenticated + segments[0] in {'(tabs)','recording'} → '/'
- *   (b) authenticated draft-recovery push '/recording?hasDraft=1' — the
- *       segments comparison keys off the PATH segment only (query excluded)
+ *   (b) authenticated draft-recovery push '/recording?hasDraft=1' is allowed
+ *       to stay on the recording route
  *   (c) authenticated normal in '(tabs)' → no redirect (null)
  *   (d) no redirect loop — '/' (segments[0] not in the gated set) is a
  *       stable fixpoint (null)
@@ -21,7 +21,7 @@
  *
  * Targets asserted match the real route the guard replaces to:
  *   - unauthenticated bounce → '/'
- *   - authenticated-not-in-tabs → '/(tabs)/explore/explore'
+ *   - authenticated-not-in-tabs-or-recording → '/(tabs)/explore/explore'
  */
 
 import { decideRedirect } from "@/app/navigationGuard";
@@ -84,11 +84,9 @@ describe("decideRedirect — NavigationGuard auth redirect", () => {
       // equal 'recording'. We assert the contract on the path-only form.
       expect(["recording"]).not.toContain("recording?hasDraft=1");
 
-      // Current behaviour: an authenticated user not in (tabs) is sent to the
-      // tabs home. The draft push itself is performed by a SEPARATE effect
-      // (router.push) — the auth decision here is computed purely on the path
-      // segment, with the query excluded.
-      expect(withoutQuery).toBe("/(tabs)/explore/explore");
+      // Authenticated users must be allowed to stay on /recording so the mic
+      // FAB and draft-recovery push are not immediately replaced by tabs home.
+      expect(withoutQuery).toBeNull();
 
       // The decision is identical whether or not a query is conceptually
       // attached, because it is never part of segments[0].

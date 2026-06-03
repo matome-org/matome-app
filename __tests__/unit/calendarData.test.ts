@@ -9,13 +9,14 @@ jest.mock("@/utils/database");
 jest.mock("@/services/recordingService");
 
 import { fetchDaysWithRecordings, fetchDayRecordings } from "@/processes/calendarData";
-import { getRecordingsByDateRange } from "@/services/recordingService";
-import { getDatabase } from "@/utils/database";
+import { getRecordingsByDateRange, getRecordingsByDayWithWorkspace } from "@/services/recordingService";
 
 const mockGetRecordingsByDateRange = getRecordingsByDateRange as jest.MockedFunction<
   typeof getRecordingsByDateRange
 >;
-const mockGetDatabase = getDatabase as jest.MockedFunction<typeof getDatabase>;
+const mockGetRecordingsByDayWithWorkspace = getRecordingsByDayWithWorkspace as jest.MockedFunction<
+  typeof getRecordingsByDayWithWorkspace
+>;
 
 function makeRecord(overrides: Partial<{ id: string; createdAt: number }> = {}) {
   return {
@@ -120,9 +121,7 @@ describe("fetchDaysWithRecordings", () => {
 
 describe("fetchDayRecordings", () => {
   function mockDb(rows: object[]) {
-    mockGetDatabase.mockResolvedValue({
-      getAllAsync: jest.fn().mockResolvedValue(rows),
-    } as any);
+    mockGetRecordingsByDayWithWorkspace.mockResolvedValue(rows as any);
   }
 
   beforeEach(() => jest.clearAllMocks());
@@ -209,12 +208,11 @@ describe("fetchDayRecordings", () => {
   });
 
   it("should query a midnight-to-end-of-day epoch window for the target date", async () => {
-    const mockGetAllAsync = jest.fn().mockResolvedValue([]);
-    mockGetDatabase.mockResolvedValue({ getAllAsync: mockGetAllAsync } as any);
+    mockGetRecordingsByDayWithWorkspace.mockResolvedValue([] as any);
     await fetchDayRecordings(new Date(2026, 3, 15));
 
-    const [, params] = mockGetAllAsync.mock.calls[0];
-    const [startEpoch, endEpoch] = params as number[];
+    const [startEpoch] = mockGetRecordingsByDayWithWorkspace.mock.calls[0];
+    const endEpoch = startEpoch + 24 * 60 * 60 * 1000 - 1;
     const startDate = new Date(startEpoch);
 
     expect(startDate.getFullYear()).toBe(2026);

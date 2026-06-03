@@ -16,7 +16,9 @@
  *
  * Behaviour is identical to the previous inline effect logic in _layout.tsx:
  *   - while loading        → `null` (guard waits, no decision yet)
- *   - authed, not in tabs  → `/(tabs)/explore/explore`
+ *   - authed, not in tabs
+ *     and not recording      → `/(tabs)/explore/explore`
+ *   - authed, recording      → `null`
  *   - unauthed, in (tabs)
  *     or in recording      → `/`
  *   - otherwise            → `null`
@@ -43,7 +45,7 @@ export const decideRedirect = ({
   const inTabsGroup = segments[0] === '(tabs)';
   const inRecording = segments[0] === 'recording';
 
-  if (isAuthenticated && !inTabsGroup) {
+  if (isAuthenticated && !inTabsGroup && !inRecording) {
     return '/(tabs)/explore/explore';
   }
   if (!isAuthenticated && (inTabsGroup || inRecording)) {

@@ -63,7 +63,7 @@ __tests__/
 .maestro/        -> E2E device flows (smoke.yaml scaffolded; see E2E section)
 ```
 
-Today there are 7 suites: 6 in `__tests__/unit/`, 1 in `__tests__/integration/`.
+Today there are 13 suites: 11 in `__tests__/unit/`, 2 in `__tests__/integration/`.
 
 ## Naming
 
@@ -119,7 +119,7 @@ These are pulled from the real tests — follow them:
 ## How to run
 
 ```bash
-bun test               # jest --passWithNoTests (the "test" script)
+bun run test           # jest --passWithNoTests (the "test" script)
 bun run test:watch     # jest --watch
 bun run test:coverage  # jest --coverage
 
@@ -164,15 +164,17 @@ Welcome screen (`Views/welcome/Welcome.tsx`): `MATOME`, `Finally organized.`,
 locale-independent and needs no auth and no network call — it proves the harness
 can launch the app and reach the first screen.
 
-#### Recording + auth flows (task T10) — AUTHORED, NOT YET VALIDATED ON DEVICE
+#### Recording + auth flows (task T10) — AUTHORED, BLOCKED UNTIL LOCAL SAFETY SETUP
 
 These five flows cover the device-only behaviors the three recording-persistence
 audits flagged but static analysis / RTL could not exercise (killApp, relaunch,
 deep-link bounce, cross-session disk state). Each file carries an `AUTHORED — not
-yet validated on device` header. **None have been run** — there is no emulator
-and no dev-client build in the authoring environment (see Status below); they are
-ready-to-run scaffold to execute via `mise run up` + a dev-client build, then
-`maestro test .maestro`.
+yet validated on device` header. **None have been run** — there is no Maestro
+CLI, emulator, deterministic local auth setup, or dev-client build in the
+authoring environment (see Status below). They are scaffold only. Do not run
+recording flows directly with `maestro test`; run `bun run e2e` or
+`mise run e2e` so `scripts/e2e-preflight.sh` can fail safely before any
+recording starts.
 
 Selectors are the **en-locale literals** rendered by the screens (`locales/en.ts`
 `recording.*`: `Ready to Record`, `Recording`, `Paused`, `Pause`, `Finish`,
@@ -191,24 +193,36 @@ Details segmented tab `Summary`) plus the Welcome literals, **plus three minimal
 
 | Flow | Asserts | Audit |
 | --- | --- | --- |
-| `record-pause-resume-finish.yaml` | record → pause (`Paused`) → resume (`Recording`) → finish lands on detail (`Summary` + `fab-save`); single-file span model + finish→detail nav | happy path |
-| `record-kill-recover.yaml` | after `killApp` + relaunch the draft prompt (`Resume Recording?`) appears; Resume → record more → finish → detail; crash recovery | audit#1 / audit#3 |
-| `back-to-back-discard.yaml` | session 1 finish persists a `recording-card`; session 2 `Cancel` discards without navigating to detail; S1 card still present | audit#2 E2 (state bleed) |
-| `discard-cleanup.yaml` | record → `Cancel` → back in `Inbox`, no `Summary` detail reached; clean-account variant asserts `No recordings found` (commented) | audit#2 discard cleanup |
+| `record-pause-resume-finish.yaml` | record → pause (`Paused`, not `Recording`) → resume (`Recording`, not `Paused`) → finish lands on detail (`Summary` + `fab-save`, not recording UI); single-file span model + finish→detail nav | happy path |
+| `record-kill-recover.yaml` | after `killApp` + relaunch the draft prompt (`Resume Recording?`, not `Inbox`) appears; Resume clears prompt → record more → finish → detail; crash recovery | audit#1 / audit#3 |
+| `back-to-back-discard.yaml` | session 1 finish persists a `recording-card`; session 2 `Cancel` returns to `Inbox`, not detail, and S1 card still present. Exact card-count proof is blocked until deterministic seeded data exists. | audit#2 E2 (state bleed) |
+| `discard-cleanup.yaml` | record → `Cancel` → back in `Inbox`, no `Summary`/`fab-save` detail reached. Strict empty-inbox proof is blocked until deterministic authed+empty local setup exists. | audit#2 discard cleanup |
 | `auth-deeplink-guard.yaml` | logged-out (`clearState: true`) `openLink: matomeapp://recording` → bounced to Welcome (`Finally organized.`), mic screen (`Ready to Record`) NOT visible | audit#3 A01 (auth gate) |
 
-Preconditions per flow are in each file's header. The recording flows require an
-**authenticated session already present** on the device (auth setup is out of
-scope for these flows); `auth-deeplink-guard.yaml` is the exception — it
-intentionally runs logged-out via `clearState: true`. On-disk leak assertions
+Preconditions per flow are in each file's header. The recording flows are blocked
+by `scripts/e2e-preflight.sh` unless all of these are true:
+
+1. Maestro CLI is installed.
+2. `EXPO_PUBLIC_SUPABASE_URL` points to a local Supabase URL.
+3. `EXPO_PUBLIC_TRANSCRIBE_API_URL` points to a local transcription stub URL.
+4. The runner has seeded/logged in a deterministic local test user and explicitly
+   sets `MATOME_E2E_AUTH_READY=local-seeded`.
+
+This repo still lacks an automated Maestro login/seed flow. Until that exists,
+recording flows must not rely on stale production or device sessions, and any run
+without `MATOME_E2E_AUTH_READY=local-seeded` fails before recording. The
+`auth-deeplink-guard.yaml` flow is the exception — it intentionally runs logged
+out via `clearState: true`. On-disk leak assertions
 (zero `recording_*.mp3` / `segment_*.m4a` after discard) are verified by the
 service **unit** tests (tasks 493/479), not by Maestro, which can only observe
 the user-visible outcome. The deep `record → transcription` flows depend on the
 transcription-stub network boundary described below.
 
-Runners: `package.json` scripts `e2e` (`maestro test .maestro`) and `e2e:smoke`,
-plus `mise run e2e` (which pre-checks Maestro + an online emulator + the app
-being installed before delegating to `maestro test .maestro`).
+Runners: `package.json` scripts `e2e` (`scripts/e2e-preflight.sh all` then
+`maestro test .maestro`), `e2e:preflight`, and `e2e:smoke` (`smoke` preflight
+then `maestro test .maestro/smoke.yaml`), plus `mise run e2e` (which pre-checks
+an online emulator + the app being installed before delegating to the same full
+preflight and Maestro command).
 
 ### Prerequisites to run it
 
@@ -219,6 +233,12 @@ being installed before delegating to `maestro test .maestro`).
    `expo start --dev-client`).
 3. **The app installed on the emulator** under `com.anonymous.matomeapp` — see
    the feasibility note below; this is the gating step.
+4. **Recording-flow safety setup**: local Supabase, local transcription stub, and
+   deterministic local auth. Example boundary values:
+   `EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321`,
+   `EXPO_PUBLIC_TRANSCRIBE_API_URL=http://localhost:8787`, and
+   `MATOME_E2E_AUTH_READY=local-seeded` after the local test user is actually
+   seeded/logged in on the device.
 
 ### Feasibility — how Maestro drives THIS app
 
@@ -268,19 +288,21 @@ screen, before any recording → transcription). For the deeper recording flows
 transcript, so flows are deterministic and offline. (Alternative — a dedicated
 throwaway test account against the real endpoint — is rejected for E2E: it is
 non-deterministic, costs real API calls, and couples tests to network/SLA.)
+`scripts/e2e-preflight.sh` now enforces that boundary before full E2E can launch;
+production or unset transcription URLs fail before any recording flow starts.
 
 ### Status in this environment
 
 The harness (`.maestro/smoke.yaml` + the five T10 recording/auth flows,
-`e2e`/`e2e:smoke` scripts, `mise run e2e`) is committed and ready. It was **not
+`e2e`/`e2e:smoke`/`e2e:preflight` scripts, `mise run e2e`) is committed, but the
+recording flows remain **AUTHORED and BLOCKED**, not known-green. They were **not
 executed here**: Maestro is not installed in this container, no emulator is
-online (`adb devices` empty), and no dev-client build of
-`com.anonymous.matomeapp` exists. The five T10 flows are therefore **AUTHORED but
-not yet validated on device** (so marked in each file header) — they have never
-run, so treat them as scaffold pending a first device run, not as known-green.
-Running them requires the dev machine with `mise run up` + an installed
-dev-client build (see Feasibility above). This is an expected environment
-boundary, not a harness defect.
+online, no dev-client build of `com.anonymous.matomeapp` exists, no local
+transcription stub URL is configured, and no deterministic local auth seed/login
+flow is committed. Treat them as scaffold pending a first safe device run, not as
+validated behavior. Running them requires the dev machine with `mise run up`, an
+installed dev-client build (see Feasibility above), a local transcription stub,
+and `MATOME_E2E_AUTH_READY=local-seeded` after local test auth is prepared.
 
 ## Risk priority for new tests
 
@@ -299,19 +321,20 @@ Add coverage in this order — highest blast-radius / audit-flagged first:
 
 ## Coverage baseline (2026-06-03)
 
-Captured via `npx jest --coverage` at the close of the test-suite plan (T11).
+Captured via `bun run test:coverage --runInBand` on 2026-06-03 after the
+TSA-1/TSA-6 remediation.
 **No threshold gate yet** (per decision) — this is the future **ratchet floor**:
 new work should not drop these numbers, and the next pass should raise them.
 
-**Overall:** statements **67.57%** (769/1138) · branches **58.36%** (314/538) ·
-functions **65.07%** (123/189) · lines **68.13%** (744/1092).
+**Overall:** statements **70.68%** · branches **65.29%** · functions **70.91%** ·
+lines **71.02%**.
 
 Per critical module (the risk-priority targets above):
 
 | Module | Stmts | Branch | Funcs | Lines |
 | --- | --- | --- | --- | --- |
-| `services/audioRecordingService.ts` | 55.61% | 37.86% | 61.36% | 55.39% |
-| `services/draftRecordingService.ts` | 100% | 100% | 100% | 100% |
+| `services/audioRecordingService.ts` | 56.77% | 41.60% | 62.50% | 56.57% |
+| `services/draftRecordingService.ts` | 97.50% | 89.47% | 100% | 97.36% |
 | `services/recordingService.ts` | 85.15% | 71.25% | 100% | 85.60% |
 | `utils/database.ts` | 82.05% | 64.28% | 60% | 81.57% |
 | `utils/migrations/001_add_notes_column.ts` | 100% | 100% | 100% | 100% |
@@ -319,33 +342,16 @@ Per critical module (the risk-priority targets above):
 | `utils/migrations/003_recording_drafts.ts` | 100% | 100% | 100% | 100% |
 | `utils/migrations/index.ts` | 100% | 100% | 100% | 100% |
 | `app/navigationGuard.ts` | 100% | 100% | 100% | 100% |
-| `app/recording.tsx` | 68.26% | 86.20% | 67.85% | 67.87% |
+| `app/recording.tsx` | 67.63% | 83.51% | 67.85% | 67.25% |
 
 `audioRecordingService.ts` is the lowest-covered critical module and the
 highest-risk one (the three audits found the most defects there) — it is the
 top ratchet target.
 
-**Run totals:** 180 passed / 36 failed (216 total) across 13 suites
-(7 passed, 6 failed). The failures are **real logic / stale-test issues, not
-harness crashes** — do not treat them as a reason to revert `jest.setup.js`.
+**Run totals:** 222 passed / 0 failed (222 total) across 13 suites
+(13 passed, 0 failed). `rtk tsc --noEmit` also passes with no TypeScript errors.
+Jest still reports an open-handle warning after successful runs; use
+`--detectOpenHandles` if that warning becomes a CI blocker.
 
-### KNOWN FOLLOWUP — 36 pre-existing failing tests
-
-These failures pre-date / are out of scope for the test-suite plan and are left
-**unfixed here** by decision. They should be triaged to green the baseline in a
-future task. Failing suites:
-
-- `__tests__/unit/insertMarkdown.unit.test.ts` — string-transform edge cases
-  (unicode emoji boundary, whitespace-only transcript).
-- `__tests__/unit/calendarData.test.ts` — `fetchDayRecordings` maps an
-  undefined result (`processes/calendarData.ts:102`).
-- `__tests__/unit/Calendar.test.tsx` — V2 Calendar component assertions stale.
-- `__tests__/unit/CalendarContainer.test.tsx` — Calendar container wiring stale.
-- `__tests__/integration/DetailsContainer.integration.test.tsx` — details
-  container integration stale.
-- `__tests__/unit/audioRecordingService.unit.test.ts` — one case
-  (per-session temp-snapshot concurrent-tracker cleanup) asserts a count that
-  is now 0; the rest of the suite passes.
-
-Triaging these to green is the **ratchet entry point**: green the baseline,
-then turn the numbers above into a `coverageThreshold` gate.
+The next ratchet step is to turn the numbers above into a `coverageThreshold`
+gate once the team chooses minimum per-file and global floors.

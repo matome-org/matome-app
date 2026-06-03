@@ -1,5 +1,6 @@
-# AUTHORED — not yet validated on device; run via `mise run up` + dev-client build,
-# then `maestro test .maestro`.
+# AUTHORED — not yet validated on device. Do not run directly: use
+# `bun run e2e` or `mise run e2e` so scripts/e2e-preflight.sh can block unsafe
+# production transcription URLs and missing deterministic local auth.
 #
 # Flow: record -> finish (session 1 saved) -> record again -> discard (session 2).
 # Asserts the second session is discarded WITHOUT clobbering the first — this is
@@ -16,7 +17,9 @@
 # discard control in the active/paused UI) + testIDs navbar-mic-fab /
 # record-primary-button / recording-card.
 #
-# PREREQUISITE: authenticated session present.
+# PREREQUISITE: local Supabase + local transcription stub + deterministic local
+# authenticated session confirmed by MATOME_E2E_AUTH_READY=local-seeded. Without
+# deterministic seeded data, Maestro cannot prove exact recording-card counts.
 appId: com.anonymous.matomeapp
 ---
 - launchApp:
@@ -54,3 +57,4 @@ appId: com.anonymous.matomeapp
 - assertVisible: "Inbox"
 - assertVisible:
     id: "recording-card"
+- assertNotVisible: "Summary"

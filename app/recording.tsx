@@ -336,6 +336,10 @@ export default function RecordingScreen() {
       }
     } else {
       // Not actively recording — still need to discard any paused segments
+      const restoredSegments = [...segmentsRef.current];
+      if (restoredSegments.length > 0) {
+        restoreSegments(restoredSegments);
+      }
       await discardSegments().catch((e) =>
         console.error('RecordingScreen: Failed to discard segments on cancel', e),
       );
@@ -362,6 +366,10 @@ export default function RecordingScreen() {
    * transition to a fresh idle state.
    */
   const handleDraftDiscard = useCallback(async () => {
+    const restoredSegments = [...segmentsRef.current];
+    if (restoredSegments.length > 0) {
+      restoreSegments(restoredSegments);
+    }
     await discardSegments().catch((e) =>
       console.error('RecordingScreen: Failed to discard draft segments', e),
     );

@@ -271,16 +271,16 @@ describe("cross-session state reset at startRecording", () => {
     );
     expect(tempCopyCalls.length).toBeGreaterThan(0);
 
-    // Now a discard with a save in-flight must NOT wipe the saved temp (proof
-    // savedAudioFilePath is set/non-null at this point).
+    const savedTempPath = (tempCopyCalls[0][0] as { to: string }).to;
+
+    // Now a discard with a save in-flight must NOT wipe the canonical saved temp
+    // (proof savedAudioFilePath is set/non-null at this point). The background
+    // pipeline may already have cleaned per-segment temp copies, so assert only
+    // the saved path survives this discard.
     fs.deleteAsync.mockClear();
     await service.discardSegments();
-    // savedAudioFilePath is set, so the temp tracker is preserved → only the
-    // segment file is swept here, the recording_*.mp3 is left for the save flow.
-    const deletedTemp = fs.deleteAsync.mock.calls.some((c) =>
-      String(c[0]).includes("recording_"),
-    );
-    expect(deletedTemp).toBe(false);
+    const deleted = fs.deleteAsync.mock.calls.map((c) => String(c[0]));
+    expect(deleted).not.toContain(savedTempPath);
 
     // --- Session 2: a fresh startRecording must reset all per-session globals. ---
     audio.__setNextUri("file:///cache/s2.m4a");
@@ -307,6 +307,30 @@ describe("cross-session state reset at startRecording", () => {
 // ─── (d) per-session temp snapshot (audit#2 race) ──────────────────────────────
 
 describe("saveRecordingFromSegments per-session temp snapshot cleanup", () => {
+  it("copies every background transcription input before returning so immediate discard cannot delete it", async () => {
+    const { service, fs } = loadService({
+      recorderUri: "file:///cache/s1.m4a",
+    });
+
+    await service.startRecording();
+    await service.stopRecording();
+    const segment = service.getSegments()[0];
+
+    await service.saveRecordingFromSegments("Inbox");
+
+    const recordingCopies = fs.copyAsync.mock.calls
+      .map((c) => c[0] as { from: string; to: string })
+      .filter((copy) => copy.to.includes("recording_"));
+    expect(recordingCopies).toHaveLength(2);
+    expect(recordingCopies[1].from).toBe(segment);
+
+    fs.deleteAsync.mockClear();
+    await service.discardSegments();
+
+    const deleted = fs.deleteAsync.mock.calls.map((c) => String(c[0]));
+    expect(deleted).toContain(segment);
+  });
+
   it("cleanup deletes only this session's snapshot temp list, not a concurrent session's tracker", async () => {
     const { service, fs } = loadService({
       recorderUri: "file:///cache/s1.m4a",
@@ -378,22 +402,35 @@ describe("discardSegments", () => {
 // ─── (f) safeDeleteFile / isWithinAppSandbox guard ─────────────────────────────
 
 describe("safeDeleteFile sandbox guard (via discardSegments)", () => {
-  it("refuses to delete a path OUTSIDE documentDirectory (deleteAsync NOT called)", async () => {
+  it("rejects restored paths OUTSIDE documentDirectory before delete can run", async () => {
     const { service, fs } = loadService();
-    service.restoreSegments(["file:///elsewhere/evil.m4a"]);
 
     fs.deleteAsync.mockClear();
-    await service.discardSegments();
+    expect(() => service.restoreSegments(["file:///elsewhere/segment_evil.m4a"])).toThrow(
+      "Restored segment URI is outside app storage",
+    );
 
     expect(fs.deleteAsync).not.toHaveBeenCalled();
   });
 
-  it("refuses to delete a path containing '..' even under documentDirectory", async () => {
+  it("rejects restored paths containing '..' even under documentDirectory", async () => {
     const { service, fs } = loadService();
-    service.restoreSegments([`${DOC_DIR}../escape.m4a`]);
 
     fs.deleteAsync.mockClear();
-    await service.discardSegments();
+    expect(() => service.restoreSegments([`${DOC_DIR}../segment_escape.m4a`])).toThrow(
+      "Restored segment URI is outside app storage",
+    );
+
+    expect(fs.deleteAsync).not.toHaveBeenCalled();
+  });
+
+  it("rejects restored paths with unexpected file names", async () => {
+    const { service, fs } = loadService();
+
+    fs.deleteAsync.mockClear();
+    expect(() => service.restoreSegments([`${DOC_DIR}recording_0.mp3`])).toThrow(
+      "Restored segment URI has an unexpected file name",
+    );
 
     expect(fs.deleteAsync).not.toHaveBeenCalled();
   });

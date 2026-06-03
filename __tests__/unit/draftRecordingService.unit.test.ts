@@ -16,6 +16,10 @@
  */
 
 jest.mock("@/utils/database");
+jest.mock("expo-file-system/legacy", () => ({
+  documentDirectory: "file:///app/documents/",
+  getInfoAsync: jest.fn().mockResolvedValue({ exists: true }),
+}));
 
 import {
   saveDraft,
@@ -23,8 +27,11 @@ import {
   deleteDraft,
 } from "@/services/draftRecordingService";
 import { getDatabase } from "@/utils/database";
+import * as FileSystem from "expo-file-system/legacy";
 
 const mockGetDatabase = getDatabase as jest.MockedFunction<typeof getDatabase>;
+const mockFileSystem = FileSystem as jest.Mocked<typeof FileSystem>;
+const DOC_DIR = "file:///app/documents/";
 
 /**
  * Factory for a mocked SQLite db handle. Extends the existing makeDbMock
@@ -56,7 +63,7 @@ function makeDraftRow(
     created_at: overrides.created_at ?? "2026-06-03T10:00:00.000Z",
     segments_json:
       overrides.segments_json ??
-      JSON.stringify(["/audio/seg_0.m4a", "/audio/seg_1.m4a"]),
+      JSON.stringify([`${DOC_DIR}segment_0.m4a`, `${DOC_DIR}segment_1.m4a`]),
     duration_ms: overrides.duration_ms ?? 42000,
   };
 }
@@ -66,13 +73,16 @@ function makeDraftRow(
 // ---------------------------------------------------------------------------
 
 describe("saveDraft", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFileSystem.getInfoAsync.mockResolvedValue({ exists: true } as any);
+  });
 
   it("wraps the DELETE+INSERT in withTransactionAsync", async () => {
     const db = makeDbMock();
     mockGetDatabase.mockResolvedValue(db);
 
-    await saveDraft(["/audio/seg_0.m4a"], 1000);
+    await saveDraft([`${DOC_DIR}segment_0.m4a`], 1000);
 
     expect(db.withTransactionAsync).toHaveBeenCalledTimes(1);
     // Both writes must have happened inside the transaction callback.
@@ -83,7 +93,7 @@ describe("saveDraft", () => {
     const db = makeDbMock();
     mockGetDatabase.mockResolvedValue(db);
 
-    await saveDraft(["/audio/seg_0.m4a"], 1000);
+    await saveDraft([`${DOC_DIR}segment_0.m4a`], 1000);
 
     const firstSql = db.runAsync.mock.calls[0][0] as string;
     const secondSql = db.runAsync.mock.calls[1][0] as string;
@@ -95,7 +105,7 @@ describe("saveDraft", () => {
     const db = makeDbMock();
     mockGetDatabase.mockResolvedValue(db);
 
-    const segments = ["/audio/seg_0.m4a", "/audio/seg_1.m4a"];
+    const segments = [`${DOC_DIR}segment_0.m4a`, `${DOC_DIR}segment_1.m4a`];
     const durationMs = 73210;
     await saveDraft(segments, durationMs);
 
@@ -134,10 +144,13 @@ describe("saveDraft", () => {
 // ---------------------------------------------------------------------------
 
 describe("loadDraft", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFileSystem.getInfoAsync.mockResolvedValue({ exists: true } as any);
+  });
 
   it("returns { segments, durationMs } for a valid row (segments_json parsed to array)", async () => {
-    const segments = ["/audio/a.m4a", "/audio/b.m4a"];
+    const segments = [`${DOC_DIR}segment_a.m4a`, `${DOC_DIR}segment_b.m4a`];
     const db = makeDbMock(
       makeDraftRow({
         segments_json: JSON.stringify(segments),
@@ -193,6 +206,45 @@ describe("loadDraft", () => {
     // non-array value.
     const result = await loadDraft();
     expect(result).toEqual({ segments: [], durationMs: 5000 });
+  });
+
+  it("rejects draft rows with non-string segment entries", async () => {
+    const db = makeDbMock(
+      makeDraftRow({ segments_json: JSON.stringify([`${DOC_DIR}segment_a.m4a`, 12]) }),
+    );
+    mockGetDatabase.mockResolvedValue(db);
+
+    await expect(loadDraft()).resolves.toBeNull();
+  });
+
+  it("rejects draft rows with segment paths outside documentDirectory", async () => {
+    const db = makeDbMock(
+      makeDraftRow({ segments_json: JSON.stringify(["file:///tmp/segment_a.m4a"]) }),
+    );
+    mockGetDatabase.mockResolvedValue(db);
+
+    await expect(loadDraft()).resolves.toBeNull();
+  });
+
+  it("rejects draft rows with traversal or unexpected file names", async () => {
+    const db = makeDbMock(
+      makeDraftRow({
+        segments_json: JSON.stringify([`${DOC_DIR}../recording_0.mp3`]),
+      }),
+    );
+    mockGetDatabase.mockResolvedValue(db);
+
+    await expect(loadDraft()).resolves.toBeNull();
+  });
+
+  it("rejects draft rows when the segment file no longer exists", async () => {
+    const db = makeDbMock(
+      makeDraftRow({ segments_json: JSON.stringify([`${DOC_DIR}segment_a.m4a`]) }),
+    );
+    mockGetDatabase.mockResolvedValue(db);
+    mockFileSystem.getInfoAsync.mockResolvedValue({ exists: false } as any);
+
+    await expect(loadDraft()).resolves.toBeNull();
   });
 });
 

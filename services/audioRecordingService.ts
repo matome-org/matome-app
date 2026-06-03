@@ -91,9 +91,49 @@ const isWithinAppSandbox = (uri: string): boolean => {
   return uri.startsWith(documentsDir) && !uri.includes("..");
 };
 
+const redactFileUri = (uri: string): string => {
+  const fileName = uri.split("/").pop() || "<unknown>";
+  return `<app-audio-file:${fileName}>`;
+};
+
+const hasExpectedAudioFileName = (uri: string): boolean => {
+  const fileName = uri.split("/").pop() || "";
+  return /^(segment|recording)_[-A-Za-z0-9_.]+\.(m4a|mp3)$/.test(fileName);
+};
+
+const validateAudioFileUri = async (uri: string): Promise<void> => {
+  if (typeof uri !== "string" || uri.length === 0) {
+    throw new Error("Audio file URI must be a non-empty string");
+  }
+  if (!isWithinAppSandbox(uri)) {
+    throw new Error("Audio file URI is outside app storage");
+  }
+  if (!hasExpectedAudioFileName(uri)) {
+    throw new Error("Audio file URI has an unexpected file name");
+  }
+
+  const fileInfo = await FileSystem.getInfoAsync(uri);
+  if (!fileInfo.exists) {
+    throw new Error("Audio file does not exist");
+  }
+};
+
+const validateRestoredSegmentUri = (uri: string): void => {
+  if (typeof uri !== "string" || uri.length === 0) {
+    throw new Error("Restored segment URI must be a non-empty string");
+  }
+  if (!isWithinAppSandbox(uri)) {
+    throw new Error("Restored segment URI is outside app storage");
+  }
+  const fileName = uri.split("/").pop() || "";
+  if (!/^segment_[-A-Za-z0-9_.]+\.m4a$/.test(fileName)) {
+    throw new Error("Restored segment URI has an unexpected file name");
+  }
+};
+
 const safeDeleteFile = async (uri: string): Promise<void> => {
   if (!isWithinAppSandbox(uri)) {
-    console.warn("Refusing to delete file outside app sandbox", uri);
+    console.warn("Refusing to delete file outside app sandbox", redactFileUri(uri));
     return;
   }
   try {
@@ -102,7 +142,7 @@ const safeDeleteFile = async (uri: string): Promise<void> => {
       await FileSystem.deleteAsync(uri, { idempotent: true });
     }
   } catch (error) {
-    console.error("Failed to delete temp audio file", uri, error);
+    console.error("Failed to delete temp audio file", redactFileUri(uri), error);
   }
 };
 
@@ -493,11 +533,7 @@ const getAudioDurationSeconds = async (uri: string): Promise<number> => {
 export const prepareAudioForTranscription = async (
   uri: string,
 ): Promise<string> => {
-  // Get file info
-  const fileInfo = await FileSystem.getInfoAsync(uri);
-  if (!fileInfo.exists) {
-    throw new Error("Audio file does not exist");
-  }
+  await validateAudioFileUri(uri);
 
   // For now, we'll use the file as-is. The API might accept various formats.
   // If conversion is absolutely required, we'd need a native module.
@@ -505,7 +541,9 @@ export const prepareAudioForTranscription = async (
   // If not, we may need to use a different approach or configure the recording format.
 
   // Copy to a more permanent location with .mp3 extension
-  const fileName = `recording_${Date.now()}.mp3`;
+  const fileName = `recording_${Date.now()}_${Math.random()
+    .toString(36)
+    .substr(2, 6)}.mp3`;
   const documentsDir = FileSystem.documentDirectory;
   if (!documentsDir) {
     throw new Error("Document directory not available");
@@ -530,6 +568,8 @@ export const prepareAudioForTranscription = async (
  */
 export const transcribeAudio = async (fileUri: string): Promise<string> => {
   try {
+    await validateAudioFileUri(fileUri);
+
     // Read file as base64 or use FormData
     // For React Native, we need to use FormData with file URI
     const formData = new FormData();
@@ -777,13 +817,19 @@ export const saveRecordingFromSegments = async (
     savedAudioFilePath = audioFilePath;
 
     // Snapshot THIS session's temp tracker + saved path into locals at save start.
-    // The per-segment loop below produces MORE temps inside the async callback; it
-    // appends them to its OWN local list (sessionTempFiles) rather than relying on
-    // the module global, so cleanup targets exactly this session's files. If a
-    // back-to-back Session-2 resets the module-global tracker mid-flight, this
-    // pipeline is unaffected and never wipes S2's live tracker.
+    // Background transcription must not depend on original segment files because
+    // recording.tsx discards them immediately after this function returns. Copy
+    // every segment input NOW, before returning, and transcribe those temp copies.
     const sessionTempFiles = [...transcriptionTempFiles];
     const sessionSavedPath = audioFilePath;
+
+    const transcriptionInputs: string[] = [];
+    const segmentsSnapshot = [...sessionSegments];
+    for (const segUri of segmentsSnapshot) {
+      const segPath = await prepareAudioForTranscription(segUri);
+      sessionTempFiles.push(segPath);
+      transcriptionInputs.push(segPath);
+    }
 
     const id = generateRecordingId();
     recordingId = id;
@@ -810,21 +856,15 @@ export const saveRecordingFromSegments = async (
     }
 
     // Background: transcribe each segment, join transcripts, summarize.
-    const segmentsSnapshot = [...sessionSegments];
     void (async () => {
       try {
-        // Transcribe each session file independently and join the results.
+        // Transcribe each pre-copied session file independently and join results.
         // In the single-file model this is normally one full-session file; the
         // loop also covers the rare recovered-draft case of multiple files so
         // the full spoken content is captured regardless.
         const transcriptParts: string[] = [];
-        for (const segUri of segmentsSnapshot) {
+        for (const segPath of transcriptionInputs) {
           try {
-            const segPath = await prepareAudioForTranscription(segUri);
-            // Record this per-segment temp into the LOCAL snapshot so the cleanup
-            // in `finally` sweeps it without ever reading the module global (which
-            // a concurrent Session-2 may have reset).
-            sessionTempFiles.push(segPath);
             const part = await transcribeAudio(segPath);
             if (part) transcriptParts.push(part);
           } catch (segError) {
@@ -996,6 +1036,9 @@ export const getSegments = (): string[] => {
  * discardSegments() still deletes ALL restored span files, so nothing leaks.
  */
 export const restoreSegments = (uris: string[]): void => {
+  for (const uri of uris) {
+    validateRestoredSegmentUri(uri);
+  }
   sessionSegments = [...uris];
 };
 

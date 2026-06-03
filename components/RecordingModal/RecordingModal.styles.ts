@@ -89,6 +89,10 @@ export const styles = StyleSheet.create({
     gap: 3,
     width: '100%',
   },
+  waveBar: {
+    width: 4,
+    borderRadius: 2,
+  },
   hint: {
     fontSize: 13,
     textAlign: 'center',

@@ -1,5 +1,6 @@
-# AUTHORED — not yet validated on device; run via `mise run up` + dev-client build,
-# then `maestro test .maestro`.
+# AUTHORED — not yet validated on device. Do not run directly: use
+# `bun run e2e` or `mise run e2e` so scripts/e2e-preflight.sh can block unsafe
+# production transcription URLs and missing deterministic local auth.
 #
 # Flow: record -> pause -> resume -> finish -> recording appears in inbox detail.
 # Covers the device-only happy path the static audits could not verify (the
@@ -13,8 +14,8 @@
 #   - record-primary-button (app/recording.tsx — the record/pause/resume Pressable)
 #   - fab-save              (Views/Details/Details.tsx — pre-existing, marks detail)
 #
-# PREREQUISITE: app launched in an AUTHENTICATED state (a logged-in session must
-# already exist on the emulator/device — auth is out of scope for this flow).
+# PREREQUISITE: local Supabase + local transcription stub + deterministic local
+# authenticated session confirmed by MATOME_E2E_AUTH_READY=local-seeded.
 appId: com.anonymous.matomeapp
 ---
 - launchApp:
@@ -31,15 +32,18 @@ appId: com.anonymous.matomeapp
 - tapOn:
     id: "record-primary-button"
 - assertVisible: "Recording"
+- assertNotVisible: "Ready to Record"
 
 # Pause — auto-saves a draft (recording -> handlePause).
 - tapOn: "Pause"
 - assertVisible: "Paused"
+- assertNotVisible: "Recording"
 
 # Resume — continues the same native recorder (paused -> handleResume).
 - tapOn:
     id: "record-primary-button"
 - assertVisible: "Recording"
+- assertNotVisible: "Paused"
 
 # Finish — finalize + save, then router.replace -> /(tabs)/inbox/[id].
 - tapOn: "Finish"
@@ -47,3 +51,4 @@ appId: com.anonymous.matomeapp
 - assertVisible: "Summary"
 - assertVisible:
     id: "fab-save"
+- assertNotVisible: "Ready to Record"

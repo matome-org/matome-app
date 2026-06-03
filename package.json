@@ -13,8 +13,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci",
-    "e2e": "maestro test .maestro",
-    "e2e:smoke": "maestro test .maestro/smoke.yaml",
+    "e2e": "sh ./scripts/e2e-preflight.sh all && maestro test .maestro",
+    "e2e:preflight": "sh ./scripts/e2e-preflight.sh all",
+    "e2e:smoke": "sh ./scripts/e2e-preflight.sh smoke && maestro test .maestro/smoke.yaml",
     "postinstall": "node ./scripts/patch-expo-updates.js"
   },
   "jest": {

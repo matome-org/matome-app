@@ -222,7 +222,10 @@ describe("RecordingScreen — phase state machine", () => {
 });
 
 describe("RecordingScreen — draft recovery prompt", () => {
-  const DRAFT_SEGMENTS = ["file:///seg-1.m4a", "file:///seg-2.m4a"];
+  const DRAFT_SEGMENTS = [
+    "file:///app/documents/segment_1.m4a",
+    "file:///app/documents/segment_2.m4a",
+  ];
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -302,6 +305,7 @@ describe("RecordingScreen — draft recovery prompt", () => {
     });
 
     await waitFor(() => expect(audio.discardSegments).toHaveBeenCalledTimes(1));
+    expect(audio.restoreSegments).toHaveBeenCalledWith(DRAFT_SEGMENTS);
     await waitFor(() => expect(draft.deleteDraft).toHaveBeenCalledTimes(1));
     // back to fresh idle
     expect(screen.getByText("recording.ready")).toBeTruthy();

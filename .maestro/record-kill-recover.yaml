@@ -1,5 +1,6 @@
-# AUTHORED — not yet validated on device; run via `mise run up` + dev-client build,
-# then `maestro test .maestro`.
+# AUTHORED — not yet validated on device. Do not run directly: use
+# `bun run e2e` or `mise run e2e` so scripts/e2e-preflight.sh can block unsafe
+# production transcription URLs and missing deterministic local auth.
 #
 # Flow: record -> pause (draft auto-saved) -> KILL app -> relaunch -> draft prompt
 #       -> Resume -> record more -> finish -> lands on detail.
@@ -12,8 +13,9 @@
 # "Resume Recording?", recording.draftResume = "Resume", recording.finish =
 # "Finish") + testIDs navbar-mic-fab / record-primary-button / fab-save.
 #
-# PREREQUISITE: authenticated session present (the draft-recovery push in
-# NavigationGuard only fires when isAuthenticated).
+# PREREQUISITE: local Supabase + local transcription stub + deterministic local
+# authenticated session confirmed by MATOME_E2E_AUTH_READY=local-seeded. The
+# draft-recovery push in NavigationGuard only fires when isAuthenticated.
 appId: com.anonymous.matomeapp
 ---
 - launchApp:
@@ -39,10 +41,12 @@ appId: com.anonymous.matomeapp
     clearState: false
 # Draft recovery prompt (recording.draftFound).
 - assertVisible: "Resume Recording?"
+- assertNotVisible: "Inbox"
 
 # Resume the recovered draft (handleDraftResume -> phase idle).
 - tapOn: "Resume"
 - assertVisible: "Ready to Record"
+- assertNotVisible: "Resume Recording?"
 
 # Record a new span on the recovered session (handleStart seeds restoreSegments).
 - tapOn:
@@ -54,3 +58,4 @@ appId: com.anonymous.matomeapp
 - assertVisible: "Summary"
 - assertVisible:
     id: "fab-save"
+- assertNotVisible: "Resume Recording?"

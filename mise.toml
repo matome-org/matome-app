@@ -52,12 +52,8 @@ description = "Run Maestro E2E flows against the running emulator (requires `mis
 run = """
 set -e
 
-# Preconditions: emulator online + Maestro installed.
-if ! command -v maestro >/dev/null 2>&1; then
-  echo '✗ maestro not found. Install it (see .docs/TESTING.md → E2E):'
-  echo '    curl -fsSL "https://get.maestro.mobile.dev" | bash'
-  exit 1
-fi
+# Preconditions: emulator online + app installed; scripts/e2e-preflight.sh also
+# checks Maestro plus recording-flow safety boundaries before Maestro launches.
 if ! adb devices | grep -qE '^emulator-[0-9]+\\s+device$'; then
   echo '✗ no emulator online. Boot the stack first: mise run up'
   exit 1
@@ -73,6 +69,7 @@ if ! adb shell pm list packages 2>/dev/null | grep -q 'com.anonymous.matomeapp';
   exit 1
 fi
 
+sh ./scripts/e2e-preflight.sh all
 exec maestro test .maestro
 """
 
