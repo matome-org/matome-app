@@ -34,6 +34,65 @@ let meteringInterval: ReturnType<typeof setInterval> | null = null;
 // ---------------------------------------------------------------------------
 let sessionSegments: string[] = [];
 
+// ---------------------------------------------------------------------------
+// Transcription temp-file tracking.
+//
+// `prepareAudioForTranscription` copies audio to documentDirectory/recording_<ts>.mp3.
+// On the multi-segment path it is called once PER segment, producing N temp
+// copies. These are intermediates: they are only needed long enough to upload
+// to the transcription API. The canonical SAVED recording (the audioFilePath
+// persisted to the recordings table) must NOT be tracked here, so it is never
+// swept by the cleanup routines below.
+//
+// Every output path is recorded in `transcriptionTempFiles`. After a save
+// completes we delete every tracked temp file except the canonical saved path
+// (see cleanupTranscriptionTempFiles). On cancel/discard of an UNSAVED session
+// we delete all tracked temp files, leaving nothing behind (privacy).
+// ---------------------------------------------------------------------------
+let transcriptionTempFiles: string[] = [];
+
+// The canonical saved recording path for the current session, once a save has
+// started. While non-null it marks "this session was saved" so that a discard
+// triggered after Finish (recording.tsx calls discardSegments() right after
+// saveRecordingFromSegments returns, while background transcription is still
+// running) does NOT delete the saved file or the in-flight temp copies the
+// background pipeline is still uploading. Reset to null by
+// cleanupTranscriptionTempFiles() once the save pipeline finishes.
+let savedAudioFilePath: string | null = null;
+
+/**
+ * Best-effort delete of a single file URI. Never throws.
+ */
+const safeDeleteFile = async (uri: string): Promise<void> => {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (info.exists) {
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+    }
+  } catch (error) {
+    console.error("Failed to delete temp audio file", uri, error);
+  }
+};
+
+/**
+ * Delete tracked transcription temp files, optionally preserving one canonical
+ * path (the saved recording's audioFilePath). All other tracked temp files are
+ * removed from disk and from the tracker. After this runs the session's temp
+ * state is cleared: the saved file (if any) survives on disk but is no longer
+ * tracked here — it is owned by the recordings table going forward.
+ */
+const cleanupTranscriptionTempFiles = async (
+  preservePath?: string,
+): Promise<void> => {
+  const toDelete = transcriptionTempFiles.filter(
+    (uri) => uri !== preservePath,
+  );
+  transcriptionTempFiles = [];
+  savedAudioFilePath = null;
+
+  await Promise.allSettled(toDelete.map((uri) => safeDeleteFile(uri)));
+};
+
 const logRecordingOperationError = (
   message: string,
   context: { operation: string; recordingId?: string },
@@ -256,6 +315,11 @@ export const prepareAudioForTranscription = async (
     to: newUri,
   });
 
+  // Track every temp copy so it can be cleaned up on save (intermediates) or
+  // discard (privacy). The canonical saved recording is excluded from cleanup
+  // by the save flows via cleanupTranscriptionTempFiles(preservePath).
+  transcriptionTempFiles = [...transcriptionTempFiles, newUri];
+
   return newUri;
 };
 
@@ -362,8 +426,11 @@ export const saveRecording = async (
     const durationSeconds = await getAudioDurationSeconds(uri);
     const duration = formatDuration(durationSeconds);
 
-    // Prepare audio file
+    // Prepare audio file. This is the canonical SAVED recording — mark it so
+    // any concurrent discard/cancel of this session leaves it (and the in-flight
+    // temp copies) untouched until the background pipeline finishes.
     const audioFilePath = await prepareAudioForTranscription(uri);
+    savedAudioFilePath = audioFilePath;
 
     // Create recording record with processing status
     const id = generateRecordingId();
@@ -431,6 +498,9 @@ export const saveRecording = async (
         );
         Alert.alert("Failed to transcribe audio");
       } finally {
+        // Transcription done — remove every temp transcription copy EXCEPT the
+        // canonical saved audioFilePath (kept for playback in the detail view).
+        await cleanupTranscriptionTempFiles(audioFilePath);
         try {
           await updateRecording(id, { isProcessing: false });
         } catch (error) {
@@ -482,7 +552,12 @@ export const saveRecordingFromSegments = async (
     const durationSeconds = await getAudioDurationSeconds(uri);
     const duration = formatDuration(durationSeconds);
 
+    // Canonical SAVED recording for this multi-segment session. Mark it so the
+    // discardSegments() call recording.tsx fires immediately after this returns
+    // (while the background per-segment transcription below is still running)
+    // does not delete it or the in-flight per-segment temp copies.
     const audioFilePath = await prepareAudioForTranscription(uri);
+    savedAudioFilePath = audioFilePath;
 
     const id = generateRecordingId();
     recordingId = id;
@@ -568,6 +643,11 @@ export const saveRecordingFromSegments = async (
         );
         Alert.alert("Failed to transcribe audio");
       } finally {
+        // Transcription done — delete every per-segment temp transcription copy
+        // produced above, preserving only the canonical saved audioFilePath.
+        // Finish therefore leaves exactly one audio file on disk for this
+        // session (segment .m4a files are removed separately by discardSegments).
+        await cleanupTranscriptionTempFiles(audioFilePath);
         try {
           await updateRecording(id, { isProcessing: false });
         } catch (error) {
@@ -692,25 +772,38 @@ export const mergeSegments = async (): Promise<string> => {
 
 /**
  * Delete all segment files from disk and clear module-level segment state.
+ * Also deletes any orphaned transcription temp copies (recording_*.mp3) for the
+ * session so recorded audio never survives a Discard (privacy) and disk usage
+ * stays bounded.
+ *
+ * The canonical SAVED recording (savedAudioFilePath) is preserved: this is what
+ * lets recording.tsx call discardSegments() right after Finish — while the
+ * background transcription pipeline is still uploading the in-flight temp copies
+ * — without destroying the saved file. On a pure Discard (no save occurred)
+ * savedAudioFilePath is null, so every tracked temp copy is removed.
+ *
  * Safe to call even if no segments exist.
  */
 export const discardSegments = async (): Promise<void> => {
-  const toDelete = [...sessionSegments];
+  const segmentsToDelete = [...sessionSegments];
   sessionSegments = [];
   recordingUri = null;
 
-  await Promise.allSettled(
-    toDelete.map(async (uri) => {
-      try {
-        const info = await FileSystem.getInfoAsync(uri);
-        if (info.exists) {
-          await FileSystem.deleteAsync(uri, { idempotent: true });
-        }
-      } catch (error) {
-        console.error("discardSegments: failed to delete segment file", uri, error);
-      }
-    }),
-  );
+  // Temp transcription copies to remove. When a save is in progress
+  // (savedAudioFilePath set), leave ALL tracked temp files alone — the save
+  // flow's own cleanup will remove the intermediates and preserve the saved
+  // file once its background pipeline finishes. When no save occurred, sweep
+  // every tracked temp copy.
+  let tempToDelete: string[] = [];
+  if (savedAudioFilePath === null) {
+    tempToDelete = [...transcriptionTempFiles];
+    transcriptionTempFiles = [];
+  }
+
+  await Promise.allSettled([
+    ...segmentsToDelete.map((uri) => safeDeleteFile(uri)),
+    ...tempToDelete.map((uri) => safeDeleteFile(uri)),
+  ]);
 };
 
 /**
