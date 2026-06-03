@@ -17,7 +17,10 @@ import {
   formatDuration,
   getRecordingDuration,
   getRecordingMetering,
+  isRecorderActive,
+  pauseRecording,
   releaseRecorder,
+  resumeRecording,
   saveRecordingFromSegments,
   startRecording,
   stopRecording,
@@ -225,38 +228,58 @@ export default function RecordingScreen() {
   }, [t]);
 
   /**
-   * Pause — stop the current segment, preserve it, and auto-save draft state
-   * so the session can be recovered after an app restart.
+   * Pause — natively suspend the SINGLE live recorder (no segment split, so no
+   * audio is lost), snapshot it for crash-recovery, and auto-save draft state so
+   * the session can be recovered after an app restart.
+   *
+   * pauseRecording() keeps one underlying file open; handleResume continues
+   * appending to it. The full session therefore lands in one file at Finish.
    */
   const handlePause = useCallback(async () => {
     try {
-      const segmentUri = await stopRecording();
-      const updatedSegments = [...segmentsRef.current, segmentUri];
-      segmentsRef.current = updatedSegments;
+      const snapshotUri = await pauseRecording();
+      // Single-file model: the live recorder owns the full audio. The snapshot
+      // is the lone recoverable segment, so the draft tracks just it.
+      segmentsRef.current = [snapshotUri];
       completedDurationRef.current = totalDuration;
       setPhase('paused');
 
       // Auto-save draft so the session survives an app restart
-      await saveDraft(updatedSegments, Math.round(totalDuration * 1000));
+      await saveDraft(segmentsRef.current, Math.round(totalDuration * 1000));
     } catch (error) {
       console.error('RecordingScreen: Failed to pause recording', error);
-      // Surface the failure: the segment couldn't be stopped/saved, so keep the
-      // user in the live 'recording' phase rather than silently showing 'paused'.
+      // Surface the failure: pause didn't succeed, so keep the user in the live
+      // 'recording' phase rather than silently showing 'paused'.
       setPhase('recording');
       alert(t('recording.pauseFailed'));
     }
   }, [totalDuration, t]);
 
   /**
-   * Resume — start a new segment. Duration accumulates from prior segments.
+   * Resume — continue the SAME native recorder (appends to the single file).
+   *
+   * If there is no live recorder (e.g. the session was recovered from a draft
+   * after an app restart, where the recorder no longer exists), fall back to
+   * starting a fresh recorder — that recovered case is the only path that can
+   * produce a second segment, handled defensively by the merge/transcription
+   * pipeline.
    */
   const handleResume = useCallback(async () => {
     try {
-      await startRecording();
+      await resumeRecording();
+      // resumeRecording continues the existing recorder; completed duration is
+      // already reflected by the recorder's cumulative native duration.
+      completedDurationRef.current = 0;
       setPhase('recording');
-    } catch (error) {
-      console.error('RecordingScreen: Failed to resume recording', error);
-      alert(t('recording.resumeFailed'));
+    } catch {
+      // No live recorder to resume (recovered draft) — start a new segment.
+      try {
+        await startRecording();
+        setPhase('recording');
+      } catch (startError) {
+        console.error('RecordingScreen: Failed to resume recording', startError);
+        alert(t('recording.resumeFailed'));
+      }
     }
   }, [t]);
 
@@ -312,24 +335,28 @@ export default function RecordingScreen() {
   }, []);
 
   /**
-   * Finish — stop the active segment if needed, merge all segments into one
-   * file, trigger the save/upload pipeline, then clean up.
+   * Finish — finalize the live recorder (if any), then save/upload.
    *
-   * Merge strategy: see the segment-merge logic in audioRecordingService for
-   * details. For multi-segment M4A sessions the last segment is used as the
-   * audio file while all segments are transcribed individually and their
-   * transcripts are joined. Full binary merge requires a native audio module
-   * (future work).
+   * Single-file model: an in-app session is one native recorder (recording or
+   * paused). stopRecording() finalizes it into ONE file holding the complete
+   * audio across every pause/resume span — the multi-segment audio-loss defect
+   * is gone. We finalize from BOTH 'recording' and 'paused' so a Finish tapped
+   * while paused still flushes (and releases) the live recorder.
+   *
+   * Recovered-draft fallback: if the draft was restored after an app restart
+   * there is no live recorder; the persisted segment file(s) already hold the
+   * audio, so we skip stopRecording() and let saveRecordingFromSegments use the
+   * module's sessionSegments (transcribing every segment defensively).
    */
   const handleFinish = useCallback(async () => {
     setPhase('processing');
 
     try {
-      if (phase === 'recording') {
-        // Stop the current active segment — it will be added to sessionSegments
-        // inside stopRecording (which also appends to segmentsRef via side effect)
+      if ((phase === 'recording' || phase === 'paused') && isRecorderActive()) {
+        // Finalize the live recorder into the single complete-session file.
+        // stopRecording() supersedes any pause-snapshot in module state.
         const segmentUri = await stopRecording();
-        segmentsRef.current = [...segmentsRef.current, segmentUri];
+        segmentsRef.current = [segmentUri];
       }
 
       // saveRecordingFromSegments reads sessionSegments from module state,

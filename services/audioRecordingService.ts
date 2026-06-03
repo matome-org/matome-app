@@ -28,6 +28,14 @@ let lastMeteringValue: number | undefined = undefined;
 let lastDurationMillis: number = 0;
 let meteringInterval: ReturnType<typeof setInterval> | null = null;
 
+// True while the live recorder is a single continuous session that has been
+// paused/resumed at least once (pauseRecording sets it). When such a recorder is
+// finalized, stopRecording() knows the finalized file is the COMPLETE session
+// audio and supersedes any pause-snapshot in sessionSegments — so the session
+// resolves to exactly one full-audio file (no segment loss, no duplicate temp
+// snapshot left to re-transcribe). Reset whenever a fresh recorder is created.
+let recorderIsContinuousSession = false;
+
 // ---------------------------------------------------------------------------
 // Segment tracking — persists across pause/resume cycles within a session.
 // Segment files are written to documentDirectory so they survive app restarts.
@@ -153,6 +161,9 @@ export const startRecording = async (): Promise<void> => {
       ...platformSpecific,
     });
 
+    // Fresh recorder — not (yet) a paused/resumed continuous session.
+    recorderIsContinuousSession = false;
+
     await recorder.prepareToRecordAsync();
     recorder.record();
 
@@ -200,6 +211,16 @@ export const stopRecording = async (): Promise<string> => {
     lastMeteringValue = undefined;
     lastDurationMillis = 0;
 
+    // If this recorder was a paused/resumed continuous session, the file we just
+    // finalized contains the COMPLETE session audio (every pause/resume span).
+    // It supersedes any pause-snapshot accumulated in sessionSegments, which are
+    // now stale partial copies. Capture them for deletion so the session
+    // resolves to exactly one full-audio file and stale snapshots are not
+    // re-transcribed or left on disk.
+    const wasContinuous = recorderIsContinuousSession;
+    const supersededSnapshots = wasContinuous ? [...sessionSegments] : [];
+    recorderIsContinuousSession = false;
+
     // Copy to documentDirectory so the segment survives app restarts and is
     // not subject to OS cache eviction. File name is timestamp + random suffix
     // to guarantee uniqueness across sessions.
@@ -214,7 +235,16 @@ export const stopRecording = async (): Promise<string> => {
     await FileSystem.copyAsync({ from: uri, to: segmentUri });
 
     recordingUri = segmentUri;
-    sessionSegments = [...sessionSegments, segmentUri];
+    if (wasContinuous) {
+      // Single complete file is the sole segment for this session.
+      sessionSegments = [segmentUri];
+      void Promise.allSettled(
+        supersededSnapshots.map((snap) => safeDeleteFile(snap)),
+      );
+    } else {
+      // Legacy / recovered-draft path: genuinely separate segment, keep all.
+      sessionSegments = [...sessionSegments, segmentUri];
+    }
 
     return segmentUri;
   } catch (error) {
@@ -222,6 +252,119 @@ export const stopRecording = async (): Promise<string> => {
     recorder = null;
     throw error;
   }
+};
+
+/**
+ * Pause the active recording WITHOUT splitting it into a separate segment.
+ *
+ * expo-audio's native AudioRecorder supports a true pause()/record() cycle on a
+ * SINGLE recording: pause() suspends capture while keeping the same underlying
+ * file open, and a subsequent record() resumes appending to that SAME file.
+ * resumeRecording() below calls record() to continue. Because the session stays
+ * in one file, Finish (stopRecording) produces audio containing ALL spoken
+ * content — this is the fix for the multi-segment audio-loss defect: there is no
+ * longer more than one segment to "merge", so nothing is discarded.
+ *
+ * Crash-recovery note: while paused the recorder's file is not yet finalized, so
+ * we snapshot the recorder's current uri to a durable segment_*.m4a copy in
+ * documentDirectory. That snapshot lets a paused-then-killed session still be
+ * recovered from a draft (as a single recoverable segment). On resume the live
+ * recorder keeps growing the same file; at Finish stopRecording() supersedes the
+ * snapshot with the complete file. The stale snapshot is swept by
+ * discardSegments() after Finish (it lives in documentDirectory under the
+ * segment_ prefix), so no audio is leaked or double-counted.
+ *
+ * Returns the durable snapshot URI (for draft persistence). Stops the metering
+ * poll while paused.
+ */
+export const pauseRecording = async (): Promise<string> => {
+  if (!recorder) {
+    throw new Error("No recording in progress");
+  }
+
+  if (meteringInterval) {
+    clearInterval(meteringInterval);
+    meteringInterval = null;
+  }
+
+  // Capture the duration accumulated so far before pausing so the timer holds.
+  const status = recorder.getStatus();
+  if (status.durationMillis) {
+    lastDurationMillis = status.durationMillis;
+  }
+
+  // Native pause — keeps the single underlying file open for resume().
+  recorder.pause();
+  recorderIsContinuousSession = true;
+
+  const liveUri = recorder.uri;
+  if (!liveUri) {
+    throw new Error("Recording URI is null");
+  }
+
+  // Durable snapshot for crash recovery. The live recorder continues to own and
+  // grow `liveUri` on resume; this copy is only a recoverable fallback for a
+  // kill-while-paused. It is overwritten in role by the finalized file at Finish
+  // and cleaned up by discardSegments().
+  const segmentFileName = `segment_${Date.now()}_${Math.random()
+    .toString(36)
+    .substr(2, 6)}.m4a`;
+  const documentsDir = FileSystem.documentDirectory;
+  if (!documentsDir) {
+    throw new Error("Document directory not available");
+  }
+  const snapshotUri = `${documentsDir}${segmentFileName}`;
+  try {
+    await FileSystem.copyAsync({ from: liveUri, to: snapshotUri });
+  } catch (error) {
+    // Snapshot is best-effort recovery only; pause itself already succeeded.
+    console.error("Failed to snapshot paused recording for recovery", error);
+    return liveUri;
+  }
+
+  // Track the snapshot as the (single) recoverable segment for this session.
+  // Replace rather than append: the single live file is the source of truth, so
+  // we only ever keep the latest snapshot.
+  const previousSnapshots = [...sessionSegments];
+  sessionSegments = [snapshotUri];
+  recordingUri = snapshotUri;
+  // Best-effort delete of any prior snapshot from an earlier pause this session.
+  void Promise.allSettled(previousSnapshots.map((uri) => safeDeleteFile(uri)));
+
+  return snapshotUri;
+};
+
+/**
+ * Resume a recording that was paused via pauseRecording(). Continues appending
+ * to the SAME underlying file (no new segment). Restarts the metering poll.
+ */
+export const resumeRecording = async (): Promise<void> => {
+  if (!recorder) {
+    throw new Error("No paused recording to resume");
+  }
+
+  recorder.record();
+
+  meteringInterval = setInterval(() => {
+    if (recorder) {
+      const status = recorder.getStatus();
+      if (status.isRecording) {
+        lastMeteringValue = status.metering;
+        lastDurationMillis = status.durationMillis;
+      }
+    }
+  }, 80);
+};
+
+/**
+ * Whether a live native recorder currently exists (recording OR paused).
+ * Lets the recording screen decide at Finish whether to finalize the live
+ * recorder via stopRecording() (in-app session) or fall back to the already
+ * persisted segment files (a draft recovered after an app restart, where no
+ * live recorder exists).
+ */
+export const isRecorderActive = (): boolean => {
+  return recorder !== null;
 };
 
 /**
@@ -526,18 +669,21 @@ export const saveRecording = async (
 };
 
 /**
- * Save a recording from an already-stopped set of session segments.
- * Used by the recording screen after multi-segment pause/resume sessions.
+ * Save a recording from the finalized session segment(s).
+ * Used by the recording screen after a pause/resume session is finished.
  *
  * Steps:
- *   1. Merge all segments into one file (see mergeSegments for strategy notes).
- *   2. Get total duration from the merged (or last) file.
+ *   1. Resolve the session audio file via mergeSegments (see its notes).
+ *   2. Get total duration from that file.
  *   3. Prepare the audio file for transcription.
  *   4. Persist a DB record and start the background transcription pipeline.
  *
- * For multi-segment sessions the transcription pipeline receives the last
- * segment's audio file. Future work: replace mergeSegments with a native
- * M4A mux so the full audio is preserved.
+ * Single-file model (current): pause/resume keep the whole session in ONE file
+ * (native AudioRecorder pause()/record()), so mergeSegments returns the COMPLETE
+ * audio and getAudioDurationSeconds reads the full duration — no audio is lost.
+ * The per-segment transcription loop below still iterates sessionSegments, which
+ * is the lone full-session file in this model (and defensively handles the rare
+ * recovered-draft case that carries more than one file).
  */
 export const saveRecordingFromSegments = async (
   badge: BadgeType = "Inbox",
@@ -587,9 +733,10 @@ export const saveRecordingFromSegments = async (
     const segmentsSnapshot = [...sessionSegments];
     void (async () => {
       try {
-        // Transcribe each segment independently and join the results.
-        // This ensures we capture the full spoken content across all segments
-        // even though the saved audio file currently contains only the last.
+        // Transcribe each session file independently and join the results.
+        // In the single-file model this is normally one full-session file; the
+        // loop also covers the rare recovered-draft case of multiple files so
+        // the full spoken content is captured regardless.
         const transcriptParts: string[] = [];
         for (const segUri of segmentsSnapshot) {
           try {
@@ -730,31 +877,26 @@ export const getSegments = (): string[] => {
  * Merge all session segments into a single file ready for the transcription
  * pipeline. Returns the URI of the merged (or only) file.
  *
+ * Single-file architecture (current): pause/resume use the native
+ * AudioRecorder pause()/record() cycle (see pauseRecording / resumeRecording),
+ * which keeps the ENTIRE session in ONE underlying file. Finish therefore
+ * produces a single sessionSegments entry whose audio contains every pause/
+ * resume span — no concatenation is needed and no audio is lost.
+ *
  * Merge strategy:
  *   • 0 segments: throws — nothing to merge.
- *   • 1 segment: returns it directly, no copy needed.
- *   • 2+ segments (M4A/AAC): True binary concatenation of M4A containers is
- *     not possible without a native module because each M4A file has a
- *     self-contained moov atom describing its own samples. Naively appending
- *     bytes produces a file whose moov still points at only the first
- *     segment's samples, resulting in silent or corrupt audio.
- *
- *     Correct approaches (requires a native module not currently in the
- *     dependency tree):
- *       • AVMutableComposition (iOS) / MediaMux (Android) via a custom
- *         Expo module or react-native-ffmpeg.
- *       • Convert all segments to raw PCM (WAV) before recording, then
- *         concatenate the PCM data after stripping each subsequent file's
- *         44-byte WAV header.
- *
- *     Current pragmatic fallback: copy the LAST segment as the "merged"
- *     file so the save pipeline receives a valid audio file. The transcription
- *     API is called once per segment and the transcripts are joined in
- *     saveRecordingFromSegments() below. Audio playback in the detail view
- *     will reflect only the last segment until proper merging is implemented.
- *
- *     TODO: Replace this with a proper merge once a native audio module is
- *     added to the project.
+ *   • 1 segment: returns it directly (the normal path). This is the complete,
+ *     full-session audio file.
+ *   • 2+ segments: a DEFENSIVE fallback. The single-file pause/resume design
+ *     never produces multiple segments for an in-app session; this branch only
+ *     triggers for a legacy/recovered draft that happened to persist more than
+ *     one segment file. True binary concatenation of independent M4A/AAC
+ *     containers is impossible without a native mux module (each file has its
+ *     own self-contained moov atom), so we return the LAST segment as the audio
+ *     file. Transcription still covers every segment because
+ *     saveRecordingFromSegments() transcribes each segment file independently
+ *     and joins the results. This path is not expected to occur for sessions
+ *     recorded by the current build.
  */
 export const mergeSegments = async (): Promise<string> => {
   if (sessionSegments.length === 0) {
@@ -831,6 +973,7 @@ export const releaseRecorder = async (): Promise<void> => {
     } finally {
       recorder.release();
       recorder = null;
+      recorderIsContinuousSession = false;
       lastMeteringValue = undefined;
       lastDurationMillis = 0;
     }
@@ -855,6 +998,7 @@ export const cancelRecording = async (): Promise<void> => {
     } finally {
       recorder.release();
       recorder = null;
+      recorderIsContinuousSession = false;
       lastMeteringValue = undefined;
       lastDurationMillis = 0;
     }
