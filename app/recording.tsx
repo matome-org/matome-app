@@ -543,7 +543,22 @@ export default function RecordingScreen() {
               <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
             </Pressable>
 
-            {phase === 'paused' && (
+            {phase === 'recording' && (
+              <Pressable
+                style={[
+                  styles.actionButton,
+                  styles.pauseButton,
+                  { borderColor: theme['color-primary-500'] },
+                ]}
+                onPress={handlePause}
+              >
+                <Text style={[styles.pauseButtonText, { color: theme['color-primary-500'] }]}>
+                  {t('recording.pause')}
+                </Text>
+              </Pressable>
+            )}
+
+            {(phase === 'recording' || phase === 'paused') && (
               <Pressable
                 style={[
                   styles.actionButton,
@@ -554,21 +569,6 @@ export default function RecordingScreen() {
               >
                 <Text style={styles.finishButtonText}>
                   {t('recording.finish')}
-                </Text>
-              </Pressable>
-            )}
-
-            {phase === 'recording' && (
-              <Pressable
-                style={[
-                  styles.actionButton,
-                  styles.finishButton,
-                  { backgroundColor: theme['color-danger-500'] },
-                ]}
-                onPress={handleFinish}
-              >
-                <Text style={styles.finishButtonText}>
-                  {t('recording.stop')}
                 </Text>
               </Pressable>
             )}
@@ -685,6 +685,14 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: '#333',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  pauseButton: {
+    borderWidth: 2,
+    backgroundColor: 'transparent',
+  },
+  pauseButtonText: {
     fontWeight: '600',
     fontSize: 16,
   },
