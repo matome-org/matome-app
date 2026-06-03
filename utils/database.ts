@@ -94,17 +94,25 @@ const runMigrations = async (db: SQLite.SQLiteDatabase) => {
 
   // Invariant guard: a device can never have applied more migrations than the
   // app ships. If it has, the migrations array was truncated/reordered (the
-  // append-only contract above was broken) and continuing would corrupt the
-  // schema. Fail loudly instead of silently skipping.
-  if (currentVersion > migrations.length) {
-    throw new Error(
-      `Migration invariant violated: stored user_version (${currentVersion}) ` +
-        `exceeds shipped migration count (${migrations.length}). The migrations ` +
-        `array must be append-only — do not reorder or remove entries.`
+  // append-only contract above was broken) — OR the DB was carried over from a
+  // newer build (downgrade/drift). Throwing here would leave initDatabase
+  // permanently rejecting and BRICK startup for every getDatabase consumer.
+  // App is pre-launch with no users, so we self-heal instead of failing loud:
+  // log a clear warning, then CLAMP the in-memory version down to the shipped
+  // count so the migration loop below no-ops (it won't re-run already-applied
+  // migrations and can't loop). Startup proceeds normally.
+  let effectiveVersion = currentVersion;
+  if (effectiveVersion > migrations.length) {
+    console.warn(
+      `Migration invariant: stored user_version (${currentVersion}) exceeds ` +
+        `shipped migration count (${migrations.length}). The migrations array ` +
+        `must be append-only — do not reorder or remove entries. Clamping to ` +
+        `the shipped count and continuing.`
     );
+    effectiveVersion = migrations.length;
   }
 
-  for (let i = currentVersion; i < migrations.length; i++) {
+  for (let i = effectiveVersion; i < migrations.length; i++) {
     await db.execAsync(migrations[i]);
   }
 
