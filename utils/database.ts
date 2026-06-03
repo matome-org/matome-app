@@ -110,6 +110,13 @@ const runMigrations = async (db: SQLite.SQLiteDatabase) => {
         `the shipped count and continuing.`
     );
     effectiveVersion = migrations.length;
+    // Persist the clamp so the self-heal sticks: the write-back below is gated
+    // on `currentVersion < migrations.length` (false here, since currentVersion
+    // is the stale high value), so without this the inflated user_version is
+    // never corrected and every launch re-reads it, re-warns, and re-clamps.
+    // Writing the shipped count back now makes the warning fire once, not on
+    // every launch.
+    await db.execAsync(`PRAGMA user_version = ${migrations.length};`);
   }
 
   for (let i = effectiveVersion; i < migrations.length; i++) {
