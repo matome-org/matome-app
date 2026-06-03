@@ -147,16 +147,64 @@ machine**, not in CI or the agent container.
 
 ```
 .maestro/
-  smoke.yaml     -> launch app -> assert the Welcome (first) screen is visible
+  smoke.yaml                      -> launch app -> assert Welcome (first) screen
+  record-pause-resume-finish.yaml -> record -> pause -> resume -> finish -> detail
+  record-kill-recover.yaml        -> record -> pause -> kill -> relaunch -> Resume
+  back-to-back-discard.yaml       -> record -> finish -> record again -> discard
+  discard-cleanup.yaml            -> record -> discard -> no recording persists
+  auth-deeplink-guard.yaml        -> unauth deep-link to /recording -> bounced
 ```
 
-`smoke.yaml` uses `appId: com.anonymous.matomeapp` (the `android.package` /
-`ios.bundleIdentifier` from `app.json`) and asserts three **hardcoded literal**
-strings on the unauthenticated Welcome screen (`Views/welcome/Welcome.tsx`):
-`MATOME`, `Finally organized.`, `Tap once. We handle the rest.`. These are not
-i18n keys, so the assertion is locale-independent and needs no auth and no
-network call — it proves the harness can launch the app and reach the first
-screen.
+All flows use `appId: com.anonymous.matomeapp` (the `android.package` /
+`ios.bundleIdentifier` from `app.json`).
+
+`smoke.yaml` asserts three **hardcoded literal** strings on the unauthenticated
+Welcome screen (`Views/welcome/Welcome.tsx`): `MATOME`, `Finally organized.`,
+`Tap once. We handle the rest.`. These are not i18n keys, so the assertion is
+locale-independent and needs no auth and no network call — it proves the harness
+can launch the app and reach the first screen.
+
+#### Recording + auth flows (task T10) — AUTHORED, NOT YET VALIDATED ON DEVICE
+
+These five flows cover the device-only behaviors the three recording-persistence
+audits flagged but static analysis / RTL could not exercise (killApp, relaunch,
+deep-link bounce, cross-session disk state). Each file carries an `AUTHORED — not
+yet validated on device` header. **None have been run** — there is no emulator
+and no dev-client build in the authoring environment (see Status below); they are
+ready-to-run scaffold to execute via `mise run up` + a dev-client build, then
+`maestro test .maestro`.
+
+Selectors are the **en-locale literals** rendered by the screens (`locales/en.ts`
+`recording.*`: `Ready to Record`, `Recording`, `Paused`, `Pause`, `Finish`,
+`Resume Recording?`, `Resume`; `common.cancel`: `Cancel`; `inbox.title`: `Inbox`;
+Details segmented tab `Summary`) plus the Welcome literals, **plus three minimal
+`testID`s added to app source** where no stable text exists:
+
+- `navbar-mic-fab` — `components/NavBar/NavBar.tsx` (the center mic Pressable that
+  opens `/recording`).
+- `record-primary-button` — `app/recording.tsx` (the record/pause/resume circular
+  Pressable, which has no text label).
+- `recording-card` — `Views/Home/RecordingCard/Recordingcard.tsx` (an inbox list
+  card; titles are dynamic so tapping by text is unstable).
+- `fab-save` — `Views/Details/Details.tsx` (**pre-existing**, reused as a stable
+  marker that the detail screen was reached).
+
+| Flow | Asserts | Audit |
+| --- | --- | --- |
+| `record-pause-resume-finish.yaml` | record → pause (`Paused`) → resume (`Recording`) → finish lands on detail (`Summary` + `fab-save`); single-file span model + finish→detail nav | happy path |
+| `record-kill-recover.yaml` | after `killApp` + relaunch the draft prompt (`Resume Recording?`) appears; Resume → record more → finish → detail; crash recovery | audit#1 / audit#3 |
+| `back-to-back-discard.yaml` | session 1 finish persists a `recording-card`; session 2 `Cancel` discards without navigating to detail; S1 card still present | audit#2 E2 (state bleed) |
+| `discard-cleanup.yaml` | record → `Cancel` → back in `Inbox`, no `Summary` detail reached; clean-account variant asserts `No recordings found` (commented) | audit#2 discard cleanup |
+| `auth-deeplink-guard.yaml` | logged-out (`clearState: true`) `openLink: matomeapp://recording` → bounced to Welcome (`Finally organized.`), mic screen (`Ready to Record`) NOT visible | audit#3 A01 (auth gate) |
+
+Preconditions per flow are in each file's header. The recording flows require an
+**authenticated session already present** on the device (auth setup is out of
+scope for these flows); `auth-deeplink-guard.yaml` is the exception — it
+intentionally runs logged-out via `clearState: true`. On-disk leak assertions
+(zero `recording_*.mp3` / `segment_*.m4a` after discard) are verified by the
+service **unit** tests (tasks 493/479), not by Maestro, which can only observe
+the user-visible outcome. The deep `record → transcription` flows depend on the
+transcription-stub network boundary described below.
 
 Runners: `package.json` scripts `e2e` (`maestro test .maestro`) and `e2e:smoke`,
 plus `mise run e2e` (which pre-checks Maestro + an online emulator + the app
@@ -223,12 +271,16 @@ non-deterministic, costs real API calls, and couples tests to network/SLA.)
 
 ### Status in this environment
 
-The harness (`.maestro/smoke.yaml`, `e2e`/`e2e:smoke` scripts, `mise run e2e`)
-is committed and ready. It was **not executed here**: Maestro is not installed in
-this container, no emulator is online (`adb devices` empty), and no dev-client
-build of `com.anonymous.matomeapp` exists. Running it requires the dev machine
-with `mise run up` + an installed dev-client build (see Feasibility above). This
-is an expected environment boundary, not a harness defect.
+The harness (`.maestro/smoke.yaml` + the five T10 recording/auth flows,
+`e2e`/`e2e:smoke` scripts, `mise run e2e`) is committed and ready. It was **not
+executed here**: Maestro is not installed in this container, no emulator is
+online (`adb devices` empty), and no dev-client build of
+`com.anonymous.matomeapp` exists. The five T10 flows are therefore **AUTHORED but
+not yet validated on device** (so marked in each file header) — they have never
+run, so treat them as scaffold pending a first device run, not as known-green.
+Running them requires the dev machine with `mise run up` + an installed
+dev-client build (see Feasibility above). This is an expected environment
+boundary, not a harness defect.
 
 ## Risk priority for new tests
 

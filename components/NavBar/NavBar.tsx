@@ -171,6 +171,7 @@ export const NavBar = ({ state, descriptors, navigation }: NavBarProps) => {
       {/* Center mic button */}
       <View style={styles.micWrapper}>
         <Pressable
+          testID="navbar-mic-fab"
           style={[
             styles.micButton,
             {

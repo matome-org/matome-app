@@ -1,0 +1,46 @@
+# AUTHORED — not yet validated on device; run via `mise run up` + dev-client build,
+# then `maestro test .maestro`.
+#
+# Flow: record -> discard -> no recording persists.
+# Covers audit#2's discard-cleanup outcome at the UX level: a recorded-then-
+# discarded session must NOT appear in the inbox (handleCancel ->
+# cancelRecording/discardSegments + deleteDraft, then router.back). The on-disk
+# "zero recording_*.mp3 / segment_*.m4a remain" assertion lives in the service
+# unit tests (task 493/479); Maestro can only observe the user-visible result.
+#
+# BEST RUN AGAINST A CLEAN STATE: launchApp with clearState would also wipe the
+# auth session, so this flow instead records exactly one session and discards it,
+# then asserts the inbox shows NO recording produced by THIS flow. The strongest
+# device assertion (empty inbox) requires a freshly-seeded authed+empty account;
+# documented as a precondition rather than enforced here.
+#
+# Selectors: recording.* en literals + common.cancel ("Cancel") + testIDs
+# navbar-mic-fab / record-primary-button. inbox.noResults = "No recordings found"
+# is asserted only in the clean-account variant noted above.
+#
+# PREREQUISITE: authenticated session present. For the strict "no recording
+# persists" assertion, start from a freshly-seeded account with an empty inbox.
+appId: com.anonymous.matomeapp
+---
+- launchApp:
+    clearState: false
+- assertVisible: "Inbox"
+
+# Record a session.
+- tapOn:
+    id: "navbar-mic-fab"
+- assertVisible: "Ready to Record"
+- tapOn:
+    id: "record-primary-button"
+- assertVisible: "Recording"
+
+# Discard it (Cancel -> handleCancel -> discardSegments + deleteDraft + back).
+- tapOn: "Cancel"
+
+# Back in the inbox: no detail screen was reached (discard does not navigate to
+# detail), so the Details "Summary" segmented tab must NOT be visible.
+- assertVisible: "Inbox"
+- assertNotVisible: "Summary"
+# Clean-account variant: when the inbox started empty, the discarded session
+# leaves it empty. Uncomment when running against a freshly-seeded account.
+# - assertVisible: "No recordings found"

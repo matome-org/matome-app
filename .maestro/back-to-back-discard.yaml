@@ -1,0 +1,56 @@
+# AUTHORED — not yet validated on device; run via `mise run up` + dev-client build,
+# then `maestro test .maestro`.
+#
+# Flow: record -> finish (session 1 saved) -> record again -> discard (session 2).
+# Asserts the second session is discarded WITHOUT clobbering the first — this is
+# the cross-session state-bleed case (audit#2 E2: startRecording must reset all
+# module session globals so S2's discard cannot no-op or leak into S1). Device
+# only — the file/disk + module-global interaction can't be seen statically.
+#
+# "Discarded" is observed at the UI level: after S2 discard we land back in the
+# inbox and the S1 recording from the first finish is still present (Inbox header
+# + at least one recording-card). On-disk leak verification is documented in
+# unit tests (task 493); this flow proves the UX outcome.
+#
+# Selectors: recording.* en literals + common.cancel ("Cancel", which is the
+# discard control in the active/paused UI) + testIDs navbar-mic-fab /
+# record-primary-button / recording-card.
+#
+# PREREQUISITE: authenticated session present.
+appId: com.anonymous.matomeapp
+---
+- launchApp:
+    clearState: false
+- assertVisible: "Inbox"
+
+# --- Session 1: record -> finish (persists a recording) ---
+- tapOn:
+    id: "navbar-mic-fab"
+- assertVisible: "Ready to Record"
+- tapOn:
+    id: "record-primary-button"
+- assertVisible: "Recording"
+- tapOn: "Finish"
+# Back in the inbox detail for S1.
+- assertVisible: "Summary"
+# Return to the inbox list.
+- back
+- assertVisible: "Inbox"
+# S1 recording card is present.
+- assertVisible:
+    id: "recording-card"
+
+# --- Session 2: record -> discard (Cancel) ---
+- tapOn:
+    id: "navbar-mic-fab"
+- assertVisible: "Ready to Record"
+- tapOn:
+    id: "record-primary-button"
+- assertVisible: "Recording"
+# Discard the active session via the Cancel control (handleCancel -> back).
+- tapOn: "Cancel"
+
+# Back in the inbox: S2 was discarded (no new detail screen), and S1 survives.
+- assertVisible: "Inbox"
+- assertVisible:
+    id: "recording-card"

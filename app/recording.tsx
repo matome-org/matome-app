@@ -628,6 +628,7 @@ export default function RecordingScreen() {
 
           {/* Primary action button */}
           <Pressable
+            testID="record-primary-button"
             style={[
               styles.recordingIndicator,
               {
