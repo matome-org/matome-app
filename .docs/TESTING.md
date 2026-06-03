@@ -15,7 +15,7 @@ does not exist in the repo yet.
 | `@testing-library/react-native` | 13 | Component / integration rendering (`render`, `fireEvent`, `screen`, `waitFor`, `act`) |
 | `@testing-library/jest-native` | 5.4 | Extra RN matchers |
 | `babel-jest`, `@types/jest`, `typescript` | — | Transform + types |
-| Maestro | — | E2E device flows **(planned — not installed)** |
+| Maestro | — | E2E device flows — **harness scaffolded** (`.maestro/`, `e2e` scripts); CLI not installed in this repo, runs on the dev machine |
 
 Jest is wired in `package.json` under the `"jest"` key: `preset: "jest-expo"`,
 a single `setupFiles` entry (`<rootDir>/jest.setup.js`), a `transformIgnorePatterns`
@@ -60,7 +60,7 @@ crashing on import. (Harness fix landed in commit `49dbeb4`.)
 __tests__/
   unit/          -> pure logic + service/process units (mocked deps)
   integration/   -> Containers rendered via @testing-library/react-native
-.maestro/        -> E2E device flows (planned — does not exist yet)
+.maestro/        -> E2E device flows (smoke.yaml scaffolded; see E2E section)
 ```
 
 Today there are 7 suites: 6 in `__tests__/unit/`, 1 in `__tests__/integration/`.
@@ -127,9 +127,108 @@ bun run test:coverage  # jest --coverage
 npx jest recordingService
 npx jest __tests__/integration/DetailsContainer.integration.test.tsx
 
-bun run e2e            # (planned — no script yet)
-maestro test .maestro/ # (planned — Maestro not installed, no .maestro/ dir)
+bun run e2e            # maestro test .maestro       (all flows)
+bun run e2e:smoke      # maestro test .maestro/smoke.yaml
+mise run e2e           # same, but pre-checks emulator + installed app first
 ```
+
+See the **E2E (Maestro)** section below for the device prerequisites — `e2e`
+needs an emulator up (`mise run up`) and the app installed; it does NOT run in
+CI or this repo's container without those.
+
+## E2E (Maestro)
+
+Device-level flows that static analysis and RTL cannot verify — record / pause /
+kill / relaunch / resume / discard, and the unauthenticated deep-link auth
+bounce. The harness is scaffolded in this repo; **execution happens on the dev
+machine**, not in CI or the agent container.
+
+### What is in the repo
+
+```
+.maestro/
+  smoke.yaml     -> launch app -> assert the Welcome (first) screen is visible
+```
+
+`smoke.yaml` uses `appId: com.anonymous.matomeapp` (the `android.package` /
+`ios.bundleIdentifier` from `app.json`) and asserts three **hardcoded literal**
+strings on the unauthenticated Welcome screen (`Views/welcome/Welcome.tsx`):
+`MATOME`, `Finally organized.`, `Tap once. We handle the rest.`. These are not
+i18n keys, so the assertion is locale-independent and needs no auth and no
+network call — it proves the harness can launch the app and reach the first
+screen.
+
+Runners: `package.json` scripts `e2e` (`maestro test .maestro`) and `e2e:smoke`,
+plus `mise run e2e` (which pre-checks Maestro + an online emulator + the app
+being installed before delegating to `maestro test .maestro`).
+
+### Prerequisites to run it
+
+1. **Maestro CLI** (not a repo dependency; install once on the machine):
+   `curl -fsSL "https://get.maestro.mobile.dev" | bash`
+2. **Emulator + Metro + local Supabase up**: `mise run up` (boots the `pixel7`
+   AVD, starts Supabase, regenerates `.env.local`, `adb reverse 54321`, and runs
+   `expo start --dev-client`).
+3. **The app installed on the emulator** under `com.anonymous.matomeapp` — see
+   the feasibility note below; this is the gating step.
+
+### Feasibility — how Maestro drives THIS app
+
+Maestro drives an **installed** package by `appId`; it does not host JS. So the
+question is which build of `com.anonymous.matomeapp` is on the device.
+
+- **Expo Go is NOT viable.** The project depends on custom native config
+  (`expo-build-properties`, `expo-secure-store`, `expo-sqlite`, `expo-audio`,
+  `expo-updates`) — Expo Go's prebuilt shell cannot host these. Also, under
+  Expo Go the OS package id is Expo Go's own (`host.exp.exponent`), not
+  `com.anonymous.matomeapp`, so `launchApp: com.anonymous.matomeapp` would not
+  resolve.
+- **A dev-client build IS required.** `mise.toml [tasks.up]` already runs
+  `expo start --dev-client`, which expects a **dev-client** build of this app
+  installed on the device. Note: `expo-dev-client` is **not currently a
+  dependency** in `package.json`, and there is no committed APK — so the
+  dev-client must be produced before E2E can run:
+  - Local: `npx expo run:android` (compiles + installs the native dev build on
+    the running emulator). First build is the cost — full native compile
+    (Gradle), single-digit to low-double-digit minutes, plus Android SDK/NDK
+    setup. Subsequent runs are fast (JS-only over Metro).
+  - Or a remote **EAS development build** (`eas.json` already has a
+    `development` profile: `developmentClient: true`, internal apk), then
+    install the artifact on the emulator.
+- **Release/preview APK** also works for E2E (it carries the same `appId`); it
+  drops the Metro dependency but is a slower iteration loop.
+
+**Verdict:** Maestro can drive this app, but **needs a dev-client (or release)
+build** — it cannot run via Expo Go. Producing that build is a native
+compile/EAS step the repo owner should run on their machine; this task does not
+trigger a native build unilaterally.
+
+### Network boundary for E2E
+
+Decision: **use the local Supabase from `mise run up`**. The `up` task already
+points the app at `http://localhost:54321` (writes `EXPO_PUBLIC_SUPABASE_URL`
+into `.env.local`) and `adb reverse tcp:54321 tcp:54321` makes it reachable from
+the emulator. So auth + DB reads/writes in E2E hit the local stack — no
+production Supabase, no shared test data.
+
+The **transcription call** (`EXPO_PUBLIC_TRANSCRIBE_API_URL`, prod default
+`https://api.matome.io/`) is the one external dependency. For E2E it is **not
+exercised by the committed `smoke.yaml`** (the smoke flow stops at the Welcome
+screen, before any recording → transcription). For the deeper recording flows
+(task T10), the chosen approach is to **stub the transcription boundary**: point
+`EXPO_PUBLIC_TRANSCRIBE_API_URL` at a local stub server returning a canned
+transcript, so flows are deterministic and offline. (Alternative — a dedicated
+throwaway test account against the real endpoint — is rejected for E2E: it is
+non-deterministic, costs real API calls, and couples tests to network/SLA.)
+
+### Status in this environment
+
+The harness (`.maestro/smoke.yaml`, `e2e`/`e2e:smoke` scripts, `mise run e2e`)
+is committed and ready. It was **not executed here**: Maestro is not installed in
+this container, no emulator is online (`adb devices` empty), and no dev-client
+build of `com.anonymous.matomeapp` exists. Running it requires the dev machine
+with `mise run up` + an installed dev-client build (see Feasibility above). This
+is an expected environment boundary, not a harness defect.
 
 ## Risk priority for new tests
 
