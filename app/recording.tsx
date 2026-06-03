@@ -20,6 +20,7 @@ import {
   isRecorderActive,
   pauseRecording,
   releaseRecorder,
+  restoreSegments,
   resumeRecording,
   saveRecordingFromSegments,
   startRecording,
@@ -272,16 +273,34 @@ export default function RecordingScreen() {
       completedDurationRef.current = 0;
       setPhase('recording');
     } catch {
-      // No live recorder to resume (recovered draft) — start a new segment.
+      // No live recorder to resume (recovered draft, post-restart) — start a new
+      // segment. ORDERING HAZARD: startRecording() resets the module's
+      // sessionSegments to []. So we must snapshot the recovered prior spans
+      // FIRST, then call startRecording(), then re-seed via restoreSegments() so
+      // the restored spans survive the reset. On the subsequent Finish,
+      // stopRecording() APPENDS the new span → sessionSegments = [...priorSpans,
+      // newSpan], yielding a transcript that covers EVERY span (pre- and
+      // post-restart) and discardSegments() that cleans ALL files (no leak).
+      const priorSpans = [...segmentsRef.current];
       try {
         await startRecording();
+        // Re-seed AFTER startRecording's reset (the crux). Skip when there were
+        // no recovered spans (fresh start) — restoreSegments([]) would be a
+        // harmless no-op but we keep the seeded module state explicit only when
+        // there is something to restore.
+        if (priorSpans.length > 0) {
+          restoreSegments(priorSpans);
+        }
+        // Carry the recovered elapsed duration so the on-screen timer continues
+        // from the pre-restart time instead of dropping to 0.
+        completedDurationRef.current = totalDuration;
         setPhase('recording');
       } catch (startError) {
         console.error('RecordingScreen: Failed to resume recording', startError);
         alert(t('recording.resumeFailed'));
       }
     }
-  }, [t]);
+  }, [totalDuration, t]);
 
   /**
    * Cancel — discard all segments, delete the draft record, and navigate back.
@@ -373,11 +392,19 @@ export default function RecordingScreen() {
 
       triggerRefresh();
 
-      // Replace this full-screen modal route with the detail screen in a single
-      // navigation. The previous back()+push() sequence raced the modal-dismiss
-      // animation against the push and could land on the wrong screen; replace()
-      // dismisses and navigates atomically while preserving the destination.
-      router.replace(`/inbox/${recordingId}`);
+      // Replace this full-screen modal route with the recording-detail screen in
+      // a single navigation. The previous back()+push() sequence raced the
+      // modal-dismiss animation against the push and could land on the wrong
+      // screen; replace() dismisses and navigates atomically.
+      //
+      // Route target: the detail screen lives at app/(tabs)/inbox/[id].tsx
+      // (DetailsContainer). We use the FULLY-QUALIFIED `/(tabs)/inbox/${id}` form
+      // so the destination unambiguously sits inside the (tabs) group — this
+      // matches the convention used by _layout.tsx ('/(tabs)/explore/explore')
+      // and CalendarContainer ('/(tabs)/calendar/${id}'). Landing inside (tabs)
+      // means NavigationGuard's `isAuthenticated && !inTabsGroup` branch
+      // (segments[0] === '(tabs)') will NOT bounce the navigation to explore.
+      router.replace(`/(tabs)/inbox/${recordingId}`);
     } catch (error) {
       console.error('RecordingScreen: Failed to finish recording', error);
       setPhase('paused');
