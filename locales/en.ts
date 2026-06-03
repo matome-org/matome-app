@@ -43,6 +43,10 @@ export default {
     draftHint: 'You have an unfinished recording. Would you like to resume or start fresh?',
     draftResume: 'Resume',
     draftDiscard: 'Discard',
+    startFailed: 'Failed to start recording. Please check microphone permissions.',
+    resumeFailed: 'Failed to resume recording. Please try again.',
+    pauseFailed: 'Failed to pause recording. Please try again.',
+    saveFailed: 'Failed to save recording. Please try again.',
   },
   details: {
     summary: 'Summary',

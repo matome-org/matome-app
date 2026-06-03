@@ -30,12 +30,16 @@ export const saveDraft = async (
   durationMs: number,
 ): Promise<void> => {
   const db = await getDatabase();
-  // Keep only one draft row at a time; delete any existing row first.
-  await db.runAsync("DELETE FROM recording_drafts;");
-  await db.runAsync(
-    "INSERT INTO recording_drafts (created_at, segments_json, duration_ms) VALUES (?, ?, ?);",
-    [new Date().toISOString(), JSON.stringify(segments), durationMs],
-  );
+  // Keep only one draft row at a time; replace any existing row.
+  // Wrap the DELETE-then-INSERT in a transaction so a draft can never be left
+  // deleted-but-not-reinserted if the INSERT fails midway.
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM recording_drafts;");
+    await db.runAsync(
+      "INSERT INTO recording_drafts (created_at, segments_json, duration_ms) VALUES (?, ?, ?);",
+      [new Date().toISOString(), JSON.stringify(segments), durationMs],
+    );
+  });
 };
 
 /**

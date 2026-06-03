@@ -44,8 +44,15 @@ export const initDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
       CREATE INDEX IF NOT EXISTS idx_recordings_createdAt ON recordings(createdAt DESC);
     `);
 
-    // Ensure recording_drafts exists independently of the migration version so
-    // devices that got into a state where migration 003 was skipped still work.
+    // CANONICAL / DEFENSIVE recording_drafts schema.
+    //
+    // This inline CREATE TABLE is intentionally duplicated with
+    // utils/migrations/003_recording_drafts.ts. It is kept as a DEFENSIVE
+    // copy so that devices which somehow skipped migration 003 (e.g. a
+    // user_version drift) still get a working recording_drafts table. The two
+    // definitions MUST stay byte-for-byte in sync: if you change one, change
+    // the other (and consider a new appended migration for an in-place schema
+    // change rather than editing 003). Do NOT remove this copy.
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS recording_drafts (
         id INTEGER PRIMARY KEY,
@@ -66,10 +73,36 @@ export const initDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
 };
 
 const runMigrations = async (db: SQLite.SQLiteDatabase) => {
+  // APPEND-ONLY CONTRACT.
+  //
+  // `PRAGMA user_version` stores the number of migrations a device has already
+  // applied, and migrations are run by their ARRAY INDEX (`migrations[i]`). This
+  // is correct ONLY while the `migrations` array is strictly append-only:
+  //   - a migration's position (index) is its permanent version number,
+  //   - existing entries are never reordered, removed, or have their meaning
+  //     changed.
+  //
+  // If a future change reorders or deletes an entry, a device that already
+  // recorded user_version = N would silently SKIP the now-shifted migration,
+  // leaving its schema corrupt with no error. There is no per-migration id to
+  // cross-check against, so the index IS the contract. New migrations must only
+  // ever be appended to the end of the array in utils/migrations/index.ts.
   const result = await db.getFirstAsync<{ user_version: number }>(
     "PRAGMA user_version;"
   );
   const currentVersion = result?.user_version ?? 0;
+
+  // Invariant guard: a device can never have applied more migrations than the
+  // app ships. If it has, the migrations array was truncated/reordered (the
+  // append-only contract above was broken) and continuing would corrupt the
+  // schema. Fail loudly instead of silently skipping.
+  if (currentVersion > migrations.length) {
+    throw new Error(
+      `Migration invariant violated: stored user_version (${currentVersion}) ` +
+        `exceeds shipped migration count (${migrations.length}). The migrations ` +
+        `array must be append-only — do not reorder or remove entries.`
+    );
+  }
 
   for (let i = currentVersion; i < migrations.length; i++) {
     await db.execAsync(migrations[i]);

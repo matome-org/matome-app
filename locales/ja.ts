@@ -43,6 +43,10 @@ export default {
     draftHint: '未完了の録音があります。再開するか、新しく始めるか選択してください。',
     draftResume: '再開',
     draftDiscard: '破棄',
+    startFailed: '録音を開始できませんでした。マイクの権限を確認してください。',
+    resumeFailed: '録音を再開できませんでした。もう一度お試しください。',
+    pauseFailed: '録音を一時停止できませんでした。もう一度お試しください。',
+    saveFailed: '録音を保存できませんでした。もう一度お試しください。',
   },
   details: {
     summary: '要約',

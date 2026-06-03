@@ -17,7 +17,6 @@ import {
   formatDuration,
   getRecordingDuration,
   getRecordingMetering,
-  mergeSegments,
   releaseRecorder,
   saveRecordingFromSegments,
   startRecording,
@@ -221,9 +220,9 @@ export default function RecordingScreen() {
       setPhase('recording');
     } catch (error) {
       console.error('RecordingScreen: Failed to start recording', error);
-      alert('Failed to start recording. Please check microphone permissions.');
+      alert(t('recording.startFailed'));
     }
-  }, []);
+  }, [t]);
 
   /**
    * Pause — stop the current segment, preserve it, and auto-save draft state
@@ -241,8 +240,12 @@ export default function RecordingScreen() {
       await saveDraft(updatedSegments, Math.round(totalDuration * 1000));
     } catch (error) {
       console.error('RecordingScreen: Failed to pause recording', error);
+      // Surface the failure: the segment couldn't be stopped/saved, so keep the
+      // user in the live 'recording' phase rather than silently showing 'paused'.
+      setPhase('recording');
+      alert(t('recording.pauseFailed'));
     }
-  }, [totalDuration]);
+  }, [totalDuration, t]);
 
   /**
    * Resume — start a new segment. Duration accumulates from prior segments.
@@ -253,9 +256,9 @@ export default function RecordingScreen() {
       setPhase('recording');
     } catch (error) {
       console.error('RecordingScreen: Failed to resume recording', error);
-      alert('Failed to resume recording. Please try again.');
+      alert(t('recording.resumeFailed'));
     }
-  }, []);
+  }, [t]);
 
   /**
    * Cancel — discard all segments, delete the draft record, and navigate back.
@@ -312,10 +315,11 @@ export default function RecordingScreen() {
    * Finish — stop the active segment if needed, merge all segments into one
    * file, trigger the save/upload pipeline, then clean up.
    *
-   * Merge strategy: see mergeSegments() in audioRecordingService for details.
-   * For multi-segment M4A sessions the last segment is used as the audio file
-   * while all segments are transcribed individually and their transcripts
-   * are joined. Full binary merge requires a native audio module (future work).
+   * Merge strategy: see the segment-merge logic in audioRecordingService for
+   * details. For multi-segment M4A sessions the last segment is used as the
+   * audio file while all segments are transcribed individually and their
+   * transcripts are joined. Full binary merge requires a native audio module
+   * (future work).
    */
   const handleFinish = useCallback(async () => {
     setPhase('processing');
@@ -342,14 +346,17 @@ export default function RecordingScreen() {
 
       triggerRefresh();
 
-      router.back();
-      router.push(`/inbox/${recordingId}`);
+      // Replace this full-screen modal route with the detail screen in a single
+      // navigation. The previous back()+push() sequence raced the modal-dismiss
+      // animation against the push and could land on the wrong screen; replace()
+      // dismisses and navigates atomically while preserving the destination.
+      router.replace(`/inbox/${recordingId}`);
     } catch (error) {
       console.error('RecordingScreen: Failed to finish recording', error);
       setPhase('paused');
-      alert('Failed to save recording. Please try again.');
+      alert(t('recording.saveFailed'));
     }
-  }, [phase, router, triggerRefresh]);
+  }, [phase, router, triggerRefresh, t]);
 
   // ---------------------------------------------------------------------------
   // Waveform renderer
