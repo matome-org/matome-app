@@ -70,8 +70,26 @@ let savedAudioFilePath: string | null = null;
 
 /**
  * Best-effort delete of a single file URI. Never throws.
+ *
+ * Sandbox guard: only paths inside the app's documentDirectory (and free of
+ * `..` traversal) are eligible for deletion. Some delete sites replay paths read
+ * back from the DB (segments_json), so this primitive must never be coerced into
+ * removing a file outside the app sandbox. Out-of-sandbox paths are skipped with
+ * a warning instead of being deleted.
  */
+const isWithinAppSandbox = (uri: string): boolean => {
+  const documentsDir = FileSystem.documentDirectory;
+  if (!documentsDir) {
+    return false;
+  }
+  return uri.startsWith(documentsDir) && !uri.includes("..");
+};
+
 const safeDeleteFile = async (uri: string): Promise<void> => {
+  if (!isWithinAppSandbox(uri)) {
+    console.warn("Refusing to delete file outside app sandbox", uri);
+    return;
+  }
   try {
     const info = await FileSystem.getInfoAsync(uri);
     if (info.exists) {
@@ -127,6 +145,29 @@ export const requestPermissions = async (): Promise<boolean> => {
  */
 export const startRecording = async (): Promise<void> => {
   try {
+    // Reset ALL per-session module-globals up front so a fresh session can never
+    // inherit stale state from a prior one. Without this, a back-to-back record
+    // (S1 Finish → back → S2 record while S1's background transcription is still
+    // in-flight) bleeds S1's flags into S2: S2's discard could no-op (S1's saved
+    // path still marked, so temps survive — privacy leak) or S2's temps could be
+    // tracked under S1's session and leaked. We deliberately do NOT delete any
+    // files here — S1's in-flight save owns its temps and cleans them up via its
+    // own pipeline; we only drop S2's pointers to that state so the two sessions
+    // are isolated. (A separate restoreSegments() may re-seed sessionSegments
+    // immediately after this for the draft-recovery resume flow.)
+    sessionSegments = [];
+    transcriptionTempFiles = [];
+    savedAudioFilePath = null;
+    recordingUri = null;
+    recorderIsContinuousSession = false;
+
+    // Clear any leftover metering poll from a prior session before we reassign
+    // below, so a double-start can never leak an orphaned interval timer.
+    if (meteringInterval) {
+      clearInterval(meteringInterval);
+      meteringInterval = null;
+    }
+
     // Request permissions
     const hasPermission = await requestPermissions();
     if (!hasPermission) {
@@ -344,6 +385,14 @@ export const resumeRecording = async (): Promise<void> => {
   }
 
   recorder.record();
+
+  // Clear any existing metering poll before reassigning so a resume can never
+  // leak an orphaned interval timer (e.g. resume called without a prior pause
+  // having cleared it).
+  if (meteringInterval) {
+    clearInterval(meteringInterval);
+    meteringInterval = null;
+  }
 
   meteringInterval = setInterval(() => {
     if (recorder) {
@@ -871,6 +920,45 @@ export const retryTranscription = async (
  */
 export const getSegments = (): string[] => {
   return [...sessionSegments];
+};
+
+/**
+ * Seed sessionSegments from a recovered draft's persisted span URIs.
+ *
+ * Restart-recovery flow: after an app restart there is no live recorder and the
+ * module-level sessionSegments array is empty (fresh JS process). recording.tsx
+ * loads the draft's span URIs from the DB and, to resume recording, calls
+ * startRecording() (which resets sessionSegments) and then this function to
+ * re-seed the prior spans. A subsequent stopRecording() APPENDS the newly
+ * recorded span, so the session resolves to [A, B] (older spans first, new span
+ * last) — see the ordering note below.
+ *
+ * Idempotent: replaces sessionSegments wholesale with a fresh copy of `uris`, so
+ * calling it twice with the same input yields the same state (no accumulation).
+ *
+ * Ordering contract (verified):
+ *   startRecording()      → sessionSegments = []      (fix: reset)
+ *   restoreSegments([A])  → sessionSegments = [A]
+ *   stopRecording()       → sessionSegments = [A, B]  (append, NOT continuous)
+ * stopRecording only REPLACES (collapses to one file) when the just-finalized
+ * recorder was a paused/resumed CONTINUOUS session. A recovery-resume span that
+ * is recorded straight through (record → finish, no pause) is NOT continuous, so
+ * its stopRecording takes the append branch and preserves the restored spans.
+ *
+ * AUDIO LIMITATION (cross-restart, multi-span):
+ * When a recovered draft carries 2+ spans, saveRecordingFromSegments transcribes
+ * EVERY span independently and joins them, so the resulting TRANSCRIPT is
+ * COMPLETE — no spoken content is lost. The playable AUDIO file, however, is the
+ * LAST span only: independent M4A/AAC containers each have their own self-
+ * contained moov atom and cannot be concatenated without a native mux module
+ * (AVMutableComposition / MediaMuxer), which is out of scope and intentionally
+ * NOT added here (no native/ffmpeg dependency). Full-audio mux is deferred. The
+ * app is pre-launch and the transcript is the primary value, so a complete
+ * transcript with last-span playback is the accepted behavior for this edge case.
+ * discardSegments() still deletes ALL restored span files, so nothing leaks.
+ */
+export const restoreSegments = (uris: string[]): void => {
+  sessionSegments = [...uris];
 };
 
 /**
