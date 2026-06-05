@@ -1,13 +1,7 @@
-import { Session, User } from '@supabase/supabase-js';
+import type { AuthResponse, User } from '@matome/api-client';
 
-export type { Session, User };
+export type { User };
 
-export interface LoginResponse {
-  session: Session;
-  user: User;
-}
+export type LoginResponse = AuthResponse;
 
-export interface SignupResponse {
-  session: Session | null;
-  user: User;
-}
+export type SignupResponse = AuthResponse;

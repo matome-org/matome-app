@@ -1,4 +1,5 @@
-import { supabase } from '@/config/supabase';
+import { coreApiClient } from '@/services/coreApiClient';
+import { saveRefreshToken, saveToken } from '@/utils/storage';
 
 import { LoginResponse, SignupResponse } from './types/authTypes';
 
@@ -6,9 +7,10 @@ export const login = async (body: {
     email: string;
     password: string;
 }): Promise<LoginResponse> => {
-    const { data, error } = await supabase.auth.signInWithPassword(body);
-    if (error) throw error;
-    return data;
+    const auth = await coreApiClient.login(body);
+    await saveToken(auth.access_token);
+    await saveRefreshToken(auth.refresh_token);
+    return auth;
 };
 
 export const signup = async (body: {
@@ -16,13 +18,11 @@ export const signup = async (body: {
     password: string;
     name: string;
 }): Promise<SignupResponse> => {
-    const { data, error } = await supabase.auth.signUp({
+    const auth = await coreApiClient.register({
         email: body.email,
         password: body.password,
-        options: {
-            data: { name: body.name },
-        },
     });
-    if (error) throw error;
-    return data as SignupResponse;
+    await saveToken(auth.access_token);
+    await saveRefreshToken(auth.refresh_token);
+    return auth;
 };

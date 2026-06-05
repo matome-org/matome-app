@@ -1,5 +1,6 @@
-import { supabase } from '@/config/supabase';
 import { User } from '@/processes/types/authTypes';
+import { coreApiClient } from '@/services/coreApiClient';
+import { getRefreshToken, removeRefreshToken, removeToken } from '@/utils/storage';
 import { create } from 'zustand';
 
 interface AuthState {
@@ -19,8 +20,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   checkAuth: async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      set({ isAuthenticated: !!session, user: session?.user ?? null, isLoading: false });
+      const { user } = await coreApiClient.me();
+      set({ isAuthenticated: true, user, isLoading: false });
     } catch (error) {
       console.error('Error checking auth:', error);
       set({ isAuthenticated: false, user: null, isLoading: false });
@@ -32,7 +33,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
+    const refreshToken = await getRefreshToken();
+    if (refreshToken) {
+      await coreApiClient.logout({ refresh_token: refreshToken }).catch(() => undefined);
+    }
+    await Promise.all([removeToken(), removeRefreshToken()]);
     set({ isAuthenticated: false, user: null });
   },
 

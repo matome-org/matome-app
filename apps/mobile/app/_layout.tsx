@@ -12,7 +12,6 @@ import 'react-native-reanimated';
 import ToastContainer from 'react-native-toast-message';
 
 import { decideRedirect } from '@/app/navigationGuard';
-import { supabase } from '@/config/supabase';
 import { darkTheme, lightTheme } from '@/config/themes';
 import { runUpdateFlow } from '@/services/updateService';
 import { loadDraft } from '@/services/draftRecordingService';
@@ -29,20 +28,14 @@ const queryClient = new QueryClient();
 
 // Handles auth redirects — lives inside navigation context
 const NavigationGuard = () => {
-  const { isAuthenticated, isLoading, checkAuth, setAuthenticated } = useAuthStore();
+  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
     checkAuth();
     runUpdateFlow();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthenticated(!!session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [checkAuth, setAuthenticated]);
+  }, [checkAuth]);
 
   useEffect(() => {
     if (isLoading) return;
