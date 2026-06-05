@@ -47,6 +47,8 @@ export default {
     resumeFailed: 'Failed to resume recording. Please try again.',
     pauseFailed: 'Failed to pause recording. Please try again.',
     saveFailed: 'Failed to save recording. Please try again.',
+    webUnavailableTitle: 'Recording not available on web',
+    webUnavailableHint: 'Audio recording needs the microphone. Open matome on your phone to record.',
   },
   details: {
     summary: 'Summary',

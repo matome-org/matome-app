@@ -47,6 +47,8 @@ export default {
     resumeFailed: '録音を再開できませんでした。もう一度お試しください。',
     pauseFailed: '録音を一時停止できませんでした。もう一度お試しください。',
     saveFailed: '録音を保存できませんでした。もう一度お試しください。',
+    webUnavailableTitle: 'ウェブでは録音できません',
+    webUnavailableHint: '録音にはマイクが必要です。スマートフォンの matome アプリで録音してください。',
   },
   details: {
     summary: '要約',

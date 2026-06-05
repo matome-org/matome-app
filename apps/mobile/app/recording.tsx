@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -59,6 +60,11 @@ export default function RecordingScreen() {
   const { t } = useTranslation();
   const triggerRefresh = useRecordingsStore((s) => s.triggerRefresh);
 
+  // Audio recording relies on the native mic (expo-audio); it has no web
+  // implementation. On web we render an "unavailable" notice and skip every
+  // recorder/native-service call below.
+  const isWeb = Platform.OS === 'web';
+
   // hasDraft=1 is set by NavigationGuard when a draft is detected at startup
   const { hasDraft } = useLocalSearchParams<{ hasDraft?: string }>();
 
@@ -88,6 +94,7 @@ export default function RecordingScreen() {
   // Draft check on mount — only runs when hasDraft=1 param is present
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    if (isWeb) return;
     if (hasDraft !== '1') return;
 
     const checkDraft = async () => {
@@ -187,6 +194,9 @@ export default function RecordingScreen() {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     return () => {
+      // No native recorder is ever started on web — nothing to release.
+      if (isWeb) return;
+
       // Always clear the local UI metering interval.
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -212,7 +222,7 @@ export default function RecordingScreen() {
         );
       }
     };
-  }, []);
+  }, [isWeb]);
 
   // ---------------------------------------------------------------------------
   // Action handlers
@@ -503,6 +513,69 @@ export default function RecordingScreen() {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+
+  // Web has no native mic recorder — show an unavailable notice instead of
+  // letting the recorder UI call services that throw in the browser.
+  if (isWeb) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.webUnavailable,
+          {
+            backgroundColor: theme['color-basic-100'],
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+          },
+        ]}
+      >
+        <Pressable
+          style={styles.closeButton}
+          onPress={() => router.back()}
+          accessibilityLabel={t('common.cancel')}
+        >
+          <Ionicons name="close" size={28} color={theme['color-basic-700']} />
+        </Pressable>
+
+        <View
+          style={[
+            styles.draftIcon,
+            { backgroundColor: theme['color-primary-500'] + '20' },
+          ]}
+        >
+          <Ionicons
+            name="mic-off-outline"
+            size={48}
+            color={theme['color-primary-500']}
+          />
+        </View>
+        <Text
+          category="h5"
+          style={[styles.title, { color: theme['color-basic-800'] }]}
+        >
+          {t('recording.webUnavailableTitle')}
+        </Text>
+        <Text
+          category="p1"
+          style={[styles.hint, { color: theme['color-basic-600'] }]}
+        >
+          {t('recording.webUnavailableHint')}
+        </Text>
+        <Pressable
+          style={[
+            styles.actionButton,
+            styles.finishButton,
+            styles.webBackButton,
+            { backgroundColor: theme['color-primary-500'] },
+          ]}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.finishButtonText}>{t('common.cancel')}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
@@ -743,6 +816,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 20,
+  },
+  webUnavailable: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 8,
+  },
+  webBackButton: {
+    flex: 0,
+    marginTop: 16,
+    paddingHorizontal: 32,
   },
   processingText: {
     fontSize: 16,
