@@ -1,0 +1,29 @@
+{
+  "name": "@matome/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "web": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@matome/api-client": "workspace:*",
+    "@matome/ui": "workspace:*",
+    "next": "^16.0.7",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "~19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^16.0.7",
+    "typescript": "~5.9.3"
+  }
+}
