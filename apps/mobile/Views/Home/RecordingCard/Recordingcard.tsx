@@ -3,6 +3,7 @@ import { Text, useTheme } from "@ui-kitten/components";
 import { useTranslation } from "react-i18next";
 import { RecordingCardProps } from "./RecordCard.types";
 import { ActivityIndicator, TouchableOpacity, View } from "react-native";
+import type { GestureResponderEvent } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet } from "react-native";
 
@@ -23,17 +24,32 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
   duration,
   badge,
   isProcessing,
+  mediaType = "audio",
+  processingStatus,
   isActive,
   onPress,
   onLongPress,
+  onRetry,
   handleLongPress,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation();
   const color = getBadgeColor(badge);
+  const isFailed = processingStatus === "failed";
+  const mediaIcon =
+    mediaType === "image"
+      ? "image-outline"
+      : mediaType === "meeting"
+        ? "document-text-outline"
+        : "play";
 
   const handlePress = () => {
     onPress?.(id);
+  };
+
+  const handleRetryPress = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onRetry?.(id);
   };
 
   return (
@@ -61,8 +77,10 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
           <View
             style={[cardStyles.processingDot, { backgroundColor: color }]}
           />
+        ) : isFailed ? (
+          <Ionicons name="warning-outline" size={16} color="#C64A3D" />
         ) : (
-          <Ionicons name="play" size={16} color={color} />
+          <Ionicons name={mediaIcon} size={16} color={color} />
         )}
       </View>
 
@@ -92,6 +110,21 @@ const RecordingCard: React.FC<RecordingCardProps> = ({
             <Text style={[cardStyles.processingText, { color: color }]}>
               {t("recording.transcribing")}
             </Text>
+          </View>
+        ) : isFailed ? (
+          <View style={cardStyles.processingRow}>
+            <Text style={[cardStyles.failedText, { color: "#C64A3D" }]}>
+              {t("recording.transcriptionFailed")}
+            </Text>
+            <TouchableOpacity
+              testID="recording-card-retry"
+              style={cardStyles.retryButton}
+              onPress={handleRetryPress}
+            >
+              <Text style={[cardStyles.retryText, { color: color }]}>
+                {t("common.retry")}
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : (
           summary != null && summary.length > 0 && (
@@ -189,6 +222,20 @@ const cardStyles = StyleSheet.create({
   processingText: {
     fontSize: 12,
     fontStyle: "italic",
+  },
+  failedText: {
+    flex: 1,
+    fontSize: 12,
+  },
+  retryButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(14,15,16,0.05)",
+  },
+  retryText: {
+    fontSize: 12,
+    fontWeight: "700",
   },
   footer: {
     flexDirection: "row",

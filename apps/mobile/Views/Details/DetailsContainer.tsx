@@ -14,7 +14,7 @@ import {
   recordToCard,
   updateRecording,
 } from "@/services/recordingService";
-import { summarizeText } from "@/services/summarizeService";
+import { coreApiClient } from "@/services/coreApiClient";
 import { retryTranscription } from "@/services/audioRecordingService";
 import { initDatabase } from "@/utils/database";
 
@@ -299,6 +299,9 @@ export const DetailsContainer: React.FC = () => {
 
   const handleSave = useCallback(async () => {
     try {
+      if (/^\d+$/.test(id)) {
+        await coreApiClient.patchRecording(Number(id), { transcript });
+      }
       await updateRecording(id, { notes: transcript });
       // Update the saved reference so dirty resets to false
       savedTextRef.current = transcript;
@@ -314,10 +317,7 @@ export const DetailsContainer: React.FC = () => {
       if (!text.trim()) return;
       setIsSummarizing(true);
       try {
-        const summary = await summarizeText(text);
-        await updateRecording(id, { summary });
-        setRecording((prev) => (prev ? { ...prev, summary } : prev));
-        Toast.show({ type: "success", text1: t("toast.summaryGenerated") });
+        Toast.show({ type: "info", text1: t("toast.summaryFailed") });
       } catch (e) {
         Toast.show({ type: "error", text1: t("toast.summaryFailed") });
       } finally {

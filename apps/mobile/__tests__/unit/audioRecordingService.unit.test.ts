@@ -143,8 +143,48 @@ jest.mock("@/services/recordingService", () => ({
   updateRecording: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock("@/services/summarizeService", () => ({
-  summarizeText: jest.fn().mockResolvedValue("summary"),
+jest.mock("@/services/coreRecordingService", () => ({
+  createPendingCoreRecording: jest.fn().mockResolvedValue({
+    recording: {
+      id: 123,
+      owner_id: 456,
+      title: "New Recording",
+      storage_key: "owners/456/recordings/123/media",
+      status: "pending",
+      inserted_at: "2026-06-05T00:00:00Z",
+      updated_at: "2026-06-05T00:00:00Z",
+    },
+    upload: { url: "http://localhost/upload", method: "PUT", expires_in: 60 },
+  }),
+  uploadCoreRecordingAudio: jest.fn().mockResolvedValue(undefined),
+  enqueueCoreRecordingProcessing: jest.fn().mockResolvedValue(undefined),
+  waitForCoreRecordingResult: jest.fn().mockResolvedValue({
+    id: 123,
+    owner_id: 456,
+    title: "Processed Recording",
+    storage_key: "owners/456/recordings/123/media",
+    status: "done",
+    transcript: "transcript",
+    summary: "summary",
+    inserted_at: "2026-06-05T00:00:00Z",
+    updated_at: "2026-06-05T00:00:00Z",
+  }),
+}));
+
+jest.mock("@/services/coreApiClient", () => ({
+  coreApiClient: {
+    getRecording: jest.fn().mockResolvedValue({
+      recording: {
+        id: 123,
+        owner_id: 456,
+        title: "New Recording",
+        storage_key: "owners/456/recordings/123/media",
+        status: "pending",
+        inserted_at: "2026-06-05T00:00:00Z",
+        updated_at: "2026-06-05T00:00:00Z",
+      },
+    }),
+  },
 }));
 
 jest.mock("react-native", () => ({

@@ -15,6 +15,12 @@
  */
 
 jest.mock("@/utils/database");
+jest.mock("@/services/coreApiClient", () => ({
+  coreApiClient: {
+    getRecording: jest.fn(),
+    listRecordings: jest.fn(),
+  },
+}));
 
 import {
   createRecording,
@@ -27,9 +33,11 @@ import {
   recordToCard,
   type RecordingRecord,
 } from "@/services/recordingService";
+import { coreApiClient } from "@/services/coreApiClient";
 import { getDatabase } from "@/utils/database";
 
 const mockGetDatabase = getDatabase as jest.MockedFunction<typeof getDatabase>;
+const mockCoreApiClient = coreApiClient as jest.Mocked<typeof coreApiClient>;
 
 function makeDbMock(rows: object[] = [], firstRow: object | null = null) {
   return {
@@ -55,12 +63,26 @@ function makeRow(overrides: Partial<RecordingRecord> = {}): RecordingRecord {
   };
 }
 
+beforeEach(() => {
+  mockCoreApiClient.listRecordings.mockRejectedValue(new Error("offline"));
+  mockCoreApiClient.getRecording.mockRejectedValue(new Error("offline"));
+  jest.spyOn(console, "warn").mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 // ---------------------------------------------------------------------------
 // createRecording
 // ---------------------------------------------------------------------------
 
 describe("createRecording", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCoreApiClient.listRecordings.mockRejectedValue(new Error("offline"));
+    mockCoreApiClient.getRecording.mockRejectedValue(new Error("offline"));
+  });
 
   it("should INSERT into recordings with the full column list", async () => {
     const db = makeDbMock();
@@ -72,7 +94,7 @@ describe("createRecording", () => {
     const [sql] = db.runAsync.mock.calls[0];
     expect(sql).toContain("INSERT INTO recordings");
     expect(sql).toContain(
-      "id, title, summary, timestamp, duration, badge, isProcessing, audioFilePath, createdAt",
+      "id, title, summary, timestamp, duration, badge, isProcessing, audioFilePath, createdAt, mediaType, processingStatus",
     );
   });
 
@@ -106,6 +128,8 @@ describe("createRecording", () => {
       1, // isProcessing true → 1
       "/audio/rec-1.m4a",
       createdAt,
+      "audio",
+      "processing",
     ]);
   });
 
@@ -184,6 +208,56 @@ describe("getAllRecordings", () => {
     mockGetDatabase.mockResolvedValue(db);
     expect(await getAllRecordings()).toEqual([]);
   });
+
+  it("should hydrate SQLite from Core and return server-backed rows when online", async () => {
+    const db = makeDbMock([], makeRow({
+      id: "123",
+      audioFilePath: "/audio/existing.m4a",
+    }));
+    mockGetDatabase.mockResolvedValue(db);
+    mockCoreApiClient.listRecordings.mockResolvedValue({
+      recordings: [
+        {
+          id: 123,
+          owner_id: 9,
+          title: "Core title",
+          summary: "Core summary",
+          transcript: "Core transcript",
+          media_type: "audio",
+          storage_key: "owners/9/recordings/123/media",
+          status: "done",
+          duration: 65,
+          badge: "Work",
+          workspace_id: null,
+          inserted_at: "2026-06-05T03:00:00.000Z",
+          updated_at: "2026-06-05T03:01:00.000Z",
+        },
+      ],
+    });
+
+    const result = await getAllRecordings();
+
+    expect(result).toMatchObject([
+      {
+        id: "123",
+        title: "Core title",
+        summary: "Core summary",
+        notes: "Core transcript",
+        duration: "1:05",
+        badge: "Work",
+        isProcessing: 0,
+        audioFilePath: "/audio/existing.m4a",
+      },
+    ]);
+    expect(db.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("ON CONFLICT(id) DO UPDATE SET"),
+      expect.arrayContaining(["123", "Core title", "Core summary"]),
+    );
+    expect(db.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("id NOT IN (?)"),
+      ["123"],
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -203,6 +277,41 @@ describe("getInboxRecordings", () => {
     expect(sql).toContain("workspaceId IS NULL");
     expect(sql).toContain("ORDER BY createdAt DESC");
     expect(result[0].id).toBe("inbox-1");
+  });
+
+  it("should return only Core inbox rows after successful online reconciliation", async () => {
+    const db = makeDbMock([], null);
+    mockGetDatabase.mockResolvedValue(db);
+    mockCoreApiClient.listRecordings.mockResolvedValue({
+      recordings: [
+        {
+          id: 1,
+          owner_id: 9,
+          title: "Inbox",
+          storage_key: "owners/9/recordings/1/media",
+          status: "done",
+          badge: "Inbox",
+          workspace_id: null,
+          inserted_at: "2026-06-05T03:00:00.000Z",
+          updated_at: "2026-06-05T03:00:00.000Z",
+        },
+        {
+          id: 2,
+          owner_id: 9,
+          title: "Workspace",
+          storage_key: "owners/9/recordings/2/media",
+          status: "done",
+          badge: "Work",
+          workspace_id: 44,
+          inserted_at: "2026-06-05T02:00:00.000Z",
+          updated_at: "2026-06-05T02:00:00.000Z",
+        },
+      ],
+    });
+
+    const result = await getInboxRecordings();
+
+    expect(result.map((row) => row.id)).toEqual(["1"]);
   });
 });
 
@@ -254,6 +363,41 @@ describe("getRecordingById", () => {
       badge: "Work",
       isProcessing: 1,
       audioFilePath: "/audio/rec-map.m4a",
+    });
+  });
+
+  it("should read a numeric recording from Core first and update the cache", async () => {
+    const db = makeDbMock([], makeRow({ id: "456", audioFilePath: "/audio/456.m4a" }));
+    mockGetDatabase.mockResolvedValue(db);
+    mockCoreApiClient.getRecording.mockResolvedValue({
+      recording: {
+        id: 456,
+        owner_id: 9,
+        title: "Fresh detail",
+        summary: "Server summary",
+        transcript: "Server transcript",
+        media_type: "meeting",
+        storage_key: "owners/9/recordings/456/media",
+        status: "processing",
+        duration: 120,
+        badge: "Personal",
+        workspace_id: null,
+        inserted_at: "2026-06-05T03:00:00.000Z",
+        updated_at: "2026-06-05T03:00:00.000Z",
+      },
+    });
+
+    const result = await getRecordingById("456");
+
+    expect(mockCoreApiClient.getRecording).toHaveBeenCalledWith(456);
+    expect(result).toMatchObject({
+      id: "456",
+      title: "Fresh detail",
+      notes: "Server transcript",
+      mediaType: "meeting",
+      processingStatus: "processing",
+      isProcessing: 1,
+      audioFilePath: "/audio/456.m4a",
     });
   });
 });
@@ -354,6 +498,18 @@ describe("updateRecording", () => {
     expect(sql).toContain("notes = ?");
     expect(values).toEqual(["remember this", "rec-1"]);
   });
+
+  it("should persist media type and processing status", async () => {
+    const db = makeDbMock();
+    mockGetDatabase.mockResolvedValue(db);
+
+    await updateRecording("rec-1", { mediaType: "image", processingStatus: "failed" });
+
+    const [sql, values] = db.runAsync.mock.calls[0];
+    expect(sql).toContain("mediaType = ?");
+    expect(sql).toContain("processingStatus = ?");
+    expect(values).toEqual(["image", "failed", "rec-1"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -447,7 +603,9 @@ describe("recordToCard", () => {
         timestamp: "2026-04-10T10:00:00.000Z",
         duration: "2:30",
         badge: "Personal",
-        notes: "some notes",
+      notes: "some notes",
+      mediaType: "image",
+      processingStatus: "failed",
       }),
     );
     expect(card).toMatchObject({
@@ -458,6 +616,8 @@ describe("recordToCard", () => {
       duration: "2:30",
       badge: "Personal",
       notes: "some notes",
+      mediaType: "image",
+      processingStatus: "failed",
     });
   });
 });

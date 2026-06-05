@@ -1,4 +1,5 @@
 import { getInboxRecordings, recordToCard } from "@/services/recordingService";
+import type { RecordingMediaType, RecordingProcessingStatus } from "@/services/recordingService";
 import i18n from "@/config/i18n";
 
 export type BadgeType = "Work" | "Personal" | "Inbox";
@@ -12,6 +13,8 @@ export interface RecordingCard {
   notes?: string;
   badge: BadgeType;
   isProcessing: boolean;
+  mediaType?: RecordingMediaType;
+  processingStatus?: RecordingProcessingStatus;
   isActive?: boolean;
 }
 

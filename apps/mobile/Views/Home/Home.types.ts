@@ -9,10 +9,12 @@ export interface HomeProps {
   searchQuery?: string;
   onCardPress?: (id: string) => void;
   onCardLongPress?: (id: string) => void;
+  onRetryRecording?: (id: string) => void;
   onSearchPress?: () => void;
   onSearchChange?: (query: string) => void;
   onSearchClose?: () => void;
   onSettingsPress?: () => void;
+  onImportPress?: () => void;
   onRefresh?: () => void;
 }
 
@@ -21,4 +23,5 @@ export interface HomeSectionProps {
   recordings: RecordingCardProps[];
   onCardPress?: (id: string) => void;
   onCardLongPress?: (id: string) => void;
+  onRetryRecording?: (id: string) => void;
 }

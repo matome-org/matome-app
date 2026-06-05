@@ -1,5 +1,11 @@
 import { getDatabase } from "@/utils/database";
 import type { RecordingCard, BadgeType } from "@/processes/homeData";
+import { coreApiClient } from "@/services/coreApiClient";
+import type { Recording } from "@matome/api-client";
+import { MatomeApiError } from "@matome/api-client";
+
+export type RecordingMediaType = "audio" | "meeting" | "image";
+export type RecordingProcessingStatus = "pending" | "processing" | "done" | "failed";
 
 export interface RecordingRecord {
   id: string;
@@ -11,13 +17,19 @@ export interface RecordingRecord {
   isProcessing: number; // SQLite stores as INTEGER (0 or 1)
   audioFilePath: string;
   createdAt: number;
-  workspaceId: string;
+  workspaceId: string | null;
   notes?: string;
+  mediaType?: RecordingMediaType;
+  processingStatus?: RecordingProcessingStatus;
 }
 
 const BADGE_VALUES: BadgeType[] = ["Work", "Personal", "Inbox"];
+const MEDIA_TYPE_VALUES: RecordingMediaType[] = ["audio", "meeting", "image"];
+const PROCESSING_STATUS_VALUES: RecordingProcessingStatus[] = ["pending", "processing", "done", "failed"];
 
 type SQLitePrimitive = string | number | null;
+
+const CORE_BACKED_ID_PATTERN = /^\d+$/;
 
 /**
  * Force a value to a plain JS primitive suitable for expo-sqlite binding.
@@ -84,6 +96,20 @@ const assertBadge = (value: unknown): BadgeType => {
   return value as BadgeType;
 };
 
+const assertMediaType = (value: unknown): RecordingMediaType => {
+  if (typeof value !== "string" || !MEDIA_TYPE_VALUES.includes(value as RecordingMediaType)) {
+    throw new Error("Invalid mediaType: expected audio, meeting, or image");
+  }
+  return value as RecordingMediaType;
+};
+
+const assertProcessingStatus = (value: unknown): RecordingProcessingStatus => {
+  if (typeof value !== "string" || !PROCESSING_STATUS_VALUES.includes(value as RecordingProcessingStatus)) {
+    throw new Error("Invalid processingStatus: expected pending, processing, done, or failed");
+  }
+  return value as RecordingProcessingStatus;
+};
+
 /**
  * Normalize summary for SQLite binding.
  * Returns "" instead of null because expo-modules-core (Android, v3.0.x)
@@ -108,6 +134,139 @@ const normalizeOptionalString = (
   return assertString(value, field);
 };
 
+const isCoreBackedId = (id: string): boolean => CORE_BACKED_ID_PATTERN.test(id);
+
+const normalizeCoreBadge = (value: string | null | undefined): BadgeType => {
+  return typeof value === "string" && BADGE_VALUES.includes(value as BadgeType)
+    ? (value as BadgeType)
+    : "Inbox";
+};
+
+const normalizeCoreMediaType = (value: string | null | undefined): RecordingMediaType => {
+  return typeof value === "string" && MEDIA_TYPE_VALUES.includes(value as RecordingMediaType)
+    ? (value as RecordingMediaType)
+    : "audio";
+};
+
+const formatCoreTimestamp = (value: string): string => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+const formatCoreDuration = (durationSeconds: number | null | undefined): string => {
+  const totalSeconds = Math.max(0, Math.round(durationSeconds ?? 0));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+};
+
+const coreRecordingToRecord = (
+  recording: Recording,
+  existing?: RecordingRecord | null,
+): RecordingRecord => {
+  const insertedAt = new Date(recording.inserted_at).getTime();
+  const status = assertProcessingStatus(recording.status);
+
+  return {
+    id: String(recording.id),
+    title: recording.title,
+    summary: recording.summary ?? "",
+    timestamp: formatCoreTimestamp(recording.inserted_at),
+    duration: formatCoreDuration(recording.duration),
+    badge: normalizeCoreBadge(recording.badge),
+    isProcessing: status === "pending" || status === "processing" ? 1 : 0,
+    audioFilePath: existing?.audioFilePath ?? "",
+    createdAt: Number.isNaN(insertedAt) ? existing?.createdAt ?? Date.now() : insertedAt,
+    workspaceId: recording.workspace_id == null ? null : String(recording.workspace_id),
+    notes: recording.transcript ?? "",
+    mediaType: normalizeCoreMediaType(recording.media_type),
+    processingStatus: status,
+  };
+};
+
+const upsertCachedRecording = async (
+  recording: Recording,
+): Promise<RecordingRecord> => {
+  const db = await getDatabase();
+  const id = String(recording.id);
+  const existing = await db.getFirstAsync<RecordingRecord>(
+    `SELECT * FROM recordings WHERE id = ?`,
+    id,
+  );
+  const row = coreRecordingToRecord(recording, existing ?? null);
+
+  await db.runAsync(
+    `INSERT INTO recordings (
+       id, title, summary, timestamp, duration, badge, isProcessing,
+       audioFilePath, createdAt, workspaceId, notes, mediaType, processingStatus
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       title = excluded.title,
+       summary = excluded.summary,
+       timestamp = excluded.timestamp,
+       duration = excluded.duration,
+       badge = excluded.badge,
+       isProcessing = excluded.isProcessing,
+       audioFilePath = CASE
+         WHEN recordings.audioFilePath IS NOT NULL AND recordings.audioFilePath != ''
+         THEN recordings.audioFilePath
+         ELSE excluded.audioFilePath
+       END,
+       createdAt = excluded.createdAt,
+       workspaceId = excluded.workspaceId,
+       notes = excluded.notes,
+       mediaType = excluded.mediaType,
+       processingStatus = excluded.processingStatus`,
+    [
+      row.id,
+      row.title,
+      row.summary ?? "",
+      row.timestamp,
+      row.duration,
+      row.badge,
+      row.isProcessing,
+      row.audioFilePath,
+      row.createdAt,
+      row.workspaceId ?? null,
+      row.notes ?? "",
+      row.mediaType ?? "audio",
+      row.processingStatus ?? "done",
+    ],
+  );
+
+  return {
+    ...row,
+    audioFilePath: existing?.audioFilePath || row.audioFilePath,
+  };
+};
+
+const reconcileCoreRecordings = async (
+  recordings: Recording[],
+): Promise<RecordingRecord[]> => {
+  const rows = await Promise.all(recordings.map(upsertCachedRecording));
+  const db = await getDatabase();
+  const serverIds = recordings.map((recording) => String(recording.id));
+
+  if (serverIds.length > 0) {
+    await db.runAsync(
+      `DELETE FROM recordings
+       WHERE id GLOB '[0-9]*'
+         AND id NOT GLOB '*[^0-9]*'
+         AND id NOT IN (${serverIds.map(() => "?").join(", ")})`,
+      serverIds,
+    );
+  } else {
+    await db.runAsync(`DELETE FROM recordings WHERE id GLOB '[0-9]*' AND id NOT GLOB '*[^0-9]*'`);
+  }
+
+  return rows.sort((a, b) => b.createdAt - a.createdAt);
+};
+
 
 /**
  * Create a new recording in the database.
@@ -130,12 +289,14 @@ export const createRecording = async (
     coerceSqlitePrimitive(recording.isProcessing ? 1 : 0, "isProcessing"),
     coerceSqlitePrimitive(assertString(recording.audioFilePath, "audioFilePath"), "audioFilePath"),
     coerceSqlitePrimitive(assertNumber(recording.createdAt, "createdAt"), "createdAt"),
+    coerceSqlitePrimitive(assertMediaType(recording.mediaType ?? "audio"), "mediaType"),
+    coerceSqlitePrimitive(assertProcessingStatus(recording.processingStatus ?? (recording.isProcessing ? "processing" : "done")), "processingStatus"),
   ];
 
   try {
     await db.runAsync(
-      `INSERT INTO recordings (id, title, summary, timestamp, duration, badge, isProcessing, audioFilePath, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO recordings (id, title, summary, timestamp, duration, badge, isProcessing, audioFilePath, createdAt, mediaType, processingStatus)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params,
     );
   } catch (error) {
@@ -156,6 +317,13 @@ export const createRecording = async (
  * Get all recordings, ordered by creation date (newest first)
  */
 export const getAllRecordings = async (): Promise<RecordingRecord[]> => {
+  try {
+    const { recordings } = await coreApiClient.listRecordings();
+    return reconcileCoreRecordings(recordings);
+  } catch (error) {
+    console.warn("Core recordings unavailable; reading SQLite cache", error);
+  }
+
   const db = await getDatabase();
 
   const result = await db.getAllAsync<RecordingRecord>(
@@ -169,6 +337,14 @@ export const getAllRecordings = async (): Promise<RecordingRecord[]> => {
  * Get inbox recordings (workspaceId IS NULL), ordered by creation date (newest first)
  */
 export const getInboxRecordings = async (): Promise<RecordingRecord[]> => {
+  try {
+    const { recordings } = await coreApiClient.listRecordings();
+    const rows = await reconcileCoreRecordings(recordings);
+    return rows.filter((recording) => recording.workspaceId == null);
+  } catch (error) {
+    console.warn("Core inbox recordings unavailable; reading SQLite cache", error);
+  }
+
   const db = await getDatabase();
 
   const result = await db.getAllAsync<RecordingRecord>(
@@ -184,6 +360,20 @@ export const getInboxRecordings = async (): Promise<RecordingRecord[]> => {
 export const getRecordingById = async (
   id: string,
 ): Promise<RecordingRecord | null> => {
+  if (isCoreBackedId(id)) {
+    try {
+      const { recording } = await coreApiClient.getRecording(Number(id));
+      return upsertCachedRecording(recording);
+    } catch (error) {
+      if (error instanceof MatomeApiError && error.status === 404) {
+        const db = await getDatabase();
+        await db.runAsync(`DELETE FROM recordings WHERE id = ?`, [id]);
+        return null;
+      }
+      console.warn("Core recording unavailable; reading SQLite cache", error);
+    }
+  }
+
   const db = await getDatabase();
 
   const result = await db.getFirstAsync<RecordingRecord>(
@@ -200,7 +390,7 @@ export const getRecordingById = async (
 export const updateRecording = async (
   id: string,
   updates: Partial<
-    Pick<RecordingRecord, "summary" | "title" | "badge" | "notes" | "workspaceId">
+    Pick<RecordingRecord, "summary" | "title" | "badge" | "notes" | "workspaceId" | "mediaType" | "processingStatus">
   > & {
     isProcessing?: boolean;
   },
@@ -248,6 +438,16 @@ export const updateRecording = async (
     }
     fields.push("workspaceId = ?");
     values.push(coerceSqlitePrimitive(workspaceId, "workspaceId"));
+  }
+
+  if (updates.mediaType !== undefined) {
+    fields.push("mediaType = ?");
+    values.push(coerceSqlitePrimitive(assertMediaType(updates.mediaType), "mediaType"));
+  }
+
+  if (updates.processingStatus !== undefined) {
+    fields.push("processingStatus = ?");
+    values.push(coerceSqlitePrimitive(assertProcessingStatus(updates.processingStatus), "processingStatus"));
   }
 
   if (fields.length === 0) {
@@ -390,5 +590,7 @@ export const recordToCard = (record: RecordingRecord): RecordingCard => {
     badge: record.badge,
     notes: record.notes,
     isProcessing: record.isProcessing === 1,
+    mediaType: record.mediaType ?? "audio",
+    processingStatus: record.processingStatus ?? (record.isProcessing === 1 ? "processing" : "done"),
   };
 };

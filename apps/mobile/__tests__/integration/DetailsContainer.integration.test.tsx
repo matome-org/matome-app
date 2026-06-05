@@ -8,7 +8,6 @@
  * Mocking strategy:
  *   - expo-router: mock useRouter, useNavigation, useLocalSearchParams
  *   - recordingService: mock getRecordingById and updateRecording
- *   - summarizeService: mock summarizeText
  *   - expo-audio, expo-file-system/legacy: mock entirely
  *   - react-native Alert: spy on Alert.alert
  *   - react-native-toast-message: mock
@@ -53,10 +52,6 @@ jest.mock("@/services/recordingService", () => ({
     summary: r.summary,
     isProcessing: r.isProcessing === 1,
   })),
-}));
-
-jest.mock("@/services/summarizeService", () => ({
-  summarizeText: jest.fn(),
 }));
 
 jest.mock("@/services/audioRecordingService", () => ({

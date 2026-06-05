@@ -23,6 +23,7 @@ const HomeSection: React.FC<HomeSectionProps> = ({
   recordings,
   onCardPress,
   onCardLongPress,
+  onRetryRecording,
 }) => {
   const theme = useTheme();
 
@@ -43,6 +44,7 @@ const HomeSection: React.FC<HomeSectionProps> = ({
             {...recording}
             onPress={onCardPress}
             onLongPress={onCardLongPress}
+            onRetry={onRetryRecording}
           />
         ))}
       </View>
@@ -57,9 +59,11 @@ export const Home: React.FC<HomeProps> = ({
   searchQuery = "",
   onCardPress,
   onCardLongPress,
+  onRetryRecording,
   onSearchChange,
   onSearchClose,
   onSettingsPress,
+  onImportPress,
   onRefresh,
 }) => {
   const theme = useTheme();
@@ -76,9 +80,10 @@ export const Home: React.FC<HomeProps> = ({
         recordings={recordings}
         onCardPress={onCardPress}
         onCardLongPress={onCardLongPress}
+        onRetryRecording={onRetryRecording}
       />
     ),
-    [onCardPress, onCardLongPress],
+    [onCardPress, onCardLongPress, onRetryRecording],
   );
 
   if (isLoading) {
@@ -132,6 +137,22 @@ export const Home: React.FC<HomeProps> = ({
             )}
           </View>
           <View style={styles.topBarActions}>
+            <TouchableOpacity
+              style={[
+                styles.iconBtn,
+                {
+                  backgroundColor: theme["color-basic-100"],
+                  borderColor: theme["color-basic-400"],
+                },
+              ]}
+              onPress={onImportPress}
+            >
+              <Ionicons
+                name="add-outline"
+                size={20}
+                color={theme["color-basic-700"]}
+              />
+            </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.iconBtn,

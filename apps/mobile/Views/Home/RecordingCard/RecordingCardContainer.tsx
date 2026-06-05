@@ -10,9 +10,12 @@ const RecordingCardContainer: React.FC<RecordingCardProps> = ({
   duration,
   badge,
   isProcessing,
+  mediaType,
+  processingStatus,
   isActive,
   onPress,
   onLongPress,
+  onRetry,
 }) => {
   const handlePress = useCallback(() => {
     onPress?.(id);
@@ -31,9 +34,12 @@ const RecordingCardContainer: React.FC<RecordingCardProps> = ({
       duration={duration}
       badge={badge}
       isProcessing={isProcessing}
+      mediaType={mediaType}
+      processingStatus={processingStatus}
       isActive={isActive}
       onPress={onPress}
       onLongPress={onLongPress}
+      onRetry={onRetry}
       handlePress={handlePress}
       handleLongPress={handleLongPress}
     />

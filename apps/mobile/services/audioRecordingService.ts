@@ -1,4 +1,3 @@
-import axios from "axios";
 import {
   AudioModule,
   setAudioModeAsync,
@@ -8,19 +7,16 @@ import {
 } from "expo-audio";
 import type { AudioStatus } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
-import { configs } from "@/config/config";
 import { createRecording, updateRecording } from "./recordingService";
-import { summarizeText } from "./summarizeService";
 import type { BadgeType } from "@/processes/homeData";
 import { Alert, Platform } from "react-native";
-
-// Transcribe API client - created from config to avoid module load order issues
-const transcribeConfig = configs.find(
-  (c) => (c as { name?: string }).name === "transcribeApi",
-);
-const transcribeApi = transcribeConfig
-  ? axios.create({ baseURL: transcribeConfig.baseURL })
-  : null;
+import { coreApiClient } from "./coreApiClient";
+import {
+  createPendingCoreRecording,
+  enqueueCoreRecordingProcessing,
+  uploadCoreRecordingAudio,
+  waitForCoreRecordingResult,
+} from "./coreRecordingService";
 
 let recorder: InstanceType<typeof AudioModule.AudioRecorder> | null = null;
 let recordingUri: string | null = null;
@@ -564,61 +560,6 @@ export const prepareAudioForTranscription = async (
 };
 
 /**
- * Send audio file to transcription API
- */
-export const transcribeAudio = async (fileUri: string): Promise<string> => {
-  try {
-    await validateAudioFileUri(fileUri);
-
-    // Read file as base64 or use FormData
-    // For React Native, we need to use FormData with file URI
-    const formData = new FormData();
-
-    // Get file name from URI
-    const fileName = fileUri.split("/").pop() || "audio.mp3";
-
-    // Create file object for FormData
-    // @ts-ignore - FormData in React Native accepts file objects differently
-    formData.append("file", {
-      uri: fileUri,
-      type: "audio/mpeg", // or 'audio/mp3', 'audio/m4a' depending on format
-      name: fileName,
-    } as any);
-
-    let transcript;
-
-    if (!transcribeApi) {
-      transcript = "transcript teste";
-      //throw new Error('Transcribe API is not configured. Check config/config.ts.');
-    } else {
-      const response = await transcribeApi.post<{
-        text?: unknown;
-        transcript?: unknown;
-      }>("/api/v1/transcribe", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-
-      const data = response.data;
-      const text = typeof data?.text === "string" ? data.text : "";
-      const transcriptValue =
-        typeof data?.transcript === "string" ? data.transcript : "";
-      transcript = text || transcriptValue || "";
-    }
-
-    if (!transcript) {
-      throw new Error("No transcript returned from API");
-    }
-
-    return transcript;
-  } catch (error) {
-    console.error("Transcription error:", error);
-    throw error;
-  }
-};
-
-/**
  * Generate a unique ID for recordings
  */
 export const generateRecordingId = (): string => {
@@ -652,8 +593,54 @@ export const formatTimestamp = (date: Date): string => {
   });
 };
 
+const syncCoreRecordingResult = async (
+  localRecordingId: string,
+  result: Awaited<ReturnType<typeof waitForCoreRecordingResult>>,
+): Promise<void> => {
+  await updateRecording(localRecordingId, {
+    summary: result.summary ?? undefined,
+    notes: result.transcript ?? "",
+    title: generateTitle(result.transcript ?? result.summary ?? null),
+    isProcessing: false,
+    processingStatus: "done",
+  });
+};
+
+const uploadAndProcessCoreRecording = async ({
+  localRecordingId,
+  coreRecording,
+  upload,
+  audioFilePath,
+}: {
+  localRecordingId: string;
+  coreRecording: Awaited<ReturnType<typeof createPendingCoreRecording>>["recording"];
+  upload: Awaited<ReturnType<typeof createPendingCoreRecording>>["upload"];
+  audioFilePath: string;
+}): Promise<void> => {
+  try {
+    await uploadCoreRecordingAudio(upload, audioFilePath);
+    await enqueueCoreRecordingProcessing(coreRecording.id);
+    const result = await waitForCoreRecordingResult(coreRecording);
+    await syncCoreRecordingResult(localRecordingId, result);
+  } catch (error) {
+    logRecordingOperationError(
+      "Failed to process recording through Core",
+      { operation: "coreRecordingProcessing", recordingId: localRecordingId },
+      error,
+    );
+    Alert.alert("Failed to process audio");
+    await updateRecording(localRecordingId, { isProcessing: false, processingStatus: "failed" }).catch((e) => {
+      logRecordingOperationError(
+        "Failed to reset processing status after Core failure",
+        { operation: "coreRecordingProcessing.finalize", recordingId: localRecordingId },
+        e,
+      );
+    });
+  }
+};
+
 /**
- * Complete recording flow: stop recording, save file, transcribe, and save to database
+ * Complete recording flow: stop recording, save file, upload, and save to database.
  */
 export const saveRecording = async (
   badge: BadgeType = "Inbox",
@@ -684,8 +671,12 @@ export const saveRecording = async (
     const sessionTempFiles = [...transcriptionTempFiles];
     const sessionSavedPath = audioFilePath;
 
-    // Create recording record with processing status
-    const id = generateRecordingId();
+    const { recording: coreRecording, upload } = await createPendingCoreRecording({
+      title: "New Recording",
+      durationSeconds,
+      badge,
+    });
+    const id = String(coreRecording.id);
     recordingId = id;
     const now = new Date();
 
@@ -697,6 +688,8 @@ export const saveRecording = async (
         duration,
         badge,
         isProcessing: true,
+        mediaType: "audio",
+        processingStatus: "pending",
         audioFilePath,
         createdAt: now.getTime(), // Store as milliseconds
       });
@@ -709,61 +702,21 @@ export const saveRecording = async (
       throw error;
     }
 
-    // Transcribe and summarize in background, then finalize processing status.
+    // Upload to Core and let the server-side AI pipeline finalize via Channels.
     void (async () => {
       try {
-        const transcript = await transcribeAudio(audioFilePath);
-        const title = generateTitle(transcript);
-
-        // Summarize the transcript; fall back gracefully if it fails
-        let summary: string | undefined;
-        try {
-          summary = await summarizeText(transcript);
-        } catch (error) {
-          logRecordingOperationError(
-            "Failed to summarize transcript",
-            { operation: "summarizeText", recordingId: id },
-            error,
-          );
-          // summary remains undefined — user can regenerate from the Details view
-        }
-
-        try {
-          await updateRecording(id, {
-            summary,
-            notes: transcript,
-            title,
-          });
-        } catch (error) {
-          logRecordingOperationError(
-            "Failed to persist transcription result",
-            { operation: "updateRecording.transcription", recordingId: id },
-            error,
-          );
-          throw error;
-        }
-      } catch (error) {
-        logRecordingOperationError(
-          "Failed to transcribe recording",
-          { operation: "transcribeAudio", recordingId: id },
-          error,
-        );
-        Alert.alert("Failed to transcribe audio");
+        await uploadAndProcessCoreRecording({
+          localRecordingId: id,
+          coreRecording,
+          upload,
+          audioFilePath,
+        });
       } finally {
-        // Transcription done — remove every temp transcription copy EXCEPT the
+        // Upload done — remove every temp transcription copy EXCEPT the
         // canonical saved audioFilePath (kept for playback in the detail view).
         // Operate on the LOCAL snapshot, never the module global, so a concurrent
         // Session-2 that reset the global is unaffected.
         await cleanupTranscriptionTempFiles(sessionTempFiles, sessionSavedPath);
-        try {
-          await updateRecording(id, { isProcessing: false });
-        } catch (error) {
-          logRecordingOperationError(
-            "Failed to finalize processing status",
-            { operation: "updateRecording.finalizeProcessing", recordingId: id },
-            error,
-          );
-        }
       }
     })();
 
@@ -786,15 +739,14 @@ export const saveRecording = async (
  * Steps:
  *   1. Resolve the session audio file via mergeSegments (see its notes).
  *   2. Get total duration from that file.
- *   3. Prepare the audio file for transcription.
- *   4. Persist a DB record and start the background transcription pipeline.
+ *   3. Prepare the audio file for upload.
+ *   4. Persist a DB record and start the Core processing pipeline.
  *
  * Single-file model (current): pause/resume keep the whole session in ONE file
  * (native AudioRecorder pause()/record()), so mergeSegments returns the COMPLETE
  * audio and getAudioDurationSeconds reads the full duration — no audio is lost.
- * The per-segment transcription loop below still iterates sessionSegments, which
- * is the lone full-session file in this model (and defensively handles the rare
- * recovered-draft case that carries more than one file).
+  * Core processing receives the canonical audio file. The rare recovered-draft
+  * multi-file case still uses mergeSegments' documented last-file fallback.
  */
 export const saveRecordingFromSegments = async (
   badge: BadgeType = "Inbox",
@@ -817,21 +769,22 @@ export const saveRecordingFromSegments = async (
     savedAudioFilePath = audioFilePath;
 
     // Snapshot THIS session's temp tracker + saved path into locals at save start.
-    // Background transcription must not depend on original segment files because
-    // recording.tsx discards them immediately after this function returns. Copy
-    // every segment input NOW, before returning, and transcribe those temp copies.
+    // recording.tsx discards segment files immediately after this function
+    // returns, so preserve the local temp-file cleanup behavior around upload.
     const sessionTempFiles = [...transcriptionTempFiles];
     const sessionSavedPath = audioFilePath;
 
-    const transcriptionInputs: string[] = [];
-    const segmentsSnapshot = [...sessionSegments];
-    for (const segUri of segmentsSnapshot) {
+    for (const segUri of [...sessionSegments]) {
       const segPath = await prepareAudioForTranscription(segUri);
       sessionTempFiles.push(segPath);
-      transcriptionInputs.push(segPath);
     }
 
-    const id = generateRecordingId();
+    const { recording: coreRecording, upload } = await createPendingCoreRecording({
+      title: "New Recording",
+      durationSeconds,
+      badge,
+    });
+    const id = String(coreRecording.id);
     recordingId = id;
     const now = new Date();
 
@@ -843,6 +796,8 @@ export const saveRecordingFromSegments = async (
         duration,
         badge,
         isProcessing: true,
+        mediaType: "audio",
+        processingStatus: "pending",
         audioFilePath,
         createdAt: now.getTime(),
       });
@@ -855,66 +810,17 @@ export const saveRecordingFromSegments = async (
       throw error;
     }
 
-    // Background: transcribe each segment, join transcripts, summarize.
+    // Background: upload to Core and subscribe for server-side processing results.
     void (async () => {
       try {
-        // Transcribe each pre-copied session file independently and join results.
-        // In the single-file model this is normally one full-session file; the
-        // loop also covers the rare recovered-draft case of multiple files so
-        // the full spoken content is captured regardless.
-        const transcriptParts: string[] = [];
-        for (const segPath of transcriptionInputs) {
-          try {
-            const part = await transcribeAudio(segPath);
-            if (part) transcriptParts.push(part);
-          } catch (segError) {
-            logRecordingOperationError(
-              "Failed to transcribe segment",
-              { operation: "transcribeSegment", recordingId: id },
-              segError,
-            );
-          }
-        }
-
-        const transcript = transcriptParts.join(" ").trim();
-        const title = generateTitle(transcript || null);
-
-        let summary: string | undefined;
-        if (transcript) {
-          try {
-            summary = await summarizeText(transcript);
-          } catch (error) {
-            logRecordingOperationError(
-              "Failed to summarize transcript",
-              { operation: "summarizeText", recordingId: id },
-              error,
-            );
-          }
-        }
-
-        try {
-          await updateRecording(id, {
-            summary,
-            notes: transcript,
-            title,
-          });
-        } catch (error) {
-          logRecordingOperationError(
-            "Failed to persist transcription result",
-            { operation: "updateRecording.transcription", recordingId: id },
-            error,
-          );
-          throw error;
-        }
-      } catch (error) {
-        logRecordingOperationError(
-          "Failed to transcribe recording from segments",
-          { operation: "transcribeAudio", recordingId: id },
-          error,
-        );
-        Alert.alert("Failed to transcribe audio");
+        await uploadAndProcessCoreRecording({
+          localRecordingId: id,
+          coreRecording,
+          upload,
+          audioFilePath,
+        });
       } finally {
-        // Transcription done — delete every per-segment temp transcription copy
+        // Upload done — delete every per-segment temp transcription copy
         // produced above, preserving only the canonical saved audioFilePath.
         // Operate on the LOCAL snapshot (start temps + the per-segment temps the
         // loop pushed), never the module global, so a concurrent Session-2 that
@@ -922,15 +828,6 @@ export const saveRecordingFromSegments = async (
         // audio file on disk for this session (segment .m4a files are removed
         // separately by discardSegments).
         await cleanupTranscriptionTempFiles(sessionTempFiles, sessionSavedPath);
-        try {
-          await updateRecording(id, { isProcessing: false });
-        } catch (error) {
-          logRecordingOperationError(
-            "Failed to finalize processing status",
-            { operation: "updateRecording.finalizeProcessing", recordingId: id },
-            error,
-          );
-        }
       }
     })();
 
@@ -955,33 +852,27 @@ export const retryTranscription = async (
   recordingId: string,
   audioFilePath: string,
 ): Promise<void> => {
-  await updateRecording(recordingId, { isProcessing: true });
+  await updateRecording(recordingId, { isProcessing: true, processingStatus: "processing" });
 
   void (async () => {
     try {
-      const transcript = await transcribeAudio(audioFilePath);
-      const title = generateTitle(transcript);
-
-      let summary: string | undefined;
-      try {
-        summary = await summarizeText(transcript);
-      } catch (error) {
-        logRecordingOperationError(
-          "Failed to summarize transcript on retry",
-          { operation: "summarizeText", recordingId },
-          error,
-        );
+      const coreRecordingId = Number(recordingId);
+      if (!Number.isInteger(coreRecordingId)) {
+        throw new Error("Recording retry requires a Core recording id");
       }
 
-      await updateRecording(recordingId, { summary, notes: transcript, title });
+      await validateAudioFileUri(audioFilePath);
+      const latest = await coreApiClient.getRecording(coreRecordingId);
+      await enqueueCoreRecordingProcessing(coreRecordingId);
+      const result = await waitForCoreRecordingResult(latest.recording);
+      await syncCoreRecordingResult(recordingId, result);
     } catch (error) {
       logRecordingOperationError(
-        "Failed to transcribe on retry",
+        "Failed to process on retry",
         { operation: "retryTranscription", recordingId },
         error,
       );
-    } finally {
-      await updateRecording(recordingId, { isProcessing: false }).catch((e) => {
+      await updateRecording(recordingId, { isProcessing: false, processingStatus: "failed" }).catch((e) => {
         logRecordingOperationError(
           "Failed to reset processing status after retry",
           { operation: "retryTranscription.finalize", recordingId },

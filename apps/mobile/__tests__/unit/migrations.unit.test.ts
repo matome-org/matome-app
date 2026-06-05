@@ -155,21 +155,22 @@ describe("(b) runMigrations runs only pending migrations by index", () => {
     expect(db.user_version).toBe(migrations.length);
   });
 
-  it("user_version 2 → only m003 runs (index 2), nothing earlier re-runs", async () => {
+  it("user_version 2 → pending migrations run by index, nothing earlier re-runs", async () => {
     const db = makeFakeDb(2);
     const { mod } = loadDb(db);
 
     await mod.initDatabase();
 
     const ran = migrationSqlOnly(db.execSql);
-    expect(ran).toContain(migrations[2]); // m003 only
+    expect(ran).toContain(migrations[2]);
+    expect(ran).toContain(migrations[3]);
     expect(ran).not.toContain(migrations[0]); // m001 skipped
     expect(ran).not.toContain(migrations[1]); // m002 skipped
     expect(db.user_version).toBe(migrations.length);
   });
 
-  it("user_version 3 (== count) → no migration runs, no user_version write", async () => {
-    const db = makeFakeDb(3);
+  it("user_version at current count → no migration runs, no user_version write", async () => {
+    const db = makeFakeDb(migrations.length);
     const { mod } = loadDb(db);
 
     await mod.initDatabase();
@@ -178,11 +179,11 @@ describe("(b) runMigrations runs only pending migrations by index", () => {
     for (const sql of migrations) {
       expect(ran).not.toContain(sql);
     }
-    // currentVersion (3) is NOT < migrations.length (3) → no write-back.
+    // currentVersion is NOT < migrations.length → no write-back.
     expect(
       db.execSql.some((s) => /PRAGMA\s+user_version\s*=/i.test(s)),
     ).toBe(false);
-    expect(db.user_version).toBe(3);
+    expect(db.user_version).toBe(migrations.length);
   });
 });
 
@@ -199,13 +200,15 @@ describe("(c) append-only ordering — index is the version", () => {
   const { up: m002 } = require("@/utils/migrations/002_workspace_foundation");
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { up: m003 } = require("@/utils/migrations/003_recording_drafts");
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { up: m004 } = require("@/utils/migrations/004_upload_recording_metadata");
 
-  it("migrations array is exactly [001, 002, 003] in that order", () => {
-    expect(migIndex.migrations).toEqual([m001, m002, m003]);
+  it("migrations array is exactly [001, 002, 003, 004] in that order", () => {
+    expect(migIndex.migrations).toEqual([m001, m002, m003, m004]);
   });
 
-  it("array length is 3 (one slot per shipped migration)", () => {
-    expect(migIndex.migrations).toHaveLength(3);
+  it("array length is 4 (one slot per shipped migration)", () => {
+    expect(migIndex.migrations).toHaveLength(4);
   });
 
   it("index position maps to the migration's permanent version number", () => {
@@ -215,6 +218,7 @@ describe("(c) append-only ordering — index is the version", () => {
     expect(migIndex.migrations[0]).toBe(m001);
     expect(migIndex.migrations[1]).toBe(m002);
     expect(migIndex.migrations[2]).toBe(m003);
+    expect(migIndex.migrations[3]).toBe(m004);
   });
 });
 
