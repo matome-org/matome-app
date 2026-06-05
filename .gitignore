@@ -21,6 +21,9 @@ coverage/
 # Production
 build/
 dist/
+.next/
+_build/
+target/
 *.tsbuildinfo
 
 # Misc
@@ -97,6 +100,7 @@ yalc.lock
 *.tmp
 *.temp
 .cache/
+.turbo/
 
 # Workflow artifacts
 workflow/requirements/*
@@ -105,3 +109,11 @@ workflow/plans/*
 !workflow/plans/.gitkeep
 workflow/summaries/*
 !workflow/summaries/.gitkeep
+
+# Claude Code runtime/cache
+.claude/worktrees/
+.claude/.cache/
+.claude/settings.local.json
+
+
+figma-mcp.config.local.json
