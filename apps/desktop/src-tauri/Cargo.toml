@@ -1,0 +1,21 @@
+[package]
+name = "matome-desktop"
+version = "0.1.0"
+description = "Native Matome desktop shell"
+authors = ["Matome"]
+edition = "2021"
+license = "UNLICENSED"
+
+[lib]
+name = "matome_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+cpal = "0.15"
+hound = "3.5"
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
