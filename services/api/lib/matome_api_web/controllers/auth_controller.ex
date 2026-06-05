@@ -1,0 +1,71 @@
+defmodule MatomeApiWeb.AuthController do
+  use MatomeApiWeb, :controller
+
+  alias MatomeApi.Auth
+
+  def register(conn, params) do
+    case Auth.register_user(params) do
+      {:ok, auth} ->
+        conn |> put_status(:created) |> json(auth_response(auth))
+
+      {:error, changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: errors_on(changeset)})
+    end
+  end
+
+  def login(conn, %{"email" => email, "password" => password}) do
+    case Auth.login(email, password) do
+      {:ok, auth} ->
+        json(conn, auth_response(auth))
+
+      {:error, :invalid_credentials} ->
+        conn |> put_status(:unauthorized) |> json(%{error: "invalid_credentials"})
+    end
+  end
+
+  def login(conn, _params) do
+    conn |> put_status(:unprocessable_entity) |> json(%{error: "email_and_password_required"})
+  end
+
+  def refresh(conn, %{"refresh_token" => refresh_token}) do
+    case Auth.refresh(refresh_token) do
+      {:ok, auth} ->
+        json(conn, auth_response(auth))
+
+      {:error, :invalid_refresh_token} ->
+        conn |> put_status(:unauthorized) |> json(%{error: "invalid_refresh_token"})
+    end
+  end
+
+  def refresh(conn, _params) do
+    conn |> put_status(:unprocessable_entity) |> json(%{error: "refresh_token_required"})
+  end
+
+  def logout(conn, params) do
+    Auth.logout(params["refresh_token"])
+    send_resp(conn, :no_content, "")
+  end
+
+  def me(conn, _params) do
+    json(conn, %{user: user_response(conn.assigns.current_user)})
+  end
+
+  defp auth_response(%{user: user, access_token: access_token, refresh_token: refresh_token}) do
+    %{
+      user: user_response(user),
+      access_token: access_token,
+      refresh_token: refresh_token,
+      token_type: "Bearer"
+    }
+  end
+
+  defp user_response(user), do: %{id: user.id, email: user.email}
+
+  defp errors_on(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+      Enum.reduce(opts, message, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+  end
+end
