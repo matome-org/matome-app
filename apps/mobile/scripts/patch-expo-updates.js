@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
+const workspaceRoot = path.join(__dirname, '..', '..', '..');
 const filePath = path.join(
-  __dirname,
-  '..',
+  workspaceRoot,
   'node_modules',
   'expo-updates',
   'expo-updates-gradle-plugin',

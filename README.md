@@ -6,10 +6,10 @@ Matome is a React Native mobile app built with Expo. It records audio, transcrib
 
 ```bash
 bun install
-npx expo start
-npx expo start --ios
-npx expo start --android
-npx expo lint
+bun run web
+bun run ios
+bun run android
+bun run lint
 ```
 
 ## Documentation

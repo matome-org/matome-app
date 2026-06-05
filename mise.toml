@@ -34,7 +34,7 @@ supabase start
 {
   echo 'EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321'
   supabase status -o env | awk -F= '/^ANON_KEY=/ { gsub(/"/, "", $2); print "EXPO_PUBLIC_SUPABASE_ANON_KEY=" $2 }'
-} > .env.local
+} > apps/mobile/.env.local
 
 # 4. Make localhost:54321 reachable from emulator/device
 adb reverse tcp:54321 tcp:54321 >/dev/null 2>&1 || true
@@ -44,7 +44,31 @@ fuser -k 8081/tcp 2>/dev/null || true
 sleep 1
 
 # 6. Metro (foreground, Ctrl+C to stop)
-exec ./node_modules/.bin/expo start --dev-client
+exec bun --cwd apps/mobile expo start --dev-client
+"""
+
+[tasks.web]
+description = "Start Supabase + Next web (browser, no emulator)"
+run = """
+set -e
+
+# 1. Supabase (idempotent — re-running is a no-op if already up)
+[ -f supabase/config.toml ] || supabase init
+supabase start
+
+# 2. Regenerate the web app env from supabase status.
+#    Browser hits localhost:54321 directly — no adb reverse needed.
+{
+  echo 'NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321'
+  supabase status -o env | awk -F= '/^ANON_KEY=/ { gsub(/"/, "", $2); print "NEXT_PUBLIC_SUPABASE_ANON_KEY=" $2 }'
+} > apps/web/.env.local
+
+# 3. Free port 3000 (kills any stale Next dev server)
+fuser -k 3000/tcp 2>/dev/null || true
+sleep 1
+
+# 4. Next web app (foreground, Ctrl+C to stop)
+exec bun --cwd apps/web web
 """
 
 [tasks.e2e]
@@ -69,6 +93,7 @@ if ! adb shell pm list packages 2>/dev/null | grep -q 'com.anonymous.matomeapp';
   exit 1
 fi
 
+cd apps/mobile
 sh ./scripts/e2e-preflight.sh all
 exec maestro test .maestro
 """

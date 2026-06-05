@@ -1,10 +1,18 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": [
+    "expo/tsconfig.base",
+    "../../packages/config/tsconfig/base.json"
+  ],
   "compilerOptions": {
-    "strict": true,
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@matome/api-client": [
+        "../../packages/api-client/src"
+      ],
+      "@matome/ui": [
+        "../../packages/ui/src"
       ]
     }
   },

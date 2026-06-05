@@ -1,10 +1,7 @@
 // https://docs.expo.dev/guides/using-eslint/
 const { defineConfig } = require('eslint/config');
-const expoConfig = require('eslint-config-expo/flat');
+const expoConfig = require('@matome/config/eslint/expo');
 
 module.exports = defineConfig([
-  expoConfig,
-  {
-    ignores: ['dist/*'],
-  },
+  ...expoConfig,
 ]);
