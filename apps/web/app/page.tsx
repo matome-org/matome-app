@@ -4,5 +4,5 @@ import { getCurrentUser } from '@/lib/session';
 export default async function HomePage() {
   const user = await getCurrentUser();
 
-  redirect(user ? '/app' : '/login');
+  redirect(user ? '/app/inbox' : '/login');
 }

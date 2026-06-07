@@ -198,7 +198,8 @@ h1 {
   padding: 12px 14px;
 }
 
-.side-nav a:hover {
+.side-nav a:hover,
+.side-nav a[aria-current='page'] {
   background: var(--secondary);
   color: var(--foreground);
 }
@@ -457,7 +458,8 @@ h1 {
   font-weight: var(--font-weight-semibold);
 }
 
-.detail-shell .review-main {
+.detail-shell .review-main,
+.detail-main {
   max-width: 1180px;
 }
 
