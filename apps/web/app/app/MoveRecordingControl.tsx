@@ -35,7 +35,7 @@ export function MoveRecordingControl({
         disabled={isPending}
         onChange={(event) => void onChange(event.target.value)}
       >
-        <option value={INBOX_VALUE}>Inbox</option>
+        <option value={INBOX_VALUE}>{t('web.inboxLabel')}</option>
         {spaces.map((space) => (
           <option key={space.id} value={String(space.id)}>
             {space.name}

@@ -93,8 +93,8 @@ export function SpacesManager({
       <div className="space-list">
         <div className="space-row">
           <div>
-            <strong>{t('calendar.allSpaces') === 'All' ? 'Inbox' : 'Inbox'}</strong>
-            <p>{t('inbox.title')}</p>
+            <strong>{t('web.inboxLabel')}</strong>
+            <p>{t('web.unassigned')}</p>
           </div>
           <span>{inboxCount}</span>
         </div>

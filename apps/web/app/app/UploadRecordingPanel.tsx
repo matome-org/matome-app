@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import type { Space } from '@matome/api-client';
 import { createRecordingUploadAction, processRecordingUploadAction } from '@/app/actions';
 
@@ -23,22 +24,23 @@ const titleFromFile = (file: File) => file.name.replace(/\.[^.]+$/, '').replace(
 
 export function UploadRecordingPanel({ spaces = [] }: { spaces?: Space[] }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>('idle');
-  const [message, setMessage] = useState('Drop audio or image media here, or choose a file.');
+  const [message, setMessage] = useState('');
   const [targetSpace, setTargetSpace] = useState<string>('');
   const [isPending, startTransition] = useTransition();
 
   const uploadFile = async (file: File) => {
     if (!isSupportedFile(file)) {
       setState('failed');
-      setMessage('Choose an audio or image file so Core can route it through the AI pipeline.');
+      setMessage(t('web.uploadDrop'));
       return;
     }
 
     try {
       setState('creating');
-      setMessage(`Creating pending recording for ${file.name}...`);
+      setMessage(t('recording.processing'));
 
       const { recording, upload } = await createRecordingUploadAction({
         title: titleFromFile(file),
@@ -47,7 +49,7 @@ export function UploadRecordingPanel({ spaces = [] }: { spaces?: Space[] }) {
       });
 
       setState('uploading');
-      setMessage('Uploading media directly to Storage with Core presigned URL...');
+      setMessage(t('recording.processing'));
 
       const headers = new Headers(upload.headers ?? undefined);
       const response = await fetch(upload.url, {
@@ -61,15 +63,15 @@ export function UploadRecordingPanel({ spaces = [] }: { spaces?: Space[] }) {
       }
 
       setState('processing');
-      setMessage('Upload complete. Asking Core to queue processing...');
+      setMessage(t('recording.processing'));
       await processRecordingUploadAction(recording.id);
 
       setState('queued');
-      setMessage('Processing queued. Live Channels will refresh this dashboard as status changes.');
+      setMessage(t('recording.transcribing'));
       startTransition(() => router.refresh());
     } catch (error) {
       setState('failed');
-      setMessage(error instanceof Error ? error.message : 'Upload failed before processing could be queued.');
+      setMessage(error instanceof Error ? error.message : t('recording.saveFailed'));
     } finally {
       if (inputRef.current) {
         inputRef.current.value = '';
@@ -88,15 +90,15 @@ export function UploadRecordingPanel({ spaces = [] }: { spaces?: Space[] }) {
   return (
     <section className={`surface-card upload-card ${state}`} id="upload" aria-labelledby="upload-title">
       <div>
-        <p className="eyebrow">Upload</p>
-        <h2 id="upload-title">Send media through Core</h2>
-        <p className="body-copy">Web stays upload-only: it creates a pending recording, uses Core&apos;s presigned Storage URL, then watches Channels for status.</p>
+        <p className="eyebrow">{t('web.uploadEyebrow')}</p>
+        <h2 id="upload-title">{t('web.uploadTitle')}</h2>
+        <p className="body-copy">{t('web.uploadCopy')}</p>
       </div>
       {spaces.length > 0 ? (
         <label className="field">
-          <span>Space</span>
+          <span>{t('web.space')}</span>
           <select value={targetSpace} onChange={(event) => setTargetSpace(event.target.value)}>
-            <option value="">Inbox</option>
+            <option value="">{t('web.inboxLabel')}</option>
             {spaces.map((space) => (
               <option key={space.id} value={String(space.id)}>
                 {space.name}
@@ -120,8 +122,8 @@ export function UploadRecordingPanel({ spaces = [] }: { spaces?: Space[] }) {
           disabled={state === 'creating' || state === 'uploading' || state === 'processing' || isPending}
           onChange={(event) => onFiles(event.currentTarget.files)}
         />
-        <span>{state === 'idle' || state === 'failed' || state === 'queued' ? 'Choose file' : 'Working...'}</span>
-        <small>{message}</small>
+        <span>{state === 'idle' || state === 'failed' || state === 'queued' ? t('web.chooseFile') : t('web.working')}</span>
+        <small>{message || t('web.uploadDrop')}</small>
       </label>
     </section>
   );

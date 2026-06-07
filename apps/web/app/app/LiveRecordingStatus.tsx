@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 
 type SocketPayload = {
   token: string;
@@ -20,6 +21,7 @@ const makeSocketUrl = ({ socketUrl, token }: SocketPayload) => {
 
 export function LiveRecordingStatus() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [state, setState] = useState<'connecting' | 'live' | 'offline'>('connecting');
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -102,5 +104,9 @@ export function LiveRecordingStatus() {
     };
   }, [router]);
 
-  return <span className={`live-pill ${state}`}>{state === 'live' ? 'Live Channels' : state === 'connecting' ? 'Connecting' : 'Offline'}</span>;
+  return (
+    <span className={`live-pill ${state}`}>
+      {state === 'live' ? t('web.live') : state === 'connecting' ? t('web.connecting') : t('web.offline')}
+    </span>
+  );
 }

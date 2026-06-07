@@ -561,3 +561,156 @@ h1 {
     min-height: 48px;
   }
 }
+
+/* --- Feature-parity additions (recording, detail, spaces, settings) --- */
+.record-card,
+.upload-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.record-stage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.record-waveform {
+  flex: 1;
+  width: 100%;
+  height: 64px;
+  color: var(--color-accent, #6366f1);
+  background: var(--color-surface-sunken, rgba(99, 102, 241, 0.06));
+  border-radius: 10px;
+}
+
+.record-elapsed {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1rem;
+  min-width: 56px;
+  text-align: right;
+}
+
+.record-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.record-message {
+  color: var(--color-text-muted, #6b7280);
+}
+
+.button.ghost {
+  background: transparent;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+}
+
+.audio-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.audio-player input[type='range'] {
+  flex: 1;
+  min-width: 160px;
+}
+
+.audio-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.audio-equalizer {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 24px;
+}
+
+.audio-equalizer span {
+  width: 3px;
+  height: 6px;
+  background: var(--color-accent, #6366f1);
+  border-radius: 2px;
+}
+
+.audio-player.is-playing .audio-equalizer span {
+  animation: eq 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes eq {
+  from { height: 4px; }
+  to { height: 22px; }
+}
+
+.detail-interactive {
+  display: contents;
+}
+
+.retry-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.space-create,
+.space-edit {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.space-create input,
+.space-edit input {
+  flex: 1;
+}
+
+.space-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recording-row-main {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.move-control select,
+.upload-card select {
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
