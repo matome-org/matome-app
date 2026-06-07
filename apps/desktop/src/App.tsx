@@ -63,6 +63,8 @@ export function App() {
     return () => {
       cancelled = true;
     };
+    // Mount-only session boot; refreshRecordings is intentionally not a dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function refreshRecordings(nextQuery = query) {
