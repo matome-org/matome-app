@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import type { Recording } from '@matome/api-client';
+import type { Recording, Space } from '@matome/api-client';
 import {
   getRecordingDownloadUrlAction,
   patchRecordingAction,
   processRecordingUploadAction,
 } from '@/app/actions';
+import { MoveRecordingControl } from '../../MoveRecordingControl';
 
 const formatClock = (seconds: number) => {
   if (!Number.isFinite(seconds)) {
@@ -108,7 +109,13 @@ function AudioPlayer({ recordingId }: { recordingId: number }) {
   );
 }
 
-export function RecordingDetailClient({ recording }: { recording: Recording }) {
+export function RecordingDetailClient({
+  recording,
+  spaces,
+}: {
+  recording: Recording;
+  spaces: Space[];
+}) {
   const router = useRouter();
   const { t } = useTranslation();
   const [isPending, startTransition] = useTransition();
@@ -173,7 +180,14 @@ export function RecordingDetailClient({ recording }: { recording: Recording }) {
   return (
     <div className="detail-interactive">
       <article className="surface-card span-3" aria-label="player">
-        <p className="eyebrow">{t('recording.title')}</p>
+        <div className="section-heading">
+          <p className="eyebrow">{t('recording.title')}</p>
+          <MoveRecordingControl
+            recordingId={recording.id}
+            currentWorkspaceId={recording.workspace_id}
+            spaces={spaces}
+          />
+        </div>
         <AudioPlayer recordingId={recording.id} />
         {recording.status === 'failed' ? (
           <div className="retry-row">

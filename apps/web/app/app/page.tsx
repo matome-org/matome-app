@@ -5,6 +5,8 @@ import { getCurrentUser } from '@/lib/session';
 import { LiveRecordingStatus } from './LiveRecordingStatus';
 import { RecordRecordingPanel } from './RecordRecordingPanel';
 import { UploadRecordingPanel } from './UploadRecordingPanel';
+import { SpacesManager } from './SpacesManager';
+import { MoveRecordingControl } from './MoveRecordingControl';
 import { formatDateTime, formatDuration, getSpaceName, loadReviewData, statusLabel } from './review-data';
 
 type AuthenticatedShellPageProps = {
@@ -20,6 +22,11 @@ export default async function AuthenticatedShellPage({ searchParams }: Authentic
 
   const query = params.q?.trim() ?? '';
   const data = await loadReviewData(query);
+
+  const spaceCounts = data.spaces.reduce<Record<number, number>>((acc, space) => {
+    acc[space.id] = data.recordings.filter((recording) => recording.workspace_id === space.id).length;
+    return acc;
+  }, {});
 
   return (
     <main className="review-shell">
@@ -83,45 +90,27 @@ export default async function AuthenticatedShellPage({ searchParams }: Authentic
             </div>
             <div className="recording-list">
               {data.recordings.map((recording) => (
-                <Link className="recording-row" href={`/app/recordings/${recording.id}`} key={recording.id}>
-                  <div>
-                    <strong>{recording.title}</strong>
-                    <p>{recording.summary || recording.transcript || 'Processing output is not ready yet.'}</p>
-                    <small>{getSpaceName(data.spaces, recording.workspace_id)} · {formatDateTime(recording.inserted_at)} · {formatDuration(recording.duration)}</small>
-                  </div>
-                  <span className={`status-chip ${recording.status}`}>{statusLabel(recording.status)}</span>
-                </Link>
+                <div className="recording-row" key={recording.id}>
+                  <Link className="recording-row-main" href={`/app/recordings/${recording.id}`}>
+                    <div>
+                      <strong>{recording.title}</strong>
+                      <p>{recording.summary || recording.transcript || 'Processing output is not ready yet.'}</p>
+                      <small>{getSpaceName(data.spaces, recording.workspace_id)} · {formatDateTime(recording.inserted_at)} · {formatDuration(recording.duration)}</small>
+                    </div>
+                    <span className={`status-chip ${recording.status}`}>{statusLabel(recording.status)}</span>
+                  </Link>
+                  <MoveRecordingControl
+                    recordingId={recording.id}
+                    currentWorkspaceId={recording.workspace_id}
+                    spaces={data.spaces}
+                  />
+                </div>
               ))}
               {data.recordings.length === 0 ? <p className="empty-state">No recordings match this view.</p> : null}
             </div>
           </article>
 
-          <article className="surface-card" id="spaces" aria-labelledby="spaces-title">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Spaces</p>
-                <h2 id="spaces-title">Review by workspace</h2>
-              </div>
-              <span>{data.spaces.length}</span>
-            </div>
-            <div className="space-list">
-              <div className="space-row">
-                <div><strong>Inbox</strong><p>Unassigned recordings</p></div>
-                <span>{data.inboxCount}</span>
-              </div>
-              {data.spaces.map((space) => {
-                const count = data.recordings.filter((recording) => recording.workspace_id === space.id).length;
-
-                return (
-                  <div className="space-row" key={space.id}>
-                    <div><strong>{space.name}</strong><p>{space.description || 'No description'}</p></div>
-                    <span>{count}</span>
-                  </div>
-                );
-              })}
-              {data.spaces.length === 0 ? <p className="empty-state">No spaces yet.</p> : null}
-            </div>
-          </article>
+          <SpacesManager spaces={data.spaces} counts={spaceCounts} inboxCount={data.inboxCount} />
         </section>
 
         <section className="surface-card" id="calendar" aria-labelledby="calendar-title">

@@ -83,7 +83,7 @@ export default async function RecordingDetailPage({ params }: RecordingDetailPag
               <div><dt>Error</dt><dd>{recording.error_reason ?? 'None'}</dd></div>
             </dl>
           </article>
-          <RecordingDetailClient recording={recording} />
+          <RecordingDetailClient recording={recording} spaces={workspaces} />
         </div>
       </section>
     </main>
