@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Space } from '@matome/api-client';
 import { createRecordingUploadAction, processRecordingUploadAction } from '@/app/actions';
 
 type UploadState = 'idle' | 'creating' | 'uploading' | 'processing' | 'queued' | 'failed';
@@ -20,11 +21,12 @@ const isSupportedFile = (file: File) => acceptedTypes.some((prefix) => file.type
 
 const titleFromFile = (file: File) => file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || file.name;
 
-export function UploadRecordingPanel() {
+export function UploadRecordingPanel({ spaces = [] }: { spaces?: Space[] }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>('idle');
   const [message, setMessage] = useState('Drop audio or image media here, or choose a file.');
+  const [targetSpace, setTargetSpace] = useState<string>('');
   const [isPending, startTransition] = useTransition();
 
   const uploadFile = async (file: File) => {
@@ -41,6 +43,7 @@ export function UploadRecordingPanel() {
       const { recording, upload } = await createRecordingUploadAction({
         title: titleFromFile(file),
         mediaType: inferMediaType(file),
+        ...(targetSpace ? { workspaceId: Number(targetSpace) } : {}),
       });
 
       setState('uploading');
@@ -89,6 +92,19 @@ export function UploadRecordingPanel() {
         <h2 id="upload-title">Send media through Core</h2>
         <p className="body-copy">Web stays upload-only: it creates a pending recording, uses Core&apos;s presigned Storage URL, then watches Channels for status.</p>
       </div>
+      {spaces.length > 0 ? (
+        <label className="field">
+          <span>Space</span>
+          <select value={targetSpace} onChange={(event) => setTargetSpace(event.target.value)}>
+            <option value="">Inbox</option>
+            {spaces.map((space) => (
+              <option key={space.id} value={String(space.id)}>
+                {space.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <label
         className="upload-dropzone"
         onDragOver={(event) => event.preventDefault()}

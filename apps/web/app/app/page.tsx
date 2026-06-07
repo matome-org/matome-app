@@ -65,7 +65,7 @@ export default async function AuthenticatedShellPage({ searchParams }: Authentic
 
         <section className="surface-grid two-column" id="capture">
           <RecordRecordingPanel />
-          <UploadRecordingPanel />
+          <UploadRecordingPanel spaces={data.spaces} />
         </section>
 
         <section className="surface-card search-card" id="search" aria-labelledby="search-title">
