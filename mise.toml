@@ -2,10 +2,108 @@
 bun = "1.3.8"
 java = "openjdk-17"
 node = "24.13.0"
+erlang = "27.2"
+elixir = "1.17.3-otp-27"
 "aqua:supabase/cli" = "2.84.2"
 
 [tasks.up]
-description = "Start emulator + Supabase + Metro (idempotent)"
+description = "Start the full local stack (Supabase + Core API + AI stub + web), seed dev user, idempotent"
+run = """
+set -e
+ROOT="$(pwd)"
+RUN_DIR="$ROOT/.dev"
+mkdir -p "$RUN_DIR"
+
+port_busy() { fuser -s "$1/tcp" 2>/dev/null; }
+
+# 1. Supabase (start only if not already running — never error if it is)
+[ -f supabase/config.toml ] || supabase init
+if supabase status >/dev/null 2>&1; then
+  echo '→ Supabase already running'
+else
+  supabase start
+fi
+
+# 2. Pull local backend creds from supabase status and wire Core to them.
+#    Core keeps its own database (matome_api_dev) inside the Supabase Postgres,
+#    isolated from the `postgres` db that holds the storage.buckets schema.
+eval "$(supabase status -o env | sed 's/^/SB_/')"
+export STORAGE_S3_ENDPOINT="$SB_STORAGE_S3_URL"
+export STORAGE_S3_ACCESS_KEY_ID="$SB_S3_PROTOCOL_ACCESS_KEY_ID"
+export STORAGE_S3_SECRET_ACCESS_KEY="$SB_S3_PROTOCOL_ACCESS_KEY_SECRET"
+export STORAGE_S3_REGION="$SB_S3_PROTOCOL_REGION"
+export AI_ENGINE_TOKEN="local-ai-engine-token"
+export DATABASE_URL="${SB_DB_URL%/*}/matome_api_dev"
+
+# 3. Ensure the media storage bucket exists (best effort; lives in the storage schema).
+psql "$SB_DB_URL" -v ON_ERROR_STOP=1 -q -c \
+  "insert into storage.buckets (id, name) values ('media', 'media') on conflict (id) do nothing;" \
+  || echo '⚠ could not ensure media bucket via psql — create it in Studio if uploads fail'
+
+# 4. Core API (port 4000): migrate then start backgrounded.
+if port_busy 4000; then
+  echo '→ Core API already on :4000'
+else
+  echo '→ preparing Core API (deps + migrations)...'
+  ( cd services/api && mix deps.get && mix ecto.create --quiet && mix ecto.migrate )
+  echo '→ starting Core API → .dev/core.log'
+  ( cd services/api && nohup mix phx.server >"$RUN_DIR/core.log" 2>&1 & echo $! >"$RUN_DIR/core.pid" )
+fi
+
+# 5. AI stub (port 5055): token must match Core's AI_ENGINE_TOKEN.
+if port_busy 5055; then
+  echo '→ AI stub already on :5055'
+else
+  echo '→ starting AI stub → .dev/ai-stub.log'
+  nohup node services/ai-stub/src/server.js >"$RUN_DIR/ai-stub.log" 2>&1 &
+  echo $! >"$RUN_DIR/ai-stub.pid"
+fi
+
+# 6. Wait for Core to answer (first run compiles, can take a minute).
+echo '→ waiting for Core on :4000...'
+for _ in $(seq 1 90); do
+  port_busy 4000 && break
+  sleep 2
+done
+
+# 7. Seed the dev test user — only if it does not already exist.
+if [ "$(psql "$DATABASE_URL" -tAc "select 1 from users where email='dev@matome.test'" 2>/dev/null)" = "1" ]; then
+  echo '→ dev user already seeded'
+else
+  echo '→ seeding dev user (dev@matome.test / devpassword123)'
+  curl -s -o /dev/null -X POST http://127.0.0.1:4000/api/auth/register \
+    -H 'content-type: application/json' \
+    -d '{"email":"dev@matome.test","password":"devpassword123"}' \
+    || echo '⚠ could not seed dev user — register it manually via /api/auth/register'
+fi
+
+# 8. Web app (port 3000) — the default client, started backgrounded.
+if port_busy 3000; then
+  echo '→ Web app already on :3000'
+else
+  echo '→ starting Web app → .dev/web.log'
+  nohup bun --cwd apps/web web >"$RUN_DIR/web.log" 2>&1 &
+  echo $! >"$RUN_DIR/web.pid"
+fi
+
+echo ''
+echo '✓ stack up:'
+echo '   Supabase Studio  http://127.0.0.1:54323'
+echo '   Core API         http://127.0.0.1:4000   (logs: tail -f .dev/core.log)'
+echo '   AI stub          http://127.0.0.1:5055   (logs: tail -f .dev/ai-stub.log)'
+echo '   Web app          http://localhost:3000   (already running — logs: tail -f .dev/web.log)'
+echo ''
+echo '   Login: dev@matome.test / devpassword123'
+echo ''
+echo '   The web client is already up. To run another client, use its dedicated command:'
+echo '     mise run mobile    emulator + Metro'
+echo '     mise run desktop   Tauri desktop app'
+echo ''
+echo '   Stop: mise run down   |   Reset everything: mise run nuke'
+"""
+
+[tasks.mobile]
+description = "Start emulator + local backend DB + Metro (idempotent)"
 run = """
 set -e
 
@@ -30,14 +128,14 @@ fi
 [ -f supabase/config.toml ] || supabase init
 supabase start
 
-# 3. Regenerate .env.local from supabase status
+# 3. Regenerate the mobile app env. Mobile talks to Core only; Core owns
+#    database/storage access and AI orchestration behind the API boundary.
 {
-  echo 'EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321'
-  supabase status -o env | awk -F= '/^ANON_KEY=/ { gsub(/"/, "", $2); print "EXPO_PUBLIC_SUPABASE_ANON_KEY=" $2 }'
+  echo 'EXPO_PUBLIC_CORE_API_URL=http://localhost:4000'
 } > apps/mobile/.env.local
 
-# 4. Make localhost:54321 reachable from emulator/device
-adb reverse tcp:54321 tcp:54321 >/dev/null 2>&1 || true
+# 4. Make local Core reachable from emulator/device
+adb reverse tcp:4000 tcp:4000 >/dev/null 2>&1 || true
 
 # 5. Free port 8081 (kills any stale Metro)
 fuser -k 8081/tcp 2>/dev/null || true
@@ -71,20 +169,34 @@ sleep 1
 exec bun --cwd apps/web web
 """
 
+[tasks.desktop]
+description = "Start the Tauri desktop client (foreground; backend must be up via `mise run up`)"
+run = """
+set -e
+
+if ! fuser -s 4000/tcp 2>/dev/null; then
+  echo '✗ Core API not on :4000. Boot the backend first: mise run up'
+  exit 1
+fi
+
+# Tauri dev app (foreground, Ctrl+C to stop). Talks to local Core by default.
+exec bun --cwd apps/desktop run desktop
+"""
+
 [tasks.e2e]
-description = "Run Maestro E2E flows against the running emulator (requires `mise run up` + app installed)"
+description = "Run Maestro E2E flows against the running emulator (requires `mise run mobile` + app installed)"
 run = """
 set -e
 
 # Preconditions: emulator online + app installed; scripts/e2e-preflight.sh also
 # checks Maestro plus recording-flow safety boundaries before Maestro launches.
 if ! adb devices | grep -qE '^emulator-[0-9]+\\s+device$'; then
-  echo '✗ no emulator online. Boot the stack first: mise run up'
+  echo '✗ no emulator online. Boot the emulator first: mise run mobile'
   exit 1
 fi
 
 # The app (com.anonymous.matomeapp) must already be installed on the emulator.
-# `mise run up` runs `expo start --dev-client`, which serves the JS bundle to a
+# `mise run mobile` runs `expo start --dev-client`, which serves the JS bundle to a
 # DEV-CLIENT build that must be installed separately (expo run:android or an EAS
 # dev build) — Expo Go cannot host this project's native modules. See TESTING.md.
 if ! adb shell pm list packages 2>/dev/null | grep -q 'com.anonymous.matomeapp'; then
@@ -99,11 +211,27 @@ exec maestro test .maestro
 """
 
 [tasks.down]
-description = "Stop Metro, Supabase, and emulator"
+description = "Stop the whole stack: Core API, AI stub, Metro, Supabase, emulator"
 run = """
 set +e
-fuser -k 8081/tcp 2>/dev/null
-supabase stop
+ROOT="$(pwd)"
+RUN_DIR="$ROOT/.dev"
+
+# Services started by `mise run up` (kill by port, then clear pidfiles)
+fuser -k 3000/tcp 2>/dev/null   # Web app
+fuser -k 4000/tcp 2>/dev/null   # Core API
+fuser -k 5055/tcp 2>/dev/null   # AI stub
+rm -f "$RUN_DIR/web.pid" "$RUN_DIR/core.pid" "$RUN_DIR/ai-stub.pid"
+
+fuser -k 8081/tcp 2>/dev/null   # Metro
+
+# Supabase: stop only if running (idempotent — no error when already down)
+if supabase status >/dev/null 2>&1; then
+  supabase stop
+else
+  echo '→ Supabase already stopped'
+fi
+
 adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ {print $1}' | while read -r d; do
   adb -s "$d" emu kill 2>/dev/null
 done
@@ -111,16 +239,40 @@ true
 """
 
 [tasks.nuke]
-description = "Stop everything + remove all Supabase containers and images"
+description = "Wipe the environment: stop everything, drop Supabase containers + volumes + images, clear caches"
 run = """
 set +e
-fuser -k 8081/tcp 2>/dev/null
+ROOT="$(pwd)"
+RUN_DIR="$ROOT/.dev"
+
+echo '→ stopping local services...'
+fuser -k 3000/tcp 2>/dev/null   # Web app
+fuser -k 4000/tcp 2>/dev/null   # Core API
+fuser -k 5055/tcp 2>/dev/null   # AI stub
+fuser -k 8081/tcp 2>/dev/null   # Metro
+
+# Supabase: stop and discard its data volumes (--no-backup drops the local DB).
+echo '→ stopping Supabase + dropping volumes...'
 supabase stop --no-backup
+
+echo '→ killing emulators...'
 adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ {print $1}' | while read -r d; do
   adb -s "$d" emu kill 2>/dev/null
 done
+
+# Remove every Supabase container, volume, and image (local + ECR mirror).
+echo '→ removing Supabase containers + volumes + images...'
 docker ps -aq --filter 'name=supabase_' | xargs -r docker rm -f
+docker volume ls -q --filter 'name=supabase_' | xargs -r docker volume rm -f
 docker images -q --filter 'reference=supabase/*' | xargs -r docker rmi -f
 docker images -q --filter 'reference=public.ecr.aws/supabase/*' | xargs -r docker rmi -f
+
+# Local runtime + generated state (pidfiles, logs, mobile env, supabase scaffolding).
+echo '→ clearing local caches + generated state...'
+rm -rf "$RUN_DIR"
+rm -f apps/mobile/.env.local apps/web/.env.local
+rm -rf supabase/.branches supabase/.temp
+
+echo '✓ environment wiped. Next `mise run up` rebuilds from scratch.'
 true
 """

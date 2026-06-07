@@ -117,3 +117,6 @@ workflow/summaries/*
 
 
 figma-mcp.config.local.json
+
+# Local dev stack runtime (pidfiles + logs from `mise run services`)
+.dev/
