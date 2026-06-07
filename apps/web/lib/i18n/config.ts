@@ -1,5 +1,4 @@
 import { createInstance, type i18n, type Resource } from 'i18next';
-import { initReactI18next } from 'react-i18next';
 
 import en from '@/locales/en';
 import ja from '@/locales/ja';
@@ -12,9 +11,17 @@ export const defaultLocale: Locale = 'en';
 /** Cookie that persists the user's chosen locale across requests. */
 export const LOCALE_COOKIE = 'matome_locale';
 
-const resources: Resource = {
+/** Inlined resources — shared by the server translator and the client provider. */
+export const resources: Resource = {
   en: { translation: en },
   ja: { translation: ja },
+};
+
+export const i18nInitOptions = {
+  fallbackLng: defaultLocale,
+  supportedLngs: locales as unknown as string[],
+  resources,
+  interpolation: { escapeValue: false },
 };
 
 export function isLocale(value: string | undefined | null): value is Locale {
@@ -26,18 +33,12 @@ export function normalizeLocale(value: string | undefined | null): Locale {
 }
 
 /**
- * Build a fully-initialised i18next instance for a given locale. Resources are
- * inlined (no async backend), so the instance renders synchronously on both the
- * server and the client — keeping SSR output and hydration in sync.
+ * Plain i18next instance (no react-i18next binding) for use in Server
+ * Components. Keeping react-i18next out of this module avoids pulling
+ * React.createContext into the RSC/server build graph.
  */
 export function createI18nInstance(locale: Locale): i18n {
   const instance = createInstance();
-  instance.use(initReactI18next).init({
-    lng: locale,
-    fallbackLng: defaultLocale,
-    supportedLngs: locales,
-    resources,
-    interpolation: { escapeValue: false },
-  });
+  instance.init({ ...i18nInitOptions, lng: locale });
   return instance;
 }
