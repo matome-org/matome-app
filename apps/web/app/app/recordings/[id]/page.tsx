@@ -5,6 +5,7 @@ import { createServerApiClient } from '@/lib/api';
 import { getCurrentUser } from '@/lib/session';
 import { formatDateTime, formatDuration, getSpaceName, statusLabel } from '../../review-data';
 import { LiveRecordingStatus } from '../../LiveRecordingStatus';
+import { RecordingDetailClient } from './RecordingDetailClient';
 
 type RecordingDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -82,11 +83,7 @@ export default async function RecordingDetailPage({ params }: RecordingDetailPag
               <div><dt>Error</dt><dd>{recording.error_reason ?? 'None'}</dd></div>
             </dl>
           </article>
-          <article className="surface-card span-3" aria-labelledby="transcript-title">
-            <p className="eyebrow">Transcript</p>
-            <h2 id="transcript-title">Source transcript</h2>
-            <p className="transcript-copy">{recording.transcript || 'Transcript will appear here when processing finishes.'}</p>
-          </article>
+          <RecordingDetailClient recording={recording} />
         </div>
       </section>
     </main>
