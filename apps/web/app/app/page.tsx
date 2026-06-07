@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { logoutAction } from '@/app/actions';
 import { getCurrentUser } from '@/lib/session';
 import { LiveRecordingStatus } from './LiveRecordingStatus';
+import { RecordRecordingPanel } from './RecordRecordingPanel';
 import { UploadRecordingPanel } from './UploadRecordingPanel';
 import { formatDateTime, formatDuration, getSpaceName, loadReviewData, statusLabel } from './review-data';
 
@@ -54,7 +55,10 @@ export default async function AuthenticatedShellPage({ searchParams }: Authentic
           <div><span>{data.failedCount}</span><p>Needs review</p></div>
         </section>
 
-        <UploadRecordingPanel />
+        <section className="surface-grid two-column" id="capture">
+          <RecordRecordingPanel />
+          <UploadRecordingPanel />
+        </section>
 
         <section className="surface-card search-card" id="search" aria-labelledby="search-title">
           <div>
