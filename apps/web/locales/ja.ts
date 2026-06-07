@@ -146,6 +146,9 @@ const ja: typeof en = {
     statusProcessing: '処理中',
     statusDone: '完了',
     statusFailed: '失敗',
+    confirmDelete: '「{{name}}」を削除しますか？',
+    playAudio: '音声を再生',
+    titleLabel: 'タイトル',
   },
 };
 

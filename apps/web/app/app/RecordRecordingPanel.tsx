@@ -217,7 +217,7 @@ export function RecordRecordingPanel() {
 
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        const durationSeconds = Math.round((accumulatedRef.current + 0) / 1000);
+        const durationSeconds = Math.round(accumulatedRef.current / 1000);
         teardownStream();
         if (blob.size > 0) {
           void uploadRecording(blob, mimeType, durationSeconds);
@@ -329,7 +329,7 @@ export function RecordRecordingPanel() {
       </div>
 
       <label className="field">
-        <span>{t('details.notes')}</span>
+        <span>{t('web.titleLabel')}</span>
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}

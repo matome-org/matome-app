@@ -52,7 +52,7 @@ export function SpacesManager({
   };
 
   const remove = async (id: number, name: string) => {
-    if (!window.confirm(`${t('common.cancel')}? — ${name}`)) {
+    if (!window.confirm(t('web.confirmDelete', { name }))) {
       return;
     }
     try {

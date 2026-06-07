@@ -59,7 +59,7 @@ function AudioPlayer({ recordingId }: { recordingId: number }) {
     return (
       <div className="audio-player">
         <button className="button secondary" type="button" onClick={() => void load()} disabled={loading}>
-          {loading ? t('recording.loading') : '▶ ' + t('details.summary')}
+          {loading ? t('recording.loading') : `▶ ${t('web.playAudio')}`}
         </button>
         {error ? <small className="record-message">{error}</small> : null}
       </div>

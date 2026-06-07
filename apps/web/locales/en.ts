@@ -144,6 +144,9 @@ const en = {
     statusProcessing: 'Processing',
     statusDone: 'Done',
     statusFailed: 'Failed',
+    confirmDelete: 'Delete "{{name}}"?',
+    playAudio: 'Play audio',
+    titleLabel: 'Title',
   },
 };
 

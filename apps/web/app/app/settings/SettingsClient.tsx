@@ -32,7 +32,7 @@ export function SettingsClient({ initialTheme }: { initialTheme: Theme }) {
       </section>
 
       <section className="surface-card" aria-labelledby="language-title">
-        <p className="eyebrow">{t('settings.appearance')}</p>
+        <p className="eyebrow">{t('settings.language')}</p>
         <h2 id="language-title">{t('settings.language')}</h2>
         <div className="segmented" role="group" aria-label={t('settings.language')}>
           {(['en', 'ja'] as Locale[]).map((value) => (

@@ -31,6 +31,9 @@ export function MoveRecordingControl({
     <label className="move-control">
       <span className="sr-only">{t('spaces.title')}</span>
       <select
+        // Remount when the server-resolved workspace changes (after router.refresh)
+        // so the uncontrolled value never goes stale.
+        key={currentWorkspaceId ?? 'inbox'}
         defaultValue={currentWorkspaceId ? String(currentWorkspaceId) : INBOX_VALUE}
         disabled={isPending}
         onChange={(event) => void onChange(event.target.value)}
