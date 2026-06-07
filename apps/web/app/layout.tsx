@@ -3,6 +3,7 @@ import { cssVariables } from '@matome/ui';
 import './globals.css';
 import { I18nProvider } from '@/lib/i18n/I18nProvider';
 import { getLocale } from '@/lib/i18n/server';
+import { getTheme } from '@/lib/theme/server';
 
 export const metadata: Metadata = {
   title: 'Matome Web',
@@ -10,10 +11,10 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const locale = await getLocale();
+  const [locale, theme] = await Promise.all([getLocale(), getTheme()]);
 
   return (
-    <html lang={locale}>
+    <html lang={locale} data-theme={theme}>
       <head>
         <style dangerouslySetInnerHTML={{ __html: cssVariables }} />
       </head>

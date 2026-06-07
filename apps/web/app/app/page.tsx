@@ -38,6 +38,7 @@ export default async function AuthenticatedShellPage({ searchParams }: Authentic
           <a href="#search">Search</a>
           <a href="#spaces">Spaces</a>
           <a href="#calendar">Calendar</a>
+          <Link href="/app/settings">Settings</Link>
         </nav>
         <form action={logoutAction}>
           <button className="button secondary sign-out" type="submit">Sign out</button>
