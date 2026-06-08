@@ -4,6 +4,7 @@ java = "openjdk-17"
 node = "24.13.0"
 erlang = "27.2"
 elixir = "1.17.3-otp-27"
+flutter = "latest"
 "aqua:supabase/cli" = "2.84.2"
 
 [tasks.up]
@@ -181,6 +182,68 @@ fi
 
 # Tauri dev app (foreground, Ctrl+C to stop). Talks to local Core by default.
 exec bun --cwd apps/desktop run desktop
+"""
+
+# --- Flutter lab (apps/flutter) — Home/Today on each platform vs local Core ---
+# All three require the backend up first: `mise run up` (Core API on :4000,
+# dev seed dev@matome.test). The app's AuthGate signs in with the seed account.
+
+[tasks."flutter-web"]
+description = "Flutter lab Home on web (Chromium) → local Core API. Run `mise run up` first."
+run = """
+set -e
+if ! fuser -s 4000/tcp 2>/dev/null; then
+  echo '✗ Core API not on :4000. Boot the backend first: mise run up'
+  exit 1
+fi
+export CHROME_EXECUTABLE=/usr/bin/chromium
+cd apps/flutter
+exec flutter run -d chrome --web-port 8080 \
+  --dart-define=API_BASE_URL=http://localhost:4000
+"""
+
+[tasks."flutter-linux"]
+description = "Flutter lab Home on Linux desktop → local Core API. Run `mise run up` first."
+run = """
+set -e
+if ! fuser -s 4000/tcp 2>/dev/null; then
+  echo '✗ Core API not on :4000. Boot the backend first: mise run up'
+  exit 1
+fi
+cd apps/flutter
+exec flutter run -d linux \
+  --dart-define=API_BASE_URL=http://localhost:4000
+"""
+
+[tasks."flutter-android"]
+description = "Flutter lab Home on pixel7 emulator → local Core API. Run `mise run up` first."
+run = """
+set -e
+if ! fuser -s 4000/tcp 2>/dev/null; then
+  echo '✗ Core API not on :4000. Boot the backend first: mise run up'
+  exit 1
+fi
+
+# 1. Emulator: start pixel7 only if none online
+if ! adb devices | grep -qE '^emulator-[0-9]+\\s+device$'; then
+  echo '→ starting emulator pixel7...'
+  ANDROID_AVD_HOME=$HOME/.config/.android/avd \
+    nohup $HOME/Android/Sdk/emulator/emulator -avd pixel7 -no-boot-anim -no-snapshot-load \
+    >/tmp/emulator-flutter.log 2>&1 &
+  disown 2>/dev/null || true
+  adb wait-for-device
+  until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')" = "1" ]; do
+    sleep 2
+  done
+  echo '→ emulator ready'
+fi
+
+# 2. Make host Core reachable as localhost on the device, then run there.
+adb reverse tcp:4000 tcp:4000 >/dev/null 2>&1 || true
+DEV=$(adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ {print $1; exit}')
+cd apps/flutter
+exec flutter run -d "$DEV" \
+  --dart-define=API_BASE_URL=http://localhost:4000
 """
 
 [tasks.e2e]

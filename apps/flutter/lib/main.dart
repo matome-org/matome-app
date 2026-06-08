@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/home/home_screen.dart';
+import 'features/auth/auth_gate.dart';
 
 void main() {
   runApp(const ProviderScope(child: MatomeApp()));
 }
 
-/// App root for the lab: boots Riverpod and renders the Home/Today screen,
-/// which consumes the existing recordings controller.
+/// App root for the lab: boots Riverpod, signs in with the dev seed account
+/// via [AuthGate], then renders the Home/Today screen, which consumes the
+/// existing recordings controller.
 class MatomeApp extends StatelessWidget {
   const MatomeApp({super.key});
 
@@ -19,7 +20,7 @@ class MatomeApp extends StatelessWidget {
       title: 'Matome (Flutter Lab)',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: const HomeScreen(),
+      home: const AuthGate(),
     );
   }
 }
