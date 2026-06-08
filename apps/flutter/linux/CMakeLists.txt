@@ -42,6 +42,9 @@ endif()
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_14)
   target_compile_options(${TARGET} PRIVATE -Wall -Werror)
+  # clang 22 flags deprecated-literal-operator in flutter_secure_storage_linux's
+  # vendored json.hpp; downgrade only that diagnostic so -Werror still guards the rest.
+  target_compile_options(${TARGET} PRIVATE -Wno-deprecated-literal-operator)
   target_compile_options(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-O3>")
   target_compile_definitions(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:NDEBUG>")
 endfunction()
