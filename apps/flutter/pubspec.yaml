@@ -35,9 +35,19 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # HTTP client for the Phoenix Core API (auth + recordings).
+  dio: ^5.7.0
+  # Secure storage for the Guardian JWT access/refresh tokens.
+  flutter_secure_storage: ^9.2.2
+  # State management: AsyncValue-based providers for session + recordings.
+  flutter_riverpod: ^2.6.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Mock the dio HTTP adapter so tests don't require a live backend.
+  http_mock_adapter: ^0.6.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
