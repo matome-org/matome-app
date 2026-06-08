@@ -20,6 +20,12 @@ if System.get_env("PHX_SERVER") do
   config :matome_api, MatomeApiWeb.Endpoint, server: true
 end
 
+# Allow CORS origins to be overridden at runtime in any environment.
+# Comma-separated list, e.g. "https://app.matome.test,https://web.matome.test".
+if origins = System.get_env("CORS_ORIGINS") do
+  config :matome_api, :cors_origins, origins
+end
+
 config :matome_api, MatomeApi.AIEngine,
   endpoint: System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:5055/v1/jobs",
   token: System.get_env("AI_ENGINE_TOKEN") || "dev-ai-token",

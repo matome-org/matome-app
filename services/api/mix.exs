@@ -44,6 +44,7 @@ defmodule MatomeApi.MixProject do
       {:guardian, "~> 2.3"},
       {:argon2_elixir, "~> 4.1"},
       {:dns_cluster, "~> 0.1.1"},
+      {:cors_plug, "~> 3.0"},
       {:bandit, "~> 1.5"}
     ]
   end

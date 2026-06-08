@@ -47,6 +47,34 @@ defmodule MatomeApiWeb.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+
+  # CORS must run before the router so browser preflight (OPTIONS) requests
+  # and Authorization headers from cross-origin clients (Flutter Web) are
+  # handled. Allowed origins come from the :cors_origins app env (configurable
+  # via CORS_ORIGINS); see config/config.exs and config/runtime.exs.
+  plug CORSPlug,
+    origin: &MatomeApiWeb.Endpoint.cors_origins/0,
+    headers: [
+      "Authorization",
+      "Content-Type",
+      "Accept",
+      "Origin",
+      "X-Requested-With"
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+
   plug OpenApiSpex.Plug.PutApiSpec, module: MatomeApiWeb.ApiSpec
   plug MatomeApiWeb.Router
+
+  @doc """
+  Returns the list of allowed CORS origins, sourced from the
+  `:matome_api, :cors_origins` application env (a comma-separated string).
+  Evaluated per-request so runtime config (CORS_ORIGINS) is honoured.
+  """
+  def cors_origins do
+    Application.get_env(:matome_api, :cors_origins, "")
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
 end
