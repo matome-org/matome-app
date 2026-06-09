@@ -1,0 +1,11 @@
+# Test runner config.
+#
+# The `live` tag marks integration tests that require a running Core API on
+# :4000 plus a `LIVE_TOKEN` env var (see test/live_socket_derisk_test.dart).
+# They are excluded from the default `flutter test` run; opt in with:
+#
+#   flutter test --tags live
+tags:
+  live:
+    # Skipped by default; explicit `--tags live` clears this skip.
+    skip: "live integration test — run with --tags live and LIVE_TOKEN set"

@@ -218,7 +218,7 @@ packages:
     source: hosted
     version: "0.2.8"
   fake_async:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: fake_async
       sha256: "5368f224a74523e8d2e7399ea1638b37aecfca824a3cc4dfdf77bf1fa905ac44"
@@ -589,6 +589,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
+  phoenix_socket:
+    dependency: "direct main"
+    description:
+      name: phoenix_socket
+      sha256: "5a7853170dfa4b9312fadd6797cc2bd54dc8ab7f222b640cbc36216e67a92796"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.7"
   platform:
     dependency: transitive
     description:
@@ -653,6 +661,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.1"
+  rxdart:
+    dependency: transitive
+    description:
+      name: rxdart
+      sha256: "5c3004a4a8dbb94bd4bf5412a4def4acdaa12e12f269737a5751369e12d1a962"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.28.0"
   serial_csv:
     dependency: transitive
     description:
