@@ -52,6 +52,20 @@ dependencies:
   slang: ^4.4.0
   slang_flutter: ^4.4.0
 
+  # Offline-first local persistence (F2). Cross-platform SQLite:
+  #   - native (mobile/desktop) via sqlite3_flutter_libs,
+  #   - web via the drift wasm worker + sqlite3.wasm asset.
+  # The reactive query layer + typed DAOs replicate the apps/mobile expo-sqlite
+  # schema (recordings / recording_drafts / workspaces) and its migration
+  # history (user_version 1..4).
+  drift: ^2.20.0
+  # path_provider resolves the per-platform app-documents dir for the native DB
+  # file. drift_flutter wires native + web connections with one helper.
+  drift_flutter: ^0.2.0
+  path_provider: ^2.1.4
+  # Bundles the native sqlite3 shared lib for Android/iOS/desktop.
+  sqlite3_flutter_libs: ^0.5.24
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -62,6 +76,9 @@ dev_dependencies:
   # slang i18n codegen: turns lib/i18n/*.i18n.json into strongly-typed Dart.
   slang_build_runner: ^4.4.0
   build_runner: ^2.4.13
+
+  # Drift code generator (produces the *.g.dart database/table glue).
+  drift_dev: ^2.20.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

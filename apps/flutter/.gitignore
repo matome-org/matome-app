@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Drift web worker compile byproducts (the committed drift_worker.js is the artifact).
+web/drift_worker.js.deps
+web/drift_worker.js.map

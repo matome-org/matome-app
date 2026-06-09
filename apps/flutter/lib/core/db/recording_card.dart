@@ -1,0 +1,63 @@
+import 'app_database.dart';
+
+/// UI-facing recording type, ported from the RN `RecordingCard`
+/// (apps/mobile/processes/homeData + recordToCard in recordingService.ts).
+///
+/// This is the shape the home/calendar screens consume. It is derived from a
+/// persisted [RecordingRow] via [RecordingCard.fromRow]; the DB row keeps the
+/// raw SQLite columns, the card exposes the display-ready, typed view.
+class RecordingCard {
+  const RecordingCard({
+    required this.id,
+    required this.title,
+    required this.timestamp,
+    required this.duration,
+    required this.badge,
+    required this.isProcessing,
+    required this.mediaType,
+    required this.processingStatus,
+    this.summary,
+    this.notes,
+    this.workspaceName,
+  });
+
+  final String id;
+  final String title;
+  final String? summary;
+  final String timestamp;
+  final String duration;
+  final String badge;
+  final String? notes;
+  final bool isProcessing;
+  final String mediaType;
+  final String processingStatus;
+
+  /// Populated only when the row was loaded via a workspace LEFT JOIN
+  /// (see [RecordingsDao.recordingsByDayWithWorkspace]); NULL == Inbox.
+  final String? workspaceName;
+
+  /// Maps a persisted DB row to the UI card, mirroring `recordToCard`:
+  ///   * `isProcessing` int → bool,
+  ///   * `processingStatus` falls back to processing/done from the flag.
+  factory RecordingCard.fromRow(
+    RecordingRow row, {
+    String? workspaceName,
+  }) {
+    return RecordingCard(
+      id: row.id,
+      title: row.title,
+      summary: row.summary,
+      timestamp: row.timestamp,
+      duration: row.duration,
+      badge: row.badge,
+      notes: row.notes,
+      isProcessing: row.isProcessing == 1,
+      mediaType: row.mediaType,
+      processingStatus:
+          row.processingStatus.isNotEmpty
+              ? row.processingStatus
+              : (row.isProcessing == 1 ? 'processing' : 'done'),
+      workspaceName: workspaceName,
+    );
+  }
+}

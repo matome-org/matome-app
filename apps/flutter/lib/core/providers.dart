@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/auth_repository.dart';
 import '../features/recordings/recordings_repository.dart';
+import 'db/app_database.dart';
 import 'http/api_client.dart';
 import 'http/token_store.dart';
 import 'settings/settings_store.dart';
@@ -29,3 +30,21 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 final recordingsRepositoryProvider = Provider<RecordingsRepository>((ref) {
   return RecordingsRepository(apiClient: ref.watch(apiClientProvider));
 });
+
+/// Offline-first local store (Drift). Opened once and disposed with the
+/// container. Overridable in tests with [AppDatabase.forTesting] over an
+/// in-memory NativeDatabase.
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  final db = AppDatabase();
+  ref.onDispose(db.close);
+  return db;
+});
+
+/// Typed DAO providers for the local store — the plain-Dart persistence
+/// surface the UI/sync layer (Wave 3) drives.
+final recordingsDaoProvider =
+    Provider((ref) => ref.watch(appDatabaseProvider).recordingsDao);
+final workspacesDaoProvider =
+    Provider((ref) => ref.watch(appDatabaseProvider).workspacesDao);
+final recordingDraftsDaoProvider =
+    Provider((ref) => ref.watch(appDatabaseProvider).recordingDraftsDao);
