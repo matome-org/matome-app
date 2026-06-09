@@ -365,4 +365,63 @@ void main() {
     expect(done.single.card.processingStatus, 'done');
     expect(done.single.card.summary, 'transcribed');
   });
+
+  test(
+      'B3 regression: a sparse terminal (null summary/notes) does NOT wipe '
+      'previously-good values', () async {
+    // A row that already transcribed successfully (has summary + notes).
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: '88',
+        title: 'Done already',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: '/tmp/a.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        summary: const Value('good summary'),
+        notes: const Value('good notes'),
+        processingStatus: const Value('done'),
+      ),
+    );
+    final container = _container(db, recordings: const []);
+    addTearDown(container.dispose);
+    final controller = container.read(inboxControllerProvider.notifier);
+    await controller.reloadFromLocal();
+
+    // The socket-vs-poll race is won by a SPARSE `done` event carrying null
+    // summary/transcript — pre-fix this null-overwrote the good data.
+    await controller.applyUploadResult('88', failed: false);
+
+    final row = await db.recordingsDao.getRecordingById('88');
+    expect(row!.summary, 'good summary'); // preserved, not wiped to null
+    expect(row.notes, 'good notes'); // preserved, not wiped to null
+    expect(row.processingStatus, 'done');
+    expect(row.isProcessing, 0);
+  });
+
+  test('B3: a real non-null terminal update DOES apply (overwrites)', () async {
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: '89',
+        title: 'Reprocessing',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: '/tmp/a.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        summary: const Value('old summary'),
+        notes: const Value('old notes'),
+      ),
+    );
+    final container = _container(db, recordings: const []);
+    addTearDown(container.dispose);
+    final controller = container.read(inboxControllerProvider.notifier);
+    await controller.reloadFromLocal();
+
+    await controller.applyUploadResult('89',
+        failed: false, summary: 'new summary', notes: 'new notes');
+
+    final row = await db.recordingsDao.getRecordingById('89');
+    expect(row!.summary, 'new summary'); // real update applied
+    expect(row.notes, 'new notes');
+  });
 }

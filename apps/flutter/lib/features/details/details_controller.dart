@@ -1,19 +1,15 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/config/app_config.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/providers.dart';
-import '../recordings/recording.dart';
-import '../recordings/recording_result_waiter.dart';
-import '../recordings/recording_status_socket.dart';
 import '../recordings/recordings_repository.dart';
 import '../home/inbox_sync.dart';
+import '../home/inbox_upload.dart';
 
 /// Resolved audio playback source for the Details player.
 ///
@@ -99,18 +95,25 @@ class DetailsState {
 /// (#780) sync conventions ([recordingToCompanion], int<->TEXT id) so edits
 /// stay consistent across both stores.
 class DetailsController extends StateNotifier<DetailsState> {
-  DetailsController(this._ref, String id) : super(DetailsState(id: id)) {
+  DetailsController(
+    this._ref,
+    String id, {
+    RecordingResultAwaiter awaitResult = liveRecordingResultAwaiter,
+  })  : _awaitTerminal = awaitResult,
+        super(DetailsState(id: id)) {
     load();
   }
 
   final Ref _ref;
 
+  /// Races the realtime socket against a poll fallback for the terminal result.
+  /// Shared with the upload flow ([liveRecordingResultAwaiter], B1) so there is
+  /// a single socket/poll await implementation; injected in tests.
+  final RecordingResultAwaiter _awaitTerminal;
+
   RecordingsDao get _dao => _ref.read(recordingsDaoProvider);
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
   RecordingsRepository get _repo => _ref.read(recordingsRepositoryProvider);
-
-  RecordingStatusSocket? _socket;
-  RecordingResultWaiter? _waiter;
 
   /// Loads the recording. Drift `getRecordingById` is the primary source; on a
   /// miss we fetch from Core, reconcile into Drift (S1 conventions) and re-read.
@@ -211,7 +214,13 @@ class DetailsController extends StateNotifier<DetailsState> {
 
     try {
       final pending = await _repo.enqueueProcessing(coreId);
-      final result = await _awaitResult(pending);
+      // Single socket/poll await — shared with the upload flow (B1) so there is
+      // no duplicated pipeline. First terminal signal from either source wins.
+      final result = await _awaitTerminal(
+        recording: pending,
+        poll: () => _repo.fetchRecording(pending.id),
+        ref: _ref,
+      );
       if (result.failed) {
         await _applyTerminal(failed: true);
       } else {
@@ -227,49 +236,26 @@ class DetailsController extends StateNotifier<DetailsState> {
     }
   }
 
-  Future<RecordingResult> _awaitResult(Recording recording) async {
-    final socket = RecordingStatusSocket(
-      apiBaseUrl: AppConfig.apiBaseUrl,
-      tokenStore: _ref.read(tokenStoreProvider),
-      ownerId: recording.ownerId,
-    );
-    _socket = socket;
-    try {
-      try {
-        await socket.connectAndJoin();
-      } catch (_) {
-        // Socket unavailable — poll fallback resolves the pipeline.
-      }
-      final waiter = RecordingResultWaiter(
-        recordingId: recording.id,
-        statusEvents: socket.events,
-        poll: () => _repo.fetchRecording(recording.id),
-      );
-      _waiter = waiter;
-      return await waiter.wait();
-    } finally {
-      _waiter?.cancel();
-      _waiter = null;
-      await socket.dispose();
-      _socket = null;
-    }
-  }
-
   Future<void> _applyTerminal({
     required bool failed,
     String? summary,
     String? notes,
   }) async {
+    // Merge, not null-overwrite (B3): a sparse socket `done` event can carry a
+    // null summary/transcript even after good data exists, so [mergeText] leaves
+    // the column untouched rather than wiping a previously-good value.
     await _dao.updateRecording(
       state.id,
       RecordingsCompanion(
         isProcessing: const Value(0),
         processingStatus: Value(failed ? 'failed' : 'done'),
-        summary: failed ? const Value.absent() : Value(summary),
-        notes: failed ? const Value.absent() : Value(notes),
+        summary: failed ? const Value.absent() : mergeText(summary),
+        notes: failed ? const Value.absent() : mergeText(notes),
       ),
     );
     final row = await _dao.getRecordingById(state.id);
+    // Guard against a state emit after the autoDispose provider tore down (e.g.
+    // the user navigated away mid-retry).
     if (!mounted) return;
     state = state.copyWith(
       row: row,
@@ -303,13 +289,6 @@ class DetailsController extends StateNotifier<DetailsState> {
     );
     final row = await _dao.getRecordingById(state.id);
     if (row != null) state = state.copyWith(row: row);
-  }
-
-  @override
-  void dispose() {
-    _waiter?.cancel();
-    unawaited(_socket?.dispose());
-    super.dispose();
   }
 }
 

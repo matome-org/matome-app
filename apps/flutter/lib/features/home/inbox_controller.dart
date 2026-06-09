@@ -140,6 +140,10 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// bare "failed" status. The Drift schema has no dedicated error column, so
   /// `notes` is reused as the failure detail surface (it is unused for a
   /// recording that never transcribed).
+  ///
+  /// On success, [summary]/[notes] are merge-written (B3): a sparse socket
+  /// `done` event can carry nulls even after good data exists, so [mergeText]
+  /// keeps the column untouched rather than null-wiping a previously-good value.
   Future<void> applyUploadResult(
     String recordingId, {
     required bool failed,
@@ -152,8 +156,8 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
       RecordingsCompanion(
         isProcessing: const Value(0),
         processingStatus: Value(failed ? 'failed' : 'done'),
-        summary: failed ? const Value.absent() : Value(summary),
-        notes: failed ? Value(errorReason) : Value(notes),
+        summary: failed ? const Value.absent() : mergeText(summary),
+        notes: failed ? Value(errorReason) : mergeText(notes),
       ),
     );
     await reloadFromLocal();

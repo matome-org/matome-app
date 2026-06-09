@@ -17,6 +17,22 @@ import '../recordings/recording.dart';
 /// Stringified Core recording id used as the Drift primary key.
 String coreIdToLocalId(int coreId) => coreId.toString();
 
+/// Merge guard for a terminal/realtime text field (summary, notes, transcript).
+///
+/// A `recording:status` socket `done` event can be **sparse** — it may carry a
+/// null/empty summary or transcript even though processing produced good data
+/// (the loser of the socket-vs-poll race, or an early partial broadcast). Writing
+/// that null through a partial UPDATE would WIPE a previously-good value.
+///
+/// Returns [Value.absent] when [incoming] is null or empty so the column is
+/// left untouched (the existing DB value is preserved); otherwise [Value] of the
+/// trimmed-non-empty incoming text. This is the B3 data-loss guard, mirroring the
+/// per-field merge [recordingToCompanion] already applies on the sync path.
+Value<String?> mergeText(String? incoming) {
+  if (incoming == null || incoming.isEmpty) return const Value.absent();
+  return Value(incoming);
+}
+
 /// Stringified Core workspace id, or null for the Inbox.
 String? coreWorkspaceIdToLocal(int? workspaceId) => workspaceId?.toString();
 
