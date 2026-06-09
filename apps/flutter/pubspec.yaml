@@ -72,8 +72,29 @@ dependencies:
   # dart:io WebSocket. Speaks the Phoenix v2 JSON serializer.
   phoenix_socket: ^0.7.0
 
+  # Audio capture (F3 de-risk). Single native recorder with a true
+  # pause()/resume() cycle that appends to the SAME underlying file, plus an
+  # amplitude (metering) stream for the waveform. Mirrors the apps/mobile
+  # expo-audio AudioRecorder model (start/stop/pause/resume, one file/session).
+  # Platform note (documented in audio_recording_service.dart): Android/iOS
+  # capture is fully supported; web uses MediaRecorder (mic only over a secure
+  # origin); Linux desktop has NO record backend, so capture degrades to a
+  # documented no-op there.
+  record: ^7.0.0
+  # Duration probe + playback helper for finalized audio files. Used by
+  # getAudioDurationSeconds to read the real (summed) session duration off the
+  # finalized file rather than trusting the live status poll.
+  just_audio: ^0.9.42
+
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+
+  # On-device integration test harness. Used by the F3 audio de-risk
+  # (integration_test/audio_recording_live_test.dart) to drive a REAL native
+  # recorder on the Android emulator and prove start→pause→resume→finish yields
+  # one continuous file with the summed duration.
+  integration_test:
     sdk: flutter
 
   # Mock the dio HTTP adapter so tests don't require a live backend.
