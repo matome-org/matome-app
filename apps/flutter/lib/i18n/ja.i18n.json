@@ -92,7 +92,24 @@
     "allSpaces": "すべて"
   },
   "satori": {
-    "title": "悟り"
+    "title": "悟り",
+    "subtitle": "悟 · あなたのAIアシスタント",
+    "soon": "近日公開",
+    "underConstruction": "開発中",
+    "headlinePrefix": "Satori はもうすぐ",
+    "headlineAccent": "目覚め",
+    "headlineSuffix": "ます。",
+    "body": "あなたの録音を検索し、理解します。質問したり、フォローアップを下書きしたり、重要なことを浮かび上がらせたり。リリース目標：次回リリース。",
+    "roadmapLabel": "今後の予定",
+    "roadmapSearchTitle": "録音全体の全文検索",
+    "roadmapSearchDetail": "v0.8 · 提供開始",
+    "roadmapQuestionsTitle": "トランスクリプトに質問する",
+    "roadmapQuestionsDetail": "進行中",
+    "roadmapEmailsTitle": "通話からメール・フォローアップを下書き",
+    "roadmapEmailsDetail": "次の予定",
+    "roadmapInsightsTitle": "スペース横断のインサイトと傾向",
+    "roadmapInsightsDetail": "後ほど",
+    "notify": "準備ができたら通知する"
   },
   "welcome": {
     "title": "Matomeへようこそ",

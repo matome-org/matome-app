@@ -200,6 +200,23 @@ class _Translations$satori$ja extends Translations$satori$en {
 
 	// Translations
 	@override String get title => '悟り';
+	@override String get subtitle => '悟 · あなたのAIアシスタント';
+	@override String get soon => '近日公開';
+	@override String get underConstruction => '開発中';
+	@override String get headlinePrefix => 'Satori はもうすぐ';
+	@override String get headlineAccent => '目覚め';
+	@override String get headlineSuffix => 'ます。';
+	@override String get body => 'あなたの録音を検索し、理解します。質問したり、フォローアップを下書きしたり、重要なことを浮かび上がらせたり。リリース目標：次回リリース。';
+	@override String get roadmapLabel => '今後の予定';
+	@override String get roadmapSearchTitle => '録音全体の全文検索';
+	@override String get roadmapSearchDetail => 'v0.8 · 提供開始';
+	@override String get roadmapQuestionsTitle => 'トランスクリプトに質問する';
+	@override String get roadmapQuestionsDetail => '進行中';
+	@override String get roadmapEmailsTitle => '通話からメール・フォローアップを下書き';
+	@override String get roadmapEmailsDetail => '次の予定';
+	@override String get roadmapInsightsTitle => 'スペース横断のインサイトと傾向';
+	@override String get roadmapInsightsDetail => '後ほど';
+	@override String get notify => '準備ができたら通知する';
 }
 
 // Path: welcome
@@ -336,6 +353,23 @@ extension on TranslationsJa {
 			'calendar.noRecordings' => 'この日の録音はありません',
 			'calendar.allSpaces' => 'すべて',
 			'satori.title' => '悟り',
+			'satori.subtitle' => '悟 · あなたのAIアシスタント',
+			'satori.soon' => '近日公開',
+			'satori.underConstruction' => '開発中',
+			'satori.headlinePrefix' => 'Satori はもうすぐ',
+			'satori.headlineAccent' => '目覚め',
+			'satori.headlineSuffix' => 'ます。',
+			'satori.body' => 'あなたの録音を検索し、理解します。質問したり、フォローアップを下書きしたり、重要なことを浮かび上がらせたり。リリース目標：次回リリース。',
+			'satori.roadmapLabel' => '今後の予定',
+			'satori.roadmapSearchTitle' => '録音全体の全文検索',
+			'satori.roadmapSearchDetail' => 'v0.8 · 提供開始',
+			'satori.roadmapQuestionsTitle' => 'トランスクリプトに質問する',
+			'satori.roadmapQuestionsDetail' => '進行中',
+			'satori.roadmapEmailsTitle' => '通話からメール・フォローアップを下書き',
+			'satori.roadmapEmailsDetail' => '次の予定',
+			'satori.roadmapInsightsTitle' => 'スペース横断のインサイトと傾向',
+			'satori.roadmapInsightsDetail' => '後ほど',
+			'satori.notify' => '準備ができたら通知する',
 			'welcome.title' => 'Matomeへようこそ',
 			'welcome.signIn' => 'サインイン',
 			'welcome.signUp' => 'サインアップ',

@@ -92,7 +92,24 @@
     "allSpaces": "All"
   },
   "satori": {
-    "title": "Satori"
+    "title": "Satori",
+    "subtitle": "悟 · your AI assistant",
+    "soon": "SOON",
+    "underConstruction": "UNDER CONSTRUCTION",
+    "headlinePrefix": "Satori is ",
+    "headlineAccent": "almost",
+    "headlineSuffix": " awake.",
+    "body": "Your recordings, searched and understood. Ask questions, draft follow-ups, surface what matters. Ship target: next release.",
+    "roadmapLabel": "WHAT'S COMING",
+    "roadmapSearchTitle": "Full-text search across recordings",
+    "roadmapSearchDetail": "v0.8 · shipped",
+    "roadmapQuestionsTitle": "Ask questions of your transcripts",
+    "roadmapQuestionsDetail": "in progress",
+    "roadmapEmailsTitle": "Draft emails + follow-ups from calls",
+    "roadmapEmailsDetail": "next up",
+    "roadmapInsightsTitle": "Cross-space insights & trends",
+    "roadmapInsightsDetail": "later",
+    "notify": "Notify me when it's ready"
   },
   "welcome": {
     "title": "Welcome to Matome",

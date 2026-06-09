@@ -359,6 +359,57 @@ class Translations$satori$en {
 
 	/// en: 'Satori'
 	String get title => 'Satori';
+
+	/// en: '悟 · your AI assistant'
+	String get subtitle => '悟 · your AI assistant';
+
+	/// en: 'SOON'
+	String get soon => 'SOON';
+
+	/// en: 'UNDER CONSTRUCTION'
+	String get underConstruction => 'UNDER CONSTRUCTION';
+
+	/// en: 'Satori is '
+	String get headlinePrefix => 'Satori is ';
+
+	/// en: 'almost'
+	String get headlineAccent => 'almost';
+
+	/// en: ' awake.'
+	String get headlineSuffix => ' awake.';
+
+	/// en: 'Your recordings, searched and understood. Ask questions, draft follow-ups, surface what matters. Ship target: next release.'
+	String get body => 'Your recordings, searched and understood. Ask questions, draft follow-ups, surface what matters. Ship target: next release.';
+
+	/// en: 'WHAT'S COMING'
+	String get roadmapLabel => 'WHAT\'S COMING';
+
+	/// en: 'Full-text search across recordings'
+	String get roadmapSearchTitle => 'Full-text search across recordings';
+
+	/// en: 'v0.8 · shipped'
+	String get roadmapSearchDetail => 'v0.8 · shipped';
+
+	/// en: 'Ask questions of your transcripts'
+	String get roadmapQuestionsTitle => 'Ask questions of your transcripts';
+
+	/// en: 'in progress'
+	String get roadmapQuestionsDetail => 'in progress';
+
+	/// en: 'Draft emails + follow-ups from calls'
+	String get roadmapEmailsTitle => 'Draft emails + follow-ups from calls';
+
+	/// en: 'next up'
+	String get roadmapEmailsDetail => 'next up';
+
+	/// en: 'Cross-space insights & trends'
+	String get roadmapInsightsTitle => 'Cross-space insights & trends';
+
+	/// en: 'later'
+	String get roadmapInsightsDetail => 'later';
+
+	/// en: 'Notify me when it's ready'
+	String get notify => 'Notify me when it\'s ready';
 }
 
 // Path: welcome
@@ -553,6 +604,23 @@ extension on Translations {
 			'calendar.noRecordings' => 'No recordings for this day',
 			'calendar.allSpaces' => 'All',
 			'satori.title' => 'Satori',
+			'satori.subtitle' => '悟 · your AI assistant',
+			'satori.soon' => 'SOON',
+			'satori.underConstruction' => 'UNDER CONSTRUCTION',
+			'satori.headlinePrefix' => 'Satori is ',
+			'satori.headlineAccent' => 'almost',
+			'satori.headlineSuffix' => ' awake.',
+			'satori.body' => 'Your recordings, searched and understood. Ask questions, draft follow-ups, surface what matters. Ship target: next release.',
+			'satori.roadmapLabel' => 'WHAT\'S COMING',
+			'satori.roadmapSearchTitle' => 'Full-text search across recordings',
+			'satori.roadmapSearchDetail' => 'v0.8 · shipped',
+			'satori.roadmapQuestionsTitle' => 'Ask questions of your transcripts',
+			'satori.roadmapQuestionsDetail' => 'in progress',
+			'satori.roadmapEmailsTitle' => 'Draft emails + follow-ups from calls',
+			'satori.roadmapEmailsDetail' => 'next up',
+			'satori.roadmapInsightsTitle' => 'Cross-space insights & trends',
+			'satori.roadmapInsightsDetail' => 'later',
+			'satori.notify' => 'Notify me when it\'s ready',
 			'welcome.title' => 'Welcome to Matome',
 			'welcome.signIn' => 'Sign in',
 			'welcome.signUp' => 'Sign up',

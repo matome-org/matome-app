@@ -3,13 +3,11 @@ import 'package:flutter/material.dart';
 import '../../features/details/details_screen.dart';
 import '../../features/spaces/space_detail_screen.dart' as spaces;
 import '../../features/spaces/spaces_screen.dart' as spaces;
-import '../../i18n/strings.g.dart';
-import 'placeholder_screen.dart';
+import 'satori_screen.dart' as satori;
 
-/// Wave-3 placeholder bodies for the tab roots and per-tab stack routes.
-/// Each is a thin wrapper around [PlaceholderScreen] with the right i18n title;
-/// real content lands in Wave 3. The Inbox root reuses the existing lab
-/// `HomeScreen` (wired in the router), so it is not duplicated here.
+/// Thin tab-root / per-tab stack wrappers that adapt the real feature screens
+/// onto the shell's route slots. The Inbox root reuses the existing lab
+/// `HomeScreen` (wired directly in the router), so it is not duplicated here.
 
 /// Spaces tab root (S5, #784): the real Spaces list/grid with create + delete.
 class SpacesScreen extends StatelessWidget {
@@ -18,11 +16,11 @@ class SpacesScreen extends StatelessWidget {
   Widget build(BuildContext context) => const spaces.SpacesScreen();
 }
 
+/// Satori tab root (S6, #785): the roadmap "under construction" screen.
 class SatoriScreen extends StatelessWidget {
   const SatoriScreen({super.key});
   @override
-  Widget build(BuildContext context) =>
-      PlaceholderScreen(title: t.satori.title, icon: Icons.auto_awesome);
+  Widget build(BuildContext context) => const satori.SatoriScreen();
 }
 
 /// Recording details (S2, #781), reachable as `/inbox/:id` and `/calendar/:id`.
