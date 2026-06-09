@@ -55,8 +55,13 @@ yarn-error.log*
 web-build/
 
 # Native
-android/
-ios/
+# Scope the legacy RN/Expo native-project ignores to apps/mobile only. The
+# Flutter app (apps/flutter) MUST version its native projects so the migration
+# is reproducible (compileSdk 36 + RECORD_AUDIO on Android, NSMicrophone /
+# audio-input on iOS/macOS). Each apps/flutter/<platform>/.gitignore still
+# excludes that platform's build artifacts.
+apps/mobile/android/
+apps/mobile/ios/
 *.orig.*
 *.jks
 *.p8
