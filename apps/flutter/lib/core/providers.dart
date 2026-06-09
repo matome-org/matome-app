@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/recordings/recordings_repository.dart';
 import 'db/app_database.dart';
 import 'http/api_client.dart';
+import 'http/api_exception.dart';
 import 'http/token_store.dart';
 import 'settings/settings_store.dart';
 
@@ -21,10 +23,29 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return AuthRepository(
-    apiClient: ref.watch(apiClientProvider),
+  final apiClient = ref.watch(apiClientProvider);
+  final repo = AuthRepository(
+    apiClient: apiClient,
     tokenStore: ref.watch(tokenStoreProvider),
   );
+  // F4 (#777) follow-up: install the 401-retry interceptor now that the repo
+  // (which owns refresh()) exists. On a 401 to any authed call, it refreshes
+  // once and retries; on refresh failure it signs the session out so the nav
+  // guard bounces the user back to welcome.
+  apiClient.attachRefreshInterceptor(
+    onRefresh: () async {
+      try {
+        await repo.refresh();
+        return true;
+      } on ApiException {
+        return false;
+      }
+    },
+    onSignOut: () async {
+      ref.read(authControllerProvider.notifier).signedOutByInterceptor();
+    },
+  );
+  return repo;
 });
 
 final recordingsRepositoryProvider = Provider<RecordingsRepository>((ref) {

@@ -44,3 +44,18 @@ String? errorCodeFromBody(Object? data) {
   }
   return null;
 }
+
+/// Normalizes a Phoenix changeset error body
+/// (`{"errors":{"email":["has already been taken"]}}`) into a stable code.
+/// Returns `email_taken` for a duplicate email, otherwise `null`.
+String? changesetErrorCode(Object? data) {
+  if (data is! Map) return null;
+  final errors = data['errors'];
+  if (errors is! Map) return null;
+  final emailErrors = errors['email'];
+  if (emailErrors is List &&
+      emailErrors.any((e) => e is String && e.contains('has already been'))) {
+    return 'email_taken';
+  }
+  return null;
+}

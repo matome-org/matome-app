@@ -98,6 +98,99 @@ void main() {
     );
   });
 
+  test('register success returns session and persists tokens', () async {
+    adapter.onPost(
+      '/api/auth/register',
+      (server) => server.reply(201, {
+        'user': {'id': 7, 'email': 'new@matome.test'},
+        'access_token': 'reg-access',
+        'refresh_token': 'reg-refresh',
+        'token_type': 'Bearer',
+      }),
+      data: {'email': 'new@matome.test', 'password': 'pw123456'},
+    );
+
+    final session = await repo.register(
+      email: 'new@matome.test',
+      password: 'pw123456',
+    );
+
+    expect(session.user.id, 7);
+    expect(session.accessToken, 'reg-access');
+    expect(await tokenStore.readAccessToken(), 'reg-access');
+    expect(await tokenStore.readRefreshToken(), 'reg-refresh');
+  });
+
+  test('register 409 throws email_taken ApiException', () async {
+    adapter.onPost(
+      '/api/auth/register',
+      (server) => server.reply(409, {'error': 'email_taken'}),
+      data: {'email': 'taken@matome.test', 'password': 'pw123456'},
+    );
+
+    expect(
+      () => repo.register(email: 'taken@matome.test', password: 'pw123456'),
+      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'email_taken')),
+    );
+  });
+
+  test('register 422 changeset (email taken) maps to email_taken', () async {
+    adapter.onPost(
+      '/api/auth/register',
+      (server) => server.reply(422, {
+        'errors': {
+          'email': ['has already been taken'],
+        },
+      }),
+      data: {'email': 'dev@matome.test', 'password': 'pw123456'},
+    );
+
+    expect(
+      () => repo.register(email: 'dev@matome.test', password: 'pw123456'),
+      throwsA(isA<ApiException>().having((e) => e.code, 'code', 'email_taken')),
+    );
+  });
+
+  test('me returns the authenticated user', () async {
+    adapter.onGet(
+      '/api/auth/me',
+      (server) => server.reply(200, {
+        'user': {'id': 1, 'email': 'dev@matome.test'},
+      }),
+    );
+
+    final user = await repo.me();
+    expect(user.id, 1);
+    expect(user.email, 'dev@matome.test');
+  });
+
+  test('me throws ApiException(401) on unauthorized', () async {
+    adapter.onGet(
+      '/api/auth/me',
+      (server) => server.reply(401, {'error': 'unauthorized'}),
+    );
+
+    expect(
+      () => repo.me(),
+      throwsA(
+          isA<ApiException>().having((e) => e.statusCode, 'statusCode', 401)),
+    );
+  });
+
+  test('logout posts refresh token then clears local tokens', () async {
+    await tokenStore.saveTokens(accessToken: 'a', refreshToken: 'refresh-456');
+    adapter.onPost(
+      '/api/auth/logout',
+      (server) => server.reply(204, null),
+      data: {'refresh_token': 'refresh-456'},
+    );
+
+    await repo.logout();
+
+    expect(await tokenStore.readAccessToken(), isNull);
+    expect(await tokenStore.readRefreshToken(), isNull);
+  });
+
   test('refresh uses stored refresh token and updates session', () async {
     await tokenStore.saveTokens(
       accessToken: 'old',

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/i18n/locale_controller.dart';
 import '../../core/theme/theme_controller.dart';
+import '../../features/auth/auth_controller.dart';
 import '../../i18n/strings.g.dart';
+import '../auth_state.dart';
 
 /// Settings screen (route `/inbox/settings`). Surfaces the live theme-mode and
 /// language toggles so the shell exercises both persisted controllers. Full
@@ -15,6 +17,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeControllerProvider);
     final locale = ref.watch(localeControllerProvider);
+    final user = ref.watch(authStateProvider).user;
 
     return Scaffold(
       appBar: AppBar(title: Text(t.settings.title)),
@@ -66,6 +69,19 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+          const Divider(),
+          _SectionHeader(t.settings.account),
+          if (user != null)
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: Text(user.email),
+            ),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: Text(t.settings.signOut),
+            onTap: () =>
+                ref.read(authControllerProvider.notifier).logout(),
           ),
         ],
       ),

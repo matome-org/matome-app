@@ -49,6 +49,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$calendar$en calendar = Translations$calendar$en.internal(_root);
 	late final Translations$satori$en satori = Translations$satori$en.internal(_root);
 	late final Translations$welcome$en welcome = Translations$welcome$en.internal(_root);
+	late final Translations$auth$en auth = Translations$auth$en.internal(_root);
 }
 
 // Path: common
@@ -235,6 +236,93 @@ class Translations$welcome$en {
 
 	/// en: 'Sign up'
 	String get signUp => 'Sign up';
+
+	/// en: 'Your voice.'
+	String get headlineLine1 => 'Your voice.';
+
+	/// en: 'Your life.'
+	String get headlineLine2 => 'Your life.';
+
+	/// en: 'Finally organized.'
+	String get headlineAccent => 'Finally organized.';
+
+	/// en: 'Record, transcribe, and organize your thoughts — with Satori, your AI that actually listens.'
+	String get subheadline => 'Record, transcribe, and organize your thoughts — with Satori, your AI that actually listens.';
+
+	/// en: 'ワンタップ capture'
+	String get featureCaptureTitle => 'ワンタップ capture';
+
+	/// en: 'Tap once. We handle the rest.'
+	String get featureCaptureSubtitle => 'Tap once. We handle the rest.';
+
+	/// en: 'AI summaries + notes'
+	String get featureSummariesTitle => 'AI summaries + notes';
+
+	/// en: 'Every recording becomes a usable artifact.'
+	String get featureSummariesSubtitle => 'Every recording becomes a usable artifact.';
+
+	/// en: 'Spaces that scale'
+	String get featureSpacesTitle => 'Spaces that scale';
+
+	/// en: 'Personal or enterprise — bring your own structure.'
+	String get featureSpacesSubtitle => 'Personal or enterprise — bring your own structure.';
+
+	/// en: 'Have an account? '
+	String get haveAccount => 'Have an account? ';
+}
+
+// Path: auth
+class Translations$auth$en {
+	Translations$auth$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Email'
+	String get email => 'Email';
+
+	/// en: 'Enter your email'
+	String get emailPlaceholder => 'Enter your email';
+
+	/// en: 'Password'
+	String get password => 'Password';
+
+	/// en: 'Enter your password'
+	String get passwordPlaceholder => 'Enter your password';
+
+	/// en: 'Name'
+	String get name => 'Name';
+
+	/// en: 'Enter your name'
+	String get namePlaceholder => 'Enter your name';
+
+	/// en: 'Confirm password'
+	String get confirmPassword => 'Confirm password';
+
+	/// en: 'Confirm your password'
+	String get confirmPasswordPlaceholder => 'Confirm your password';
+
+	/// en: 'Create account'
+	String get createAccount => 'Create account';
+
+	/// en: 'Already have an account? Sign in'
+	String get alreadyHaveAccount => 'Already have an account? Sign in';
+
+	/// en: 'Invalid email or password.'
+	String get errorInvalidCredentials => 'Invalid email or password.';
+
+	/// en: 'Email and password are required.'
+	String get errorRequiredFields => 'Email and password are required.';
+
+	/// en: 'Passwords do not match.'
+	String get errorPasswordMismatch => 'Passwords do not match.';
+
+	/// en: 'That email is already registered.'
+	String get errorEmailTaken => 'That email is already registered.';
+
+	/// en: 'Something went wrong. Please try again.'
+	String get errorGeneric => 'Something went wrong. Please try again.';
 }
 
 /// The flat map containing all translations for locale <en>.
@@ -280,6 +368,32 @@ extension on Translations {
 			'welcome.title' => 'Welcome to Matome',
 			'welcome.signIn' => 'Sign in',
 			'welcome.signUp' => 'Sign up',
+			'welcome.headlineLine1' => 'Your voice.',
+			'welcome.headlineLine2' => 'Your life.',
+			'welcome.headlineAccent' => 'Finally organized.',
+			'welcome.subheadline' => 'Record, transcribe, and organize your thoughts — with Satori, your AI that actually listens.',
+			'welcome.featureCaptureTitle' => 'ワンタップ capture',
+			'welcome.featureCaptureSubtitle' => 'Tap once. We handle the rest.',
+			'welcome.featureSummariesTitle' => 'AI summaries + notes',
+			'welcome.featureSummariesSubtitle' => 'Every recording becomes a usable artifact.',
+			'welcome.featureSpacesTitle' => 'Spaces that scale',
+			'welcome.featureSpacesSubtitle' => 'Personal or enterprise — bring your own structure.',
+			'welcome.haveAccount' => 'Have an account? ',
+			'auth.email' => 'Email',
+			'auth.emailPlaceholder' => 'Enter your email',
+			'auth.password' => 'Password',
+			'auth.passwordPlaceholder' => 'Enter your password',
+			'auth.name' => 'Name',
+			'auth.namePlaceholder' => 'Enter your name',
+			'auth.confirmPassword' => 'Confirm password',
+			'auth.confirmPasswordPlaceholder' => 'Confirm your password',
+			'auth.createAccount' => 'Create account',
+			'auth.alreadyHaveAccount' => 'Already have an account? Sign in',
+			'auth.errorInvalidCredentials' => 'Invalid email or password.',
+			'auth.errorRequiredFields' => 'Email and password are required.',
+			'auth.errorPasswordMismatch' => 'Passwords do not match.',
+			'auth.errorEmailTaken' => 'That email is already registered.',
+			'auth.errorGeneric' => 'Something went wrong. Please try again.',
 			_ => null,
 		};
 	}

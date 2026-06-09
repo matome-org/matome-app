@@ -50,6 +50,34 @@
   "welcome": {
     "title": "Welcome to Matome",
     "signIn": "Sign in",
-    "signUp": "Sign up"
+    "signUp": "Sign up",
+    "headlineLine1": "Your voice.",
+    "headlineLine2": "Your life.",
+    "headlineAccent": "Finally organized.",
+    "subheadline": "Record, transcribe, and organize your thoughts — with Satori, your AI that actually listens.",
+    "featureCaptureTitle": "ワンタップ capture",
+    "featureCaptureSubtitle": "Tap once. We handle the rest.",
+    "featureSummariesTitle": "AI summaries + notes",
+    "featureSummariesSubtitle": "Every recording becomes a usable artifact.",
+    "featureSpacesTitle": "Spaces that scale",
+    "featureSpacesSubtitle": "Personal or enterprise — bring your own structure.",
+    "haveAccount": "Have an account? "
+  },
+  "auth": {
+    "email": "Email",
+    "emailPlaceholder": "Enter your email",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "name": "Name",
+    "namePlaceholder": "Enter your name",
+    "confirmPassword": "Confirm password",
+    "confirmPasswordPlaceholder": "Confirm your password",
+    "createAccount": "Create account",
+    "alreadyHaveAccount": "Already have an account? Sign in",
+    "errorInvalidCredentials": "Invalid email or password.",
+    "errorRequiredFields": "Email and password are required.",
+    "errorPasswordMismatch": "Passwords do not match.",
+    "errorEmailTaken": "That email is already registered.",
+    "errorGeneric": "Something went wrong. Please try again."
   }
 }

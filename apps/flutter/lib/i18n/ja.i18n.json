@@ -50,6 +50,34 @@
   "welcome": {
     "title": "Matomeへようこそ",
     "signIn": "サインイン",
-    "signUp": "サインアップ"
+    "signUp": "サインアップ",
+    "headlineLine1": "あなたの声を。",
+    "headlineLine2": "あなたの生活を。",
+    "headlineAccent": "ついに整理。",
+    "subheadline": "録音、文字起こし、そして思考の整理を — 本当に聞いてくれるAI、Satoriとともに。",
+    "featureCaptureTitle": "ワンタップ capture",
+    "featureCaptureSubtitle": "ワンタップ。あとはお任せください。",
+    "featureSummariesTitle": "AI要約 + メモ",
+    "featureSummariesSubtitle": "すべての録音が使える成果物になります。",
+    "featureSpacesTitle": "拡張できるスペース",
+    "featureSpacesSubtitle": "個人でも企業でも — 自分の構造を持ち込めます。",
+    "haveAccount": "アカウントをお持ちですか？ "
+  },
+  "auth": {
+    "email": "メールアドレス",
+    "emailPlaceholder": "メールアドレスを入力してください",
+    "password": "パスワード",
+    "passwordPlaceholder": "パスワードを入力してください",
+    "name": "名前",
+    "namePlaceholder": "名前を入力してください",
+    "confirmPassword": "パスワードを確認",
+    "confirmPasswordPlaceholder": "パスワードを再入力してください",
+    "createAccount": "アカウント作成",
+    "alreadyHaveAccount": "すでにアカウントをお持ちですか？サインイン",
+    "errorInvalidCredentials": "メールアドレスまたはパスワードが正しくありません。",
+    "errorRequiredFields": "メールアドレスとパスワードを入力してください。",
+    "errorPasswordMismatch": "パスワードが一致しません。",
+    "errorEmailTaken": "そのメールアドレスは既に登録されています。",
+    "errorGeneric": "問題が発生しました。もう一度お試しください。"
   }
 }

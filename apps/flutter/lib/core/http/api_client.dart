@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
+import 'auth_refresh_interceptor.dart';
 import 'token_store.dart';
 
 /// Thin wrapper around [Dio] configured for the Phoenix Core API.
@@ -39,4 +42,27 @@ class ApiClient {
 
   final Dio dio;
   final TokenStore _tokenStore;
+
+  bool _refreshAttached = false;
+
+  /// Installs the 401-retry interceptor (F4 #777 follow-up). Wired up after
+  /// the [AuthRepository] exists, since the refresh callback depends on it.
+  ///
+  /// * [onRefresh] — runs `AuthRepository.refresh()`; returns `true` on success.
+  /// * [onSignOut] — called when refresh fails so the app can drop the session.
+  void attachRefreshInterceptor({
+    required RefreshResult onRefresh,
+    FutureOr<void> Function()? onSignOut,
+  }) {
+    if (_refreshAttached) return;
+    _refreshAttached = true;
+    dio.interceptors.add(
+      AuthRefreshInterceptor(
+        dio: dio,
+        tokenStore: _tokenStore,
+        onRefresh: onRefresh,
+        onSignOut: onSignOut,
+      ),
+    );
+  }
 }

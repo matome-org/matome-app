@@ -78,5 +78,27 @@ void main() {
         isNull,
       );
     });
+
+    test('unauthed on login/signup stays put (auth screens are reachable)', () {
+      for (final loc in ['/login', '/signup']) {
+        expect(
+          decideRedirect(
+              isAuthenticated: false, isLoading: false, location: loc),
+          isNull,
+          reason: loc,
+        );
+      }
+    });
+
+    test('authed on login/signup redirects into the tabs', () {
+      for (final loc in ['/login', '/signup']) {
+        expect(
+          decideRedirect(
+              isAuthenticated: true, isLoading: false, location: loc),
+          GuardTargets.home,
+          reason: loc,
+        );
+      }
+    });
   });
 }

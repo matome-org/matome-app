@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/auth/login_screen.dart';
+import '../features/auth/signup_screen.dart';
+import '../features/auth/welcome_screen.dart';
 import '../features/home/home_screen.dart';
 import 'auth_state.dart';
 import 'navigation_guard.dart';
 import 'screens/recording_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/tab_screens.dart';
-import 'screens/welcome_screen.dart';
 import 'shell_scaffold.dart';
 
 final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -51,8 +53,10 @@ class _AuthListenable extends ChangeNotifier {
 ///       /spaces/recording/:id  recording in a space
 ///     /satori               satori root
 final routerProvider = Provider<GoRouter>((ref) {
-  // Kick off the lab seed sign-in once when the router is first built.
-  AuthBootstrap.signInSeed(ref);
+  // Real auth: the AuthController restores the persisted session on creation
+  // (validates tokens via /api/auth/me). Touch it so that bootstrap kicks off
+  // as soon as the router is built and the guard observes loading -> resolved.
+  ref.read(authStateProvider);
 
   return GoRouter(
     navigatorKey: _rootKey,
@@ -70,6 +74,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/',
         builder: (context, state) => const WelcomeScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignupScreen(),
       ),
       GoRoute(
         path: '/recording',

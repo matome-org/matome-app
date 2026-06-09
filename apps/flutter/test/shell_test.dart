@@ -8,11 +8,12 @@ import 'package:matome_flutter/app/navigation_guard.dart';
 import 'package:matome_flutter/app/screens/recording_screen.dart';
 import 'package:matome_flutter/app/screens/settings_screen.dart';
 import 'package:matome_flutter/app/screens/tab_screens.dart';
-import 'package:matome_flutter/app/screens/welcome_screen.dart';
 import 'package:matome_flutter/app/shell_scaffold.dart';
+import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/i18n/locale_controller.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
+import 'package:matome_flutter/features/auth/welcome_screen.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/core/theme/theme_controller.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
@@ -93,6 +94,10 @@ Widget _pumpApp({SettingsStore? store}) {
   return ProviderScope(
     overrides: [
       settingsStoreProvider.overrideWithValue(store ?? InMemorySettingsStore()),
+      // Network-free token store so the AuthController's startup session check
+      // (settings screen reads authStateProvider) resolves to signed-out
+      // without touching the secure-storage platform channel.
+      tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
       recordingsControllerProvider
           .overrideWith((ref) => _FakeRecordingsController(ref)),
     ],

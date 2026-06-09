@@ -48,6 +48,7 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$calendar$ja calendar = _Translations$calendar$ja._(_root);
 	@override late final _Translations$satori$ja satori = _Translations$satori$ja._(_root);
 	@override late final _Translations$welcome$ja welcome = _Translations$welcome$ja._(_root);
+	@override late final _Translations$auth$ja auth = _Translations$auth$ja._(_root);
 }
 
 // Path: common
@@ -164,6 +165,41 @@ class _Translations$welcome$ja extends Translations$welcome$en {
 	@override String get title => 'Matomeへようこそ';
 	@override String get signIn => 'サインイン';
 	@override String get signUp => 'サインアップ';
+	@override String get headlineLine1 => 'あなたの声を。';
+	@override String get headlineLine2 => 'あなたの生活を。';
+	@override String get headlineAccent => 'ついに整理。';
+	@override String get subheadline => '録音、文字起こし、そして思考の整理を — 本当に聞いてくれるAI、Satoriとともに。';
+	@override String get featureCaptureTitle => 'ワンタップ capture';
+	@override String get featureCaptureSubtitle => 'ワンタップ。あとはお任せください。';
+	@override String get featureSummariesTitle => 'AI要約 + メモ';
+	@override String get featureSummariesSubtitle => 'すべての録音が使える成果物になります。';
+	@override String get featureSpacesTitle => '拡張できるスペース';
+	@override String get featureSpacesSubtitle => '個人でも企業でも — 自分の構造を持ち込めます。';
+	@override String get haveAccount => 'アカウントをお持ちですか？ ';
+}
+
+// Path: auth
+class _Translations$auth$ja extends Translations$auth$en {
+	_Translations$auth$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get email => 'メールアドレス';
+	@override String get emailPlaceholder => 'メールアドレスを入力してください';
+	@override String get password => 'パスワード';
+	@override String get passwordPlaceholder => 'パスワードを入力してください';
+	@override String get name => '名前';
+	@override String get namePlaceholder => '名前を入力してください';
+	@override String get confirmPassword => 'パスワードを確認';
+	@override String get confirmPasswordPlaceholder => 'パスワードを再入力してください';
+	@override String get createAccount => 'アカウント作成';
+	@override String get alreadyHaveAccount => 'すでにアカウントをお持ちですか？サインイン';
+	@override String get errorInvalidCredentials => 'メールアドレスまたはパスワードが正しくありません。';
+	@override String get errorRequiredFields => 'メールアドレスとパスワードを入力してください。';
+	@override String get errorPasswordMismatch => 'パスワードが一致しません。';
+	@override String get errorEmailTaken => 'そのメールアドレスは既に登録されています。';
+	@override String get errorGeneric => '問題が発生しました。もう一度お試しください。';
 }
 
 /// The flat map containing all translations for locale <ja>.
@@ -209,6 +245,32 @@ extension on TranslationsJa {
 			'welcome.title' => 'Matomeへようこそ',
 			'welcome.signIn' => 'サインイン',
 			'welcome.signUp' => 'サインアップ',
+			'welcome.headlineLine1' => 'あなたの声を。',
+			'welcome.headlineLine2' => 'あなたの生活を。',
+			'welcome.headlineAccent' => 'ついに整理。',
+			'welcome.subheadline' => '録音、文字起こし、そして思考の整理を — 本当に聞いてくれるAI、Satoriとともに。',
+			'welcome.featureCaptureTitle' => 'ワンタップ capture',
+			'welcome.featureCaptureSubtitle' => 'ワンタップ。あとはお任せください。',
+			'welcome.featureSummariesTitle' => 'AI要約 + メモ',
+			'welcome.featureSummariesSubtitle' => 'すべての録音が使える成果物になります。',
+			'welcome.featureSpacesTitle' => '拡張できるスペース',
+			'welcome.featureSpacesSubtitle' => '個人でも企業でも — 自分の構造を持ち込めます。',
+			'welcome.haveAccount' => 'アカウントをお持ちですか？ ',
+			'auth.email' => 'メールアドレス',
+			'auth.emailPlaceholder' => 'メールアドレスを入力してください',
+			'auth.password' => 'パスワード',
+			'auth.passwordPlaceholder' => 'パスワードを入力してください',
+			'auth.name' => '名前',
+			'auth.namePlaceholder' => '名前を入力してください',
+			'auth.confirmPassword' => 'パスワードを確認',
+			'auth.confirmPasswordPlaceholder' => 'パスワードを再入力してください',
+			'auth.createAccount' => 'アカウント作成',
+			'auth.alreadyHaveAccount' => 'すでにアカウントをお持ちですか？サインイン',
+			'auth.errorInvalidCredentials' => 'メールアドレスまたはパスワードが正しくありません。',
+			'auth.errorRequiredFields' => 'メールアドレスとパスワードを入力してください。',
+			'auth.errorPasswordMismatch' => 'パスワードが一致しません。',
+			'auth.errorEmailTaken' => 'そのメールアドレスは既に登録されています。',
+			'auth.errorGeneric' => '問題が発生しました。もう一度お試しください。',
 			_ => null,
 		};
 	}
