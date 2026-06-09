@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -12,6 +13,9 @@ import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_upload.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
+import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
+import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 
@@ -91,9 +95,31 @@ void main() {
       apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
     );
 
+    // Socket absent → poll fallback resolves (GET → done). Drives the real
+    // RecordingResultWaiter race without a live Phoenix socket.
+    Future<RecordingResult> pollFallbackAwaiter({
+      required Recording recording,
+      required Future<Recording?> Function() poll,
+      required Ref ref,
+    }) async {
+      final events = StreamController<RecordingStatusEvent>();
+      final waiter = RecordingResultWaiter(
+        recordingId: recording.id,
+        statusEvents: events.stream,
+        poll: poll,
+        pollInterval: const Duration(milliseconds: 20),
+      );
+      final result = await waiter.wait();
+      await events.close();
+      return result;
+    }
+
     final container = ProviderContainer(overrides: [
       appDatabaseProvider.overrideWithValue(db),
       recordingsRepositoryProvider.overrideWithValue(repo),
+      inboxUploaderProvider.overrideWith(
+        (ref) => InboxUploader(ref, awaitResult: pollFallbackAwaiter),
+      ),
     ]);
     addTearDown(container.dispose);
 

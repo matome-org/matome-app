@@ -15,7 +15,11 @@ import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
+import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
+import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
+import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -224,6 +228,12 @@ void main() {
       appDatabaseProvider.overrideWithValue(db),
       audioRecordingServiceProvider.overrideWithValue(svc(db)),
       recordingsRepositoryProvider.overrideWithValue(stubRepo()),
+      // Avoid a live Phoenix socket connect in the widget test; the poll
+      // fallback resolves done (the realtime wiring itself is covered by the
+      // finish unit test).
+      inboxUploaderProvider.overrideWith(
+        (ref) => InboxUploader(ref, awaitResult: pollFallbackAwaiter),
+      ),
     ]);
     addTearDown(container.dispose);
 
@@ -361,4 +371,24 @@ class _StubUploadRepository extends RecordingsRepository {
 
   @override
   Future<void> uploadFile(UploadDescriptor upload, File file) async {}
+}
+
+/// Socket-absent awaiter: an empty event stream so only the poll fallback
+/// (GET → done) resolves. Drives the production [RecordingResultWaiter] race
+/// without a live Phoenix socket in the widget test.
+Future<RecordingResult> pollFallbackAwaiter({
+  required Recording recording,
+  required Future<Recording?> Function() poll,
+  required Ref ref,
+}) async {
+  final events = StreamController<RecordingStatusEvent>();
+  final waiter = RecordingResultWaiter(
+    recordingId: recording.id,
+    statusEvents: events.stream,
+    poll: poll,
+    pollInterval: const Duration(milliseconds: 20),
+  );
+  final result = await waiter.wait();
+  await events.close();
+  return result;
 }

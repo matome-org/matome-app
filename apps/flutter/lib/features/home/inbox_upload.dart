@@ -3,12 +3,29 @@ import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/db/app_database.dart';
 import '../../core/providers.dart';
 import '../recordings/recording.dart';
+import '../recordings/recording_result_waiter.dart';
+import '../recordings/recording_status_socket.dart';
 import '../recordings/recordings_repository.dart';
 import 'inbox_controller.dart';
 import 'inbox_sync.dart';
+
+/// Awaits a recording's terminal result by racing the `recording:status`
+/// socket against a periodic poll. Injectable so the finish/upload flow can be
+/// unit-tested without a live Phoenix socket.
+///
+/// The default ([liveRecordingResultAwaiter]) connects a [RecordingStatusSocket]
+/// for the recording's owner (primary path) and falls back to polling
+/// `GET /api/recordings/{id}` via [poll] when the socket is unavailable or
+/// never emits — mirroring apps/mobile `coreRecordingService`.
+typedef RecordingResultAwaiter = Future<RecordingResult> Function({
+  required Recording recording,
+  required Future<Recording?> Function() poll,
+  required Ref ref,
+});
 
 /// Picked file ready to upload through the Inbox upload flow.
 class PickedUpload {
@@ -48,17 +65,19 @@ String mediaTypeForPath(String path) {
 ///
 /// The Core id<->local id reconciliation is centralised in [inbox_sync].
 class InboxUploader {
-  InboxUploader(this._ref);
+  InboxUploader(
+    this._ref, {
+    RecordingResultAwaiter awaitResult = liveRecordingResultAwaiter,
+  }) : _awaitTerminal = awaitResult;
 
   final Ref _ref;
 
+  /// Races the realtime socket against a poll fallback for the terminal result.
+  /// Defaults to [liveRecordingResultAwaiter]; injected in tests.
+  final RecordingResultAwaiter _awaitTerminal;
+
   RecordingsRepository get _repo => _ref.read(recordingsRepositoryProvider);
   InboxController get _inbox => _ref.read(inboxControllerProvider.notifier);
-
-  /// Polls Core until the recording reaches a terminal state. Returns the last
-  /// known recording (or the seed) on timeout. Overridable in tests.
-  static const Duration pollInterval = Duration(seconds: 2);
-  static const Duration pollTimeout = Duration(minutes: 10);
 
   /// Runs the full upload for [picked]: create + presign, insert the local
   /// Drift row immediately (processing), stream-upload, enqueue processing,
@@ -88,38 +107,25 @@ class InboxUploader {
     try {
       await _repo.uploadFile(created.upload, picked.file);
       await _repo.enqueueProcessing(recording.id);
-      final done = await _awaitResult(recording);
+      // F4 realtime: socket `recording:status` primary, 2s poll fallback,
+      // 10-min timeout. First terminal signal from either source wins.
+      final result = await _awaitTerminal(
+        recording: recording,
+        poll: () => _repo.fetchRecording(recording.id),
+        ref: _ref,
+      );
+      final done = result.recording;
       await _inbox.applyUploadResult(
         localId,
-        failed: done.status == RecordingStatus.failed,
-        summary: done.summary,
-        notes: done.transcript,
+        failed: result.failed,
+        summary: done?.summary,
+        notes: done?.transcript,
       );
     } catch (_) {
       await _inbox.applyUploadResult(localId, failed: true);
     }
 
     return localId;
-  }
-
-  /// Polls `GET /api/recordings/{id}` until the status is terminal, the F4
-  /// status socket being the (separate) realtime channel used by the recording
-  /// flow. Polling here keeps the import flow resilient when the socket is down.
-  Future<Recording> _awaitResult(Recording seed) async {
-    final deadline = DateTime.now().add(pollTimeout);
-    var latest = seed;
-    while (DateTime.now().isBefore(deadline)) {
-      final fetched = await _repo.fetchRecording(seed.id);
-      if (fetched != null) {
-        latest = fetched;
-        if (fetched.status == RecordingStatus.done ||
-            fetched.status == RecordingStatus.failed) {
-          return fetched;
-        }
-      }
-      await Future<void>.delayed(pollInterval);
-    }
-    return latest;
   }
 
   RecordingsCompanion _pendingCompanion(
@@ -140,6 +146,41 @@ class InboxUploader {
       mediaType: Value(picked.mediaType),
       processingStatus: const Value('processing'),
     );
+  }
+}
+
+/// Default [RecordingResultAwaiter]: connects the `recording:status` socket for
+/// [recording]'s owner (primary) and races it against [poll] (fallback) via a
+/// [RecordingResultWaiter]. The socket is best-effort — if connect/join throws
+/// or it never emits, the poll loop still resolves the pipeline.
+Future<RecordingResult> liveRecordingResultAwaiter({
+  required Recording recording,
+  required Future<Recording?> Function() poll,
+  required Ref ref,
+}) async {
+  final socket = RecordingStatusSocket(
+    apiBaseUrl: AppConfig.apiBaseUrl,
+    tokenStore: ref.read(tokenStoreProvider),
+    ownerId: recording.ownerId,
+  );
+
+  RecordingResultWaiter? waiter;
+  try {
+    try {
+      await socket.connectAndJoin();
+    } catch (_) {
+      // Socket unavailable — the poll fallback takes over.
+    }
+
+    waiter = RecordingResultWaiter(
+      recordingId: recording.id,
+      statusEvents: socket.events,
+      poll: poll,
+    );
+    return await waiter.wait();
+  } finally {
+    waiter?.cancel();
+    await socket.dispose();
   }
 }
 
