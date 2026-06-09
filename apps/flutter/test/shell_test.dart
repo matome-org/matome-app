@@ -1,3 +1,4 @@
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,14 +10,16 @@ import 'package:matome_flutter/app/screens/recording_screen.dart';
 import 'package:matome_flutter/app/screens/settings_screen.dart';
 import 'package:matome_flutter/app/screens/tab_screens.dart';
 import 'package:matome_flutter/app/shell_scaffold.dart';
+import 'package:matome_flutter/core/db/app_database.dart';
+import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/i18n/locale_controller.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
-import 'package:matome_flutter/features/auth/welcome_screen.dart';
-import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/core/theme/theme_controller.dart';
+import 'package:matome_flutter/features/auth/welcome_screen.dart';
+import 'package:matome_flutter/features/calendar/calendar_screen.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_item.dart';
@@ -88,7 +91,7 @@ GoRouter _buildTestRouter() {
   );
 }
 
-Widget _pumpApp({SettingsStore? store}) {
+Widget _pumpApp({SettingsStore? store, required AppDatabase db}) {
   return ProviderScope(
     overrides: [
       settingsStoreProvider.overrideWithValue(store ?? InMemorySettingsStore()),
@@ -96,6 +99,9 @@ Widget _pumpApp({SettingsStore? store}) {
       // (settings screen reads authStateProvider) resolves to signed-out
       // without touching the secure-storage platform channel.
       tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
+      // The Calendar branch (built eagerly by the indexed-stack shell) reads
+      // the Drift DAOs — back them with an in-memory DB so no native file opens.
+      appDatabaseProvider.overrideWithValue(db),
       inboxControllerProvider.overrideWith(
         (ref) => FakeInboxController(ref, AsyncValue.data([_seedItem()])),
       ),
@@ -137,11 +143,17 @@ class _TestAppState extends ConsumerState<_TestApp> {
 }
 
 void main() {
-  setUp(() => LocaleSettings.setLocaleSync(AppLocale.en));
+  late AppDatabase db;
+
+  setUp(() {
+    LocaleSettings.setLocaleSync(AppLocale.en);
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+  });
+  tearDown(() => db.close());
 
   testWidgets('shell renders 4 tabs + mic FAB and navigates between tabs',
       (tester) async {
-    await tester.pumpWidget(_pumpApp());
+    await tester.pumpWidget(_pumpApp(db: db));
     await tester.pumpAndSettle();
 
     // Inbox tab is the initial branch (lab HomeScreen header).
@@ -160,7 +172,7 @@ void main() {
   });
 
   testWidgets('mic FAB opens the recording fullscreen modal', (tester) async {
-    await tester.pumpWidget(_pumpApp());
+    await tester.pumpWidget(_pumpApp(db: db));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.mic));
@@ -177,7 +189,7 @@ void main() {
 
   testWidgets('theme toggle to dark persists and applies', (tester) async {
     final store = InMemorySettingsStore();
-    await tester.pumpWidget(_pumpApp(store: store));
+    await tester.pumpWidget(_pumpApp(store: store, db: db));
     await tester.pumpAndSettle();
 
     // Open settings from the inbox stack.
@@ -195,7 +207,7 @@ void main() {
   testWidgets('language toggle to ja switches visible strings and persists',
       (tester) async {
     final store = InMemorySettingsStore();
-    await tester.pumpWidget(_pumpApp(store: store));
+    await tester.pumpWidget(_pumpApp(store: store, db: db));
     await tester.pumpAndSettle();
 
     final BuildContext ctx = tester.element(find.byType(HomeScreen));

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
 import '../features/auth/welcome_screen.dart';
+import '../features/calendar/calendar_screen.dart';
 import '../features/home/home_screen.dart';
 import 'auth_state.dart';
 import 'navigation_guard.dart';

@@ -9,13 +9,6 @@ import 'placeholder_screen.dart';
 /// real content lands in Wave 3. The Inbox root reuses the existing lab
 /// `HomeScreen` (wired in the router), so it is not duplicated here.
 
-class CalendarScreen extends StatelessWidget {
-  const CalendarScreen({super.key});
-  @override
-  Widget build(BuildContext context) =>
-      PlaceholderScreen(title: t.calendar.title, icon: Icons.calendar_today);
-}
-
 class SpacesScreen extends StatelessWidget {
   const SpacesScreen({super.key});
   @override
