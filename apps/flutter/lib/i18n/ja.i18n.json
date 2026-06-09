@@ -75,7 +75,16 @@
   "spaces": {
     "title": "スペース",
     "empty": "スペースがありません",
-    "emptyHint": "+ をタップしてスペースを作成し、録音を整理しましょう"
+    "emptyHint": "+ をタップしてスペースを作成し、録音を整理しましょう",
+    "count": "$n 件の録音",
+    "createTitle": "新しいスペース",
+    "createHint": "スペース名",
+    "create": "作成",
+    "cancel": "キャンセル",
+    "deleteTitle": "スペースを削除しますか？",
+    "deleteBody": "このスペースの録音は受信トレイに戻ります。",
+    "delete": "削除",
+    "detailEmpty": "このスペースにはまだ録音がありません"
   },
   "calendar": {
     "title": "カレンダー",

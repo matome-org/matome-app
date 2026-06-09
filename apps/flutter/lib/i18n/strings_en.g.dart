@@ -302,6 +302,33 @@ class Translations$spaces$en {
 
 	/// en: 'Tap + to create a space and organize your recordings'
 	String get emptyHint => 'Tap + to create a space and organize your recordings';
+
+	/// en: '$n recordings'
+	String count({required Object n}) => '${n} recordings';
+
+	/// en: 'New space'
+	String get createTitle => 'New space';
+
+	/// en: 'Space name'
+	String get createHint => 'Space name';
+
+	/// en: 'Create'
+	String get create => 'Create';
+
+	/// en: 'Cancel'
+	String get cancel => 'Cancel';
+
+	/// en: 'Delete space?'
+	String get deleteTitle => 'Delete space?';
+
+	/// en: 'Recordings in this space will move back to the Inbox.'
+	String get deleteBody => 'Recordings in this space will move back to the Inbox.';
+
+	/// en: 'Delete'
+	String get delete => 'Delete';
+
+	/// en: 'No recordings in this space yet'
+	String get detailEmpty => 'No recordings in this space yet';
 }
 
 // Path: calendar
@@ -513,6 +540,15 @@ extension on Translations {
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',
+			'spaces.count' => ({required Object n}) => '${n} recordings',
+			'spaces.createTitle' => 'New space',
+			'spaces.createHint' => 'Space name',
+			'spaces.create' => 'Create',
+			'spaces.cancel' => 'Cancel',
+			'spaces.deleteTitle' => 'Delete space?',
+			'spaces.deleteBody' => 'Recordings in this space will move back to the Inbox.',
+			'spaces.delete' => 'Delete',
+			'spaces.detailEmpty' => 'No recordings in this space yet',
 			'calendar.title' => 'Calendar',
 			'calendar.noRecordings' => 'No recordings for this day',
 			'calendar.allSpaces' => 'All',

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../features/details/details_screen.dart';
+import '../../features/spaces/space_detail_screen.dart' as spaces;
+import '../../features/spaces/spaces_screen.dart' as spaces;
 import '../../i18n/strings.g.dart';
 import 'placeholder_screen.dart';
 
@@ -9,11 +11,11 @@ import 'placeholder_screen.dart';
 /// real content lands in Wave 3. The Inbox root reuses the existing lab
 /// `HomeScreen` (wired in the router), so it is not duplicated here.
 
+/// Spaces tab root (S5, #784): the real Spaces list/grid with create + delete.
 class SpacesScreen extends StatelessWidget {
   const SpacesScreen({super.key});
   @override
-  Widget build(BuildContext context) =>
-      PlaceholderScreen(title: t.spaces.title, icon: Icons.folder_outlined);
+  Widget build(BuildContext context) => const spaces.SpacesScreen();
 }
 
 class SatoriScreen extends StatelessWidget {
@@ -32,18 +34,15 @@ class RecordingDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) => DetailsScreen(id: id);
 }
 
-/// Space details, reachable as `/spaces/:spaceId`.
+/// Space details (S5, #784), reachable as `/spaces/:spaceId`. Lists the
+/// recordings assigned to the workspace.
 class SpaceDetailScreen extends StatelessWidget {
   const SpaceDetailScreen({super.key, required this.spaceId});
   final String spaceId;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(t.spaces.title)),
-      body: PlaceholderScreen(title: t.spaces.title, subtitle: 'space: $spaceId'),
-    );
-  }
+  Widget build(BuildContext context) =>
+      spaces.SpaceDetailScreen(spaceId: spaceId);
 }
 
 /// Recording within a space (S2, #781), reachable as `/spaces/recording/:id`

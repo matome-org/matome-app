@@ -75,7 +75,16 @@
   "spaces": {
     "title": "Spaces",
     "empty": "No spaces yet",
-    "emptyHint": "Tap + to create a space and organize your recordings"
+    "emptyHint": "Tap + to create a space and organize your recordings",
+    "count": "$n recordings",
+    "createTitle": "New space",
+    "createHint": "Space name",
+    "create": "Create",
+    "cancel": "Cancel",
+    "deleteTitle": "Delete space?",
+    "deleteBody": "Recordings in this space will move back to the Inbox.",
+    "delete": "Delete",
+    "detailEmpty": "No recordings in this space yet"
   },
   "calendar": {
     "title": "Calendar",

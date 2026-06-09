@@ -169,6 +169,15 @@ class _Translations$spaces$ja extends Translations$spaces$en {
 	@override String get title => 'スペース';
 	@override String get empty => 'スペースがありません';
 	@override String get emptyHint => '+ をタップしてスペースを作成し、録音を整理しましょう';
+	@override String count({required Object n}) => '${n} 件の録音';
+	@override String get createTitle => '新しいスペース';
+	@override String get createHint => 'スペース名';
+	@override String get create => '作成';
+	@override String get cancel => 'キャンセル';
+	@override String get deleteTitle => 'スペースを削除しますか？';
+	@override String get deleteBody => 'このスペースの録音は受信トレイに戻ります。';
+	@override String get delete => '削除';
+	@override String get detailEmpty => 'このスペースにはまだ録音がありません';
 }
 
 // Path: calendar
@@ -314,6 +323,15 @@ extension on TranslationsJa {
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',
+			'spaces.count' => ({required Object n}) => '${n} 件の録音',
+			'spaces.createTitle' => '新しいスペース',
+			'spaces.createHint' => 'スペース名',
+			'spaces.create' => '作成',
+			'spaces.cancel' => 'キャンセル',
+			'spaces.deleteTitle' => 'スペースを削除しますか？',
+			'spaces.deleteBody' => 'このスペースの録音は受信トレイに戻ります。',
+			'spaces.delete' => '削除',
+			'spaces.detailEmpty' => 'このスペースにはまだ録音がありません',
 			'calendar.title' => 'カレンダー',
 			'calendar.noRecordings' => 'この日の録音はありません',
 			'calendar.allSpaces' => 'すべて',
