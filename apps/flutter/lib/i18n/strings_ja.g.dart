@@ -108,8 +108,26 @@ class _Translations$recording$ja extends Translations$recording$en {
 	@override String get title => '録音中';
 	@override String get ready => '録音準備完了';
 	@override String get startHint => 'ボタンを押して録音を開始してください';
+	@override String get stopHint => 'タップして一時停止';
+	@override String get paused => '一時停止中';
+	@override String get resumeHint => 'タップして再開';
+	@override String get processing => '保存中…';
+	@override String get loading => '読み込み中…';
 	@override String get transcribing => '文字起こし中…';
 	@override String get transcriptionFailed => '文字起こしに失敗しました';
+	@override String get pause => '一時停止';
+	@override String get resume => '再開';
+	@override String get finish => '完了';
+	@override String get draftFound => '録音を再開しますか？';
+	@override String get draftHint => '未完了の録音が見つかりました。続きから再開するか、破棄してください。';
+	@override String get draftResume => '再開';
+	@override String get draftDiscard => '破棄';
+	@override String get startFailed => '録音を開始できませんでした。';
+	@override String get pauseFailed => '録音を一時停止できませんでした。';
+	@override String get resumeFailed => '録音を再開できませんでした。';
+	@override String get saveFailed => '録音を保存できませんでした。';
+	@override String get unsupportedTitle => 'マイクを利用できません';
+	@override String get unsupportedHint => 'このデバイスでは音声録音を利用できません。録音するにはモバイルアプリをご利用ください。';
 }
 
 // Path: details
@@ -253,8 +271,26 @@ extension on TranslationsJa {
 			'recording.title' => '録音中',
 			'recording.ready' => '録音準備完了',
 			'recording.startHint' => 'ボタンを押して録音を開始してください',
+			'recording.stopHint' => 'タップして一時停止',
+			'recording.paused' => '一時停止中',
+			'recording.resumeHint' => 'タップして再開',
+			'recording.processing' => '保存中…',
+			'recording.loading' => '読み込み中…',
 			'recording.transcribing' => '文字起こし中…',
 			'recording.transcriptionFailed' => '文字起こしに失敗しました',
+			'recording.pause' => '一時停止',
+			'recording.resume' => '再開',
+			'recording.finish' => '完了',
+			'recording.draftFound' => '録音を再開しますか？',
+			'recording.draftHint' => '未完了の録音が見つかりました。続きから再開するか、破棄してください。',
+			'recording.draftResume' => '再開',
+			'recording.draftDiscard' => '破棄',
+			'recording.startFailed' => '録音を開始できませんでした。',
+			'recording.pauseFailed' => '録音を一時停止できませんでした。',
+			'recording.resumeFailed' => '録音を再開できませんでした。',
+			'recording.saveFailed' => '録音を保存できませんでした。',
+			'recording.unsupportedTitle' => 'マイクを利用できません',
+			'recording.unsupportedHint' => 'このデバイスでは音声録音を利用できません。録音するにはモバイルアプリをご利用ください。',
 			'details.summary' => '要約',
 			'details.notes' => 'メモ',
 			'details.transcript' => 'トランスクリプト',

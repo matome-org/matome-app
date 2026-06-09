@@ -156,11 +156,65 @@ class Translations$recording$en {
 	/// en: 'Tap the button to start recording'
 	String get startHint => 'Tap the button to start recording';
 
+	/// en: 'Tap to pause'
+	String get stopHint => 'Tap to pause';
+
+	/// en: 'Paused'
+	String get paused => 'Paused';
+
+	/// en: 'Tap to resume'
+	String get resumeHint => 'Tap to resume';
+
+	/// en: 'Saving…'
+	String get processing => 'Saving…';
+
+	/// en: 'Loading…'
+	String get loading => 'Loading…';
+
 	/// en: 'Transcribing…'
 	String get transcribing => 'Transcribing…';
 
 	/// en: 'Transcription failed'
 	String get transcriptionFailed => 'Transcription failed';
+
+	/// en: 'Pause'
+	String get pause => 'Pause';
+
+	/// en: 'Resume'
+	String get resume => 'Resume';
+
+	/// en: 'Finish'
+	String get finish => 'Finish';
+
+	/// en: 'Resume recording?'
+	String get draftFound => 'Resume recording?';
+
+	/// en: 'We found an unfinished recording. Resume where you left off, or discard it.'
+	String get draftHint => 'We found an unfinished recording. Resume where you left off, or discard it.';
+
+	/// en: 'Resume'
+	String get draftResume => 'Resume';
+
+	/// en: 'Discard'
+	String get draftDiscard => 'Discard';
+
+	/// en: 'Couldn't start recording.'
+	String get startFailed => 'Couldn\'t start recording.';
+
+	/// en: 'Couldn't pause recording.'
+	String get pauseFailed => 'Couldn\'t pause recording.';
+
+	/// en: 'Couldn't resume recording.'
+	String get resumeFailed => 'Couldn\'t resume recording.';
+
+	/// en: 'Couldn't save recording.'
+	String get saveFailed => 'Couldn\'t save recording.';
+
+	/// en: 'Microphone unavailable'
+	String get unsupportedTitle => 'Microphone unavailable';
+
+	/// en: 'Audio capture isn't available on this device. Try the mobile app to record.'
+	String get unsupportedHint => 'Audio capture isn\'t available on this device. Try the mobile app to record.';
 }
 
 // Path: details
@@ -416,8 +470,26 @@ extension on Translations {
 			'recording.title' => 'Recording',
 			'recording.ready' => 'Ready to Record',
 			'recording.startHint' => 'Tap the button to start recording',
+			'recording.stopHint' => 'Tap to pause',
+			'recording.paused' => 'Paused',
+			'recording.resumeHint' => 'Tap to resume',
+			'recording.processing' => 'Saving…',
+			'recording.loading' => 'Loading…',
 			'recording.transcribing' => 'Transcribing…',
 			'recording.transcriptionFailed' => 'Transcription failed',
+			'recording.pause' => 'Pause',
+			'recording.resume' => 'Resume',
+			'recording.finish' => 'Finish',
+			'recording.draftFound' => 'Resume recording?',
+			'recording.draftHint' => 'We found an unfinished recording. Resume where you left off, or discard it.',
+			'recording.draftResume' => 'Resume',
+			'recording.draftDiscard' => 'Discard',
+			'recording.startFailed' => 'Couldn\'t start recording.',
+			'recording.pauseFailed' => 'Couldn\'t pause recording.',
+			'recording.resumeFailed' => 'Couldn\'t resume recording.',
+			'recording.saveFailed' => 'Couldn\'t save recording.',
+			'recording.unsupportedTitle' => 'Microphone unavailable',
+			'recording.unsupportedHint' => 'Audio capture isn\'t available on this device. Try the mobile app to record.',
 			'details.summary' => 'Summary',
 			'details.notes' => 'Notes',
 			'details.transcript' => 'Transcript',

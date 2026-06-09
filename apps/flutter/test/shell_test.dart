@@ -164,10 +164,15 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.mic));
-    await tester.pumpAndSettle();
+    // The modal probes mic support asynchronously on entry (a real recorder
+    // call that doesn't resolve under the test FakeAsync), so pump a few bounded
+    // frames instead of settling on the entry spinner.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
 
-    // Recording modal shows the "Ready to Record" label.
-    expect(find.text('Ready to Record'), findsOneWidget);
+    // The fullscreen recording modal mounted over the shell.
+    expect(find.byType(RecordingScreen), findsOneWidget);
   });
 
   testWidgets('theme toggle to dark persists and applies', (tester) async {

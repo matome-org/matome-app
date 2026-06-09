@@ -64,12 +64,15 @@ class InboxUploader {
   /// Drift row immediately (processing), stream-upload, enqueue processing,
   /// then await the terminal result and reconcile it into the local row.
   ///
+  /// [durationSeconds] is the known audio length (seconds) for a captured
+  /// recording; the Inbox file-picker path leaves it 0 (unknown).
+  ///
   /// Returns the created Core recording id (stringified, == local Drift id).
-  Future<String> upload(PickedUpload picked) async {
+  Future<String> upload(PickedUpload picked, {int durationSeconds = 0}) async {
     // 1. Create + presign on Core.
     final created = await _repo.createRecording(
       title: picked.title,
-      durationSeconds: 0,
+      durationSeconds: durationSeconds,
       mediaType: picked.mediaType,
     );
     final recording = created.recording;
@@ -77,7 +80,9 @@ class InboxUploader {
 
     // 2. Insert the local row immediately as processing so the card appears
     //    in the Inbox before Core finishes.
-    await _inbox.insertLocalUpload(_pendingCompanion(recording, picked));
+    await _inbox.insertLocalUpload(
+      _pendingCompanion(recording, picked, durationSeconds),
+    );
 
     // 3 + 4. Upload + enqueue + await result, then reconcile the local row.
     try {
@@ -120,13 +125,14 @@ class InboxUploader {
   RecordingsCompanion _pendingCompanion(
     Recording recording,
     PickedUpload picked,
+    int durationSeconds,
   ) {
     final now = DateTime.now();
     return RecordingsCompanion(
       id: Value(coreIdToLocalId(recording.id)),
       title: Value(picked.title),
       timestamp: Value(formatClock(now)),
-      duration: const Value(''),
+      duration: Value(formatDurationText(durationSeconds)),
       badge: const Value('Inbox'),
       isProcessing: const Value(1),
       audioFilePath: Value(picked.file.path),
