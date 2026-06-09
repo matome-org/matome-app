@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/db/app_database.dart';
+import '../../core/http/api_exception.dart';
 import '../../core/providers.dart';
 import '../recordings/recording.dart';
 import '../recordings/recording_result_waiter.dart';
@@ -121,8 +122,17 @@ class InboxUploader {
         summary: done?.summary,
         notes: done?.transcript,
       );
-    } catch (_) {
-      await _inbox.applyUploadResult(localId, failed: true);
+    } catch (error) {
+      // Persist a real reason on terminal failure instead of a bare "failed":
+      // an ApiException carries a friendly message; anything else falls back to
+      // its toString so the failed card is diagnosable.
+      final reason =
+          error is ApiException ? error.message : error.toString();
+      await _inbox.applyUploadResult(
+        localId,
+        failed: true,
+        errorReason: reason,
+      );
     }
 
     return localId;

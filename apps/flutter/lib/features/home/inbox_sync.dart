@@ -66,10 +66,38 @@ String formatClock(DateTime when) {
 ///
 /// `audioFilePath` defaults to the storage key (or empty) — S1 does not need a
 /// local file path for synced rows. Inbox rows keep `workspaceId` NULL.
-RecordingsCompanion recordingToCompanion(Recording recording) {
+///
+/// [existing] is the row already in Drift (or `null` for a first-time insert).
+/// When supplied, this performs a **per-field merge** so a stale Core list-row
+/// does not clobber a local-only edit that has not yet round-tripped to Core:
+///
+///   * `workspaceId` — if the local row was moved into a space but Core still
+///     reports the Inbox (null), keep the local space. This is the data-loss
+///     guard for move-to-space (B2): without it the next `refresh()` snaps the
+///     recording back to the Inbox.
+///   * `notes` — if Core returns no transcript yet but the local row already
+///     has notes, keep the local notes rather than wiping them to null.
+RecordingsCompanion recordingToCompanion(
+  Recording recording, {
+  RecordingRow? existing,
+}) {
   final local = statusToLocal(recording.status);
   final createdAt =
       (recording.insertedAt ?? DateTime.now()).millisecondsSinceEpoch;
+
+  final coreWorkspaceId = coreWorkspaceIdToLocal(recording.workspaceId);
+  // Keep a local move-to-space if Core hasn't caught up (still reports Inbox).
+  final mergedWorkspaceId =
+      (coreWorkspaceId == null && existing?.workspaceId != null)
+          ? existing!.workspaceId
+          : coreWorkspaceId;
+
+  final coreNotes = recording.transcript;
+  // Keep local notes if Core has none yet but we already cached some.
+  final mergedNotes = (coreNotes == null && existing?.notes != null)
+      ? existing!.notes
+      : coreNotes;
+
   return RecordingsCompanion(
     id: Value(coreIdToLocalId(recording.id)),
     title: Value(recording.title),
@@ -80,8 +108,8 @@ RecordingsCompanion recordingToCompanion(Recording recording) {
     isProcessing: Value(local.isProcessing),
     audioFilePath: Value(recording.storageKey ?? ''),
     createdAt: Value(createdAt),
-    notes: Value(recording.transcript),
-    workspaceId: Value(coreWorkspaceIdToLocal(recording.workspaceId)),
+    notes: Value(mergedNotes),
+    workspaceId: Value(mergedWorkspaceId),
     mediaType: Value(recording.mediaType ?? 'audio'),
     processingStatus: Value(local.processingStatus),
   );

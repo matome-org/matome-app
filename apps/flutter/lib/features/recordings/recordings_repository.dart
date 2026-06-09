@@ -207,12 +207,19 @@ class RecordingsRepository {
   ///
   /// Mirrors apps/mobile `coreApiClient.patchRecording`. Only the provided
   /// fields are sent. Returns the updated [Recording] echoed by the backend.
+  ///
+  /// [workspaceId] moves the recording into a space (or back to the Inbox when
+  /// `clearWorkspace` is true → sends `workspace_id: null`). The Core changeset
+  /// casts `workspace_id` and FK-validates it against a workspace the caller
+  /// owns, so a move-to-space survives a later list sync.
   Future<Recording> updateRecording(
     int id, {
     String? transcript,
     String? summary,
     String? title,
     String? badge,
+    int? workspaceId,
+    bool clearWorkspace = false,
   }) async {
     try {
       final response = await _apiClient.dio.patch<Map<String, dynamic>>(
@@ -222,6 +229,7 @@ class RecordingsRepository {
           'summary': ?summary,
           'title': ?title,
           'badge': ?badge,
+          if (clearWorkspace) 'workspace_id': null else 'workspace_id': ?workspaceId,
         },
       );
       final status = response.statusCode ?? 0;
