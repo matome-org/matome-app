@@ -168,6 +168,12 @@ class Translations$recording$en {
 	/// en: 'Saving…'
 	String get processing => 'Saving…';
 
+	/// en: 'You can leave this open or continue in the Inbox — we'll keep saving in the background.'
+	String get processingHint => 'You can leave this open or continue in the Inbox — we\'ll keep saving in the background.';
+
+	/// en: 'Continue in Inbox'
+	String get processingBackground => 'Continue in Inbox';
+
 	/// en: 'Loading…'
 	String get loading => 'Loading…';
 
@@ -185,6 +191,18 @@ class Translations$recording$en {
 
 	/// en: 'Finish'
 	String get finish => 'Finish';
+
+	/// en: 'Discard recording?'
+	String get discardConfirmTitle => 'Discard recording?';
+
+	/// en: 'This recording hasn't been saved. If you leave now, the audio will be lost.'
+	String get discardConfirmBody => 'This recording hasn\'t been saved. If you leave now, the audio will be lost.';
+
+	/// en: 'Keep recording'
+	String get discardConfirmKeep => 'Keep recording';
+
+	/// en: 'Discard'
+	String get discardConfirmDiscard => 'Discard';
 
 	/// en: 'Resume recording?'
 	String get draftFound => 'Resume recording?';
@@ -552,12 +570,18 @@ extension on Translations {
 			'recording.paused' => 'Paused',
 			'recording.resumeHint' => 'Tap to resume',
 			'recording.processing' => 'Saving…',
+			'recording.processingHint' => 'You can leave this open or continue in the Inbox — we\'ll keep saving in the background.',
+			'recording.processingBackground' => 'Continue in Inbox',
 			'recording.loading' => 'Loading…',
 			'recording.transcribing' => 'Transcribing…',
 			'recording.transcriptionFailed' => 'Transcription failed',
 			'recording.pause' => 'Pause',
 			'recording.resume' => 'Resume',
 			'recording.finish' => 'Finish',
+			'recording.discardConfirmTitle' => 'Discard recording?',
+			'recording.discardConfirmBody' => 'This recording hasn\'t been saved. If you leave now, the audio will be lost.',
+			'recording.discardConfirmKeep' => 'Keep recording',
+			'recording.discardConfirmDiscard' => 'Discard',
 			'recording.draftFound' => 'Resume recording?',
 			'recording.draftHint' => 'We found an unfinished recording. Resume where you left off, or discard it.',
 			'recording.draftResume' => 'Resume',

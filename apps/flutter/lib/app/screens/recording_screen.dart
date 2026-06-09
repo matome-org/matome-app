@@ -175,10 +175,43 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     }
   }
 
+  /// Close-while-capturing. If there is in-progress audio (recording/paused),
+  /// confirm first so a stray tap on the X never silently throws away a take.
+  /// From idle (no segments yet) there's nothing to lose — close straight away.
   Future<void> _discard() async {
+    final hasAudio =
+        _phase == _ModalPhase.recording || _phase == _ModalPhase.paused;
+    if (hasAudio) {
+      final confirmed = await _confirmDiscard();
+      if (!confirmed || !mounted) return;
+    }
     await ref.read(recordingControllerProvider.notifier).discard();
     _resetBars();
     if (mounted) _close();
+  }
+
+  /// Confirmation before discarding an unsaved in-progress recording.
+  Future<bool> _confirmDiscard() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t.recording.discardConfirmTitle),
+        content: Text(t.recording.discardConfirmBody),
+        actions: [
+          TextButton(
+            key: const Key('discard-keep-button'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(t.recording.discardConfirmKeep),
+          ),
+          FilledButton(
+            key: const Key('discard-confirm-button'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(t.recording.discardConfirmDiscard),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   /// Draft prompt → Discard: clear segments + draft, then a fresh idle screen.
@@ -191,13 +224,32 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   Future<void> _finish() async {
     setState(() => _phase = _ModalPhase.processing);
+    // Kick the F4 finish/upload pipeline off the widget's lifecycle. The
+    // InboxUploader inserts the Drift row as `processing` immediately and is
+    // owned by the provider container (it outlives this widget), so the
+    // terminal await (socket/poll race, up to the 10-min window) keeps running
+    // even if the user backgrounds the modal to the Inbox.
+    final finishing = ref.read(recordingFinisherProvider).finish();
     try {
-      await ref.read(recordingFinisherProvider).finish();
+      await finishing;
       if (mounted) _close();
     } catch (_) {
-      _snack(t.recording.saveFailed);
-      if (mounted) setState(() => _phase = _ModalPhase.paused);
+      // If the modal was backgrounded the failure surfaces on the Inbox card
+      // (InboxUploader persists `failed`); only revert/notify when still shown.
+      if (mounted) {
+        _snack(t.recording.saveFailed);
+        setState(() => _phase = _ModalPhase.paused);
+      }
     }
+  }
+
+  /// Processing → "Continue in Inbox": dismiss the modal while the upload keeps
+  /// running in the background. The Inbox row already shows `processing` and
+  /// flips to done/failed when the pipeline resolves — so the UI is never
+  /// pinned on the spinner for up to 10 minutes.
+  void _backgroundToInbox() {
+    if (context.canPop()) context.pop();
+    context.go('/inbox');
   }
 
   void _close() {
@@ -249,10 +301,12 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     switch (_phase) {
       case _ModalPhase.draftCheck:
       case _ModalPhase.processing:
+        final isProcessing = _phase == _ModalPhase.processing;
         return _ProcessingView(
-          label: _phase == _ModalPhase.draftCheck
-              ? t.recording.loading
-              : t.recording.processing,
+          label: isProcessing ? t.recording.processing : t.recording.loading,
+          // Only the terminal upload phase offers the background hand-off; the
+          // draftCheck probe is a sub-second mic/draft check.
+          onBackground: isProcessing ? _backgroundToInbox : null,
         );
       case _ModalPhase.unsupported:
         return _UnsupportedView(onClose: _close);
@@ -279,18 +333,41 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 }
 
 class _ProcessingView extends StatelessWidget {
-  const _ProcessingView({required this.label});
+  const _ProcessingView({required this.label, this.onBackground});
   final String label;
+
+  /// When non-null, renders a "Continue in Inbox" affordance so the user can
+  /// dismiss the modal and let the upload finish in the background.
+  final VoidCallback? onBackground;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const CircularProgressIndicator(),
-        const SizedBox(height: 20),
-        Text(label, style: Theme.of(context).textTheme.titleMedium),
-      ],
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 20),
+          Text(label, style: theme.textTheme.titleMedium),
+          if (onBackground != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              t.recording.processingHint,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton(
+              key: const Key('processing-background-button'),
+              onPressed: onBackground,
+              child: Text(t.recording.processingBackground),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

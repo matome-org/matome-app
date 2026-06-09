@@ -95,11 +95,25 @@ class AuthRefreshInterceptor extends Interceptor {
     Response? response,
     DioException? error,
   }) async {
-    bool refreshed;
-    try {
-      refreshed = await (_refreshing ??= _runRefresh());
-    } finally {
-      _refreshing = null;
+    // Single-flight: the first 401 to arrive owns the refresh and is the only
+    // one allowed to clear `_refreshing`; every concurrent 401 awaits that same
+    // future instead of kicking off its own. Resetting in a per-call `finally`
+    // (the old approach) let a follower null the shared future out from under a
+    // still-in-flight refresh, so staggered 401s could double-refresh.
+    final inFlight = _refreshing;
+    final bool refreshed;
+    if (inFlight != null) {
+      refreshed = await inFlight;
+    } else {
+      final mine = _runRefresh();
+      _refreshing = mine;
+      try {
+        refreshed = await mine;
+      } finally {
+        // Only the owner clears the slot, and only if it still points at our
+        // refresh (defensive — a follower never reassigns it).
+        if (identical(_refreshing, mine)) _refreshing = null;
+      }
     }
 
     if (!refreshed) {

@@ -347,6 +347,108 @@ void main() {
     expect(await db.recordingDraftsDao.loadDraft(), isNull);
   });
 
+  testWidgets(
+      'close while recording asks to confirm before discarding (no silent loss)',
+      (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      audioRecordingServiceProvider.overrideWithValue(svc(db)),
+      recordingsRepositoryProvider.overrideWithValue(stubRepo()),
+    ]);
+    addTearDown(container.dispose);
+
+    await pumpEntry(tester, app(container));
+    // Start recording so there is in-progress audio to protect.
+    await tapAsync(tester, find.byKey(const Key('record-primary-button')));
+    expect(find.text(t.recording.title), findsOneWidget);
+
+    // Tap the close (X): a confirmation dialog appears instead of discarding.
+    await tapAsync(tester, find.byIcon(Icons.close));
+    expect(find.text(t.recording.discardConfirmTitle), findsOneWidget);
+
+    // "Keep recording" dismisses the dialog and keeps the session.
+    await tapAsync(tester, find.byKey(const Key('discard-keep-button')));
+    // Let the dialog's dismiss transition fully run before asserting it's gone.
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.text(t.recording.discardConfirmTitle), findsNothing);
+    expect(
+      container.read(recordingControllerProvider).phase,
+      RecordingPhase.recording,
+    );
+
+    // Re-open and confirm Discard: now the session is torn down and the modal
+    // navigates to the Inbox.
+    await tapAsync(tester, find.byIcon(Icons.close));
+    await tapAsync(tester, find.byKey(const Key('discard-confirm-button')));
+    expect(find.text('inbox'), findsOneWidget);
+  });
+
+  testWidgets(
+      'processing can be backgrounded to the Inbox while the upload finishes',
+      (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+
+    // A gated awaiter: the terminal result only resolves once we release it, so
+    // the modal stays in `processing` long enough to background it (mirrors the
+    // real up-to-10-min await window).
+    final release = Completer<void>();
+    Future<RecordingResult> gatedAwaiter({
+      required Recording recording,
+      required Future<Recording?> Function() poll,
+      required Ref ref,
+    }) async {
+      await release.future;
+      final done = await poll();
+      return RecordingResult.done(done);
+    }
+
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      audioRecordingServiceProvider.overrideWithValue(svc(db)),
+      recordingsRepositoryProvider.overrideWithValue(stubRepo()),
+      inboxUploaderProvider.overrideWith(
+        (ref) => InboxUploader(ref, awaitResult: gatedAwaiter),
+      ),
+    ]);
+    addTearDown(container.dispose);
+
+    await pumpEntry(tester, app(container));
+    await tapAsync(tester, find.byKey(const Key('record-primary-button')));
+
+    // Finish → enters processing; the upload row is inserted immediately but
+    // the terminal await is still gated.
+    await tapAsync(tester, find.byKey(const Key('finish-button')));
+    expect(find.text(t.recording.processing), findsOneWidget);
+    expect(
+      find.byKey(const Key('processing-background-button')),
+      findsOneWidget,
+    );
+    // Row is already in the Inbox as processing.
+    final pending = await db.recordingsDao.getRecordingById('42');
+    expect(pending, isNotNull);
+    expect(pending!.processingStatus, 'processing');
+
+    // Background to the Inbox: the modal is dismissed even though the upload
+    // hasn't resolved.
+    await tapAsync(
+        tester, find.byKey(const Key('processing-background-button')));
+    expect(find.text('inbox'), findsOneWidget);
+
+    // The pipeline keeps running off the (still-alive) provider; release it and
+    // the row flips to done.
+    await tester.runAsync(() async {
+      release.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    final row = await db.recordingsDao.getRecordingById('42');
+    expect(row!.processingStatus, 'done');
+  });
+
   testWidgets('unsupported mic → shows graceful notice, no crash',
       (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());

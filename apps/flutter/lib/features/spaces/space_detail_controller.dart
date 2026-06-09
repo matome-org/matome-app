@@ -45,12 +45,20 @@ class SpaceDetailController
   }
 
   Future<void> load() async {
-    state = await AsyncValue.guard(_load);
+    final next = await AsyncValue.guard(_load);
+    // Guard against a state emit after the autoDispose provider tore down (e.g.
+    // the user navigated away before the load resolved).
+    if (!mounted) return;
+    state = next;
   }
 }
 
 /// Family keyed by the space (workspace) id.
-final spaceDetailControllerProvider = StateNotifierProvider.family<
+///
+/// `autoDispose` so the notifier (and its Drift load) is torn down when the
+/// Space detail route is popped — mirroring [detailsControllerProvider]. Without
+/// it, one notifier leaks per visited workspaceId for the app's lifetime.
+final spaceDetailControllerProvider = StateNotifierProvider.autoDispose.family<
     SpaceDetailController, AsyncValue<SpaceDetailState>, String>(
   (ref, spaceId) => SpaceDetailController(ref, spaceId),
 );
