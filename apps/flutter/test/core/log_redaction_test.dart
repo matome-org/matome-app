@@ -1,0 +1,43 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:matome_flutter/core/logging/log_redaction.dart';
+
+// ---------------------------------------------------------------------------
+// Socket log-redaction guard (SEC audit-fix #815). Proves the Guardian JWT in
+// the phoenix_socket connect URL is stripped from log messages.
+// ---------------------------------------------------------------------------
+
+void main() {
+  group('redactSensitiveQueryParams', () {
+    test('redacts the token from a phoenix_socket connect log line', () {
+      const jwt = 'eyJhbGciOiJIUzI1NiJ9.payload.signature-AbC_123';
+      final line = 'Attempting to connect to '
+          'wss://api.example.com/socket/websocket?vsn=2.0.0&token=$jwt';
+
+      final out = redactSensitiveQueryParams(line);
+
+      expect(out, isNot(contains(jwt)));
+      expect(out, contains('token=[REDACTED]'));
+      // Non-sensitive params are preserved.
+      expect(out, contains('vsn=2.0.0'));
+      expect(out, contains('wss://api.example.com/socket/websocket'));
+    });
+
+    test('redacts a planned ticket param too', () {
+      final out = redactSensitiveQueryParams(
+        'connect ...?ticket=abc123def&vsn=2.0.0',
+      );
+      expect(out, contains('ticket=[REDACTED]'));
+      expect(out, isNot(contains('abc123def')));
+    });
+
+    test('leaves messages without sensitive params untouched', () {
+      const msg = 'Socket open';
+      expect(redactSensitiveQueryParams(msg), msg);
+    });
+
+    test('redacts token at end of string (no trailing &)', () {
+      final out = redactSensitiveQueryParams('url?token=tail.jwt.value');
+      expect(out, 'url?token=[REDACTED]');
+    });
+  });
+}

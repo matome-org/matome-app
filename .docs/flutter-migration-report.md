@@ -147,6 +147,95 @@ repositories / DAOs under `apps/flutter/lib/**`).
 
 ---
 
+## 5b. Security — at-rest encryption & socket token (okt-audit, #815)
+
+Two pre-prod `warning` findings from the okt security audit were addressed.
+
+### 5b.1 Drift at-rest encryption (recordings / transcripts / summaries)
+
+**Finding:** the native Drift sqlite file stored audio metadata, transcripts and
+summaries **unencrypted** — the largest at-rest exposure for an audio/transcript
+app.
+
+**Intended fix:** SQLCipher (`sqlcipher_flutter_libs`) — open the native Drift
+connection with a `PRAGMA key`, the key being a **256-bit passphrase generated on
+first boot and stored in `flutter_secure_storage`** (OS keystore, never in the DB
+file or in logs). Subsequent boots read the same key back so the encrypted file
+keeps opening.
+
+**Shipped now:**
+- `lib/core/db/db_encryption.dart` — `DbEncryptionKeyManager`: first-boot
+  generate (32 bytes from `Random.secure`, hex-encoded) → `flutter_secure_storage`;
+  reuse on every later boot; `PRAGMA key = "x'<hex>'"` raw-key statement. Backed by
+  a `SecureKeyStore` interface so it is unit-testable without the platform channel
+  (`test/db/db_encryption_test.dart` — first-boot-generates / reuse / entropy /
+  pragma-shape).
+- `lib/core/db/connection.dart` split into `connection_native.dart` /
+  `connection_web.dart` (conditional import on `dart.library.js_interop`). The
+  native impl carries the full SQLCipher `setup`/`isolateSetup` recipe (apply key +
+  assert `PRAGMA cipher_version` so an unencrypted open fails loudly), gated behind
+  `kSqlCipherEnabled` (compile-time `MATOME_SQLCIPHER`, **default `false`**).
+
+**Interim decision = OS full-disk encryption (FDE) reliance.** `kSqlCipherEnabled`
+defaults `false` because `sqlcipher_flutter_libs` **cannot be co-built with
+`drift_flutter` in this version set** — two independent, structural blockers, both
+verified in this environment:
+
+| Target | Blocker |
+|--------|---------|
+| **Android** | `sqlcipher_flutter_libs` declares the **same** Android plugin namespace (`eu.simonbinder.sqlite3_flutter_libs`) as the `sqlite3_flutter_libs` that `drift_flutter` **force-pulls transitively** → Gradle manifest-merger fails (`Namespace … used in multiple modules`). The two libs are mutually exclusive on Android. |
+| **Linux** | `sqlcipher_flutter_libs`' CMake sets `OPENSSL_USE_STATIC_LIBS ON` and `find_package(OpenSSL REQUIRED)`; distros that ship **shared-only** OpenSSL (Arch here) fail with `Could NOT find OpenSSL … (missing: OPENSSL_CRYPTO_LIBRARY)` — no static `libcrypto.a` available. |
+
+Faking encryption was explicitly rejected (the `cipher_version` guard would refuse a
+plain-sqlite3 open anyway). FDE is the documented interim protection.
+
+**To enable real SQLCipher (tracked follow-up):** drop `drift_flutter` for a
+hand-rolled native `NativeDatabase` connection (so `sqlite3_flutter_libs` is no
+longer force-pulled and the namespace collision disappears) **or** consume a
+sqlcipher build with a distinct namespace + a shared-OpenSSL CMake path; then
+uncomment `sqlcipher_flutter_libs` in `pubspec.yaml` and build with
+`--dart-define=MATOME_SQLCIPHER=true`. The keying + key-storage + cipher-assert code
+is already shipped and unit-tested, so the flip is localized to `connection_native.dart`.
+
+**Web:** there is **no SQLCipher equivalent** for the drift wasm worker, so the web
+DB is **never** encrypted at-rest. Mitigation: the browser storage sandbox
+(OPFS / IndexedDB, same-origin only) plus reliance on the user's OS/disk encryption.
+This is a documented platform limitation, not a regression.
+
+> **Existing local dev data:** enabling SQLCipher later produces a *new keyed* DB;
+> any pre-existing plaintext lab DB is reset (acceptable for the lab). A migration
+> (`sqlcipher_export`) can be added if dev data must survive the flip.
+
+### 5b.2 Guardian token in the WebSocket URL
+
+**Finding:** `recording_status_socket.dart` passes the Guardian access token in the
+WS connect URL query (`?token=<jwt>`). It rides `wss`/TLS and **is the Phoenix Socket
+contract** (so it is not wire-exploitable), but the JWT can leak via app logs / proxy
+/ shell history — an anti-pattern to harden before prod.
+
+**The real fix is a backend change (out of bounds for this task — no `services/*`
+edits):**
+
+> **BACKEND follow-up (tracked):** add a short-TTL **single-use socket ticket**
+> endpoint to the authed Phoenix HTTP API (`services/api`). The flow: the client
+> calls the authenticated HTTP endpoint → Phoenix issues a one-time, ~30s-TTL ticket
+> (e.g. signed `Phoenix.Token`) bound to the user → the client passes that **ticket**
+> in `?token=` instead of the long-lived JWT, and `UserSocket.connect/3` verifies +
+> burns it. This removes the long-lived JWT from the URL entirely. The Flutter client
+> change is then a small swap in `dynamicParams` (fetch ticket over HTTP, send ticket)
+> — to be implemented once the endpoint exists; do **not** change the socket protocol
+> client-side before the backend supports it.
+
+**Client-side mitigation shipped now:** the JWT must never reach app logs.
+`phoenix_socket` logs `Attempting to connect to <mountPoint>` at `FINEST`, and the
+mount point carries `?token=<jwt>`. `lib/core/logging/log_redaction.dart` installs a
+root-`package:logging` listener (wired in `main()` before anything can log) that
+**redacts `token=` / `ticket=` values to `[REDACTED]`** in every emitted record, so
+the token never lands in a sink in cleartext even once logging is enabled. Covered by
+`test/core/log_redaction_test.dart`.
+
+---
+
 ## 6. Verification evidence (this run)
 
 - `flutter analyze` → **No issues found**.

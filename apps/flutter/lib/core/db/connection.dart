@@ -1,26 +1,28 @@
 import 'package:drift/drift.dart';
-import 'package:drift_flutter/drift_flutter.dart';
+
+import 'db_encryption.dart';
+// Conditional impl: native (ffi/SQLCipher-capable) vs web (wasm, no SQLCipher).
+import 'connection_native.dart'
+    if (dart.library.js_interop) 'connection_web.dart' as impl;
 
 /// Opens the platform-appropriate lazy connection for the app database.
 ///
-/// `driftDatabase` from drift_flutter is the cross-platform entry point:
-///   * native (Android/iOS/macOS/Linux/Windows) — a [NativeDatabase] backed by
-///     the bundled sqlite3 lib (sqlite3_flutter_libs), file stored under the
-///     app-documents directory (resolved via path_provider internally);
-///   * web — a WasmDatabase served from the drift worker + sqlite3.wasm assets
-///     under `web/` (see `web/` setup / pubspec). drift_flutter picks the best
-///     available storage implementation (OPFS when supported, IndexedDB fall
-///     back) automatically.
+/// ## At-rest encryption (SEC audit-fix #815)
+/// The Drift store holds recordings/transcripts/summaries — the largest at-rest
+/// exposure for an audio/transcript app. The intended production protection is
+/// **SQLCipher** on native, with a 256-bit key generated on first boot and kept
+/// in `flutter_secure_storage` (see [DbEncryptionKeyManager]).
 ///
-/// Keeping this isolated means the rest of the app never imports a
-/// platform-specific connection — the UI/sync layer (Wave 3) just talks to
-/// [AppDatabase].
-QueryExecutor openConnection() {
-  return driftDatabase(
-    name: 'matome',
-    web: DriftWebOptions(
-      sqlite3Wasm: Uri.parse('sqlite3.wasm'),
-      driftWorker: Uri.parse('drift_worker.js'),
-    ),
-  );
-}
+/// In the current version set, `sqlcipher_flutter_libs` cannot be co-built with
+/// `drift_flutter` (Android plugin-namespace collision; Linux static-OpenSSL
+/// requirement), so the lab build **relies on OS full-disk encryption (FDE)**
+/// as the documented interim decision. The keying machinery is shipped and
+/// unit-tested; enabling SQLCipher is a localized flip — see
+/// `connection_native.dart` (`kSqlCipherEnabled`) and the Security section of
+/// `.docs/flutter-migration-report.md`.
+///
+/// On **web** there is no SQLCipher equivalent for the drift wasm worker, so the
+/// web DB is never encrypted at-rest; the browser storage sandbox (OPFS /
+/// IndexedDB, same-origin) plus OS/disk encryption is the documented mitigation.
+QueryExecutor openConnection({SecureKeyStore? keyStore}) =>
+    impl.openPlatformConnection(keyStore: keyStore);

@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import 'connection.dart';
+import 'db_encryption.dart';
 import 'daos/recordings_dao.dart';
 import 'daos/recording_drafts_dao.dart';
 import 'daos/workspaces_dao.dart';
@@ -26,7 +27,10 @@ const int kSchemaVersion = 4;
   daos: [RecordingsDao, WorkspacesDao, RecordingDraftsDao],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(openConnection());
+  /// Production constructor: opens the platform connection, SQLCipher-encrypted
+  /// on native (key from [keyStore], defaulting to `flutter_secure_storage`).
+  AppDatabase({SecureKeyStore? keyStore})
+      : super(openConnection(keyStore: keyStore));
 
   /// Test constructor — pass a [NativeDatabase.memory] executor.
   AppDatabase.forTesting(super.executor);

@@ -65,6 +65,25 @@ dependencies:
   path_provider: ^2.1.4
   # Bundles the native sqlite3 shared lib for Android/iOS/desktop.
   sqlite3_flutter_libs: ^0.5.24
+  # NOTE (#815 at-rest encryption): `sqlcipher_flutter_libs` is the intended
+  # production at-rest encryption provider, but it cannot be co-built with
+  # `drift_flutter` in this version set:
+  #   * Android — it declares the SAME plugin namespace
+  #     (`eu.simonbinder.sqlite3_flutter_libs`) as the `sqlite3_flutter_libs`
+  #     that `drift_flutter` force-pulls → manifest-merger collision.
+  #   * Linux  — its CMake forces `OPENSSL_USE_STATIC_LIBS ON`; distros that
+  #     ship only shared OpenSSL (e.g. Arch) fail `find_package(OpenSSL)`.
+  # Interim decision = OS full-disk encryption (FDE) reliance, documented in
+  # .docs/flutter-migration-report.md. Re-enable by dropping `drift_flutter` for
+  # a hand-rolled native connection (or a sqlcipher build with a distinct
+  # namespace + shared-OpenSSL) and uncommenting:
+  #   sqlcipher_flutter_libs: ^0.6.0
+
+  # package:logging — used directly so the socket log-redaction guard (#815)
+  # can install a root-logger listener that strips `?token=<jwt>` out of any
+  # phoenix_socket log record before it reaches a sink. Already pulled in
+  # transitively by phoenix_socket; pinned here to make the dependency explicit.
+  logging: ^1.2.0
 
   # Phoenix Channels client (F4 de-risk). Connects to the Core `/socket`,
   # joins `user:{ownerId}`, and listens for `recording:status` push events.
