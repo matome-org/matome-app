@@ -30,6 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Material/Cupertino localizations for the supported locales (en/ja).
+  flutter_localizations:
+    sdk: flutter
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -41,6 +44,13 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   # State management: AsyncValue-based providers for session + recordings.
   flutter_riverpod: ^2.6.1
+  # Declarative routing: app shell (tabs + FAB modal + per-tab stacks) and the
+  # auth-gated nav guard (ported from apps/mobile decideRedirect).
+  go_router: ^14.6.2
+  # Type-safe i18n (en/ja) — nested keys mirror apps/mobile/locales/*.ts.
+  # Runtime half of slang; codegen lives in slang_flutter / build_runner.
+  slang: ^4.4.0
+  slang_flutter: ^4.4.0
 
 dev_dependencies:
   flutter_test:
@@ -48,6 +58,10 @@ dev_dependencies:
 
   # Mock the dio HTTP adapter so tests don't require a live backend.
   http_mock_adapter: ^0.6.1
+
+  # slang i18n codegen: turns lib/i18n/*.i18n.json into strongly-typed Dart.
+  slang_build_runner: ^4.4.0
+  build_runner: ^2.4.13
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

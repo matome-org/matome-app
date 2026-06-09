@@ -1,26 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'app/router.dart';
+import 'core/i18n/locale_controller.dart';
 import 'core/theme/app_theme.dart';
-import 'features/auth/auth_gate.dart';
+import 'core/theme/theme_controller.dart';
+import 'i18n/strings.g.dart';
 
 void main() {
-  runApp(const ProviderScope(child: MatomeApp()));
+  WidgetsFlutterBinding.ensureInitialized();
+  // slang: hydrate from the device locale; the persisted choice is applied by
+  // LocaleController on first build.
+  LocaleSettings.useDeviceLocale();
+  runApp(
+    ProviderScope(
+      child: TranslationProvider(child: const MatomeApp()),
+    ),
+  );
 }
 
-/// App root for the lab: boots Riverpod, signs in with the dev seed account
-/// via [AuthGate], then renders the Home/Today screen, which consumes the
-/// existing recordings controller.
-class MatomeApp extends StatelessWidget {
+/// App root: boots Riverpod + slang, then renders the go_router shell with the
+/// Eva light/dark themes driven by the persisted theme controller.
+class MatomeApp extends ConsumerWidget {
   const MatomeApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Matome (Flutter Lab)',
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeControllerProvider);
+    // Watch the locale so the whole app rebuilds on language switch.
+    ref.watch(localeControllerProvider);
+
+    return MaterialApp.router(
+      title: 'Matome',
       debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
-      home: const AuthGate(),
+      theme: buildLightTheme(),
+      darkTheme: buildDarkTheme(),
+      themeMode: themeMode,
+      locale: TranslationProvider.of(context).flutterLocale,
+      supportedLocales: AppLocaleUtils.supportedLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      routerConfig: router,
     );
   }
 }

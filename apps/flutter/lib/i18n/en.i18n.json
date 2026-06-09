@@ -1,0 +1,55 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "retry": "Retry",
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
+  "settings": {
+    "title": "Settings",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "language": "Language",
+    "account": "Account",
+    "signOut": "Sign out",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "langEn": "English",
+    "langJa": "日本語"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "searchPlaceholder": "Search transcripts, tags, spaces…",
+    "noResults": "No recordings found",
+    "recordings": "recordings"
+  },
+  "recording": {
+    "title": "Recording",
+    "ready": "Ready to Record",
+    "startHint": "Tap the button to start recording"
+  },
+  "details": {
+    "summary": "Summary",
+    "notes": "Notes"
+  },
+  "spaces": {
+    "title": "Spaces",
+    "empty": "No spaces yet",
+    "emptyHint": "Tap + to create a space and organize your recordings"
+  },
+  "calendar": {
+    "title": "Calendar",
+    "noRecordings": "No recordings for this day",
+    "allSpaces": "All"
+  },
+  "satori": {
+    "title": "Satori"
+  },
+  "welcome": {
+    "title": "Welcome to Matome",
+    "signIn": "Sign in",
+    "signUp": "Sign up"
+  }
+}

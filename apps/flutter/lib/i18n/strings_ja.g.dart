@@ -1,0 +1,215 @@
+///
+/// Generated file. Do not edit.
+///
+// coverage:ignore-file
+// ignore_for_file: type=lint, unused_import
+// dart format off
+
+import 'package:flutter/widgets.dart';
+import 'package:intl/intl.dart';
+import 'package:slang/generated.dart';
+import 'strings.g.dart';
+
+// Path: <root>
+class TranslationsJa extends Translations with BaseTranslations<AppLocale, Translations> {
+	/// You can call this constructor and build your own translation instance of this locale.
+	/// Constructing via the enum [AppLocale.build] is preferred.
+	TranslationsJa({Map<String, Node>? overrides, PluralResolver? cardinalResolver, PluralResolver? ordinalResolver, TranslationMetadata<AppLocale, Translations>? meta})
+		: assert(overrides == null, 'Set "translation_overrides: true" in order to enable this feature.'),
+		  $meta = meta ?? TranslationMetadata(
+		    locale: AppLocale.ja,
+		    overrides: overrides ?? {},
+		    cardinalResolver: cardinalResolver,
+		    ordinalResolver: ordinalResolver,
+		  ),
+		  super(cardinalResolver: cardinalResolver, ordinalResolver: ordinalResolver) {
+		super.$meta.setFlatMapFunction($meta.getTranslation); // copy base translations to super.$meta
+		$meta.setFlatMapFunction(_flatMapFunction);
+	}
+
+	/// Metadata for the translations of <ja>.
+	@override final TranslationMetadata<AppLocale, Translations> $meta;
+
+	/// Access flat map
+	@override dynamic operator[](String key) => $meta.getTranslation(key) ?? super.$meta.getTranslation(key);
+
+	late final TranslationsJa _root = this; // ignore: unused_field
+
+	@override 
+	TranslationsJa $copyWith({TranslationMetadata<AppLocale, Translations>? meta}) => TranslationsJa(meta: meta ?? this.$meta);
+
+	// Translations
+	@override late final _Translations$common$ja common = _Translations$common$ja._(_root);
+	@override late final _Translations$settings$ja settings = _Translations$settings$ja._(_root);
+	@override late final _Translations$inbox$ja inbox = _Translations$inbox$ja._(_root);
+	@override late final _Translations$recording$ja recording = _Translations$recording$ja._(_root);
+	@override late final _Translations$details$ja details = _Translations$details$ja._(_root);
+	@override late final _Translations$spaces$ja spaces = _Translations$spaces$ja._(_root);
+	@override late final _Translations$calendar$ja calendar = _Translations$calendar$ja._(_root);
+	@override late final _Translations$satori$ja satori = _Translations$satori$ja._(_root);
+	@override late final _Translations$welcome$ja welcome = _Translations$welcome$ja._(_root);
+}
+
+// Path: common
+class _Translations$common$ja extends Translations$common$en {
+	_Translations$common$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get cancel => 'キャンセル';
+	@override String get save => '保存';
+	@override String get retry => '再試行';
+	@override String get today => '今日';
+	@override String get yesterday => '昨日';
+}
+
+// Path: settings
+class _Translations$settings$ja extends Translations$settings$en {
+	_Translations$settings$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '設定';
+	@override String get appearance => '外観';
+	@override String get theme => 'テーマ';
+	@override String get language => '言語';
+	@override String get account => 'アカウント';
+	@override String get signOut => 'サインアウト';
+	@override String get themeLight => 'ライト';
+	@override String get themeDark => 'ダーク';
+	@override String get themeSystem => 'システム';
+	@override String get langEn => 'English';
+	@override String get langJa => '日本語';
+}
+
+// Path: inbox
+class _Translations$inbox$ja extends Translations$inbox$en {
+	_Translations$inbox$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '受信箱';
+	@override String get searchPlaceholder => 'トランスクリプト、タグ、スペースを検索...';
+	@override String get noResults => '録音が見つかりません';
+	@override String get recordings => '件の録音';
+}
+
+// Path: recording
+class _Translations$recording$ja extends Translations$recording$en {
+	_Translations$recording$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '録音中';
+	@override String get ready => '録音準備完了';
+	@override String get startHint => 'ボタンを押して録音を開始してください';
+}
+
+// Path: details
+class _Translations$details$ja extends Translations$details$en {
+	_Translations$details$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get summary => '要約';
+	@override String get notes => 'メモ';
+}
+
+// Path: spaces
+class _Translations$spaces$ja extends Translations$spaces$en {
+	_Translations$spaces$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'スペース';
+	@override String get empty => 'スペースがありません';
+	@override String get emptyHint => '+ をタップしてスペースを作成し、録音を整理しましょう';
+}
+
+// Path: calendar
+class _Translations$calendar$ja extends Translations$calendar$en {
+	_Translations$calendar$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'カレンダー';
+	@override String get noRecordings => 'この日の録音はありません';
+	@override String get allSpaces => 'すべて';
+}
+
+// Path: satori
+class _Translations$satori$ja extends Translations$satori$en {
+	_Translations$satori$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '悟り';
+}
+
+// Path: welcome
+class _Translations$welcome$ja extends Translations$welcome$en {
+	_Translations$welcome$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'Matomeへようこそ';
+	@override String get signIn => 'サインイン';
+	@override String get signUp => 'サインアップ';
+}
+
+/// The flat map containing all translations for locale <ja>.
+/// Only for edge cases! For simple maps, use the map function of this library.
+///
+/// The Dart AOT compiler has issues with very large switch statements,
+/// so the map is split into smaller functions (512 entries each).
+extension on TranslationsJa {
+	dynamic _flatMapFunction(String path) {
+		return switch (path) {
+			'common.cancel' => 'キャンセル',
+			'common.save' => '保存',
+			'common.retry' => '再試行',
+			'common.today' => '今日',
+			'common.yesterday' => '昨日',
+			'settings.title' => '設定',
+			'settings.appearance' => '外観',
+			'settings.theme' => 'テーマ',
+			'settings.language' => '言語',
+			'settings.account' => 'アカウント',
+			'settings.signOut' => 'サインアウト',
+			'settings.themeLight' => 'ライト',
+			'settings.themeDark' => 'ダーク',
+			'settings.themeSystem' => 'システム',
+			'settings.langEn' => 'English',
+			'settings.langJa' => '日本語',
+			'inbox.title' => '受信箱',
+			'inbox.searchPlaceholder' => 'トランスクリプト、タグ、スペースを検索...',
+			'inbox.noResults' => '録音が見つかりません',
+			'inbox.recordings' => '件の録音',
+			'recording.title' => '録音中',
+			'recording.ready' => '録音準備完了',
+			'recording.startHint' => 'ボタンを押して録音を開始してください',
+			'details.summary' => '要約',
+			'details.notes' => 'メモ',
+			'spaces.title' => 'スペース',
+			'spaces.empty' => 'スペースがありません',
+			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',
+			'calendar.title' => 'カレンダー',
+			'calendar.noRecordings' => 'この日の録音はありません',
+			'calendar.allSpaces' => 'すべて',
+			'satori.title' => '悟り',
+			'welcome.title' => 'Matomeへようこそ',
+			'welcome.signIn' => 'サインイン',
+			'welcome.signUp' => 'サインアップ',
+			_ => null,
+		};
+	}
+}
