@@ -1,22 +1,29 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/db/app_database.dart';
 import '../../core/theme/app_theme.dart';
-import '../recordings/recording.dart';
-import '../recordings/recordings_controller.dart';
-import 'home_filters.dart';
-import 'widgets/recording_card.dart';
+import 'home_filters.dart' show formatTimestamp;
+import 'inbox_controller.dart';
+import 'inbox_grouping.dart';
+import 'inbox_item.dart';
+import 'inbox_upload.dart';
+import 'widgets/inbox_recording_card.dart';
 
 /// Width past which we treat the viewport as "wide" (desktop / web) and
 /// constrain the content column instead of letting it stretch edge-to-edge.
 const double _wideBreakpoint = 1000;
-
-/// Max width of the content column on wide viewports.
 const double _contentMaxWidth = 720;
 
-/// Home / Today screen. Watches the existing [recordingsControllerProvider]
-/// (`AsyncValue<List<Recording>>`) and renders loading / error / empty / list
-/// states. Filtering and search are entirely client-side.
+/// Inbox / Home screen (S1, #780). Offline-first: the list is driven from
+/// Drift (`getInboxRecordings`) via [inboxControllerProvider], with a Core sync
+/// on load / pull-to-refresh. Search is client-side. Tap navigates to Details
+/// (S2 route), long-press opens the move-to-space sheet, the FAB uploads a file.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -25,7 +32,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  HomeFilter _filter = HomeFilter.all;
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -36,21 +42,61 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _refresh() =>
-      ref.read(recordingsControllerProvider.notifier).refresh();
+      ref.read(inboxControllerProvider.notifier).refresh();
 
-  void _retry(Recording recording) {
-    // Lab scope: a real retry endpoint is out of scope; re-fetch the list so
-    // the gesture is wired and observable.
-    _refresh();
+  void _openDetails(InboxItem item) {
+    GoRouter.of(context).go('/inbox/${item.id}');
+  }
+
+  Future<void> _pickAndUpload() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      withReadStream: false,
+    );
+    final path = result?.files.single.path;
+    if (path == null || !mounted) return;
+
+    final name = result!.files.single.name;
+    final picked = PickedUpload(
+      file: File(path),
+      title: _titleFromName(name),
+      mediaType: mediaTypeForPath(path),
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Uploading "${picked.title}"…')),
+    );
+    // Fire-and-forget: the controller inserts the local row immediately and
+    // updates it as the pipeline resolves; the list reflects each step.
+    unawaited(ref.read(inboxUploaderProvider).upload(picked));
+  }
+
+  Future<void> _showMoveSheet(InboxItem item) async {
+    final spaces = await ref.read(inboxControllerProvider.notifier).spaces();
+    if (!mounted) return;
+    final target = await showModalBottomSheet<WorkspaceRow>(
+      context: context,
+      builder: (context) => _MoveToSpaceSheet(spaces: spaces),
+    );
+    if (target == null) return;
+    await ref
+        .read(inboxControllerProvider.notifier)
+        .moveToSpace(item.id, target.id);
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(recordingsControllerProvider);
+    final state = ref.watch(inboxControllerProvider);
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _pickAndUpload,
+        backgroundColor: AppColors.primary,
+        tooltip: 'Upload a file',
+        child: const Icon(Icons.upload_file, color: Colors.white),
+      ),
       body: SafeArea(
         bottom: false,
         child: Center(
@@ -69,25 +115,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     _searchController.clear();
                     setState(() => _search = '');
                   },
-                  filter: _filter,
-                  onFilterChanged: (f) => setState(() => _filter = f),
+                  onSettings: () => GoRouter.of(context).go('/inbox/settings'),
                 ),
                 Expanded(
                   child: state.when(
                     loading: () => const Center(
                       child: CircularProgressIndicator(color: AppColors.primary),
                     ),
-                    error: (err, _) => _ErrorState(
-                      message: err.toString(),
-                      onRetry: _refresh,
-                    ),
-                    data: (recordings) => _Body(
-                      recordings: recordings,
-                      filter: _filter,
+                    error: (err, _) =>
+                        _ErrorState(message: err.toString(), onRetry: _refresh),
+                    data: (items) => _Body(
+                      items: items,
                       search: _search,
                       onRefresh: _refresh,
-                      onRetry: _retry,
-                      isWide: isWide,
+                      onTap: _openDetails,
+                      onLongPress: _showMoveSheet,
                     ),
                   ),
                 ),
@@ -100,6 +142,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+String _titleFromName(String name) {
+  final dot = name.lastIndexOf('.');
+  final base = dot > 0 ? name.substring(0, dot) : name;
+  final trimmed = base.trim();
+  return trimmed.isEmpty ? 'Untitled' : trimmed;
+}
+
 class _Header extends StatelessWidget {
   const _Header({
     required this.total,
@@ -107,8 +156,7 @@ class _Header extends StatelessWidget {
     required this.search,
     required this.onSearchChanged,
     required this.onSearchCleared,
-    required this.filter,
-    required this.onFilterChanged,
+    required this.onSettings,
   });
 
   final int total;
@@ -116,8 +164,7 @@ class _Header extends StatelessWidget {
   final String search;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onSearchCleared;
-  final HomeFilter filter;
-  final ValueChanged<HomeFilter> onFilterChanged;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -164,9 +211,7 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              _IconButton(icon: Icons.add, onPressed: () {}),
-              const SizedBox(width: 8),
-              _IconButton(icon: Icons.settings_outlined, onPressed: () {}),
+              _IconButton(icon: Icons.settings_outlined, onPressed: onSettings),
             ],
           ),
           const SizedBox(height: 12),
@@ -176,8 +221,6 @@ class _Header extends StatelessWidget {
             onChanged: onSearchChanged,
             onCleared: onSearchCleared,
           ),
-          const SizedBox(height: 12),
-          _FilterChips(active: filter, onChanged: onFilterChanged),
         ],
       ),
     );
@@ -235,7 +278,8 @@ class _SearchField extends StatelessWidget {
         isDense: true,
         hintText: 'Search recordings',
         hintStyle: const TextStyle(color: AppColors.textSecondary),
-        prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+        prefixIcon:
+            const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
         suffixIcon: value.isEmpty
             ? null
             : IconButton(
@@ -264,83 +308,39 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _FilterChips extends StatelessWidget {
-  const _FilterChips({required this.active, required this.onChanged});
-
-  final HomeFilter active;
-  final ValueChanged<HomeFilter> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: HomeFilter.values.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final filter = HomeFilter.values[index];
-          final selected = filter == active;
-          return GestureDetector(
-            onTap: () => onChanged(filter),
-            child: Container(
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.textPrimary : const Color(0x0A0E0F10),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                filter.label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : AppColors.textSecondary,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _Body extends StatelessWidget {
   const _Body({
-    required this.recordings,
-    required this.filter,
+    required this.items,
     required this.search,
     required this.onRefresh,
-    required this.onRetry,
-    required this.isWide,
+    required this.onTap,
+    required this.onLongPress,
   });
 
-  final List<Recording> recordings;
-  final HomeFilter filter;
+  final List<InboxItem> items;
   final String search;
   final Future<void> Function() onRefresh;
-  final ValueChanged<Recording> onRetry;
-  final bool isWide;
+  final ValueChanged<InboxItem> onTap;
+  final ValueChanged<InboxItem> onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    final filtered = applyFilters(
-      recordings: recordings,
-      filter: filter,
-      search: search,
+    final filtered = searchItems(items, search);
+    final sections = groupByDate(
+      filtered,
+      todayLabel: 'Today',
+      yesterdayLabel: 'Yesterday',
     );
-    final sections = groupIntoSections(filtered);
 
     if (sections.isEmpty) {
       return RefreshIndicator(
         onRefresh: onRefresh,
+        color: AppColors.primary,
         child: ListView(
-          // Needs to scroll so pull-to-refresh works even when empty.
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             SizedBox(height: MediaQuery.sizeOf(context).height * 0.18),
-            _EmptyState(searching: search.trim().isNotEmpty || filter != HomeFilter.all),
+            _EmptyState(searching: search.trim().isNotEmpty),
           ],
         ),
       );
@@ -351,7 +351,7 @@ class _Body extends StatelessWidget {
       color: AppColors.primary,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
         itemCount: sections.length,
         itemBuilder: (context, index) {
           final section = sections[index];
@@ -373,28 +373,76 @@ class _Body extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '${section.recordings.length}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textMuted,
-                      ),
+                      '${section.items.length}',
+                      style:
+                          const TextStyle(fontSize: 12, color: AppColors.textMuted),
                     ),
                   ],
                 ),
               ),
-              ...section.recordings.map(
-                (r) => Padding(
+              ...section.items.map(
+                (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: RecordingCard(
-                    recording: r,
-                    onTap: () {},
-                    onRetry: onRetry,
+                  child: InboxRecordingCard(
+                    card: item.card,
+                    relativeTime: formatTimestamp(
+                      DateTime.fromMillisecondsSinceEpoch(item.createdAt),
+                    ),
+                    onTap: () => onTap(item),
+                    onLongPress: () => onLongPress(item),
                   ),
                 ),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _MoveToSpaceSheet extends StatelessWidget {
+  const _MoveToSpaceSheet({required this.spaces});
+
+  final List<WorkspaceRow> spaces;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
+            child: Text(
+              'Move to space',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          if (spaces.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 24),
+              child: Text(
+                'No spaces yet.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            )
+          else
+            ...spaces.map(
+              (ws) => ListTile(
+                leading: const Icon(Icons.folder_outlined,
+                    color: AppColors.textSecondary),
+                title: Text(ws.name),
+                onTap: () => Navigator.of(context).pop(ws),
+              ),
+            ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
@@ -430,8 +478,8 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               searching
-                  ? 'Try a different filter or search term.'
-                  : 'Recordings you capture will show up here.',
+                  ? 'Try a different search term.'
+                  : 'Recordings you capture or upload will show up here.',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
             ),

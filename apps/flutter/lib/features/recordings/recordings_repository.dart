@@ -14,9 +14,10 @@ import 'upload_descriptor.dart';
 /// `POST /api/recordings/{id}/process`, plus the `GET /api/recordings/{id}`
 /// poll used as the realtime-channel fallback.
 class RecordingsRepository {
-  RecordingsRepository({required ApiClient apiClient}) : this._(apiClient);
-
-  RecordingsRepository._(this._apiClient);
+  // Plain generative constructor (no redirect) so tests can subclass it to stub
+  // the presigned-PUT upload, which otherwise opens its own bare Dio.
+  // ignore: prefer_initializing_formals
+  RecordingsRepository({required ApiClient apiClient}) : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 

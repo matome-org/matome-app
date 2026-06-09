@@ -86,6 +86,13 @@ dependencies:
   # finalized file rather than trusting the live status poll.
   just_audio: ^0.9.42
 
+  # File picker for the Inbox upload flow (S1, #780): pick an audio/image/doc
+  # file → create a Core recording → upload via the F4 pipeline. Cross-platform
+  # (android/web/linux). Mirrors apps/mobile uploadRecordingService's picker.
+  # v10 compiles against a current Android SDK (v8's android-34 module fails the
+  # AAR metadata check against the lifecycle plugin Flutter 3.44 ships).
+  file_picker: ^10.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

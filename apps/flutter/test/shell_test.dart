@@ -14,33 +14,31 @@ import 'package:matome_flutter/core/i18n/locale_controller.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/features/auth/welcome_screen.dart';
+import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/core/theme/theme_controller.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
-import 'package:matome_flutter/features/recordings/recording.dart';
-import 'package:matome_flutter/features/recordings/recordings_controller.dart';
+import 'package:matome_flutter/features/home/inbox_controller.dart';
+import 'package:matome_flutter/features/home/inbox_item.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+
+import 'support/fake_inbox.dart';
 
 /// Pre-authenticated, network-free router for the shell smoke test: skips the
 /// seed-login bootstrap and seeds the Inbox tab with a fixed recording list.
-class _FakeRecordingsController extends RecordingsController {
-  _FakeRecordingsController(super.ref) {
-    state = AsyncValue.data([
-      Recording(
-        id: 1,
-        ownerId: 1,
+InboxItem _seedItem() => InboxItem(
+      card: const RecordingCard(
+        id: '1',
         title: 'Standup notes',
-        status: RecordingStatus.done,
+        timestamp: '9:00 AM',
+        duration: '0:30',
         badge: 'work',
-        insertedAt: DateTime(2024),
+        isProcessing: false,
+        mediaType: 'audio',
+        processingStatus: 'done',
       ),
-    ]);
-  }
-  @override
-  Future<void> load() async {}
-  @override
-  Future<void> refresh() async {}
-}
+      createdAt: DateTime(2024).millisecondsSinceEpoch,
+    );
 
 GoRouter _buildTestRouter() {
   final rootKey = GlobalKey<NavigatorState>();
@@ -98,8 +96,9 @@ Widget _pumpApp({SettingsStore? store}) {
       // (settings screen reads authStateProvider) resolves to signed-out
       // without touching the secure-storage platform channel.
       tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
-      recordingsControllerProvider
-          .overrideWith((ref) => _FakeRecordingsController(ref)),
+      inboxControllerProvider.overrideWith(
+        (ref) => FakeInboxController(ref, AsyncValue.data([_seedItem()])),
+      ),
     ],
     child: TranslationProvider(child: const _TestApp()),
   );

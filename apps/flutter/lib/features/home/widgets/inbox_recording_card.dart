@@ -1,36 +1,44 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/db/recording_card.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../recordings/recording.dart';
-import '../home_filters.dart';
 
-/// A single recording row, ported in essence from the RN `RecordingCard`:
-/// leading status/media avatar, title + relative time, summary OR
-/// processing/failed line (with retry), and a footer with badge + duration.
-class RecordingCard extends StatelessWidget {
-  const RecordingCard({
+/// A single Inbox row rendered from the Drift [RecordingCard] (S1, #780).
+///
+/// Ported in spirit from the lab `RecordingCard`, but bound to the persisted
+/// card type (string fields) instead of the HTTP [Recording] model: leading
+/// status/media avatar, title + duration, summary OR a processing/failed line,
+/// and a footer with the badge.
+class InboxRecordingCard extends StatelessWidget {
+  const InboxRecordingCard({
     super.key,
-    required this.recording,
+    required this.card,
+    required this.relativeTime,
     this.onTap,
-    this.onRetry,
-    this.now,
+    this.onLongPress,
   });
 
-  final Recording recording;
+  final RecordingCard card;
+
+  /// Pre-formatted relative timestamp shown top-right (e.g. "3h", "2d").
+  final String relativeTime;
+
   final VoidCallback? onTap;
-  final ValueChanged<Recording>? onRetry;
-  final DateTime? now;
+  final VoidCallback? onLongPress;
 
   bool get _isProcessing =>
-      recording.status == RecordingStatus.pending ||
-      recording.status == RecordingStatus.processing;
+      card.isProcessing ||
+      card.processingStatus == 'processing' ||
+      card.processingStatus == 'pending';
 
-  bool get _isFailed => recording.status == RecordingStatus.failed;
+  bool get _isFailed => card.processingStatus == 'failed';
 
   IconData get _mediaIcon {
-    final type = recording.mediaType ?? '';
+    final type = card.mediaType;
     if (type.startsWith('image')) return Icons.image_outlined;
-    if (type.contains('meeting') || type.contains('text')) {
+    if (type.contains('document') ||
+        type.contains('meeting') ||
+        type.contains('text')) {
       return Icons.description_outlined;
     }
     return Icons.play_arrow_rounded;
@@ -38,21 +46,19 @@ class RecordingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = badgeColor(recording.badge);
-    final timestamp = formatTimestamp(recording.insertedAt, now: now);
-    final duration = formatDuration(recording.duration);
+    final color = badgeColor(card.badge);
 
     return Semantics(
       button: true,
-      label: 'Recording: ${recording.title}',
+      label: 'Recording: ${card.title}',
       child: Material(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
+          onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(16),
           child: Container(
-            // Touch target: padding alone gives a >=44px tall row on mobile.
             constraints: const BoxConstraints(minHeight: 64),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -73,20 +79,19 @@ class RecordingCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _TitleRow(title: recording.title, timestamp: timestamp),
+                      _TitleRow(title: card.title, timestamp: relativeTime),
                       const SizedBox(height: 4),
                       _Body(
-                        recording: recording,
+                        card: card,
                         color: color,
                         isProcessing: _isProcessing,
                         isFailed: _isFailed,
-                        onRetry: onRetry,
                       ),
                       const SizedBox(height: 6),
                       _Footer(
-                        badge: recording.badge,
+                        badge: card.badge,
                         color: color,
-                        duration: duration,
+                        duration: card.duration,
                       ),
                     ],
                   ),
@@ -124,10 +129,10 @@ class _Avatar extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       child: isProcessing
-          ? Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ? SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
             )
           : isFailed
               ? const Icon(Icons.warning_amber_rounded,
@@ -175,18 +180,16 @@ class _TitleRow extends StatelessWidget {
 
 class _Body extends StatelessWidget {
   const _Body({
-    required this.recording,
+    required this.card,
     required this.color,
     required this.isProcessing,
     required this.isFailed,
-    required this.onRetry,
   });
 
-  final Recording recording;
+  final RecordingCard card;
   final Color color;
   final bool isProcessing;
   final bool isFailed;
-  final ValueChanged<Recording>? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +203,7 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            'Transcribing…',
+            'Processing…',
             style: TextStyle(
               fontSize: 12,
               fontStyle: FontStyle.italic,
@@ -212,34 +215,14 @@ class _Body extends StatelessWidget {
     }
 
     if (isFailed) {
-      return Row(
-        children: [
-          const Expanded(
-            child: Text(
-              'Transcription failed',
-              style: TextStyle(fontSize: 12, color: AppColors.failed),
-            ),
-          ),
-          TextButton(
-            onPressed: onRetry == null ? null : () => onRetry!(recording),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(44, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              foregroundColor: color,
-            ),
-            child: const Text(
-              'Retry',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
+      return const Text(
+        'Processing failed',
+        style: TextStyle(fontSize: 12, color: AppColors.failed),
       );
     }
 
-    final summary = recording.summary;
-    if (summary == null || summary.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    final summary = card.summary;
+    if (summary == null || summary.isEmpty) return const SizedBox.shrink();
     return Text(
       summary,
       maxLines: 2,
@@ -260,13 +243,13 @@ class _Footer extends StatelessWidget {
     required this.duration,
   });
 
-  final String? badge;
+  final String badge;
   final Color color;
   final String duration;
 
   @override
   Widget build(BuildContext context) {
-    final label = (badge == null || badge!.isEmpty) ? null : badge!;
+    final label = badge.isEmpty ? null : badge;
     return Row(
       children: [
         if (label != null)

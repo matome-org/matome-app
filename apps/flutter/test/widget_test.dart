@@ -2,56 +2,46 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
-import 'package:matome_flutter/features/recordings/recording.dart';
-import 'package:matome_flutter/features/recordings/recordings_controller.dart';
+import 'package:matome_flutter/features/home/inbox_controller.dart';
+import 'package:matome_flutter/features/home/inbox_item.dart';
 
-/// A controller seeded with a fixed list — no HTTP, no live backend.
-/// Subclasses the real [RecordingsController] so it satisfies the provider's
-/// override type, but replaces [load]/[refresh] so nothing hits the network.
-class _FakeRecordingsController extends RecordingsController {
-  _FakeRecordingsController(super.ref, this._seed) {
-    state = _seed;
-  }
+import 'support/fake_inbox.dart';
 
-  final AsyncValue<List<Recording>> _seed;
-
-  @override
-  Future<void> load() async {
-    state = _seed;
-  }
-
-  @override
-  Future<void> refresh() async {
-    state = _seed;
-  }
-}
-
-Recording _rec({
-  required int id,
+InboxItem _item({
+  required String id,
   required String title,
   String? summary,
-  String? badge,
-  RecordingStatus status = RecordingStatus.done,
-  DateTime? insertedAt,
+  String? notes,
+  String badge = 'Inbox',
+  bool processing = false,
+  DateTime? createdAt,
 }) {
-  return Recording(
-    id: id,
-    ownerId: 1,
-    title: title,
-    status: status,
-    summary: summary,
-    badge: badge,
-    insertedAt: insertedAt ?? DateTime.now(),
+  final at = createdAt ?? DateTime.now();
+  return InboxItem(
+    card: RecordingCard(
+      id: id,
+      title: title,
+      summary: summary,
+      timestamp: '9:00 AM',
+      duration: '0:30',
+      badge: badge,
+      notes: notes,
+      isProcessing: processing,
+      mediaType: 'audio',
+      processingStatus: processing ? 'processing' : 'done',
+    ),
+    createdAt: at.millisecondsSinceEpoch,
   );
 }
 
-Widget _pumpHome(AsyncValue<List<Recording>> state) {
+Widget _pumpHome(AsyncValue<List<InboxItem>> state) {
   return ProviderScope(
     overrides: [
-      recordingsControllerProvider.overrideWith(
-        (ref) => _FakeRecordingsController(ref, state),
+      inboxControllerProvider.overrideWith(
+        (ref) => FakeInboxController(ref, state),
       ),
     ],
     child: MaterialApp(theme: buildAppTheme(), home: const HomeScreen()),
@@ -59,46 +49,63 @@ Widget _pumpHome(AsyncValue<List<Recording>> state) {
 }
 
 void main() {
-  testWidgets('Home renders header, chips and a list of recordings',
+  testWidgets('Inbox renders header and grouped recordings from Drift',
       (tester) async {
+    final now = DateTime.now();
     await tester.pumpWidget(
       _pumpHome(
         AsyncValue.data([
-          _rec(id: 1, title: 'Standup notes', badge: 'work', summary: 'sync'),
-          _rec(id: 2, title: 'Idea dump', badge: 'ideas'),
+          _item(
+            id: '1',
+            title: 'Standup notes',
+            summary: 'sync',
+            badge: 'Work',
+            createdAt: now,
+          ),
+          _item(
+            id: '2',
+            title: 'Idea dump',
+            badge: 'Ideas',
+            createdAt: now.subtract(const Duration(days: 2)),
+          ),
         ]),
       ),
     );
     await tester.pumpAndSettle();
 
+    // Header title is the large "Inbox" heading.
     expect(find.text('Inbox'), findsOneWidget);
-    expect(find.text('All'), findsOneWidget);
-    expect(find.text('Unresolved'), findsOneWidget);
     expect(find.text('Standup notes'), findsOneWidget);
     expect(find.text('Idea dump'), findsOneWidget);
+    // Grouped by date: today's item lands under the "TODAY" header.
+    expect(find.text('TODAY'), findsOneWidget);
   });
 
-  testWidgets('Filter chip narrows the visible recordings', (tester) async {
+  testWidgets('Search filters by title / summary / notes', (tester) async {
     await tester.pumpWidget(
       _pumpHome(
         AsyncValue.data([
-          _rec(id: 1, title: 'Standup notes', badge: 'work'),
-          _rec(id: 2, title: 'Idea dump', badge: 'ideas'),
+          _item(id: '1', title: 'Standup notes', summary: 'weekly sync'),
+          _item(id: '2', title: 'Idea dump', notes: 'rocket ideas'),
         ]),
       ),
     );
     await tester.pumpAndSettle();
 
-    // Both visible under "All".
     expect(find.text('Standup notes'), findsOneWidget);
     expect(find.text('Idea dump'), findsOneWidget);
 
-    // Tap "Work" -> only the work-badged recording remains.
-    await tester.tap(find.text('Work'));
+    // Search by a token that only appears in the first item's summary.
+    await tester.enterText(find.byType(TextField), 'sync');
     await tester.pumpAndSettle();
-
     expect(find.text('Standup notes'), findsOneWidget);
     expect(find.text('Idea dump'), findsNothing);
+
+    // Search by a token that only appears in the second item's notes.
+    await tester.enterText(find.byType(TextField), 'rocket');
+    await tester.pumpAndSettle();
+    expect(find.text('Standup notes'), findsNothing);
+    expect(find.text('Idea dump'), findsOneWidget);
   });
 
   testWidgets('Empty data shows the empty state', (tester) async {
