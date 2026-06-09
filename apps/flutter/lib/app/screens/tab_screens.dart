@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../features/details/details_screen.dart';
 import '../../i18n/strings.g.dart';
 import 'placeholder_screen.dart';
 
@@ -29,18 +30,13 @@ class SatoriScreen extends StatelessWidget {
       PlaceholderScreen(title: t.satori.title, icon: Icons.auto_awesome);
 }
 
-/// Recording details, reachable as `/inbox/:id` and `/calendar/:id`.
+/// Recording details (S2, #781), reachable as `/inbox/:id` and `/calendar/:id`.
 class RecordingDetailScreen extends StatelessWidget {
   const RecordingDetailScreen({super.key, required this.id});
   final String id;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('${t.recording.title} #$id')),
-      body: PlaceholderScreen(title: t.details.summary, subtitle: 'id: $id'),
-    );
-  }
+  Widget build(BuildContext context) => DetailsScreen(id: id);
 }
 
 /// Space details, reachable as `/spaces/:spaceId`.
@@ -57,16 +53,12 @@ class SpaceDetailScreen extends StatelessWidget {
   }
 }
 
-/// Recording within a space, reachable as `/spaces/recording/:id`.
+/// Recording within a space (S2, #781), reachable as `/spaces/recording/:id`
+/// (the migration's `/explore/recording/:id` slot).
 class SpaceRecordingScreen extends StatelessWidget {
   const SpaceRecordingScreen({super.key, required this.id});
   final String id;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('${t.recording.title} #$id')),
-      body: PlaceholderScreen(title: t.details.notes, subtitle: 'id: $id'),
-    );
-  }
+  Widget build(BuildContext context) => DetailsScreen(id: id);
 }

@@ -155,6 +155,12 @@ class Translations$recording$en {
 
 	/// en: 'Tap the button to start recording'
 	String get startHint => 'Tap the button to start recording';
+
+	/// en: 'Transcribing…'
+	String get transcribing => 'Transcribing…';
+
+	/// en: 'Transcription failed'
+	String get transcriptionFailed => 'Transcription failed';
 }
 
 // Path: details
@@ -170,6 +176,60 @@ class Translations$details$en {
 
 	/// en: 'Notes'
 	String get notes => 'Notes';
+
+	/// en: 'Transcript'
+	String get transcript => 'Transcript';
+
+	/// en: 'Edit'
+	String get edit => 'Edit';
+
+	/// en: 'Preview'
+	String get preview => 'Preview';
+
+	/// en: 'No summary yet.'
+	String get noSummary => 'No summary yet.';
+
+	/// en: 'No notes yet. Tap Edit to add some.'
+	String get noNotes => 'No notes yet. Tap Edit to add some.';
+
+	/// en: 'Write notes in markdown…'
+	String get notesPlaceholder => 'Write notes in markdown…';
+
+	/// en: 'Delete'
+	String get delete => 'Delete';
+
+	/// en: 'Move to space'
+	String get moveToSpace => 'Move to space';
+
+	/// en: 'Delete recording'
+	String get deleteConfirmTitle => 'Delete recording';
+
+	/// en: 'This recording will be permanently removed. Continue?'
+	String get deleteConfirmBody => 'This recording will be permanently removed. Continue?';
+
+	/// en: 'Unsaved changes'
+	String get unsavedTitle => 'Unsaved changes';
+
+	/// en: 'You have unsaved changes. Do you want to discard them?'
+	String get unsavedBody => 'You have unsaved changes. Do you want to discard them?';
+
+	/// en: 'Keep editing'
+	String get keepEditing => 'Keep editing';
+
+	/// en: 'Discard'
+	String get discard => 'Discard';
+
+	/// en: 'Recording not found'
+	String get notFound => 'Recording not found';
+
+	/// en: 'Notes saved'
+	String get saved => 'Notes saved';
+
+	/// en: 'Couldn't save notes'
+	String get saveFailed => 'Couldn\'t save notes';
+
+	/// en: 'Couldn't play audio'
+	String get audioFailed => 'Couldn\'t play audio';
 }
 
 // Path: spaces
@@ -356,8 +416,28 @@ extension on Translations {
 			'recording.title' => 'Recording',
 			'recording.ready' => 'Ready to Record',
 			'recording.startHint' => 'Tap the button to start recording',
+			'recording.transcribing' => 'Transcribing…',
+			'recording.transcriptionFailed' => 'Transcription failed',
 			'details.summary' => 'Summary',
 			'details.notes' => 'Notes',
+			'details.transcript' => 'Transcript',
+			'details.edit' => 'Edit',
+			'details.preview' => 'Preview',
+			'details.noSummary' => 'No summary yet.',
+			'details.noNotes' => 'No notes yet. Tap Edit to add some.',
+			'details.notesPlaceholder' => 'Write notes in markdown…',
+			'details.delete' => 'Delete',
+			'details.moveToSpace' => 'Move to space',
+			'details.deleteConfirmTitle' => 'Delete recording',
+			'details.deleteConfirmBody' => 'This recording will be permanently removed. Continue?',
+			'details.unsavedTitle' => 'Unsaved changes',
+			'details.unsavedBody' => 'You have unsaved changes. Do you want to discard them?',
+			'details.keepEditing' => 'Keep editing',
+			'details.discard' => 'Discard',
+			'details.notFound' => 'Recording not found',
+			'details.saved' => 'Notes saved',
+			'details.saveFailed' => 'Couldn\'t save notes',
+			'details.audioFailed' => 'Couldn\'t play audio',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

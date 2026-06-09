@@ -203,6 +203,112 @@ class RecordingsRepository {
     }
   }
 
+  /// `PATCH /api/recordings/{id}` (Bearer). Persists edits to the Core record.
+  ///
+  /// Mirrors apps/mobile `coreApiClient.patchRecording`. Only the provided
+  /// fields are sent. Returns the updated [Recording] echoed by the backend.
+  Future<Recording> updateRecording(
+    int id, {
+    String? transcript,
+    String? summary,
+    String? title,
+    String? badge,
+  }) async {
+    try {
+      final response = await _apiClient.dio.patch<Map<String, dynamic>>(
+        '/api/recordings/$id',
+        data: <String, dynamic>{
+          'transcript': ?transcript,
+          'summary': ?summary,
+          'title': ?title,
+          'badge': ?badge,
+        },
+      );
+      final status = response.statusCode ?? 0;
+      if (status == 401) {
+        throw const ApiException(
+          'Session expired. Please sign in again.',
+          statusCode: 401,
+          code: 'unauthorized',
+        );
+      }
+      if (status != 200) {
+        throw ApiException(
+          'Failed to update recording.',
+          statusCode: status,
+          code: errorCodeFromBody(response.data),
+        );
+      }
+      final raw = response.data?['recording'];
+      if (raw is! Map<String, dynamic>) {
+        throw const ApiException(
+          'Malformed update response.',
+          statusCode: 200,
+          code: 'malformed_response',
+        );
+      }
+      return Recording.fromJson(raw);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  /// `DELETE /api/recordings/{id}` (Bearer). Removes the Core record.
+  /// Treats 204/200 (and a 404 — already gone) as success.
+  Future<void> deleteRecording(int id) async {
+    try {
+      final response = await _apiClient.dio.delete<dynamic>(
+        '/api/recordings/$id',
+      );
+      final status = response.statusCode ?? 0;
+      if (status == 401) {
+        throw const ApiException(
+          'Session expired. Please sign in again.',
+          statusCode: 401,
+          code: 'unauthorized',
+        );
+      }
+      if (status != 204 && status != 200 && status != 404) {
+        throw ApiException(
+          'Failed to delete recording.',
+          statusCode: status,
+          code: errorCodeFromBody(response.data),
+        );
+      }
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  /// `GET /api/recordings/{id}/download-url` (Bearer). Returns a presigned
+  /// download URL for the stored audio, or `null` when none is available
+  /// (404 / missing storage key). Used by Details (S2) as the playback source
+  /// when there is no local file path.
+  Future<String?> downloadUrl(int id) async {
+    try {
+      final response = await _apiClient.dio.get<Map<String, dynamic>>(
+        '/api/recordings/$id/download-url',
+      );
+      final status = response.statusCode ?? 0;
+      if (status == 404) return null;
+      if (status == 401) {
+        throw const ApiException(
+          'Session expired. Please sign in again.',
+          statusCode: 401,
+          code: 'unauthorized',
+        );
+      }
+      if (status != 200) return null;
+      final download = response.data?['download'];
+      if (download is Map && download['url'] is String) {
+        return download['url'] as String;
+      }
+      return null;
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   /// `POST /api/recordings/{id}/process` (Bearer). Enqueues processing.
   /// Returns the (still-pending) recording echoed by the backend.
   Future<Recording> enqueueProcessing(int id) async {

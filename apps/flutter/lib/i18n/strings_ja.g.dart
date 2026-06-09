@@ -108,6 +108,8 @@ class _Translations$recording$ja extends Translations$recording$en {
 	@override String get title => '録音中';
 	@override String get ready => '録音準備完了';
 	@override String get startHint => 'ボタンを押して録音を開始してください';
+	@override String get transcribing => '文字起こし中…';
+	@override String get transcriptionFailed => '文字起こしに失敗しました';
 }
 
 // Path: details
@@ -119,6 +121,24 @@ class _Translations$details$ja extends Translations$details$en {
 	// Translations
 	@override String get summary => '要約';
 	@override String get notes => 'メモ';
+	@override String get transcript => 'トランスクリプト';
+	@override String get edit => '編集';
+	@override String get preview => 'プレビュー';
+	@override String get noSummary => 'まだ要約はありません。';
+	@override String get noNotes => 'まだメモはありません。編集をタップして追加してください。';
+	@override String get notesPlaceholder => 'マークダウンでメモを書く…';
+	@override String get delete => '削除';
+	@override String get moveToSpace => 'スペースへ移動';
+	@override String get deleteConfirmTitle => '録音を削除';
+	@override String get deleteConfirmBody => 'この録音は完全に削除されます。続行しますか？';
+	@override String get unsavedTitle => '未保存の変更';
+	@override String get unsavedBody => '未保存の変更があります。破棄しますか？';
+	@override String get keepEditing => '編集を続ける';
+	@override String get discard => '破棄';
+	@override String get notFound => '録音が見つかりません';
+	@override String get saved => 'メモを保存しました';
+	@override String get saveFailed => 'メモを保存できませんでした';
+	@override String get audioFailed => '音声を再生できませんでした';
 }
 
 // Path: spaces
@@ -233,8 +253,28 @@ extension on TranslationsJa {
 			'recording.title' => '録音中',
 			'recording.ready' => '録音準備完了',
 			'recording.startHint' => 'ボタンを押して録音を開始してください',
+			'recording.transcribing' => '文字起こし中…',
+			'recording.transcriptionFailed' => '文字起こしに失敗しました',
 			'details.summary' => '要約',
 			'details.notes' => 'メモ',
+			'details.transcript' => 'トランスクリプト',
+			'details.edit' => '編集',
+			'details.preview' => 'プレビュー',
+			'details.noSummary' => 'まだ要約はありません。',
+			'details.noNotes' => 'まだメモはありません。編集をタップして追加してください。',
+			'details.notesPlaceholder' => 'マークダウンでメモを書く…',
+			'details.delete' => '削除',
+			'details.moveToSpace' => 'スペースへ移動',
+			'details.deleteConfirmTitle' => '録音を削除',
+			'details.deleteConfirmBody' => 'この録音は完全に削除されます。続行しますか？',
+			'details.unsavedTitle' => '未保存の変更',
+			'details.unsavedBody' => '未保存の変更があります。破棄しますか？',
+			'details.keepEditing' => '編集を続ける',
+			'details.discard' => '破棄',
+			'details.notFound' => '録音が見つかりません',
+			'details.saved' => 'メモを保存しました',
+			'details.saveFailed' => 'メモを保存できませんでした',
+			'details.audioFailed' => '音声を再生できませんでした',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

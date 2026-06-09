@@ -28,11 +28,31 @@
   "recording": {
     "title": "Recording",
     "ready": "Ready to Record",
-    "startHint": "Tap the button to start recording"
+    "startHint": "Tap the button to start recording",
+    "transcribing": "Transcribing…",
+    "transcriptionFailed": "Transcription failed"
   },
   "details": {
     "summary": "Summary",
-    "notes": "Notes"
+    "notes": "Notes",
+    "transcript": "Transcript",
+    "edit": "Edit",
+    "preview": "Preview",
+    "noSummary": "No summary yet.",
+    "noNotes": "No notes yet. Tap Edit to add some.",
+    "notesPlaceholder": "Write notes in markdown…",
+    "delete": "Delete",
+    "moveToSpace": "Move to space",
+    "deleteConfirmTitle": "Delete recording",
+    "deleteConfirmBody": "This recording will be permanently removed. Continue?",
+    "unsavedTitle": "Unsaved changes",
+    "unsavedBody": "You have unsaved changes. Do you want to discard them?",
+    "keepEditing": "Keep editing",
+    "discard": "Discard",
+    "notFound": "Recording not found",
+    "saved": "Notes saved",
+    "saveFailed": "Couldn't save notes",
+    "audioFailed": "Couldn't play audio"
   },
   "spaces": {
     "title": "Spaces",

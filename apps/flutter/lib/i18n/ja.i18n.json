@@ -28,11 +28,31 @@
   "recording": {
     "title": "録音中",
     "ready": "録音準備完了",
-    "startHint": "ボタンを押して録音を開始してください"
+    "startHint": "ボタンを押して録音を開始してください",
+    "transcribing": "文字起こし中…",
+    "transcriptionFailed": "文字起こしに失敗しました"
   },
   "details": {
     "summary": "要約",
-    "notes": "メモ"
+    "notes": "メモ",
+    "transcript": "トランスクリプト",
+    "edit": "編集",
+    "preview": "プレビュー",
+    "noSummary": "まだ要約はありません。",
+    "noNotes": "まだメモはありません。編集をタップして追加してください。",
+    "notesPlaceholder": "マークダウンでメモを書く…",
+    "delete": "削除",
+    "moveToSpace": "スペースへ移動",
+    "deleteConfirmTitle": "録音を削除",
+    "deleteConfirmBody": "この録音は完全に削除されます。続行しますか？",
+    "unsavedTitle": "未保存の変更",
+    "unsavedBody": "未保存の変更があります。破棄しますか？",
+    "keepEditing": "編集を続ける",
+    "discard": "破棄",
+    "notFound": "録音が見つかりません",
+    "saved": "メモを保存しました",
+    "saveFailed": "メモを保存できませんでした",
+    "audioFailed": "音声を再生できませんでした"
   },
   "spaces": {
     "title": "スペース",

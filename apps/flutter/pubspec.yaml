@@ -83,8 +83,15 @@ dependencies:
   record: ^7.0.0
   # Duration probe + playback helper for finalized audio files. Used by
   # getAudioDurationSeconds to read the real (summed) session duration off the
-  # finalized file rather than trusting the live status poll.
+  # finalized file rather than trusting the live status poll. Also drives the
+  # Details (S2) audio player: play/pause, position/duration, scrubber.
   just_audio: ^0.9.42
+
+  # Markdown rendering for the Details (S2) Summary/Notes/Transcript tabs.
+  # Renders persisted markdown (headings, bold/italic, lists, checkboxes) in
+  # preview mode; the edit-mode toolbar (insertMarkdown helpers) writes the
+  # same markdown back. Mirrors apps/mobile react-native-markdown-display.
+  flutter_markdown: ^0.7.4
 
   # File picker for the Inbox upload flow (S1, #780): pick an audio/image/doc
   # file → create a Core recording → upload via the F4 pipeline. Cross-platform
