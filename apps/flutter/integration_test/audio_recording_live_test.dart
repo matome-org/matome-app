@@ -16,6 +16,9 @@ import 'package:matome_flutter/features/recording/audio_recording_service.dart';
 //
 // Run: flutter test integration_test/audio_recording_live_test.dart -d <device>
 // Requires RECORD_AUDIO permission (granted on the emulator before running).
+// This file is the LIVE-MIC counterpart of the headless E2E flows in
+// integration_test/e2e_recording_flows_test.dart (which use FakeRecorderBackend
+// and run under CI with no device).
 // ---------------------------------------------------------------------------
 
 void main() {
