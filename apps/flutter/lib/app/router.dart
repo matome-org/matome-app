@@ -87,9 +87,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/recording',
         parentNavigatorKey: _rootKey,
-        pageBuilder: (context, state) => const MaterialPage(
+        pageBuilder: (context, state) => MaterialPage(
           fullscreenDialog: true,
           child: RecordingScreen(),
+        ),
+      ),
+      // Desktop meeting recorder (loopback + mic, MVP Linux). Same fullscreen
+      // modal as /recording, bound to the meeting (ffmpeg loopback) recorder.
+      GoRoute(
+        path: '/meeting',
+        parentNavigatorKey: _rootKey,
+        pageBuilder: (context, state) => MaterialPage(
+          fullscreenDialog: true,
+          child: RecordingScreen(binding: RecorderBinding.meeting),
         ),
       ),
       StatefulShellRoute.indexedStack(

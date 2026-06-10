@@ -14,7 +14,7 @@ part 'app_database.g.dart';
 /// 001..004, which map to SQLite `user_version` 4 on a fully-migrated mobile
 /// device. New schema changes are append-only: bump this and add a step in
 /// [MigrationStrategy.onUpgrade].
-const int kSchemaVersion = 4;
+const int kSchemaVersion = 5;
 
 /// The offline-first local store.
 ///
@@ -69,6 +69,27 @@ class AppDatabase extends _$AppDatabase {
           if (from < 4) {
             await m.addColumn(recordings, recordings.mediaType);
             await m.addColumn(recordings, recordings.processingStatus);
+          }
+          // m005 — local-first id model (plan #43): add nullable `coreId` and
+          // backfill it from legacy rows whose stringified `id` is a Core int.
+          // The GLOB guard APPROXIMATES Dart's `int.tryParse(id)` for canonical
+          // Core ids (a leading-sign-optional run of digits → UUID-style
+          // `rec_local_…` ids stay NULL). It is NOT exact: it accepts embedded
+          // `-` (e.g. `12-34`) that `int.tryParse` rejects, and does not bound
+          // length, so an overflowing all-digit string would diverge too. That
+          // is acceptable here because real Core ids are small positive ints —
+          // no actual row matches the divergent cases. The GLOB still prevents
+          // SQLite's bare CAST from silently coercing non-numeric text to 0.
+          // (This is an applied, irreversible migration — do NOT change the SQL.)
+          if (from < 5) {
+            await m.addColumn(recordings, recordings.coreId);
+            await customStatement(
+              "UPDATE recordings SET coreId = CAST(id AS INTEGER) "
+              "WHERE coreId IS NULL "
+              "AND (id GLOB '[0-9]*' OR id GLOB '-[0-9]*') "
+              "AND id NOT GLOB '*[^0-9-]*' "
+              "AND id GLOB '*[0-9]*'",
+            );
           }
         },
         beforeOpen: (details) async {

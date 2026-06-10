@@ -8,7 +8,9 @@ import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/providers.dart';
+import '../recordings/recording_ids.dart';
 import '../recordings/recordings_repository.dart';
+import '../recordings/upload_queue.dart';
 import 'inbox_item.dart';
 import 'inbox_sync.dart';
 
@@ -52,9 +54,12 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     try {
       final remote = await _repo.fetchRecordings();
       for (final recording in remote) {
-        // Per-field merge: read the local row first so an unsynced local edit
-        // (move-to-space, notes) is not clobbered by a stale Core list-row.
-        final existing =
+        // Match the existing local row by its reconciled `coreId` column FIRST
+        // (plan #43, W3): a `rec_local_<uuid>` row that already uploaded keeps
+        // its UUID PK, so keying off the stringified Core id alone would miss it
+        // and the upsert would insert a duplicate. Fall back to the legacy
+        // stringified-id PK for rows that predate the coreId column.
+        final existing = await _dao.recordingByCoreId(recording.id) ??
             await _dao.getRecordingById(coreIdToLocalId(recording.id));
         await _dao.upsertRecording(
           recordingToCompanion(recording, existing: existing),
@@ -99,10 +104,15 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     );
     await reloadFromLocal();
 
-    // Persist to Core only when BOTH ids are Core-backed (numeric). Locally
-    // created spaces use `ws_<epoch>_<rand>` ids that have no Core counterpart;
-    // for those the merge-upsert in [refresh] is what keeps the move durable.
-    final coreId = int.tryParse(recordingId);
+    // Persist to Core only when the recording is reconciled with Core (its
+    // `coreId` column is set) AND the target space is Core-backed (numeric id).
+    // A `rec_local_<uuid>` row that hasn't uploaded yet has `coreId` null — the
+    // move can't reach Core, so it is left local-only (plan #43, W3): the
+    // merge-upsert guard in [refresh] keeps the space durable, and once the row
+    // reconciles its coreId a later move/sync round-trips it. Locally-created
+    // spaces use `ws_<epoch>_<rand>` ids with no Core counterpart, also skipped.
+    final row = await _dao.getRecordingById(recordingId);
+    final coreId = row?.coreId;
     final coreWorkspaceId = int.tryParse(workspaceId);
     if (coreId != null && coreWorkspaceId != null) {
       try {
@@ -129,6 +139,26 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// apps/mobile uploadRecordingService createRecording-then-render.
   Future<void> insertLocalUpload(RecordingsCompanion entry) async {
     await _dao.upsertRecording(entry);
+    await reloadFromLocal();
+  }
+
+  /// Reconcile a local-first row with its Core identity once `POST
+  /// /api/recordings` succeeds (plan #43, W2). The row keeps its local
+  /// `rec_local_<uuid>` PK — this fills the separate nullable `coreId` column
+  /// (never a PK remap) and flips the local-only `pending_upload` status to the
+  /// backend `processing` state so the card reflects that Core has accepted it.
+  ///
+  /// W3 keys the socket/poll reconcile on `coreId`; W4's retry queue calls this
+  /// the moment a queued create succeeds.
+  Future<void> reconcileCoreId(String localId, int coreId) async {
+    await _dao.updateRecording(
+      localId,
+      RecordingsCompanion(
+        coreId: Value(coreId),
+        isProcessing: const Value(1),
+        processingStatus: const Value('processing'),
+      ),
+    );
     await reloadFromLocal();
   }
 
@@ -173,6 +203,31 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
       ),
     );
     await reloadFromLocal();
+  }
+
+  /// MANUAL retry from the Inbox card (plan #43, W5), alongside the auto-retry
+  /// queue. Re-enqueues a `failed`/`pending_upload` row through the SAME upload
+  /// queue ([UploadQueue.drainRow]) rather than duplicating the upload pipeline.
+  ///
+  /// A `failed` row has already left `pending_upload`, so the queue's
+  /// status-gate ([UploadQueue.drainRow] only drains `pending_upload`) would
+  /// no-op on it. We first flip the row back to `pending_upload` (clearing the
+  /// failure reason persisted in `notes`), re-render so the card immediately
+  /// reads as safe-and-pending, then hand off to the queue. The audio file was
+  /// kept on every non-confirmed outcome, so the re-upload has a file to send.
+  Future<void> retryUpload(String recordingId) async {
+    await _dao.updateRecording(
+      recordingId,
+      const RecordingsCompanion(
+        isProcessing: Value(0),
+        processingStatus: Value(kProcessingStatusPendingUpload),
+        notes: Value(null),
+      ),
+    );
+    await reloadFromLocal();
+    // Single-flight + idempotent: the queue guards concurrent drains and skips
+    // rows that have already moved on, so this is safe to call from a tap.
+    await _ref.read(uploadQueueProvider).drainRow(recordingId);
   }
 }
 

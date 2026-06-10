@@ -57,6 +57,13 @@ class Recordings extends Table {
   TextColumn get processingStatus =>
       text().named('processingStatus').withDefault(const Constant('done'))();
 
+  // m005 — local-first id model (plan #43). `id` stays TEXT and now carries a
+  // local UUID (`rec_local_<uuid>`) for rows minted before any Core id exists;
+  // `coreId` is the reconciled Core numeric id, NULL until upload succeeds. The
+  // m005 migration backfills `coreId = CAST(id AS INTEGER)` for legacy rows
+  // whose id is a stringified Core id, so they reconcile without a PK remap.
+  IntColumn get coreId => integer().named('coreId').nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

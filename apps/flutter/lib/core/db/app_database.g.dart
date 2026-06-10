@@ -148,6 +148,15 @@ class $RecordingsTable extends Recordings
     requiredDuringInsert: false,
     defaultValue: const Constant('done'),
   );
+  static const VerificationMeta _coreIdMeta = const VerificationMeta('coreId');
+  @override
+  late final GeneratedColumn<int> coreId = GeneratedColumn<int>(
+    'coreId',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -163,6 +172,7 @@ class $RecordingsTable extends Recordings
     workspaceId,
     mediaType,
     processingStatus,
+    coreId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -275,6 +285,12 @@ class $RecordingsTable extends Recordings
         ),
       );
     }
+    if (data.containsKey('coreId')) {
+      context.handle(
+        _coreIdMeta,
+        coreId.isAcceptableOrUnknown(data['coreId']!, _coreIdMeta),
+      );
+    }
     return context;
   }
 
@@ -336,6 +352,10 @@ class $RecordingsTable extends Recordings
         DriftSqlType.string,
         data['${effectivePrefix}processingStatus'],
       )!,
+      coreId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}coreId'],
+      ),
     );
   }
 
@@ -359,6 +379,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
   final String? workspaceId;
   final String mediaType;
   final String processingStatus;
+  final int? coreId;
   const RecordingRow({
     required this.id,
     required this.title,
@@ -373,6 +394,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     this.workspaceId,
     required this.mediaType,
     required this.processingStatus,
+    this.coreId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -396,6 +418,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     }
     map['mediaType'] = Variable<String>(mediaType);
     map['processingStatus'] = Variable<String>(processingStatus);
+    if (!nullToAbsent || coreId != null) {
+      map['coreId'] = Variable<int>(coreId);
+    }
     return map;
   }
 
@@ -420,6 +445,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           : Value(workspaceId),
       mediaType: Value(mediaType),
       processingStatus: Value(processingStatus),
+      coreId: coreId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coreId),
     );
   }
 
@@ -442,6 +470,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       workspaceId: serializer.fromJson<String?>(json['workspaceId']),
       mediaType: serializer.fromJson<String>(json['mediaType']),
       processingStatus: serializer.fromJson<String>(json['processingStatus']),
+      coreId: serializer.fromJson<int?>(json['coreId']),
     );
   }
   @override
@@ -461,6 +490,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       'workspaceId': serializer.toJson<String?>(workspaceId),
       'mediaType': serializer.toJson<String>(mediaType),
       'processingStatus': serializer.toJson<String>(processingStatus),
+      'coreId': serializer.toJson<int?>(coreId),
     };
   }
 
@@ -478,6 +508,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     Value<String?> workspaceId = const Value.absent(),
     String? mediaType,
     String? processingStatus,
+    Value<int?> coreId = const Value.absent(),
   }) => RecordingRow(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -492,6 +523,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     workspaceId: workspaceId.present ? workspaceId.value : this.workspaceId,
     mediaType: mediaType ?? this.mediaType,
     processingStatus: processingStatus ?? this.processingStatus,
+    coreId: coreId.present ? coreId.value : this.coreId,
   );
   RecordingRow copyWithCompanion(RecordingsCompanion data) {
     return RecordingRow(
@@ -516,6 +548,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       processingStatus: data.processingStatus.present
           ? data.processingStatus.value
           : this.processingStatus,
+      coreId: data.coreId.present ? data.coreId.value : this.coreId,
     );
   }
 
@@ -534,7 +567,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           ..write('notes: $notes, ')
           ..write('workspaceId: $workspaceId, ')
           ..write('mediaType: $mediaType, ')
-          ..write('processingStatus: $processingStatus')
+          ..write('processingStatus: $processingStatus, ')
+          ..write('coreId: $coreId')
           ..write(')'))
         .toString();
   }
@@ -554,6 +588,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     workspaceId,
     mediaType,
     processingStatus,
+    coreId,
   );
   @override
   bool operator ==(Object other) =>
@@ -571,7 +606,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           other.notes == this.notes &&
           other.workspaceId == this.workspaceId &&
           other.mediaType == this.mediaType &&
-          other.processingStatus == this.processingStatus);
+          other.processingStatus == this.processingStatus &&
+          other.coreId == this.coreId);
 }
 
 class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
@@ -588,6 +624,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
   final Value<String?> workspaceId;
   final Value<String> mediaType;
   final Value<String> processingStatus;
+  final Value<int?> coreId;
   final Value<int> rowid;
   const RecordingsCompanion({
     this.id = const Value.absent(),
@@ -603,6 +640,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.workspaceId = const Value.absent(),
     this.mediaType = const Value.absent(),
     this.processingStatus = const Value.absent(),
+    this.coreId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RecordingsCompanion.insert({
@@ -619,6 +657,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.workspaceId = const Value.absent(),
     this.mediaType = const Value.absent(),
     this.processingStatus = const Value.absent(),
+    this.coreId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title),
@@ -640,6 +679,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Expression<String>? workspaceId,
     Expression<String>? mediaType,
     Expression<String>? processingStatus,
+    Expression<int>? coreId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -656,6 +696,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       if (workspaceId != null) 'workspaceId': workspaceId,
       if (mediaType != null) 'mediaType': mediaType,
       if (processingStatus != null) 'processingStatus': processingStatus,
+      if (coreId != null) 'coreId': coreId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -674,6 +715,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Value<String?>? workspaceId,
     Value<String>? mediaType,
     Value<String>? processingStatus,
+    Value<int?>? coreId,
     Value<int>? rowid,
   }) {
     return RecordingsCompanion(
@@ -690,6 +732,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       workspaceId: workspaceId ?? this.workspaceId,
       mediaType: mediaType ?? this.mediaType,
       processingStatus: processingStatus ?? this.processingStatus,
+      coreId: coreId ?? this.coreId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -736,6 +779,9 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     if (processingStatus.present) {
       map['processingStatus'] = Variable<String>(processingStatus.value);
     }
+    if (coreId.present) {
+      map['coreId'] = Variable<int>(coreId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -758,6 +804,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
           ..write('workspaceId: $workspaceId, ')
           ..write('mediaType: $mediaType, ')
           ..write('processingStatus: $processingStatus, ')
+          ..write('coreId: $coreId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1421,6 +1468,7 @@ typedef $$RecordingsTableCreateCompanionBuilder =
       Value<String?> workspaceId,
       Value<String> mediaType,
       Value<String> processingStatus,
+      Value<int?> coreId,
       Value<int> rowid,
     });
 typedef $$RecordingsTableUpdateCompanionBuilder =
@@ -1438,6 +1486,7 @@ typedef $$RecordingsTableUpdateCompanionBuilder =
       Value<String?> workspaceId,
       Value<String> mediaType,
       Value<String> processingStatus,
+      Value<int?> coreId,
       Value<int> rowid,
     });
 
@@ -1512,6 +1561,11 @@ class $$RecordingsTableFilterComposer
 
   ColumnFilters<String> get processingStatus => $composableBuilder(
     column: $table.processingStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get coreId => $composableBuilder(
+    column: $table.coreId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1589,6 +1643,11 @@ class $$RecordingsTableOrderingComposer
     column: $table.processingStatus,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get coreId => $composableBuilder(
+    column: $table.coreId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RecordingsTableAnnotationComposer
@@ -1646,6 +1705,9 @@ class $$RecordingsTableAnnotationComposer
     column: $table.processingStatus,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get coreId =>
+      $composableBuilder(column: $table.coreId, builder: (column) => column);
 }
 
 class $$RecordingsTableTableManager
@@ -1692,6 +1754,7 @@ class $$RecordingsTableTableManager
                 Value<String?> workspaceId = const Value.absent(),
                 Value<String> mediaType = const Value.absent(),
                 Value<String> processingStatus = const Value.absent(),
+                Value<int?> coreId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion(
                 id: id,
@@ -1707,6 +1770,7 @@ class $$RecordingsTableTableManager
                 workspaceId: workspaceId,
                 mediaType: mediaType,
                 processingStatus: processingStatus,
+                coreId: coreId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1724,6 +1788,7 @@ class $$RecordingsTableTableManager
                 Value<String?> workspaceId = const Value.absent(),
                 Value<String> mediaType = const Value.absent(),
                 Value<String> processingStatus = const Value.absent(),
+                Value<int?> coreId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion.insert(
                 id: id,
@@ -1739,6 +1804,7 @@ class $$RecordingsTableTableManager
                 workspaceId: workspaceId,
                 mediaType: mediaType,
                 processingStatus: processingStatus,
+                coreId: coreId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

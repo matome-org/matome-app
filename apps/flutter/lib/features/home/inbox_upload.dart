@@ -1,16 +1,20 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
+import '../../core/audio/audio_playback.dart';
 import '../../core/config/app_config.dart';
 import '../../core/db/app_database.dart';
-import '../../core/http/api_exception.dart';
 import '../../core/providers.dart';
 import '../recordings/recording.dart';
+import '../recordings/recording_ids.dart';
 import '../recordings/recording_result_waiter.dart';
 import '../recordings/recording_status_socket.dart';
-import '../recordings/recordings_repository.dart';
+import '../recordings/upload_queue.dart';
 import 'inbox_controller.dart';
 import 'inbox_sync.dart';
 
@@ -43,6 +47,88 @@ class PickedUpload {
   final String mediaType;
 }
 
+/// Copies a file-picker-imported [picked] file into durable app storage and
+/// returns the durable path. Injectable so the durable-copy step can be unit
+/// tested without `path_provider`'s platform channel.
+///
+/// Plan #45 W1 (unified local-first audio): a file-picker import must enter the
+/// SAME pipeline as a captured recording — bytes live in durable app storage
+/// FIRST, then the #43 [UploadQueue] syncs local→cloud. Returning the unchanged
+/// [picked] (no copy) is the web behaviour (cloud-direct, no durable FS).
+typedef DurableImportCopy = Future<PickedUpload> Function(PickedUpload picked);
+
+/// Default [DurableImportCopy]: on NATIVE, copies the picked file's bytes into
+/// `getApplicationDocumentsDirectory` (the same area the recorder writes its
+/// finalized segment) and returns a [PickedUpload] pointing at that DURABLE
+/// copy — so the stored `audioFilePath` survives the user deleting the source
+/// and never depends on the source path remaining present.
+///
+/// On WEB (`kIsWeb`) there is no durable native filesystem, so the import stays
+/// cloud-direct: the picked file is returned UNCHANGED (the upload queue streams
+/// it straight to Core, as today).
+Future<PickedUpload> durableImportCopy(PickedUpload picked) async {
+  // WEB: cloud-direct — no durable local FS, return the picked file unchanged.
+  if (kIsWeb) return picked;
+
+  // NATIVE: copy bytes into durable app storage and point at the copy.
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    // Derive the extension from the BASENAME only: splitting the FULL path on
+    // '.' breaks when a PARENT dir has a dot (e.g. `/home/a.b/file` → `b/file`).
+    // Take the last path segment first, then its last '.'-suffix.
+    final basename = picked.file.path.split('/').last;
+    final ext = basename.contains('.') ? basename.split('.').last : 'bin';
+    final destPath = '${dir.path}/import_'
+        '${DateTime.now().millisecondsSinceEpoch}_${_randSuffix(6)}.$ext';
+    final durable = await picked.file.copy(destPath);
+    return PickedUpload(
+      file: durable,
+      title: picked.title,
+      mediaType: picked.mediaType,
+    );
+  } catch (_) {
+    // Best-effort: if the copy fails (e.g. no storage), fall back to the source
+    // path so the import is no WORSE than before — the local-first insert still
+    // happens and the queue can still try to upload the source while it exists.
+    return picked;
+  }
+}
+
+/// Probes the real duration (whole seconds) of a durable audio file. Returns 0
+/// when the duration can't be determined (probe failed / web blob / non-audio).
+/// Injectable so the import flow can be unit-tested without a real audio engine
+/// — mirrors `AudioRecordingService`'s injectable `durationProbe` seam.
+typedef ImportDurationProbe = Future<int> Function(String path);
+
+/// Default [ImportDurationProbe] (plan #46 W3): reads the true clip length off a
+/// durable local audio file through the platform-swappable [AudioPlayback]
+/// abstraction (#870 W1) — the SAME `createAudioPlayback().setFilePath(...)`
+/// probe the recorder uses, so it now works on Linux/Windows desktop too
+/// (`just_audio` 0.9.x has no desktop backend → the old probe returned null).
+///
+/// On WEB there is no durable native file to probe here (the import is
+/// cloud-direct, see [durableImportCopy]), so callers leave the duration 0 and
+/// it is backfilled by Core once the pipeline resolves.
+Future<int> probeImportDurationSeconds(String path) async {
+  final player = createAudioPlayback();
+  try {
+    final dur = await player.setFilePath(path);
+    final ms = dur?.inMilliseconds ?? 0;
+    return ms > 0 ? (ms / 1000).round() : 0;
+  } catch (_) {
+    return 0;
+  } finally {
+    await player.dispose();
+  }
+}
+
+final _rng = Random();
+
+String _randSuffix(int len) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  return List.generate(len, (_) => chars[_rng.nextInt(chars.length)]).join();
+}
+
 /// Resolves a coarse media type from a file path extension, mirroring the
 /// audio/image/doc buckets apps/mobile uploadRecordingService uses.
 String mediaTypeForPath(String path) {
@@ -54,98 +140,149 @@ String mediaTypeForPath(String path) {
   return 'document';
 }
 
-/// Orchestrates an Inbox file upload (S1, #780), porting apps/mobile
-/// uploadRecordingService.uploadPickedRecording:
+/// Orchestrates an Inbox file upload (S1, #780), local-first (plan #43, W2).
 ///
-///  1. `POST /api/recordings` (create + presign) via the F4 pipeline.
-///  2. Insert a local Drift row immediately (status processing) so the card
-///     shows up before Core finishes — reconciling the Core int id to the
-///     local TEXT primary key.
-///  3. Stream-upload + enqueue + await result through the F4 pipeline.
-///  4. Apply the terminal (done/failed) outcome back to the local row.
+/// The order is **inverted** from the original mobile port: the local Drift row
+/// is written BEFORE any Core call, so a Core-create failure can never leave the
+/// captured audio orphaned with no row (the #828 root cause). The flow is:
 ///
-/// The Core id<->local id reconciliation is centralised in [inbox_sync].
+///  1. Mint a local `rec_local_<uuid>` id and INSERT the local Drift row
+///     immediately — `coreId = null`, status `pending_upload`, audio path on
+///     disk — so the Inbox card shows up regardless of Core reachability.
+///  2. Hand the persisted row off to the [UploadQueue] (plan #43, W4), which
+///     runs the failure-tolerant `POST /api/recordings` → reconcile `coreId` →
+///     stream-upload → enqueue → await terminal → apply pipeline. On any Core
+///     failure the queue leaves the row `pending_upload` with the audio on disk
+///     and retries it on the next trigger (app start / connectivity regained);
+///     on a confirmed `done` the queue drops the on-disk audio.
+///
+/// The Core id reconcile is centralised in [InboxController.reconcileCoreId];
+/// the create→upload→reconcile drain lives in [UploadQueue].
 class InboxUploader {
   InboxUploader(
     this._ref, {
-    RecordingResultAwaiter awaitResult = liveRecordingResultAwaiter,
-  }) : _awaitTerminal = awaitResult;
+    DurableImportCopy? durableCopy,
+    ImportDurationProbe? durationProbe,
+  })  : _durableCopy = durableCopy ?? durableImportCopy,
+        _durationProbe = durationProbe ?? probeImportDurationSeconds;
 
   final Ref _ref;
 
-  /// Races the realtime socket against a poll fallback for the terminal result.
-  /// Defaults to [liveRecordingResultAwaiter]; injected in tests.
-  final RecordingResultAwaiter _awaitTerminal;
+  /// Copies a file-picker import into durable app storage before the local-first
+  /// insert (plan #45 W1). Injectable for tests; defaults to [durableImportCopy]
+  /// (native = copy, web = cloud-direct no-copy).
+  final DurableImportCopy _durableCopy;
 
-  RecordingsRepository get _repo => _ref.read(recordingsRepositoryProvider);
+  /// Probes a durable imported audio file's real duration (plan #46 W3).
+  /// Injectable for tests; defaults to [probeImportDurationSeconds] (the #870
+  /// platform-swappable audio probe — works on Linux desktop too).
+  final ImportDurationProbe _durationProbe;
+
   InboxController get _inbox => _ref.read(inboxControllerProvider.notifier);
+  UploadQueue get _queue => _ref.read(uploadQueueProvider);
 
-  /// Runs the full upload for [picked]: create + presign, insert the local
-  /// Drift row immediately (processing), stream-upload, enqueue processing,
-  /// then await the terminal result and reconcile it into the local row.
+  /// Persists [picked] locally FIRST, then best-effort uploads to Core.
+  ///
+  /// 1. Insert a local `rec_local_<uuid>` row (`pending_upload`, `coreId` null,
+  ///    audio path on disk) — this NEVER depends on Core and shows the Inbox
+  ///    card immediately.
+  /// 2. Hand off to the [UploadQueue]: create → reconcile `coreId` → upload →
+  ///    enqueue → await → apply, all failure-tolerant. Any Core failure leaves
+  ///    the row `pending_upload` + audio on disk for the queue to retry; a
+  ///    confirmed `done` drops the on-disk audio.
   ///
   /// [durationSeconds] is the known audio length (seconds) for a captured
   /// recording; the Inbox file-picker path leaves it 0 (unknown).
   ///
-  /// Returns the created Core recording id (stringified, == local Drift id).
-  Future<String> upload(PickedUpload picked, {int durationSeconds = 0}) async {
-    // 1. Create + presign on Core.
-    final created = await _repo.createRecording(
-      title: picked.title,
-      durationSeconds: durationSeconds,
-      mediaType: picked.mediaType,
-    );
-    final recording = created.recording;
-    final localId = coreIdToLocalId(recording.id);
+  /// [onConfirmed], when given, is registered on the queue as a post-upload
+  /// cleanup hook for this row — run ONCE the upload is confirmed `done` (the
+  /// capture finisher passes `service.discardSegments` so crash-recovery
+  /// segments + the draft are dropped only after a confirmed upload).
+  ///
+  /// Returns the **local** Drift id (`rec_local_<uuid>`). NOTE (W3): callers
+  /// must not assume this equals the Core id — it no longer does. The Core id,
+  /// once known, lives in the row's `coreId` column. Today's only callers (the
+  /// recording modal `_finish`, the Inbox file-picker) discard the return value,
+  /// so this is safe.
+  Future<String> upload(
+    PickedUpload picked, {
+    int durationSeconds = 0,
+    Future<void> Function()? onConfirmed,
+    bool importFromExternalSource = false,
+  }) async {
+    // 0. DURABLE-COPY (plan #45 W1): a file-picker import names the user's SOURCE
+    //    file (e.g. ~/Videos/…mp3) which can vanish, leaving playback dead. The
+    //    import must enter the SAME pipeline as a captured recording — copy the
+    //    bytes into durable app storage FIRST and store THAT path, so the audio
+    //    no longer depends on the source surviving. The recorder finish path
+    //    already hands a durable segment (#43 W2), so it skips this step to avoid
+    //    a redundant copy that would also slip the #43 cleanup. On WEB the copy
+    //    is a no-op (cloud-direct), see [durableImportCopy].
+    final stored =
+        importFromExternalSource ? await _durableCopy(picked) : picked;
 
-    // 2. Insert the local row immediately as processing so the card appears
-    //    in the Inbox before Core finishes.
-    await _inbox.insertLocalUpload(
-      _pendingCompanion(recording, picked, durationSeconds),
-    );
-
-    // 3 + 4. Upload + enqueue + await result, then reconcile the local row.
-    try {
-      await _repo.uploadFile(created.upload, picked.file);
-      await _repo.enqueueProcessing(recording.id);
-      // F4 realtime: socket `recording:status` primary, 2s poll fallback,
-      // 10-min timeout. First terminal signal from either source wins.
-      final result = await _awaitTerminal(
-        recording: recording,
-        poll: () => _repo.fetchRecording(recording.id),
-        ref: _ref,
-      );
-      final done = result.recording;
-      await _inbox.applyUploadResult(
-        localId,
-        failed: result.failed,
-        summary: done?.summary,
-        notes: done?.transcript,
-      );
-    } catch (error) {
-      // Persist a real reason on terminal failure instead of a bare "failed":
-      // an ApiException carries a friendly message; anything else falls back to
-      // its toString so the failed card is diagnosable.
-      final reason =
-          error is ApiException ? error.message : error.toString();
-      await _inbox.applyUploadResult(
-        localId,
-        failed: true,
-        errorReason: reason,
-      );
+    // 0b. DURATION PROBE (plan #46 W3): an imported audio file arrives with NO
+    //     known length, so the card + Details showed a BLANK duration. Probe the
+    //     real length off the now-DURABLE local file (so we read a stable path,
+    //     after the #45 copy) via the #870 platform-swappable probe — the SAME
+    //     probe the recorder uses — and store it on FIRST insert so the card and
+    //     Details render the duration immediately (no row-update round-trip).
+    //
+    //     Probe BEFORE insert because: the upload itself is already fire-and-
+    //     forget (the home-screen FAB does `unawaited(upload(...))`), so this
+    //     short file read never blocks the UI; and storing the real value up
+    //     front means the duration is correct on the card's first render with
+    //     ZERO extra pipeline plumbing (an after-insert update would re-render
+    //     and risk racing the Core-side backfill).
+    //
+    //     Only the IMPORT path needs this: the recorder already passes its known
+    //     `durationSeconds`. Skip when a caller already supplied one, on WEB (no
+    //     durable file to probe; cloud-direct — Core backfills it), and for
+    //     non-audio media.
+    var resolvedDuration = durationSeconds;
+    if (resolvedDuration <= 0 &&
+        importFromExternalSource &&
+        !kIsWeb &&
+        stored.mediaType == 'audio') {
+      try {
+        resolvedDuration = await _durationProbe(stored.file.path);
+      } catch (_) {
+        // Best-effort: a probe failure just leaves the duration unknown (0) —
+        // no worse than before; Core may still backfill it.
+        resolvedDuration = 0;
+      }
     }
+
+    // 1. LOCAL-FIRST: persist the row before touching Core so the capture can
+    //    never be orphaned (the #828 root cause). The card appears immediately.
+    final localId = mintLocalRecordingId();
+    await _inbox.insertLocalUpload(
+      _pendingCompanion(localId, stored, resolvedDuration),
+    );
+
+    // Register the post-confirm cleanup BEFORE draining so the queue runs it the
+    // moment this row reconciles `done` (closes the #828 orphan-WAV seam).
+    if (onConfirmed != null) _queue.onConfirmed(localId, onConfirmed);
+
+    // 2. Hand the persisted row to the retry queue, which drives the Core
+    //    handoff and is itself the connectivity-driven background drain. This
+    //    in-line drain attempts the upload immediately; if Core is unreachable
+    //    the row stays pending_upload and a later trigger (app start /
+    //    connectivity regained) re-drains it. Never throws out of upload().
+    await _queue.drainRow(localId);
 
     return localId;
   }
 
   RecordingsCompanion _pendingCompanion(
-    Recording recording,
+    String localId,
     PickedUpload picked,
     int durationSeconds,
   ) {
     final now = DateTime.now();
     return RecordingsCompanion(
-      id: Value(coreIdToLocalId(recording.id)),
+      id: Value(localId),
+      coreId: const Value(null),
       title: Value(picked.title),
       timestamp: Value(formatClock(now)),
       duration: Value(formatDurationText(durationSeconds)),
@@ -154,7 +291,7 @@ class InboxUploader {
       audioFilePath: Value(picked.file.path),
       createdAt: Value(now.millisecondsSinceEpoch),
       mediaType: Value(picked.mediaType),
-      processingStatus: const Value('processing'),
+      processingStatus: const Value(kProcessingStatusPendingUpload),
     );
   }
 }

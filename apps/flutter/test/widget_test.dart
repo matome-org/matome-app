@@ -7,6 +7,7 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_item.dart';
+import 'package:matome_flutter/features/recordings/upload_retry_service.dart';
 
 import 'support/fake_inbox.dart';
 
@@ -43,9 +44,25 @@ Widget _pumpHome(AsyncValue<List<InboxItem>> state) {
       inboxControllerProvider.overrideWith(
         (ref) => FakeInboxController(ref, state),
       ),
+      // HomeScreen starts the W4 auto-retry service on first frame; stub it so
+      // this widget test doesn't spin up a real reachability probe / periodic
+      // timer (which would leave a pending Timer at teardown).
+      uploadRetryServiceProvider.overrideWith(
+        (ref) => _NoopRetryService(ref),
+      ),
     ],
     child: MaterialApp(theme: buildAppTheme(), home: const HomeScreen()),
   );
+}
+
+/// No-op retry service: `start()` is inert so the widget test never spins up a
+/// reachability probe or a pending periodic timer (which would trip the
+/// "Timer still pending after teardown" invariant).
+class _NoopRetryService extends UploadRetryService {
+  _NoopRetryService(super.ref);
+
+  @override
+  Future<void> start() async {}
 }
 
 void main() {

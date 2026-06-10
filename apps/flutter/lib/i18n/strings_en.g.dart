@@ -41,8 +41,10 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 
 	// Translations
 	late final Translations$common$en common = Translations$common$en.internal(_root);
+	late final Translations$a11y$en a11y = Translations$a11y$en.internal(_root);
 	late final Translations$settings$en settings = Translations$settings$en.internal(_root);
 	late final Translations$inbox$en inbox = Translations$inbox$en.internal(_root);
+	late final Translations$cardStatus$en cardStatus = Translations$cardStatus$en.internal(_root);
 	late final Translations$recording$en recording = Translations$recording$en.internal(_root);
 	late final Translations$details$en details = Translations$details$en.internal(_root);
 	late final Translations$spaces$en spaces = Translations$spaces$en.internal(_root);
@@ -74,6 +76,24 @@ class Translations$common$en {
 
 	/// en: 'Yesterday'
 	String get yesterday => 'Yesterday';
+}
+
+// Path: a11y
+class Translations$a11y$en {
+	Translations$a11y$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Settings'
+	String get openSettings => 'Settings';
+
+	/// en: 'Play'
+	String get play => 'Play';
+
+	/// en: 'Pause'
+	String get pause => 'Pause';
 }
 
 // Path: settings
@@ -137,6 +157,36 @@ class Translations$inbox$en {
 
 	/// en: 'recordings'
 	String get recordings => 'recordings';
+}
+
+// Path: cardStatus
+class Translations$cardStatus$en {
+	Translations$cardStatus$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Saved on device · waiting to upload'
+	String get pendingUpload => 'Saved on device · waiting to upload';
+
+	/// en: 'Transcribing…'
+	String get processing => 'Transcribing…';
+
+	/// en: 'Upload failed'
+	String get failed => 'Upload failed';
+
+	/// en: 'Retry'
+	String get retry => 'Retry';
+
+	/// en: 'On device'
+	String get onDevice => 'On device';
+
+	/// en: 'Cloud'
+	String get cloud => 'Cloud';
+
+	/// en: 'Sync state'
+	String get syncState => 'Sync state';
 }
 
 // Path: recording
@@ -302,6 +352,9 @@ class Translations$details$en {
 
 	/// en: 'Couldn't play audio'
 	String get audioFailed => 'Couldn\'t play audio';
+
+	/// en: 'Audio unavailable'
+	String get audioUnavailable => 'Audio unavailable';
 }
 
 // Path: spaces
@@ -548,6 +601,9 @@ extension on Translations {
 			'common.retry' => 'Retry',
 			'common.today' => 'Today',
 			'common.yesterday' => 'Yesterday',
+			'a11y.openSettings' => 'Settings',
+			'a11y.play' => 'Play',
+			'a11y.pause' => 'Pause',
 			'settings.title' => 'Settings',
 			'settings.appearance' => 'Appearance',
 			'settings.theme' => 'Theme',
@@ -563,6 +619,13 @@ extension on Translations {
 			'inbox.searchPlaceholder' => 'Search transcripts, tags, spaces…',
 			'inbox.noResults' => 'No recordings found',
 			'inbox.recordings' => 'recordings',
+			'cardStatus.pendingUpload' => 'Saved on device · waiting to upload',
+			'cardStatus.processing' => 'Transcribing…',
+			'cardStatus.failed' => 'Upload failed',
+			'cardStatus.retry' => 'Retry',
+			'cardStatus.onDevice' => 'On device',
+			'cardStatus.cloud' => 'Cloud',
+			'cardStatus.syncState' => 'Sync state',
 			'recording.title' => 'Recording',
 			'recording.ready' => 'Ready to Record',
 			'recording.startHint' => 'Tap the button to start recording',
@@ -612,6 +675,7 @@ extension on Translations {
 			'details.saved' => 'Notes saved',
 			'details.saveFailed' => 'Couldn\'t save notes',
 			'details.audioFailed' => 'Couldn\'t play audio',
+			'details.audioUnavailable' => 'Audio unavailable',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

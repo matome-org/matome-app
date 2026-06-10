@@ -7,7 +7,10 @@ import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/providers.dart';
+import '../recordings/recording_ids.dart';
 import '../recordings/recordings_repository.dart';
+import '../recordings/upload_queue.dart';
+import '../home/inbox_controller.dart';
 import '../home/inbox_sync.dart';
 import '../home/inbox_upload.dart';
 
@@ -39,6 +42,7 @@ class DetailsState {
     this.notFound = false,
     this.isProcessing = false,
     this.processingFailed = false,
+    this.pendingUpload = false,
   });
 
   final String id;
@@ -50,6 +54,11 @@ class DetailsState {
   /// Live transcription state — drives the "transcribing…" spinner + retry CTA.
   final bool isProcessing;
   final bool processingFailed;
+
+  /// Saved-on-device-but-not-yet-uploaded (plan #43, W5). Distinct from
+  /// [isProcessing]: nothing is in flight, the recording is simply held locally
+  /// until the upload queue reaches Core. Drives the SAFE-but-not-uploaded copy.
+  final bool pendingUpload;
 
   String get title => row?.title ?? '';
   String? get summary => row?.summary;
@@ -63,9 +72,18 @@ class DetailsState {
 
   String get badge => row?.badge ?? 'Inbox';
 
-  /// Core numeric id when this row maps to a Core recording (the Drift id is the
-  /// stringified Core id), else null for purely-local rows.
-  int? get coreId => int.tryParse(id);
+  /// Core numeric id for this recording, or null when the row is local-only and
+  /// has not yet been reconciled with Core (plan #43, W3).
+  ///
+  /// Source of truth is the loaded row's `coreId` column — a `rec_local_<uuid>`
+  /// row keeps `coreId` null until `POST /api/recordings` succeeds, at which
+  /// point the upload/queue flow fills it (never a PK remap). Before the row is
+  /// loaded (the Core-fetch-on-miss path in [DetailsController.load]) we fall
+  /// back to parsing the id, which resolves the legacy case where Details is
+  /// opened for a numeric-id Core recording not yet cached in Drift. For a
+  /// local-only id (`rec_local_...`) the parse yields null, so Core calls are
+  /// cleanly skipped rather than parse-failing silently.
+  int? get coreId => row?.coreId ?? int.tryParse(id);
 
   DetailsState copyWith({
     RecordingRow? row,
@@ -74,6 +92,7 @@ class DetailsState {
     bool? notFound,
     bool? isProcessing,
     bool? processingFailed,
+    bool? pendingUpload,
   }) {
     return DetailsState(
       id: id,
@@ -83,6 +102,7 @@ class DetailsState {
       notFound: notFound ?? this.notFound,
       isProcessing: isProcessing ?? this.isProcessing,
       processingFailed: processingFailed ?? this.processingFailed,
+      pendingUpload: pendingUpload ?? this.pendingUpload,
     );
   }
 }
@@ -142,12 +162,16 @@ class DetailsController extends StateNotifier<DetailsState> {
     }
 
     final source = await _resolveAudioSource(row);
+    final pending = row.processingStatus == kProcessingStatusPendingUpload;
     state = state.copyWith(
       row: row,
       audioSource: source,
       isLoading: false,
-      isProcessing: row.isProcessing == 1,
+      // A pending-upload row is held locally, not transcribing — keep the
+      // spinner off so the UI reads as safe rather than "in progress".
+      isProcessing: !pending && row.isProcessing == 1,
       processingFailed: row.processingStatus == 'failed',
+      pendingUpload: pending,
     );
   }
 
@@ -160,7 +184,9 @@ class DetailsController extends StateNotifier<DetailsState> {
     if (path.isNotEmpty && _isLocalPath(path) && File(path).existsSync()) {
       return AudioSource(AudioSourceKind.localFile, path);
     }
-    final coreId = state.coreId;
+    // Read coreId off the row being resolved (state.row isn't published yet at
+    // this point in load()). A local-only row (coreId null) has no remote URL.
+    final coreId = row.coreId ?? int.tryParse(row.id);
     if (coreId != null) {
       try {
         final url = await _repo.downloadUrl(coreId);
@@ -196,12 +222,22 @@ class DetailsController extends StateNotifier<DetailsState> {
     if (row != null) state = state.copyWith(row: row);
   }
 
-  /// Retries transcription for a failed recording via the F4 pipeline:
-  /// `POST /process` then race the `recording:status` channel against the poll.
-  /// Marks the local row processing immediately so the UI shows live progress.
+  /// Retries a failed recording.
+  ///
+  /// Two failure shapes exist (plan #43, W5):
+  ///  * No `coreId` yet — the failure happened during the local-first UPLOAD
+  ///    (create/transport), or the row is still `pending_upload`. Re-enqueue
+  ///    through the SAME auto-retry queue ([UploadQueue.drainRow]) rather than
+  ///    calling `/process` (there is no Core recording to process yet).
+  ///  * Has a `coreId` — the upload reconciled but TRANSCRIPTION failed. Retry
+  ///    via the F4 pipeline: `POST /process` then race the `recording:status`
+  ///    channel against the poll. Marks the row processing immediately.
   Future<void> retry() async {
     final coreId = state.coreId;
-    if (coreId == null) return;
+    if (coreId == null) {
+      await _retryUpload();
+      return;
+    }
 
     await _dao.updateRecording(
       state.id,
@@ -236,6 +272,21 @@ class DetailsController extends StateNotifier<DetailsState> {
     }
   }
 
+  /// Re-enqueue a not-yet-uploaded recording through the shared auto-retry
+  /// queue (plan #43, W5), then reload the local row so Details reflects the
+  /// new state. Delegates to [InboxController.retryUpload] so the manual retry
+  /// path is identical to the Inbox card's — flip to `pending_upload`, drain.
+  Future<void> _retryUpload() async {
+    state = state.copyWith(
+      pendingUpload: true,
+      processingFailed: false,
+      isProcessing: false,
+    );
+    await _ref.read(inboxControllerProvider.notifier).retryUpload(state.id);
+    if (!mounted) return;
+    await load();
+  }
+
   Future<void> _applyTerminal({
     required bool failed,
     String? summary,
@@ -264,8 +315,27 @@ class DetailsController extends StateNotifier<DetailsState> {
     );
   }
 
-  /// Deletes the recording from Drift AND Core.
+  /// Deletes the recording: the local audio FILE, the Drift row, AND Core.
+  ///
+  /// This is the EXPLICIT, user-initiated deletion (plan #46, W2 / #871). Since
+  /// the upload queue no longer auto-evicts the local audio on `done`, the
+  /// local-first `audioFilePath` is the durable source of truth and lives until
+  /// the user deletes it here. So this path must free the on-disk file too —
+  /// otherwise a user-delete would leave an orphaned WAV on disk forever.
+  ///
+  /// Order: drop the on-disk file FIRST (we still hold the row + its path),
+  /// then the Drift row, then Core (best-effort). We delete the file straight
+  /// from the row's `audioFilePath` when it is a real local path (not a remote
+  /// storage key) — deliberately NOT gated on the resolved playback source, so a
+  /// `done`/synced row that still owns its local-first copy (exactly the W2
+  /// scenario) still has that file freed. A synced-only row whose path is a Core
+  /// object key is skipped — there is no local file to remove.
   Future<void> delete() async {
+    final path = state.row?.audioFilePath ?? '';
+    if (path.isNotEmpty && (path.startsWith('/') || path.startsWith('file:'))) {
+      // Reuse the queue's best-effort path delete (never throws).
+      await deleteAudioFile(path);
+    }
     await _dao.deleteRecording(state.id);
     final coreId = state.coreId;
     if (coreId != null) {

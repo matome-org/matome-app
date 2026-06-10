@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
+import 'core/audio/audio_desktop_init.dart';
 import 'core/i18n/locale_controller.dart';
 import 'core/logging/log_redaction.dart';
 import 'core/theme/app_theme.dart';
@@ -11,6 +12,11 @@ import 'i18n/strings.g.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // #870 (plan #46 W1): on Linux/Windows desktop, register the media_kit backend
+  // under the just_audio platform interface so playback + the duration probe
+  // actually work (just_audio 0.9.x ships no native desktop backend). No-op on
+  // mobile/web. Must run before any AudioPlayback is created.
+  initDesktopAudioBackend();
   // SEC (#815): redact the Guardian JWT from any phoenix_socket log record
   // (the access token rides the WS connect URL's `?token=` query). Installed
   // before anything can log so the token never lands in a sink in cleartext.

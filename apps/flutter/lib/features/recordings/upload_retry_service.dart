@@ -1,0 +1,127 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/config/app_config.dart';
+import 'upload_queue.dart';
+
+/// A reachability check for Core — returns `true` when `AppConfig.apiBaseUrl`
+/// answers. Injectable so tests drive connectivity transitions with a fake
+/// instead of a live socket. The default ([probeApiReachability]) issues a
+/// cheap GET to the API root and treats *any* HTTP reply (even 4xx) as
+/// reachable — only a transport error (no statusCode) means "offline".
+typedef ReachabilityProbe = Future<bool> Function();
+
+/// Default [ReachabilityProbe]: a short-timeout GET to `AppConfig.apiBaseUrl`.
+/// Any HTTP response (incl. 404/401) ⇒ reachable; a connection/timeout error ⇒
+/// unreachable. Uses a bare [Dio] (no auth) so it works pre-login too.
+Future<bool> probeApiReachability() async {
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: AppConfig.apiBaseUrl,
+      connectTimeout: const Duration(seconds: 4),
+      receiveTimeout: const Duration(seconds: 4),
+      validateStatus: (_) => true,
+    ),
+  );
+  try {
+    final res = await dio.get<void>('/');
+    return res.statusCode != null;
+  } catch (_) {
+    return false;
+  } finally {
+    dio.close(force: true);
+  }
+}
+
+/// Drives the [UploadQueue] on its three triggers (plan #43, W4):
+///  (a) app start — drain once immediately,
+///  (b) connectivity regained — a lightweight periodic reachability probe to
+///      `AppConfig.apiBaseUrl` re-drains on an unreachable→reachable edge,
+///  (c) after a finish() — handled in-line by `InboxUploader.upload`'s drain;
+///      this service covers the background/offline-recovery cases.
+///
+/// No `connectivity_plus` dependency exists in the project, so this uses a
+/// simple injectable HTTP reachability probe rather than pulling in a native
+/// connectivity plugin — keeps the lab build dependency-light and fully
+/// testable with a fake probe (no real socket).
+class UploadRetryService {
+  UploadRetryService(
+    this._ref, {
+    this.probe = probeApiReachability,
+    this.interval = const Duration(seconds: 30),
+  });
+
+  final Ref _ref;
+
+  /// Core reachability check. Injectable so tests drive connectivity edges.
+  final ReachabilityProbe probe;
+
+  /// How often reachability is re-probed for the connectivity-regained trigger.
+  final Duration interval;
+
+  Timer? _timer;
+  bool _lastReachable = false;
+  bool _started = false;
+
+  UploadQueue get _queue => _ref.read(uploadQueueProvider);
+
+  /// Start the service: drain once (app-start trigger) then poll reachability,
+  /// re-draining whenever connectivity is regained. Idempotent.
+  Future<void> start() async {
+    if (_started) return;
+    _started = true;
+
+    // (a) App-start drain — clears any backlog left by a previous session that
+    //     died with Core unreachable. Best-effort: the queue never throws.
+    unawaited(_queue.drain());
+
+    // Seed the reachability edge detector so we don't double-drain on the first
+    // tick if Core was already up at start.
+    _lastReachable = await _safeProbe();
+
+    // (b) Connectivity-regained trigger — poll and drain on the rising edge.
+    _timer = Timer.periodic(interval, (_) => _tick());
+  }
+
+  Future<void> _tick() async {
+    final reachable = await _safeProbe();
+    final regained = reachable && !_lastReachable;
+    _lastReachable = reachable;
+    if (regained) {
+      unawaited(_queue.drain());
+    }
+  }
+
+  /// Manually nudge a drain (used by triggers that already know Core is up,
+  /// e.g. a successful foreground sync). Best-effort.
+  Future<void> drainNow() => _queue.drain();
+
+  Future<bool> _safeProbe() async {
+    try {
+      return await probe();
+    } catch (error) {
+      developer.log(
+        'reachability probe threw',
+        name: 'upload.retry',
+        error: error,
+      );
+      return false;
+    }
+  }
+
+  /// Stop polling and release the timer. Idempotent.
+  void dispose() {
+    _timer?.cancel();
+    _timer = null;
+    _started = false;
+  }
+}
+
+final uploadRetryServiceProvider = Provider<UploadRetryService>((ref) {
+  final service = UploadRetryService(ref);
+  ref.onDispose(service.dispose);
+  return service;
+});

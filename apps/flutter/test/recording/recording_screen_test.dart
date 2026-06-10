@@ -15,13 +15,15 @@ import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
-import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
+import 'package:matome_flutter/features/recording/recording_finish.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
+import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
+import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:record/record.dart' show Amplitude, AudioEncoder, RecordState;
 
@@ -198,13 +200,13 @@ void main() {
     }
   }
 
-  Widget app(ProviderContainer container) {
+  Widget app(ProviderContainer container, {RecorderBinding? binding}) {
     final router = GoRouter(
       initialLocation: '/recording',
       routes: [
         GoRoute(
           path: '/recording',
-          builder: (context, state) => const RecordingScreen(),
+          builder: (context, state) => RecordingScreen(binding: binding),
         ),
         GoRoute(
           path: '/inbox',
@@ -231,8 +233,12 @@ void main() {
       // Avoid a live Phoenix socket connect in the widget test; the poll
       // fallback resolves done (the realtime wiring itself is covered by the
       // finish unit test).
-      inboxUploaderProvider.overrideWith(
-        (ref) => InboxUploader(ref, awaitResult: pollFallbackAwaiter),
+      uploadQueueProvider.overrideWith(
+        (ref) => UploadQueue(
+          ref,
+          awaitResult: pollFallbackAwaiter,
+          cleanupAudio: (_) async {},
+        ),
       ),
     ]);
     addTearDown(container.dispose);
@@ -269,12 +275,70 @@ void main() {
     }
     expect(find.text('inbox'), findsOneWidget);
 
-    // The new recording landed in the Inbox (Drift), done.
-    final row = await db.recordingsDao.getRecordingById('42');
+    // The new recording landed in the Inbox (Drift), done. W2: local-first PK,
+    // so look it up by the reconciled coreId (42), not by a Core-id PK.
+    final row = await db.recordingsDao.recordingByCoreId(42);
     expect(row, isNotNull);
-    expect(row!.processingStatus, 'done');
-    // Draft was cleaned up.
-    expect(await db.recordingDraftsDao.loadDraft(), isNull);
+    expect(isLocalRecordingId(row!.id), isTrue);
+    expect(row.processingStatus, 'done');
+  });
+
+  testWidgets(
+      'meeting binding (no pause): primary button finishes while recording, '
+      'secondary pause is hidden', (tester) async {
+    // Audit #828 warning #2: the meeting backend's pause() throws, so the
+    // meeting binding must NOT map the primary button to pause and must hide the
+    // secondary pause control. We drive a binding with supportsPause:false over
+    // the same fake mic providers (the flag is what gates the UI branch).
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      audioRecordingServiceProvider.overrideWithValue(svc(db)),
+      recordingsRepositoryProvider.overrideWithValue(stubRepo()),
+      uploadQueueProvider.overrideWith(
+        (ref) => UploadQueue(
+          ref,
+          awaitResult: pollFallbackAwaiter,
+          cleanupAudio: (_) async {},
+        ),
+      ),
+    ]);
+    addTearDown(container.dispose);
+
+    final meetingLike = RecorderBinding(
+      serviceProvider: audioRecordingServiceProvider,
+      controllerProvider: recordingControllerProvider,
+      finisherProvider: recordingFinisherProvider,
+      supportsPause: false,
+    );
+
+    await pumpEntry(tester, app(container, binding: meetingLike));
+
+    // Idle: primary present, no pause control yet.
+    expect(find.byKey(const Key('record-primary-button')), findsOneWidget);
+
+    // Start → recording.
+    await tapAsync(tester, find.byKey(const Key('record-primary-button')));
+    expect(find.text(t.recording.title), findsOneWidget);
+
+    // While recording, the meeting binding hides the secondary pause control
+    // entirely (it would otherwise call the throwing pause()).
+    expect(find.byKey(const Key('pause-button')), findsNothing);
+    expect(find.byKey(const Key('finish-button')), findsOneWidget);
+
+    // The PRIMARY button now finishes (stop), not pause: tapping it finalizes
+    // and the upload pipeline closes the modal to /inbox. (If it mapped to the
+    // throwing pause() this would error instead.)
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('record-primary-button')));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.text('inbox'), findsOneWidget,
+        reason: 'meeting primary button finishes straight through');
   });
 
   testWidgets('draft prompt → Resume continues the session', (tester) async {
@@ -411,8 +475,12 @@ void main() {
       appDatabaseProvider.overrideWithValue(db),
       audioRecordingServiceProvider.overrideWithValue(svc(db)),
       recordingsRepositoryProvider.overrideWithValue(stubRepo()),
-      inboxUploaderProvider.overrideWith(
-        (ref) => InboxUploader(ref, awaitResult: gatedAwaiter),
+      uploadQueueProvider.overrideWith(
+        (ref) => UploadQueue(
+          ref,
+          awaitResult: gatedAwaiter,
+          cleanupAudio: (_) async {},
+        ),
       ),
     ]);
     addTearDown(container.dispose);
@@ -428,10 +496,13 @@ void main() {
       find.byKey(const Key('processing-background-button')),
       findsOneWidget,
     );
-    // Row is already in the Inbox as processing.
-    final pending = await db.recordingsDao.getRecordingById('42');
+    // Row is already in the Inbox; Core create succeeded so coreId reconciled
+    // to 42 and the local-first row flipped pending_upload → processing while
+    // the terminal await is still gated.
+    final pending = await db.recordingsDao.recordingByCoreId(42);
     expect(pending, isNotNull);
-    expect(pending!.processingStatus, 'processing');
+    expect(isLocalRecordingId(pending!.id), isTrue);
+    expect(pending.processingStatus, 'processing');
 
     // Background to the Inbox: the modal is dismissed even though the upload
     // hasn't resolved.
@@ -445,7 +516,7 @@ void main() {
       release.complete();
       await Future<void>.delayed(const Duration(milliseconds: 100));
     });
-    final row = await db.recordingsDao.getRecordingById('42');
+    final row = await db.recordingsDao.recordingByCoreId(42);
     expect(row!.processingStatus, 'done');
   });
 

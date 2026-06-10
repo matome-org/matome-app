@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+import '../../core/audio/audio_playback.dart';
 import '../../core/db/daos/recording_drafts_dao.dart';
 import 'recorder_backend.dart';
 
@@ -50,6 +50,7 @@ class AudioRecordingService {
     Future<Directory> Function()? documentsDirProvider,
     Future<int?> Function(String path)? durationProbe,
     Future<bool> Function()? captureSupportedProbe,
+    this.segmentExtension = 'm4a',
   })  : _recorder = recorder ?? RecordRecorderBackend(),
         _documentsDirProvider =
             documentsDirProvider ?? getApplicationDocumentsDirectory,
@@ -64,6 +65,13 @@ class AudioRecordingService {
   final Future<Directory> Function() _documentsDirProvider;
   final Future<int?> Function(String path) _durationProbe;
   final Future<bool> Function()? _captureSupportedProbe;
+
+  /// Container extension the active backend writes (no leading dot). The mic
+  /// path keeps `m4a`; the meeting (ffmpeg loopback) backend writes `wav`. It
+  /// drives both the live filename handed to [RecorderBackend.start] and the
+  /// durable segment copies, so the file the F4 pipeline uploads carries the
+  /// correct extension for `mediaTypeForPath`.
+  final String segmentExtension;
 
   // --- per-session module state (reset on every startRecording) -------------
 
@@ -301,6 +309,24 @@ class AudioRecordingService {
   /// All session segment paths (defensive copy). Mirrors RN `getSegments`.
   List<String> getSegments() => List.unmodifiable(_sessionSegments);
 
+  /// Snapshot of EVERY on-disk path this session owns right now: the resolved
+  /// segments PLUS any paths the live draft still references (a continuous
+  /// session's draft can name a superseded pause snapshot the finalized file
+  /// replaced). Taken at finish() time and handed to [discardSegmentPaths] as
+  /// the immutable cleanup set, so the deferred confirm hook deletes only this
+  /// session's files and recognizes this session's draft for deletion — even
+  /// after a back-to-back session has taken over the live state.
+  Future<List<String>> snapshotSessionCleanupPaths() async {
+    final paths = <String>{..._sessionSegments};
+    try {
+      final draft = await _draftsDao.loadDraft();
+      if (draft != null) paths.addAll(draft.segments);
+    } catch (_) {
+      // best effort — a missing/corrupt draft just means fewer paths to bind.
+    }
+    return paths.toList(growable: false);
+  }
+
   /// Whether a live recorder currently exists (recording or paused). Lets Finish
   /// decide between finalizing the live recorder vs. a recovered draft.
   bool get isRecorderActive => _liveFilePath != null;
@@ -354,12 +380,83 @@ class AudioRecordingService {
 
   /// Delete all segment files from disk AND the draft (privacy). Safe to call
   /// when nothing exists. Mirrors RN `discardSegments` + draft delete.
+  ///
+  /// WARNING — this operates on the LIVE `_sessionSegments` / draft. It is the
+  /// right call for an interactive discard/cancel (the user is acting on the
+  /// CURRENT session), but it must NOT be used as a deferred/post-upload confirm
+  /// hook: by the time an async upload confirms, a back-to-back session may have
+  /// replaced `_sessionSegments` and the draft, so this would wipe the NEW
+  /// recording. Use [discardSegmentPaths] with a snapshot for that.
   Future<void> discardSegments() async {
     final toDelete = List<String>.from(_sessionSegments);
     _sessionSegments = const [];
     _liveFilePath = null;
     await _safeDeleteAll(toDelete);
     await _draftsDao.deleteDraft();
+  }
+
+  /// Clear ONLY the crash-recovery draft row for THIS finished session, leaving
+  /// every segment file on disk untouched (plan #46 W2 retention).
+  ///
+  /// This is the split half of [discardSegments]: a confirmed finish has a
+  /// durable saved+uploaded recording, so its draft must be cleared (otherwise
+  /// [detectRecoverableDraft] would prompt the user to "recover" an
+  /// already-saved recording on next launch). But the segment files MUST survive
+  /// — with the single-file finish flow the durable `audioFilePath` IS one of
+  /// the segments, so deleting them would wipe the local-first copy.
+  ///
+  /// [sessionPaths] is the snapshot ([snapshotSessionCleanupPaths]) taken at
+  /// finish() time. The draft is dropped ONLY if it still describes THIS session
+  /// (every draft segment is in the snapshot) — mirroring [discardSegmentPaths]'s
+  /// ownership check — so a back-to-back session B that has already saved its own
+  /// crash-recovery draft is left untouched. Best-effort: never throws (clearing
+  /// the draft must not regress a confirmed finish).
+  Future<void> clearDraftForSession(List<String> sessionPaths) async {
+    final snapshot = sessionPaths.toSet();
+    try {
+      final draft = await _draftsDao.loadDraft();
+      if (draft == null) return;
+      final ownedByThisSession =
+          draft.segments.isNotEmpty && draft.segments.every(snapshot.contains);
+      if (ownedByThisSession) {
+        await _draftsDao.deleteDraft();
+      }
+    } catch (_) {
+      // best effort — never throw on draft clear.
+    }
+  }
+
+  /// Discard a SPECIFIC, previously-captured set of segment [paths] — the
+  /// snapshot taken at finish() time — instead of the live `_sessionSegments`.
+  ///
+  /// This is the safe form for a deferred post-upload confirm hook: an upload
+  /// for session A can confirm WHILE session B is already capturing on the same
+  /// singleton recorder. Deleting the live segments then would destroy B's
+  /// in-progress audio + B's draft. By binding to the captured snapshot we only
+  /// ever delete A's own files.
+  ///
+  /// The draft is deleted ONLY if it still belongs to this finished session —
+  /// i.e. every segment the current draft references is contained in [paths].
+  /// If the draft has migrated to a newer session (any segment NOT in [paths]),
+  /// it is left untouched so B's crash-recovery draft survives. Best-effort and
+  /// never throws (cleanup must not regress a confirmed upload).
+  Future<void> discardSegmentPaths(List<String> paths) async {
+    final snapshot = paths.toSet();
+    await _safeDeleteAll(snapshot);
+
+    // Only drop the draft if it still describes THIS session's snapshot. A
+    // newer session's draft (segments outside the snapshot) must survive.
+    try {
+      final draft = await _draftsDao.loadDraft();
+      if (draft == null) return;
+      final ownedByThisSession = draft.segments.isNotEmpty &&
+          draft.segments.every(snapshot.contains);
+      if (ownedByThisSession) {
+        await _draftsDao.deleteDraft();
+      }
+    } catch (_) {
+      // best effort — never throw on cleanup.
+    }
   }
 
   /// Stop any active recorder, discard all segments + draft, reset state.
@@ -425,8 +522,12 @@ class AudioRecordingService {
     return (ms ?? 0) / 1000.0;
   }
 
+  /// Default duration probe. Goes through the platform-swappable
+  /// [AudioPlayback] abstraction (#870) so it works on Linux/Windows desktop
+  /// too — `just_audio` 0.9.x has no desktop backend, so the old direct
+  /// `AudioPlayer().setFilePath` silently returned a null duration there.
   static Future<int?> _probeDurationMs(String path) async {
-    final player = AudioPlayer();
+    final player = createAudioPlayback();
     try {
       final dur = await player.setFilePath(path);
       return dur?.inMilliseconds;
@@ -444,8 +545,8 @@ class AudioRecordingService {
     return List.generate(len, (_) => chars[_rng.nextInt(chars.length)]).join();
   }
 
-  static String _segmentFileName() =>
-      'segment_${DateTime.now().millisecondsSinceEpoch}_${_randSuffix(6)}.m4a';
+  String _segmentFileName() =>
+      'segment_${DateTime.now().millisecondsSinceEpoch}_${_randSuffix(6)}.$segmentExtension';
 
   /// Format duration in seconds → "2m 14s" / "9s". Mirrors RN `formatDuration`.
   static String formatDuration(double seconds) {

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 // `isNull`/`isNotNull` collide with matcher's — we only need Value/companions
 // from drift here, so hide the column-expression helpers.
@@ -7,6 +8,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/features/recordings/recording_ids.dart';
+import 'package:sqlite3/sqlite3.dart' as raw;
 
 // ---------------------------------------------------------------------------
 // Drift offline-store tests. Mirrors apps/mobile unit coverage:
@@ -65,8 +68,8 @@ void main() {
   // (a) Schema + migration version (mirrors migrations.unit.test.ts)
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
-    test('schemaVersion is 4 (mobile migrations 001..004)', () {
-      expect(db.schemaVersion, 4);
+    test('schemaVersion is 5 (mobile 001..004 + m005 local-first id)', () {
+      expect(db.schemaVersion, 5);
     });
 
     test('onCreate builds recordings/workspaces/recording_drafts tables', () async {
@@ -101,6 +104,7 @@ void main() {
           'workspaceId', // m002
           'mediaType', // m004
           'processingStatus', // m004
+          'coreId', // m005
         ]),
       );
     });
@@ -345,6 +349,154 @@ void main() {
 
       final r3 = await recDao.getRecordingById('r3');
       expect(r3?.workspaceId, other.id); // untouched
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (e) m005 — local-first id migration (plan #43, Wave 1)
+  //
+  // Build a v4-shaped recordings table by hand (no `coreId`, user_version=4),
+  // seed both a legacy stringified-Core-id row and a freshly-minted
+  // `rec_local_<uuid>` row, then open AppDatabase over the same file so
+  // onUpgrade(4→5) runs. Assert: `coreId` column exists, the numeric-id row is
+  // backfilled, the local row stays NULL, and every existing row survives.
+  // -------------------------------------------------------------------------
+  group('m005 v4→v5 migration', () {
+    late Directory dir;
+    late File file;
+    late String localId;
+
+    /// Creates the recordings table as it existed at schema v4 (no coreId),
+    /// plus the workspaces/recording_drafts tables, sets user_version=4, and
+    /// seeds the rows. Closed before AppDatabase re-opens it.
+    void seedV4Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done'
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      // Legacy row: id is a stringified Core id → should backfill coreId=42.
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, processingStatus) "
+        "VALUES ('42', 'Legacy Core', '9:00 AM', '0:30', '/tmp/a.m4a', 100, 'done');",
+      );
+      // Local-first row: rec_local_<uuid> → coreId must stay NULL.
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, processingStatus) "
+        "VALUES ('$localId', 'Local Only', '9:05 AM', '1:00', '/tmp/b.m4a', 200, '$kProcessingStatusPendingUpload');",
+      );
+      sdb.execute('PRAGMA user_version = 4;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m005');
+      file = File('${dir.path}/matome.sqlite');
+      localId = mintLocalRecordingId();
+      seedV4Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v4 db migrates to v5 and backfills coreId', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 5);
+
+      // coreId column now exists on the migrated table.
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('coreId'));
+
+      final dao = upgraded.recordingsDao;
+
+      // Legacy numeric-id row backfilled to coreId = 42.
+      final legacy = await dao.getRecordingById('42');
+      expect(legacy, isNotNull);
+      expect(legacy!.coreId, 42);
+      expect(legacy.title, 'Legacy Core'); // existing data intact
+
+      // Local-first row keeps coreId NULL (int.tryParse would fail).
+      final local = await dao.getRecordingById(localId);
+      expect(local, isNotNull);
+      expect(local!.coreId, isNull);
+      expect(local.processingStatus, kProcessingStatusPendingUpload);
+
+      // No rows lost in migration.
+      expect(await dao.getAllRecordings(), hasLength(2));
+    });
+
+    test('recordingByCoreId resolves the backfilled row after migration', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      final byCore = await upgraded.recordingsDao.recordingByCoreId(42);
+      expect(byCore, isNotNull);
+      expect(byCore!.id, '42');
+
+      // The local-only row is intentionally not matched (coreId NULL).
+      expect(await upgraded.recordingsDao.recordingByCoreId(999), isNull);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (f) local-id minter + status constant (plan #43, Wave 1)
+  // -------------------------------------------------------------------------
+  group('recording id minter', () {
+    test('mints rec_local_<uuid> ids that are recognised as local', () {
+      final id = mintLocalRecordingId();
+      expect(id, startsWith('rec_local_'));
+      expect(isLocalRecordingId(id), isTrue);
+      expect(mintLocalRecordingId(), isNot(id)); // unique each call
+    });
+
+    test('a stringified Core id is not treated as local', () {
+      expect(isLocalRecordingId('42'), isFalse);
+    });
+
+    test('coreId column round-trips through insert + recordingByCoreId', () async {
+      final dao = db.recordingsDao;
+      final localId = mintLocalRecordingId();
+      await dao.insertRecording(
+        _recording(id: localId, createdAt: 1, processingStatus: kProcessingStatusPendingUpload)
+            .copyWith(coreId: const Value(7)),
+      );
+      final byCore = await dao.recordingByCoreId(7);
+      expect(byCore?.id, localId);
+      expect(byCore?.coreId, 7);
     });
   });
 }

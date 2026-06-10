@@ -327,6 +327,94 @@ void main() {
       await svc.dispose();
       await db.close();
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // discardSegmentPaths — the SAFE deferred confirm-hook form (audit warning 1):
+  // deletes ONLY a captured snapshot, never the live session, so a confirm that
+  // lands mid-capture of a back-to-back session cannot destroy the new audio.
+  // -------------------------------------------------------------------------
+  group('discardSegmentPaths (snapshot-bound cleanup)', () {
+    test('CROSS-SESSION: A confirms while B records → B segments + draft survive',
+        () async {
+      final db = _memDb();
+      final svc = makeService(db);
+
+      // --- Session A: record → finish → snapshot A's paths (as finish() does)
+      await svc.startRecording();
+      final aSegment = await svc.stopRecording();
+      final aSnapshot = await svc.snapshotSessionCleanupPaths();
+      expect(aSnapshot, [aSegment]);
+      expect(await File(aSegment).exists(), isTrue);
+
+      // --- Session B starts on the SAME singleton recorder and captures, which
+      //     RESETS the live _sessionSegments and (on pause) writes B's draft.
+      await svc.startRecording();
+      final bSnapshot = await svc.pauseRecording(); // B's live segment + draft
+      expect(svc.getSegments(), [bSnapshot]);
+      expect(await File(bSnapshot).exists(), isTrue);
+      final bDraft = await db.recordingDraftsDao.loadDraft();
+      expect(bDraft, isNotNull, reason: 'B owns the live draft now');
+      expect(bDraft!.segments, contains(bSnapshot));
+
+      // --- A's upload confirms NOW (deferred). The OLD bug called the live
+      //     discardSegments() → would wipe B. The snapshot-bound hook must only
+      //     delete A's file and must NOT touch B's segment or B's draft.
+      await svc.discardSegmentPaths(aSnapshot);
+
+      expect(await File(aSegment).exists(), isFalse,
+          reason: "A's own file is cleaned");
+      expect(await File(bSnapshot).exists(), isTrue,
+          reason: "B's in-progress audio MUST survive A's confirm");
+      expect(svc.getSegments(), [bSnapshot],
+          reason: "B's live session state is untouched");
+      final draftAfter = await db.recordingDraftsDao.loadDraft();
+      expect(draftAfter, isNotNull,
+          reason: "B's draft MUST survive (it isn't A's snapshot)");
+      expect(draftAfter!.segments, contains(bSnapshot));
+
+      await svc.dispose();
+      await db.close();
+    });
+
+    test('single-recording: deletes the snapshot files AND this session draft',
+        () async {
+      final db = _memDb();
+      final svc = makeService(db);
+
+      // Record with a pause so a draft exists, finish, snapshot. The continuous
+      // session's draft still names the (now-superseded) pause snapshot, which
+      // snapshotSessionCleanupPaths() folds in — so the draft is recognized as
+      // owned by THIS session and cleared on confirm.
+      await svc.startRecording();
+      await svc.pauseRecording();
+      await svc.resumeRecording();
+      final segment = await svc.stopRecording();
+      final snapshot = await svc.snapshotSessionCleanupPaths();
+      expect(await File(segment).exists(), isTrue);
+
+      // The pause draft is folded into the snapshot, so it is owned by THIS
+      // session and must be cleared on confirm (normal cleanup intact).
+      await svc.discardSegmentPaths(snapshot);
+
+      expect(await File(segment).exists(), isFalse,
+          reason: 'normal single-recording cleanup still deletes the audio');
+      expect(await db.recordingDraftsDao.loadDraft(), isNull,
+          reason: "this session's own draft is cleared on confirm");
+
+      await svc.dispose();
+      await db.close();
+    });
+
+    test('is safe with empty/missing paths and no draft', () async {
+      final db = _memDb();
+      final svc = makeService(db);
+      await svc.discardSegmentPaths(const []); // must not throw
+      await svc.discardSegmentPaths(['/nonexistent/segment.m4a']); // must not throw
+      expect(await db.recordingDraftsDao.loadDraft(), isNull);
+      await svc.dispose();
+      await db.close();
+    });
 
     test('cancelRecording stops, discards files + draft', () async {
       final db = _memDb();

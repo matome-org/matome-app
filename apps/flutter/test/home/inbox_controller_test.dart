@@ -206,11 +206,16 @@ void main() {
   });
 
   test(
-      'B2: moveToSpace persists to Core via PATCH when both ids are Core-backed '
-      '(numeric)', () async {
+      'B2/W3: moveToSpace persists to Core via PATCH using the reconciled '
+      'coreId column (not the stringified PK)', () async {
+    // A reconciled local row: UUID PK, coreId column = 5 (Core-backed). W3 keys
+    // the PATCH on the coreId column, so the move reaches Core /api/recordings/5
+    // even though the local PK is a `rec_local_<uuid>` string.
+    const localId = 'rec_local_move-me';
     await db.recordingsDao.insertRecording(
       RecordingsCompanion.insert(
-        id: '5',
+        id: localId,
+        coreId: const Value(5),
         title: 'Move me',
         timestamp: '9:00 AM',
         duration: '0:30',
@@ -249,10 +254,10 @@ void main() {
     // Core workspace id 42 -> local TEXT '42' (numeric ⇒ Core-backed).
     await container
         .read(inboxControllerProvider.notifier)
-        .moveToSpace('5', '42');
+        .moveToSpace(localId, '42');
 
-    expect(patched, isTrue); // PATCH /api/recordings/5 was issued
-    final row = await db.recordingsDao.getRecordingById('5');
+    expect(patched, isTrue); // PATCH /api/recordings/5 was issued (via coreId)
+    final row = await db.recordingsDao.getRecordingById(localId);
     expect(row!.workspaceId, '42');
   });
 
@@ -276,6 +281,31 @@ void main() {
     await container.read(inboxControllerProvider.notifier).refresh();
     final row = await db.recordingsDao.getRecordingById('8');
     expect(row!.notes, 'local notes'); // not wiped by the stale Core row
+  });
+
+  test(
+      'W3: sync keeps the locally-probed import duration when Core reports none',
+      () async {
+    // An imported row whose duration was probed on-device (plan #46 W3). A Core
+    // list-row that has no duration yet must NOT blank it back out.
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: '11',
+        title: 'Imported',
+        timestamp: '9:00 AM',
+        duration: '3m 25s', // probed on import
+        audioFilePath: '/tmp/a.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      ),
+    );
+    final container = _container(db, recordings: [
+      _remote(id: 11, title: 'Imported'), // _remote carries NO duration
+    ]);
+    addTearDown(container.dispose);
+
+    await container.read(inboxControllerProvider.notifier).refresh();
+    final row = await db.recordingsDao.getRecordingById('11');
+    expect(row!.duration, '3m 25s'); // not wiped by the duration-less Core row
   });
 
   test(
@@ -423,5 +453,128 @@ void main() {
     final row = await db.recordingsDao.getRecordingById('89');
     expect(row!.summary, 'new summary'); // real update applied
     expect(row.notes, 'new notes');
+  });
+
+  test(
+      'W3 reconcile: a local row whose coreId is filled later, then a Core '
+      'terminal result for that coreId, lands on the SAME local row — no '
+      'duplicate, no wrong-row write', () async {
+    // 1. A local-first row: rec_local_<uuid> PK, coreId NULL (pending_upload).
+    const localId = 'rec_local_w3-reconcile';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Captured offline',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: '/tmp/cap.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('pending_upload'),
+      ),
+    );
+
+    // The Core list later returns the same recording under Core int id 321 —
+    // i.e. the row has reconciled to coreId 321 and Core now reports it `done`
+    // with a transcript. This is the socket/poll terminal landing via sync.
+    final container = _container(db, recordings: [
+      _remote(id: 321, title: 'Captured offline', status: 'done',
+          summary: 'the summary'),
+    ]);
+    addTearDown(container.dispose);
+    final controller = container.read(inboxControllerProvider.notifier);
+
+    // 2. Core-create succeeds → reconcile fills coreId on the EXISTING row.
+    await controller.reconcileCoreId(localId, 321);
+    final reconciled = await db.recordingsDao.getRecordingById(localId);
+    expect(reconciled!.coreId, 321); // coreId filled on the existing PK
+    expect(reconciled.processingStatus, 'processing'); // pending_upload flipped
+
+    // 3. A refresh pulls the Core terminal for id 321. It MUST land on the
+    //    existing rec_local_ row (matched by coreId), NOT create a second row
+    //    under the stringified-id PK '321'.
+    await controller.refresh();
+    await _awaitItems(container);
+
+    final allRows = await db.recordingsDao.getAllRecordings();
+    expect(allRows.length, 1); // no duplicate row
+    final landed = allRows.single;
+    expect(landed.id, localId); // same local PK — the right row
+    expect(landed.coreId, 321);
+    expect(landed.summary, 'the summary'); // terminal result applied here
+    expect(await db.recordingsDao.getRecordingById('321'), isNull); // no PK '321'
+  });
+
+  test(
+      'BLOCKER: refresh after coreId reconcile keeps the durable LOCAL '
+      'audioFilePath when Core storage_key is null/empty (no wipe to "")',
+      () async {
+    // A local-first import: rec_local_<uuid> PK, coreId NULL, with a durable
+    // on-device audio path persisted (#45 W1 / #46 W2).
+    const localId = 'rec_local_import-keep-audio';
+    const localPath = '/data/user/0/app/files/import_x.mp3';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Imported clip',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: localPath,
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('pending_upload'),
+      ),
+    );
+
+    // Core list returns the same recording under Core int id 555 with NO
+    // storage_key (fresh recording — null/empty). Pre-fix the first refresh
+    // upsert WIPED audioFilePath to '' (the headline "audio disappeared" bug).
+    final container = _container(db, recordings: [
+      _remote(id: 555, title: 'Imported clip', status: 'done'),
+    ]);
+    addTearDown(container.dispose);
+    final controller = container.read(inboxControllerProvider.notifier);
+
+    // Reconcile coreId onto the existing local row, then run the sync/refresh.
+    await controller.reconcileCoreId(localId, 555);
+    await controller.refresh();
+    await _awaitItems(container);
+
+    final row = await db.recordingsDao.getRecordingById(localId);
+    expect(row!.coreId, 555);
+    expect(row.audioFilePath, localPath); // STILL the local path — NOT wiped
+  });
+
+  test(
+      'W3: moveToSpace on a local-only row (coreId null) does NOT call Core; '
+      'the move holds locally', () async {
+    const localId = 'rec_local_not-uploaded';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Local only',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: '/tmp/x.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('pending_upload'),
+      ),
+    );
+
+    // Pre-condition: the seeded row is genuinely local-only (coreId NULL).
+    final seeded = await db.recordingsDao.getRecordingById(localId);
+    expect(seeded!.coreId, isNull);
+
+    final container = _container(db, recordings: const []);
+    addTearDown(container.dispose);
+
+    await container
+        .read(inboxControllerProvider.notifier)
+        .moveToSpace(localId, '9');
+
+    // coreId NULL ⇒ moveToSpace must NOT reach Core. The only mocked endpoint is
+    // GET /api/recordings (the refresh); there is NO PATCH mock, so if the guard
+    // were wrong the PATCH would throw an unmocked-route error and fail the test.
+    final row = await db.recordingsDao.getRecordingById(localId);
+    expect(row!.workspaceId, '9'); // the local move still holds (durable)
+    expect(row.coreId, isNull); // still local-only — nothing round-tripped
   });
 }

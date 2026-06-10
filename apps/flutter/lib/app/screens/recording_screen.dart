@@ -4,9 +4,68 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../features/recording/audio_recording_service.dart';
+import '../../features/recording/meeting_recorder.dart';
 import '../../features/recording/recording_controller.dart';
 import '../../features/recording/recording_finish.dart';
 import '../../i18n/strings.g.dart';
+
+/// Which recorder a [RecordingScreen] drives. The default mic recorder, or the
+/// desktop **meeting** recorder (loopback + mic mixed via ffmpeg). Both share
+/// the entire modal UI + the F4 finalize/upload pipeline; only the backing
+/// providers differ, so the meeting flow is a thin variant rather than a fork.
+class RecorderBinding {
+  const RecorderBinding({
+    required this.serviceProvider,
+    required this.controllerProvider,
+    required this.finisherProvider,
+    this.titleLabel,
+    this.unsupportedReason,
+    this.supportsPause = true,
+  });
+
+  final Provider<AudioRecordingService> serviceProvider;
+  final StateNotifierProvider<RecordingController, RecordingState>
+      controllerProvider;
+  final Provider<RecordingFinisher> finisherProvider;
+
+  /// Whether this recorder supports mid-stream pause/resume. The meeting backend
+  /// is single-pass (ffmpeg capture) and `pause()` throws, so the meeting modal
+  /// must NOT offer pause — its primary button finishes instead (audit #828
+  /// warning #2). The mic backend supports pause, so it keeps the full controls.
+  final bool supportsPause;
+
+  /// Optional header label override (e.g. "Record meeting"); null falls back to
+  /// the mic recorder copy.
+  final String? titleLabel;
+
+  /// Optional host-specific reason capture is unavailable, shown on the
+  /// unsupported screen instead of the generic mic copy. Resolved against the
+  /// [WidgetRef] so it can probe the host (e.g. ffmpeg/monitor missing).
+  final Future<String?> Function(WidgetRef ref)? unsupportedReason;
+
+  /// Default mic recorder binding.
+  static final mic = RecorderBinding(
+    serviceProvider: audioRecordingServiceProvider,
+    controllerProvider: recordingControllerProvider,
+    finisherProvider: recordingFinisherProvider,
+  );
+
+  /// Desktop meeting recorder binding — loopback (system output) + mic mixed
+  /// into one WAV via ffmpeg, then through the same F4 upload pipeline. The
+  /// unsupported reason probes the host so off-Linux / missing-ffmpeg hosts get
+  /// a precise message instead of the generic mic copy.
+  static final meeting = RecorderBinding(
+    serviceProvider: meetingRecordingServiceProvider,
+    controllerProvider: meetingRecordingControllerProvider,
+    finisherProvider: meetingRecordingFinisherProvider,
+    titleLabel: 'Record meeting',
+    unsupportedReason: (ref) =>
+        ref.read(meetingCaptureCapabilityProvider).unsupportedReason(),
+    // Single-pass ffmpeg capture has no lossless pause — the meeting modal hides
+    // pause and makes its primary button finish straight through.
+    supportsPause: false,
+  );
+}
 
 /// Number of waveform bars driven by the F3 amplitude stream.
 const int _waveformBars = 20;
@@ -33,7 +92,12 @@ enum _ModalPhase {
 /// F3 amplitude stream, record/pause/resume/finish buttons, a crash-recovery
 /// draft prompt on entry, and a graceful unsupported-mic state.
 class RecordingScreen extends ConsumerStatefulWidget {
-  const RecordingScreen({super.key});
+  RecordingScreen({super.key, RecorderBinding? binding})
+      : binding = binding ?? RecorderBinding.mic;
+
+  /// Which recorder backs this modal (mic by default; the meeting recorder for
+  /// the `/meeting` route).
+  final RecorderBinding binding;
 
   @override
   ConsumerState<RecordingScreen> createState() => _RecordingScreenState();
@@ -42,6 +106,17 @@ class RecordingScreen extends ConsumerStatefulWidget {
 class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   _ModalPhase _phase = _ModalPhase.draftCheck;
   RecordingDraftDetection? _detection;
+
+  /// Host-specific unsupported reason (meeting binding), null → generic copy.
+  String? _unsupportedReason;
+
+  // Provider triplet for whichever recorder backs this modal (mic / meeting).
+  Provider<AudioRecordingService> get _serviceProvider =>
+      widget.binding.serviceProvider;
+  StateNotifierProvider<RecordingController, RecordingState>
+      get _controllerProvider => widget.binding.controllerProvider;
+  Provider<RecordingFinisher> get _finisherProvider =>
+      widget.binding.finisherProvider;
 
   /// Rolling 20-value waveform buffer, smoothed like apps/mobile (fast attack,
   /// slow decay). Heights are in logical px (5..45).
@@ -64,15 +139,22 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   /// Entry: probe mic support, then detect a crash-recovery draft (F3).
   Future<void> _bootstrap() async {
-    final service = ref.read(audioRecordingServiceProvider);
+    final service = ref.read(_serviceProvider);
     final supported = await service.isCaptureSupported();
     if (!mounted) return;
     if (!supported) {
-      setState(() => _phase = _ModalPhase.unsupported);
+      final reasonResolver = widget.binding.unsupportedReason;
+      final reason =
+          reasonResolver != null ? await reasonResolver(ref) : null;
+      if (!mounted) return;
+      setState(() {
+        _unsupportedReason = reason;
+        _phase = _ModalPhase.unsupported;
+      });
       return;
     }
 
-    final controller = ref.read(recordingControllerProvider.notifier);
+    final controller = ref.read(_controllerProvider.notifier);
     try {
       final detection = await controller.detectDraft();
       if (!mounted) return;
@@ -99,7 +181,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   void _subscribeWaveform() {
     _ampListener?.close();
     _ampListener = ref.listenManual<RecordingState>(
-      recordingControllerProvider,
+      _controllerProvider,
       (prev, next) {
         if (next.phase != RecordingPhase.recording) return;
         if (prev != null && prev.amplitude == next.amplitude) return;
@@ -133,7 +215,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   Future<void> _start() async {
     try {
-      await ref.read(recordingControllerProvider.notifier).start();
+      await ref.read(_controllerProvider.notifier).start();
       if (mounted) setState(() => _phase = _ModalPhase.recording);
     } catch (_) {
       _snack(t.recording.startFailed);
@@ -142,7 +224,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   Future<void> _pause() async {
     try {
-      await ref.read(recordingControllerProvider.notifier).pause();
+      await ref.read(_controllerProvider.notifier).pause();
       if (mounted) setState(() => _phase = _ModalPhase.paused);
     } catch (_) {
       _snack(t.recording.pauseFailed);
@@ -151,7 +233,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   Future<void> _resume() async {
     try {
-      await ref.read(recordingControllerProvider.notifier).resume();
+      await ref.read(_controllerProvider.notifier).resume();
       if (mounted) setState(() => _phase = _ModalPhase.recording);
     } catch (_) {
       _snack(t.recording.resumeFailed);
@@ -166,7 +248,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     }
     try {
       await ref
-          .read(recordingControllerProvider.notifier)
+          .read(_controllerProvider.notifier)
           .resumeFromDraft(detection);
       if (mounted) setState(() => _phase = _ModalPhase.recording);
     } catch (_) {
@@ -185,7 +267,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
       final confirmed = await _confirmDiscard();
       if (!confirmed || !mounted) return;
     }
-    await ref.read(recordingControllerProvider.notifier).discard();
+    await ref.read(_controllerProvider.notifier).discard();
     _resetBars();
     if (mounted) _close();
   }
@@ -216,7 +298,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   /// Draft prompt → Discard: clear segments + draft, then a fresh idle screen.
   Future<void> _draftDiscard() async {
-    await ref.read(recordingControllerProvider.notifier).discard();
+    await ref.read(_controllerProvider.notifier).discard();
     _detection = null;
     _resetBars();
     if (mounted) setState(() => _phase = _ModalPhase.idle);
@@ -229,7 +311,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     // owned by the provider container (it outlives this widget), so the
     // terminal await (socket/poll race, up to the 10-min window) keeps running
     // even if the user backgrounds the modal to the Inbox.
-    final finishing = ref.read(recordingFinisherProvider).finish();
+    final finishing = ref.read(_finisherProvider).finish();
     try {
       await finishing;
       if (mounted) _close();
@@ -269,7 +351,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(recordingControllerProvider);
+    final state = ref.watch(_controllerProvider);
     return Scaffold(
       body: SafeArea(
         child: Stack(
@@ -309,7 +391,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
           onBackground: isProcessing ? _backgroundToInbox : null,
         );
       case _ModalPhase.unsupported:
-        return _UnsupportedView(onClose: _close);
+        return _UnsupportedView(onClose: _close, reason: _unsupportedReason);
       case _ModalPhase.draftPrompt:
         return _DraftPromptView(
           durationSeconds: state.durationSeconds,
@@ -323,6 +405,8 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
           phase: _phase,
           durationSeconds: state.durationSeconds,
           bars: _bars,
+          idleLabel: widget.binding.titleLabel,
+          supportsPause: widget.binding.supportsPause,
           onStart: _start,
           onPause: _pause,
           onResume: _resume,
@@ -373,8 +457,11 @@ class _ProcessingView extends StatelessWidget {
 }
 
 class _UnsupportedView extends StatelessWidget {
-  const _UnsupportedView({required this.onClose});
+  const _UnsupportedView({required this.onClose, this.reason});
   final VoidCallback onClose;
+
+  /// Host-specific reason (meeting recorder); null → generic mic copy.
+  final String? reason;
 
   @override
   Widget build(BuildContext context) {
@@ -397,7 +484,7 @@ class _UnsupportedView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            t.recording.unsupportedHint,
+            reason ?? t.recording.unsupportedHint,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium
                 ?.copyWith(color: AppColors.textSecondary),
@@ -490,11 +577,22 @@ class _ActiveView extends StatelessWidget {
     required this.onPause,
     required this.onResume,
     required this.onFinish,
+    this.idleLabel,
+    this.supportsPause = true,
   });
 
   final _ModalPhase phase;
   final double durationSeconds;
   final List<double> bars;
+
+  /// Header label shown in the idle/ready state (e.g. "Record meeting"); null
+  /// falls back to the generic mic-recorder ready copy.
+  final String? idleLabel;
+
+  /// Whether the backing recorder supports pause/resume. When false (meeting),
+  /// the primary button finishes while recording (never maps to the throwing
+  /// `pause()`), and the secondary pause control is hidden.
+  final bool supportsPause;
   final VoidCallback onStart;
   final VoidCallback onPause;
   final VoidCallback onResume;
@@ -510,7 +608,7 @@ class _ActiveView extends StatelessWidget {
       case _ModalPhase.paused:
         return t.recording.paused;
       default:
-        return t.recording.ready;
+        return idleLabel ?? t.recording.ready;
     }
   }
 
@@ -581,11 +679,14 @@ class _ActiveView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 32),
-          // Primary circular record/pause/resume button.
+          // Primary circular button. With pause support: record→pause→resume.
+          // Without (meeting): the primary button finishes straight through
+          // while recording — it must NEVER map to the throwing `pause()`
+          // (audit #828 warning #2).
           GestureDetector(
             key: const Key('record-primary-button'),
             onTap: _isRecording
-                ? onPause
+                ? (supportsPause ? onPause : onFinish)
                 : _isPaused
                     ? onResume
                     : onStart,
@@ -598,7 +699,9 @@ class _ActiveView extends StatelessWidget {
               ),
               child: Center(
                 child: Icon(
-                  _isRecording ? Icons.pause : Icons.mic,
+                  _isRecording
+                      ? (supportsPause ? Icons.pause : Icons.stop)
+                      : Icons.mic,
                   size: 40,
                   color: primaryColor,
                 ),
@@ -609,7 +712,9 @@ class _ActiveView extends StatelessWidget {
           if (_isRecording || _isPaused)
             Row(
               children: [
-                if (_isRecording)
+                // Secondary pause/resume controls only exist for backends that
+                // support pause — hidden entirely for the meeting binding.
+                if (supportsPause && _isRecording)
                   Expanded(
                     child: OutlinedButton(
                       key: const Key('pause-button'),
@@ -617,7 +722,7 @@ class _ActiveView extends StatelessWidget {
                       child: Text(t.recording.pause),
                     ),
                   ),
-                if (_isPaused)
+                if (supportsPause && _isPaused)
                   Expanded(
                     child: OutlinedButton(
                       key: const Key('resume-button'),
@@ -625,7 +730,7 @@ class _ActiveView extends StatelessWidget {
                       child: Text(t.recording.resume),
                     ),
                   ),
-                const SizedBox(width: 12),
+                if (supportsPause) const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
                     key: const Key('finish-button'),

@@ -23,19 +23,30 @@ abstract final class AppColors {
   static const Color borderDark = Color(0xFF3A3A3A);
 
   // Text greys (color-basic-500..800).
-  static const Color textPrimary = Color(0xFF1A2138); // color-basic-800
-  static const Color textSecondary = Color(0xFF6B7280); // color-basic-600
-  static const Color textMuted = Color(0xFF9AA1AC); // color-basic-500
+  //
+  // WCAG AA audit (plan #45, W3): every screen paints text on the LIGHT
+  // surfaces above (cards/sheets hardcode `surface`/`background`), so these
+  // tokens are tuned to clear AA *on white* (body ≥4.5:1). Contrast ratios on
+  // #FFFFFF are noted inline. (`textPrimaryDark` is the only genuinely
+  // dark-surface text token, used via ThemeData.textTheme.)
+  static const Color textPrimary = Color(0xFF1A2138); // 15.93:1 on white
+  static const Color textSecondary = Color(0xFF595F6B); // 6.0:1 (was #6B7280)
+  static const Color textMuted = Color(0xFF6B7280); // 4.83:1 (was #9AA1AC, 2.6)
   static const Color textPrimaryDark = Color(0xFFF4F5F6);
 
-  // Status.
-  static const Color failed = Color(0xFFC64A3D);
+  // Status. Darkened from #C64A3D (4.72:1) to keep headroom now that it also
+  // backs error TEXT on white, not just icons.
+  static const Color failed = Color(0xFFB23A2E); // 5.6:1 on white
 
   // Badge accents (matches RN BADGE_COLORS spirit, keyed by free-form badge).
+  // The accent dots are decorative, but `badgePersonal` also backs the cloud
+  // sync badge TEXT (on a 12% self-tint), and `badgeDefault`/`badgeIdeas` can
+  // surface as text — so they are darkened to clear AA as text on white.
   static const Color badgeWork = Color(0xFFE1B346);
-  static const Color badgePersonal = Color(0xFF6FB180);
-  static const Color badgeIdeas = Color(0xFF6A8AD9);
-  static const Color badgeDefault = Color(0xFFA6ADB8);
+  static const Color badgePersonal =
+      Color(0xFF3A7150); // 5.74:1 white / 4.87:1 on 12% self-tint (cloud badge)
+  static const Color badgeIdeas = Color(0xFF4A6FC0); // 4.85:1 (was #6A8AD9)
+  static const Color badgeDefault = Color(0xFF6B7280); // 4.83:1 (was #A6ADB8)
 }
 
 /// Resolves a free-form `badge` string to a stable accent color.

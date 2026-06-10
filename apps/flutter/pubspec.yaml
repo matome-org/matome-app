@@ -105,12 +105,25 @@ dependencies:
   # finalized file rather than trusting the live status poll. Also drives the
   # Details (S2) audio player: play/pause, position/duration, scrubber.
   just_audio: ^0.9.42
+  # Desktop (Linux/Windows) playback backend (#870, plan #46 W1). just_audio
+  # 0.9.x ships NO Linux/Windows native backend, so `setFilePath`/play AND the
+  # duration probe silently no-op there — the user (Linux desktop) heard no
+  # audio. just_audio_media_kit endorses just_audio on Linux/Windows by bridging
+  # it onto media_kit (libmpv). Selected per-platform behind the AudioPlayback
+  # abstraction (lib/core/audio/) + JustAudioMediaKit.ensureInitialized() in
+  # main.dart. RUNTIME DEP: media_kit needs libmpv on Linux (Arch: `mpv`); the
+  # libs are pulled by media_kit_libs_linux/windows below.
+  just_audio_media_kit: ^2.0.6
+  media_kit_libs_linux: ^1.1.3
+  media_kit_libs_windows_audio: ^1.0.9
 
   # Markdown rendering for the Details (S2) Summary/Notes/Transcript tabs.
   # Renders persisted markdown (headings, bold/italic, lists, checkboxes) in
   # preview mode; the edit-mode toolbar (insertMarkdown helpers) writes the
   # same markdown back. Mirrors apps/mobile react-native-markdown-display.
-  flutter_markdown: ^0.7.4
+  # flutter_markdown was discontinued; flutter_markdown_plus is the maintained
+  # drop-in fork (same MarkdownBody API).
+  flutter_markdown_plus: ^1.0.3
 
   # File picker for the Inbox upload flow (S1, #780): pick an audio/image/doc
   # file → create a Core recording → upload via the F4 pipeline. Cross-platform
@@ -118,6 +131,13 @@ dependencies:
   # v10 compiles against a current Android SDK (v8's android-34 module fails the
   # AAR metadata check against the lifecycle plugin Flutter 3.44 ships).
   file_picker: ^10.0.0
+
+  # UUID v4 generator for local-first recording ids (`rec_local_<uuid>`),
+  # mirroring the workspace local-id precedent. Used by the id-minter helper
+  # (lib/features/recordings/recording_ids.dart) so a recording persists with a
+  # stable local PK before any Core id is known. Already pulled in transitively;
+  # pinned here to make the direct dependency explicit.
+  uuid: ^4.5.3
 
 dev_dependencies:
   flutter_test:

@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart';
 
+import '../../../features/recordings/recording_ids.dart'
+    show kProcessingStatusPendingUpload;
 import '../app_database.dart';
 import '../recording_card.dart';
 import '../tables.dart';
@@ -53,6 +55,29 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   Future<RecordingRow?> getRecordingById(String id) {
     return (select(recordings)..where((r) => r.id.equals(id)))
         .getSingleOrNull();
+  }
+
+  /// Local row whose reconciled Core id is [coreId], or null if none has been
+  /// reconciled yet. Used by the Wave 3 socket/poll reconcile path, which is
+  /// keyed on the Core numeric id and must map it back to the local UUID PK
+  /// (rows minted with `rec_local_<uuid>` keep `coreId` NULL until upload
+  /// succeeds, so those are intentionally not matched here).
+  Future<RecordingRow?> recordingByCoreId(int coreId) {
+    return (select(recordings)..where((r) => r.coreId.equals(coreId)))
+        .getSingleOrNull();
+  }
+
+  /// Rows still awaiting a confirmed Core upload — `processingStatus` is the
+  /// local-only `pending_upload` state (plan #43, W4). These are exactly the
+  /// rows the auto-retry queue drains: a local-first finish/upload persisted
+  /// them but the Core create→upload→reconcile handoff has not yet completed
+  /// (Core was unreachable, or the attempt is still in flight on a fresh boot).
+  /// Newest first so a backlog drains most-recent-first.
+  Future<List<RecordingRow>> getPendingUploadRecordings() {
+    return (select(recordings)
+          ..where((r) => r.processingStatus.equals(kProcessingStatusPendingUpload))
+          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
+        .get();
   }
 
   /// Insert a new recording. New recordings start in the Inbox

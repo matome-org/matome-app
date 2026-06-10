@@ -19,6 +19,7 @@ class RecordingCard {
     this.summary,
     this.notes,
     this.workspaceName,
+    this.coreId,
   });
 
   final String id;
@@ -31,6 +32,13 @@ class RecordingCard {
   final bool isProcessing;
   final String mediaType;
   final String processingStatus;
+
+  /// The reconciled Core id, or null while the row is still local-only.
+  ///
+  /// A `rec_local_<uuid>` row keeps this NULL until `POST /api/recordings`
+  /// succeeds; once set, the recording exists in the cloud. Drives the
+  /// sync-state badge (on-device vs cloud) — plan #45, W2.
+  final int? coreId;
 
   /// Populated only when the row was loaded via a workspace LEFT JOIN
   /// (see [RecordingsDao.recordingsByDayWithWorkspace]); NULL == Inbox.
@@ -58,6 +66,7 @@ class RecordingCard {
               ? row.processingStatus
               : (row.isProcessing == 1 ? 'processing' : 'done'),
       workspaceName: workspaceName,
+      coreId: row.coreId,
     );
   }
 }

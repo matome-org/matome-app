@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
@@ -139,5 +141,132 @@ void main() {
     expect(row!.summary, 'fresh summary'); // real update applied
     expect(row.notes, 'fresh transcript'); // transcript -> notes
     expect(row.processingStatus, 'done');
+  });
+
+  test(
+      'W3: a local-only row (rec_local_, coreId null) reads coreId from the '
+      'column and degrades cleanly — save persists locally, retry is a no-op, '
+      'no Core call is attempted', () async {
+    // A captured-but-not-yet-uploaded row: UUID PK, coreId NULL.
+    const localId = 'rec_local_details-degrade';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Local capture',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: '/tmp/local.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('pending_upload'),
+      ),
+    );
+
+    // No /api/recordings/* endpoints are mocked: any Core call would throw an
+    // unmocked-route error and fail the test. The awaiter must NOT be reached.
+    final dio = Dio(BaseOptions(
+      baseUrl: 'http://localhost:4000',
+      validateStatus: (s) => s != null && s < 500,
+    ));
+    DioAdapter(dio: dio);
+    final repo = RecordingsRepository(
+      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+    );
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(repo),
+    ]);
+    addTearDown(container.dispose);
+
+    var awaiterCalled = false;
+    final controllerProvider = Provider<DetailsController>(
+      (ref) => DetailsController(
+        ref,
+        localId,
+        awaitResult: ({required recording, required poll, required ref}) async {
+          awaiterCalled = true;
+          return const RecordingResult.done(null);
+        },
+      ),
+    );
+    final controller = container.read(controllerProvider);
+    // Let load() settle.
+    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(controller.state.coreId, isNull); // derived from the column, not parse
+
+    // save() writes notes to Drift even with no Core counterpart.
+    await controller.save('offline edit');
+    expect((await db.recordingsDao.getRecordingById(localId))!.notes,
+        'offline edit');
+
+    // retry() is a clean no-op for a row Core has never seen.
+    await controller.retry();
+    expect(awaiterCalled, isFalse); // never raced the socket/poll
+    final after = await db.recordingsDao.getRecordingById(localId);
+    expect(after!.processingStatus, 'pending_upload'); // unchanged, not 'failed'
+  });
+
+  test(
+      'W2 #871: explicit user delete removes BOTH the on-disk local audio file '
+      'AND the Drift row (free disk on user-initiated deletion)', () async {
+    // Seed a local-only row pointing at a REAL on-disk temp file.
+    final tmp = await Directory.systemTemp.createTemp('details_delete_test_');
+    addTearDown(() async {
+      if (await tmp.exists()) await tmp.delete(recursive: true);
+    });
+    final audio = File('${tmp.path}/local.m4a');
+    await audio.writeAsBytes(List<int>.filled(8, 0));
+    expect(await audio.exists(), isTrue);
+
+    const localId = 'rec_local_details-delete';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Local capture',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: audio.path,
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('done'),
+      ),
+    );
+
+    // No Core endpoints mocked: a local-only row (coreId null) makes no Core
+    // call on delete, so an unmocked route would fail the test if it did.
+    final dio = Dio(BaseOptions(
+      baseUrl: 'http://localhost:4000',
+      validateStatus: (s) => s != null && s < 500,
+    ));
+    DioAdapter(dio: dio);
+    final repo = RecordingsRepository(
+      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+    );
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(repo),
+    ]);
+    addTearDown(container.dispose);
+
+    final controllerProvider = Provider<DetailsController>(
+      (ref) => DetailsController(
+        ref,
+        localId,
+        awaitResult: ({required recording, required poll, required ref}) async =>
+            const RecordingResult.done(null),
+      ),
+    );
+    final controller = container.read(controllerProvider);
+    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+
+    await controller.delete();
+
+    // The on-disk audio is freed AND the row is gone.
+    expect(await audio.exists(), isFalse,
+        reason: 'user-delete frees the local audio file (W2 #871)');
+    expect(await db.recordingsDao.getRecordingById(localId), isNull,
+        reason: 'user-delete removes the Drift row');
   });
 }

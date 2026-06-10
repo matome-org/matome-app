@@ -27,7 +27,9 @@ abstract final class GuardTargets {
 
 /// Route prefixes that belong to the authenticated shell.
 const _tabPrefixes = ['/inbox', '/calendar', '/spaces', '/satori'];
-const _recordingPrefix = '/recording';
+// Capture modals living above the shell on the root navigator: the mic
+// recorder (`/recording`) and the desktop meeting recorder (`/meeting`).
+const _recordingPrefixes = ['/recording', '/meeting'];
 
 bool _hasPrefix(String location, String prefix) =>
     location == prefix || location.startsWith('$prefix/');
@@ -40,7 +42,7 @@ String? decideRedirect({
   if (isLoading) return null;
 
   final inTabs = _tabPrefixes.any((p) => _hasPrefix(location, p));
-  final inRecording = _hasPrefix(location, _recordingPrefix);
+  final inRecording = _recordingPrefixes.any((p) => _hasPrefix(location, p));
 
   if (isAuthenticated && !inTabs && !inRecording) {
     return GuardTargets.home;

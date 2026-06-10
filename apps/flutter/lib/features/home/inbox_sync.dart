@@ -93,6 +93,9 @@ String formatClock(DateTime when) {
 ///     recording back to the Inbox.
 ///   * `notes` — if Core returns no transcript yet but the local row already
 ///     has notes, keep the local notes rather than wiping them to null.
+///   * `audioFilePath` — if the local row holds a real on-device path but Core's
+///     `storageKey` is null/empty (fresh recording), keep the local path so the
+///     audio stays playable (#45 W1) and retained (#46 W2) across refresh.
 RecordingsCompanion recordingToCompanion(
   Recording recording, {
   RecordingRow? existing,
@@ -100,6 +103,15 @@ RecordingsCompanion recordingToCompanion(
   final local = statusToLocal(recording.status);
   final createdAt =
       (recording.insertedAt ?? DateTime.now()).millisecondsSinceEpoch;
+
+  // Keep the existing local PK when this Core row was already reconciled into a
+  // `rec_local_<uuid>` row (plan #43, W3): without this the upsert would mint a
+  // SECOND row under the stringified-Core-id PK, duplicating the recording on
+  // refresh. For a first-time sync (no existing row) the PK is the stringified
+  // Core id (the legacy convention). Either way the `coreId` column is set so
+  // the row is reconcilable by Core id from then on.
+  final localId =
+      (existing != null) ? existing.id : coreIdToLocalId(recording.id);
 
   final coreWorkspaceId = coreWorkspaceIdToLocal(recording.workspaceId);
   // Keep a local move-to-space if Core hasn't caught up (still reports Inbox).
@@ -114,15 +126,43 @@ RecordingsCompanion recordingToCompanion(
       ? existing!.notes
       : coreNotes;
 
+  // Keep the locally-probed duration if Core reports none yet (plan #46 W3): an
+  // imported file's real length is probed on-device at insert; a Core list-row
+  // that hasn't computed/returned a duration must NOT blank it back out (same
+  // data-loss guard as notes / move-to-space above).
+  final coreDuration = formatDurationText(recording.duration);
+  final existingDuration = existing?.duration;
+  final mergedDuration = (coreDuration.isEmpty &&
+          existingDuration != null &&
+          existingDuration.isNotEmpty)
+      ? existingDuration
+      : coreDuration;
+
+  // Keep the durable LOCAL audio path (plan #45 W1 playback / #46 W2 retention):
+  // a local-first import persists `audioFilePath=/…/import_x.mp3`, but Core's
+  // `storageKey` is null/empty on a fresh recording. After coreId reconcile the
+  // FIRST refresh upsert would otherwise WIPE that local path to '' (insertOn-
+  // ConflictUpdate), re-breaking "audio won't play / disappeared". Only adopt
+  // Core's storageKey when there is NO local copy to preserve — i.e. the existing
+  // path is empty or is itself a storage key, not a real on-device file path.
+  final coreStorageKey = recording.storageKey ?? '';
+  final existingAudioPath = existing?.audioFilePath;
+  final hasLocalCopy = existingAudioPath != null &&
+      (existingAudioPath.startsWith('/') ||
+          existingAudioPath.startsWith('file:'));
+  final mergedAudioFilePath =
+      (coreStorageKey.isEmpty && hasLocalCopy) ? existingAudioPath : coreStorageKey;
+
   return RecordingsCompanion(
-    id: Value(coreIdToLocalId(recording.id)),
+    id: Value(localId),
+    coreId: Value(recording.id),
     title: Value(recording.title),
     summary: Value(recording.summary),
     timestamp: Value(formatClock(recording.insertedAt ?? DateTime.now())),
-    duration: Value(formatDurationText(recording.duration)),
+    duration: Value(mergedDuration),
     badge: Value(recording.badge ?? 'Inbox'),
     isProcessing: Value(local.isProcessing),
-    audioFilePath: Value(recording.storageKey ?? ''),
+    audioFilePath: Value(mergedAudioFilePath),
     createdAt: Value(createdAt),
     notes: Value(mergedNotes),
     workspaceId: Value(mergedWorkspaceId),

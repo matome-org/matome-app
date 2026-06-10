@@ -6,6 +6,11 @@
     "today": "Today",
     "yesterday": "Yesterday"
   },
+  "a11y": {
+    "openSettings": "Settings",
+    "play": "Play",
+    "pause": "Pause"
+  },
   "settings": {
     "title": "Settings",
     "appearance": "Appearance",
@@ -24,6 +29,15 @@
     "searchPlaceholder": "Search transcripts, tags, spaces…",
     "noResults": "No recordings found",
     "recordings": "recordings"
+  },
+  "cardStatus": {
+    "pendingUpload": "Saved on device · waiting to upload",
+    "processing": "Transcribing…",
+    "failed": "Upload failed",
+    "retry": "Retry",
+    "onDevice": "On device",
+    "cloud": "Cloud",
+    "syncState": "Sync state"
   },
   "recording": {
     "title": "Recording",
@@ -76,7 +90,8 @@
     "notFound": "Recording not found",
     "saved": "Notes saved",
     "saveFailed": "Couldn't save notes",
-    "audioFailed": "Couldn't play audio"
+    "audioFailed": "Couldn't play audio",
+    "audioUnavailable": "Audio unavailable"
   },
   "spaces": {
     "title": "Spaces",

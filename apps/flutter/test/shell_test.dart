@@ -59,7 +59,7 @@ GoRouter _buildTestRouter() {
         path: '/recording',
         parentNavigatorKey: rootKey,
         pageBuilder: (c, s) =>
-            const MaterialPage(fullscreenDialog: true, child: RecordingScreen()),
+            MaterialPage(fullscreenDialog: true, child: RecordingScreen()),
       ),
       StatefulShellRoute.indexedStack(
         builder: (c, s, shell) => ShellScaffold(navigationShell: shell),

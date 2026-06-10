@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
+import '../home/widgets/sync_badge.dart';
 import 'audio_player_bar.dart';
 import 'details_controller.dart';
 import 'markdown_helpers.dart';
@@ -320,7 +321,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
       children: [
-        _MetaRow(badge: state.badge),
+        _MetaRow(
+          badge: state.badge,
+          coreId: state.coreId,
+          processingStatus: state.row?.processingStatus,
+        ),
         const SizedBox(height: 12),
         AudioPlayerBar(source: state.audioSource),
         const SizedBox(height: 16),
@@ -343,6 +348,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           isEditing: _isEditing,
           isProcessing: state.isProcessing,
           processingFailed: state.processingFailed,
+          pendingUpload: state.pendingUpload,
           controller: _editController,
           onToggleEdit: () => setState(() => _isEditing = !_isEditing),
           onInsertMarkdown: _insertMarkdown,
@@ -362,14 +368,25 @@ enum _MoreAction { delete, move }
 // ─── Meta row ─────────────────────────────────────────────────────────────
 
 class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.badge});
+  const _MetaRow({
+    required this.badge,
+    required this.coreId,
+    required this.processingStatus,
+  });
 
   final String badge;
+  final int? coreId;
+  final String? processingStatus;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    // Folder/space badge and the sync-state badge sit side by side as peers.
+    // Wrap so they fold onto a second line on a narrow screen rather than
+    // overflowing.
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -386,6 +403,7 @@ class _MetaRow extends StatelessWidget {
             ),
           ),
         ),
+        SyncBadge(coreId: coreId, processingStatus: processingStatus),
       ],
     );
   }
@@ -480,6 +498,7 @@ class _NotesSection extends StatelessWidget {
     required this.isEditing,
     required this.isProcessing,
     required this.processingFailed,
+    required this.pendingUpload,
     required this.controller,
     required this.onToggleEdit,
     required this.onInsertMarkdown,
@@ -489,6 +508,7 @@ class _NotesSection extends StatelessWidget {
   final bool isEditing;
   final bool isProcessing;
   final bool processingFailed;
+  final bool pendingUpload;
   final TextEditingController controller;
   final VoidCallback onToggleEdit;
   final void Function(String prefix, [String suffix]) onInsertMarkdown;
@@ -510,7 +530,7 @@ class _NotesSection extends StatelessWidget {
                 color: AppColors.textSecondary,
               ),
             ),
-            if (processingFailed)
+            if (processingFailed || pendingUpload)
               TextButton.icon(
                 key: const ValueKey('details-retry'),
                 onPressed: onRetry,
@@ -534,7 +554,9 @@ class _NotesSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        if (isProcessing)
+        if (pendingUpload)
+          _PendingUploadRow(label: t.cardStatus.pendingUpload)
+        else if (isProcessing)
           _ProcessingRow(label: t.recording.transcribing)
         else if (processingFailed)
           _ErrorRow(label: t.recording.transcriptionFailed)
@@ -740,6 +762,28 @@ class _ProcessingRow extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+      ],
+    );
+  }
+}
+
+class _PendingUploadRow extends StatelessWidget {
+  const _PendingUploadRow({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      key: const ValueKey('details-pending-upload'),
+      children: [
+        const Icon(Icons.cloud_off_outlined,
+            size: 18, color: AppColors.textMuted),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(label,
+              style: const TextStyle(color: AppColors.textSecondary)),
+        ),
       ],
     );
   }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart' hide AudioSource;
 
+import '../../core/audio/audio_playback.dart';
 import '../../core/theme/app_theme.dart';
+import '../../i18n/strings.g.dart';
 import 'details_controller.dart';
 
 /// Compact audio player for the Details screen (S2): a play/pause button, a
@@ -14,24 +15,40 @@ class AudioPlayerBar extends StatefulWidget {
 
   final AudioSource source;
 
-  /// Injectable for tests (a fake [AudioPlayer]); production builds its own.
-  final AudioPlayer? player;
+  /// Injectable for tests (a fake [AudioPlayback]); production builds the
+  /// platform-appropriate backend via [createAudioPlayback].
+  final AudioPlayback? player;
 
   @override
   State<AudioPlayerBar> createState() => _AudioPlayerBarState();
 }
 
 class _AudioPlayerBarState extends State<AudioPlayerBar> {
-  late final AudioPlayer _player;
+  late final AudioPlayback _player;
   bool _ownsPlayer = false;
   Object? _loadError;
 
   @override
   void initState() {
     super.initState();
-    _player = widget.player ?? AudioPlayer();
+    _player = widget.player ?? createAudioPlayback();
     _ownsPlayer = widget.player == null;
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant AudioPlayerBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When the resolved source changes (e.g. a local file was missing on first
+    // build and a Core presigned URL resolved later, or a retry produced a new
+    // path), clear the stale `_loadError` and reload — otherwise a previously
+    // failed source stays stuck on the "audio unavailable" surface forever.
+    final old = oldWidget.source;
+    final now = widget.source;
+    if (old.kind != now.kind || old.value != now.value) {
+      _loadError = null;
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -74,6 +91,49 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
     }
   }
 
+  /// Graceful "audio unavailable" state (plan #45 W1): shown when no playable
+  /// source resolved — neither a local file nor a remote URL — so the user gets
+  /// a clear, disabled affordance + message instead of a dead silent play
+  /// button. Distinct surface (muted) so it reads as inert, not actionable.
+  Widget _buildUnavailable(BuildContext context) {
+    return Container(
+      key: const ValueKey('audio-unavailable'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 48,
+            height: 48,
+            child: Material(
+              color: AppColors.border,
+              shape: CircleBorder(),
+              child: Icon(
+                Icons.music_off,
+                color: AppColors.textMuted,
+                size: 24,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              t.details.audioUnavailable,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   static String _fmt(Duration d) {
     final minutes = d.inMinutes;
     final seconds = d.inSeconds % 60;
@@ -82,7 +142,13 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
 
   @override
   Widget build(BuildContext context) {
-    final disabled = widget.source.kind == AudioSourceKind.none || _loadError != null;
+    // Plan #45 W1: when NEITHER a local file NOR a remote URL resolved (kind ==
+    // none) — or the only resolved source failed to load — there is nothing to
+    // play. Surface a graceful "audio unavailable" state instead of a dead,
+    // silent play button the user can tap to no effect.
+    final unavailable =
+        widget.source.kind == AudioSourceKind.none || _loadError != null;
+    if (unavailable) return _buildUnavailable(context);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -91,7 +157,7 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
-      child: StreamBuilder<PlayerState>(
+      child: StreamBuilder<PlaybackState>(
         stream: _player.playerStateStream,
         builder: (context, stateSnap) {
           final playing = stateSnap.data?.playing ?? false;
@@ -101,7 +167,7 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
                 children: [
                   _PlayButton(
                     playing: playing,
-                    onPressed: disabled ? null : _togglePlay,
+                    onPressed: _togglePlay,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -130,7 +196,7 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
                           child: Slider(
                             value: max > 0 ? value : 0,
                             max: max > 0 ? max : 1,
-                            onChanged: (disabled || max <= 0)
+                            onChanged: max <= 0
                                 ? null
                                 : (v) => _player.seek(
                                       Duration(milliseconds: v.round()),
@@ -187,19 +253,30 @@ class _PlayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 48,
-      height: 48,
-      child: Material(
-        color: onPressed == null ? AppColors.border : AppColors.accent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: Icon(
-            playing ? Icons.pause : Icons.play_arrow,
-            color: AppColors.textPrimary,
-            size: 26,
+    // Icon-only control — give it a screen-reader label + tooltip that tracks
+    // the current action (plan #45, W3). 48×48 already meets the tap target.
+    final label = playing ? t.a11y.pause : t.a11y.play;
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        enabled: onPressed != null,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Material(
+            color: onPressed == null ? AppColors.border : AppColors.accent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: Icon(
+                playing ? Icons.pause : Icons.play_arrow,
+                color: AppColors.textPrimary,
+                size: 26,
+              ),
+            ),
           ),
         ),
       ),

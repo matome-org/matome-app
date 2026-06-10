@@ -40,8 +40,10 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 
 	// Translations
 	@override late final _Translations$common$ja common = _Translations$common$ja._(_root);
+	@override late final _Translations$a11y$ja a11y = _Translations$a11y$ja._(_root);
 	@override late final _Translations$settings$ja settings = _Translations$settings$ja._(_root);
 	@override late final _Translations$inbox$ja inbox = _Translations$inbox$ja._(_root);
+	@override late final _Translations$cardStatus$ja cardStatus = _Translations$cardStatus$ja._(_root);
 	@override late final _Translations$recording$ja recording = _Translations$recording$ja._(_root);
 	@override late final _Translations$details$ja details = _Translations$details$ja._(_root);
 	@override late final _Translations$spaces$ja spaces = _Translations$spaces$ja._(_root);
@@ -63,6 +65,18 @@ class _Translations$common$ja extends Translations$common$en {
 	@override String get retry => '再試行';
 	@override String get today => '今日';
 	@override String get yesterday => '昨日';
+}
+
+// Path: a11y
+class _Translations$a11y$ja extends Translations$a11y$en {
+	_Translations$a11y$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get openSettings => '設定';
+	@override String get play => '再生';
+	@override String get pause => '一時停止';
 }
 
 // Path: settings
@@ -96,6 +110,22 @@ class _Translations$inbox$ja extends Translations$inbox$en {
 	@override String get searchPlaceholder => 'トランスクリプト、タグ、スペースを検索...';
 	@override String get noResults => '録音が見つかりません';
 	@override String get recordings => '件の録音';
+}
+
+// Path: cardStatus
+class _Translations$cardStatus$ja extends Translations$cardStatus$en {
+	_Translations$cardStatus$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get pendingUpload => '端末に保存済み · アップロード待ち';
+	@override String get processing => '文字起こし中…';
+	@override String get failed => 'アップロードに失敗しました';
+	@override String get retry => '再試行';
+	@override String get onDevice => '端末のみ';
+	@override String get cloud => 'クラウド';
+	@override String get syncState => '同期状態';
 }
 
 // Path: recording
@@ -163,6 +193,7 @@ class _Translations$details$ja extends Translations$details$en {
 	@override String get saved => 'メモを保存しました';
 	@override String get saveFailed => 'メモを保存できませんでした';
 	@override String get audioFailed => '音声を再生できませんでした';
+	@override String get audioUnavailable => '音声を利用できません';
 }
 
 // Path: spaces
@@ -285,6 +316,9 @@ extension on TranslationsJa {
 			'common.retry' => '再試行',
 			'common.today' => '今日',
 			'common.yesterday' => '昨日',
+			'a11y.openSettings' => '設定',
+			'a11y.play' => '再生',
+			'a11y.pause' => '一時停止',
 			'settings.title' => '設定',
 			'settings.appearance' => '外観',
 			'settings.theme' => 'テーマ',
@@ -300,6 +334,13 @@ extension on TranslationsJa {
 			'inbox.searchPlaceholder' => 'トランスクリプト、タグ、スペースを検索...',
 			'inbox.noResults' => '録音が見つかりません',
 			'inbox.recordings' => '件の録音',
+			'cardStatus.pendingUpload' => '端末に保存済み · アップロード待ち',
+			'cardStatus.processing' => '文字起こし中…',
+			'cardStatus.failed' => 'アップロードに失敗しました',
+			'cardStatus.retry' => '再試行',
+			'cardStatus.onDevice' => '端末のみ',
+			'cardStatus.cloud' => 'クラウド',
+			'cardStatus.syncState' => '同期状態',
 			'recording.title' => '録音中',
 			'recording.ready' => '録音準備完了',
 			'recording.startHint' => 'ボタンを押して録音を開始してください',
@@ -349,6 +390,7 @@ extension on TranslationsJa {
 			'details.saved' => 'メモを保存しました',
 			'details.saveFailed' => 'メモを保存できませんでした',
 			'details.audioFailed' => '音声を再生できませんでした',
+			'details.audioUnavailable' => '音声を利用できません',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

@@ -8,12 +8,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/theme/app_theme.dart';
+import '../../i18n/strings.g.dart';
 import 'home_filters.dart' show formatTimestamp;
 import 'inbox_controller.dart';
 import 'inbox_grouping.dart';
 import 'inbox_item.dart';
 import 'inbox_upload.dart';
 import 'widgets/inbox_recording_card.dart';
+import '../recordings/upload_retry_service.dart';
 
 /// Width past which we treat the viewport as "wide" (desktop / web) and
 /// constrain the content column instead of letting it stretch edge-to-edge.
@@ -36,6 +38,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    // App-start trigger (plan #43, W4): kick the auto-retry queue so any
+    // `pending_upload` rows left by a prior session (Core was unreachable) drain
+    // now, and start the connectivity-regained watcher. Best-effort; idempotent.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(uploadRetryServiceProvider).start();
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -47,6 +60,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _openDetails(InboxItem item) {
     GoRouter.of(context).go('/inbox/${item.id}');
   }
+
+  /// Manual retry from a `failed` Inbox card — re-enqueues via the auto-retry
+  /// upload queue (plan #43, W5). Fire-and-forget: the controller flips the row
+  /// to `pending_upload` and re-renders before the drain runs.
+  Future<void> _retryUpload(InboxItem item) =>
+      ref.read(inboxControllerProvider.notifier).retryUpload(item.id);
 
   Future<void> _pickAndUpload() async {
     final result = await FilePicker.platform.pickFiles(
@@ -68,7 +87,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     // Fire-and-forget: the controller inserts the local row immediately and
     // updates it as the pipeline resolves; the list reflects each step.
-    unawaited(ref.read(inboxUploaderProvider).upload(picked));
+    unawaited(ref
+        .read(inboxUploaderProvider)
+        .upload(picked, importFromExternalSource: true));
   }
 
   Future<void> _showMoveSheet(InboxItem item) async {
@@ -130,6 +151,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       onRefresh: _refresh,
                       onTap: _openDetails,
                       onLongPress: _showMoveSheet,
+                      onRetry: _retryUpload,
                     ),
                   ),
                 ),
@@ -211,7 +233,11 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              _IconButton(icon: Icons.settings_outlined, onPressed: onSettings),
+              _IconButton(
+                icon: Icons.settings_outlined,
+                onPressed: onSettings,
+                semanticLabel: t.a11y.openSettings,
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -228,26 +254,41 @@ class _Header extends StatelessWidget {
 }
 
 class _IconButton extends StatelessWidget {
-  const _IconButton({required this.icon, required this.onPressed});
+  const _IconButton({
+    required this.icon,
+    required this.onPressed,
+    required this.semanticLabel,
+  });
 
   final IconData icon;
   final VoidCallback onPressed;
 
+  /// Screen-reader label + tooltip for this icon-only control (plan #45, W3).
+  final String semanticLabel;
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 44,
-      height: 44,
-      child: Material(
-        color: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onPressed,
-          child: Icon(icon, size: 20, color: AppColors.textSecondary),
+    // 48×48 minimum tap target (WCAG 2.5.5 / Material).
+    return Tooltip(
+      message: semanticLabel,
+      child: Semantics(
+        button: true,
+        label: semanticLabel,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Material(
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onPressed,
+              child: Icon(icon, size: 20, color: AppColors.textSecondary),
+            ),
+          ),
         ),
       ),
     );
@@ -315,6 +356,7 @@ class _Body extends StatelessWidget {
     required this.onRefresh,
     required this.onTap,
     required this.onLongPress,
+    required this.onRetry,
   });
 
   final List<InboxItem> items;
@@ -322,6 +364,7 @@ class _Body extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final ValueChanged<InboxItem> onTap;
   final ValueChanged<InboxItem> onLongPress;
+  final ValueChanged<InboxItem> onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -390,6 +433,7 @@ class _Body extends StatelessWidget {
                     ),
                     onTap: () => onTap(item),
                     onLongPress: () => onLongPress(item),
+                    onRetry: () => onRetry(item),
                   ),
                 ),
               ),
