@@ -58,4 +58,5 @@ Record each cell flip here: `YYYY-MMDD · cell · evidence (cmd / test id / sha)
 - 2026-0618 · Test suite green (host dart/widget suite, platform-agnostic) · ✅ · `flutter test --concurrency=1` → **+334 passed, ~1 skipped (live)**, exit 0 · — (covers shared code for android/web/linux; ios/macos/windows device-run not verified on this Linux host)
 - 2026-0618 · Mobile code-parity assessment · read-only · Flutter ≥ RN on 13/14 capabilities, 0 true gaps (see task #1275 comment) · — (assessment, not a green-build cell — device integration_test still required)
 - 2026-0618 · Local build green (android) · ✅ · `flutter build apk --debug` → app-debug.apk (203M) + app-release.apk (61M) · —
-- 2026-0618 · Local build green (web) · ✅ · `flutter build web` → build/web/ (main.dart.js 3.8M), wasm dry-run OK, exit 0 · — (compiles on CURRENT code; web online-only refactor = task #1277, not yet applied)
+- 2026-0618 · Local build green (web) · ✅ · `flutter build web` → build/web/ (main.dart.js 3.8M), wasm dry-run OK, exit 0 · —
+- 2026-0618 · Web offline-persistence DISABLED (online-only, in-memory) · ✅ · commit `08e1f91` — WasmSqlite3 + InMemoryFileSystem + WasmDatabase.inMemory; no OPFS/IndexedDB at-rest store; rebuild `flutter build web` green · — (code+build proven; runtime proof — login/session-reload/data-from-Core in chromium — pending a live Core backend session)
