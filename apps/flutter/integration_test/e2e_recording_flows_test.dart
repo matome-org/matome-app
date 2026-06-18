@@ -144,18 +144,23 @@ void main() {
 
     final localId =
         await container.read(recordingFinisherProvider).finish(title: 'Memo');
-    expect(localId, '555');
+    // #43 local-first: finish() returns the stable LOCAL id (`rec_local_<uuid>`);
+    // the Core id is reconciled into the `coreId` column on upload — the PK is
+    // NOT remapped to the Core id.
+    expect(localId, startsWith('rec_local_'));
 
-    // Single continuous file (pause/resume collapsed to one segment).
-    final row = await db.recordingsDao.getRecordingById('555');
+    // Single continuous file (pause/resume collapsed to one segment), reconciled
+    // to the stubbed Core id 555 with a terminal `done` status.
+    final row = await db.recordingsDao.getRecordingById(localId);
     expect(row, isNotNull);
-    expect(row!.processingStatus, 'done');
+    expect(row!.coreId, 555);
+    expect(row.processingStatus, 'done');
     expect(row.isProcessing, 0);
     expect(row.summary, 'A memo');
 
-    // Appears in the Inbox.
+    // Appears in the Inbox under its local id.
     final items = container.read(inboxControllerProvider).requireValue;
-    expect(items.any((i) => i.id == '555'), isTrue);
+    expect(items.any((i) => i.id == localId), isTrue);
 
     // Privacy cleanup after finish: draft gone.
     expect(await db.recordingDraftsDao.loadDraft(), isNull);
