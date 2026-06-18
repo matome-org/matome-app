@@ -71,6 +71,11 @@ dependencies:
   # path_provider resolves the per-platform app-documents dir for the native DB
   # file. drift_flutter wires native + web connections with one helper.
   drift_flutter: ^0.2.0
+  # Direct dependency so the web connection can build an in-memory sqlite3 VFS
+  # (WasmSqlite3 + InMemoryFileSystem) for the online-only web client — see
+  # core/db/connection_web.dart (ADR-0001 #2). Already pulled transitively by
+  # drift; pinned here to make the direct import explicit.
+  sqlite3: ^2.4.0
   path_provider: ^2.1.4
   # Bundles the native sqlite3 shared lib for Android/iOS/desktop.
   sqlite3_flutter_libs: ^0.5.24
