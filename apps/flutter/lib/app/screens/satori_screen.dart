@@ -29,7 +29,14 @@ class SatoriScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
     final s = t.satori;
+    final notifyBackground = theme.brightness == Brightness.dark
+        ? colors.surface
+        : colors.textPrimary;
+    final notifyForeground = theme.brightness == Brightness.dark
+        ? colors.textPrimary
+        : colors.surface;
 
     final roadmap = <_RoadmapItem>[
       _RoadmapItem(
@@ -73,7 +80,7 @@ class SatoriScreen extends StatelessWidget {
               Text(
                 s.subtitle,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: colors.textSecondary,
                 ),
               ),
               const SizedBox(height: 36),
@@ -85,7 +92,7 @@ class SatoriScreen extends StatelessWidget {
                 s.underConstruction,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: AppColors.accentDark,
+                  color: colors.accentDark,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 2,
                 ),
@@ -97,7 +104,7 @@ class SatoriScreen extends StatelessWidget {
                 s.body,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: colors.textSecondary,
                   height: 1.5,
                 ),
               ),
@@ -110,10 +117,10 @@ class SatoriScreen extends StatelessWidget {
               // Notify CTA (decorative parity — no real action).
               FilledButton.icon(
                 onPressed: () {},
-                icon: const Icon(Icons.auto_awesome, color: AppColors.accent),
+                icon: Icon(Icons.auto_awesome, color: colors.accent),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.textPrimary,
-                  foregroundColor: Colors.white,
+                  backgroundColor: notifyBackground,
+                  foregroundColor: notifyForeground,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -134,6 +141,12 @@ class _Medallion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final badgeBackground = theme.brightness == Brightness.dark
+        ? colors.surface
+        : colors.textPrimary;
+
     return SizedBox(
       width: 140,
       height: 140,
@@ -145,21 +158,17 @@ class _Medallion extends StatelessWidget {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: AppColors.accent,
+              color: colors.accent,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.accent.withValues(alpha: 0.45),
+                  color: colors.accent.withValues(alpha: 0.45),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
               ],
             ),
-            child: const Icon(
-              Icons.auto_awesome,
-              size: 52,
-              color: Colors.white,
-            ),
+            child: Icon(Icons.auto_awesome, size: 52, color: colors.onAccent),
           ),
           Positioned(
             right: 4,
@@ -167,13 +176,13 @@ class _Medallion extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.textPrimary,
+                color: badgeBackground,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 t.satori.soon,
-                style: const TextStyle(
-                  color: AppColors.accent,
+                style: TextStyle(
+                  color: colors.accent,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1,
@@ -193,6 +202,8 @@ class _Headline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final base = theme.textTheme.headlineSmall?.copyWith(
       fontWeight: FontWeight.w800,
       letterSpacing: -0.5,
@@ -207,7 +218,7 @@ class _Headline extends StatelessWidget {
           TextSpan(text: s.headlinePrefix),
           TextSpan(
             text: s.headlineAccent,
-            style: base?.copyWith(color: AppColors.accentDark),
+            style: base?.copyWith(color: colors.accentDark),
           ),
           TextSpan(text: s.headlineSuffix),
         ],
@@ -225,6 +236,7 @@ class _RoadmapCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -238,17 +250,14 @@ class _RoadmapCard extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
+              color: colors.textSecondary,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
             ),
           ),
           const SizedBox(height: 10),
           for (var i = 0; i < items.length; i++)
-            _RoadmapRow(
-              item: items[i],
-              showDivider: i < items.length - 1,
-            ),
+            _RoadmapRow(item: items[i], showDivider: i < items.length - 1),
         ],
       ),
     );
@@ -264,6 +273,7 @@ class _RoadmapRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
     final isNext = item.state == _RoadmapState.next;
     return Container(
       decoration: showDivider
@@ -286,7 +296,7 @@ class _RoadmapRow extends StatelessWidget {
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: isNext
-                        ? AppColors.textSecondary
+                        ? colors.textSecondary
                         : theme.textTheme.bodyMedium?.color,
                   ),
                 ),
@@ -294,7 +304,7 @@ class _RoadmapRow extends StatelessWidget {
                 Text(
                   item.detail,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textMuted,
+                    color: colors.textMuted,
                   ),
                 ),
               ],
@@ -312,17 +322,20 @@ class _RoadmapDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     switch (state) {
       case _RoadmapState.done:
         return Container(
           width: 20,
           height: 20,
           margin: const EdgeInsets.only(top: 2),
-          decoration: const BoxDecoration(
-            color: AppColors.accent,
+          decoration: BoxDecoration(
+            color: colors.accent,
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.check, size: 12, color: AppColors.textPrimary),
+          child: Icon(Icons.check, size: 12, color: colors.onAccent),
         );
       case _RoadmapState.active:
         return Container(
@@ -332,13 +345,13 @@ class _RoadmapDot extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.accent, width: 2),
+            border: Border.all(color: colors.accent, width: 2),
           ),
           child: Container(
             width: 8,
             height: 8,
-            decoration: const BoxDecoration(
-              color: AppColors.accent,
+            decoration: BoxDecoration(
+              color: colors.accent,
               shape: BoxShape.circle,
             ),
           ),
@@ -350,7 +363,7 @@ class _RoadmapDot extends StatelessWidget {
           margin: const EdgeInsets.only(top: 2),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.textMuted, width: 1.5),
+            border: Border.all(color: colors.textMuted, width: 1.5),
           ),
         );
     }

@@ -51,16 +51,19 @@ class AuthScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: colors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: onBack == null
             ? null
             : IconButton(
-                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                icon: Icon(Icons.arrow_back, color: colors.textPrimary),
                 onPressed: onBack,
               ),
       ),
@@ -75,10 +78,10 @@ class AuthScaffold extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 28),
@@ -120,15 +123,18 @@ class AuthField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
+            color: colors.textSecondary,
           ),
         ),
         const SizedBox(height: 6),
@@ -142,25 +148,27 @@ class AuthField extends StatelessWidget {
           enableSuggestions: !obscure,
           autofillHints: autofillHints,
           onSubmitted: onSubmitted,
-          style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+          style: TextStyle(fontSize: 15, color: colors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: AppColors.textMuted),
+            hintStyle: TextStyle(color: colors.textMuted),
             filled: true,
-            fillColor: AppColors.surface,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            fillColor: colors.surface,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: colors.border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: colors.border),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.accent),
+              borderSide: BorderSide(color: colors.accent),
             ),
           ),
         ),
@@ -177,22 +185,25 @@ class AuthErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.failed.withValues(alpha: 0.10),
+        color: colors.failed.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.failed.withValues(alpha: 0.35)),
+        border: Border.all(color: colors.failed.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, size: 18, color: AppColors.failed),
+          Icon(Icons.error_outline, size: 18, color: colors.failed),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(fontSize: 13, color: AppColors.failed),
+              style: TextStyle(fontSize: 13, color: colors.failed),
             ),
           ),
         ],
@@ -216,16 +227,17 @@ class AuthSubmitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return FilledButton(
       onPressed: loading ? null : onPressed,
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.textPrimary,
+        backgroundColor: colors.textPrimary,
         foregroundColor: Colors.white,
-        disabledBackgroundColor: AppColors.textMuted,
+        disabledBackgroundColor: colors.textMuted,
         minimumSize: const Size.fromHeight(52),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       child: loading
           ? const SizedBox(

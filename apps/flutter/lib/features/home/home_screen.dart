@@ -87,9 +87,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     // Fire-and-forget: the controller inserts the local row immediately and
     // updates it as the pipeline resolves; the list reflects each step.
-    unawaited(ref
-        .read(inboxUploaderProvider)
-        .upload(picked, importFromExternalSource: true));
+    unawaited(
+      ref
+          .read(inboxUploaderProvider)
+          .upload(picked, importFromExternalSource: true),
+    );
   }
 
   Future<void> _showMoveSheet(InboxItem item) async {
@@ -107,14 +109,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final state = ref.watch(inboxControllerProvider);
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       floatingActionButton: FloatingActionButton(
         onPressed: _pickAndUpload,
-        backgroundColor: AppColors.primary,
+        backgroundColor: colors.primary,
         tooltip: 'Upload a file',
         child: const Icon(Icons.upload_file, color: Colors.white),
       ),
@@ -140,8 +144,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 Expanded(
                   child: state.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
+                    loading: () => Center(
+                      child: CircularProgressIndicator(color: colors.primary),
                     ),
                     error: (err, _) =>
                         _ErrorState(message: err.toString(), onRetry: _refresh),
@@ -190,11 +194,14 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,28 +213,28 @@ class _Header extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'マトメ',
                       style: TextStyle(
                         fontSize: 12,
                         letterSpacing: 2,
-                        color: AppColors.textSecondary,
+                        color: colors.textSecondary,
                       ),
                     ),
-                    const Text(
+                    Text(
                       'Inbox',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                        color: colors.textPrimary,
                       ),
                     ),
                     if (total > 0)
                       Text(
                         '$total recordings',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: colors.textSecondary,
                         ),
                       ),
                   ],
@@ -268,6 +275,9 @@ class _IconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     // 48×48 minimum tap target (WCAG 2.5.5 / Material).
     return Tooltip(
       message: semanticLabel,
@@ -278,15 +288,15 @@ class _IconButton extends StatelessWidget {
           width: 48,
           height: 48,
           child: Material(
-            color: AppColors.surface,
+            color: colors.surface,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: AppColors.border),
+              side: BorderSide(color: colors.border),
             ),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: onPressed,
-              child: Icon(icon, size: 20, color: AppColors.textSecondary),
+              child: Icon(icon, size: 20, color: colors.textSecondary),
             ),
           ),
         ),
@@ -310,39 +320,41 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return TextField(
       controller: controller,
       onChanged: onChanged,
       textInputAction: TextInputAction.search,
-      style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+      style: TextStyle(fontSize: 14, color: colors.textPrimary),
       decoration: InputDecoration(
         isDense: true,
         hintText: 'Search recordings',
-        hintStyle: const TextStyle(color: AppColors.textSecondary),
-        prefixIcon:
-            const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+        hintStyle: TextStyle(color: colors.textSecondary),
+        prefixIcon: Icon(Icons.search, size: 18, color: colors.textSecondary),
         suffixIcon: value.isEmpty
             ? null
             : IconButton(
                 icon: const Icon(Icons.cancel, size: 16),
-                color: AppColors.textSecondary,
+                color: colors.textSecondary,
                 onPressed: onCleared,
                 tooltip: 'Clear search',
               ),
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: colors.surface,
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: colors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: colors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary),
+          borderSide: BorderSide(color: colors.primary),
         ),
       ),
     );
@@ -368,6 +380,8 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final filtered = searchItems(items, search);
     final sections = groupByDate(
       filtered,
@@ -378,7 +392,7 @@ class _Body extends StatelessWidget {
     if (sections.isEmpty) {
       return RefreshIndicator(
         onRefresh: onRefresh,
-        color: AppColors.primary,
+        color: colors.primary,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
@@ -391,7 +405,7 @@ class _Body extends StatelessWidget {
 
     return RefreshIndicator(
       onRefresh: onRefresh,
-      color: AppColors.primary,
+      color: colors.primary,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
@@ -407,18 +421,17 @@ class _Body extends StatelessWidget {
                   children: [
                     Text(
                       section.title.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1,
-                        color: AppColors.textSecondary,
+                        color: colors.textSecondary,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '${section.items.length}',
-                      style:
-                          const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
                     ),
                   ],
                 ),
@@ -452,35 +465,40 @@ class _MoveToSpaceSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
             child: Text(
               'Move to space',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: colors.textPrimary,
               ),
             ),
           ),
           if (spaces.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 8, 20, 24),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               child: Text(
                 'No spaces yet.',
-                style: TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: colors.textSecondary),
               ),
             )
           else
             ...spaces.map(
               (ws) => ListTile(
-                leading: const Icon(Icons.folder_outlined,
-                    color: AppColors.textSecondary),
+                leading: Icon(
+                  Icons.folder_outlined,
+                  color: colors.textSecondary,
+                ),
                 title: Text(ws.name),
                 onTap: () => Navigator.of(context).pop(ws),
               ),
@@ -499,6 +517,9 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -508,15 +529,15 @@ class _EmptyState extends StatelessWidget {
             Icon(
               searching ? Icons.search_off : Icons.inbox_outlined,
               size: 44,
-              color: AppColors.textMuted,
+              color: colors.textMuted,
             ),
             const SizedBox(height: 12),
             Text(
               searching ? 'No matching recordings' : 'No recordings yet',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: colors.textSecondary,
               ),
             ),
             const SizedBox(height: 4),
@@ -525,7 +546,7 @@ class _EmptyState extends StatelessWidget {
                   ? 'Try a different search term.'
                   : 'Recordings you capture or upload will show up here.',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+              style: TextStyle(fontSize: 13, color: colors.textMuted),
             ),
           ],
         ),
@@ -542,20 +563,23 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, size: 44, color: AppColors.failed),
+            Icon(Icons.cloud_off, size: 44, color: colors.failed),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               "Couldn't load recordings",
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: colors.textPrimary,
               ),
             ),
             const SizedBox(height: 4),
@@ -564,13 +588,13 @@ class _ErrorState extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+              style: TextStyle(fontSize: 13, color: colors.textMuted),
             ),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: onRetry,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: colors.primary,
                 minimumSize: const Size(120, 44),
               ),
               child: const Text('Try again'),

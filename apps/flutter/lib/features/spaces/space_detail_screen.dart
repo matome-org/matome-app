@@ -21,12 +21,14 @@ class SpaceDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(spaceDetailControllerProvider(spaceId));
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final title = state.valueOrNull?.name ?? t.spaces.title;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: colors.background,
         title: Text(title),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -36,16 +38,15 @@ class SpaceDetailScreen extends ConsumerWidget {
       body: SafeArea(
         top: false,
         child: state.when(
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          ),
+          loading: () =>
+              Center(child: CircularProgressIndicator(color: colors.primary)),
           error: (err, _) => Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
                 err.toString(),
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textMuted),
+                style: TextStyle(color: colors.textMuted),
               ),
             ),
           ),
@@ -76,10 +77,13 @@ class _List extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     if (items.isEmpty) {
       return RefreshIndicator(
         onRefresh: onRefresh,
-        color: AppColors.primary,
+        color: colors.primary,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
@@ -90,15 +94,18 @@ class _List extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.inbox_outlined,
-                        size: 44, color: AppColors.textMuted),
+                    Icon(
+                      Icons.inbox_outlined,
+                      size: 44,
+                      color: colors.textMuted,
+                    ),
                     const SizedBox(height: 12),
                     Text(
                       t.spaces.detailEmpty,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: AppColors.textSecondary,
+                        color: colors.textSecondary,
                       ),
                     ),
                   ],
@@ -112,7 +119,7 @@ class _List extends StatelessWidget {
 
     return RefreshIndicator(
       onRefresh: onRefresh,
-      color: AppColors.primary,
+      color: colors.primary,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),

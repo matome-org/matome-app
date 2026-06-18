@@ -77,13 +77,15 @@ class InboxRecordingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = badgeColor(card.badge);
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final color = colors.badgeColor(card.badge);
 
     return Semantics(
       button: true,
       label: 'Recording: ${card.title}',
       child: Material(
-        color: AppColors.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onTap,
@@ -94,16 +96,12 @@ class InboxRecordingCard extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Avatar(
-                  color: color,
-                  state: state,
-                  mediaIcon: _mediaIcon,
-                ),
+                _Avatar(color: color, state: state, mediaIcon: _mediaIcon),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -150,6 +148,8 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final Color bg;
     final Widget child;
     switch (state) {
@@ -161,15 +161,21 @@ class _Avatar extends StatelessWidget {
           child: CircularProgressIndicator(strokeWidth: 2, color: color),
         );
       case RecordingCardState.failed:
-        bg = AppColors.failed.withValues(alpha: 0.13);
-        child = const Icon(Icons.warning_amber_rounded,
-            size: 16, color: AppColors.failed);
+        bg = colors.failed.withValues(alpha: 0.13);
+        child = Icon(
+          Icons.warning_amber_rounded,
+          size: 16,
+          color: colors.failed,
+        );
       case RecordingCardState.pendingUpload:
         // Safe-but-not-uploaded: a neutral "offline / on device" glyph rather
         // than a spinner (nothing is in flight) or a warning (nothing is wrong).
-        bg = AppColors.textMuted.withValues(alpha: 0.13);
-        child = const Icon(Icons.cloud_off_outlined,
-            size: 16, color: AppColors.textMuted);
+        bg = colors.textMuted.withValues(alpha: 0.13);
+        child = Icon(
+          Icons.cloud_off_outlined,
+          size: 16,
+          color: colors.textMuted,
+        );
       case RecordingCardState.done:
         bg = color.withValues(alpha: 0.13);
         child = Icon(mediaIcon, size: 18, color: color);
@@ -192,6 +198,9 @@ class _TitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
@@ -201,10 +210,10 @@ class _TitleRow extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: colors.textPrimary,
             ),
           ),
         ),
@@ -212,7 +221,7 @@ class _TitleRow extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             timestamp,
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 11, color: colors.textSecondary),
           ),
         ],
       ],
@@ -235,6 +244,9 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     switch (state) {
       case RecordingCardState.pendingUpload:
         // SAFE-but-not-uploaded. No spinner — nothing is in flight; this reads
@@ -242,18 +254,14 @@ class _Body extends StatelessWidget {
         return Row(
           key: const ValueKey('card-pending-upload'),
           children: [
-            const Icon(Icons.cloud_off_outlined,
-                size: 13, color: AppColors.textMuted),
+            Icon(Icons.cloud_off_outlined, size: 13, color: colors.textMuted),
             const SizedBox(width: 6),
             Flexible(
               child: Text(
                 t.cardStatus.pendingUpload,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textMuted,
-                ),
+                style: TextStyle(fontSize: 12, color: colors.textMuted),
               ),
             ),
           ],
@@ -284,14 +292,14 @@ class _Body extends StatelessWidget {
         return Row(
           key: const ValueKey('card-failed'),
           children: [
-            const Icon(Icons.error_outline, size: 13, color: AppColors.failed),
+            Icon(Icons.error_outline, size: 13, color: colors.failed),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 t.cardStatus.failed,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: AppColors.failed),
+                style: TextStyle(fontSize: 12, color: colors.failed),
               ),
             ),
             if (onRetry != null)
@@ -301,13 +309,15 @@ class _Body extends StatelessWidget {
                 icon: const Icon(Icons.refresh, size: 14),
                 label: Text(t.cardStatus.retry),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.failed,
+                  foregroundColor: colors.failed,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   minimumSize: const Size(0, 28),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   visualDensity: VisualDensity.compact,
                   textStyle: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w600),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
           ],
@@ -322,10 +332,10 @@ class _Body extends StatelessWidget {
           summary,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             height: 1.35,
-            color: AppColors.textSecondary,
+            color: colors.textSecondary,
           ),
         );
     }
@@ -349,7 +359,12 @@ class _Footer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
     final label = badge.isEmpty ? null : badge;
+    final badgeBackground = theme.brightness == Brightness.dark
+        ? colors.textPrimary.withValues(alpha: 0.10)
+        : colors.subtleFillStrong;
     // The folder badge, the sync-state badge, and the duration sit on one line
     // as peer chips. Wrap so a long space name + both pills degrade gracefully
     // on a narrow card instead of overflowing.
@@ -362,7 +377,7 @@ class _Footer extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: const Color(0x0D0E0F10),
+              color: badgeBackground,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Row(
@@ -371,16 +386,18 @@ class _Footer extends StatelessWidget {
                 Container(
                   width: 6,
                   height: 6,
-                  decoration:
-                      BoxDecoration(color: color, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 5),
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: colors.textPrimary,
                   ),
                 ),
               ],
@@ -390,7 +407,7 @@ class _Footer extends StatelessWidget {
         if (duration.isNotEmpty)
           Text(
             duration,
-            style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+            style: TextStyle(fontSize: 11, color: colors.textMuted),
           ),
       ],
     );

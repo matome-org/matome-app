@@ -16,6 +16,8 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final features = [
       (
         Icons.mic_none_outlined,
@@ -35,7 +37,7 @@ class WelcomeScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -49,12 +51,12 @@ class WelcomeScreen extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text(
+                      Text(
                         'マトメ',
                         style: TextStyle(
                           fontSize: 30,
                           fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
+                          color: colors.textPrimary,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -66,7 +68,7 @@ class WelcomeScreen extends StatelessWidget {
                             fontSize: 14,
                             letterSpacing: 3,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.accentDark,
+                            color: colors.accentDark,
                           ),
                         ),
                       ),
@@ -76,18 +78,18 @@ class WelcomeScreen extends StatelessWidget {
                   // Headline.
                   Text.rich(
                     TextSpan(
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 34,
                         height: 1.15,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                        color: colors.textPrimary,
                       ),
                       children: [
                         TextSpan(text: '${t.welcome.headlineLine1}\n'),
                         TextSpan(text: '${t.welcome.headlineLine2}\n'),
                         TextSpan(
                           text: t.welcome.headlineAccent,
-                          style: const TextStyle(color: AppColors.accentDark),
+                          style: TextStyle(color: colors.accentDark),
                         ),
                       ],
                     ),
@@ -95,10 +97,10 @@ class WelcomeScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   Text(
                     t.welcome.subheadline,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       height: 1.4,
-                      color: AppColors.textSecondary,
+                      color: colors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -114,7 +116,7 @@ class WelcomeScreen extends StatelessWidget {
                     child: FilledButton(
                       onPressed: () => context.go('/signup'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.textPrimary,
+                        backgroundColor: colors.textPrimary,
                         foregroundColor: Colors.white,
                         minimumSize: const Size.fromHeight(52),
                         shape: RoundedRectangleBorder(
@@ -136,17 +138,17 @@ class WelcomeScreen extends StatelessWidget {
                       onPressed: () => context.go('/login'),
                       child: Text.rich(
                         TextSpan(
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: AppColors.textSecondary,
+                            color: colors.textSecondary,
                           ),
                           children: [
                             TextSpan(text: t.welcome.haveAccount),
                             TextSpan(
                               text: t.welcome.signIn,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
+                                color: colors.textPrimary,
                               ),
                             ),
                           ],
@@ -177,6 +179,9 @@ class _FeatureRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -184,10 +189,10 @@ class _FeatureRow extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: AppColors.accentSoft,
+            color: colors.accentSoft,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, size: 22, color: AppColors.accentDark),
+          child: Icon(icon, size: 22, color: colors.accentDark),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -196,19 +201,16 @@ class _FeatureRow extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: colors.textPrimary,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 13, color: colors.textSecondary),
               ),
             ],
           ),

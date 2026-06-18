@@ -6,6 +6,8 @@
 #
 #   flutter test --tags live
 tags:
+  golden:
+    # Alchemist shared-widget golden baselines; run with `flutter test --tags golden`.
   live:
     # Skipped by default; explicit `--tags live` clears this skip.
     skip: "live integration test — run with --tags live and LIVE_TOKEN set"

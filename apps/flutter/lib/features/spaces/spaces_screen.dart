@@ -12,20 +12,6 @@ import 'spaces_controller.dart';
 const double _wideBreakpoint = 1000;
 const double _contentMaxWidth = 720;
 
-/// Stable accent palette mirroring the RN `SPACE_COLORS`, keyed by list index.
-const List<Color> _spaceColors = [
-  Color(0xFFE1B346),
-  Color(0xFF6FB180),
-  Color(0xFF6A8AD9),
-  Color(0xFFD98A55),
-  Color(0xFFC97A9C),
-  Color(0xFFA089CC),
-  Color(0xFF14B8A6),
-  Color(0xFFEF4444),
-];
-
-Color _spaceColor(int index) => _spaceColors[index % _spaceColors.length];
-
 /// Spaces tab (S5, #784). Offline-first list of workspaces with their recording
 /// counts, driven from Drift via [spacesControllerProvider]. The FAB opens a
 /// create-space modal; long-press confirms deletion (which returns the space's
@@ -59,13 +45,15 @@ class SpacesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(spacesControllerProvider);
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       floatingActionButton: FloatingActionButton(
         onPressed: () => _create(context, ref),
-        backgroundColor: AppColors.primary,
+        backgroundColor: colors.primary,
         tooltip: t.spaces.createTitle,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -81,9 +69,8 @@ class SpacesScreen extends ConsumerWidget {
                 _Header(total: state.valueOrNull?.length ?? 0),
                 Expanded(
                   child: state.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary),
+                    loading: () => Center(
+                      child: CircularProgressIndicator(color: colors.primary),
                     ),
                     error: (err, _) => Center(
                       child: Padding(
@@ -91,7 +78,7 @@ class SpacesScreen extends ConsumerWidget {
                         child: Text(
                           err.toString(),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.textMuted),
+                          style: TextStyle(color: colors.textMuted),
                         ),
                       ),
                     ),
@@ -99,8 +86,7 @@ class SpacesScreen extends ConsumerWidget {
                       spaces: spaces,
                       onRefresh: () =>
                           ref.read(spacesControllerProvider.notifier).load(),
-                      onTap: (s) =>
-                          GoRouter.of(context).go('/spaces/${s.id}'),
+                      onTap: (s) => GoRouter.of(context).go('/spaces/${s.id}'),
                       onLongPress: (s) => _confirmDelete(context, ref, s),
                     ),
                   ),
@@ -121,39 +107,39 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'マトメ',
             style: TextStyle(
               fontSize: 12,
               letterSpacing: 2,
-              color: AppColors.textSecondary,
+              color: colors.textSecondary,
             ),
           ),
           Text(
             t.spaces.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
+              color: colors.textPrimary,
             ),
           ),
           if (total > 0)
             Text(
               t.spaces.count(n: total),
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: colors.textSecondary),
             ),
         ],
       ),
@@ -176,10 +162,13 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     if (spaces.isEmpty) {
       return RefreshIndicator(
         onRefresh: onRefresh,
-        color: AppColors.primary,
+        color: colors.primary,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
@@ -192,7 +181,7 @@ class _Body extends StatelessWidget {
 
     return RefreshIndicator(
       onRefresh: onRefresh,
-      color: AppColors.primary,
+      color: colors.primary,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
@@ -202,7 +191,7 @@ class _Body extends StatelessWidget {
           final space = spaces[index];
           return _SpaceTile(
             space: space,
-            color: _spaceColor(index),
+            color: colors.spaceColor(index),
             onTap: () => onTap(space),
             onLongPress: () => onLongPress(space),
           );
@@ -227,11 +216,14 @@ class _SpaceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Semantics(
       button: true,
       label: 'Space: ${space.name}',
       child: Material(
-        color: AppColors.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           key: ValueKey('space-tile-${space.id}'),
@@ -242,7 +234,7 @@ class _SpaceTile extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               children: [
@@ -265,25 +257,24 @@ class _SpaceTile extends StatelessWidget {
                         space.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          color: colors.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         t.spaces.count(n: space.count),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: colors.textSecondary,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right,
-                    size: 20, color: AppColors.textMuted),
+                Icon(Icons.chevron_right, size: 20, color: colors.textMuted),
               ],
             ),
           ),
@@ -313,8 +304,11 @@ class _CreateSpaceDialogState extends State<_CreateSpaceDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return AlertDialog(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       title: Text(t.spaces.createTitle),
       content: TextField(
         controller: _controller,
@@ -334,7 +328,7 @@ class _CreateSpaceDialogState extends State<_CreateSpaceDialog> {
         FilledButton(
           key: const ValueKey('create-space-confirm'),
           onPressed: _submit,
-          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+          style: FilledButton.styleFrom(backgroundColor: colors.primary),
           child: Text(t.spaces.create),
         ),
       ],
@@ -349,8 +343,11 @@ class _DeleteSpaceDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return AlertDialog(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       title: Text(t.spaces.deleteTitle),
       content: Text('$name\n\n${t.spaces.deleteBody}'),
       actions: [
@@ -361,7 +358,7 @@ class _DeleteSpaceDialog extends StatelessWidget {
         FilledButton(
           key: const ValueKey('delete-space-confirm'),
           onPressed: () => Navigator.of(context).pop(true),
-          style: FilledButton.styleFrom(backgroundColor: AppColors.failed),
+          style: FilledButton.styleFrom(backgroundColor: colors.failed),
           child: Text(t.spaces.delete),
         ),
       ],
@@ -374,28 +371,30 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.folder_outlined,
-                size: 44, color: AppColors.textMuted),
+            Icon(Icons.folder_outlined, size: 44, color: colors.textMuted),
             const SizedBox(height: 12),
             Text(
               t.spaces.empty,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: colors.textSecondary,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               t.spaces.emptyHint,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+              style: TextStyle(fontSize: 13, color: colors.textMuted),
             ),
           ],
         ),

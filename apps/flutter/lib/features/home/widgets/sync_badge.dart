@@ -41,20 +41,22 @@ class SyncBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final (IconData icon, String label, Color color) = switch (state) {
       SyncState.cloud => (
-          Icons.cloud_done_outlined,
-          t.cardStatus.cloud,
-          AppColors.badgePersonal,
-        ),
+        Icons.cloud_done_outlined,
+        t.cardStatus.cloud,
+        colors.badgePersonal,
+      ),
       SyncState.onDevice => (
-          Icons.smartphone_outlined,
-          t.cardStatus.onDevice,
-          // textSecondary (not textMuted): clears WCAG AA 4.5:1 as TEXT over
-          // its own 12% tint (plan #45, W3), whereas textMuted only clears it
-          // on a plain white surface.
-          AppColors.textSecondary,
-        ),
+        Icons.smartphone_outlined,
+        t.cardStatus.onDevice,
+        // textSecondary (not textMuted): clears WCAG AA 4.5:1 as TEXT over
+        // its own 12% tint (plan #45, W3), whereas textMuted only clears it
+        // on a plain white surface.
+        colors.textSecondary,
+      ),
     };
 
     return Semantics(

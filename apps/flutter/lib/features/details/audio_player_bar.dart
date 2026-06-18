@@ -96,37 +96,33 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
   /// a clear, disabled affordance + message instead of a dead silent play
   /// button. Distinct surface (muted) so it reads as inert, not actionable.
   Widget _buildUnavailable(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Container(
       key: const ValueKey('audio-unavailable'),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 48,
             height: 48,
             child: Material(
-              color: AppColors.border,
-              shape: CircleBorder(),
-              child: Icon(
-                Icons.music_off,
-                color: AppColors.textMuted,
-                size: 24,
-              ),
+              color: colors.border,
+              shape: const CircleBorder(),
+              child: Icon(Icons.music_off, color: colors.textMuted, size: 24),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               t.details.audioUnavailable,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 14, color: colors.textSecondary),
             ),
           ),
         ],
@@ -142,6 +138,8 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     // Plan #45 W1: when NEITHER a local file NOR a remote URL resolved (kind ==
     // none) — or the only resolved source failed to load — there is nothing to
     // play. Surface a graceful "audio unavailable" state instead of a dead,
@@ -153,9 +151,9 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: colors.border),
       ),
       child: StreamBuilder<PlaybackState>(
         stream: _player.playerStateStream,
@@ -165,10 +163,7 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
             children: [
               Row(
                 children: [
-                  _PlayButton(
-                    playing: playing,
-                    onPressed: _togglePlay,
-                  ),
+                  _PlayButton(playing: playing, onPressed: _togglePlay),
                   const SizedBox(width: 12),
                   Expanded(
                     child: StreamBuilder<Duration>(
@@ -189,9 +184,9 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
                             overlayShape: const RoundSliderOverlayShape(
                               overlayRadius: 12,
                             ),
-                            activeTrackColor: AppColors.accent,
-                            inactiveTrackColor: AppColors.border,
-                            thumbColor: AppColors.accent,
+                            activeTrackColor: colors.accent,
+                            inactiveTrackColor: colors.border,
+                            thumbColor: colors.accent,
                           ),
                           child: Slider(
                             value: max > 0 ? value : 0,
@@ -199,8 +194,8 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
                             onChanged: max <= 0
                                 ? null
                                 : (v) => _player.seek(
-                                      Duration(milliseconds: v.round()),
-                                    ),
+                                    Duration(milliseconds: v.round()),
+                                  ),
                           ),
                         );
                       },
@@ -219,17 +214,17 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
                     children: [
                       Text(
                         _fmt(position),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: AppColors.textSecondary,
+                          color: colors.textSecondary,
                           fontFeatures: [FontFeature.tabularFigures()],
                         ),
                       ),
                       Text(
                         _fmt(duration),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: AppColors.textSecondary,
+                          color: colors.textSecondary,
                           fontFeatures: [FontFeature.tabularFigures()],
                         ),
                       ),
@@ -253,6 +248,8 @@ class _PlayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     // Icon-only control — give it a screen-reader label + tooltip that tracks
     // the current action (plan #45, W3). 48×48 already meets the tap target.
     final label = playing ? t.a11y.pause : t.a11y.play;
@@ -266,14 +263,14 @@ class _PlayButton extends StatelessWidget {
           width: 48,
           height: 48,
           child: Material(
-            color: onPressed == null ? AppColors.border : AppColors.accent,
+            color: onPressed == null ? colors.border : colors.accent,
             shape: const CircleBorder(),
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: onPressed,
               child: Icon(
                 playing ? Icons.pause : Icons.play_arrow,
-                color: AppColors.textPrimary,
+                color: colors.textPrimary,
                 size: 26,
               ),
             ),

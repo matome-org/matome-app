@@ -152,6 +152,8 @@ dependencies:
   # stable local PK before any Core id is known. Already pulled in transitively;
   # pinned here to make the direct dependency explicit.
   uuid: ^4.5.3
+  widgetbook: ^3.24.0
+  widgetbook_annotation: ^3.11.0
 
 dev_dependencies:
   flutter_test:
@@ -184,6 +186,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  alchemist: ^0.14.0
+  widgetbook_generator: ^3.24.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

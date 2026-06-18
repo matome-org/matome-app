@@ -25,7 +25,7 @@ class RecorderBinding {
 
   final Provider<AudioRecordingService> serviceProvider;
   final StateNotifierProvider<RecordingController, RecordingState>
-      controllerProvider;
+  controllerProvider;
   final Provider<RecordingFinisher> finisherProvider;
 
   /// Whether this recorder supports mid-stream pause/resume. The meeting backend
@@ -93,7 +93,7 @@ enum _ModalPhase {
 /// draft prompt on entry, and a graceful unsupported-mic state.
 class RecordingScreen extends ConsumerStatefulWidget {
   RecordingScreen({super.key, RecorderBinding? binding})
-      : binding = binding ?? RecorderBinding.mic;
+    : binding = binding ?? RecorderBinding.mic;
 
   /// Which recorder backs this modal (mic by default; the meeting recorder for
   /// the `/meeting` route).
@@ -114,7 +114,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   Provider<AudioRecordingService> get _serviceProvider =>
       widget.binding.serviceProvider;
   StateNotifierProvider<RecordingController, RecordingState>
-      get _controllerProvider => widget.binding.controllerProvider;
+  get _controllerProvider => widget.binding.controllerProvider;
   Provider<RecordingFinisher> get _finisherProvider =>
       widget.binding.finisherProvider;
 
@@ -144,8 +144,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     if (!mounted) return;
     if (!supported) {
       final reasonResolver = widget.binding.unsupportedReason;
-      final reason =
-          reasonResolver != null ? await reasonResolver(ref) : null;
+      final reason = reasonResolver != null ? await reasonResolver(ref) : null;
       if (!mounted) return;
       setState(() {
         _unsupportedReason = reason;
@@ -180,28 +179,29 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   /// "setState during build" / stream-conflict during a phase transition).
   void _subscribeWaveform() {
     _ampListener?.close();
-    _ampListener = ref.listenManual<RecordingState>(
-      _controllerProvider,
-      (prev, next) {
-        if (next.phase != RecordingPhase.recording) return;
-        if (prev != null && prev.amplitude == next.amplitude) return;
-        const minDb = -60.0;
-        const maxDb = 0.0;
-        var normalized = (next.amplitude - minDb) / (maxDb - minDb);
-        normalized = normalized.clamp(0.0, 1.0);
-        final target = normalized * 40 + 5;
-        final next0 =
-            target > _lastHeight ? target : _lastHeight * 0.7 + target * 0.3;
-        _lastHeight = next0 < 5 ? 5 : next0;
-        _bars
-          ..removeAt(0)
-          ..add(_lastHeight);
-        if (!mounted) return;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() {});
-        });
-      },
-    );
+    _ampListener = ref.listenManual<RecordingState>(_controllerProvider, (
+      prev,
+      next,
+    ) {
+      if (next.phase != RecordingPhase.recording) return;
+      if (prev != null && prev.amplitude == next.amplitude) return;
+      const minDb = -60.0;
+      const maxDb = 0.0;
+      var normalized = (next.amplitude - minDb) / (maxDb - minDb);
+      normalized = normalized.clamp(0.0, 1.0);
+      final target = normalized * 40 + 5;
+      final next0 = target > _lastHeight
+          ? target
+          : _lastHeight * 0.7 + target * 0.3;
+      _lastHeight = next0 < 5 ? 5 : next0;
+      _bars
+        ..removeAt(0)
+        ..add(_lastHeight);
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    });
   }
 
   void _resetBars() {
@@ -247,9 +247,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
       return;
     }
     try {
-      await ref
-          .read(_controllerProvider.notifier)
-          .resumeFromDraft(detection);
+      await ref.read(_controllerProvider.notifier).resumeFromDraft(detection);
       if (mounted) setState(() => _phase = _ModalPhase.recording);
     } catch (_) {
       _snack(t.recording.resumeFailed);
@@ -344,7 +342,9 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // --- render ---------------------------------------------------------------
@@ -365,7 +365,8 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
                   child: IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: t.common.cancel,
-                    onPressed: _phase == _ModalPhase.draftPrompt ||
+                    onPressed:
+                        _phase == _ModalPhase.draftPrompt ||
                             _phase == _ModalPhase.unsupported
                         ? _close
                         : _discard,
@@ -427,6 +428,7 @@ class _ProcessingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -440,8 +442,9 @@ class _ProcessingView extends StatelessWidget {
             Text(
               t.recording.processingHint,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: AppColors.textSecondary),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.textSecondary,
+              ),
             ),
             const SizedBox(height: 20),
             OutlinedButton(
@@ -466,6 +469,7 @@ class _UnsupportedView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -473,21 +477,24 @@ class _UnsupportedView extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 48,
-            backgroundColor: AppColors.accentSoft,
-            child: const Icon(Icons.mic_off, size: 44, color: AppColors.accentDark),
+            backgroundColor: colors.accentSoft,
+            child: Icon(Icons.mic_off, size: 44, color: colors.accentDark),
           ),
           const SizedBox(height: 24),
           Text(
             t.recording.unsupportedTitle,
             textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             reason ?? t.recording.unsupportedHint,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: AppColors.textSecondary),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.textSecondary,
+            ),
           ),
           const SizedBox(height: 24),
           FilledButton(onPressed: onClose, child: Text(t.common.cancel)),
@@ -511,6 +518,7 @@ class _DraftPromptView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -518,28 +526,32 @@ class _DraftPromptView extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 48,
-            backgroundColor: AppColors.accentSoft,
-            child: const Icon(Icons.mic, size: 44, color: AppColors.accentDark),
+            backgroundColor: colors.accentSoft,
+            child: Icon(Icons.mic, size: 44, color: colors.accentDark),
           ),
           const SizedBox(height: 24),
           Text(
             t.recording.draftFound,
             textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             t.recording.draftHint,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: AppColors.textSecondary),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.textSecondary,
+            ),
           ),
           if (durationSeconds > 0) ...[
             const SizedBox(height: 16),
             Text(
               AudioRecordingService.formatDuration(durationSeconds),
-              style: theme.textTheme.headlineSmall
-                  ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ],
           const SizedBox(height: 24),
@@ -626,7 +638,8 @@ class _ActiveView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primaryColor = _isRecording ? AppColors.failed : AppColors.accent;
+    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final primaryColor = _isRecording ? colors.failed : colors.accent;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -635,15 +648,17 @@ class _ActiveView extends StatelessWidget {
           Text(
             _statusLabel,
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             _hintLabel,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: AppColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colors.textSecondary,
+            ),
           ),
           const SizedBox(height: 24),
           Text(
@@ -668,9 +683,7 @@ class _ActiveView extends StatelessWidget {
                     width: 4,
                     height: bars[i],
                     decoration: BoxDecoration(
-                      color: _isRecording
-                          ? AppColors.accent
-                          : AppColors.border,
+                      color: _isRecording ? colors.accent : colors.border,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -688,8 +701,8 @@ class _ActiveView extends StatelessWidget {
             onTap: _isRecording
                 ? (supportsPause ? onPause : onFinish)
                 : _isPaused
-                    ? onResume
-                    : onStart,
+                ? onResume
+                : onStart,
             child: Container(
               width: 96,
               height: 96,

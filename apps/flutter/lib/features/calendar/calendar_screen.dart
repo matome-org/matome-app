@@ -15,7 +15,13 @@ const List<String> _monthNames = [
 ];
 
 const List<String> _weekdayNames = [
-  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
 ];
 
 const List<String> _shortMonthNames = [
@@ -48,12 +54,14 @@ class CalendarScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(calendarControllerProvider);
     final controller = ref.read(calendarControllerProvider.notifier);
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
     final today = DateTime.now();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: colors.background,
       body: SafeArea(
         bottom: false,
         child: Center(
@@ -132,6 +140,9 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -145,25 +156,21 @@ class _Header extends StatelessWidget {
                 key: const ValueKey('calendar-prev-month'),
                 tooltip: 'Previous month',
                 onPressed: onPrev,
-                icon: const Icon(Icons.chevron_left,
-                    color: AppColors.textSecondary),
+                icon: Icon(Icons.chevron_left, color: colors.textSecondary),
               ),
               Column(
                 children: [
                   Text(
                     _monthNames[month],
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
                   Text(
                     '$year',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: TextStyle(fontSize: 12, color: colors.textSecondary),
                   ),
                 ],
               ),
@@ -171,8 +178,7 @@ class _Header extends StatelessWidget {
                 key: const ValueKey('calendar-next-month'),
                 tooltip: 'Next month',
                 onPressed: onNext,
-                icon: const Icon(Icons.chevron_right,
-                    color: AppColors.textSecondary),
+                icon: Icon(Icons.chevron_right, color: colors.textSecondary),
               ),
             ],
           ),
@@ -183,9 +189,9 @@ class _Header extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: colors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: colors.border),
             ),
             child: _MonthGrid(
               year: year,
@@ -237,6 +243,8 @@ class _MonthGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     // weekday(): Mon=1..Sun=7 in Dart; the RN grid is Sunday-first, so map
     // Sunday(7) -> 0, Mon(1) -> 1, ... Sat(6) -> 6.
     final firstWeekday = DateTime(year, month + 1, 1).weekday % 7;
@@ -256,10 +264,10 @@ class _MonthGrid extends StatelessWidget {
               child: Center(
                 child: Text(
                   _weekdayLabels[i],
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textMuted,
+                    color: colors.textMuted,
                   ),
                 ),
               ),
@@ -288,14 +296,14 @@ class _MonthGrid extends StatelessWidget {
             }),
           ),
         if (isLoading)
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
             child: SizedBox(
               height: 16,
               width: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: AppColors.accent,
+                color: colors.accent,
               ),
             ),
           ),
@@ -321,17 +329,20 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     final Color background = isSelected
-        ? AppColors.accentSoft
+        ? colors.accentSoft
         : hasRecording
-            ? AppColors.accent.withValues(alpha: 0.16)
-            : Colors.transparent;
+        ? colors.accent.withValues(alpha: 0.16)
+        : Colors.transparent;
 
     final Color textColor = isSelected
-        ? AppColors.textPrimary
+        ? colors.textPrimary
         : isToday
-            ? AppColors.accentDark
-            : AppColors.textPrimary;
+        ? colors.accentDark
+        : colors.textPrimary;
 
     return InkWell(
       key: ValueKey('calendar-day-$day'),
@@ -350,15 +361,16 @@ class _DayCell extends StatelessWidget {
                 color: background,
                 borderRadius: BorderRadius.circular(8),
                 border: isSelected
-                    ? Border.all(color: AppColors.textPrimary, width: 2)
+                    ? Border.all(color: colors.textPrimary, width: 2)
                     : null,
               ),
               child: Text(
                 '$day',
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight:
-                      isSelected || isToday ? FontWeight.w700 : FontWeight.w400,
+                  fontWeight: isSelected || isToday
+                      ? FontWeight.w700
+                      : FontWeight.w400,
                   color: textColor,
                 ),
               ),
@@ -370,7 +382,7 @@ class _DayCell extends StatelessWidget {
               height: 5,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: hasRecording ? AppColors.accent : Colors.transparent,
+                color: hasRecording ? colors.accent : Colors.transparent,
               ),
             ),
           ],
@@ -411,9 +423,8 @@ class _SpaceFilterStrip extends StatelessWidget {
               key: ValueKey('calendar-filter-${space.id}'),
               label: space.name,
               active: selectedSpaceId == space.id,
-              onTap: () => onSpaceFilter(
-                selectedSpaceId == space.id ? null : space.id,
-              ),
+              onTap: () =>
+                  onSpaceFilter(selectedSpaceId == space.id ? null : space.id),
             ),
           ],
         ],
@@ -436,8 +447,11 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Material(
-      color: active ? AppColors.textPrimary : const Color(0x0A0E0F10),
+      color: active ? colors.textPrimary : colors.subtleFill,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -450,7 +464,7 @@ class _FilterChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: active ? Colors.white : AppColors.textSecondary,
+                color: active ? Colors.white : colors.textSecondary,
               ),
             ),
           ),
@@ -476,8 +490,11 @@ class _DayHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (selectedDay <= 0) return const SizedBox.shrink();
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final date = DateTime(year, month + 1, selectedDay);
-    final label = '${_weekdayNames[date.weekday % 7]}, '
+    final label =
+        '${_weekdayNames[date.weekday % 7]}, '
         '${_shortMonthNames[month]} $selectedDay';
 
     return Padding(
@@ -488,20 +505,17 @@ class _DayHeading extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: colors.textPrimary,
             ),
           ),
           if (count > 0) ...[
             const SizedBox(width: 8),
             Text(
               '$count ${count == 1 ? 'recording' : 'recordings'}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: colors.textSecondary),
             ),
           ],
         ],
@@ -518,12 +532,14 @@ class _RecordingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
     final isWork = item.badge == 'Work';
-    final dotColor = isWork ? AppColors.accent : AppColors.textMuted;
+    final dotColor = isWork ? colors.accent : colors.textMuted;
     final displayName = item.workspaceName ?? item.badge;
 
     return Material(
-      color: AppColors.surface,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         key: ValueKey('calendar-recording-${item.id}'),
@@ -533,7 +549,7 @@ class _RecordingRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: colors.border),
           ),
           child: Row(
             children: [
@@ -554,10 +570,10 @@ class _RecordingRow extends StatelessWidget {
                       item.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: colors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -565,11 +581,13 @@ class _RecordingRow extends StatelessWidget {
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: isWork
-                                ? AppColors.accent.withValues(alpha: 0.13)
-                                : AppColors.border,
+                                ? colors.accent.withValues(alpha: 0.13)
+                                : colors.border,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -578,17 +596,17 @@ class _RecordingRow extends StatelessWidget {
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: isWork
-                                  ? AppColors.accentDark
-                                  : AppColors.textSecondary,
+                                  ? colors.accentDark
+                                  : colors.textSecondary,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           formatDuration(item.duration),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: colors.textSecondary,
                           ),
                         ),
                       ],
@@ -596,8 +614,7 @@ class _RecordingRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right,
-                  size: 18, color: AppColors.textMuted),
+              Icon(Icons.chevron_right, size: 18, color: colors.textMuted),
             ],
           ),
         ),
@@ -611,14 +628,19 @@ class _DayLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: SizedBox(
           height: 24,
           width: 24,
           child: CircularProgressIndicator(
-              strokeWidth: 2, color: AppColors.accent),
+            strokeWidth: 2,
+            color: colors.accent,
+          ),
         ),
       ),
     );
@@ -630,21 +652,24 @@ class _DayEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.calendar_today_outlined,
-                size: 32, color: AppColors.textMuted),
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 32,
+              color: colors.textMuted,
+            ),
             const SizedBox(height: 12),
             Text(
               t.calendar.noRecordings,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textMuted,
-              ),
+              style: TextStyle(fontSize: 14, color: colors.textMuted),
             ),
           ],
         ),
