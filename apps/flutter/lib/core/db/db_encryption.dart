@@ -49,6 +49,16 @@ class DbEncryptionKeyManager {
 
   static const int _keyBytes = 32; // 256-bit
 
+  /// NOTE (flutter_secure_storage 10.x): `AndroidOptions.resetOnError` now
+  /// defaults to `true` — on a platform decrypt error the backend WIPES the
+  /// stored value instead of throwing. For the JWT (token_store) that only
+  /// forces a re-login, but for THIS SQLCipher passphrase a silent wipe is
+  /// unrecoverable: [obtainKey] would then read empty, generate a *new* key,
+  /// and the existing encrypted Drift DB could never be reopened. When at-rest
+  /// encryption is switched on (`kSqlCipherEnabled`), construct the backing
+  /// [FlutterSecureStorage] with `aOptions: AndroidOptions(resetOnError: false)`
+  /// so a transient read error degrades to an explicit failure, not data loss.
+  ///
   /// Returns the persisted passphrase, generating + storing one on first boot.
   Future<String> obtainKey() async {
     final existing = await _store.read(storageKey);

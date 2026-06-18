@@ -41,7 +41,16 @@ dependencies:
   # HTTP client for the Phoenix Core API (auth + recordings).
   dio: ^5.7.0
   # Secure storage for the Guardian JWT access/refresh tokens.
-  flutter_secure_storage: ^9.2.2
+  # Pinned to v10+: v9's flutter_secure_storage_linux (1.2.2..1.2.x) wrote the
+  # secret blob as INDENTED, multi-line JSON ("Fix json.dump with indentations").
+  # On a Linux desktop whose GNOME keyring has an empty password (autologin +
+  # LUKS), that multi-line value fails the keyring parser, so gnome-keyring
+  # rejects the WHOLE keyring file on next boot — logging the user out of every
+  # stored credential, not just matome's (upstream issue #951). v10 pulls
+  # flutter_secure_storage_linux >=2.0.0, which reverted to single-line JSON and
+  # closes the corruption path. Reads stay backward-compatible (json decode
+  # accepts both forms), so existing secrets survive the upgrade.
+  flutter_secure_storage: ^10.0.0
   # State management: AsyncValue-based providers for session + recordings.
   flutter_riverpod: ^2.6.1
   # Declarative routing: app shell (tabs + FAB modal + per-tab stacks) and the
