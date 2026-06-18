@@ -103,6 +103,102 @@ echo ''
 echo '   Stop: mise run down   |   Reset everything: mise run nuke'
 """
 
+[tasks.supabase]
+description = "Start ONLY Supabase (Postgres + Storage), idempotent. The DB layer every client/backend needs."
+run = """
+set -e
+[ -f supabase/config.toml ] || supabase init
+if supabase status >/dev/null 2>&1; then
+  echo '→ Supabase already running'
+else
+  supabase start
+fi
+echo '✓ Supabase up — Studio http://127.0.0.1:54323'
+"""
+
+[tasks.backend]
+description = "Start the SHARED BACKEND only (Supabase + Core API + AI stub), seed dev user — NO client. Use this before a flutter-* / desktop client so you don't boot the Next web you don't need."
+run = """
+set -e
+ROOT="$(pwd)"
+RUN_DIR="$ROOT/.dev"
+mkdir -p "$RUN_DIR"
+
+port_busy() { fuser -s "$1/tcp" 2>/dev/null; }
+
+# 1. Supabase (start only if not already running)
+[ -f supabase/config.toml ] || supabase init
+if supabase status >/dev/null 2>&1; then
+  echo '→ Supabase already running'
+else
+  supabase start
+fi
+
+# 2. Pull local backend creds from supabase status and wire Core to them.
+eval "$(supabase status -o env | sed 's/^/SB_/')"
+export STORAGE_S3_ENDPOINT="$SB_STORAGE_S3_URL"
+export STORAGE_S3_ACCESS_KEY_ID="$SB_S3_PROTOCOL_ACCESS_KEY_ID"
+export STORAGE_S3_SECRET_ACCESS_KEY="$SB_S3_PROTOCOL_ACCESS_KEY_SECRET"
+export STORAGE_S3_REGION="$SB_S3_PROTOCOL_REGION"
+export AI_ENGINE_TOKEN="local-ai-engine-token"
+export DATABASE_URL="${SB_DB_URL%/*}/matome_api_dev"
+
+# 3. Ensure the media storage bucket exists (best effort).
+psql "$SB_DB_URL" -v ON_ERROR_STOP=1 -q -c \
+  "insert into storage.buckets (id, name) values ('media', 'media') on conflict (id) do nothing;" \
+  || echo '⚠ could not ensure media bucket via psql — create it in Studio if uploads fail'
+
+# 4. Core API (port 4000): migrate then start backgrounded.
+if port_busy 4000; then
+  echo '→ Core API already on :4000'
+else
+  echo '→ preparing Core API (deps + migrations)...'
+  ( cd services/api && mix deps.get && mix ecto.create --quiet && mix ecto.migrate )
+  echo '→ starting Core API → .dev/core.log'
+  ( cd services/api && nohup mix phx.server >"$RUN_DIR/core.log" 2>&1 & echo $! >"$RUN_DIR/core.pid" )
+fi
+
+# 5. AI stub (port 5055): token must match Core's AI_ENGINE_TOKEN.
+if port_busy 5055; then
+  echo '→ AI stub already on :5055'
+else
+  echo '→ starting AI stub → .dev/ai-stub.log'
+  nohup node services/ai-stub/src/server.js >"$RUN_DIR/ai-stub.log" 2>&1 &
+  echo $! >"$RUN_DIR/ai-stub.pid"
+fi
+
+# 6. Wait for Core to answer (first run compiles, can take a minute).
+echo '→ waiting for Core on :4000...'
+for _ in $(seq 1 90); do
+  port_busy 4000 && break
+  sleep 2
+done
+
+# 7. Seed the dev test user — only if it does not already exist.
+if [ "$(psql "$DATABASE_URL" -tAc "select 1 from users where email='dev@matome.test'" 2>/dev/null)" = "1" ]; then
+  echo '→ dev user already seeded'
+else
+  echo '→ seeding dev user (dev@matome.test / devpassword123)'
+  curl -s -o /dev/null -X POST http://127.0.0.1:4000/api/auth/register \
+    -H 'content-type: application/json' \
+    -d '{"email":"dev@matome.test","password":"devpassword123"}' \
+    || echo '⚠ could not seed dev user — register it manually via /api/auth/register'
+fi
+
+echo ''
+echo '✓ backend up (no client):'
+echo '   Supabase Studio  http://127.0.0.1:54323'
+echo '   Core API         http://127.0.0.1:4000   (logs: tail -f .dev/core.log)'
+echo '   AI stub          http://127.0.0.1:5055   (logs: tail -f .dev/ai-stub.log)'
+echo '   Login: dev@matome.test / devpassword123'
+echo ''
+echo '   Now start ONE client against it:'
+echo '     mise run flutter-web      Flutter web (Chromium)'
+echo '     mise run flutter-linux    Flutter Linux desktop'
+echo '     mise run flutter-android  Flutter on pixel7 emulator'
+echo '   Stop: mise run down'
+"""
+
 [tasks.mobile]
 description = "Start emulator + local backend DB + Metro (idempotent)"
 run = """
@@ -171,12 +267,12 @@ exec bun --cwd apps/web web
 """
 
 [tasks.desktop]
-description = "Start the Tauri desktop client (foreground; backend must be up via `mise run up`)"
+description = "Start the Tauri desktop client (foreground; backend must be up via `mise run backend`)"
 run = """
 set -e
 
 if ! fuser -s 4000/tcp 2>/dev/null; then
-  echo '✗ Core API not on :4000. Boot the backend first: mise run up'
+  echo '✗ Core API not on :4000. Boot the backend first: mise run backend'
   exit 1
 fi
 
@@ -185,15 +281,17 @@ exec bun --cwd apps/desktop run desktop
 """
 
 # --- Flutter lab (apps/flutter) — Home/Today on each platform vs local Core ---
-# All three require the backend up first: `mise run up` (Core API on :4000,
-# dev seed dev@matome.test). The app's AuthGate signs in with the seed account.
+# All three require the backend up first: `mise run backend` (Supabase + Core
+# API on :4000 + AI stub, dev seed dev@matome.test) — NOT the full `mise run up`,
+# which also boots the Next web client you don't need here. The app's AuthGate
+# signs in with the seed account.
 
 [tasks."flutter-web"]
-description = "Flutter lab Home on web (Chromium) → local Core API. Run `mise run up` first."
+description = "Flutter lab Home on web (Chromium) → local Core API. Run `mise run backend` first."
 run = """
 set -e
 if ! fuser -s 4000/tcp 2>/dev/null; then
-  echo '✗ Core API not on :4000. Boot the backend first: mise run up'
+  echo '✗ Core API not on :4000. Boot the backend first: mise run backend'
   exit 1
 fi
 export CHROME_EXECUTABLE=/usr/bin/chromium
@@ -203,11 +301,11 @@ exec flutter run -d chrome --web-port 8080 \
 """
 
 [tasks."flutter-linux"]
-description = "Flutter lab Home on Linux desktop → local Core API. Run `mise run up` first."
+description = "Flutter lab Home on Linux desktop → local Core API. Run `mise run backend` first."
 run = """
 set -e
 if ! fuser -s 4000/tcp 2>/dev/null; then
-  echo '✗ Core API not on :4000. Boot the backend first: mise run up'
+  echo '✗ Core API not on :4000. Boot the backend first: mise run backend'
   exit 1
 fi
 cd apps/flutter
@@ -216,11 +314,11 @@ exec flutter run -d linux \
 """
 
 [tasks."flutter-android"]
-description = "Flutter lab Home on pixel7 emulator → local Core API. Run `mise run up` first."
+description = "Flutter lab Home on pixel7 emulator → local Core API. Run `mise run backend` first."
 run = """
 set -e
 if ! fuser -s 4000/tcp 2>/dev/null; then
-  echo '✗ Core API not on :4000. Boot the backend first: mise run up'
+  echo '✗ Core API not on :4000. Boot the backend first: mise run backend'
   exit 1
 fi
 
