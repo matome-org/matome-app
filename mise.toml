@@ -8,7 +8,7 @@ flutter = "latest"
 "aqua:supabase/cli" = "2.84.2"
 
 [tasks.up]
-description = "Start the full local stack (Supabase + Core API + AI stub + web), seed dev user, idempotent"
+description = "Start the full local backend (Supabase + Core API + AI stub), seed dev user, idempotent. apps/web retired — use a flutter-* client. (Effectively the same as `backend`.)"
 run = """
 set -e
 ROOT="$(pwd)"
@@ -78,27 +78,19 @@ else
     || echo '⚠ could not seed dev user — register it manually via /api/auth/register'
 fi
 
-# 8. Web app (port 3000) — the default client, started backgrounded.
-if port_busy 3000; then
-  echo '→ Web app already on :3000'
-else
-  echo '→ starting Web app → .dev/web.log'
-  nohup bun --cwd apps/web web >"$RUN_DIR/web.log" 2>&1 &
-  echo $! >"$RUN_DIR/web.pid"
-fi
-
 echo ''
-echo '✓ stack up:'
+echo '✓ stack up (backend; apps/web retired — the Flutter app is the client):'
 echo '   Supabase Studio  http://127.0.0.1:54323'
 echo '   Core API         http://127.0.0.1:4000   (logs: tail -f .dev/core.log)'
 echo '   AI stub          http://127.0.0.1:5055   (logs: tail -f .dev/ai-stub.log)'
-echo '   Web app          http://localhost:3000   (already running — logs: tail -f .dev/web.log)'
 echo ''
 echo '   Login: dev@matome.test / devpassword123'
 echo ''
-echo '   The web client is already up. To run another client, use its dedicated command:'
-echo '     mise run mobile    emulator + Metro'
-echo '     mise run desktop   Tauri desktop app'
+echo '   Start a client:'
+echo '     mise run flutter-web      Flutter web (Chromium)'
+echo '     mise run flutter-linux    Flutter Linux desktop'
+echo '     mise run flutter-android  Flutter on pixel7 emulator'
+echo '     mise run mobile / desktop legacy RN / Tauri (not yet retired)'
 echo ''
 echo '   Stop: mise run down   |   Reset everything: mise run nuke'
 """
@@ -117,7 +109,7 @@ echo '✓ Supabase up — Studio http://127.0.0.1:54323'
 """
 
 [tasks.backend]
-description = "Start the SHARED BACKEND only (Supabase + Core API + AI stub), seed dev user — NO client. Use this before a flutter-* / desktop client so you don't boot the Next web you don't need."
+description = "Start the SHARED BACKEND (Supabase + Core API + AI stub), seed dev user — NO client. Run before a flutter-* / desktop client. (Since apps/web was retired this is equivalent to `up`.)"
 run = """
 set -e
 ROOT="$(pwd)"
@@ -240,30 +232,6 @@ sleep 1
 
 # 6. Metro (foreground, Ctrl+C to stop)
 exec bun --cwd apps/mobile expo start --dev-client
-"""
-
-[tasks.web]
-description = "Start Supabase + Next web (browser, no emulator)"
-run = """
-set -e
-
-# 1. Supabase (idempotent — re-running is a no-op if already up)
-[ -f supabase/config.toml ] || supabase init
-supabase start
-
-# 2. Regenerate the web app env from supabase status.
-#    Browser hits localhost:54321 directly — no adb reverse needed.
-{
-  echo 'NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321'
-  supabase status -o env | awk -F= '/^ANON_KEY=/ { gsub(/"/, "", $2); print "NEXT_PUBLIC_SUPABASE_ANON_KEY=" $2 }'
-} > apps/web/.env.local
-
-# 3. Free port 3000 (kills any stale Next dev server)
-fuser -k 3000/tcp 2>/dev/null || true
-sleep 1
-
-# 4. Next web app (foreground, Ctrl+C to stop)
-exec bun --cwd apps/web web
 """
 
 [tasks.desktop]

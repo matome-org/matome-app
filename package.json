@@ -12,7 +12,6 @@
     "start": "turbo run start --filter=matome-app",
     "android": "turbo run android --filter=matome-app",
     "ios": "turbo run ios --filter=matome-app",
-    "web": "turbo run web --filter=@matome/web",
     "desktop": "turbo run desktop --filter=@matome/desktop",
     "ai:stub": "node services/ai-stub/src/server.js",
     "generate:api": "turbo run generate:api --filter=@matome/api-client",

@@ -13,10 +13,6 @@
       "cache": false,
       "persistent": true
     },
-    "web": {
-      "cache": false,
-      "persistent": true
-    },
     "generate:api": {
       "outputs": ["src/index.ts"]
     },
