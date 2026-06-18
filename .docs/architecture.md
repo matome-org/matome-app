@@ -3,6 +3,15 @@
 > Status: agreed · Last updated: 2026-06-04
 > Two owned backends (no Supabase/BaaS), three JS/TS clients, one OpenAPI contract.
 
+> ⚠️ **SUPERSEDED IN PART (2026-06-18) — see [ADR-0001](decisions/ADR-0001-consolidate-to-flutter.md).**
+> The **client topology below is being reversed**: the three JS/TS clients (Expo RN, Next.js,
+> Tauri) are being consolidated into a **single Flutter codebase** (`apps/flutter`) for
+> web + desktop + mobile. §1.5 ("No Dart/Flutter"), §5 (client table), §6 (TS client), §10
+> (monorepo layout), §11 (design system), and §13 (Locked list) are superseded by ADR-0001.
+> The **backend is unchanged** (Elixir Core API + Python AI engine stay exactly as documented).
+> This doc's full rewrite is deferred to the consolidation cleanup wave; until then, read client
+> sections through ADR-0001. Plan: `flutter-consolidation` (#82).
+
 ---
 
 ## 1. Principles
