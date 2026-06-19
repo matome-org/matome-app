@@ -47,6 +47,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$cardStatus$en cardStatus = Translations$cardStatus$en.internal(_root);
 	late final Translations$recording$en recording = Translations$recording$en.internal(_root);
 	late final Translations$details$en details = Translations$details$en.internal(_root);
+	late final Translations$matome$en matome = Translations$matome$en.internal(_root);
 	late final Translations$spaces$en spaces = Translations$spaces$en.internal(_root);
 	late final Translations$calendar$en calendar = Translations$calendar$en.internal(_root);
 	late final Translations$satori$en satori = Translations$satori$en.internal(_root);
@@ -355,6 +356,81 @@ class Translations$details$en {
 
 	/// en: 'Audio unavailable'
 	String get audioUnavailable => 'Audio unavailable';
+}
+
+// Path: matome
+class Translations$matome$en {
+	Translations$matome$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Matome'
+	String get title => 'Matome';
+
+	/// en: 'Matome not found'
+	String get notFound => 'Matome not found';
+
+	/// en: 'On device · not filed'
+	String get onDevice => 'On device · not filed';
+
+	/// en: 'Items'
+	String get recordings => 'Items';
+
+	/// en: 'No items yet'
+	String get noRecordings => 'No items yet';
+
+	/// en: 'Summary'
+	String get summary => 'Summary';
+
+	/// en: 'No summary yet'
+	String get noSummary => 'No summary yet';
+
+	/// en: 'Notes'
+	String get notes => 'Notes';
+
+	/// en: 'No notes yet'
+	String get noNotes => 'No notes yet';
+
+	/// en: 'File into a space'
+	String get fileIntoSpace => 'File into a space';
+
+	/// en: 'File into a space'
+	String get fileIntoSpaceSheetTitle => 'File into a space';
+
+	/// en: 'Filed in $space'
+	String filedIn({required Object space}) => 'Filed in ${space}';
+
+	/// en: 'Refile'
+	String get refile => 'Refile';
+
+	/// en: 'Default'
+	String get personalSpaceHint => 'Default';
+
+	/// en: 'Add photo'
+	String get addPhoto => 'Add photo';
+
+	/// en: 'Edit notes'
+	String get editNotes => 'Edit notes';
+
+	/// en: 'Add notes about this matome…'
+	String get notesHint => 'Add notes about this matome…';
+
+	/// en: 'Save'
+	String get save => 'Save';
+
+	/// en: 'Cancel'
+	String get cancel => 'Cancel';
+
+	/// en: 'Tag contacts'
+	String get tagContacts => 'Tag contacts';
+
+	/// en: 'Share'
+	String get share => 'Share';
+
+	/// en: 'Coming soon'
+	String get comingSoon => 'Coming soon';
 }
 
 // Path: spaces
@@ -676,6 +752,28 @@ extension on Translations {
 			'details.saveFailed' => 'Couldn\'t save notes',
 			'details.audioFailed' => 'Couldn\'t play audio',
 			'details.audioUnavailable' => 'Audio unavailable',
+			'matome.title' => 'Matome',
+			'matome.notFound' => 'Matome not found',
+			'matome.onDevice' => 'On device · not filed',
+			'matome.recordings' => 'Items',
+			'matome.noRecordings' => 'No items yet',
+			'matome.summary' => 'Summary',
+			'matome.noSummary' => 'No summary yet',
+			'matome.notes' => 'Notes',
+			'matome.noNotes' => 'No notes yet',
+			'matome.fileIntoSpace' => 'File into a space',
+			'matome.fileIntoSpaceSheetTitle' => 'File into a space',
+			'matome.filedIn' => ({required Object space}) => 'Filed in ${space}',
+			'matome.refile' => 'Refile',
+			'matome.personalSpaceHint' => 'Default',
+			'matome.addPhoto' => 'Add photo',
+			'matome.editNotes' => 'Edit notes',
+			'matome.notesHint' => 'Add notes about this matome…',
+			'matome.save' => 'Save',
+			'matome.cancel' => 'Cancel',
+			'matome.tagContacts' => 'Tag contacts',
+			'matome.share' => 'Share',
+			'matome.comingSoon' => 'Coming soon',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

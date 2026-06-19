@@ -46,6 +46,7 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$cardStatus$ja cardStatus = _Translations$cardStatus$ja._(_root);
 	@override late final _Translations$recording$ja recording = _Translations$recording$ja._(_root);
 	@override late final _Translations$details$ja details = _Translations$details$ja._(_root);
+	@override late final _Translations$matome$ja matome = _Translations$matome$ja._(_root);
 	@override late final _Translations$spaces$ja spaces = _Translations$spaces$ja._(_root);
 	@override late final _Translations$calendar$ja calendar = _Translations$calendar$ja._(_root);
 	@override late final _Translations$satori$ja satori = _Translations$satori$ja._(_root);
@@ -194,6 +195,37 @@ class _Translations$details$ja extends Translations$details$en {
 	@override String get saveFailed => 'メモを保存できませんでした';
 	@override String get audioFailed => '音声を再生できませんでした';
 	@override String get audioUnavailable => '音声を利用できません';
+}
+
+// Path: matome
+class _Translations$matome$ja extends Translations$matome$en {
+	_Translations$matome$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'まとめ';
+	@override String get notFound => 'まとめが見つかりません';
+	@override String get onDevice => '端末に保存 · 未整理';
+	@override String get recordings => 'アイテム';
+	@override String get noRecordings => 'アイテムはまだありません';
+	@override String get summary => '要約';
+	@override String get noSummary => '要約はまだありません';
+	@override String get notes => 'メモ';
+	@override String get noNotes => 'メモはまだありません';
+	@override String get fileIntoSpace => 'スペースに整理';
+	@override String get fileIntoSpaceSheetTitle => 'スペースに整理';
+	@override String filedIn({required Object space}) => '${space} に整理済み';
+	@override String get refile => '再整理';
+	@override String get personalSpaceHint => 'デフォルト';
+	@override String get addPhoto => '写真を追加';
+	@override String get editNotes => 'メモを編集';
+	@override String get notesHint => 'このまとめについてのメモ…';
+	@override String get save => '保存';
+	@override String get cancel => 'キャンセル';
+	@override String get tagContacts => '連絡先をタグ付け';
+	@override String get share => '共有';
+	@override String get comingSoon => '近日公開';
 }
 
 // Path: spaces
@@ -391,6 +423,28 @@ extension on TranslationsJa {
 			'details.saveFailed' => 'メモを保存できませんでした',
 			'details.audioFailed' => '音声を再生できませんでした',
 			'details.audioUnavailable' => '音声を利用できません',
+			'matome.title' => 'まとめ',
+			'matome.notFound' => 'まとめが見つかりません',
+			'matome.onDevice' => '端末に保存 · 未整理',
+			'matome.recordings' => 'アイテム',
+			'matome.noRecordings' => 'アイテムはまだありません',
+			'matome.summary' => '要約',
+			'matome.noSummary' => '要約はまだありません',
+			'matome.notes' => 'メモ',
+			'matome.noNotes' => 'メモはまだありません',
+			'matome.fileIntoSpace' => 'スペースに整理',
+			'matome.fileIntoSpaceSheetTitle' => 'スペースに整理',
+			'matome.filedIn' => ({required Object space}) => '${space} に整理済み',
+			'matome.refile' => '再整理',
+			'matome.personalSpaceHint' => 'デフォルト',
+			'matome.addPhoto' => '写真を追加',
+			'matome.editNotes' => 'メモを編集',
+			'matome.notesHint' => 'このまとめについてのメモ…',
+			'matome.save' => '保存',
+			'matome.cancel' => 'キャンセル',
+			'matome.tagContacts' => '連絡先をタグ付け',
+			'matome.share' => '共有',
+			'matome.comingSoon' => '近日公開',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

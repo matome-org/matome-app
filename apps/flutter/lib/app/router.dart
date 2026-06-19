@@ -7,6 +7,7 @@ import '../features/auth/signup_screen.dart';
 import '../features/auth/welcome_screen.dart';
 import '../features/calendar/calendar_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/matome/matome_detail_screen.dart';
 import 'auth_state.dart';
 import 'navigation_guard.dart';
 import 'screens/recording_screen.dart';
@@ -90,6 +91,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => MaterialPage(
           fullscreenDialog: true,
           child: RecordingScreen(),
+        ),
+      ),
+      // Matome detail hub (#1371): the read-only "page" for a Matome and its
+      // Items. Lives on the root navigator until the nav reframe (#1378) wires
+      // it into the shell tabs; the route just needs to resolve for now.
+      GoRoute(
+        path: '/matome/:id',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => MatomeDetailScreen(
+          id: state.pathParameters['id']!,
         ),
       ),
       // Desktop meeting recorder (loopback + mic, MVP Linux). Same fullscreen
