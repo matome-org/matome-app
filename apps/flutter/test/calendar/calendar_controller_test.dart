@@ -8,8 +8,8 @@ import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/calendar/calendar_controller.dart';
 // ignore_for_file: avoid_redundant_argument_values
 
-/// Mirrors apps/mobile/__tests__/unit/CalendarContainer.test.tsx against the
-/// Flutter [CalendarController] and a real in-memory Drift DB.
+/// Drives the matome-centric [CalendarController] (#1378) against a real
+/// in-memory Drift DB: the unit is the **Matome**, grouped by `happened_at`.
 
 int _epoch(int year, int month, int day, [int hour = 0]) =>
     DateTime(year, month, day, hour).millisecondsSinceEpoch;
@@ -19,23 +19,15 @@ Future<void> _seed(
   required String id,
   required int createdAt,
   String title = 'Team meeting',
-  String duration = '5m 0s',
-  String badge = 'Work',
   String? workspaceId,
 }) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: Value(id),
-      title: Value(title),
-      timestamp: const Value(''),
-      duration: Value(duration),
-      badge: Value(badge),
-      isProcessing: const Value(0),
-      audioFilePath: const Value(''),
-      createdAt: Value(createdAt),
-      mediaType: const Value('audio'),
-      processingStatus: const Value('done'),
-      workspaceId: Value(workspaceId),
+  return db.matomesDao.create(
+    MatomesCompanion.insert(
+      id: id,
+      title: title,
+      spaceId: Value(workspaceId),
+      happenedAt: createdAt,
+      createdAt: createdAt,
     ),
   );
 }
@@ -109,10 +101,10 @@ void main() {
     addTearDown(b.container.dispose);
     final controller = b.controller;
 
-    await _pumpUntil(() => controller.state.daysWithRecordings.isNotEmpty);
-    expect(controller.state.daysWithRecordings, containsAll(<int>{5, 10}));
+    await _pumpUntil(() => controller.state.daysWithMatomes.isNotEmpty);
+    expect(controller.state.daysWithMatomes, containsAll(<int>{5, 10}));
     // Day list is the selected (today=10th) day's recordings.
-    expect(controller.state.dayRecordings.map((r) => r.id), ['r-today']);
+    expect(controller.state.dayMatomes.map((r) => r.id), ['r-today']);
   });
 
   group('space filter', () {
@@ -126,24 +118,24 @@ void main() {
       await _seed(db, id: 'r1', createdAt: day, workspaceId: eng.id);
       await _seed(db, id: 'r2', createdAt: day, workspaceId: design.id);
       await _seed(db, id: 'r3', createdAt: day, workspaceId: eng.id);
-      await _seed(db, id: 'r4', createdAt: day, badge: 'Inbox');
+      await _seed(db, id: 'r4', createdAt: day); // inbox matome (no space)
 
       final b = _build(db, now: DateTime(2026, 4, 10, 9));
       container = b.container;
       controller = b.controller;
       addTearDown(container.dispose);
-      await _pumpUntil(() => controller.state.rawDayRecordings.length == 4);
+      await _pumpUntil(() => controller.state.rawDayMatomes.length == 4);
     });
 
     test('shows all recordings when no space filter is active', () {
-      expect(controller.state.dayRecordings.length, 4);
+      expect(controller.state.dayMatomes.length, 4);
     });
 
     test('filters to one space when its chip is active', () async {
       final eng =
           controller.state.spaces.firstWhere((s) => s.name == 'Engineering');
       controller.setSpaceFilter(eng.id);
-      expect(controller.state.dayRecordings.map((r) => r.id), ['r1', 'r3']);
+      expect(controller.state.dayMatomes.map((r) => r.id), ['r1', 'r3']);
     });
 
     test('clears the filter (toggle off) restores all recordings', () {
@@ -151,7 +143,7 @@ void main() {
           controller.state.spaces.firstWhere((s) => s.name == 'Engineering');
       controller.setSpaceFilter(eng.id);
       controller.setSpaceFilter(null);
-      expect(controller.state.dayRecordings.length, 4);
+      expect(controller.state.dayMatomes.length, 4);
     });
   });
 
@@ -164,14 +156,14 @@ void main() {
     addTearDown(b.container.dispose);
     final controller = b.controller;
 
-    await _pumpUntil(() => controller.state.dayRecordings.isNotEmpty);
-    expect(controller.state.dayRecordings.single.id, 'apr');
+    await _pumpUntil(() => controller.state.dayMatomes.isNotEmpty);
+    expect(controller.state.dayMatomes.single.id, 'apr');
 
     // Navigate April -> March on day 10 (valid in both months). The day panel
     // must refresh to March's recordings, not keep stale April data.
     await controller.prevMonth();
     expect(controller.state.month, 2); // 0-indexed March
-    expect(controller.state.dayRecordings.single.id, 'mar');
+    expect(controller.state.dayMatomes.single.id, 'mar');
   });
 
   test('prevMonth wraps the year at January', () async {
@@ -218,6 +210,6 @@ void main() {
 
     await controller.selectDay(5);
     expect(controller.state.selectedDay, 5);
-    expect(controller.state.dayRecordings.single.id, 'd5');
+    expect(controller.state.dayMatomes.single.id, 'd5');
   });
 }

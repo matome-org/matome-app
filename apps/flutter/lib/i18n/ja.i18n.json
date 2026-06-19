@@ -28,7 +28,15 @@
     "title": "受信箱",
     "searchPlaceholder": "トランスクリプト、タグ、スペースを検索...",
     "noResults": "録音が見つかりません",
-    "recordings": "件の録音"
+    "recordings": "件の録音",
+    "matomeCount": "$n 件のマトメ",
+    "searchHint": "マトメを検索",
+    "empty": "マトメがありません",
+    "emptyHint": "録音やアップロードしたマトメがここに表示されます。",
+    "noMatches": "一致するマトメがありません",
+    "noMatchesHint": "別の検索語をお試しください。",
+    "loadFailed": "マトメを読み込めませんでした",
+    "selectHint": "プレビューするマトメを選択"
   },
   "cardStatus": {
     "pendingUpload": "端末に保存済み · アップロード待ち",
@@ -101,6 +109,8 @@
     "noRecordings": "アイテムはまだありません",
     "summary": "要約",
     "noSummary": "要約はまだありません",
+    "regenerateSummary": "要約を再生成",
+    "summaryStale": "アイテムが変更されました — 要約が古い可能性があります",
     "notes": "メモ",
     "noNotes": "メモはまだありません",
     "fileIntoSpace": "スペースに整理",
@@ -124,7 +134,9 @@
     "removeContact": "連絡先を削除",
     "roleAttendee": "参加者",
     "roleOrganizer": "主催者",
-    "roleSpeaker": "発表者"
+    "roleSpeaker": "発表者",
+    "itemCount": "$n 件のアイテム",
+    "onDeviceShort": "端末内"
   },
   "spaces": {
     "title": "スペース",
@@ -138,11 +150,15 @@
     "deleteTitle": "スペースを削除しますか？",
     "deleteBody": "このスペースの録音は受信トレイに戻ります。",
     "delete": "削除",
-    "detailEmpty": "このスペースにはまだ録音がありません"
+    "detailEmpty": "このスペースにはまだ録音がありません",
+    "detailEmptyMatomes": "このスペースにはまだマトメがありません",
+    "matomeCount": "$n 件のマトメ"
   },
   "calendar": {
     "title": "カレンダー",
     "noRecordings": "この日の録音はありません",
+    "noMatomes": "この日のマトメはありません",
+    "matomeCount": "$n 件のマトメ",
     "allSpaces": "すべて"
   },
   "contacts": {

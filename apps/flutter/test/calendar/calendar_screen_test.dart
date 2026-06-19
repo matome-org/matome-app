@@ -12,9 +12,10 @@ import 'package:matome_flutter/features/calendar/calendar_controller.dart';
 import 'package:matome_flutter/features/calendar/calendar_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
-/// Widget tests for the Calendar tab (S4): dots render on days with
-/// recordings, tapping a day lists its recordings, the space filter narrows the
-/// list, month nav reloads, and tapping a recording routes to `/calendar/:id`.
+/// Widget tests for the Calendar tab (S4) under the matome-centric model
+/// (#1378): dots render on days with matomes, tapping a day lists its matomes,
+/// the space filter narrows the list, month nav reloads, and tapping a matome
+/// routes to `/matome/:id`.
 
 int _epoch(int year, int month, int day, [int hour = 9]) =>
     DateTime(year, month, day, hour).millisecondsSinceEpoch;
@@ -24,23 +25,15 @@ Future<void> _seed(
   required String id,
   required int createdAt,
   String title = 'Team meeting',
-  String duration = '5m 0s',
-  String badge = 'Work',
   String? workspaceId,
 }) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: Value(id),
-      title: Value(title),
-      timestamp: const Value(''),
-      duration: Value(duration),
-      badge: Value(badge),
-      isProcessing: const Value(0),
-      audioFilePath: const Value(''),
-      createdAt: Value(createdAt),
-      mediaType: const Value('audio'),
-      processingStatus: const Value('done'),
-      workspaceId: Value(workspaceId),
+  return db.matomesDao.create(
+    MatomesCompanion.insert(
+      id: id,
+      title: title,
+      spaceId: Value(workspaceId),
+      happenedAt: createdAt,
+      createdAt: createdAt,
     ),
   );
 }
@@ -56,15 +49,13 @@ Widget _app(AppDatabase db, {required DateTime now}) {
       GoRoute(
         path: '/calendar',
         builder: (_, _) => const CalendarScreen(),
-        routes: [
-          GoRoute(
-            path: ':id',
-            builder: (_, state) {
-              _lastRoute = '/calendar/${state.pathParameters['id']}';
-              return const Scaffold(body: Text('details-stub'));
-            },
-          ),
-        ],
+      ),
+      GoRoute(
+        path: '/matome/:id',
+        builder: (_, state) {
+          _lastRoute = '/matome/${state.pathParameters['id']}';
+          return const Scaffold(body: Text('matome-stub'));
+        },
       ),
     ],
   );
@@ -106,7 +97,7 @@ void main() {
     final element = tester.element(find.byType(CalendarScreen));
     final container = ProviderScope.containerOf(element);
     final state = container.read(calendarControllerProvider);
-    expect(state.daysWithRecordings.contains(5), isTrue);
+    expect(state.daysWithMatomes.contains(5), isTrue);
   });
 
   testWidgets('tapping a day lists that day\'s recordings', (tester) async {
@@ -120,13 +111,13 @@ void main() {
     await tester.pumpAndSettle();
 
     // Today (10th) has nothing -> empty state.
-    expect(find.text(t.calendar.noRecordings), findsOneWidget);
+    expect(find.text(t.calendar.noMatomes), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('calendar-day-5')));
     await tester.pumpAndSettle();
 
     expect(find.text('Morning sync'), findsOneWidget);
-    expect(find.text(t.calendar.noRecordings), findsNothing);
+    expect(find.text(t.calendar.noMatomes), findsNothing);
   });
 
   testWidgets('space filter narrows the day list', (tester) async {
@@ -144,7 +135,6 @@ void main() {
       id: 'r-inbox',
       title: 'Inbox note',
       createdAt: day,
-      badge: 'Inbox',
     );
 
     await tester.pumpWidget(_app(db, now: DateTime(2026, 4, 10, 9)));
@@ -207,7 +197,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('calendar-recording-rec-42')));
     await tester.pumpAndSettle();
 
-    expect(_lastRoute, '/calendar/rec-42');
-    expect(find.text('details-stub'), findsOneWidget);
+    expect(_lastRoute, '/matome/rec-42');
+    expect(find.text('matome-stub'), findsOneWidget);
   });
 }

@@ -12,7 +12,7 @@ import 'package:matome_flutter/app/screens/settings_screen.dart';
 import 'package:matome_flutter/app/screens/tab_screens.dart';
 import 'package:matome_flutter/app/shell_scaffold.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
-import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/i18n/locale_controller.dart';
 import 'package:matome_flutter/core/providers.dart';
@@ -25,7 +25,7 @@ import 'package:matome_flutter/features/auth/welcome_screen.dart';
 import 'package:matome_flutter/features/calendar/calendar_screen.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
-import 'package:matome_flutter/features/home/inbox_item.dart';
+import 'package:matome_flutter/features/home/matome_inbox_controller.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 import 'support/fake_inbox.dart';
@@ -71,18 +71,15 @@ class _FakeAuthRepository implements AuthRepository {
   Future<AuthSession> refresh() => throw UnimplementedError();
 }
 
-InboxItem _seedItem() => InboxItem(
-  card: const RecordingItem(
-    id: '1',
-    title: 'Standup notes',
-    timestamp: '9:00 AM',
-    duration: '0:30',
-    badge: 'work',
-    isProcessing: false,
-    mediaType: 'audio',
-    processingStatus: 'done',
-  ),
+MatomeItem _seedItem() => MatomeItem(
+  id: '1',
+  spaceId: null,
+  title: 'Standup notes',
+  happenedAt: DateTime(2024).millisecondsSinceEpoch,
   createdAt: DateTime(2024).millisecondsSinceEpoch,
+  summaryStale: false,
+  recordingCount: 1,
+  recordings: const [],
 );
 
 GoRouter _buildRouter(WidgetRef ref) {
@@ -159,8 +156,11 @@ Widget _pumpApp({required AppDatabase db, required InMemoryTokenStore store}) {
       tokenStoreProvider.overrideWithValue(store),
       authRepositoryProvider.overrideWithValue(repo),
       appDatabaseProvider.overrideWithValue(db),
+      matomeInboxControllerProvider.overrideWith(
+        (ref) => FakeMatomeInboxController(ref, AsyncValue.data([_seedItem()])),
+      ),
       inboxControllerProvider.overrideWith(
-        (ref) => FakeInboxController(ref, AsyncValue.data([_seedItem()])),
+        (ref) => FakeInboxController(ref, const AsyncValue.data([])),
       ),
     ],
     child: TranslationProvider(child: const _TestApp()),

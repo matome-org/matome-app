@@ -12,31 +12,32 @@ class CalendarSpace {
   final String name;
 }
 
-/// Immutable Calendar screen state, mirroring the local React state held by
-/// apps/mobile CalendarContainer.
+/// Immutable Calendar screen state (#1378): the unit is the **Matome**, grouped
+/// by `happenedAt`. Dots mark days with matomes; the day list shows that day's
+/// matomes; the space filter narrows by `spaceId`.
 class CalendarState {
   const CalendarState({
     required this.year,
     required this.month,
     required this.selectedDay,
-    required this.daysWithRecordings,
-    required this.rawDayRecordings,
+    required this.daysWithMatomes,
+    required this.rawDayMatomes,
     required this.spaces,
     required this.selectedSpaceId,
     required this.isMonthLoading,
     required this.isDayLoading,
   });
 
-  /// 0-indexed month (0 = January), matching the RN container.
+  /// 0-indexed month (0 = January).
   final int year;
   final int month;
   final int selectedDay;
 
-  /// Day-of-month numbers (1–31) that have at least one recording this month.
-  final Set<int> daysWithRecordings;
+  /// Day-of-month numbers (1–31) that have at least one matome this month.
+  final Set<int> daysWithMatomes;
 
-  /// The selected day's recordings before the space filter is applied.
-  final List<CalendarRecordingItem> rawDayRecordings;
+  /// The selected day's matomes before the space filter is applied.
+  final List<CalendarMatomeItem> rawDayMatomes;
 
   final List<CalendarSpace> spaces;
   final String? selectedSpaceId;
@@ -44,14 +45,13 @@ class CalendarState {
   final bool isMonthLoading;
   final bool isDayLoading;
 
-  /// The selected day's recordings after applying the active space filter.
-  /// Filters on `workspaceId` (not name) so two spaces with identical names
-  /// never bleed into each other's list. Ports the `filteredDayRecordings`
-  /// memo from CalendarContainer.
-  List<CalendarRecordingItem> get dayRecordings {
-    if (selectedSpaceId == null) return rawDayRecordings;
-    return rawDayRecordings
-        .where((r) => r.workspaceId == selectedSpaceId)
+  /// The selected day's matomes after applying the active space filter. Filters
+  /// on `spaceId` (not name) so two spaces with identical names never bleed into
+  /// each other's list.
+  List<CalendarMatomeItem> get dayMatomes {
+    if (selectedSpaceId == null) return rawDayMatomes;
+    return rawDayMatomes
+        .where((m) => m.spaceId == selectedSpaceId)
         .toList(growable: false);
   }
 
@@ -59,8 +59,8 @@ class CalendarState {
     int? year,
     int? month,
     int? selectedDay,
-    Set<int>? daysWithRecordings,
-    List<CalendarRecordingItem>? rawDayRecordings,
+    Set<int>? daysWithMatomes,
+    List<CalendarMatomeItem>? rawDayMatomes,
     List<CalendarSpace>? spaces,
     Object? selectedSpaceId = _noChange,
     bool? isMonthLoading,
@@ -70,8 +70,8 @@ class CalendarState {
       year: year ?? this.year,
       month: month ?? this.month,
       selectedDay: selectedDay ?? this.selectedDay,
-      daysWithRecordings: daysWithRecordings ?? this.daysWithRecordings,
-      rawDayRecordings: rawDayRecordings ?? this.rawDayRecordings,
+      daysWithMatomes: daysWithMatomes ?? this.daysWithMatomes,
+      rawDayMatomes: rawDayMatomes ?? this.rawDayMatomes,
       spaces: spaces ?? this.spaces,
       selectedSpaceId: selectedSpaceId == _noChange
           ? this.selectedSpaceId
@@ -84,13 +84,13 @@ class CalendarState {
   static const Object _noChange = Object();
 }
 
-/// Drives the Calendar screen (S4). Offline-first: dots, day lists, and spaces
-/// all read from Drift (display source). Faithful port of CalendarContainer:
-///   * loadMonthDots(y, m)  → fetchDaysWithRecordings,
-///   * loadDayRecordings(d) → fetchDayRecordings,
+/// Drives the Calendar screen (S4) under the matome-centric model (#1378).
+/// Offline-first: dots, day lists, and spaces all read from Drift.
+///   * loadMonthDots(y, m)  → fetchDaysWithMatomes,
+///   * loadDayMatomes(d)    → fetchDayMatomes,
 ///   * loadSpaces()         → workspaces list,
-///   * handleMonthChange    → always reloads BOTH dots and the day list
-///     (CRITICAL-2 guard), clamping the selected day to the new month.
+///   * handleMonthChange    → always reloads BOTH dots and the day list,
+///     clamping the selected day to the new month.
 class CalendarController extends StateNotifier<CalendarState> {
   CalendarController(this._ref, {DateTime? now})
     : super(_initial(now ?? DateTime.now())) {
@@ -99,16 +99,20 @@ class CalendarController extends StateNotifier<CalendarState> {
 
   final Ref _ref;
 
-  CalendarData get _data => CalendarData(_ref.read(recordingsDaoProvider));
+  CalendarData get _data => CalendarData(_ref.read(matomesDaoProvider));
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
+
+  /// spaceId → workspace name, refreshed by [loadSpaces]. Used to label the
+  /// day-list rows with their filed Space.
+  Map<String, String> _spaceNames = const {};
 
   static CalendarState _initial(DateTime now) {
     return CalendarState(
       year: now.year,
-      month: now.month - 1, // store 0-indexed to match RN
+      month: now.month - 1, // store 0-indexed
       selectedDay: now.day,
-      daysWithRecordings: const <int>{},
-      rawDayRecordings: const [],
+      daysWithMatomes: const <int>{},
+      rawDayMatomes: const [],
       spaces: const [],
       selectedSpaceId: null,
       isMonthLoading: false,
@@ -117,12 +121,14 @@ class CalendarController extends StateNotifier<CalendarState> {
   }
 
   Future<void> _bootstrap() async {
+    // Spaces first so the day-list rows can resolve their space names.
+    await loadSpaces();
+    if (!mounted) return;
     await Future.wait([
       loadMonthDots(state.year, state.month),
-      loadDayRecordings(
+      loadDayMatomes(
         DateTime(state.year, state.month + 1, state.selectedDay),
       ),
-      loadSpaces(),
     ]);
   }
 
@@ -131,9 +137,9 @@ class CalendarController extends StateNotifier<CalendarState> {
     if (!mounted) return;
     state = state.copyWith(isMonthLoading: true);
     try {
-      final days = await _data.fetchDaysWithRecordings(year, month);
+      final days = await _data.fetchDaysWithMatomes(year, month);
       if (!mounted) return;
-      state = state.copyWith(daysWithRecordings: days);
+      state = state.copyWith(daysWithMatomes: days);
     } catch (_) {
       // Swallow — keep whatever dots are already shown (offline-first).
     } finally {
@@ -142,15 +148,18 @@ class CalendarController extends StateNotifier<CalendarState> {
   }
 
   /// Reload the day list for [date].
-  Future<void> loadDayRecordings(DateTime date) async {
+  Future<void> loadDayMatomes(DateTime date) async {
     if (!mounted) return;
     state = state.copyWith(isDayLoading: true);
     try {
-      final records = await _data.fetchDayRecordings(date);
+      final matomes = await _data.fetchDayMatomes(
+        date,
+        spaceNames: _spaceNames,
+      );
       if (!mounted) return;
-      state = state.copyWith(rawDayRecordings: records);
+      state = state.copyWith(rawDayMatomes: matomes);
     } catch (_) {
-      if (mounted) state = state.copyWith(rawDayRecordings: const []);
+      if (mounted) state = state.copyWith(rawDayMatomes: const []);
     } finally {
       if (mounted) state = state.copyWith(isDayLoading: false);
     }
@@ -161,6 +170,7 @@ class CalendarController extends StateNotifier<CalendarState> {
     try {
       final rows = await _workspacesDao.getWorkspaces();
       if (!mounted) return;
+      _spaceNames = {for (final w in rows) w.id: w.name};
       state = state.copyWith(
         spaces: rows
             .map((w) => CalendarSpace(id: w.id, name: w.name))
@@ -172,8 +182,8 @@ class CalendarController extends StateNotifier<CalendarState> {
   }
 
   /// Navigate to a new [year]/[month] (0-indexed). Clamps the selected day to
-  /// the last day of the new month when it would overflow (e.g. Mar 31 → Feb),
-  /// then ALWAYS reloads both the dots and the day list (CRITICAL-2 guard).
+  /// the last day of the new month when it would overflow, then ALWAYS reloads
+  /// both the dots and the day list.
   Future<void> changeMonth(int year, int month) async {
     if (!mounted) return;
     final daysInNewMonth = DateTime(year, month + 2, 0).day;
@@ -184,7 +194,7 @@ class CalendarController extends StateNotifier<CalendarState> {
     state = state.copyWith(year: year, month: month, selectedDay: targetDay);
 
     await Future.wait([
-      loadDayRecordings(DateTime(year, month + 1, targetDay)),
+      loadDayMatomes(DateTime(year, month + 1, targetDay)),
       loadMonthDots(year, month),
     ]);
   }
@@ -201,15 +211,15 @@ class CalendarController extends StateNotifier<CalendarState> {
     return changeMonth(state.year, state.month + 1);
   }
 
-  /// Select [day] in the current month and load its recordings.
+  /// Select [day] in the current month and load its matomes.
   Future<void> selectDay(int day) async {
     if (!mounted) return;
     state = state.copyWith(selectedDay: day);
-    await loadDayRecordings(DateTime(state.year, state.month + 1, day));
+    await loadDayMatomes(DateTime(state.year, state.month + 1, day));
   }
 
   /// Apply (or clear, when null) the space filter. No DB re-fetch — filtering
-  /// happens in [CalendarState.dayRecordings].
+  /// happens in [CalendarState.dayMatomes].
   void setSpaceFilter(String? spaceId) {
     state = state.copyWith(selectedSpaceId: spaceId);
   }

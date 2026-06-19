@@ -11,7 +11,7 @@ import 'package:matome_flutter/app/screens/settings_screen.dart';
 import 'package:matome_flutter/app/screens/tab_screens.dart';
 import 'package:matome_flutter/app/shell_scaffold.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
-import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/i18n/locale_controller.dart';
 import 'package:matome_flutter/core/providers.dart';
@@ -22,25 +22,22 @@ import 'package:matome_flutter/features/auth/welcome_screen.dart';
 import 'package:matome_flutter/features/calendar/calendar_screen.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
-import 'package:matome_flutter/features/home/inbox_item.dart';
+import 'package:matome_flutter/features/home/matome_inbox_controller.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 import 'support/fake_inbox.dart';
 
 /// Pre-authenticated, network-free router for the shell smoke test: skips the
-/// seed-login bootstrap and seeds the Inbox tab with a fixed recording list.
-InboxItem _seedItem() => InboxItem(
-  card: const RecordingItem(
-    id: '1',
-    title: 'Standup notes',
-    timestamp: '9:00 AM',
-    duration: '0:30',
-    badge: 'work',
-    isProcessing: false,
-    mediaType: 'audio',
-    processingStatus: 'done',
-  ),
+/// seed-login bootstrap and seeds the Inbox tab with a fixed **matome** list.
+MatomeItem _seedItem() => MatomeItem(
+  id: '1',
+  spaceId: null,
+  title: 'Standup notes',
+  happenedAt: DateTime(2024).millisecondsSinceEpoch,
   createdAt: DateTime(2024).millisecondsSinceEpoch,
+  summaryStale: false,
+  recordingCount: 1,
+  recordings: const [],
 );
 
 GoRouter _buildTestRouter() {
@@ -121,8 +118,13 @@ Widget _pumpApp({SettingsStore? store, required AppDatabase db}) {
       // The Calendar branch (built eagerly by the indexed-stack shell) reads
       // the Drift DAOs — back them with an in-memory DB so no native file opens.
       appDatabaseProvider.overrideWithValue(db),
+      matomeInboxControllerProvider.overrideWith(
+        (ref) => FakeMatomeInboxController(ref, AsyncValue.data([_seedItem()])),
+      ),
+      // The matome inbox controller listens to the recording-level inbox;
+      // stub it so the listen target never builds a real Drift/Core controller.
       inboxControllerProvider.overrideWith(
-        (ref) => FakeInboxController(ref, AsyncValue.data([_seedItem()])),
+        (ref) => FakeInboxController(ref, const AsyncValue.data([])),
       ),
     ],
     child: TranslationProvider(child: const _TestApp()),
@@ -227,13 +229,14 @@ void main() {
     // Inbox is a two-pane: the list is visible AND the empty detail pane shows
     // its teaching placeholder (nothing selected yet).
     expect(find.text('Standup notes'), findsOneWidget);
-    expect(find.text('Select a recording to preview'), findsOneWidget);
+    expect(find.text(t.inbox.selectHint), findsOneWidget);
 
-    // Selecting the recording fills the detail pane without leaving the list.
+    // Selecting the matome fills the detail pane (the embedded matome hub)
+    // without leaving the list.
     await tester.tap(find.text('Standup notes'));
     await tester.pumpAndSettle();
     expect(find.text('Standup notes'), findsWidgets); // list row still present
-    expect(find.text('Select a recording to preview'), findsNothing);
+    expect(find.text(t.inbox.selectHint), findsNothing);
   });
 
   testWidgets('mic FAB opens the recording fullscreen modal', (tester) async {

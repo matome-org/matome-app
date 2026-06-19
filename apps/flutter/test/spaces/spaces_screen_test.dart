@@ -40,6 +40,25 @@ Future<void> _seedRecording(
   );
 }
 
+/// Seeds a Matome filed into [spaceId] (#1378) — the unit the Space detail now
+/// lists.
+Future<void> _seedMatome(
+  AppDatabase db, {
+  required String id,
+  String title = 'Matome',
+  String? spaceId,
+}) {
+  return db.matomesDao.create(
+    MatomesCompanion.insert(
+      id: id,
+      title: title,
+      spaceId: Value(spaceId),
+      happenedAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+    ),
+  );
+}
+
 String? _lastRoute;
 
 Widget _app(AppDatabase db) {
@@ -52,18 +71,18 @@ Widget _app(AppDatabase db) {
         builder: (_, _) => const SpacesScreen(),
         routes: [
           GoRoute(
-            path: 'recording/:id',
-            builder: (_, state) {
-              _lastRoute = '/spaces/recording/${state.pathParameters['id']}';
-              return const Scaffold(body: Text('details-stub'));
-            },
-          ),
-          GoRoute(
             path: ':spaceId',
             builder: (_, state) =>
                 SpaceDetailScreen(spaceId: state.pathParameters['spaceId']!),
           ),
         ],
+      ),
+      GoRoute(
+        path: '/matome/:id',
+        builder: (_, state) {
+          _lastRoute = '/matome/${state.pathParameters['id']}';
+          return const Scaffold(body: Text('matome-stub'));
+        },
       ),
     ],
   );
@@ -170,17 +189,17 @@ void main() {
     expect(find.text('Work'), findsOneWidget);
   });
 
-  testWidgets('tapping a space opens its detail listing its recordings', (
+  testWidgets('tapping a space opens its detail listing its matomes', (
     tester,
   ) async {
     final work = await db.workspacesDao.createWorkspace('Work');
-    await _seedRecording(
+    await _seedMatome(
       db,
       id: 'a',
       title: 'In work space',
-      workspaceId: work.id,
+      spaceId: work.id,
     );
-    await _seedRecording(db, id: 'inbox-one', title: 'Inbox only');
+    await _seedMatome(db, id: 'inbox-one', title: 'Inbox only');
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
@@ -192,15 +211,15 @@ void main() {
     expect(find.text('Inbox only'), findsNothing); // not in this space
   });
 
-  testWidgets('tapping a recording in detail routes to /spaces/recording/:id', (
+  testWidgets('tapping a matome in detail routes to /matome/:id', (
     tester,
   ) async {
     final work = await db.workspacesDao.createWorkspace('Work');
-    await _seedRecording(
+    await _seedMatome(
       db,
-      id: 'rec-9',
+      id: 'mat-9',
       title: 'Routed',
-      workspaceId: work.id,
+      spaceId: work.id,
     );
 
     await tester.pumpWidget(_app(db));
@@ -209,14 +228,14 @@ void main() {
     await tester.tap(find.byKey(ValueKey('space-tile-${work.id}')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('space-recording-rec-9')));
+    await tester.tap(find.byKey(const ValueKey('space-matome-mat-9')));
     await tester.pumpAndSettle();
 
-    expect(_lastRoute, '/spaces/recording/rec-9');
-    expect(find.text('details-stub'), findsOneWidget);
+    expect(_lastRoute, '/matome/mat-9');
+    expect(find.text('matome-stub'), findsOneWidget);
   });
 
-  testWidgets('detail shows empty state for a space with no recordings', (
+  testWidgets('detail shows empty state for a space with no matomes', (
     tester,
   ) async {
     final work = await db.workspacesDao.createWorkspace('Empty');
@@ -227,6 +246,6 @@ void main() {
     await tester.tap(find.byKey(ValueKey('space-tile-${work.id}')));
     await tester.pumpAndSettle();
 
-    expect(find.text(t.spaces.detailEmpty), findsOneWidget);
+    expect(find.text(t.spaces.detailEmptyMatomes), findsOneWidget);
   });
 }

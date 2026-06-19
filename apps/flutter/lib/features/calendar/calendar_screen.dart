@@ -40,11 +40,12 @@ String formatDuration(int seconds) {
   return '$m:${s.toString().padLeft(2, '0')}';
 }
 
-/// Calendar tab (S4, #783). Offline-first month grid backed by Drift:
-///   * dots/heat on days with recordings (byDateRange for the visible month),
-///   * tap a day → that day's recordings (byDayWithWorkspace),
+/// Calendar tab (S4, #783) under the matome-centric model (#1378). Offline-first
+/// month grid backed by Drift:
+///   * dots/heat on days with matomes (matomesByDateRange for the visible month),
+///   * tap a day → that day's matomes (matomeItemsByDateRange),
 ///   * a space filter strip (workspaces) narrows the day list,
-///   * tap a recording → `/calendar/:id` (shared DetailsScreen, S2),
+///   * tap a matome → `/matome/:id` (the matome hub),
 ///   * prev/next month nav reloads the dots and the day list.
 class CalendarScreen extends ConsumerWidget {
   const CalendarScreen({super.key});
@@ -58,11 +59,11 @@ class CalendarScreen extends ConsumerWidget {
 
     final today = DateTime.now();
 
-    void openDetails(String id) => GoRouter.of(context).go('/calendar/$id');
+    void openMatome(String id) => GoRouter.of(context).go('/matome/$id');
 
     // Full-width single column at every size: the month grid spans the whole
     // width (its day cells are fixed-height, so a wide window just widens the
-    // cells — a desktop "big calendar" look) with the day's recordings below.
+    // cells — a desktop "big calendar" look) with the day's matomes below.
     final content = CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -77,7 +78,7 @@ class CalendarScreen extends ConsumerWidget {
             onSpaceFilter: controller.setSpaceFilter,
           ),
         ),
-        if (state.dayRecordings.isEmpty)
+        if (state.dayMatomes.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
             child: state.isDayLoading
@@ -93,14 +94,14 @@ class CalendarScreen extends ConsumerWidget {
               spacing.xxl + spacing.xxl,
             ),
             sliver: SliverList.builder(
-              itemCount: state.dayRecordings.length,
+              itemCount: state.dayMatomes.length,
               itemBuilder: (context, i) {
-                final item = state.dayRecordings[i];
+                final item = state.dayMatomes[i];
                 return Padding(
                   padding: EdgeInsets.only(bottom: spacing.sm),
-                  child: _RecordingRow(
+                  child: _MatomeRow(
                     item: item,
-                    onTap: () => openDetails(item.id),
+                    onTap: () => openMatome(item.id),
                   ),
                 );
               },
@@ -203,7 +204,7 @@ class _Header extends StatelessWidget {
             child: _MonthGrid(
               year: year,
               month: month,
-              daysWithRecordings: state.daysWithRecordings,
+              daysWithMatomes: state.daysWithMatomes,
               selectedDay: state.selectedDay,
               today: today,
               isLoading: state.isMonthLoading,
@@ -222,7 +223,7 @@ class _Header extends StatelessWidget {
           year: year,
           month: month,
           selectedDay: state.selectedDay,
-          count: state.dayRecordings.length,
+          count: state.dayMatomes.length,
         ),
       ],
     );
@@ -233,7 +234,7 @@ class _MonthGrid extends StatelessWidget {
   const _MonthGrid({
     required this.year,
     required this.month,
-    required this.daysWithRecordings,
+    required this.daysWithMatomes,
     required this.selectedDay,
     required this.today,
     required this.isLoading,
@@ -242,7 +243,7 @@ class _MonthGrid extends StatelessWidget {
 
   final int year;
   final int month;
-  final Set<int> daysWithRecordings;
+  final Set<int> daysWithMatomes;
   final int selectedDay;
   final DateTime today;
   final bool isLoading;
@@ -297,7 +298,7 @@ class _MonthGrid extends StatelessWidget {
               return Expanded(
                 child: _DayCell(
                   day: day,
-                  hasRecording: daysWithRecordings.contains(day),
+                  hasRecording: daysWithMatomes.contains(day),
                   isSelected: day == selectedDay,
                   isToday: isCurrentMonth && day == today.day,
                   onTap: () => onDayPress(day),
@@ -539,7 +540,7 @@ class _DayHeading extends StatelessWidget {
           if (count > 0) ...[
             SizedBox(width: spacing.xs),
             Text(
-              '$count ${count == 1 ? 'recording' : 'recordings'}',
+              t.calendar.matomeCount(n: count),
               style: typography.label.copyWith(color: colors.textSecondary),
             ),
           ],
@@ -549,22 +550,25 @@ class _DayHeading extends StatelessWidget {
   }
 }
 
-class _RecordingRow extends StatelessWidget {
-  const _RecordingRow({required this.item, required this.onTap});
+class _MatomeRow extends StatelessWidget {
+  const _MatomeRow({required this.item, required this.onTap});
 
-  final CalendarRecordingItem item;
+  final CalendarMatomeItem item;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final displayName = item.workspaceName ?? item.badge;
+    // Inbox matomes have no Space; show the canonical "Inbox" badge so the row
+    // still reads as a status chip.
+    final isInbox = item.spaceId == null;
+    final displayName = item.spaceName ?? 'Inbox';
 
     return AppCard.calendar(
       id: item.id,
       title: item.title,
-      badge: item.badge,
+      badge: isInbox ? 'Inbox' : (item.spaceName ?? 'Work'),
       statusLabel: displayName,
-      durationLabel: formatDuration(item.duration),
+      durationLabel: t.matome.itemCount(n: item.itemCount),
       onTap: onTap,
     );
   }
@@ -602,7 +606,7 @@ class _DayEmpty extends StatelessWidget {
 
     return EmptyState(
       icon: Icons.calendar_today_outlined,
-      title: t.calendar.noRecordings,
+      title: t.calendar.noMatomes,
       iconSize: 32,
       titleStyle: typography.bodySmall.copyWith(color: colors.textMuted),
     );

@@ -19,6 +19,8 @@ Future<void> _seedMatome(
   String? description,
   String? spaceId,
   int? coreId,
+  bool summaryStale = false,
+  String? itemSummary,
   int recordingCount = 2,
 }) async {
   await db.matomesDao.create(
@@ -30,6 +32,7 @@ Future<void> _seedMatome(
       createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
       description: Value(description),
       aggregatedSummary: Value(aggregatedSummary),
+      summaryStale: Value(summaryStale),
       coreId: Value(coreId),
     ),
   );
@@ -40,6 +43,7 @@ Future<void> _seedMatome(
         id: Value('rec_$i'),
         matomeId: Value(id),
         title: Value('Item $i'),
+        summary: Value(itemSummary),
         timestamp: const Value('9:00 AM'),
         duration: const Value('0:30'),
         badge: const Value('Inbox'),
@@ -137,6 +141,61 @@ void main() {
 
     expect(find.byKey(const ValueKey('matome-on-device')), findsOneWidget);
     expect(find.text(t.matome.onDevice), findsOneWidget);
+  });
+
+  testWidgets('stale summary shows a Regenerate affordance that recomputes '
+      'from items and clears stale', (tester) async {
+    await _seedMatome(
+      db,
+      id: 'm_stale',
+      // A stored-but-stale summary, with items that DO carry summaries so the
+      // local generator has something to roll up.
+      aggregatedSummary: 'Old summary',
+      summaryStale: true,
+      itemSummary: 'Item insight.',
+      recordingCount: 2,
+    );
+
+    await tester.pumpWidget(_app(container(), id: 'm_stale'));
+    await tester.pumpAndSettle();
+
+    final regenButton =
+        find.byKey(const ValueKey('matome-regenerate-summary'));
+    await tester.scrollUntilVisible(regenButton, 200);
+    expect(regenButton, findsOneWidget);
+    expect(find.text(t.matome.summaryStale), findsOneWidget);
+
+    await tester.tap(regenButton);
+    await tester.pumpAndSettle();
+
+    // The stored summary was recomposed from the items and the stale flag (and
+    // its affordance) cleared.
+    final row = await db.matomesDao.getById('m_stale');
+    expect(row!.summaryStale, isFalse);
+    expect(row.aggregatedSummary, contains('Item insight.'));
+    expect(
+      find.byKey(const ValueKey('matome-regenerate-summary')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('no Regenerate affordance when summary is fresh (not stale)', (
+    tester,
+  ) async {
+    await _seedMatome(
+      db,
+      id: 'm_fresh',
+      aggregatedSummary: 'Fresh summary',
+      itemSummary: 'insight',
+    );
+
+    await tester.pumpWidget(_app(container(), id: 'm_fresh'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('matome-regenerate-summary')),
+      findsNothing,
+    );
   });
 
   testWidgets('renders the not-found state for a missing Matome', (

@@ -2,60 +2,61 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
-import 'package:matome_flutter/features/home/inbox_item.dart';
+import 'package:matome_flutter/features/home/matome_inbox_controller.dart';
 import 'package:matome_flutter/features/recordings/upload_retry_service.dart';
+import 'package:matome_flutter/i18n/strings.g.dart';
 
 import 'support/fake_inbox.dart';
 
-InboxItem _item({
+/// Builds a display [MatomeItem] for the Inbox list (#1378). The Inbox now lists
+/// **inbox matomes** (spaceId == null), each with a title and item count.
+MatomeItem _matome({
   required String id,
   required String title,
-  String? summary,
-  String? notes,
-  String badge = 'Inbox',
-  bool processing = false,
-  DateTime? createdAt,
+  int itemCount = 1,
+  DateTime? happenedAt,
 }) {
-  final at = createdAt ?? DateTime.now();
-  return InboxItem(
-    card: RecordingItem(
-      id: id,
-      title: title,
-      summary: summary,
-      timestamp: '9:00 AM',
-      duration: '0:30',
-      badge: badge,
-      notes: notes,
-      isProcessing: processing,
-      mediaType: 'audio',
-      processingStatus: processing ? 'processing' : 'done',
-    ),
+  final at = happenedAt ?? DateTime.now();
+  return MatomeItem(
+    id: id,
+    spaceId: null,
+    title: title,
+    happenedAt: at.millisecondsSinceEpoch,
     createdAt: at.millisecondsSinceEpoch,
+    summaryStale: false,
+    recordingCount: itemCount,
+    recordings: const [],
   );
 }
 
-Widget _pumpHome(AsyncValue<List<InboxItem>> state) {
+Widget _pumpHome(AsyncValue<List<MatomeItem>> state) {
   return ProviderScope(
     overrides: [
+      matomeInboxControllerProvider.overrideWith(
+        (ref) => FakeMatomeInboxController(ref, state),
+      ),
+      // The matome controller listens to the recording-level inbox controller;
+      // stub it so the listen target never builds a real Drift/Core controller.
       inboxControllerProvider.overrideWith(
-        (ref) => FakeInboxController(ref, state),
+        (ref) => FakeInboxController(ref, const AsyncValue.data([])),
       ),
       // HomeScreen starts the W4 auto-retry service on first frame; stub it so
       // this widget test doesn't spin up a real reachability probe / periodic
       // timer (which would leave a pending Timer at teardown).
       uploadRetryServiceProvider.overrideWith((ref) => _NoopRetryService(ref)),
     ],
-    child: MaterialApp(theme: buildAppTheme(), home: const HomeScreen()),
+    child: TranslationProvider(
+      child: MaterialApp(theme: buildAppTheme(), home: const HomeScreen()),
+    ),
   );
 }
 
 /// No-op retry service: `start()` is inert so the widget test never spins up a
-/// reachability probe or a pending periodic timer (which would trip the
-/// "Timer still pending after teardown" invariant).
+/// reachability probe or a pending periodic timer.
 class _NoopRetryService extends UploadRetryService {
   _NoopRetryService(super.ref);
 
@@ -64,25 +65,18 @@ class _NoopRetryService extends UploadRetryService {
 }
 
 void main() {
-  testWidgets('Inbox renders header and grouped recordings from Drift', (
+  testWidgets('Inbox renders header and grouped matomes from Drift', (
     tester,
   ) async {
     final now = DateTime.now();
     await tester.pumpWidget(
       _pumpHome(
         AsyncValue.data([
-          _item(
-            id: '1',
-            title: 'Standup notes',
-            summary: 'sync',
-            badge: 'Work',
-            createdAt: now,
-          ),
-          _item(
+          _matome(id: '1', title: 'Standup notes', happenedAt: now),
+          _matome(
             id: '2',
             title: 'Idea dump',
-            badge: 'Ideas',
-            createdAt: now.subtract(const Duration(days: 2)),
+            happenedAt: now.subtract(const Duration(days: 2)),
           ),
         ]),
       ),
@@ -97,12 +91,12 @@ void main() {
     expect(find.text('TODAY'), findsOneWidget);
   });
 
-  testWidgets('Search filters by title / summary / notes', (tester) async {
+  testWidgets('Search filters matomes by title', (tester) async {
     await tester.pumpWidget(
       _pumpHome(
         AsyncValue.data([
-          _item(id: '1', title: 'Standup notes', summary: 'weekly sync'),
-          _item(id: '2', title: 'Idea dump', notes: 'rocket ideas'),
+          _matome(id: '1', title: 'Standup notes'),
+          _matome(id: '2', title: 'Idea dump'),
         ]),
       ),
     );
@@ -111,14 +105,14 @@ void main() {
     expect(find.text('Standup notes'), findsOneWidget);
     expect(find.text('Idea dump'), findsOneWidget);
 
-    // Search by a token that only appears in the first item's summary.
-    await tester.enterText(find.byType(TextField), 'sync');
+    // Search by a token that only appears in the first matome's title.
+    await tester.enterText(find.byType(TextField), 'standup');
     await tester.pumpAndSettle();
     expect(find.text('Standup notes'), findsOneWidget);
     expect(find.text('Idea dump'), findsNothing);
 
-    // Search by a token that only appears in the second item's notes.
-    await tester.enterText(find.byType(TextField), 'rocket');
+    // Search by a token that only appears in the second matome's title.
+    await tester.enterText(find.byType(TextField), 'idea');
     await tester.pumpAndSettle();
     expect(find.text('Standup notes'), findsNothing);
     expect(find.text('Idea dump'), findsOneWidget);
@@ -128,7 +122,7 @@ void main() {
     await tester.pumpWidget(_pumpHome(const AsyncValue.data([])));
     await tester.pumpAndSettle();
 
-    expect(find.text('No recordings yet'), findsOneWidget);
+    expect(find.text(t.inbox.empty), findsOneWidget);
   });
 
   testWidgets('Loading state shows a spinner', (tester) async {

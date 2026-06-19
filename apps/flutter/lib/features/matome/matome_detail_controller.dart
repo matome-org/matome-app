@@ -194,6 +194,15 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     await load();
   }
 
+  /// Regenerate the stored aggregated summary from the Matome's CURRENT Items
+  /// (ADR-0003). Deterministic LOCAL composition via the DAO — no AI/backend
+  /// call. Stores the rollup and clears the stale flag (or NULLs it when no Item
+  /// has a summary yet). Reloads so the hub reflects the fresh summary.
+  Future<void> regenerateSummary() async {
+    await _dao.regenerateSummary(state.id);
+    await load();
+  }
+
   /// Import an image [file] as an Item (recording, `mediaType: 'image'`) of this
   /// Matome. Reuses the local-first upload insert path: the bytes are copied to
   /// durable app storage, then a `rec_local_<uuid>` row is upserted with this

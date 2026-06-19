@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/providers.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
 import '../features/auth/welcome_screen.dart';
 import '../features/calendar/calendar_screen.dart';
+import '../features/details/details_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/matome/matome_detail_screen.dart';
 import 'auth_state.dart';
@@ -42,18 +44,36 @@ class _AuthListenable extends ChangeNotifier {
   }
 }
 
-/// The app router. Mirrors the expo-router tree:
+/// Resolves an OLD recording-centric deep-link (`:id` is a recordingId) to its
+/// parent Matome hub (#1378). The 1-recording→1-matome backfill invariant makes
+/// this deterministic: look up `recording.matomeId` and redirect to
+/// `/matome/<matomeId>`. Returns null (no redirect → the route's own builder
+/// runs) when the recording has no resolvable Matome, so the link degrades to
+/// the legacy single-recording view rather than dead-ending.
+Future<String?> _redirectRecordingToMatome(Ref ref, String? recordingId) async {
+  if (recordingId == null) return null;
+  final matomeId =
+      await ref.read(matomesDaoProvider).matomeIdForRecording(recordingId);
+  if (matomeId == null) return null;
+  return '/matome/$matomeId';
+}
+
+/// The app router (matome-centric, #1378). The primary detail route is the
+/// **Matome hub** `/matome/:id`; the individual-recording [DetailsScreen] is
+/// reached from inside the hub via `/recording/detail/:id`. Tree:
 ///   /                       welcome (unauthenticated landing)
-///   /recording              fullscreen modal (root navigator, above the shell)
+///   /recording              fullscreen capture modal (root navigator)
+///   /recording/detail/:id   single-recording details (drill-down from the hub)
+///   /matome/:id             the Matome hub (primary detail)
 ///   [shell]                 5 stateful tab branches:
-///     /inbox                inbox root (lab HomeScreen)
+///     /inbox                inbox root (inbox MATOMES)
 ///       /inbox/settings     settings
-///       /inbox/:id          recording details
-///     /calendar             calendar root
-///       /calendar/:id       day / recording details
+///       /inbox/:id          LEGACY recording link → redirects to parent matome
+///     /calendar             calendar root (matomes by happenedAt)
+///       /calendar/:id       LEGACY recording link → redirects to parent matome
 ///     /spaces               spaces root
-///       /spaces/:spaceId    space details
-///       /spaces/recording/:id  recording in a space
+///       /spaces/:spaceId    space details (its matomes)
+///       /spaces/recording/:id  LEGACY recording link → redirects to parent matome
 ///     /satori               satori root
 ///     /contacts             contacts directory root (#1374)
 final routerProvider = Provider<GoRouter>((ref) {
@@ -95,13 +115,24 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: RecordingScreen(),
         ),
       ),
-      // Matome detail hub (#1371): the read-only "page" for a Matome and its
-      // Items. Lives on the root navigator until the nav reframe (#1378) wires
-      // it into the shell tabs; the route just needs to resolve for now.
+      // Matome detail hub (#1371/#1378): the primary detail "page" for a Matome
+      // and its Items. Reached from every list surface (inbox / calendar /
+      // spaces) and as the redirect target for legacy recording deep-links.
       GoRoute(
         path: '/matome/:id',
         parentNavigatorKey: _rootKey,
         builder: (context, state) => MatomeDetailScreen(
+          id: state.pathParameters['id']!,
+        ),
+      ),
+      // Single-recording details (#1378): the drill-DOWN route used from inside
+      // the Matome hub to open ONE Item. Distinct from the legacy recording
+      // deep-links, which now redirect UP to the parent matome — so this route
+      // is the only non-redirecting path to the [DetailsScreen].
+      GoRoute(
+        path: '/recording/detail/:id',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => DetailsScreen(
           id: state.pathParameters['id']!,
         ),
       ),
@@ -131,7 +162,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => const SettingsScreen(),
                   ),
                   GoRoute(
+                    // LEGACY recording deep-link → parent matome (#1378).
                     path: ':id',
+                    redirect: (context, state) => _redirectRecordingToMatome(
+                      ref,
+                      state.pathParameters['id'],
+                    ),
                     builder: (context, state) => RecordingDetailScreen(
                       id: state.pathParameters['id']!,
                     ),
@@ -148,7 +184,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => const CalendarScreen(),
                 routes: [
                   GoRoute(
+                    // LEGACY recording deep-link → parent matome (#1378).
                     path: ':id',
+                    redirect: (context, state) => _redirectRecordingToMatome(
+                      ref,
+                      state.pathParameters['id'],
+                    ),
                     builder: (context, state) => RecordingDetailScreen(
                       id: state.pathParameters['id']!,
                     ),
@@ -165,7 +206,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) => const SpacesScreen(),
                 routes: [
                   GoRoute(
+                    // LEGACY recording-in-a-space deep-link → parent matome.
                     path: 'recording/:id',
+                    redirect: (context, state) => _redirectRecordingToMatome(
+                      ref,
+                      state.pathParameters['id'],
+                    ),
                     builder: (context, state) => SpaceRecordingScreen(
                       id: state.pathParameters['id']!,
                     ),

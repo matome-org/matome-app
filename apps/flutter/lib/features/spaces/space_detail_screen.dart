@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/db/matome_card.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_card.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
 import '../home/home_filters.dart' show formatTimestamp;
-import '../home/inbox_item.dart';
 import 'space_detail_controller.dart';
 
-/// Wide-viewport reading clamp so the recording rows don't sprawl across a
-/// desktop window (this screen is a pushed route with its own app bar).
+/// Wide-viewport reading clamp so the matome rows don't sprawl across a desktop
+/// window (this screen is a pushed route with its own app bar).
 const double _wideBreakpoint = 1000;
 const double _contentMaxWidth = 720;
 
-/// Space detail screen (S5, #784), reachable as `/spaces/:spaceId`. Lists the
-/// recordings assigned to the workspace (Drift `getRecordingsInWorkspace`);
-/// tapping a recording routes to `/spaces/recording/:id` (the shared
-/// DetailsScreen wired by S2). Mirrors `app/(tabs)/explore/[spaceId].tsx`.
+/// Space detail screen (S5, #784) under the matome-centric model (#1378),
+/// reachable as `/spaces/:spaceId`. Lists the **matomes** filed into the
+/// workspace (Drift `listMatomeItemsInSpace`); tapping a matome routes to the
+/// matome hub (`/matome/:id`).
 class SpaceDetailScreen extends ConsumerWidget {
   const SpaceDetailScreen({super.key, required this.spaceId});
 
@@ -63,8 +63,7 @@ class SpaceDetailScreen extends ConsumerWidget {
             onRefresh: () => ref
                 .read(spaceDetailControllerProvider(spaceId).notifier)
                 .load(),
-            onTap: (item) =>
-                GoRouter.of(context).go('/spaces/recording/${item.id}'),
+            onTap: (item) => GoRouter.of(context).go('/matome/${item.id}'),
           ),
         ),
       ),
@@ -80,10 +79,10 @@ class _List extends StatelessWidget {
     required this.onTap,
   });
 
-  final List<InboxItem> items;
+  final List<MatomeItem> items;
   final bool isWide;
   final Future<void> Function() onRefresh;
-  final ValueChanged<InboxItem> onTap;
+  final ValueChanged<MatomeItem> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +100,7 @@ class _List extends StatelessWidget {
             SizedBox(height: MediaQuery.sizeOf(context).height * 0.2),
             EmptyState(
               icon: Icons.inbox_outlined,
-              title: t.spaces.detailEmpty,
+              title: t.spaces.detailEmptyMatomes,
               titleStyle: typography.bodySmall.copyWith(
                 color: colors.textSecondary,
               ),
@@ -124,11 +123,11 @@ class _List extends StatelessWidget {
         final item = items[index];
         return Padding(
           padding: EdgeInsets.only(bottom: spacing.sm),
-          child: AppCard.recording(
-            key: ValueKey('space-recording-${item.id}'),
-            card: item.card,
+          child: AppCard.matome(
+            key: ValueKey('space-matome-${item.id}'),
+            matome: item,
             relativeTime: formatTimestamp(
-              DateTime.fromMillisecondsSinceEpoch(item.createdAt),
+              DateTime.fromMillisecondsSinceEpoch(item.happenedAt),
             ),
             onTap: () => onTap(item),
           ),

@@ -131,7 +131,7 @@ class _MatomeDetailBody extends ConsumerWidget {
             SizedBox(height: spacing.lg),
             _SectionLabel(text: t.matome.summary),
             SizedBox(height: spacing.xs),
-            _AggregatedSummary(summary: matome.aggregatedSummary),
+            _AggregatedSummary(matome: matome, controller: controller),
             SizedBox(height: spacing.lg),
             _NotesSection(
               description: matome.description,
@@ -727,9 +727,12 @@ class _RecordingTile extends StatelessWidget {
   bool get _isImage => item.mediaType.startsWith('image');
 
   void _open(BuildContext context) {
-    // Reuse the existing recording detail route. `/inbox/:id` resolves the
-    // single-recording DetailsScreen regardless of the active tab.
-    context.go('/inbox/${item.id}');
+    // The single-recording DetailsScreen, reached from INSIDE the matome hub for
+    // one Item (#1378). This is its own non-redirecting route — the old
+    // recording-centric deep-links (`/inbox/:id`, `/calendar/:id`,
+    // `/spaces/recording/:id`) now redirect back UP to the parent matome, so the
+    // hub must use the dedicated `/recording/detail/:id` route to drill DOWN.
+    context.push('/recording/detail/${item.id}');
   }
 
   @override
@@ -812,10 +815,17 @@ class _ImageItemTile extends StatelessWidget {
 
 // ─── Aggregated summary ──────────────────────────────────────────────────────
 
+/// The stored aggregated summary (ADR-0003) plus its regenerate affordance. A
+/// "Regenerate summary" action surfaces when the summary is flagged stale (the
+/// item set / a child summary changed) OR when there is no summary yet but the
+/// Matome already has Items to roll up — either way the deterministic local
+/// generator can (re)compose it. Tapping calls the controller and the hub
+/// reloads with the fresh summary.
 class _AggregatedSummary extends StatelessWidget {
-  const _AggregatedSummary({required this.summary});
+  const _AggregatedSummary({required this.matome, required this.controller});
 
-  final String? summary;
+  final MatomeItem matome;
+  final MatomeDetailController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -823,23 +833,57 @@ class _AggregatedSummary extends StatelessWidget {
     final spacing = context.spacing;
     final radius = context.radius;
     final typography = context.typography;
-    final hasSummary = summary != null && summary!.trim().isNotEmpty;
+    final summary = matome.aggregatedSummary;
+    final hasSummary = summary != null && summary.trim().isNotEmpty;
+    final hasItems = matome.recordings.isNotEmpty;
+    // Offer regeneration when explicitly stale, or when nothing is stored yet
+    // but there are Items to roll up (the first compose).
+    final canRegenerate =
+        matome.summaryStale || (!hasSummary && hasItems);
 
-    return Container(
-      key: const ValueKey('matome-summary'),
-      width: double.infinity,
-      padding: EdgeInsets.all(spacing.md),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(radius.md),
-        border: Border.all(color: colors.border),
-      ),
-      child: hasSummary
-          ? MarkdownBody(data: summary!)
-          : Text(
-              t.matome.noSummary,
-              style: typography.bodySmall.copyWith(color: colors.textMuted),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          key: const ValueKey('matome-summary'),
+          width: double.infinity,
+          padding: EdgeInsets.all(spacing.md),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(radius.md),
+            border: Border.all(color: colors.border),
+          ),
+          child: hasSummary
+              ? MarkdownBody(data: summary)
+              : Text(
+                  t.matome.noSummary,
+                  style:
+                      typography.bodySmall.copyWith(color: colors.textMuted),
+                ),
+        ),
+        if (canRegenerate) ...[
+          SizedBox(height: spacing.xs),
+          Row(
+            children: [
+              if (matome.summaryStale)
+                Expanded(
+                  child: Text(
+                    t.matome.summaryStale,
+                    style: typography.label.copyWith(color: colors.textMuted),
+                  ),
+                )
+              else
+                const Spacer(),
+              AppTextButton.icon(
+                key: const ValueKey('matome-regenerate-summary'),
+                onPressed: controller.regenerateSummary,
+                icon: Icon(Icons.refresh, size: spacing.md),
+                label: Text(t.matome.regenerateSummary),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }

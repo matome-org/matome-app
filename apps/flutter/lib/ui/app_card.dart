@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/db/matome_card.dart';
 import '../core/db/recording_card.dart';
 import '../core/theme/app_theme.dart';
 import '../i18n/strings.g.dart';
@@ -12,7 +13,7 @@ const _pendingUploadStatus = 'pending_upload';
 
 enum AppCardRecordingState { pendingUpload, processing, done, failed }
 
-enum _AppCardVariant { recording, calendar }
+enum _AppCardVariant { recording, calendar, matome }
 
 class AppCard extends StatelessWidget {
   const AppCard.recording({
@@ -23,6 +24,7 @@ class AppCard extends StatelessWidget {
     this.onLongPress,
     this.onRetry,
   }) : id = null,
+       matome = null,
        title = null,
        badge = null,
        statusLabel = null,
@@ -38,13 +40,32 @@ class AppCard extends StatelessWidget {
     required this.durationLabel,
     required this.onTap,
   }) : card = null,
+       matome = null,
        relativeTime = null,
        onLongPress = null,
        onRetry = null,
        _variant = _AppCardVariant.calendar;
 
+  /// A **Matome** row (#1378): the top-level managed unit. Shows the matome
+  /// title, its item count, an inbox / on-device hint, and a relative time.
+  const AppCard.matome({
+    super.key,
+    required this.matome,
+    required this.relativeTime,
+    this.onTap,
+    this.onLongPress,
+  }) : card = null,
+       id = null,
+       title = null,
+       badge = null,
+       statusLabel = null,
+       durationLabel = null,
+       onRetry = null,
+       _variant = _AppCardVariant.matome;
+
   final _AppCardVariant _variant;
   final RecordingItem? card;
+  final MatomeItem? matome;
   final String? relativeTime;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
@@ -88,7 +109,87 @@ class AppCard extends StatelessWidget {
     return switch (_variant) {
       _AppCardVariant.recording => _buildRecording(context),
       _AppCardVariant.calendar => _buildCalendar(context),
+      _AppCardVariant.matome => _buildMatome(context),
     };
+  }
+
+  Widget _buildMatome(BuildContext context) {
+    final m = matome!;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final accent = colors.accent;
+
+    return Semantics(
+      button: true,
+      label: 'Matome: ${m.title}',
+      child: Material(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(radius.lg),
+        child: InkWell(
+          key: ValueKey('matome-card-${m.id}'),
+          onTap: onTap,
+          onLongPress: onLongPress,
+          borderRadius: BorderRadius.circular(radius.lg),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 64),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(radius.lg),
+              border: Border.all(color: colors.border),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Avatar(
+                  backgroundColor: accent.withValues(alpha: 0.13),
+                  size: 36,
+                  child: Icon(
+                    Icons.layers_outlined,
+                    size: 18,
+                    color: accent,
+                  ),
+                ),
+                SizedBox(width: spacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _RecordingTitleRow(
+                        title: m.title,
+                        timestamp: relativeTime ?? '',
+                      ),
+                      SizedBox(height: spacing.xxs),
+                      Wrap(
+                        spacing: spacing.xs,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            t.matome.itemCount(n: m.recordingCount),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                          if (m.isInbox)
+                            _MatomeHintChip(localOnly: m.isLocalOnly),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: colors.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildRecording(BuildContext context) {
@@ -417,6 +518,49 @@ class _RecordingBody extends StatelessWidget {
           ),
         );
     }
+  }
+}
+
+/// Small inbox / on-device hint pill for a matome list row (#1378). A filed
+/// matome shows nothing; an inbox matome shows "On device" (cloud-off when it
+/// has not reconciled to Core yet).
+class _MatomeHintChip extends StatelessWidget {
+  const _MatomeHintChip({required this.localOnly});
+
+  final bool localOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    return Container(
+      key: const ValueKey('matome-card-on-device'),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.subtleFill,
+        borderRadius: BorderRadius.circular(radius.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            localOnly ? Icons.cloud_off_outlined : Icons.inbox_outlined,
+            size: spacing.md,
+            color: colors.textMuted,
+          ),
+          SizedBox(width: spacing.xxs),
+          Text(
+            t.matome.onDeviceShort,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: colors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

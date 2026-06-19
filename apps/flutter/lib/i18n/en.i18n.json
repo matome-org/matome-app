@@ -28,7 +28,15 @@
     "title": "Inbox",
     "searchPlaceholder": "Search transcripts, tags, spaces…",
     "noResults": "No recordings found",
-    "recordings": "recordings"
+    "recordings": "recordings",
+    "matomeCount": "$n matomes",
+    "searchHint": "Search matomes",
+    "empty": "No matomes yet",
+    "emptyHint": "Matomes you capture or upload will show up here.",
+    "noMatches": "No matching matomes",
+    "noMatchesHint": "Try a different search term.",
+    "loadFailed": "Couldn't load matomes",
+    "selectHint": "Select a matome to preview"
   },
   "cardStatus": {
     "pendingUpload": "Saved on device · waiting to upload",
@@ -101,6 +109,8 @@
     "noRecordings": "No items yet",
     "summary": "Summary",
     "noSummary": "No summary yet",
+    "regenerateSummary": "Regenerate summary",
+    "summaryStale": "Items changed — summary may be out of date",
     "notes": "Notes",
     "noNotes": "No notes yet",
     "fileIntoSpace": "File into a space",
@@ -124,7 +134,9 @@
     "removeContact": "Remove contact",
     "roleAttendee": "Attendee",
     "roleOrganizer": "Organizer",
-    "roleSpeaker": "Speaker"
+    "roleSpeaker": "Speaker",
+    "itemCount": "$n items",
+    "onDeviceShort": "On device"
   },
   "spaces": {
     "title": "Spaces",
@@ -138,11 +150,15 @@
     "deleteTitle": "Delete space?",
     "deleteBody": "Recordings in this space will move back to the Inbox.",
     "delete": "Delete",
-    "detailEmpty": "No recordings in this space yet"
+    "detailEmpty": "No recordings in this space yet",
+    "detailEmptyMatomes": "No matomes in this space yet",
+    "matomeCount": "$n matomes"
   },
   "calendar": {
     "title": "Calendar",
     "noRecordings": "No recordings for this day",
+    "noMatomes": "No matomes for this day",
+    "matomeCount": "$n matomes",
     "allSpaces": "All"
   },
   "contacts": {

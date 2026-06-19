@@ -6,36 +6,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/db/app_database.dart';
+import '../../core/db/matome_card.dart';
 import '../../core/theme/app_theme.dart';
-import '../details/details_screen.dart';
 import '../../i18n/strings.g.dart';
-import '../../ui/app_bottom_sheet.dart';
 import '../../ui/app_button.dart';
 import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
+import '../matome/matome_detail_screen.dart';
 import 'home_filters.dart' show formatTimestamp;
-import 'inbox_controller.dart';
-import 'inbox_grouping.dart';
-import 'inbox_item.dart';
 import 'inbox_upload.dart';
+import 'matome_inbox_controller.dart';
+import 'matome_inbox_grouping.dart';
 import '../recordings/upload_retry_service.dart';
 
 /// Width past which we treat the viewport as "wide" (desktop / web) and
 /// constrain the content column instead of letting it stretch edge-to-edge.
 const double _wideBreakpoint = 1000;
 
-/// Selected Inbox recording for the desktop two-pane layout. On wide viewports
+/// Selected Inbox matome for the desktop two-pane layout. On wide viewports
 /// tapping a row sets this instead of navigating, so the list stays visible
-/// beside the detail pane. Narrow viewports ignore it and route as before.
+/// beside the [MatomeDetailScreen] detail pane. Narrow viewports ignore it and
+/// route to `/matome/:id` as before.
 final inboxSelectionProvider = StateProvider<String?>((ref) => null);
 
-/// Inbox / Home screen (S1, #780). Offline-first: the list is driven from
-/// Drift (`getInboxRecordings`) via [inboxControllerProvider], with a Core sync
-/// on load / pull-to-refresh. Search is client-side. Tap navigates to Details
-/// (S2 route), long-press opens the move-to-space sheet, the FAB uploads a file.
+/// Inbox / Home screen (S1) under the matome-centric model (#1378): the
+/// top-level managed unit is the **Matome**, so the list shows **inbox
+/// matomes** (`MatomesDao.listInboxMatomeItems`, spaceId == null) rather than
+/// individual recordings. Offline-first: the list is driven from Drift via
+/// [matomeInboxControllerProvider], with a Core recording-sync underneath
+/// (recordings still sync and land in matomes). Tap navigates to the matome hub
+/// (`/matome/:id`); the FAB uploads a file (which creates a recording → an
+/// inbox matome).
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -65,23 +68,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _refresh() =>
-      ref.read(inboxControllerProvider.notifier).refresh();
+      ref.read(matomeInboxControllerProvider.notifier).refresh();
 
-  void _openDetails(InboxItem item) {
+  void _openMatome(MatomeItem item) {
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
     if (isWide) {
       // Two-pane: select in place, keep the list visible.
       ref.read(inboxSelectionProvider.notifier).state = item.id;
     } else {
-      GoRouter.of(context).go('/inbox/${item.id}');
+      GoRouter.of(context).go('/matome/${item.id}');
     }
   }
-
-  /// Manual retry from a `failed` Inbox card — re-enqueues via the auto-retry
-  /// upload queue (plan #43, W5). Fire-and-forget: the controller flips the row
-  /// to `pending_upload` and re-renders before the drain runs.
-  Future<void> _retryUpload(InboxItem item) =>
-      ref.read(inboxControllerProvider.notifier).retryUpload(item.id);
 
   Future<void> _pickAndUpload() async {
     final result = await FilePicker.platform.pickFiles(
@@ -101,8 +98,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     messenger.showSnackBar(
       SnackBar(content: Text('Uploading "${picked.title}"…')),
     );
-    // Fire-and-forget: the controller inserts the local row immediately and
-    // updates it as the pipeline resolves; the list reflects each step.
+    // Fire-and-forget: the upload inserts the local recording row immediately
+    // (into a fresh Inbox matome via upsertRecordingWithMatome); the matome
+    // controller listens to the recording inbox and re-reads the list.
     unawaited(
       ref
           .read(inboxUploaderProvider)
@@ -110,23 +108,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Future<void> _showMoveSheet(InboxItem item) async {
-    final spaces = await ref.read(inboxControllerProvider.notifier).spaces();
-    if (!mounted) return;
-    final target = await showAppBottomSheet<WorkspaceRow>(
-      context: context,
-      builder: (context) => _MoveToSpaceSheet(spaces: spaces),
-    );
-    if (target == null) return;
-    await ref
-        .read(inboxControllerProvider.notifier)
-        .moveToSpace(item.id, target.id);
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final state = ref.watch(inboxControllerProvider);
+    final state = ref.watch(matomeInboxControllerProvider);
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
     final listColumn = Column(
@@ -154,9 +139,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               items: items,
               search: _search,
               onRefresh: _refresh,
-              onTap: _openDetails,
-              onLongPress: _showMoveSheet,
-              onRetry: _retryUpload,
+              onTap: _openMatome,
             ),
           ),
         ),
@@ -189,9 +172,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-/// Right-hand pane of the desktop two-pane Inbox: the embedded [DetailsScreen]
-/// for the selected recording, or a teaching placeholder when nothing is
-/// selected yet.
+/// Right-hand pane of the desktop two-pane Inbox: the embedded
+/// [MatomeDetailScreen] (the matome hub) for the selected matome, or a teaching
+/// placeholder when nothing is selected yet.
 class _InboxDetailPane extends ConsumerWidget {
   const _InboxDetailPane();
 
@@ -216,7 +199,7 @@ class _InboxDetailPane extends ConsumerWidget {
               ),
               SizedBox(height: spacing.sm),
               Text(
-                'Select a recording to preview',
+                t.inbox.selectHint,
                 style: typography.bodySmall.copyWith(color: colors.textMuted),
               ),
             ],
@@ -225,7 +208,7 @@ class _InboxDetailPane extends ConsumerWidget {
       );
     }
 
-    return DetailsScreen(
+    return MatomeDetailScreen(
       key: ValueKey(selectedId),
       id: selectedId,
       embedded: true,
@@ -296,14 +279,14 @@ class _Header extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Inbox',
+                      t.inbox.title,
                       style: typography.display.copyWith(
                         color: colors.textPrimary,
                       ),
                     ),
                     if (total > 0)
                       Text(
-                        '$total recordings',
+                        t.inbox.matomeCount(n: total),
                         style: typography.label.copyWith(
                           color: colors.textSecondary,
                         ),
@@ -411,7 +394,7 @@ class _SearchField extends StatelessWidget {
       controller: controller,
       onChanged: onChanged,
       textInputAction: TextInputAction.search,
-      hint: 'Search recordings',
+      hint: t.inbox.searchHint,
       isDense: true,
       prefixIcon: Icon(
         Icons.search,
@@ -437,24 +420,20 @@ class _Body extends StatelessWidget {
     required this.search,
     required this.onRefresh,
     required this.onTap,
-    required this.onLongPress,
-    required this.onRetry,
   });
 
-  final List<InboxItem> items;
+  final List<MatomeItem> items;
   final String search;
   final Future<void> Function() onRefresh;
-  final ValueChanged<InboxItem> onTap;
-  final ValueChanged<InboxItem> onLongPress;
-  final ValueChanged<InboxItem> onRetry;
+  final ValueChanged<MatomeItem> onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
     final typography = context.typography;
-    final filtered = searchItems(items, search);
-    final sections = groupByDate(
+    final filtered = searchMatomes(items, search);
+    final sections = groupMatomesByDate(
       filtered,
       todayLabel: 'Today',
       yesterdayLabel: 'Yesterday',
@@ -520,14 +499,12 @@ class _Body extends StatelessWidget {
               ...section.items.map(
                 (item) => Padding(
                   padding: EdgeInsets.only(bottom: spacing.sm),
-                  child: AppCard.recording(
-                    card: item.card,
+                  child: AppCard.matome(
+                    matome: item,
                     relativeTime: formatTimestamp(
-                      DateTime.fromMillisecondsSinceEpoch(item.createdAt),
+                      DateTime.fromMillisecondsSinceEpoch(item.happenedAt),
                     ),
                     onTap: () => onTap(item),
-                    onLongPress: () => onLongPress(item),
-                    onRetry: () => onRetry(item),
                   ),
                 ),
               ),
@@ -535,52 +512,6 @@ class _Body extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-}
-
-class _MoveToSpaceSheet extends StatelessWidget {
-  const _MoveToSpaceSheet({required this.spaces});
-
-  final List<WorkspaceRow> spaces;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    return AppBottomSheet(
-      title: Text(
-        'Move to space',
-        style: typography.body.copyWith(
-          fontWeight: FontWeight.w700,
-          color: colors.textPrimary,
-        ),
-      ),
-      children: [
-        if (spaces.isEmpty)
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              spacing.lg,
-              spacing.xs,
-              spacing.lg,
-              spacing.lg,
-            ),
-            child: Text(
-              'No spaces yet.',
-              style: typography.bodySmall.copyWith(color: colors.textSecondary),
-            ),
-          )
-        else
-          ...spaces.map(
-            (ws) => ListTile(
-              leading: Icon(Icons.folder_outlined, color: colors.textSecondary),
-              title: Text(ws.name),
-              onTap: () => Navigator.of(context).pop(ws),
-            ),
-          ),
-      ],
     );
   }
 }
@@ -594,10 +525,8 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return EmptyState(
       icon: searching ? Icons.search_off : Icons.inbox_outlined,
-      title: searching ? 'No matching recordings' : 'No recordings yet',
-      message: searching
-          ? 'Try a different search term.'
-          : 'Recordings you capture or upload will show up here.',
+      title: searching ? t.inbox.noMatches : t.inbox.empty,
+      message: searching ? t.inbox.noMatchesHint : t.inbox.emptyHint,
     );
   }
 }
@@ -627,7 +556,7 @@ class _ErrorState extends StatelessWidget {
             ),
             SizedBox(height: spacing.sm),
             Text(
-              "Couldn't load recordings",
+              t.inbox.loadFailed,
               style: typography.bodySmall.copyWith(
                 fontWeight: FontWeight.w600,
                 color: colors.textPrimary,

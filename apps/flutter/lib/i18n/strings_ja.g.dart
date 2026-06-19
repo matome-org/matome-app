@@ -112,6 +112,14 @@ class _Translations$inbox$ja extends Translations$inbox$en {
 	@override String get searchPlaceholder => 'トランスクリプト、タグ、スペースを検索...';
 	@override String get noResults => '録音が見つかりません';
 	@override String get recordings => '件の録音';
+	@override String matomeCount({required Object n}) => '${n} 件のマトメ';
+	@override String get searchHint => 'マトメを検索';
+	@override String get empty => 'マトメがありません';
+	@override String get emptyHint => '録音やアップロードしたマトメがここに表示されます。';
+	@override String get noMatches => '一致するマトメがありません';
+	@override String get noMatchesHint => '別の検索語をお試しください。';
+	@override String get loadFailed => 'マトメを読み込めませんでした';
+	@override String get selectHint => 'プレビューするマトメを選択';
 }
 
 // Path: cardStatus
@@ -212,6 +220,8 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get noRecordings => 'アイテムはまだありません';
 	@override String get summary => '要約';
 	@override String get noSummary => '要約はまだありません';
+	@override String get regenerateSummary => '要約を再生成';
+	@override String get summaryStale => 'アイテムが変更されました — 要約が古い可能性があります';
 	@override String get notes => 'メモ';
 	@override String get noNotes => 'メモはまだありません';
 	@override String get fileIntoSpace => 'スペースに整理';
@@ -236,6 +246,8 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get roleAttendee => '参加者';
 	@override String get roleOrganizer => '主催者';
 	@override String get roleSpeaker => '発表者';
+	@override String itemCount({required Object n}) => '${n} 件のアイテム';
+	@override String get onDeviceShort => '端末内';
 }
 
 // Path: spaces
@@ -257,6 +269,8 @@ class _Translations$spaces$ja extends Translations$spaces$en {
 	@override String get deleteBody => 'このスペースの録音は受信トレイに戻ります。';
 	@override String get delete => '削除';
 	@override String get detailEmpty => 'このスペースにはまだ録音がありません';
+	@override String get detailEmptyMatomes => 'このスペースにはまだマトメがありません';
+	@override String matomeCount({required Object n}) => '${n} 件のマトメ';
 }
 
 // Path: calendar
@@ -268,6 +282,8 @@ class _Translations$calendar$ja extends Translations$calendar$en {
 	// Translations
 	@override String get title => 'カレンダー';
 	@override String get noRecordings => 'この日の録音はありません';
+	@override String get noMatomes => 'この日のマトメはありません';
+	@override String matomeCount({required Object n}) => '${n} 件のマトメ';
 	@override String get allSpaces => 'すべて';
 }
 
@@ -401,6 +417,14 @@ extension on TranslationsJa {
 			'inbox.searchPlaceholder' => 'トランスクリプト、タグ、スペースを検索...',
 			'inbox.noResults' => '録音が見つかりません',
 			'inbox.recordings' => '件の録音',
+			'inbox.matomeCount' => ({required Object n}) => '${n} 件のマトメ',
+			'inbox.searchHint' => 'マトメを検索',
+			'inbox.empty' => 'マトメがありません',
+			'inbox.emptyHint' => '録音やアップロードしたマトメがここに表示されます。',
+			'inbox.noMatches' => '一致するマトメがありません',
+			'inbox.noMatchesHint' => '別の検索語をお試しください。',
+			'inbox.loadFailed' => 'マトメを読み込めませんでした',
+			'inbox.selectHint' => 'プレビューするマトメを選択',
 			'cardStatus.pendingUpload' => '端末に保存済み · アップロード待ち',
 			'cardStatus.processing' => '文字起こし中…',
 			'cardStatus.failed' => 'アップロードに失敗しました',
@@ -465,6 +489,8 @@ extension on TranslationsJa {
 			'matome.noRecordings' => 'アイテムはまだありません',
 			'matome.summary' => '要約',
 			'matome.noSummary' => '要約はまだありません',
+			'matome.regenerateSummary' => '要約を再生成',
+			'matome.summaryStale' => 'アイテムが変更されました — 要約が古い可能性があります',
 			'matome.notes' => 'メモ',
 			'matome.noNotes' => 'メモはまだありません',
 			'matome.fileIntoSpace' => 'スペースに整理',
@@ -489,6 +515,8 @@ extension on TranslationsJa {
 			'matome.roleAttendee' => '参加者',
 			'matome.roleOrganizer' => '主催者',
 			'matome.roleSpeaker' => '発表者',
+			'matome.itemCount' => ({required Object n}) => '${n} 件のアイテム',
+			'matome.onDeviceShort' => '端末内',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',
@@ -501,8 +529,12 @@ extension on TranslationsJa {
 			'spaces.deleteBody' => 'このスペースの録音は受信トレイに戻ります。',
 			'spaces.delete' => '削除',
 			'spaces.detailEmpty' => 'このスペースにはまだ録音がありません',
+			'spaces.detailEmptyMatomes' => 'このスペースにはまだマトメがありません',
+			'spaces.matomeCount' => ({required Object n}) => '${n} 件のマトメ',
 			'calendar.title' => 'カレンダー',
 			'calendar.noRecordings' => 'この日の録音はありません',
+			'calendar.noMatomes' => 'この日のマトメはありません',
+			'calendar.matomeCount' => ({required Object n}) => '${n} 件のマトメ',
 			'calendar.allSpaces' => 'すべて',
 			'contacts.title' => '連絡先',
 			'contacts.count' => ({required Object n}) => '${n} 件の連絡先',

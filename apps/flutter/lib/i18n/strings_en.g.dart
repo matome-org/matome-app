@@ -159,6 +159,30 @@ class Translations$inbox$en {
 
 	/// en: 'recordings'
 	String get recordings => 'recordings';
+
+	/// en: '$n matomes'
+	String matomeCount({required Object n}) => '${n} matomes';
+
+	/// en: 'Search matomes'
+	String get searchHint => 'Search matomes';
+
+	/// en: 'No matomes yet'
+	String get empty => 'No matomes yet';
+
+	/// en: 'Matomes you capture or upload will show up here.'
+	String get emptyHint => 'Matomes you capture or upload will show up here.';
+
+	/// en: 'No matching matomes'
+	String get noMatches => 'No matching matomes';
+
+	/// en: 'Try a different search term.'
+	String get noMatchesHint => 'Try a different search term.';
+
+	/// en: 'Couldn't load matomes'
+	String get loadFailed => 'Couldn\'t load matomes';
+
+	/// en: 'Select a matome to preview'
+	String get selectHint => 'Select a matome to preview';
 }
 
 // Path: cardStatus
@@ -388,6 +412,12 @@ class Translations$matome$en {
 	/// en: 'No summary yet'
 	String get noSummary => 'No summary yet';
 
+	/// en: 'Regenerate summary'
+	String get regenerateSummary => 'Regenerate summary';
+
+	/// en: 'Items changed — summary may be out of date'
+	String get summaryStale => 'Items changed — summary may be out of date';
+
 	/// en: 'Notes'
 	String get notes => 'Notes';
 
@@ -459,6 +489,12 @@ class Translations$matome$en {
 
 	/// en: 'Speaker'
 	String get roleSpeaker => 'Speaker';
+
+	/// en: '$n items'
+	String itemCount({required Object n}) => '${n} items';
+
+	/// en: 'On device'
+	String get onDeviceShort => 'On device';
 }
 
 // Path: spaces
@@ -504,6 +540,12 @@ class Translations$spaces$en {
 
 	/// en: 'No recordings in this space yet'
 	String get detailEmpty => 'No recordings in this space yet';
+
+	/// en: 'No matomes in this space yet'
+	String get detailEmptyMatomes => 'No matomes in this space yet';
+
+	/// en: '$n matomes'
+	String matomeCount({required Object n}) => '${n} matomes';
 }
 
 // Path: calendar
@@ -519,6 +561,12 @@ class Translations$calendar$en {
 
 	/// en: 'No recordings for this day'
 	String get noRecordings => 'No recordings for this day';
+
+	/// en: 'No matomes for this day'
+	String get noMatomes => 'No matomes for this day';
+
+	/// en: '$n matomes'
+	String matomeCount({required Object n}) => '${n} matomes';
 
 	/// en: 'All'
 	String get allSpaces => 'All';
@@ -780,6 +828,14 @@ extension on Translations {
 			'inbox.searchPlaceholder' => 'Search transcripts, tags, spaces…',
 			'inbox.noResults' => 'No recordings found',
 			'inbox.recordings' => 'recordings',
+			'inbox.matomeCount' => ({required Object n}) => '${n} matomes',
+			'inbox.searchHint' => 'Search matomes',
+			'inbox.empty' => 'No matomes yet',
+			'inbox.emptyHint' => 'Matomes you capture or upload will show up here.',
+			'inbox.noMatches' => 'No matching matomes',
+			'inbox.noMatchesHint' => 'Try a different search term.',
+			'inbox.loadFailed' => 'Couldn\'t load matomes',
+			'inbox.selectHint' => 'Select a matome to preview',
 			'cardStatus.pendingUpload' => 'Saved on device · waiting to upload',
 			'cardStatus.processing' => 'Transcribing…',
 			'cardStatus.failed' => 'Upload failed',
@@ -844,6 +900,8 @@ extension on Translations {
 			'matome.noRecordings' => 'No items yet',
 			'matome.summary' => 'Summary',
 			'matome.noSummary' => 'No summary yet',
+			'matome.regenerateSummary' => 'Regenerate summary',
+			'matome.summaryStale' => 'Items changed — summary may be out of date',
 			'matome.notes' => 'Notes',
 			'matome.noNotes' => 'No notes yet',
 			'matome.fileIntoSpace' => 'File into a space',
@@ -868,6 +926,8 @@ extension on Translations {
 			'matome.roleAttendee' => 'Attendee',
 			'matome.roleOrganizer' => 'Organizer',
 			'matome.roleSpeaker' => 'Speaker',
+			'matome.itemCount' => ({required Object n}) => '${n} items',
+			'matome.onDeviceShort' => 'On device',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',
@@ -880,8 +940,12 @@ extension on Translations {
 			'spaces.deleteBody' => 'Recordings in this space will move back to the Inbox.',
 			'spaces.delete' => 'Delete',
 			'spaces.detailEmpty' => 'No recordings in this space yet',
+			'spaces.detailEmptyMatomes' => 'No matomes in this space yet',
+			'spaces.matomeCount' => ({required Object n}) => '${n} matomes',
 			'calendar.title' => 'Calendar',
 			'calendar.noRecordings' => 'No recordings for this day',
+			'calendar.noMatomes' => 'No matomes for this day',
+			'calendar.matomeCount' => ({required Object n}) => '${n} matomes',
 			'calendar.allSpaces' => 'All',
 			'contacts.title' => 'Contacts',
 			'contacts.count' => ({required Object n}) => '${n} contacts',
