@@ -113,9 +113,13 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// `matome_id` is reused. Runs in a single transaction.
   Future<void> upsertRecordingWithMatome(RecordingsCompanion entry) {
     return transaction(() async {
-      // Caller already supplied a Matome — respect it verbatim.
+      // Caller already supplied a Matome — respect it verbatim. The owning
+      // Matome's item set / a child summary changed, so its aggregated summary
+      // is now stale (ADR-0003 invalidation): a new Item was added or an
+      // existing one's summary was reconciled in.
       if (entry.matomeId.present && entry.matomeId.value != null) {
         await into(recordings).insertOnConflictUpdate(entry);
+        await _markMatomeSummaryStale(entry.matomeId.value!);
         return;
       }
 
@@ -129,6 +133,7 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
         await into(recordings).insertOnConflictUpdate(
           entry.copyWith(matomeId: Value(existing!.matomeId)),
         );
+        await _markMatomeSummaryStale(existing.matomeId!);
         return;
       }
 
@@ -155,6 +160,15 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
         entry.copyWith(matomeId: Value(matomeId)),
       );
     });
+  }
+
+  /// Flags the owning Matome's aggregated summary as pending regeneration —
+  /// its item set / a child summary changed (ADR-0003 invalidation). Mirrors
+  /// [MatomesDao.markSummaryStale]; written inline so it joins the caller's
+  /// transaction (the `Matomes` table is in this accessor).
+  Future<void> _markMatomeSummaryStale(String matomeId) async {
+    await (update(matomes)..where((m) => m.id.equals(matomeId)))
+        .write(const MatomesCompanion(summaryStale: Value(true)));
   }
 
   /// Partial update. Only the provided companion fields are written, mirroring

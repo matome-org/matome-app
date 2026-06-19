@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../../features/matome/matome_summary.dart';
 import '../app_database.dart';
 import '../matome_card.dart';
 import '../recording_card.dart';
@@ -100,6 +101,72 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
         .get();
   }
 
+  /// Matomes whose `happened_at` falls in [startEpoch, endEpoch] inclusive,
+  /// newest first — the Calendar's by-day / by-month window (#1378). Groups by
+  /// `happened_at` so the day list and month dots are Matome-, not
+  /// recording-, scoped.
+  Future<List<MatomeRow>> matomesByDateRange(int startEpoch, int endEpoch) {
+    return (select(matomes)
+          ..where((m) => m.happenedAt.isBetweenValues(startEpoch, endEpoch))
+          ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
+        .get();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reads — hydrated list cards (Matome + its item count)
+  // ---------------------------------------------------------------------------
+
+  /// Maps a list of [MatomeRow] to display [MatomeItem]s, populating
+  /// `recordingCount` per Matome with a single grouped COUNT over `recordings`
+  /// (no child rows loaded — the list cards only need the count). Children are
+  /// left empty; the detail hub hydrates them via [getMatomeWithRecordings].
+  Future<List<MatomeItem>> _hydrateCounts(List<MatomeRow> rows) async {
+    if (rows.isEmpty) return const [];
+    final ids = rows.map((r) => r.id).toList(growable: false);
+    final countExpr = recordings.id.count();
+    final query = selectOnly(recordings)
+      ..addColumns([recordings.matomeId, countExpr])
+      ..where(recordings.matomeId.isIn(ids))
+      ..groupBy([recordings.matomeId]);
+    final counts = <String, int>{};
+    for (final row in await query.get()) {
+      final mid = row.read(recordings.matomeId);
+      if (mid != null) counts[mid] = row.read(countExpr) ?? 0;
+    }
+    return rows
+        .map((r) => MatomeItem.fromRow(r, recordingCount: counts[r.id] ?? 0))
+        .toList(growable: false);
+  }
+
+  /// Inbox Matomes as display cards (`space_id IS NULL`), each with its item
+  /// count, newest first. The Inbox list source (#1378).
+  Future<List<MatomeItem>> listInboxMatomeItems() async =>
+      _hydrateCounts(await listInboxMatomes());
+
+  /// A Space's Matomes as display cards, each with its item count, newest
+  /// first. The Space-detail list source (#1378).
+  Future<List<MatomeItem>> listMatomeItemsInSpace(String spaceId) async =>
+      _hydrateCounts(await listMatomesInSpace(spaceId));
+
+  /// The Matomes happening in [startEpoch, endEpoch] as display cards, each
+  /// with its item count, newest first. The Calendar day-list source (#1378).
+  Future<List<MatomeItem>> matomeItemsByDateRange(
+    int startEpoch,
+    int endEpoch,
+  ) async =>
+      _hydrateCounts(await matomesByDateRange(startEpoch, endEpoch));
+
+  /// The parent Matome id of a recording, or null when the recording does not
+  /// exist (or — pre-backfill — has no Matome). Powers the deep-link redirect
+  /// that resolves an OLD recording-centric link to its parent Matome hub
+  /// (#1378): `/inbox/:recId` → `/matome/<matomeId>` (1-rec→1-matome invariant).
+  Future<String?> matomeIdForRecording(String recordingId) async {
+    final row = await (select(recordings)
+          ..where((r) => r.id.equals(recordingId)))
+        .getSingleOrNull();
+    return row?.matomeId;
+  }
+
   // ---------------------------------------------------------------------------
   // Reads — Matome + its Items
   // ---------------------------------------------------------------------------
@@ -146,9 +213,30 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// Re-assign a recording to a different Matome (move, never copy — a recording
   /// is an Item of exactly ONE Matome; ADR-0003 invariant). Returns the number
   /// of recording rows updated (0 if [recordingId] does not exist).
+  ///
+  /// The item set of BOTH the source and the destination Matome changed, so
+  /// both have their aggregated summary marked stale (ADR-0003 invalidation):
+  /// the source lost a contributing Item, the destination gained one. Runs in a
+  /// transaction so the move + both stale-marks go atomically.
   Future<int> moveRecordingToMatome(String recordingId, String matomeId) {
-    return (update(recordings)..where((r) => r.id.equals(recordingId)))
-        .write(RecordingsCompanion(matomeId: Value(matomeId)));
+    return transaction(() async {
+      final current = await (select(recordings)
+            ..where((r) => r.id.equals(recordingId)))
+          .getSingleOrNull();
+      final sourceMatomeId = current?.matomeId;
+
+      final n = await (update(recordings)
+            ..where((r) => r.id.equals(recordingId)))
+          .write(RecordingsCompanion(matomeId: Value(matomeId)));
+
+      if (n > 0) {
+        await markSummaryStale(matomeId, true);
+        if (sourceMatomeId != null && sourceMatomeId != matomeId) {
+          await markSummaryStale(sourceMatomeId, true);
+        }
+      }
+      return n;
+    });
   }
 
   /// Set the stored aggregated (Matome-level) summary and clear the stale flag —
@@ -167,5 +255,35 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   Future<int> markSummaryStale(String matomeId, bool stale) {
     return (update(matomes)..where((m) => m.id.equals(matomeId)))
         .write(MatomesCompanion(summaryStale: Value(stale)));
+  }
+
+  /// Recompute the aggregated summary from the Matome's CURRENT child Items and
+  /// store it, clearing the stale flag (ADR-0003). Deterministic LOCAL
+  /// composition via [composeAggregatedSummary] — no AI/backend call (that is
+  /// the sync/backend wave's job).
+  ///
+  /// When the items compose to a non-empty rollup it is stored via
+  /// [setAggregatedSummary] (which clears `summaryStale`). When NOTHING composes
+  /// (no Item carries a summary), the column is set to NULL and the stale flag
+  /// is still cleared — the regeneration ran, the answer is "nothing to roll up
+  /// yet", and the hub falls back to its empty state. Returns the regenerated
+  /// summary (or null), or null when [matomeId] does not exist.
+  Future<String?> regenerateSummary(String matomeId) async {
+    final item = await getMatomeWithRecordings(matomeId);
+    if (item == null) return null;
+
+    final composed = composeAggregatedSummary(item.recordings);
+    if (composed == null) {
+      await (update(matomes)..where((m) => m.id.equals(matomeId))).write(
+        const MatomesCompanion(
+          aggregatedSummary: Value(null),
+          summaryStale: Value(false),
+        ),
+      );
+      return null;
+    }
+
+    await setAggregatedSummary(matomeId, composed);
+    return composed;
   }
 }

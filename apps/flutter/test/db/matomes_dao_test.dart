@@ -45,6 +45,7 @@ RecordingsCompanion _recording({
   required int createdAt,
   String? matomeId,
   String? workspaceId,
+  String? summary,
 }) {
   return RecordingsCompanion.insert(
     id: id,
@@ -55,6 +56,7 @@ RecordingsCompanion _recording({
     createdAt: createdAt,
     matomeId: Value(matomeId),
     workspaceId: Value(workspaceId),
+    summary: Value(summary),
   );
 }
 
@@ -236,6 +238,95 @@ void main() {
       expect(fromA!.recordings, isEmpty);
       expect(fromB!.recordings.map((r) => r.id), equals(['r1']));
     });
+
+    test('marks BOTH the source and destination summaries stale', () async {
+      final mA = mintLocalMatomeId();
+      final mB = mintLocalMatomeId();
+      // Both start with a fresh (non-stale) stored summary.
+      await dao.create(_matome(id: mA, summaryStale: false));
+      await dao.create(_matome(id: mB, summaryStale: false));
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'r1', createdAt: 1, matomeId: mA),
+      );
+      // Clear the stale flag set by the insert itself so we observe the MOVE.
+      await dao.markSummaryStale(mA, false);
+      await dao.markSummaryStale(mB, false);
+
+      await dao.moveRecordingToMatome('r1', mB);
+
+      expect((await dao.getById(mA))!.summaryStale, isTrue);
+      expect((await dao.getById(mB))!.summaryStale, isTrue);
+    });
+  });
+
+  group('regenerateSummary', () {
+    test('composes from current items, stores it, and clears stale', () async {
+      final id = mintLocalMatomeId();
+      await dao.create(_matome(id: id, summaryStale: true));
+      await db.recordingsDao.insertRecording(
+        _recording(
+          id: 'r1',
+          title: 'Kickoff',
+          createdAt: 100,
+          matomeId: id,
+          summary: 'Agreed scope.',
+        ),
+      );
+      await db.recordingsDao.insertRecording(
+        _recording(
+          id: 'r2',
+          title: 'Recap',
+          createdAt: 50,
+          matomeId: id,
+          summary: 'Next steps.',
+        ),
+      );
+
+      final out = await dao.regenerateSummary(id);
+      expect(out, isNotNull);
+      expect(out, contains('2 recordings'));
+
+      final row = await dao.getById(id);
+      expect(row!.aggregatedSummary, out);
+      expect(row.summaryStale, isFalse);
+      expect(row.aggregatedSummary, contains('• Kickoff: Agreed scope.'));
+    });
+
+    test('NULLs the summary (still clearing stale) when no item has one',
+        () async {
+      final id = mintLocalMatomeId();
+      await dao.create(
+        _matome(id: id, aggregatedSummary: 'stale text', summaryStale: true),
+      );
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'r1', createdAt: 1, matomeId: id, summary: null),
+      );
+
+      final out = await dao.regenerateSummary(id);
+      expect(out, isNull);
+
+      final row = await dao.getById(id);
+      expect(row!.aggregatedSummary, isNull);
+      expect(row.summaryStale, isFalse);
+    });
+
+    test('returns null for an unknown Matome', () async {
+      expect(await dao.regenerateSummary('nope'), isNull);
+    });
+  });
+
+  group('item-change invalidation', () {
+    test('adding an Item via upsertRecordingWithMatome marks summary stale',
+        () async {
+      final id = mintLocalMatomeId();
+      await dao.create(_matome(id: id, summaryStale: false));
+
+      await db.recordingsDao.upsertRecordingWithMatome(
+        _recording(id: 'r1', createdAt: 1, matomeId: id, summary: 'x'),
+      );
+
+      expect((await dao.getById(id))!.summaryStale, isTrue);
+    });
   });
 
   group('summary mutations', () {
@@ -260,6 +351,54 @@ void main() {
 
       expect(await dao.markSummaryStale(id, false), 1);
       expect((await dao.getById(id))!.summaryStale, isFalse);
+    });
+  });
+
+  // Hydrated list cards + the deep-link resolver (#1378).
+  group('list cards (#1378)', () {
+    test('listInboxMatomeItems returns inbox matomes with item counts',
+        () async {
+      await dao.create(_matome(id: 'inbox-a', happenedAt: 2000));
+      await dao.create(_matome(id: 'inbox-b', happenedAt: 1000));
+      await dao.create(_matome(id: 'filed', spaceId: _kSpace, happenedAt: 3000));
+      // Two recordings under inbox-a, none under inbox-b.
+      await db.recordingsDao
+          .insertRecording(_recording(id: 'r1', createdAt: 1, matomeId: 'inbox-a'));
+      await db.recordingsDao
+          .insertRecording(_recording(id: 'r2', createdAt: 2, matomeId: 'inbox-a'));
+
+      final items = await dao.listInboxMatomeItems();
+      expect(items.map((m) => m.id), ['inbox-a', 'inbox-b']); // newest first
+      expect(items.first.recordingCount, 2);
+      expect(items[1].recordingCount, 0);
+    });
+
+    test('listMatomeItemsInSpace returns only that space\'s matomes', () async {
+      await dao.create(_matome(id: 'in', spaceId: _kSpace, happenedAt: 1000));
+      await dao.create(_matome(id: 'out', happenedAt: 2000)); // inbox
+
+      final items = await dao.listMatomeItemsInSpace(_kSpace);
+      expect(items.map((m) => m.id), ['in']);
+    });
+
+    test('matomeItemsByDateRange windows by happened_at', () async {
+      await dao.create(_matome(id: 'before', happenedAt: 100));
+      await dao.create(_matome(id: 'inside', happenedAt: 500));
+      await dao.create(_matome(id: 'after', happenedAt: 900));
+
+      final items = await dao.matomeItemsByDateRange(400, 600);
+      expect(items.map((m) => m.id), ['inside']);
+    });
+
+    test('matomeIdForRecording resolves a recording to its parent matome',
+        () async {
+      await dao.create(_matome(id: 'parent', happenedAt: 1000));
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'child', createdAt: 1, matomeId: 'parent'),
+      );
+
+      expect(await dao.matomeIdForRecording('child'), 'parent');
+      expect(await dao.matomeIdForRecording('nope'), isNull);
     });
   });
 }
