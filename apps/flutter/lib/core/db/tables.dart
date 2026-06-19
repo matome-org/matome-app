@@ -221,3 +221,123 @@ class RecordingDrafts extends Table {
   IntColumn get durationMs =>
       integer().named('duration_ms').withDefault(const Constant(0))();
 }
+
+/// A **Contact** — an owner-owned person record (ADR-0004 — identity & contacts).
+///
+/// m008, SCHEMA-READY / NOT ENFORCED: a Contact is owned by a user
+/// (`owner_id`), carries a `display_name` and arbitrary JSON `metadata`, and may
+/// optionally LINK to a real platform user (`linked_user_id`, reserved). The
+/// linked-user *profile-without-consent* BEHAVIOUR is deferred to the
+/// `matome-collaboration` plan — this table only adds the columns.
+///
+/// Minted local-first (`contact_local_<uuid>`, `core_id` NULL until synced),
+/// mirroring the Matome id model (see `contact_ids.dart`).
+@DataClassName('ContactRow')
+class Contacts extends Table {
+  @override
+  String get tableName => 'contacts';
+
+  TextColumn get id => text()();
+
+  // The owning user's id. Reserved/unenforced — no ACL reads it today.
+  TextColumn get ownerId => text().named('owner_id')();
+
+  TextColumn get displayName => text().named('display_name')();
+
+  // Arbitrary JSON map of contact fields (email/phone/etc). Stored as a TEXT
+  // blob; defaults to an empty JSON object so a bare insert is valid.
+  TextColumn get metadata =>
+      text().withDefault(const Constant('{}'))();
+
+  // Reserved FK → a real platform user. NULLABLE/unenforced: when set, the
+  // owner may (eventually) view that user's Matome profile — BEHAVIOUR deferred.
+  TextColumn get linkedUserId =>
+      text().named('linked_user_id').nullable()();
+
+  IntColumn get createdAt => integer().named('created_at')();
+
+  // Reconciled Core numeric id, NULL until synced (mirrors matomes.coreId).
+  IntColumn get coreId => integer().named('core_id').nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Edge: a Contact tagged in a Matome (ADR-0004 — `matome_contacts`).
+///
+/// m008, SCHEMA-READY. `role` ∈ { organizer | attendee | speaker } (default
+/// 'attendee'). UNIQUE(matome_id, contact_id) makes the add idempotent (a
+/// re-sync re-adding an existing edge is a no-op — the set-merge rule).
+///
+/// Deletion-cascade is done by EXPLICIT DAO deletes (ContactsDao), NOT by an
+/// on-disk FK `onDelete` clause: this project's drift build does not emit
+/// REFERENCES DDL (the existing `matomes.space_id` / `recordings.matome_id`
+/// references are relation hints only — see app_database.g.dart), so a runtime
+/// FK cascade would silently not fire. `references(...)` is kept as a drift
+/// relation hint for query joins.
+@DataClassName('MatomeContactRow')
+class MatomeContacts extends Table {
+  @override
+  String get tableName => 'matome_contacts';
+
+  TextColumn get id => text()();
+  TextColumn get matomeId => text().named('matome_id').references(Matomes, #id)();
+  TextColumn get contactId =>
+      text().named('contact_id').references(Contacts, #id)();
+  TextColumn get role => text().withDefault(const Constant('attendee'))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+        {matomeId, contactId},
+      ];
+}
+
+/// Edge: a Contact as a member of a Space (ADR-0004 — `space_contacts`).
+///
+/// m008, SCHEMA-READY. UNIQUE(space_id, contact_id) → idempotent add. The
+/// space FK references `workspaces` (the Space — the rename is logical).
+/// Deletion-cascade on Contact delete is done by EXPLICIT DAO deletes (see
+/// [MatomeContacts] doc) — no on-disk FK cascade.
+@DataClassName('SpaceContactRow')
+class SpaceContacts extends Table {
+  @override
+  String get tableName => 'space_contacts';
+
+  TextColumn get id => text()();
+  TextColumn get spaceId =>
+      text().named('space_id').references(Workspaces, #id)();
+  TextColumn get contactId =>
+      text().named('contact_id').references(Contacts, #id)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+        {spaceId, contactId},
+      ];
+}
+
+/// Edge: a Matome shared with a user (ADR-0004 — `matome_shares`).
+///
+/// m008, RESERVED — sharing BEHAVIOUR is deferred to the `matome-collaboration`
+/// plan; this table only persists the intent. `permission` defaults to 'read'.
+/// Deletion-cascade on Matome delete is done by EXPLICIT DAO deletes (see
+/// [MatomeContacts] doc) — no on-disk FK cascade.
+@DataClassName('MatomeShareRow')
+class MatomeShares extends Table {
+  @override
+  String get tableName => 'matome_shares';
+
+  TextColumn get id => text()();
+  TextColumn get matomeId =>
+      text().named('matome_id').references(Matomes, #id)();
+  TextColumn get sharedWithUserId => text().named('shared_with_user_id')();
+  TextColumn get permission => text().withDefault(const Constant('read'))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}

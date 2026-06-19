@@ -8,6 +8,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/features/contacts/contact_ids.dart';
 import 'package:matome_flutter/features/matome/matome_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:sqlite3/sqlite3.dart' as raw;
@@ -70,9 +71,9 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 7 (001..004 + m005 id + m006 Space + m007 Matome)',
+      'schemaVersion is 8 (…m006 Space + m007 Matome + m008 Contacts)',
       () {
-        expect(db.schemaVersion, 7);
+        expect(db.schemaVersion, 8);
       },
     );
 
@@ -95,6 +96,10 @@ void main() {
             'space_members', // m006
             'organizations', // m006
             'matomes', // m007
+            'contacts', // m008
+            'matome_contacts', // m008
+            'space_contacts', // m008
+            'matome_shares', // m008
           ]),
         );
       },
@@ -537,9 +542,9 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      // A v4-seeded DB now migrates through m005, m006 *and* m007, so the live
+      // A v4-seeded DB now migrates through m005..m008, so the live
       // schemaVersion getter reports the current constant (7).
-      expect(upgraded.schemaVersion, 7);
+      expect(upgraded.schemaVersion, 8);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -659,7 +664,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 7);
+      expect(upgraded.schemaVersion, 8);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -809,7 +814,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 7);
+      expect(upgraded.schemaVersion, 8);
 
       final tables = await upgraded
           .customSelect(
@@ -1026,5 +1031,436 @@ void main() {
         expect(byCore?.coreId, 7);
       },
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // (j) m008 — Contacts schema (ADR-0004). Real-file v7→v8 migration.
+  //
+  // Build a v7-shaped DB by hand (matomes + workspaces + recordings, NO
+  // contacts/edge tables, user_version=7), then open AppDatabase over the same
+  // file so onUpgrade(7→8) runs. Assert the four tables exist, schemaVersion=8,
+  // pre-existing rows survive, and re-opening is idempotent.
+  // -------------------------------------------------------------------------
+  group('m008 v7→v8 migration (Contacts schema)', () {
+    late Directory dir;
+    late File file;
+
+    /// v7-shaped tables: workspaces (m006 cols) + recordings (matome_id) +
+    /// matomes, NO contacts/matome_contacts/space_contacts/matome_shares.
+    /// user_version=7.
+    void seedV7Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_members (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member'
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE organizations (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+      // A pre-existing Matome so we can prove existing rows survive m008.
+      sdb.execute(
+        "INSERT INTO matomes (id, title, happened_at, created_at) "
+        "VALUES ('mat_local_pre', 'Pre-existing', 100, 100);",
+      );
+      sdb.execute('PRAGMA user_version = 7;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m008');
+      file = File('${dir.path}/matome.sqlite');
+      seedV7Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v7 db migrates to v8: the four Contacts tables exist',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 8);
+
+      final tables = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%'",
+          )
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(
+        tables,
+        containsAll(<String>[
+          'contacts',
+          'matome_contacts',
+          'space_contacts',
+          'matome_shares',
+        ]),
+      );
+
+      // contacts column contract.
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(contacts)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(
+        cols,
+        containsAll(<String>[
+          'id',
+          'owner_id',
+          'display_name',
+          'metadata',
+          'linked_user_id',
+          'created_at',
+          'core_id',
+        ]),
+      );
+
+      // Pre-existing Matome row survived the migration.
+      final pre = await upgraded.matomesDao.getById('mat_local_pre');
+      expect(pre, isNotNull);
+      expect(pre!.title, 'Pre-existing');
+    });
+
+    test('m008 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.contactsDao.listContacts();
+      await first.close();
+
+      // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 8);
+      final tables = await second
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%'",
+          )
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(tables, contains('contacts'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (k) ContactsDao — CRUD + edges + set-merge + deletion-cascade (m008).
+  // -------------------------------------------------------------------------
+  group('ContactsDao (m008, schema-ready/unenforced)', () {
+    ContactsCompanion makeContact({
+      required String id,
+      String ownerId = 'owner1',
+      String displayName = 'Alice',
+      String metadata = '{}',
+      String? linkedUserId,
+      int createdAt = 1,
+    }) {
+      return ContactsCompanion.insert(
+        id: id,
+        ownerId: ownerId,
+        displayName: displayName,
+        metadata: Value(metadata),
+        linkedUserId: Value(linkedUserId),
+        createdAt: createdAt,
+      );
+    }
+
+    Future<String> seedMatome(AppDatabase d, String id) async {
+      await d.matomesDao.create(
+        MatomesCompanion.insert(
+          id: id,
+          title: 'M $id',
+          happenedAt: 1,
+          createdAt: 1,
+        ),
+      );
+      return id;
+    }
+
+    test('contacts CRUD round-trips (defaults metadata + nullable link)',
+        () async {
+      final dao = db.contactsDao;
+      await dao.create(makeContact(id: 'c1', displayName: 'Zoe'));
+      await dao.create(
+        makeContact(
+          id: 'c2',
+          displayName: 'Alice',
+          metadata: '{"email":"a@x.com"}',
+          linkedUserId: 'u_real',
+        ),
+      );
+
+      final c1 = await dao.getById('c1');
+      expect(c1, isNotNull);
+      expect(c1!.metadata, '{}'); // default
+      expect(c1.linkedUserId, isNull); // reserved, unset
+
+      final c2 = await dao.getById('c2');
+      expect(c2!.metadata, '{"email":"a@x.com"}');
+      expect(c2.linkedUserId, 'u_real');
+
+      // listContacts is display-name ascending → Alice before Zoe.
+      final all = await dao.listContacts();
+      expect(all.map((c) => c.id), ['c2', 'c1']);
+
+      // listContactsForOwner filters by owner.
+      await dao.create(makeContact(id: 'c3', ownerId: 'other'));
+      final mine = await dao.listContactsForOwner('owner1');
+      expect(mine.map((c) => c.id), containsAll(<String>['c1', 'c2']));
+      expect(mine.map((c) => c.id), isNot(contains('c3')));
+
+      // update writes only patched fields.
+      await dao.updateContact(
+        'c1',
+        const ContactsCompanion(displayName: Value('Zoe Renamed')),
+      );
+      expect((await dao.getById('c1'))!.displayName, 'Zoe Renamed');
+
+      // coreId reconcile lookup.
+      await dao.updateContact('c1', const ContactsCompanion(coreId: Value(99)));
+      expect((await dao.contactByCoreId(99))!.id, 'c1');
+    });
+
+    test(
+      'matome_contacts add/list/remove with role + idempotent re-add',
+      () async {
+        final dao = db.contactsDao;
+        final m = await seedMatome(db, 'mat_local_k1');
+        await dao.create(makeContact(id: 'c1', displayName: 'Bob'));
+
+        await dao.addContactToMatome(
+          matomeId: m,
+          contactId: 'c1',
+          role: 'speaker',
+        );
+
+        final listed = await dao.listContactsForMatome(m);
+        expect(listed, hasLength(1));
+        expect(listed.single.contact.id, 'c1');
+        expect(listed.single.role, 'speaker');
+
+        // Idempotent re-add (UNIQUE handles dup) — still exactly one edge.
+        await dao.addContactToMatome(
+          matomeId: m,
+          contactId: 'c1',
+          role: 'attendee',
+        );
+        final after = await dao.listContactsForMatome(m);
+        expect(after, hasLength(1));
+        // Conflict was ignored → role unchanged from first add.
+        expect(after.single.role, 'speaker');
+
+        // setMatomeContactRole updates the existing edge.
+        await dao.setMatomeContactRole(
+          matomeId: m,
+          contactId: 'c1',
+          role: 'organizer',
+        );
+        expect(
+          (await dao.listContactsForMatome(m)).single.role,
+          'organizer',
+        );
+
+        // Explicit removal.
+        await dao.removeContactFromMatome(matomeId: m, contactId: 'c1');
+        expect(await dao.listContactsForMatome(m), isEmpty);
+      },
+    );
+
+    test('space_contacts add/list/remove + idempotent re-add', () async {
+      final dao = db.contactsDao;
+      await dao.create(makeContact(id: 'c1', displayName: 'Bob'));
+
+      await dao.addContactToSpace(
+        spaceId: 'ws_default_personal',
+        contactId: 'c1',
+      );
+      // Idempotent re-add.
+      await dao.addContactToSpace(
+        spaceId: 'ws_default_personal',
+        contactId: 'c1',
+      );
+      final members = await dao.listContactsForSpace('ws_default_personal');
+      expect(members.map((c) => c.id), ['c1']);
+
+      await dao.removeContactFromSpace(
+        spaceId: 'ws_default_personal',
+        contactId: 'c1',
+      );
+      expect(await dao.listContactsForSpace('ws_default_personal'), isEmpty);
+    });
+
+    test('matome_shares add/list/remove (reserved)', () async {
+      final dao = db.contactsDao;
+      final m = await seedMatome(db, 'mat_local_share');
+      final share = await dao.addMatomeShare(
+        matomeId: m,
+        sharedWithUserId: 'u_friend',
+      );
+      expect(share.permission, 'read'); // default
+
+      await dao.addMatomeShare(
+        matomeId: m,
+        sharedWithUserId: 'u_editor',
+        permission: 'write',
+      );
+      final shares = await dao.listSharesForMatome(m);
+      expect(shares, hasLength(2));
+
+      await dao.removeMatomeShare(share.id);
+      final after = await dao.listSharesForMatome(m);
+      expect(after.map((s) => s.sharedWithUserId), ['u_editor']);
+    });
+
+    // The join-table MERGE-SURVIVAL test (set-merge rule): adding contact A then
+    // a stale "re-sync" that re-adds the PRE-EXISTING set (B, C) WITHOUT A must
+    // NOT drop A — removal is explicit-only, never implied by a partial set.
+    test('partial re-sync of an edge set never drops an absent member',
+        () async {
+      final dao = db.contactsDao;
+      final m = await seedMatome(db, 'mat_local_merge');
+      for (final id in ['A', 'B', 'C']) {
+        await dao.create(makeContact(id: id, displayName: id));
+      }
+
+      // Initial set: B, C are tagged.
+      await dao.addContactToMatome(matomeId: m, contactId: 'B');
+      await dao.addContactToMatome(matomeId: m, contactId: 'C');
+      // Then A is added.
+      await dao.addContactToMatome(matomeId: m, contactId: 'A');
+
+      // A stale re-sync re-adds the OLD set (B, C) — A is absent from it.
+      // Because add is a union (idempotent) and removal is explicit-only, A's
+      // edge MUST survive.
+      await dao.addContactToMatome(matomeId: m, contactId: 'B');
+      await dao.addContactToMatome(matomeId: m, contactId: 'C');
+
+      final ids =
+          (await dao.listContactsForMatome(m)).map((e) => e.contact.id).toSet();
+      expect(ids, {'A', 'B', 'C'}); // A survived the partial re-sync.
+    });
+
+    test(
+      'deletion-cascade: delete contact removes its edges, Matome survives',
+      () async {
+        final dao = db.contactsDao;
+        final m = await seedMatome(db, 'mat_local_del_c');
+        await dao.create(makeContact(id: 'c1', displayName: 'Bob'));
+        await dao.create(makeContact(id: 'c2', displayName: 'Eve'));
+
+        await dao.addContactToMatome(matomeId: m, contactId: 'c1');
+        await dao.addContactToMatome(matomeId: m, contactId: 'c2');
+        await dao.addContactToSpace(
+          spaceId: 'ws_default_personal',
+          contactId: 'c1',
+        );
+
+        await dao.deleteContact('c1');
+
+        // c1 gone, its edges gone; c2's edge survives; Matome + Space survive.
+        expect(await dao.getById('c1'), isNull);
+        final tagged =
+            (await dao.listContactsForMatome(m)).map((e) => e.contact.id);
+        expect(tagged, ['c2']);
+        expect(
+          await dao.listContactsForSpace('ws_default_personal'),
+          isEmpty,
+        );
+        expect(await db.matomesDao.getById(m), isNotNull);
+        expect(await dao.getById('c2'), isNotNull);
+      },
+    );
+
+    test(
+      'deletion-cascade: delete matome removes its edges, contact survives',
+      () async {
+        final dao = db.contactsDao;
+        final m = await seedMatome(db, 'mat_local_del_m');
+        await dao.create(makeContact(id: 'c1', displayName: 'Bob'));
+
+        await dao.addContactToMatome(matomeId: m, contactId: 'c1');
+        await dao.addMatomeShare(matomeId: m, sharedWithUserId: 'u_x');
+
+        await db.matomesDao.deleteMatome(m);
+
+        // Matome gone, its matome_contacts + matome_shares gone; contact stays.
+        expect(await db.matomesDao.getById(m), isNull);
+        expect(await dao.listContactsForMatome(m), isEmpty);
+        expect(await dao.listSharesForMatome(m), isEmpty);
+        expect(await dao.getById('c1'), isNotNull);
+      },
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // (l) contact id minter (m008).
+  // -------------------------------------------------------------------------
+  group('contact id minter', () {
+    test('mints contact_local_<uuid> ids recognised as local', () {
+      final id = mintLocalContactId();
+      expect(id, startsWith('contact_local_'));
+      expect(isLocalContactId(id), isTrue);
+      expect(mintLocalContactId(), isNot(id)); // unique each call
+    });
+
+    test('a stringified Core id is not treated as local', () {
+      expect(isLocalContactId('42'), isFalse);
+    });
   });
 }

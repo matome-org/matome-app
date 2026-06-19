@@ -52,10 +52,17 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
     return (update(matomes)..where((m) => m.id.equals(id))).write(patch);
   }
 
-  /// Delete a Matome by id. Named `deleteMatome` (not `delete`) so it does not
-  /// shadow the inherited [DatabaseAccessor.delete] query builder.
+  /// Delete a Matome by id, EXPLICITLY cascading its contact/share edges
+  /// (`matome_contacts` + `matome_shares`) via [ContactsDao.deleteMatomeEdges]
+  /// — the Contacts themselves survive (ADR-0004 deletion-cascade). Runs in a
+  /// transaction so the Matome and its edges go atomically. Named `deleteMatome`
+  /// (not `delete`) so it does not shadow the inherited
+  /// [DatabaseAccessor.delete] query builder. Returns `matomes` rows deleted.
   Future<int> deleteMatome(String id) {
-    return (delete(matomes)..where((m) => m.id.equals(id))).go();
+    return transaction(() async {
+      await attachedDatabase.contactsDao.deleteMatomeEdges(id);
+      return (delete(matomes)..where((m) => m.id.equals(id))).go();
+    });
   }
 
   // ---------------------------------------------------------------------------

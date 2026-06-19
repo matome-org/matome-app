@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../features/matome/matome_ids.dart';
 import 'connection.dart';
 import 'db_encryption.dart';
+import 'daos/contacts_dao.dart';
 import 'daos/matomes_dao.dart';
 import 'daos/recordings_dao.dart';
 import 'daos/recording_drafts_dao.dart';
@@ -30,7 +31,14 @@ part 'app_database.g.dart';
 /// this as "m006"; m006 was taken by the Space-evolution slice above, so the
 /// Matome slice lands as m007 — the version number, not the ADR prose, is
 /// authoritative.)
-const int kSchemaVersion = 7;
+///
+/// v8 (m008, Contacts schema — ADR-0004) adds the owner-owned `contacts` table
+/// and the three edge tables `matome_contacts` / `space_contacts` /
+/// `matome_shares`. SCHEMA-READY, NOT ENFORCED — no sharing/profile/ACL logic
+/// and no UI; behaviour is deferred to the `matome-collaboration` plan. (The
+/// task prose drafts this as "m007"; m007 was taken by the Matome slice, so the
+/// Contacts slice lands as m008 — the version constant is authoritative.)
+const int kSchemaVersion = 8;
 
 /// The offline-first local store.
 ///
@@ -46,6 +54,10 @@ const int kSchemaVersion = 7;
     SpaceMembers,
     Organizations,
     Matomes,
+    Contacts,
+    MatomeContacts,
+    SpaceContacts,
+    MatomeShares,
   ],
   daos: [
     RecordingsDao,
@@ -53,6 +65,7 @@ const int kSchemaVersion = 7;
     RecordingDraftsDao,
     SpacesDao,
     MatomesDao,
+    ContactsDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -183,6 +196,34 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(matomes);
             await m.addColumn(recordings, recordings.matomeId);
             await _backfillMatomesPerRecording();
+          }
+          // m008 — Contacts schema (ADR-0004). Creates the owner-owned
+          // `contacts` table and the three edge tables `matome_contacts`,
+          // `space_contacts` and `matome_shares`. New domain — NO backfill.
+          // SCHEMA-READY / NOT ENFORCED: no sharing / profile / ACL logic and
+          // no UI ships here (deferred to the `matome-collaboration` plan).
+          //
+          // Deletion-cascade is EXPLICIT (ContactsDao/MatomesDao transactions),
+          // NOT an on-disk FK clause: this drift build emits no REFERENCES DDL,
+          // so a runtime PRAGMA cascade would not fire. Deleting a Contact drops
+          // its matome_contacts/space_contacts edges; deleting a Matome drops
+          // its matome_contacts/matome_shares edges — never the counterpart row.
+          // The M:N add is idempotent (UNIQUE(matome_id, contact_id) /
+          // UNIQUE(space_id, contact_id)): a re-sync re-adding an existing edge
+          // is a no-op and never drops other members (set-merge).
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, new domain, no prod users):
+          //   DROP TABLE IF EXISTS matome_shares;
+          //   DROP TABLE IF EXISTS space_contacts;
+          //   DROP TABLE IF EXISTS matome_contacts;
+          //   DROP TABLE IF EXISTS contacts;
+          //   PRAGMA user_version = 7;
+          if (from < 8) {
+            await m.createTable(contacts);
+            await m.createTable(matomeContacts);
+            await m.createTable(spaceContacts);
+            await m.createTable(matomeShares);
           }
         },
         beforeOpen: (details) async {

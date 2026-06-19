@@ -2722,6 +2722,1374 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
   }
 }
 
+class $ContactsTable extends Contacts
+    with TableInfo<$ContactsTable, ContactRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ContactsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ownerIdMeta = const VerificationMeta(
+    'ownerId',
+  );
+  @override
+  late final GeneratedColumn<String> ownerId = GeneratedColumn<String>(
+    'owner_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _displayNameMeta = const VerificationMeta(
+    'displayName',
+  );
+  @override
+  late final GeneratedColumn<String> displayName = GeneratedColumn<String>(
+    'display_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _metadataMeta = const VerificationMeta(
+    'metadata',
+  );
+  @override
+  late final GeneratedColumn<String> metadata = GeneratedColumn<String>(
+    'metadata',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{}'),
+  );
+  static const VerificationMeta _linkedUserIdMeta = const VerificationMeta(
+    'linkedUserId',
+  );
+  @override
+  late final GeneratedColumn<String> linkedUserId = GeneratedColumn<String>(
+    'linked_user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _coreIdMeta = const VerificationMeta('coreId');
+  @override
+  late final GeneratedColumn<int> coreId = GeneratedColumn<int>(
+    'core_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    ownerId,
+    displayName,
+    metadata,
+    linkedUserId,
+    createdAt,
+    coreId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'contacts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ContactRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('owner_id')) {
+      context.handle(
+        _ownerIdMeta,
+        ownerId.isAcceptableOrUnknown(data['owner_id']!, _ownerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ownerIdMeta);
+    }
+    if (data.containsKey('display_name')) {
+      context.handle(
+        _displayNameMeta,
+        displayName.isAcceptableOrUnknown(
+          data['display_name']!,
+          _displayNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_displayNameMeta);
+    }
+    if (data.containsKey('metadata')) {
+      context.handle(
+        _metadataMeta,
+        metadata.isAcceptableOrUnknown(data['metadata']!, _metadataMeta),
+      );
+    }
+    if (data.containsKey('linked_user_id')) {
+      context.handle(
+        _linkedUserIdMeta,
+        linkedUserId.isAcceptableOrUnknown(
+          data['linked_user_id']!,
+          _linkedUserIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('core_id')) {
+      context.handle(
+        _coreIdMeta,
+        coreId.isAcceptableOrUnknown(data['core_id']!, _coreIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ContactRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ContactRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      ownerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_id'],
+      )!,
+      displayName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}display_name'],
+      )!,
+      metadata: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}metadata'],
+      )!,
+      linkedUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}linked_user_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      coreId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}core_id'],
+      ),
+    );
+  }
+
+  @override
+  $ContactsTable createAlias(String alias) {
+    return $ContactsTable(attachedDatabase, alias);
+  }
+}
+
+class ContactRow extends DataClass implements Insertable<ContactRow> {
+  final String id;
+  final String ownerId;
+  final String displayName;
+  final String metadata;
+  final String? linkedUserId;
+  final int createdAt;
+  final int? coreId;
+  const ContactRow({
+    required this.id,
+    required this.ownerId,
+    required this.displayName,
+    required this.metadata,
+    this.linkedUserId,
+    required this.createdAt,
+    this.coreId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['owner_id'] = Variable<String>(ownerId);
+    map['display_name'] = Variable<String>(displayName);
+    map['metadata'] = Variable<String>(metadata);
+    if (!nullToAbsent || linkedUserId != null) {
+      map['linked_user_id'] = Variable<String>(linkedUserId);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    if (!nullToAbsent || coreId != null) {
+      map['core_id'] = Variable<int>(coreId);
+    }
+    return map;
+  }
+
+  ContactsCompanion toCompanion(bool nullToAbsent) {
+    return ContactsCompanion(
+      id: Value(id),
+      ownerId: Value(ownerId),
+      displayName: Value(displayName),
+      metadata: Value(metadata),
+      linkedUserId: linkedUserId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(linkedUserId),
+      createdAt: Value(createdAt),
+      coreId: coreId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coreId),
+    );
+  }
+
+  factory ContactRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ContactRow(
+      id: serializer.fromJson<String>(json['id']),
+      ownerId: serializer.fromJson<String>(json['ownerId']),
+      displayName: serializer.fromJson<String>(json['displayName']),
+      metadata: serializer.fromJson<String>(json['metadata']),
+      linkedUserId: serializer.fromJson<String?>(json['linkedUserId']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      coreId: serializer.fromJson<int?>(json['coreId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'ownerId': serializer.toJson<String>(ownerId),
+      'displayName': serializer.toJson<String>(displayName),
+      'metadata': serializer.toJson<String>(metadata),
+      'linkedUserId': serializer.toJson<String?>(linkedUserId),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'coreId': serializer.toJson<int?>(coreId),
+    };
+  }
+
+  ContactRow copyWith({
+    String? id,
+    String? ownerId,
+    String? displayName,
+    String? metadata,
+    Value<String?> linkedUserId = const Value.absent(),
+    int? createdAt,
+    Value<int?> coreId = const Value.absent(),
+  }) => ContactRow(
+    id: id ?? this.id,
+    ownerId: ownerId ?? this.ownerId,
+    displayName: displayName ?? this.displayName,
+    metadata: metadata ?? this.metadata,
+    linkedUserId: linkedUserId.present ? linkedUserId.value : this.linkedUserId,
+    createdAt: createdAt ?? this.createdAt,
+    coreId: coreId.present ? coreId.value : this.coreId,
+  );
+  ContactRow copyWithCompanion(ContactsCompanion data) {
+    return ContactRow(
+      id: data.id.present ? data.id.value : this.id,
+      ownerId: data.ownerId.present ? data.ownerId.value : this.ownerId,
+      displayName: data.displayName.present
+          ? data.displayName.value
+          : this.displayName,
+      metadata: data.metadata.present ? data.metadata.value : this.metadata,
+      linkedUserId: data.linkedUserId.present
+          ? data.linkedUserId.value
+          : this.linkedUserId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      coreId: data.coreId.present ? data.coreId.value : this.coreId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContactRow(')
+          ..write('id: $id, ')
+          ..write('ownerId: $ownerId, ')
+          ..write('displayName: $displayName, ')
+          ..write('metadata: $metadata, ')
+          ..write('linkedUserId: $linkedUserId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('coreId: $coreId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    ownerId,
+    displayName,
+    metadata,
+    linkedUserId,
+    createdAt,
+    coreId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ContactRow &&
+          other.id == this.id &&
+          other.ownerId == this.ownerId &&
+          other.displayName == this.displayName &&
+          other.metadata == this.metadata &&
+          other.linkedUserId == this.linkedUserId &&
+          other.createdAt == this.createdAt &&
+          other.coreId == this.coreId);
+}
+
+class ContactsCompanion extends UpdateCompanion<ContactRow> {
+  final Value<String> id;
+  final Value<String> ownerId;
+  final Value<String> displayName;
+  final Value<String> metadata;
+  final Value<String?> linkedUserId;
+  final Value<int> createdAt;
+  final Value<int?> coreId;
+  final Value<int> rowid;
+  const ContactsCompanion({
+    this.id = const Value.absent(),
+    this.ownerId = const Value.absent(),
+    this.displayName = const Value.absent(),
+    this.metadata = const Value.absent(),
+    this.linkedUserId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.coreId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ContactsCompanion.insert({
+    required String id,
+    required String ownerId,
+    required String displayName,
+    this.metadata = const Value.absent(),
+    this.linkedUserId = const Value.absent(),
+    required int createdAt,
+    this.coreId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       ownerId = Value(ownerId),
+       displayName = Value(displayName),
+       createdAt = Value(createdAt);
+  static Insertable<ContactRow> custom({
+    Expression<String>? id,
+    Expression<String>? ownerId,
+    Expression<String>? displayName,
+    Expression<String>? metadata,
+    Expression<String>? linkedUserId,
+    Expression<int>? createdAt,
+    Expression<int>? coreId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (ownerId != null) 'owner_id': ownerId,
+      if (displayName != null) 'display_name': displayName,
+      if (metadata != null) 'metadata': metadata,
+      if (linkedUserId != null) 'linked_user_id': linkedUserId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (coreId != null) 'core_id': coreId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ContactsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? ownerId,
+    Value<String>? displayName,
+    Value<String>? metadata,
+    Value<String?>? linkedUserId,
+    Value<int>? createdAt,
+    Value<int?>? coreId,
+    Value<int>? rowid,
+  }) {
+    return ContactsCompanion(
+      id: id ?? this.id,
+      ownerId: ownerId ?? this.ownerId,
+      displayName: displayName ?? this.displayName,
+      metadata: metadata ?? this.metadata,
+      linkedUserId: linkedUserId ?? this.linkedUserId,
+      createdAt: createdAt ?? this.createdAt,
+      coreId: coreId ?? this.coreId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (ownerId.present) {
+      map['owner_id'] = Variable<String>(ownerId.value);
+    }
+    if (displayName.present) {
+      map['display_name'] = Variable<String>(displayName.value);
+    }
+    if (metadata.present) {
+      map['metadata'] = Variable<String>(metadata.value);
+    }
+    if (linkedUserId.present) {
+      map['linked_user_id'] = Variable<String>(linkedUserId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (coreId.present) {
+      map['core_id'] = Variable<int>(coreId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ContactsCompanion(')
+          ..write('id: $id, ')
+          ..write('ownerId: $ownerId, ')
+          ..write('displayName: $displayName, ')
+          ..write('metadata: $metadata, ')
+          ..write('linkedUserId: $linkedUserId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('coreId: $coreId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MatomeContactsTable extends MatomeContacts
+    with TableInfo<$MatomeContactsTable, MatomeContactRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MatomeContactsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _matomeIdMeta = const VerificationMeta(
+    'matomeId',
+  );
+  @override
+  late final GeneratedColumn<String> matomeId = GeneratedColumn<String>(
+    'matome_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contactIdMeta = const VerificationMeta(
+    'contactId',
+  );
+  @override
+  late final GeneratedColumn<String> contactId = GeneratedColumn<String>(
+    'contact_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+    'role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('attendee'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, matomeId, contactId, role];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'matome_contacts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MatomeContactRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('matome_id')) {
+      context.handle(
+        _matomeIdMeta,
+        matomeId.isAcceptableOrUnknown(data['matome_id']!, _matomeIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_matomeIdMeta);
+    }
+    if (data.containsKey('contact_id')) {
+      context.handle(
+        _contactIdMeta,
+        contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contactIdMeta);
+    }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {matomeId, contactId},
+  ];
+  @override
+  MatomeContactRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MatomeContactRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      matomeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}matome_id'],
+      )!,
+      contactId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}contact_id'],
+      )!,
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}role'],
+      )!,
+    );
+  }
+
+  @override
+  $MatomeContactsTable createAlias(String alias) {
+    return $MatomeContactsTable(attachedDatabase, alias);
+  }
+}
+
+class MatomeContactRow extends DataClass
+    implements Insertable<MatomeContactRow> {
+  final String id;
+  final String matomeId;
+  final String contactId;
+  final String role;
+  const MatomeContactRow({
+    required this.id,
+    required this.matomeId,
+    required this.contactId,
+    required this.role,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['matome_id'] = Variable<String>(matomeId);
+    map['contact_id'] = Variable<String>(contactId);
+    map['role'] = Variable<String>(role);
+    return map;
+  }
+
+  MatomeContactsCompanion toCompanion(bool nullToAbsent) {
+    return MatomeContactsCompanion(
+      id: Value(id),
+      matomeId: Value(matomeId),
+      contactId: Value(contactId),
+      role: Value(role),
+    );
+  }
+
+  factory MatomeContactRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MatomeContactRow(
+      id: serializer.fromJson<String>(json['id']),
+      matomeId: serializer.fromJson<String>(json['matomeId']),
+      contactId: serializer.fromJson<String>(json['contactId']),
+      role: serializer.fromJson<String>(json['role']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'matomeId': serializer.toJson<String>(matomeId),
+      'contactId': serializer.toJson<String>(contactId),
+      'role': serializer.toJson<String>(role),
+    };
+  }
+
+  MatomeContactRow copyWith({
+    String? id,
+    String? matomeId,
+    String? contactId,
+    String? role,
+  }) => MatomeContactRow(
+    id: id ?? this.id,
+    matomeId: matomeId ?? this.matomeId,
+    contactId: contactId ?? this.contactId,
+    role: role ?? this.role,
+  );
+  MatomeContactRow copyWithCompanion(MatomeContactsCompanion data) {
+    return MatomeContactRow(
+      id: data.id.present ? data.id.value : this.id,
+      matomeId: data.matomeId.present ? data.matomeId.value : this.matomeId,
+      contactId: data.contactId.present ? data.contactId.value : this.contactId,
+      role: data.role.present ? data.role.value : this.role,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MatomeContactRow(')
+          ..write('id: $id, ')
+          ..write('matomeId: $matomeId, ')
+          ..write('contactId: $contactId, ')
+          ..write('role: $role')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, matomeId, contactId, role);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MatomeContactRow &&
+          other.id == this.id &&
+          other.matomeId == this.matomeId &&
+          other.contactId == this.contactId &&
+          other.role == this.role);
+}
+
+class MatomeContactsCompanion extends UpdateCompanion<MatomeContactRow> {
+  final Value<String> id;
+  final Value<String> matomeId;
+  final Value<String> contactId;
+  final Value<String> role;
+  final Value<int> rowid;
+  const MatomeContactsCompanion({
+    this.id = const Value.absent(),
+    this.matomeId = const Value.absent(),
+    this.contactId = const Value.absent(),
+    this.role = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MatomeContactsCompanion.insert({
+    required String id,
+    required String matomeId,
+    required String contactId,
+    this.role = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       matomeId = Value(matomeId),
+       contactId = Value(contactId);
+  static Insertable<MatomeContactRow> custom({
+    Expression<String>? id,
+    Expression<String>? matomeId,
+    Expression<String>? contactId,
+    Expression<String>? role,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (matomeId != null) 'matome_id': matomeId,
+      if (contactId != null) 'contact_id': contactId,
+      if (role != null) 'role': role,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MatomeContactsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? matomeId,
+    Value<String>? contactId,
+    Value<String>? role,
+    Value<int>? rowid,
+  }) {
+    return MatomeContactsCompanion(
+      id: id ?? this.id,
+      matomeId: matomeId ?? this.matomeId,
+      contactId: contactId ?? this.contactId,
+      role: role ?? this.role,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (matomeId.present) {
+      map['matome_id'] = Variable<String>(matomeId.value);
+    }
+    if (contactId.present) {
+      map['contact_id'] = Variable<String>(contactId.value);
+    }
+    if (role.present) {
+      map['role'] = Variable<String>(role.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MatomeContactsCompanion(')
+          ..write('id: $id, ')
+          ..write('matomeId: $matomeId, ')
+          ..write('contactId: $contactId, ')
+          ..write('role: $role, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SpaceContactsTable extends SpaceContacts
+    with TableInfo<$SpaceContactsTable, SpaceContactRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SpaceContactsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _spaceIdMeta = const VerificationMeta(
+    'spaceId',
+  );
+  @override
+  late final GeneratedColumn<String> spaceId = GeneratedColumn<String>(
+    'space_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contactIdMeta = const VerificationMeta(
+    'contactId',
+  );
+  @override
+  late final GeneratedColumn<String> contactId = GeneratedColumn<String>(
+    'contact_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, spaceId, contactId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'space_contacts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SpaceContactRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('space_id')) {
+      context.handle(
+        _spaceIdMeta,
+        spaceId.isAcceptableOrUnknown(data['space_id']!, _spaceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_spaceIdMeta);
+    }
+    if (data.containsKey('contact_id')) {
+      context.handle(
+        _contactIdMeta,
+        contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contactIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {spaceId, contactId},
+  ];
+  @override
+  SpaceContactRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SpaceContactRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      spaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}space_id'],
+      )!,
+      contactId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}contact_id'],
+      )!,
+    );
+  }
+
+  @override
+  $SpaceContactsTable createAlias(String alias) {
+    return $SpaceContactsTable(attachedDatabase, alias);
+  }
+}
+
+class SpaceContactRow extends DataClass implements Insertable<SpaceContactRow> {
+  final String id;
+  final String spaceId;
+  final String contactId;
+  const SpaceContactRow({
+    required this.id,
+    required this.spaceId,
+    required this.contactId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['space_id'] = Variable<String>(spaceId);
+    map['contact_id'] = Variable<String>(contactId);
+    return map;
+  }
+
+  SpaceContactsCompanion toCompanion(bool nullToAbsent) {
+    return SpaceContactsCompanion(
+      id: Value(id),
+      spaceId: Value(spaceId),
+      contactId: Value(contactId),
+    );
+  }
+
+  factory SpaceContactRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SpaceContactRow(
+      id: serializer.fromJson<String>(json['id']),
+      spaceId: serializer.fromJson<String>(json['spaceId']),
+      contactId: serializer.fromJson<String>(json['contactId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'spaceId': serializer.toJson<String>(spaceId),
+      'contactId': serializer.toJson<String>(contactId),
+    };
+  }
+
+  SpaceContactRow copyWith({String? id, String? spaceId, String? contactId}) =>
+      SpaceContactRow(
+        id: id ?? this.id,
+        spaceId: spaceId ?? this.spaceId,
+        contactId: contactId ?? this.contactId,
+      );
+  SpaceContactRow copyWithCompanion(SpaceContactsCompanion data) {
+    return SpaceContactRow(
+      id: data.id.present ? data.id.value : this.id,
+      spaceId: data.spaceId.present ? data.spaceId.value : this.spaceId,
+      contactId: data.contactId.present ? data.contactId.value : this.contactId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SpaceContactRow(')
+          ..write('id: $id, ')
+          ..write('spaceId: $spaceId, ')
+          ..write('contactId: $contactId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, spaceId, contactId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SpaceContactRow &&
+          other.id == this.id &&
+          other.spaceId == this.spaceId &&
+          other.contactId == this.contactId);
+}
+
+class SpaceContactsCompanion extends UpdateCompanion<SpaceContactRow> {
+  final Value<String> id;
+  final Value<String> spaceId;
+  final Value<String> contactId;
+  final Value<int> rowid;
+  const SpaceContactsCompanion({
+    this.id = const Value.absent(),
+    this.spaceId = const Value.absent(),
+    this.contactId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SpaceContactsCompanion.insert({
+    required String id,
+    required String spaceId,
+    required String contactId,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       spaceId = Value(spaceId),
+       contactId = Value(contactId);
+  static Insertable<SpaceContactRow> custom({
+    Expression<String>? id,
+    Expression<String>? spaceId,
+    Expression<String>? contactId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (spaceId != null) 'space_id': spaceId,
+      if (contactId != null) 'contact_id': contactId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SpaceContactsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? spaceId,
+    Value<String>? contactId,
+    Value<int>? rowid,
+  }) {
+    return SpaceContactsCompanion(
+      id: id ?? this.id,
+      spaceId: spaceId ?? this.spaceId,
+      contactId: contactId ?? this.contactId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (spaceId.present) {
+      map['space_id'] = Variable<String>(spaceId.value);
+    }
+    if (contactId.present) {
+      map['contact_id'] = Variable<String>(contactId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SpaceContactsCompanion(')
+          ..write('id: $id, ')
+          ..write('spaceId: $spaceId, ')
+          ..write('contactId: $contactId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MatomeSharesTable extends MatomeShares
+    with TableInfo<$MatomeSharesTable, MatomeShareRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MatomeSharesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _matomeIdMeta = const VerificationMeta(
+    'matomeId',
+  );
+  @override
+  late final GeneratedColumn<String> matomeId = GeneratedColumn<String>(
+    'matome_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sharedWithUserIdMeta = const VerificationMeta(
+    'sharedWithUserId',
+  );
+  @override
+  late final GeneratedColumn<String> sharedWithUserId = GeneratedColumn<String>(
+    'shared_with_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _permissionMeta = const VerificationMeta(
+    'permission',
+  );
+  @override
+  late final GeneratedColumn<String> permission = GeneratedColumn<String>(
+    'permission',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('read'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    matomeId,
+    sharedWithUserId,
+    permission,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'matome_shares';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MatomeShareRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('matome_id')) {
+      context.handle(
+        _matomeIdMeta,
+        matomeId.isAcceptableOrUnknown(data['matome_id']!, _matomeIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_matomeIdMeta);
+    }
+    if (data.containsKey('shared_with_user_id')) {
+      context.handle(
+        _sharedWithUserIdMeta,
+        sharedWithUserId.isAcceptableOrUnknown(
+          data['shared_with_user_id']!,
+          _sharedWithUserIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_sharedWithUserIdMeta);
+    }
+    if (data.containsKey('permission')) {
+      context.handle(
+        _permissionMeta,
+        permission.isAcceptableOrUnknown(data['permission']!, _permissionMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MatomeShareRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MatomeShareRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      matomeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}matome_id'],
+      )!,
+      sharedWithUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shared_with_user_id'],
+      )!,
+      permission: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}permission'],
+      )!,
+    );
+  }
+
+  @override
+  $MatomeSharesTable createAlias(String alias) {
+    return $MatomeSharesTable(attachedDatabase, alias);
+  }
+}
+
+class MatomeShareRow extends DataClass implements Insertable<MatomeShareRow> {
+  final String id;
+  final String matomeId;
+  final String sharedWithUserId;
+  final String permission;
+  const MatomeShareRow({
+    required this.id,
+    required this.matomeId,
+    required this.sharedWithUserId,
+    required this.permission,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['matome_id'] = Variable<String>(matomeId);
+    map['shared_with_user_id'] = Variable<String>(sharedWithUserId);
+    map['permission'] = Variable<String>(permission);
+    return map;
+  }
+
+  MatomeSharesCompanion toCompanion(bool nullToAbsent) {
+    return MatomeSharesCompanion(
+      id: Value(id),
+      matomeId: Value(matomeId),
+      sharedWithUserId: Value(sharedWithUserId),
+      permission: Value(permission),
+    );
+  }
+
+  factory MatomeShareRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MatomeShareRow(
+      id: serializer.fromJson<String>(json['id']),
+      matomeId: serializer.fromJson<String>(json['matomeId']),
+      sharedWithUserId: serializer.fromJson<String>(json['sharedWithUserId']),
+      permission: serializer.fromJson<String>(json['permission']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'matomeId': serializer.toJson<String>(matomeId),
+      'sharedWithUserId': serializer.toJson<String>(sharedWithUserId),
+      'permission': serializer.toJson<String>(permission),
+    };
+  }
+
+  MatomeShareRow copyWith({
+    String? id,
+    String? matomeId,
+    String? sharedWithUserId,
+    String? permission,
+  }) => MatomeShareRow(
+    id: id ?? this.id,
+    matomeId: matomeId ?? this.matomeId,
+    sharedWithUserId: sharedWithUserId ?? this.sharedWithUserId,
+    permission: permission ?? this.permission,
+  );
+  MatomeShareRow copyWithCompanion(MatomeSharesCompanion data) {
+    return MatomeShareRow(
+      id: data.id.present ? data.id.value : this.id,
+      matomeId: data.matomeId.present ? data.matomeId.value : this.matomeId,
+      sharedWithUserId: data.sharedWithUserId.present
+          ? data.sharedWithUserId.value
+          : this.sharedWithUserId,
+      permission: data.permission.present
+          ? data.permission.value
+          : this.permission,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MatomeShareRow(')
+          ..write('id: $id, ')
+          ..write('matomeId: $matomeId, ')
+          ..write('sharedWithUserId: $sharedWithUserId, ')
+          ..write('permission: $permission')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, matomeId, sharedWithUserId, permission);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MatomeShareRow &&
+          other.id == this.id &&
+          other.matomeId == this.matomeId &&
+          other.sharedWithUserId == this.sharedWithUserId &&
+          other.permission == this.permission);
+}
+
+class MatomeSharesCompanion extends UpdateCompanion<MatomeShareRow> {
+  final Value<String> id;
+  final Value<String> matomeId;
+  final Value<String> sharedWithUserId;
+  final Value<String> permission;
+  final Value<int> rowid;
+  const MatomeSharesCompanion({
+    this.id = const Value.absent(),
+    this.matomeId = const Value.absent(),
+    this.sharedWithUserId = const Value.absent(),
+    this.permission = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MatomeSharesCompanion.insert({
+    required String id,
+    required String matomeId,
+    required String sharedWithUserId,
+    this.permission = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       matomeId = Value(matomeId),
+       sharedWithUserId = Value(sharedWithUserId);
+  static Insertable<MatomeShareRow> custom({
+    Expression<String>? id,
+    Expression<String>? matomeId,
+    Expression<String>? sharedWithUserId,
+    Expression<String>? permission,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (matomeId != null) 'matome_id': matomeId,
+      if (sharedWithUserId != null) 'shared_with_user_id': sharedWithUserId,
+      if (permission != null) 'permission': permission,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MatomeSharesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? matomeId,
+    Value<String>? sharedWithUserId,
+    Value<String>? permission,
+    Value<int>? rowid,
+  }) {
+    return MatomeSharesCompanion(
+      id: id ?? this.id,
+      matomeId: matomeId ?? this.matomeId,
+      sharedWithUserId: sharedWithUserId ?? this.sharedWithUserId,
+      permission: permission ?? this.permission,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (matomeId.present) {
+      map['matome_id'] = Variable<String>(matomeId.value);
+    }
+    if (sharedWithUserId.present) {
+      map['shared_with_user_id'] = Variable<String>(sharedWithUserId.value);
+    }
+    if (permission.present) {
+      map['permission'] = Variable<String>(permission.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MatomeSharesCompanion(')
+          ..write('id: $id, ')
+          ..write('matomeId: $matomeId, ')
+          ..write('sharedWithUserId: $sharedWithUserId, ')
+          ..write('permission: $permission, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2733,6 +4101,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SpaceMembersTable spaceMembers = $SpaceMembersTable(this);
   late final $OrganizationsTable organizations = $OrganizationsTable(this);
   late final $MatomesTable matomes = $MatomesTable(this);
+  late final $ContactsTable contacts = $ContactsTable(this);
+  late final $MatomeContactsTable matomeContacts = $MatomeContactsTable(this);
+  late final $SpaceContactsTable spaceContacts = $SpaceContactsTable(this);
+  late final $MatomeSharesTable matomeShares = $MatomeSharesTable(this);
   late final RecordingsDao recordingsDao = RecordingsDao(this as AppDatabase);
   late final WorkspacesDao workspacesDao = WorkspacesDao(this as AppDatabase);
   late final RecordingDraftsDao recordingDraftsDao = RecordingDraftsDao(
@@ -2740,6 +4112,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final SpacesDao spacesDao = SpacesDao(this as AppDatabase);
   late final MatomesDao matomesDao = MatomesDao(this as AppDatabase);
+  late final ContactsDao contactsDao = ContactsDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2751,6 +4124,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     spaceMembers,
     organizations,
     matomes,
+    contacts,
+    matomeContacts,
+    spaceContacts,
+    matomeShares,
   ];
 }
 
@@ -4177,6 +5554,779 @@ typedef $$MatomesTableProcessedTableManager =
       MatomeRow,
       PrefetchHooks Function()
     >;
+typedef $$ContactsTableCreateCompanionBuilder =
+    ContactsCompanion Function({
+      required String id,
+      required String ownerId,
+      required String displayName,
+      Value<String> metadata,
+      Value<String?> linkedUserId,
+      required int createdAt,
+      Value<int?> coreId,
+      Value<int> rowid,
+    });
+typedef $$ContactsTableUpdateCompanionBuilder =
+    ContactsCompanion Function({
+      Value<String> id,
+      Value<String> ownerId,
+      Value<String> displayName,
+      Value<String> metadata,
+      Value<String?> linkedUserId,
+      Value<int> createdAt,
+      Value<int?> coreId,
+      Value<int> rowid,
+    });
+
+class $$ContactsTableFilterComposer
+    extends Composer<_$AppDatabase, $ContactsTable> {
+  $$ContactsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metadata => $composableBuilder(
+    column: $table.metadata,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get linkedUserId => $composableBuilder(
+    column: $table.linkedUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get coreId => $composableBuilder(
+    column: $table.coreId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ContactsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ContactsTable> {
+  $$ContactsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metadata => $composableBuilder(
+    column: $table.metadata,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get linkedUserId => $composableBuilder(
+    column: $table.linkedUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get coreId => $composableBuilder(
+    column: $table.coreId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ContactsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ContactsTable> {
+  $$ContactsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get ownerId =>
+      $composableBuilder(column: $table.ownerId, builder: (column) => column);
+
+  GeneratedColumn<String> get displayName => $composableBuilder(
+    column: $table.displayName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get metadata =>
+      $composableBuilder(column: $table.metadata, builder: (column) => column);
+
+  GeneratedColumn<String> get linkedUserId => $composableBuilder(
+    column: $table.linkedUserId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get coreId =>
+      $composableBuilder(column: $table.coreId, builder: (column) => column);
+}
+
+class $$ContactsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ContactsTable,
+          ContactRow,
+          $$ContactsTableFilterComposer,
+          $$ContactsTableOrderingComposer,
+          $$ContactsTableAnnotationComposer,
+          $$ContactsTableCreateCompanionBuilder,
+          $$ContactsTableUpdateCompanionBuilder,
+          (
+            ContactRow,
+            BaseReferences<_$AppDatabase, $ContactsTable, ContactRow>,
+          ),
+          ContactRow,
+          PrefetchHooks Function()
+        > {
+  $$ContactsTableTableManager(_$AppDatabase db, $ContactsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ContactsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ContactsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ContactsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> ownerId = const Value.absent(),
+                Value<String> displayName = const Value.absent(),
+                Value<String> metadata = const Value.absent(),
+                Value<String?> linkedUserId = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int?> coreId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContactsCompanion(
+                id: id,
+                ownerId: ownerId,
+                displayName: displayName,
+                metadata: metadata,
+                linkedUserId: linkedUserId,
+                createdAt: createdAt,
+                coreId: coreId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String ownerId,
+                required String displayName,
+                Value<String> metadata = const Value.absent(),
+                Value<String?> linkedUserId = const Value.absent(),
+                required int createdAt,
+                Value<int?> coreId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ContactsCompanion.insert(
+                id: id,
+                ownerId: ownerId,
+                displayName: displayName,
+                metadata: metadata,
+                linkedUserId: linkedUserId,
+                createdAt: createdAt,
+                coreId: coreId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ContactsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ContactsTable,
+      ContactRow,
+      $$ContactsTableFilterComposer,
+      $$ContactsTableOrderingComposer,
+      $$ContactsTableAnnotationComposer,
+      $$ContactsTableCreateCompanionBuilder,
+      $$ContactsTableUpdateCompanionBuilder,
+      (ContactRow, BaseReferences<_$AppDatabase, $ContactsTable, ContactRow>),
+      ContactRow,
+      PrefetchHooks Function()
+    >;
+typedef $$MatomeContactsTableCreateCompanionBuilder =
+    MatomeContactsCompanion Function({
+      required String id,
+      required String matomeId,
+      required String contactId,
+      Value<String> role,
+      Value<int> rowid,
+    });
+typedef $$MatomeContactsTableUpdateCompanionBuilder =
+    MatomeContactsCompanion Function({
+      Value<String> id,
+      Value<String> matomeId,
+      Value<String> contactId,
+      Value<String> role,
+      Value<int> rowid,
+    });
+
+class $$MatomeContactsTableFilterComposer
+    extends Composer<_$AppDatabase, $MatomeContactsTable> {
+  $$MatomeContactsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get matomeId => $composableBuilder(
+    column: $table.matomeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contactId => $composableBuilder(
+    column: $table.contactId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MatomeContactsTableOrderingComposer
+    extends Composer<_$AppDatabase, $MatomeContactsTable> {
+  $$MatomeContactsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get matomeId => $composableBuilder(
+    column: $table.matomeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contactId => $composableBuilder(
+    column: $table.contactId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MatomeContactsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MatomeContactsTable> {
+  $$MatomeContactsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get matomeId =>
+      $composableBuilder(column: $table.matomeId, builder: (column) => column);
+
+  GeneratedColumn<String> get contactId =>
+      $composableBuilder(column: $table.contactId, builder: (column) => column);
+
+  GeneratedColumn<String> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+}
+
+class $$MatomeContactsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MatomeContactsTable,
+          MatomeContactRow,
+          $$MatomeContactsTableFilterComposer,
+          $$MatomeContactsTableOrderingComposer,
+          $$MatomeContactsTableAnnotationComposer,
+          $$MatomeContactsTableCreateCompanionBuilder,
+          $$MatomeContactsTableUpdateCompanionBuilder,
+          (
+            MatomeContactRow,
+            BaseReferences<
+              _$AppDatabase,
+              $MatomeContactsTable,
+              MatomeContactRow
+            >,
+          ),
+          MatomeContactRow,
+          PrefetchHooks Function()
+        > {
+  $$MatomeContactsTableTableManager(
+    _$AppDatabase db,
+    $MatomeContactsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MatomeContactsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MatomeContactsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MatomeContactsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> matomeId = const Value.absent(),
+                Value<String> contactId = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MatomeContactsCompanion(
+                id: id,
+                matomeId: matomeId,
+                contactId: contactId,
+                role: role,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String matomeId,
+                required String contactId,
+                Value<String> role = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MatomeContactsCompanion.insert(
+                id: id,
+                matomeId: matomeId,
+                contactId: contactId,
+                role: role,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MatomeContactsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MatomeContactsTable,
+      MatomeContactRow,
+      $$MatomeContactsTableFilterComposer,
+      $$MatomeContactsTableOrderingComposer,
+      $$MatomeContactsTableAnnotationComposer,
+      $$MatomeContactsTableCreateCompanionBuilder,
+      $$MatomeContactsTableUpdateCompanionBuilder,
+      (
+        MatomeContactRow,
+        BaseReferences<_$AppDatabase, $MatomeContactsTable, MatomeContactRow>,
+      ),
+      MatomeContactRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SpaceContactsTableCreateCompanionBuilder =
+    SpaceContactsCompanion Function({
+      required String id,
+      required String spaceId,
+      required String contactId,
+      Value<int> rowid,
+    });
+typedef $$SpaceContactsTableUpdateCompanionBuilder =
+    SpaceContactsCompanion Function({
+      Value<String> id,
+      Value<String> spaceId,
+      Value<String> contactId,
+      Value<int> rowid,
+    });
+
+class $$SpaceContactsTableFilterComposer
+    extends Composer<_$AppDatabase, $SpaceContactsTable> {
+  $$SpaceContactsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get spaceId => $composableBuilder(
+    column: $table.spaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contactId => $composableBuilder(
+    column: $table.contactId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SpaceContactsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SpaceContactsTable> {
+  $$SpaceContactsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get spaceId => $composableBuilder(
+    column: $table.spaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contactId => $composableBuilder(
+    column: $table.contactId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SpaceContactsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SpaceContactsTable> {
+  $$SpaceContactsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get spaceId =>
+      $composableBuilder(column: $table.spaceId, builder: (column) => column);
+
+  GeneratedColumn<String> get contactId =>
+      $composableBuilder(column: $table.contactId, builder: (column) => column);
+}
+
+class $$SpaceContactsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SpaceContactsTable,
+          SpaceContactRow,
+          $$SpaceContactsTableFilterComposer,
+          $$SpaceContactsTableOrderingComposer,
+          $$SpaceContactsTableAnnotationComposer,
+          $$SpaceContactsTableCreateCompanionBuilder,
+          $$SpaceContactsTableUpdateCompanionBuilder,
+          (
+            SpaceContactRow,
+            BaseReferences<_$AppDatabase, $SpaceContactsTable, SpaceContactRow>,
+          ),
+          SpaceContactRow,
+          PrefetchHooks Function()
+        > {
+  $$SpaceContactsTableTableManager(_$AppDatabase db, $SpaceContactsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SpaceContactsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SpaceContactsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SpaceContactsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> spaceId = const Value.absent(),
+                Value<String> contactId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SpaceContactsCompanion(
+                id: id,
+                spaceId: spaceId,
+                contactId: contactId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String spaceId,
+                required String contactId,
+                Value<int> rowid = const Value.absent(),
+              }) => SpaceContactsCompanion.insert(
+                id: id,
+                spaceId: spaceId,
+                contactId: contactId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SpaceContactsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SpaceContactsTable,
+      SpaceContactRow,
+      $$SpaceContactsTableFilterComposer,
+      $$SpaceContactsTableOrderingComposer,
+      $$SpaceContactsTableAnnotationComposer,
+      $$SpaceContactsTableCreateCompanionBuilder,
+      $$SpaceContactsTableUpdateCompanionBuilder,
+      (
+        SpaceContactRow,
+        BaseReferences<_$AppDatabase, $SpaceContactsTable, SpaceContactRow>,
+      ),
+      SpaceContactRow,
+      PrefetchHooks Function()
+    >;
+typedef $$MatomeSharesTableCreateCompanionBuilder =
+    MatomeSharesCompanion Function({
+      required String id,
+      required String matomeId,
+      required String sharedWithUserId,
+      Value<String> permission,
+      Value<int> rowid,
+    });
+typedef $$MatomeSharesTableUpdateCompanionBuilder =
+    MatomeSharesCompanion Function({
+      Value<String> id,
+      Value<String> matomeId,
+      Value<String> sharedWithUserId,
+      Value<String> permission,
+      Value<int> rowid,
+    });
+
+class $$MatomeSharesTableFilterComposer
+    extends Composer<_$AppDatabase, $MatomeSharesTable> {
+  $$MatomeSharesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get matomeId => $composableBuilder(
+    column: $table.matomeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sharedWithUserId => $composableBuilder(
+    column: $table.sharedWithUserId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get permission => $composableBuilder(
+    column: $table.permission,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MatomeSharesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MatomeSharesTable> {
+  $$MatomeSharesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get matomeId => $composableBuilder(
+    column: $table.matomeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sharedWithUserId => $composableBuilder(
+    column: $table.sharedWithUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get permission => $composableBuilder(
+    column: $table.permission,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MatomeSharesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MatomeSharesTable> {
+  $$MatomeSharesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get matomeId =>
+      $composableBuilder(column: $table.matomeId, builder: (column) => column);
+
+  GeneratedColumn<String> get sharedWithUserId => $composableBuilder(
+    column: $table.sharedWithUserId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get permission => $composableBuilder(
+    column: $table.permission,
+    builder: (column) => column,
+  );
+}
+
+class $$MatomeSharesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MatomeSharesTable,
+          MatomeShareRow,
+          $$MatomeSharesTableFilterComposer,
+          $$MatomeSharesTableOrderingComposer,
+          $$MatomeSharesTableAnnotationComposer,
+          $$MatomeSharesTableCreateCompanionBuilder,
+          $$MatomeSharesTableUpdateCompanionBuilder,
+          (
+            MatomeShareRow,
+            BaseReferences<_$AppDatabase, $MatomeSharesTable, MatomeShareRow>,
+          ),
+          MatomeShareRow,
+          PrefetchHooks Function()
+        > {
+  $$MatomeSharesTableTableManager(_$AppDatabase db, $MatomeSharesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MatomeSharesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MatomeSharesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MatomeSharesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> matomeId = const Value.absent(),
+                Value<String> sharedWithUserId = const Value.absent(),
+                Value<String> permission = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MatomeSharesCompanion(
+                id: id,
+                matomeId: matomeId,
+                sharedWithUserId: sharedWithUserId,
+                permission: permission,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String matomeId,
+                required String sharedWithUserId,
+                Value<String> permission = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MatomeSharesCompanion.insert(
+                id: id,
+                matomeId: matomeId,
+                sharedWithUserId: sharedWithUserId,
+                permission: permission,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MatomeSharesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MatomeSharesTable,
+      MatomeShareRow,
+      $$MatomeSharesTableFilterComposer,
+      $$MatomeSharesTableOrderingComposer,
+      $$MatomeSharesTableAnnotationComposer,
+      $$MatomeSharesTableCreateCompanionBuilder,
+      $$MatomeSharesTableUpdateCompanionBuilder,
+      (
+        MatomeShareRow,
+        BaseReferences<_$AppDatabase, $MatomeSharesTable, MatomeShareRow>,
+      ),
+      MatomeShareRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4193,4 +6343,12 @@ class $AppDatabaseManager {
       $$OrganizationsTableTableManager(_db, _db.organizations);
   $$MatomesTableTableManager get matomes =>
       $$MatomesTableTableManager(_db, _db.matomes);
+  $$ContactsTableTableManager get contacts =>
+      $$ContactsTableTableManager(_db, _db.contacts);
+  $$MatomeContactsTableTableManager get matomeContacts =>
+      $$MatomeContactsTableTableManager(_db, _db.matomeContacts);
+  $$SpaceContactsTableTableManager get spaceContacts =>
+      $$SpaceContactsTableTableManager(_db, _db.spaceContacts);
+  $$MatomeSharesTableTableManager get matomeShares =>
+      $$MatomeSharesTableTableManager(_db, _db.matomeShares);
 }
