@@ -312,6 +312,59 @@ exec flutter run -d "$DEV" \
   --dart-define=API_BASE_URL=http://localhost:4000
 """
 
+[tasks.storybook]
+description = "Run the isolated Flutter Widgetbook design catalog on Chromium"
+run = """
+set -e
+export CHROME_EXECUTABLE=/usr/bin/chromium
+cd apps/flutter_widgetbook
+exec flutter run -d chrome -t lib/widgetbook.dart
+"""
+
+[tasks."flutter-design-system-check"]
+description = "Run the full Flutter design-system enforcement gate"
+run = """
+set -e
+
+cd apps/flutter
+flutter analyze
+flutter test test/core/theme/design_system_source_guard_test.dart
+flutter test test/core/theme/design_system_docs_test.dart
+flutter test test/core/theme/app_theme_contrast_test.dart
+flutter test test/goldens/shared_widgets_golden_test.dart
+flutter test test/core/theme/ui_component_coverage_guard_test.dart
+
+cd ../flutter_widgetbook
+export CHROME_EXECUTABLE=/usr/bin/chromium
+generated_before=""
+cleanup_widgetbook_artifacts() {
+  rm -rf .dart_tool/chrome-device build
+  if [ -n "$generated_before" ]; then
+    rm -f "$generated_before"
+  fi
+}
+cleanup_widgetbook_artifacts
+trap cleanup_widgetbook_artifacts EXIT
+
+generated_before="$(mktemp)"
+cp lib/widgetbook.directories.g.dart "$generated_before"
+set +e
+dart run build_runner build
+build_status=$?
+set -e
+if [ "$build_status" -ne 0 ]; then
+  cp "$generated_before" lib/widgetbook.directories.g.dart
+  exit "$build_status"
+fi
+if ! cmp -s "$generated_before" lib/widgetbook.directories.g.dart; then
+  cp "$generated_before" lib/widgetbook.directories.g.dart
+  echo '✗ apps/flutter_widgetbook/lib/widgetbook.directories.g.dart is stale. Regenerate it before running the gate.'
+  exit 1
+fi
+flutter test -d chrome test/widgetbook_smoke_test.dart
+flutter build web -t lib/widgetbook.dart
+"""
+
 [tasks.e2e]
 description = "Run Maestro E2E flows against the running emulator (requires `mise run mobile` + app installed)"
 run = """
