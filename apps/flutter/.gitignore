@@ -47,3 +47,6 @@ app.*.map.json
 # Drift web worker compile byproducts (the committed drift_worker.js is the artifact).
 web/drift_worker.js.deps
 web/drift_worker.js.map
+
+# Alchemist golden-test failure diffs (transient; regenerated on every failed run).
+test/goldens/failures/
