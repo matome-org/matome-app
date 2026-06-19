@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matome_flutter/core/audio/audio_playback.dart';
+import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/details_controller.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -90,6 +91,7 @@ void main() {
   Widget host(AudioSource source, {AudioPlayback? player}) {
     return TranslationProvider(
       child: MaterialApp(
+        theme: buildLightTheme(),
         home: Scaffold(
           body: AudioPlayerBar(source: source, player: player),
         ),

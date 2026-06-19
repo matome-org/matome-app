@@ -10,6 +10,7 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/details/details_screen.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -23,10 +24,12 @@ class _Recorder {
 }
 
 ProviderContainer _container(AppDatabase db, _Recorder rec) {
-  final dio = Dio(BaseOptions(
-    baseUrl: 'http://localhost:4000',
-    validateStatus: (s) => s != null && s < 500,
-  ));
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: 'http://localhost:4000',
+      validateStatus: (s) => s != null && s < 500,
+    ),
+  );
   final adapter = DioAdapter(dio: dio);
 
   // download-url -> none, so the audio player stays inert (no platform calls).
@@ -35,37 +38,30 @@ ProviderContainer _container(AppDatabase db, _Recorder rec) {
     (server) => server.reply(404, {'error': 'not_found'}),
   );
   // PATCH (save) succeeds and echoes the recording.
-  adapter.onPatch(
-    RegExp(r'/api/recordings/\d+'),
-    (server) {
-      rec.patched.add('patched');
-      return server.reply(200, {
-        'recording': {
-          'id': 5,
-          'owner_id': 1,
-          'title': 'Test rec',
-          'status': 'done',
-          'transcript': 'edited body',
-        }
-      });
-    },
-    data: Matchers.any,
-  );
+  adapter.onPatch(RegExp(r'/api/recordings/\d+'), (server) {
+    rec.patched.add('patched');
+    return server.reply(200, {
+      'recording': {
+        'id': 5,
+        'owner_id': 1,
+        'title': 'Test rec',
+        'status': 'done',
+        'transcript': 'edited body',
+      },
+    });
+  }, data: Matchers.any);
   // POST /process (retry) -> 202 pending; poll then returns done.
-  adapter.onPost(
-    RegExp(r'/api/recordings/\d+/process'),
-    (server) {
-      rec.processed.add('processed');
-      return server.reply(202, {
-        'recording': {
-          'id': 5,
-          'owner_id': 1,
-          'title': 'Test rec',
-          'status': 'pending',
-        }
-      });
-    },
-  );
+  adapter.onPost(RegExp(r'/api/recordings/\d+/process'), (server) {
+    rec.processed.add('processed');
+    return server.reply(202, {
+      'recording': {
+        'id': 5,
+        'owner_id': 1,
+        'title': 'Test rec',
+        'status': 'pending',
+      },
+    });
+  });
   adapter.onGet(
     RegExp(r'/api/recordings/\d+$'),
     (server) => server.reply(200, {
@@ -76,24 +72,23 @@ ProviderContainer _container(AppDatabase db, _Recorder rec) {
         'status': 'done',
         'summary': 'fresh summary',
         'transcript': 'fresh transcript',
-      }
+      },
     }),
   );
-  adapter.onDelete(
-    RegExp(r'/api/recordings/\d+'),
-    (server) {
-      rec.deleted.add('deleted');
-      return server.reply(204, null);
-    },
-  );
+  adapter.onDelete(RegExp(r'/api/recordings/\d+'), (server) {
+    rec.deleted.add('deleted');
+    return server.reply(204, null);
+  });
 
   final repo = RecordingsRepository(
     apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
   );
-  return ProviderContainer(overrides: [
-    appDatabaseProvider.overrideWithValue(db),
-    recordingsRepositoryProvider.overrideWithValue(repo),
-  ]);
+  return ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(repo),
+    ],
+  );
 }
 
 Future<void> _seed(
@@ -123,7 +118,10 @@ Widget _app(ProviderContainer container) {
   return UncontrolledProviderScope(
     container: container,
     child: TranslationProvider(
-      child: const MaterialApp(home: DetailsScreen(id: '5')),
+      child: MaterialApp(
+        theme: buildLightTheme(),
+        home: const DetailsScreen(id: '5'),
+      ),
     ),
   );
 }
@@ -178,7 +176,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-        find.byKey(const ValueKey('details-editor')), 'edited body');
+      find.byKey(const ValueKey('details-editor')),
+      'edited body',
+    );
     await tester.pumpAndSettle();
 
     // Save via FAB.
@@ -203,7 +203,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('details-edit-toggle')));
     await tester.pumpAndSettle();
     await tester.enterText(
-        find.byKey(const ValueKey('details-editor')), 'unsaved change');
+      find.byKey(const ValueKey('details-editor')),
+      'unsaved change',
+    );
     await tester.pumpAndSettle();
 
     // Attempt to leave -> the unsaved-changes dialog appears (pop blocked).
@@ -218,8 +220,9 @@ void main() {
     expect(find.byKey(const ValueKey('details-editor')), findsOneWidget);
   });
 
-  testWidgets('retry triggers the processing pipeline (POST /process)',
-      (tester) async {
+  testWidgets('retry triggers the processing pipeline (POST /process)', (
+    tester,
+  ) async {
     await _seed(db, processingStatus: 'failed', notes: 'partial');
     final container = _container(db, rec);
     addTearDown(container.dispose);

@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/app_card.dart';
+import '../../ui/empty_state.dart';
+import '../../ui/loading_indicator.dart';
 import 'calendar_controller.dart';
 import 'calendar_data.dart';
 
@@ -29,10 +32,6 @@ const List<String> _shortMonthNames = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-/// Wide-viewport content clamp (mirrors HomeScreen).
-const double _wideBreakpoint = 1000;
-const double _contentMaxWidth = 720;
-
 /// Format whole seconds as `m:ss` (the day-list duration label).
 /// Mirrors the RN Calendar `formatDuration` helper.
 String formatDuration(int seconds) {
@@ -54,65 +53,65 @@ class CalendarScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(calendarControllerProvider);
     final controller = ref.read(calendarControllerProvider.notifier);
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
-    final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
+    final colors = context.colors;
+    final spacing = context.spacing;
 
     final today = DateTime.now();
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        bottom: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: isWide ? _contentMaxWidth : double.infinity,
-            ),
-            child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: _Header(
-                    year: state.year,
-                    month: state.month,
-                    state: state,
-                    today: today,
-                    onPrev: controller.prevMonth,
-                    onNext: controller.nextMonth,
-                    onDayPress: controller.selectDay,
-                    onSpaceFilter: controller.setSpaceFilter,
-                  ),
-                ),
-                if (state.dayRecordings.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: state.isDayLoading
-                        ? const _DayLoading()
-                        : const _DayEmpty(),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-                    sliver: SliverList.builder(
-                      itemCount: state.dayRecordings.length,
-                      itemBuilder: (context, i) {
-                        final item = state.dayRecordings[i];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _RecordingRow(
-                            item: item,
-                            onTap: () =>
-                                GoRouter.of(context).go('/calendar/${item.id}'),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
+    void openDetails(String id) => GoRouter.of(context).go('/calendar/$id');
+
+    // Full-width single column at every size: the month grid spans the whole
+    // width (its day cells are fixed-height, so a wide window just widens the
+    // cells — a desktop "big calendar" look) with the day's recordings below.
+    final content = CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: _Header(
+            year: state.year,
+            month: state.month,
+            state: state,
+            today: today,
+            onPrev: controller.prevMonth,
+            onNext: controller.nextMonth,
+            onDayPress: controller.selectDay,
+            onSpaceFilter: controller.setSpaceFilter,
           ),
         ),
-      ),
+        if (state.dayRecordings.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: state.isDayLoading
+                ? const _DayLoading()
+                : const _DayEmpty(),
+          )
+        else
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              spacing.md,
+              spacing.xxs,
+              spacing.md,
+              spacing.xxl + spacing.xxl,
+            ),
+            sliver: SliverList.builder(
+              itemCount: state.dayRecordings.length,
+              itemBuilder: (context, i) {
+                final item = state.dayRecordings[i];
+                return Padding(
+                  padding: EdgeInsets.only(bottom: spacing.sm),
+                  child: _RecordingRow(
+                    item: item,
+                    onTap: () => openDetails(item.id),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: SafeArea(bottom: false, child: content),
     );
   }
 }
@@ -140,15 +139,22 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Month navigation.
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: EdgeInsets.fromLTRB(
+            spacing.md,
+            spacing.sm,
+            spacing.md,
+            spacing.xs,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -162,15 +168,16 @@ class _Header extends StatelessWidget {
                 children: [
                   Text(
                     _monthNames[month],
-                    style: TextStyle(
-                      fontSize: 20,
+                    style: typography.title.copyWith(
                       fontWeight: FontWeight.w800,
                       color: colors.textPrimary,
                     ),
                   ),
                   Text(
                     '$year',
-                    style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                    style: typography.label.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -185,12 +192,12 @@ class _Header extends StatelessWidget {
         ),
         // Month grid.
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: spacing.md),
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(spacing.sm),
             decoration: BoxDecoration(
               color: colors.surface,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(radius.lg),
               border: Border.all(color: colors.border),
             ),
             child: _MonthGrid(
@@ -243,8 +250,10 @@ class _MonthGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final strokeWidth = spacing.xs / spacing.xxs;
     // weekday(): Mon=1..Sun=7 in Dart; the RN grid is Sunday-first, so map
     // Sunday(7) -> 0, Mon(1) -> 1, ... Sat(6) -> 6.
     final firstWeekday = DateTime(year, month + 1, 1).weekday % 7;
@@ -264,8 +273,7 @@ class _MonthGrid extends StatelessWidget {
               child: Center(
                 child: Text(
                   _weekdayLabels[i],
-                  style: TextStyle(
-                    fontSize: 11,
+                  style: typography.label.copyWith(
                     fontWeight: FontWeight.w600,
                     color: colors.textMuted,
                   ),
@@ -274,7 +282,7 @@ class _MonthGrid extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: spacing.xs),
         // Day cells.
         for (var row = 0; row < rows; row++)
           Row(
@@ -282,7 +290,9 @@ class _MonthGrid extends StatelessWidget {
               final cellIndex = row * 7 + col;
               final day = cellIndex - firstWeekday + 1;
               if (day < 1 || day > daysInMonth) {
-                return const Expanded(child: SizedBox(height: 44));
+                return Expanded(
+                  child: SizedBox(height: spacing.xl + spacing.sm),
+                );
               }
               return Expanded(
                 child: _DayCell(
@@ -297,14 +307,11 @@ class _MonthGrid extends StatelessWidget {
           ),
         if (isLoading)
           Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: SizedBox(
-              height: 16,
-              width: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colors.accent,
-              ),
+            padding: EdgeInsets.only(top: spacing.xs),
+            child: LoadingIndicator(
+              size: spacing.md,
+              strokeWidth: strokeWidth,
+              color: colors.accent,
             ),
           ),
       ],
@@ -329,14 +336,17 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+    final transparent = colors.surface.withValues(alpha: 0);
 
     final Color background = isSelected
         ? colors.accentSoft
         : hasRecording
         ? colors.accent.withValues(alpha: 0.16)
-        : Colors.transparent;
+        : transparent;
 
     final Color textColor = isSelected
         ? colors.textPrimary
@@ -346,28 +356,27 @@ class _DayCell extends StatelessWidget {
 
     return InkWell(
       key: ValueKey('calendar-day-$day'),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(radius.sm),
       onTap: onTap,
       child: SizedBox(
-        height: 44,
+        height: spacing.xl + spacing.sm,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 30,
-              height: 30,
+              width: spacing.xl,
+              height: spacing.xl,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: background,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(radius.sm),
                 border: isSelected
                     ? Border.all(color: colors.textPrimary, width: 2)
                     : null,
               ),
               child: Text(
                 '$day',
-                style: TextStyle(
-                  fontSize: 13,
+                style: typography.label.copyWith(
                   fontWeight: isSelected || isToday
                       ? FontWeight.w700
                       : FontWeight.w400,
@@ -375,14 +384,14 @@ class _DayCell extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 2),
+            SizedBox(height: spacing.xxs),
             // Recording dot.
             Container(
-              width: 5,
-              height: 5,
+              width: spacing.xxs,
+              height: spacing.xxs,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: hasRecording ? colors.accent : Colors.transparent,
+                color: hasRecording ? colors.accent : transparent,
               ),
             ),
           ],
@@ -405,11 +414,18 @@ class _SpaceFilterStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
+
     return SizedBox(
-      height: 56,
+      height: spacing.xxl + spacing.xs,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        padding: EdgeInsets.fromLTRB(
+          spacing.md,
+          spacing.sm,
+          spacing.md,
+          spacing.xs,
+        ),
         children: [
           _FilterChip(
             key: const ValueKey('calendar-filter-all'),
@@ -418,7 +434,7 @@ class _SpaceFilterStrip extends StatelessWidget {
             onTap: () => onSpaceFilter(null),
           ),
           for (final space in spaces) ...[
-            const SizedBox(width: 8),
+            SizedBox(width: spacing.xs),
             _FilterChip(
               key: ValueKey('calendar-filter-${space.id}'),
               label: space.name,
@@ -447,24 +463,28 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
 
     return Material(
       color: active ? colors.textPrimary : colors.subtleFill,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(radius.xl),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(radius.xl),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.md,
+            vertical: spacing.xs,
+          ),
           child: Center(
             child: Text(
               label,
-              style: TextStyle(
-                fontSize: 13,
+              style: typography.label.copyWith(
                 fontWeight: FontWeight.w600,
-                color: active ? Colors.white : colors.textSecondary,
+                color: active ? colors.onTextPrimary : colors.textSecondary,
               ),
             ),
           ),
@@ -490,32 +510,37 @@ class _DayHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (selectedDay <= 0) return const SizedBox.shrink();
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
     final date = DateTime(year, month + 1, selectedDay);
     final label =
         '${_weekdayNames[date.weekday % 7]}, '
         '${_shortMonthNames[month]} $selectedDay';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: EdgeInsets.fromLTRB(
+        spacing.md,
+        spacing.xs,
+        spacing.md,
+        spacing.xs,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
           Text(
             label,
-            style: TextStyle(
-              fontSize: 16,
+            style: typography.body.copyWith(
               fontWeight: FontWeight.w700,
               color: colors.textPrimary,
             ),
           ),
           if (count > 0) ...[
-            const SizedBox(width: 8),
+            SizedBox(width: spacing.xs),
             Text(
               '$count ${count == 1 ? 'recording' : 'recordings'}',
-              style: TextStyle(fontSize: 12, color: colors.textSecondary),
+              style: typography.label.copyWith(color: colors.textSecondary),
             ),
           ],
         ],
@@ -527,98 +552,20 @@ class _DayHeading extends StatelessWidget {
 class _RecordingRow extends StatelessWidget {
   const _RecordingRow({required this.item, required this.onTap});
 
-  final CalendarRecordingCard item;
+  final CalendarRecordingItem item;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
-    final isWork = item.badge == 'Work';
-    final dotColor = isWork ? colors.accent : colors.textMuted;
     final displayName = item.workspaceName ?? item.badge;
 
-    return Material(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        key: ValueKey('calendar-recording-${item.id}'),
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.border),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: dotColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isWork
-                                ? colors.accent.withValues(alpha: 0.13)
-                                : colors.border,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            displayName,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isWork
-                                  ? colors.accentDark
-                                  : colors.textSecondary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          formatDuration(item.duration),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right, size: 18, color: colors.textMuted),
-            ],
-          ),
-        ),
-      ),
+    return AppCard.calendar(
+      id: item.id,
+      title: item.title,
+      badge: item.badge,
+      statusLabel: displayName,
+      durationLabel: formatDuration(item.duration),
+      onTap: onTap,
     );
   }
 }
@@ -628,19 +575,17 @@ class _DayLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final strokeWidth = spacing.xs / spacing.xxs;
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SizedBox(
-          height: 24,
-          width: 24,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: colors.accent,
-          ),
+        padding: EdgeInsets.all(spacing.lg),
+        child: LoadingIndicator(
+          size: spacing.lg,
+          strokeWidth: strokeWidth,
+          color: colors.accent,
         ),
       ),
     );
@@ -652,28 +597,14 @@ class _DayEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final typography = context.typography;
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.calendar_today_outlined,
-              size: 32,
-              color: colors.textMuted,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              t.calendar.noRecordings,
-              style: TextStyle(fontSize: 14, color: colors.textMuted),
-            ),
-          ],
-        ),
-      ),
+    return EmptyState(
+      icon: Icons.calendar_today_outlined,
+      title: t.calendar.noRecordings,
+      iconSize: 32,
+      titleStyle: typography.bodySmall.copyWith(color: colors.textMuted),
     );
   }
 }

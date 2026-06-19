@@ -4,13 +4,17 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/app_button.dart';
+import '../../ui/app_dialog.dart';
+import '../../ui/app_text_field.dart';
+import '../../ui/empty_state.dart';
+import '../../ui/loading_indicator.dart';
 import 'space_card.dart';
 import 'spaces_controller.dart';
 
-/// Width past which we constrain the content column (desktop / web), matching
-/// the Inbox screen's behaviour.
+/// Width past which the space list reflows into a multi-column grid (desktop /
+/// web) so a wide window shows several spaces per row instead of one tall list.
 const double _wideBreakpoint = 1000;
-const double _contentMaxWidth = 720;
 
 /// Spaces tab (S5, #784). Offline-first list of workspaces with their recording
 /// counts, driven from Drift via [spacesControllerProvider]. The FAB opens a
@@ -45,8 +49,7 @@ class SpacesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(spacesControllerProvider);
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
     return Scaffold(
@@ -55,45 +58,40 @@ class SpacesScreen extends ConsumerWidget {
         onPressed: () => _create(context, ref),
         backgroundColor: colors.primary,
         tooltip: t.spaces.createTitle,
-        child: const Icon(Icons.add, color: Colors.white),
+        child: Icon(Icons.add, color: colors.onAccent),
       ),
       body: SafeArea(
         bottom: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: isWide ? _contentMaxWidth : double.infinity,
-            ),
-            child: Column(
-              children: [
-                _Header(total: state.valueOrNull?.length ?? 0),
-                Expanded(
-                  child: state.when(
-                    loading: () => Center(
-                      child: CircularProgressIndicator(color: colors.primary),
-                    ),
-                    error: (err, _) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          err.toString(),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: colors.textMuted),
-                        ),
+        child: Column(
+          children: [
+            _Header(total: state.valueOrNull?.length ?? 0),
+            Expanded(
+              child: state.when(
+                loading: () =>
+                    Center(child: LoadingIndicator(color: colors.primary)),
+                error: (err, _) => Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(context.spacing.lg),
+                    child: Text(
+                      err.toString(),
+                      textAlign: TextAlign.center,
+                      style: context.typography.bodySmall.copyWith(
+                        color: colors.textMuted,
                       ),
-                    ),
-                    data: (spaces) => _Body(
-                      spaces: spaces,
-                      onRefresh: () =>
-                          ref.read(spacesControllerProvider.notifier).load(),
-                      onTap: (s) => GoRouter.of(context).go('/spaces/${s.id}'),
-                      onLongPress: (s) => _confirmDelete(context, ref, s),
                     ),
                   ),
                 ),
-              ],
+                data: (spaces) => _Body(
+                  spaces: spaces,
+                  isWide: isWide,
+                  onRefresh: () =>
+                      ref.read(spacesControllerProvider.notifier).load(),
+                  onTap: (s) => GoRouter.of(context).go('/spaces/${s.id}'),
+                  onLongPress: (s) => _confirmDelete(context, ref, s),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -107,12 +105,18 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: EdgeInsets.fromLTRB(
+        spacing.md,
+        spacing.sm,
+        spacing.md,
+        spacing.sm,
+      ),
       decoration: BoxDecoration(
         color: colors.background,
         border: Border(bottom: BorderSide(color: colors.border)),
@@ -122,24 +126,21 @@ class _Header extends StatelessWidget {
         children: [
           Text(
             'マトメ',
-            style: TextStyle(
-              fontSize: 12,
+            style: typography.label.copyWith(
               letterSpacing: 2,
               color: colors.textSecondary,
             ),
           ),
           Text(
             t.spaces.title,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
+            style: typography.display.copyWith(
               color: colors.textPrimary,
             ),
           ),
           if (total > 0)
             Text(
               t.spaces.count(n: total),
-              style: TextStyle(fontSize: 12, color: colors.textSecondary),
+              style: typography.label.copyWith(color: colors.textSecondary),
             ),
         ],
       ),
@@ -150,20 +151,22 @@ class _Header extends StatelessWidget {
 class _Body extends StatelessWidget {
   const _Body({
     required this.spaces,
+    required this.isWide,
     required this.onRefresh,
     required this.onTap,
     required this.onLongPress,
   });
 
   final List<SpaceCard> spaces;
+  final bool isWide;
   final Future<void> Function() onRefresh;
   final ValueChanged<SpaceCard> onTap;
   final ValueChanged<SpaceCard> onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
 
     if (spaces.isEmpty) {
       return RefreshIndicator(
@@ -173,30 +176,56 @@ class _Body extends StatelessWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             SizedBox(height: MediaQuery.sizeOf(context).height * 0.18),
-            const _EmptyState(),
+            EmptyState(
+              icon: Icons.folder_outlined,
+              title: t.spaces.empty,
+              message: t.spaces.emptyHint,
+            ),
           ],
         ),
+      );
+    }
+
+    final padding = EdgeInsets.fromLTRB(
+      spacing.md,
+      spacing.sm,
+      spacing.md,
+      spacing.xxl + spacing.xxl,
+    );
+
+    Widget tile(int index) {
+      final space = spaces[index];
+      return _SpaceTile(
+        space: space,
+        color: colors.spaceColor(index),
+        onTap: () => onTap(space),
+        onLongPress: () => onLongPress(space),
       );
     }
 
     return RefreshIndicator(
       onRefresh: onRefresh,
       color: colors.primary,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-        itemCount: spaces.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final space = spaces[index];
-          return _SpaceTile(
-            space: space,
-            color: colors.spaceColor(index),
-            onTap: () => onTap(space),
-            onLongPress: () => onLongPress(space),
-          );
-        },
-      ),
+      child: isWide
+          ? GridView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: padding,
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 360,
+                mainAxisExtent: spacing.xxl + spacing.lg,
+                crossAxisSpacing: spacing.sm,
+                mainAxisSpacing: spacing.sm,
+              ),
+              itemCount: spaces.length,
+              itemBuilder: (context, index) => tile(index),
+            )
+          : ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: padding,
+              itemCount: spaces.length,
+              separatorBuilder: (_, _) => SizedBox(height: spacing.xs),
+              itemBuilder: (context, index) => tile(index),
+            ),
     );
   }
 }
@@ -216,39 +245,45 @@ class _SpaceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
 
     return Semantics(
       button: true,
       label: 'Space: ${space.name}',
       child: Material(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(radius.lg),
         child: InkWell(
           key: ValueKey('space-tile-${space.id}'),
           onTap: onTap,
           onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(radius.lg),
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: EdgeInsets.all(spacing.sm),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(radius.lg),
               border: Border.all(color: colors.border),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: spacing.xl + spacing.xs,
+                  height: spacing.xl + spacing.xs,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.13),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(radius.md),
                   ),
-                  child: Icon(Icons.folder_outlined, size: 22, color: color),
+                  child: Icon(
+                    Icons.folder_outlined,
+                    size: typography.title.fontSize,
+                    color: color,
+                  ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: spacing.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,24 +292,26 @@ class _SpaceTile extends StatelessWidget {
                         space.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
+                        style: typography.bodySmall.copyWith(
                           fontWeight: FontWeight.w700,
                           color: colors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: spacing.xxs),
                       Text(
                         t.spaces.count(n: space.count),
-                        style: TextStyle(
-                          fontSize: 12,
+                        style: typography.label.copyWith(
                           color: colors.textSecondary,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, size: 20, color: colors.textMuted),
+                Icon(
+                  Icons.chevron_right,
+                  size: spacing.md + spacing.xxs,
+                  color: colors.textMuted,
+                ),
               ],
             ),
           ),
@@ -304,28 +341,24 @@ class _CreateSpaceDialogState extends State<_CreateSpaceDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
 
-    return AlertDialog(
+    return AppDialog(
       backgroundColor: colors.surface,
       title: Text(t.spaces.createTitle),
-      content: TextField(
+      content: AppTextField(
         controller: _controller,
+        hint: t.spaces.createHint,
         autofocus: true,
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _submit(),
-        decoration: InputDecoration(
-          hintText: t.spaces.createHint,
-          border: const OutlineInputBorder(),
-        ),
       ),
       actions: [
-        TextButton(
+        AppTextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: Text(t.spaces.cancel),
         ),
-        FilledButton(
+        PrimaryButton(
           key: const ValueKey('create-space-confirm'),
           onPressed: _submit,
           style: FilledButton.styleFrom(backgroundColor: colors.primary),
@@ -343,62 +376,24 @@ class _DeleteSpaceDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
 
-    return AlertDialog(
+    return AppDialog(
       backgroundColor: colors.surface,
       title: Text(t.spaces.deleteTitle),
       content: Text('$name\n\n${t.spaces.deleteBody}'),
       actions: [
-        TextButton(
+        AppTextButton(
           onPressed: () => Navigator.of(context).pop(false),
           child: Text(t.spaces.cancel),
         ),
-        FilledButton(
+        PrimaryButton(
           key: const ValueKey('delete-space-confirm'),
           onPressed: () => Navigator.of(context).pop(true),
           style: FilledButton.styleFrom(backgroundColor: colors.failed),
           child: Text(t.spaces.delete),
         ),
       ],
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.folder_outlined, size: 44, color: colors.textMuted),
-            const SizedBox(height: 12),
-            Text(
-              t.spaces.empty,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: colors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              t.spaces.emptyHint,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: colors.textMuted),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

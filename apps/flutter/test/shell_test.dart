@@ -30,18 +30,18 @@ import 'support/fake_inbox.dart';
 /// Pre-authenticated, network-free router for the shell smoke test: skips the
 /// seed-login bootstrap and seeds the Inbox tab with a fixed recording list.
 InboxItem _seedItem() => InboxItem(
-      card: const RecordingCard(
-        id: '1',
-        title: 'Standup notes',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        badge: 'work',
-        isProcessing: false,
-        mediaType: 'audio',
-        processingStatus: 'done',
-      ),
-      createdAt: DateTime(2024).millisecondsSinceEpoch,
-    );
+  card: const RecordingItem(
+    id: '1',
+    title: 'Standup notes',
+    timestamp: '9:00 AM',
+    duration: '0:30',
+    badge: 'work',
+    isProcessing: false,
+    mediaType: 'audio',
+    processingStatus: 'done',
+  ),
+  createdAt: DateTime(2024).millisecondsSinceEpoch,
+);
 
 GoRouter _buildTestRouter() {
   final rootKey = GlobalKey<NavigatorState>();
@@ -64,27 +64,38 @@ GoRouter _buildTestRouter() {
       StatefulShellRoute.indexedStack(
         builder: (c, s, shell) => ShellScaffold(navigationShell: shell),
         branches: [
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/inbox',
-              builder: (c, s) => const HomeScreen(),
-              routes: [
-                GoRoute(
-                  path: 'settings',
-                  builder: (c, s) => const SettingsScreen(),
-                ),
-              ],
-            ),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/calendar', builder: (c, s) => const CalendarScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/spaces', builder: (c, s) => const SpacesScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/satori', builder: (c, s) => const SatoriScreen()),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/inbox',
+                builder: (c, s) => const HomeScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'settings',
+                    builder: (c, s) => const SettingsScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/calendar',
+                builder: (c, s) => const CalendarScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/spaces', builder: (c, s) => const SpacesScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/satori', builder: (c, s) => const SatoriScreen()),
+            ],
+          ),
         ],
       ),
     ],
@@ -151,8 +162,9 @@ void main() {
   });
   tearDown(() => db.close());
 
-  testWidgets('shell renders 4 tabs + mic FAB and navigates between tabs',
-      (tester) async {
+  testWidgets('shell renders 4 tabs + mic FAB and navigates between tabs', (
+    tester,
+  ) async {
     await tester.pumpWidget(_pumpApp(db: db));
     await tester.pumpAndSettle();
 
@@ -169,6 +181,34 @@ void main() {
     // Navigate to the Satori tab.
     await tester.tap(find.byIcon(Icons.auto_awesome_outlined));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('wide viewport renders a NavigationRail, not the bottom bar', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_pumpApp(db: db));
+    await tester.pumpAndSettle();
+
+    // Desktop layout: side rail replaces the bottom bar; mic FAB rehomed.
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(BottomAppBar), findsNothing);
+    expect(find.byIcon(Icons.mic), findsOneWidget);
+
+    // Inbox is a two-pane: the list is visible AND the empty detail pane shows
+    // its teaching placeholder (nothing selected yet).
+    expect(find.text('Standup notes'), findsOneWidget);
+    expect(find.text('Select a recording to preview'), findsOneWidget);
+
+    // Selecting the recording fills the detail pane without leaving the list.
+    await tester.tap(find.text('Standup notes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Standup notes'), findsWidgets); // list row still present
+    expect(find.text('Select a recording to preview'), findsNothing);
   });
 
   testWidgets('mic FAB opens the recording fullscreen modal', (tester) async {
@@ -204,8 +244,9 @@ void main() {
     expect(await store.read('matome.theme_mode'), 'dark');
   });
 
-  testWidgets('language toggle to ja switches visible strings and persists',
-      (tester) async {
+  testWidgets('language toggle to ja switches visible strings and persists', (
+    tester,
+  ) async {
     final store = InMemorySettingsStore();
     await tester.pumpWidget(_pumpApp(store: store, db: db));
     await tester.pumpAndSettle();

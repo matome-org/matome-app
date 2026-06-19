@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/app_button.dart';
+
+/// Reading-width clamp so the roadmap content doesn't sprawl on wide windows.
+const double _contentMaxWidth = 640;
 
 /// Roadmap status for a single Satori feature, driving the leading dot styling.
 enum _RoadmapState { done, active, next }
@@ -29,7 +33,9 @@ class SatoriScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
     final s = t.satori;
     final notifyBackground = theme.brightness == Brightness.dark
         ? colors.surface
@@ -64,10 +70,20 @@ class SatoriScreen extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+          padding: EdgeInsets.fromLTRB(
+            spacing.lg,
+            spacing.md,
+            spacing.lg,
+            spacing.xxl + spacing.xxl + spacing.xxs,
+          ),
+          // Reading-width clamp so the roadmap card and CTA don't sprawl across
+          // a wide desktop window (they previously stretched edge-to-edge).
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // Header.
               Text(
                 s.title,
@@ -76,18 +92,18 @@ class SatoriScreen extends StatelessWidget {
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: spacing.xxs),
               Text(
                 s.subtitle,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colors.textSecondary,
                 ),
               ),
-              const SizedBox(height: 36),
+              SizedBox(height: spacing.xl + spacing.xxs),
 
               // Medallion + headline (centered).
               const _Medallion(),
-              const SizedBox(height: 24),
+              SizedBox(height: spacing.lg),
               Text(
                 s.underConstruction,
                 textAlign: TextAlign.center,
@@ -97,9 +113,9 @@ class SatoriScreen extends StatelessWidget {
                   letterSpacing: 2,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: spacing.xs),
               _Headline(theme: theme),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.sm),
               Text(
                 s.body,
                 textAlign: TextAlign.center,
@@ -108,27 +124,29 @@ class SatoriScreen extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 28),
+              SizedBox(height: spacing.lg + spacing.xxs),
 
               // Roadmap card.
               _RoadmapCard(label: s.roadmapLabel, items: roadmap),
-              const SizedBox(height: 20),
+              SizedBox(height: spacing.md + spacing.xxs),
 
               // Notify CTA (decorative parity — no real action).
-              FilledButton.icon(
+              PrimaryButton.icon(
                 onPressed: () {},
                 icon: Icon(Icons.auto_awesome, color: colors.accent),
                 style: FilledButton.styleFrom(
                   backgroundColor: notifyBackground,
                   foregroundColor: notifyForeground,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: EdgeInsets.symmetric(vertical: spacing.md),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(radius.lg),
                   ),
                 ),
                 label: Text(s.notify),
               ),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -142,46 +160,52 @@ class _Medallion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+    final elevation = context.elevation;
     final badgeBackground = theme.brightness == Brightness.dark
         ? colors.surface
         : colors.textPrimary;
 
     return SizedBox(
-      width: 140,
-      height: 140,
+      width: spacing.xxl + spacing.xxl + spacing.xl + spacing.sm,
+      height: spacing.xxl + spacing.xxl + spacing.xl + spacing.sm,
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: colors.accent,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: colors.accent.withValues(alpha: 0.45),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+          Material(
+            color: colors.accent,
+            elevation: elevation.level3,
+            shadowColor: colors.accent.withValues(alpha: 0.45),
+            shape: const CircleBorder(),
+            child: SizedBox(
+              width: spacing.xxl + spacing.xxl + spacing.lg,
+              height: spacing.xxl + spacing.xxl + spacing.lg,
+              child: Icon(
+                Icons.auto_awesome,
+                size: spacing.xxl + spacing.xxs,
+                color: colors.onAccent,
+              ),
             ),
-            child: Icon(Icons.auto_awesome, size: 52, color: colors.onAccent),
           ),
           Positioned(
-            right: 4,
-            bottom: 6,
+            right: spacing.xxs,
+            bottom: spacing.xs,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.sm,
+                vertical: spacing.xxs,
+              ),
               decoration: BoxDecoration(
                 color: badgeBackground,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(radius.pill),
               ),
               child: Text(
                 t.satori.soon,
-                style: TextStyle(
+                style: typography.label.copyWith(
                   color: colors.accent,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
@@ -202,8 +226,7 @@ class _Headline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
     final base = theme.textTheme.headlineSmall?.copyWith(
       fontWeight: FontWeight.w800,
       letterSpacing: -0.5,
@@ -236,12 +259,14 @@ class _RoadmapCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(spacing.md),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(radius.lg),
         border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
@@ -255,7 +280,7 @@ class _RoadmapCard extends StatelessWidget {
               letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: spacing.xs),
           for (var i = 0; i < items.length; i++)
             _RoadmapRow(item: items[i], showDivider: i < items.length - 1),
         ],
@@ -273,7 +298,8 @@ class _RoadmapRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
     final isNext = item.state == _RoadmapState.next;
     return Container(
       decoration: showDivider
@@ -281,12 +307,12 @@ class _RoadmapRow extends StatelessWidget {
               border: Border(bottom: BorderSide(color: theme.dividerColor)),
             )
           : null,
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: EdgeInsets.symmetric(vertical: spacing.sm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _RoadmapDot(state: item.state),
-          const SizedBox(width: 12),
+          SizedBox(width: spacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,7 +326,7 @@ class _RoadmapRow extends StatelessWidget {
                         : theme.textTheme.bodyMedium?.color,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: spacing.xxs),
                 Text(
                   item.detail,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -322,34 +348,34 @@ class _RoadmapDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
 
     switch (state) {
       case _RoadmapState.done:
         return Container(
-          width: 20,
-          height: 20,
-          margin: const EdgeInsets.only(top: 2),
+          width: spacing.md + spacing.xxs,
+          height: spacing.md + spacing.xxs,
+          margin: EdgeInsets.only(top: spacing.xxs),
           decoration: BoxDecoration(
             color: colors.accent,
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.check, size: 12, color: colors.onAccent),
+          child: Icon(Icons.check, size: spacing.sm, color: colors.onAccent),
         );
       case _RoadmapState.active:
         return Container(
-          width: 20,
-          height: 20,
-          margin: const EdgeInsets.only(top: 2),
+          width: spacing.md + spacing.xxs,
+          height: spacing.md + spacing.xxs,
+          margin: EdgeInsets.only(top: spacing.xxs),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: colors.accent, width: 2),
           ),
           child: Container(
-            width: 8,
-            height: 8,
+            width: spacing.xs,
+            height: spacing.xs,
             decoration: BoxDecoration(
               color: colors.accent,
               shape: BoxShape.circle,
@@ -358,9 +384,9 @@ class _RoadmapDot extends StatelessWidget {
         );
       case _RoadmapState.next:
         return Container(
-          width: 20,
-          height: 20,
-          margin: const EdgeInsets.only(top: 2),
+          width: spacing.md + spacing.xxs,
+          height: spacing.md + spacing.xxs,
+          margin: EdgeInsets.only(top: spacing.xxs),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: colors.textMuted, width: 1.5),

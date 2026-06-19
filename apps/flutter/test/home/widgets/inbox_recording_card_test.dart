@@ -2,22 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matome_flutter/core/db/recording_card.dart';
-import 'package:matome_flutter/features/home/widgets/inbox_recording_card.dart';
+import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+import 'package:matome_flutter/ui/app_card.dart';
 
 /// W5 (plan #43): the Inbox card must render each of the four local-first
 /// lifecycle states clearly, and the `failed` card must expose a MANUAL retry
 /// affordance that re-enqueues through the upload queue (alongside auto-retry).
 void main() {
-  RecordingCard card({
+  RecordingItem card({
     required String id,
     required String processingStatus,
     bool isProcessing = false,
     String? summary,
     int? coreId,
   }) {
-    return RecordingCard(
+    return RecordingItem(
       id: id,
       title: 'Stand-up',
       summary: summary,
@@ -33,15 +34,16 @@ void main() {
 
   Future<void> pump(
     WidgetTester tester,
-    RecordingCard c, {
+    RecordingItem c, {
     VoidCallback? onRetry,
   }) async {
     // Pin the locale so the English copy assertions are deterministic.
     LocaleSettings.setLocaleSync(AppLocale.en);
     await tester.pumpWidget(
       MaterialApp(
+        theme: buildLightTheme(),
         home: Scaffold(
-          body: InboxRecordingCard(
+          body: AppCard.recording(
             card: c,
             relativeTime: '3h',
             onRetry: onRetry,
@@ -51,14 +53,16 @@ void main() {
     );
   }
 
-  testWidgets('pending_upload renders SAFE-but-not-uploaded (no spinner)',
-      (tester) async {
+  testWidgets('pending_upload renders SAFE-but-not-uploaded (no spinner)', (
+    tester,
+  ) async {
     await pump(
       tester,
       card(
         id: mintLocalRecordingId(),
         processingStatus: kProcessingStatusPendingUpload,
-        isProcessing: true, // legacy flag is set but status wins → not a spinner
+        isProcessing:
+            true, // legacy flag is set but status wins → not a spinner
       ),
     );
 
@@ -93,8 +97,9 @@ void main() {
     expect(find.byKey(const ValueKey('card-failed')), findsNothing);
   });
 
-  testWidgets('failed renders a failure line + a MANUAL retry button',
-      (tester) async {
+  testWidgets('failed renders a failure line + a MANUAL retry button', (
+    tester,
+  ) async {
     var retried = false;
     await pump(
       tester,
@@ -111,8 +116,9 @@ void main() {
     expect(retried, isTrue, reason: 'tapping retry fires the re-enqueue hook');
   });
 
-  testWidgets('failed without an onRetry hook hides the retry button',
-      (tester) async {
+  testWidgets('failed without an onRetry hook hides the retry button', (
+    tester,
+  ) async {
     await pump(tester, card(id: '42', processingStatus: 'failed'));
     expect(find.byKey(const ValueKey('card-failed')), findsOneWidget);
     expect(find.byKey(const ValueKey('card-retry')), findsNothing);
@@ -120,8 +126,9 @@ void main() {
 
   // ── W2 (plan #45): sync-state badge — on-device vs cloud ──────────────────
 
-  testWidgets('coreId null → on-device sync badge alongside the folder badge',
-      (tester) async {
+  testWidgets('coreId null → on-device sync badge alongside the folder badge', (
+    tester,
+  ) async {
     await pump(
       tester,
       card(
@@ -138,35 +145,33 @@ void main() {
     expect(find.text('Inbox'), findsOneWidget);
   });
 
-  testWidgets('coreId set + done → cloud sync badge alongside the folder badge',
-      (tester) async {
-    await pump(
-      tester,
-      card(id: '42', processingStatus: 'done', coreId: 42),
-    );
+  testWidgets(
+    'coreId set + done → cloud sync badge alongside the folder badge',
+    (tester) async {
+      await pump(tester, card(id: '42', processingStatus: 'done', coreId: 42));
 
-    expect(find.byKey(const ValueKey('sync-badge-cloud')), findsOneWidget);
-    expect(find.byKey(const ValueKey('sync-badge-onDevice')), findsNothing);
-    expect(find.text('Cloud'), findsOneWidget);
-    expect(find.text('Inbox'), findsOneWidget);
-  });
+      expect(find.byKey(const ValueKey('sync-badge-cloud')), findsOneWidget);
+      expect(find.byKey(const ValueKey('sync-badge-onDevice')), findsNothing);
+      expect(find.text('Cloud'), findsOneWidget);
+      expect(find.text('Inbox'), findsOneWidget);
+    },
+  );
 
-  testWidgets('failed keeps the W5 failure treatment AND the on-device badge',
-      (tester) async {
+  testWidgets('failed keeps the W5 failure treatment AND the on-device badge', (
+    tester,
+  ) async {
     // A failed row still has its bytes on the device, so it reads on-device
     // even if a stale coreId is present.
-    await pump(
-      tester,
-      card(id: '42', processingStatus: 'failed', coreId: 42),
-    );
+    await pump(tester, card(id: '42', processingStatus: 'failed', coreId: 42));
 
     expect(find.byKey(const ValueKey('card-failed')), findsOneWidget);
     expect(find.byKey(const ValueKey('sync-badge-onDevice')), findsOneWidget);
     expect(find.byKey(const ValueKey('sync-badge-cloud')), findsNothing);
   });
 
-  testWidgets('sync badge is accessible — icon + text, not colour alone',
-      (tester) async {
+  testWidgets('sync badge is accessible — icon + text, not colour alone', (
+    tester,
+  ) async {
     await pump(tester, card(id: '42', processingStatus: 'done', coreId: 42));
 
     final badge = find.byKey(const ValueKey('sync-badge-cloud'));
@@ -182,18 +187,45 @@ void main() {
     );
   });
 
-  testWidgets('sync badge exposes a single screen-reader label (plan #45 W3)',
-      (tester) async {
+  testWidgets('sync badge exposes a single screen-reader label (plan #45 W3)', (
+    tester,
+  ) async {
     final handle = tester.ensureSemantics();
     await pump(tester, card(id: '42', processingStatus: 'done', coreId: 42));
 
     // The pill contributes a single "Sync state: Cloud" announcement (the inner
     // icon+text are excluded so it isn't read twice). The card row merges it
     // into the row's button label, so match the combined node by substring.
-    expect(
-      find.bySemanticsLabel(RegExp('Sync state: Cloud')),
-      findsOneWidget,
-    );
+    expect(find.bySemanticsLabel(RegExp('Sync state: Cloud')), findsOneWidget);
     handle.dispose();
+  });
+
+  testWidgets('calendar variant preserves the compact row key and tap action', (
+    tester,
+  ) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildLightTheme(),
+        home: Scaffold(
+          body: AppCard.calendar(
+            id: 'rec-calendar',
+            title: 'Design review',
+            badge: 'Work',
+            statusLabel: 'Design Lab',
+            durationLabel: '1:08',
+            onTap: () => tapped = true,
+          ),
+        ),
+      ),
+    );
+
+    final row = find.byKey(const ValueKey('calendar-recording-rec-calendar'));
+    expect(row, findsOneWidget);
+    expect(find.text('Design Lab'), findsOneWidget);
+    expect(find.text('1:08'), findsOneWidget);
+
+    await tester.tap(row);
+    expect(tapped, isTrue);
   });
 }

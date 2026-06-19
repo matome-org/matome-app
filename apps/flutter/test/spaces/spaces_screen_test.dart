@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/spaces/space_detail_screen.dart';
 import 'package:matome_flutter/features/spaces/spaces_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -70,7 +71,7 @@ Widget _app(AppDatabase db) {
   return ProviderScope(
     overrides: [appDatabaseProvider.overrideWithValue(db)],
     child: TranslationProvider(
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
   );
 }
@@ -98,8 +99,9 @@ void main() {
     expect(find.text(t.spaces.count(n: 0)), findsNWidgets(2));
   });
 
-  testWidgets('shows only the seeded default when no spaces were created',
-      (tester) async {
+  testWidgets('shows only the seeded default when no spaces were created', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
 
@@ -168,10 +170,16 @@ void main() {
     expect(find.text('Work'), findsOneWidget);
   });
 
-  testWidgets('tapping a space opens its detail listing its recordings',
-      (tester) async {
+  testWidgets('tapping a space opens its detail listing its recordings', (
+    tester,
+  ) async {
     final work = await db.workspacesDao.createWorkspace('Work');
-    await _seedRecording(db, id: 'a', title: 'In work space', workspaceId: work.id);
+    await _seedRecording(
+      db,
+      id: 'a',
+      title: 'In work space',
+      workspaceId: work.id,
+    );
     await _seedRecording(db, id: 'inbox-one', title: 'Inbox only');
 
     await tester.pumpWidget(_app(db));
@@ -184,10 +192,16 @@ void main() {
     expect(find.text('Inbox only'), findsNothing); // not in this space
   });
 
-  testWidgets('tapping a recording in detail routes to /spaces/recording/:id',
-      (tester) async {
+  testWidgets('tapping a recording in detail routes to /spaces/recording/:id', (
+    tester,
+  ) async {
     final work = await db.workspacesDao.createWorkspace('Work');
-    await _seedRecording(db, id: 'rec-9', title: 'Routed', workspaceId: work.id);
+    await _seedRecording(
+      db,
+      id: 'rec-9',
+      title: 'Routed',
+      workspaceId: work.id,
+    );
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
@@ -202,8 +216,9 @@ void main() {
     expect(find.text('details-stub'), findsOneWidget);
   });
 
-  testWidgets('detail shows empty state for a space with no recordings',
-      (tester) async {
+  testWidgets('detail shows empty state for a space with no recordings', (
+    tester,
+  ) async {
     final work = await db.workspacesDao.createWorkspace('Empty');
 
     await tester.pumpWidget(_app(db));

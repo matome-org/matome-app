@@ -96,33 +96,42 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
   /// a clear, disabled affordance + message instead of a dead silent play
   /// button. Distinct surface (muted) so it reads as inert, not actionable.
   Widget _buildUnavailable(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
 
     return Container(
       key: const ValueKey('audio-unavailable'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.md,
+        vertical: spacing.md,
+      ),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(radius.lg),
         border: Border.all(color: colors.border),
       ),
       child: Row(
         children: [
           SizedBox(
-            width: 48,
-            height: 48,
+            width: spacing.xxl,
+            height: spacing.xxl,
             child: Material(
               color: colors.border,
               shape: const CircleBorder(),
-              child: Icon(Icons.music_off, color: colors.textMuted, size: 24),
+              child: Icon(
+                Icons.music_off,
+                color: colors.textMuted,
+                size: spacing.lg,
+              ),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: spacing.sm),
           Expanded(
             child: Text(
               t.details.audioUnavailable,
-              style: TextStyle(fontSize: 14, color: colors.textSecondary),
+              style: typography.bodySmall.copyWith(color: colors.textSecondary),
             ),
           ),
         ],
@@ -138,8 +147,10 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
     // Plan #45 W1: when NEITHER a local file NOR a remote URL resolved (kind ==
     // none) — or the only resolved source failed to load — there is nothing to
     // play. Surface a graceful "audio unavailable" state instead of a dead,
@@ -149,10 +160,13 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
     if (unavailable) return _buildUnavailable(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.md,
+        vertical: spacing.sm,
+      ),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(radius.lg),
         border: Border.all(color: colors.border),
       ),
       child: StreamBuilder<PlaybackState>(
@@ -164,7 +178,7 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
               Row(
                 children: [
                   _PlayButton(playing: playing, onPressed: _togglePlay),
-                  const SizedBox(width: 12),
+                  SizedBox(width: spacing.sm),
                   Expanded(
                     child: StreamBuilder<Duration>(
                       stream: _player.positionStream,
@@ -203,7 +217,7 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: spacing.xxs),
               StreamBuilder<Duration>(
                 stream: _player.positionStream,
                 builder: (context, posSnap) {
@@ -214,16 +228,14 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
                     children: [
                       Text(
                         _fmt(position),
-                        style: TextStyle(
-                          fontSize: 13,
+                        style: typography.label.copyWith(
                           color: colors.textSecondary,
                           fontFeatures: [FontFeature.tabularFigures()],
                         ),
                       ),
                       Text(
                         _fmt(duration),
-                        style: TextStyle(
-                          fontSize: 13,
+                        style: typography.label.copyWith(
                           color: colors.textSecondary,
                           fontFeatures: [FontFeature.tabularFigures()],
                         ),
@@ -248,8 +260,8 @@ class _PlayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
     // Icon-only control — give it a screen-reader label + tooltip that tracks
     // the current action (plan #45, W3). 48×48 already meets the tap target.
     final label = playing ? t.a11y.pause : t.a11y.play;
@@ -260,8 +272,8 @@ class _PlayButton extends StatelessWidget {
         label: label,
         enabled: onPressed != null,
         child: SizedBox(
-          width: 48,
-          height: 48,
+          width: spacing.xxl,
+          height: spacing.xxl,
           child: Material(
             color: onPressed == null ? colors.border : colors.accent,
             shape: const CircleBorder(),
@@ -271,7 +283,7 @@ class _PlayButton extends StatelessWidget {
               child: Icon(
                 playing ? Icons.pause : Icons.play_arrow,
                 color: colors.textPrimary,
-                size: 26,
+                size: spacing.lg,
               ),
             ),
           ),

@@ -5,7 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
-import '../home/widgets/sync_badge.dart';
+import '../../ui/app_bottom_sheet.dart';
+import '../../ui/app_button.dart';
+import '../../ui/app_dialog.dart';
+import '../../ui/app_text_field.dart';
+import '../../ui/loading_indicator.dart';
+import '../../ui/status_badge.dart';
 import 'audio_player_bar.dart';
 import 'details_controller.dart';
 import 'markdown_helpers.dart';
@@ -19,13 +24,21 @@ enum DetailsTab { summary, notes, transcript }
 ///
 /// Reachable as `/inbox/:id`, `/calendar/:id`, `/explore/recording/:id`.
 class DetailsScreen extends ConsumerStatefulWidget {
-  const DetailsScreen({super.key, required this.id});
+  const DetailsScreen({super.key, required this.id, this.embedded = false});
 
   final String id;
+
+  /// When true the screen is rendered inside a desktop two-pane layout: the
+  /// back affordance is dropped (there is no route to pop) and the body keeps a
+  /// reading-width clamp so the notes/transcript don't sprawl across the pane.
+  final bool embedded;
 
   @override
   ConsumerState<DetailsScreen> createState() => _DetailsScreenState();
 }
+
+/// Reading-width clamp for long-form detail content on wide panes.
+const double _detailReadingMaxWidth = 720;
 
 class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   DetailsTab _tab = DetailsTab.notes;
@@ -108,18 +121,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     final discard = await showDialog<bool>(
       context: context,
       builder: (context) {
-        final colors =
-            Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+        final colors = context.colors;
 
-        return AlertDialog(
+        return AppDialog(
           title: Text(t.details.unsavedTitle),
           content: Text(t.details.unsavedBody),
           actions: [
-            TextButton(
+            AppTextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(t.details.keepEditing),
             ),
-            TextButton(
+            AppTextButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: TextButton.styleFrom(foregroundColor: colors.failed),
               child: Text(t.details.discard),
@@ -141,34 +153,30 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   }
 
   Future<void> _onMoreOptions() async {
-    final action = await showModalBottomSheet<_MoreAction>(
+    final action = await showAppBottomSheet<_MoreAction>(
       context: context,
       builder: (context) {
-        final colors =
-            Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+        final colors = context.colors;
+        final typography = context.typography;
 
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(
-                  Icons.folder_outlined,
-                  color: colors.textSecondary,
-                ),
-                title: Text(t.details.moveToSpace),
-                onTap: () => Navigator.of(context).pop(_MoreAction.move),
+        return AppBottomSheet(
+          bottomPadding: 0,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: Icon(Icons.folder_outlined, color: colors.textSecondary),
+              title: Text(t.details.moveToSpace),
+              onTap: () => Navigator.of(context).pop(_MoreAction.move),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: colors.failed),
+              title: Text(
+                t.details.delete,
+                style: typography.bodySmall.copyWith(color: colors.failed),
               ),
-              ListTile(
-                leading: Icon(Icons.delete_outline, color: colors.failed),
-                title: Text(
-                  t.details.delete,
-                  style: TextStyle(color: colors.failed),
-                ),
-                onTap: () => Navigator.of(context).pop(_MoreAction.delete),
-              ),
-            ],
-          ),
+              onTap: () => Navigator.of(context).pop(_MoreAction.delete),
+            ),
+          ],
         );
       },
     );
@@ -185,18 +193,17 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
-        final colors =
-            Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+        final colors = context.colors;
 
-        return AlertDialog(
+        return AppDialog(
           title: Text(t.details.deleteConfirmTitle),
           content: Text(t.details.deleteConfirmBody),
           actions: [
-            TextButton(
+            AppTextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(t.common.cancel),
             ),
-            TextButton(
+            AppTextButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: TextButton.styleFrom(foregroundColor: colors.failed),
               child: Text(t.details.delete),
@@ -217,50 +224,49 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
     final controller = ref.read(detailsControllerProvider(widget.id).notifier);
     final spaces = await controller.spaces();
     if (!mounted) return;
-    final target = await showModalBottomSheet<WorkspaceRow>(
+    final target = await showAppBottomSheet<WorkspaceRow>(
       context: context,
       builder: (context) {
-        final colors =
-            Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+        final colors = context.colors;
+        final spacing = context.spacing;
+        final typography = context.typography;
 
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        return AppBottomSheet(
+          title: Text(
+            t.details.moveToSpace,
+            style: typography.body.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colors.textPrimary,
+            ),
+          ),
+          children: [
+            if (spaces.isEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                padding: EdgeInsets.fromLTRB(
+                  spacing.lg,
+                  spacing.xs,
+                  spacing.lg,
+                  spacing.lg,
+                ),
                 child: Text(
-                  t.details.moveToSpace,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: colors.textPrimary,
+                  t.spaces.empty,
+                  style: typography.bodySmall.copyWith(
+                    color: colors.textSecondary,
                   ),
+                ),
+              )
+            else
+              ...spaces.map(
+                (ws) => ListTile(
+                  leading: Icon(
+                    Icons.folder_outlined,
+                    color: colors.textSecondary,
+                  ),
+                  title: Text(ws.name),
+                  onTap: () => Navigator.of(context).pop(ws),
                 ),
               ),
-              if (spaces.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                  child: Text(
-                    t.spaces.empty,
-                    style: TextStyle(color: colors.textSecondary),
-                  ),
-                )
-              else
-                ...spaces.map(
-                  (ws) => ListTile(
-                    leading: Icon(
-                      Icons.folder_outlined,
-                      color: colors.textSecondary,
-                    ),
-                    title: Text(ws.name),
-                    onTap: () => Navigator.of(context).pop(ws),
-                  ),
-                ),
-              const SizedBox(height: 8),
-            ],
-          ),
+          ],
         );
       },
     );
@@ -271,8 +277,10 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(detailsControllerProvider(widget.id));
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final dirtyDotOffset = -spacing.xs / spacing.xxs;
+    final dirtyDotSize = spacing.xs + spacing.xs / spacing.xxs;
     _syncFromState(state);
 
     return PopScope(
@@ -288,6 +296,7 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
       child: Scaffold(
         backgroundColor: colors.background,
         appBar: AppBar(
+          automaticallyImplyLeading: !widget.embedded,
           backgroundColor: colors.background,
           surfaceTintColor: colors.background,
           title: Text(
@@ -312,14 +321,14 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Icon(Icons.check, color: colors.textPrimary),
+                    Icon(Icons.check, color: colors.onAccent),
                     if (_isDirty)
                       Positioned(
-                        right: -2,
-                        top: -2,
+                        right: dirtyDotOffset,
+                        top: dirtyDotOffset,
                         child: Container(
-                          width: 10,
-                          height: 10,
+                          width: dirtyDotSize,
+                          height: dirtyDotSize,
                           decoration: BoxDecoration(
                             color: colors.failed,
                             shape: BoxShape.circle,
@@ -336,39 +345,50 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
   }
 
   Widget _buildBody(DetailsState state) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
 
     if (state.isLoading) {
-      return Center(child: CircularProgressIndicator(color: colors.accent));
+      return Center(child: LoadingIndicator(color: colors.accent));
     }
     if (state.notFound) {
       return Center(
         child: Text(
           t.details.notFound,
-          style: TextStyle(color: colors.textSecondary),
+          style: typography.bodySmall.copyWith(color: colors.textSecondary),
         ),
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      children: [
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _detailReadingMaxWidth),
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            spacing.md,
+            spacing.xs,
+            spacing.md,
+            spacing.xxl + spacing.xxl,
+          ),
+          children: [
         _MetaRow(
           badge: state.badge,
           coreId: state.coreId,
           processingStatus: state.row?.processingStatus,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.sm),
         AudioPlayerBar(source: state.audioSource),
-        const SizedBox(height: 16),
+        SizedBox(height: spacing.md),
         _SegmentedControl(
           active: _tab,
           onChanged: (tab) => setState(() => _tab = tab),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: spacing.md),
         _buildTab(state),
-      ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -413,34 +433,33 @@ class _MetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
     final badgeAccent = colors.badgeColor(badge);
 
     // Folder/space badge and the sync-state badge sit side by side as peers.
     // Wrap so they fold onto a second line on a narrow screen rather than
     // overflowing.
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: spacing.xs,
+      runSpacing: spacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: badgeAccent.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
+        StatusBadge.label(
+          label: badge,
+          color: badgeAccent,
+          showDot: false,
+          backgroundColor: badgeAccent.withValues(alpha: 0.15),
+          textColor: badgeAccent,
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.sm,
+            vertical: spacing.xxs,
           ),
-          child: Text(
-            badge,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: badgeAccent,
-            ),
-          ),
+          borderRadius: radius.xl,
+          fontSize: 12,
         ),
-        SyncBadge(coreId: coreId, processingStatus: processingStatus),
+        StatusBadge.sync(coreId: coreId, processingStatus: processingStatus),
       ],
     );
   }
@@ -456,18 +475,21 @@ class _SegmentedControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+    final transparent = colors.surface.withValues(alpha: 0);
     final segments = <(DetailsTab, String)>[
       (DetailsTab.summary, t.details.summary),
       (DetailsTab.notes, t.details.notes),
       (DetailsTab.transcript, t.details.transcript),
     ];
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: EdgeInsets.all(spacing.xxs),
       decoration: BoxDecoration(
         color: colors.border,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(radius.md),
       ),
       child: Row(
         children: segments.map((seg) {
@@ -477,16 +499,15 @@ class _SegmentedControl extends StatelessWidget {
               key: ValueKey('segment-${seg.$1.name}'),
               onTap: () => onChanged(seg.$1),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: EdgeInsets.symmetric(vertical: spacing.xs),
                 decoration: BoxDecoration(
-                  color: selected ? colors.surface : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
+                  color: selected ? colors.surface : transparent,
+                  borderRadius: BorderRadius.circular(radius.sm),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   seg.$2,
-                  style: TextStyle(
-                    fontSize: 13,
+                  style: typography.label.copyWith(
                     fontWeight: FontWeight.w600,
                     color: selected ? colors.textPrimary : colors.textSecondary,
                   ),
@@ -509,22 +530,24 @@ class _SummarySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
     final hasSummary = summary != null && summary!.trim().isNotEmpty;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(spacing.md),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(radius.md),
         border: Border.all(color: colors.border),
       ),
       child: hasSummary
           ? MarkdownBody(data: summary!)
           : Text(
               t.details.noSummary,
-              style: TextStyle(color: colors.textMuted, fontSize: 15),
+              style: typography.bodySmall.copyWith(color: colors.textMuted),
             ),
     );
   }
@@ -555,8 +578,9 @@ class _NotesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -566,28 +590,30 @@ class _NotesSection extends StatelessWidget {
           children: [
             Text(
               t.details.notes,
-              style: TextStyle(
-                fontSize: 13,
+              style: typography.label.copyWith(
                 fontWeight: FontWeight.w600,
                 color: colors.textSecondary,
               ),
             ),
             if (processingFailed || pendingUpload)
-              TextButton.icon(
+              AppTextButton.icon(
                 key: const ValueKey('details-retry'),
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh, size: 16),
+                icon: Icon(Icons.refresh, size: spacing.md),
                 label: Text(t.common.retry),
                 style: TextButton.styleFrom(
-                  foregroundColor: colors.textPrimary,
+                  foregroundColor: colors.onAccent,
                   backgroundColor: colors.accent,
                 ),
               )
             else if (!isProcessing)
-              TextButton.icon(
+              AppTextButton.icon(
                 key: const ValueKey('details-edit-toggle'),
                 onPressed: onToggleEdit,
-                icon: Icon(isEditing ? Icons.visibility : Icons.edit, size: 16),
+                icon: Icon(
+                  isEditing ? Icons.visibility : Icons.edit,
+                  size: spacing.md,
+                ),
                 label: Text(isEditing ? t.details.preview : t.details.edit),
                 style: TextButton.styleFrom(
                   foregroundColor: colors.textSecondary,
@@ -595,7 +621,7 @@ class _NotesSection extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: spacing.xs),
         if (pendingUpload)
           _PendingUploadRow(label: t.cardStatus.pendingUpload)
         else if (isProcessing)
@@ -621,10 +647,11 @@ class _NotesPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final body = text.trim().isEmpty ? '*${t.details.noNotes}*' : text;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(4),
+      padding: EdgeInsets.all(spacing.xxs),
       child: MarkdownBody(data: body),
     );
   }
@@ -641,17 +668,19 @@ class _MarkdownEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.all(4),
+          padding: EdgeInsets.all(spacing.xxs),
           decoration: BoxDecoration(
             color: colors.border,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(radius.sm),
           ),
           child: Row(
             children: [
@@ -674,37 +703,20 @@ class _MarkdownEditor extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        TextField(
+        SizedBox(height: spacing.xs),
+        AppTextField(
           key: const ValueKey('details-editor'),
           controller: controller,
           maxLines: null,
           minLines: 8,
           keyboardType: TextInputType.multiline,
           textAlignVertical: TextAlignVertical.top,
-          style: TextStyle(
+          style: typography.body.copyWith(
             color: colors.textPrimary,
-            fontSize: 16,
             height: 1.5,
           ),
-          decoration: InputDecoration(
-            hintText: t.details.notesPlaceholder,
-            hintStyle: TextStyle(color: colors.textMuted),
-            filled: true,
-            fillColor: colors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: colors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: colors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: colors.accent),
-            ),
-          ),
+          hint: t.details.notesPlaceholder,
+          hintStyle: typography.bodySmall.copyWith(color: colors.textMuted),
         ),
       ],
     );
@@ -726,28 +738,29 @@ class _ToolbarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
 
     return Expanded(
       child: InkWell(
         key: ValueKey('toolbar-$label'),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(radius.sm),
         onTap: onTap,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          margin: EdgeInsets.symmetric(horizontal: spacing.xxs),
+          padding: EdgeInsets.symmetric(vertical: spacing.xs),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: colors.surface,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(radius.sm),
             border: Border.all(color: colors.border),
           ),
           child: Text(
             label,
-            style: TextStyle(
+            style: typography.label.copyWith(
               color: colors.textPrimary,
-              fontSize: 13,
               fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
               fontStyle: italic ? FontStyle.italic : FontStyle.normal,
             ),
@@ -768,15 +781,18 @@ class _TranscriptSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final typography = context.typography;
 
     if (isProcessing) {
       return _ProcessingRow(label: t.recording.transcribing);
     }
     return Text(
       text.trim().isEmpty ? t.recording.transcribing : text,
-      style: TextStyle(fontSize: 14, height: 1.6, color: colors.textSecondary),
+      style: typography.bodySmall.copyWith(
+        height: 1.6,
+        color: colors.textSecondary,
+      ),
     );
   }
 }
@@ -790,22 +806,25 @@ class _ProcessingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final inlineGap = spacing.xs + spacing.xs / spacing.xxs;
+    final strokeWidth = spacing.xs / spacing.xxs;
 
     return Row(
       key: const ValueKey('details-processing'),
       children: [
-        SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: colors.accent,
-          ),
+        LoadingIndicator(
+          size: spacing.md,
+          strokeWidth: strokeWidth,
+          color: colors.accent,
         ),
-        const SizedBox(width: 10),
-        Text(label, style: TextStyle(color: colors.textSecondary)),
+        SizedBox(width: inlineGap),
+        Text(
+          label,
+          style: typography.bodySmall.copyWith(color: colors.textSecondary),
+        ),
       ],
     );
   }
@@ -818,16 +837,25 @@ class _PendingUploadRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final inlineGap = spacing.xs + spacing.xs / spacing.xxs;
 
     return Row(
       key: const ValueKey('details-pending-upload'),
       children: [
-        Icon(Icons.cloud_off_outlined, size: 18, color: colors.textMuted),
-        const SizedBox(width: 10),
+        Icon(
+          Icons.cloud_off_outlined,
+          size: spacing.md,
+          color: colors.textMuted,
+        ),
+        SizedBox(width: inlineGap),
         Expanded(
-          child: Text(label, style: TextStyle(color: colors.textSecondary)),
+          child: Text(
+            label,
+            style: typography.bodySmall.copyWith(color: colors.textSecondary),
+          ),
         ),
       ],
     );
@@ -841,15 +869,21 @@ class _ErrorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final inlineGap = spacing.xs + spacing.xs / spacing.xxs;
 
     return Row(
       key: const ValueKey('details-error'),
       children: [
-        Icon(Icons.error_outline, size: 20, color: colors.failed),
-        const SizedBox(width: 10),
-        Text(label, style: TextStyle(color: colors.failed)),
+        Icon(
+          Icons.error_outline,
+          size: spacing.md + spacing.xxs,
+          color: colors.failed,
+        ),
+        SizedBox(width: inlineGap),
+        Text(label, style: typography.bodySmall.copyWith(color: colors.failed)),
       ],
     );
   }

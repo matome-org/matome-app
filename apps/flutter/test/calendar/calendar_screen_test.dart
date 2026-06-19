@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/calendar/calendar_controller.dart';
 import 'package:matome_flutter/features/calendar/calendar_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -74,7 +75,7 @@ Widget _app(AppDatabase db, {required DateTime now}) {
       calendarNowProvider.overrideWithValue(() => now),
     ],
     child: TranslationProvider(
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
   );
 }
@@ -85,8 +86,9 @@ void main() {
   setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  testWidgets('renders the month grid with the selected (today) heading',
-      (tester) async {
+  testWidgets('renders the month grid with the selected (today) heading', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app(db, now: DateTime(2026, 4, 10, 9)));
     await tester.pumpAndSettle();
 
@@ -108,7 +110,12 @@ void main() {
   });
 
   testWidgets('tapping a day lists that day\'s recordings', (tester) async {
-    await _seed(db, id: 'r5', title: 'Morning sync', createdAt: _epoch(2026, 4, 5));
+    await _seed(
+      db,
+      id: 'r5',
+      title: 'Morning sync',
+      createdAt: _epoch(2026, 4, 5),
+    );
     await tester.pumpWidget(_app(db, now: DateTime(2026, 4, 10, 9)));
     await tester.pumpAndSettle();
 
@@ -125,8 +132,20 @@ void main() {
   testWidgets('space filter narrows the day list', (tester) async {
     final eng = await db.workspacesDao.createWorkspace('Engineering');
     final day = _epoch(2026, 4, 10);
-    await _seed(db, id: 'r-eng', title: 'Eng standup', createdAt: day, workspaceId: eng.id);
-    await _seed(db, id: 'r-inbox', title: 'Inbox note', createdAt: day, badge: 'Inbox');
+    await _seed(
+      db,
+      id: 'r-eng',
+      title: 'Eng standup',
+      createdAt: day,
+      workspaceId: eng.id,
+    );
+    await _seed(
+      db,
+      id: 'r-inbox',
+      title: 'Inbox note',
+      createdAt: day,
+      badge: 'Inbox',
+    );
 
     await tester.pumpWidget(_app(db, now: DateTime(2026, 4, 10, 9)));
     await tester.pumpAndSettle();
@@ -149,8 +168,18 @@ void main() {
   });
 
   testWidgets('month nav reloads the day list', (tester) async {
-    await _seed(db, id: 'apr', title: 'April rec', createdAt: _epoch(2026, 4, 10));
-    await _seed(db, id: 'mar', title: 'March rec', createdAt: _epoch(2026, 3, 10));
+    await _seed(
+      db,
+      id: 'apr',
+      title: 'April rec',
+      createdAt: _epoch(2026, 4, 10),
+    );
+    await _seed(
+      db,
+      id: 'mar',
+      title: 'March rec',
+      createdAt: _epoch(2026, 3, 10),
+    );
 
     await tester.pumpWidget(_app(db, now: DateTime(2026, 4, 10, 9)));
     await tester.pumpAndSettle();
@@ -166,7 +195,12 @@ void main() {
   });
 
   testWidgets('tapping a recording navigates to /calendar/:id', (tester) async {
-    await _seed(db, id: 'rec-42', title: 'Routed rec', createdAt: _epoch(2026, 4, 10));
+    await _seed(
+      db,
+      id: 'rec-42',
+      title: 'Routed rec',
+      createdAt: _epoch(2026, 4, 10),
+    );
     await tester.pumpWidget(_app(db, now: DateTime(2026, 4, 10, 9)));
     await tester.pumpAndSettle();
 
