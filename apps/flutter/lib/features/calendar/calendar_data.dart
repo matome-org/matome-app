@@ -1,12 +1,12 @@
 import '../../core/db/daos/recordings_dao.dart';
 
-/// Display-ready card for one recording in the Calendar day list.
+/// Display-ready item for one recording in the Calendar day list.
 ///
-/// Ported from apps/mobile/processes/calendarData.ts `CalendarRecordingCard`.
+/// Ported from apps/mobile/processes/calendarData.ts day-recording data.
 /// Carries both `workspaceName` (for display) and `workspaceId` (so the space
 /// filter can target a specific space even when two spaces share a name).
-class CalendarRecordingCard {
-  const CalendarRecordingCard({
+class CalendarRecordingItem {
+  const CalendarRecordingItem({
     required this.id,
     required this.title,
     required this.duration,
@@ -92,8 +92,7 @@ class CalendarData {
   /// Window: local midnight on the 1st → last millisecond of the last day.
   /// Ports `fetchDaysWithRecordings`.
   Future<Set<int>> fetchDaysWithRecordings(int year, int month) async {
-    final monthStart =
-        DateTime(year, month + 1, 1).millisecondsSinceEpoch;
+    final monthStart = DateTime(year, month + 1, 1).millisecondsSinceEpoch;
     // DateTime(year, month + 2, 0) == last day of `month` (1-indexed month+1).
     final lastDay = DateTime(year, month + 2, 0, 23, 59, 59, 999);
     final monthEnd = lastDay.millisecondsSinceEpoch;
@@ -102,8 +101,7 @@ class CalendarData {
 
     final days = <int>{};
     for (final record in records) {
-      final day =
-          DateTime.fromMillisecondsSinceEpoch(record.createdAt).day;
+      final day = DateTime.fromMillisecondsSinceEpoch(record.createdAt).day;
       days.add(day);
     }
     return days;
@@ -112,15 +110,18 @@ class CalendarData {
   /// The day's recordings for [date], joined with workspace names and mapped to
   /// display cards. Window: local midnight of [date] → +24h-1ms. Preserves the
   /// DB ordering (newest first). Ports `fetchDayRecordings`.
-  Future<List<CalendarRecordingCard>> fetchDayRecordings(DateTime date) async {
-    final dayStart =
-        DateTime(date.year, date.month, date.day).millisecondsSinceEpoch;
+  Future<List<CalendarRecordingItem>> fetchDayRecordings(DateTime date) async {
+    final dayStart = DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).millisecondsSinceEpoch;
 
     final rows = await _dao.recordingsByDayWithWorkspace(dayStart);
 
     return rows
         .map(
-          (row) => CalendarRecordingCard(
+          (row) => CalendarRecordingItem(
             id: row.recording.id,
             title: row.recording.title,
             duration: parseDurationSeconds(row.recording.duration),

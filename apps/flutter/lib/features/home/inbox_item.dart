@@ -1,20 +1,20 @@
 import '../../core/db/app_database.dart';
 import '../../core/db/recording_card.dart';
 
-/// One Inbox row: the display [RecordingCard] plus the raw `createdAt` epoch
+/// One Inbox row: the display [RecordingItem] plus the raw `createdAt` epoch
 /// (ms) needed for date grouping and search over notes — neither of which the
 /// card alone carries.
 class InboxItem {
   const InboxItem({required this.card, required this.createdAt});
 
-  final RecordingCard card;
+  final RecordingItem card;
 
   /// `recordings.createdAt` (epoch ms), retained from the DB row for grouping.
   final int createdAt;
 
   factory InboxItem.fromRow(RecordingRow row, {String? workspaceName}) {
     return InboxItem(
-      card: RecordingCard.fromRow(row, workspaceName: workspaceName),
+      card: RecordingItem.fromRow(row, workspaceName: workspaceName),
       createdAt: row.createdAt,
     );
   }

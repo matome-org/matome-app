@@ -72,16 +72,22 @@ void main() {
       expect(db.schemaVersion, 5);
     });
 
-    test('onCreate builds recordings/workspaces/recording_drafts tables', () async {
-      final names = await db
-          .customSelect(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%'",
-          )
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(names, containsAll(<String>['recordings', 'workspaces', 'recording_drafts']));
-    });
+    test(
+      'onCreate builds recordings/workspaces/recording_drafts tables',
+      () async {
+        final names = await db
+            .customSelect(
+              "SELECT name FROM sqlite_master WHERE type='table' "
+              "AND name NOT LIKE 'sqlite_%'",
+            )
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(
+          names,
+          containsAll(<String>['recordings', 'workspaces', 'recording_drafts']),
+        );
+      },
+    );
 
     test('recordings table has the migrated column contract', () async {
       final cols = await db
@@ -116,18 +122,25 @@ void main() {
           .get();
       expect(
         cols,
-        containsAll(<String>['id', 'created_at', 'segments_json', 'duration_ms']),
+        containsAll(<String>[
+          'id',
+          'created_at',
+          'segments_json',
+          'duration_ms',
+        ]),
       );
     });
 
-    test('workspaces seeds the default "Pessoal" workspace (m002 INSERT OR IGNORE)',
-        () async {
-      final all = await db.workspacesDao.getWorkspaces();
-      expect(all, hasLength(1));
-      expect(all.single.id, 'ws_default_personal');
-      expect(all.single.name, 'Pessoal');
-      expect(all.single.isDefault, 1);
-    });
+    test(
+      'workspaces seeds the default "Pessoal" workspace (m002 INSERT OR IGNORE)',
+      () async {
+        final all = await db.workspacesDao.getWorkspaces();
+        expect(all, hasLength(1));
+        expect(all.single.id, 'ws_default_personal');
+        expect(all.single.name, 'Pessoal');
+        expect(all.single.isDefault, 1);
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -136,9 +149,15 @@ void main() {
   group('recordings DAO', () {
     test('insert + getById + getAll (newest first)', () async {
       final dao = db.recordingsDao;
-      await dao.insertRecording(_recording(id: 'r1', title: 'One', createdAt: 100));
-      await dao.insertRecording(_recording(id: 'r2', title: 'Two', createdAt: 300));
-      await dao.insertRecording(_recording(id: 'r3', title: 'Three', createdAt: 200));
+      await dao.insertRecording(
+        _recording(id: 'r1', title: 'One', createdAt: 100),
+      );
+      await dao.insertRecording(
+        _recording(id: 'r2', title: 'Two', createdAt: 300),
+      );
+      await dao.insertRecording(
+        _recording(id: 'r3', title: 'Three', createdAt: 200),
+      );
 
       final one = await dao.getRecordingById('r1');
       expect(one?.title, 'One');
@@ -151,7 +170,11 @@ void main() {
       final dao = db.recordingsDao;
       await dao.insertRecording(_recording(id: 'inbox1', createdAt: 10));
       await dao.insertRecording(
-        _recording(id: 'ws1', createdAt: 20, workspaceId: 'ws_default_personal'),
+        _recording(
+          id: 'ws1',
+          createdAt: 20,
+          workspaceId: 'ws_default_personal',
+        ),
       );
       await dao.insertRecording(_recording(id: 'inbox2', createdAt: 30));
 
@@ -161,7 +184,9 @@ void main() {
 
     test('update writes only patched fields; delete removes the row', () async {
       final dao = db.recordingsDao;
-      await dao.insertRecording(_recording(id: 'r1', title: 'Old', summary: 's', createdAt: 1));
+      await dao.insertRecording(
+        _recording(id: 'r1', title: 'Old', summary: 's', createdAt: 1),
+      );
 
       await dao.updateRecording(
         'r1',
@@ -178,8 +203,12 @@ void main() {
 
     test('upsert inserts then updates on conflict', () async {
       final dao = db.recordingsDao;
-      await dao.upsertRecording(_recording(id: 'r1', title: 'First', createdAt: 1));
-      await dao.upsertRecording(_recording(id: 'r1', title: 'Second', createdAt: 2));
+      await dao.upsertRecording(
+        _recording(id: 'r1', title: 'First', createdAt: 1),
+      );
+      await dao.upsertRecording(
+        _recording(id: 'r1', title: 'Second', createdAt: 2),
+      );
       final row = await dao.getRecordingById('r1');
       expect(row?.title, 'Second');
       expect(await dao.getAllRecordings(), hasLength(1));
@@ -213,39 +242,53 @@ void main() {
       expect(rows.map((r) => r.id), isNot(contains('nextDay')));
     });
 
-    test('recordingsByDayWithWorkspace LEFT JOINs the workspace name', () async {
+    test(
+      'recordingsByDayWithWorkspace LEFT JOINs the workspace name',
+      () async {
+        final dao = db.recordingsDao;
+        const dayStart = 1_700_000_000_000;
+        await db.workspacesDao.createWorkspace('Work');
+        final ws = (await db.workspacesDao.getWorkspaces()).firstWhere(
+          (w) => w.name == 'Work',
+        );
+
+        await dao.insertRecording(
+          _recording(id: 'inbox', createdAt: dayStart, workspaceId: null),
+        );
+        await dao.insertRecording(
+          _recording(
+            id: 'assigned',
+            createdAt: dayStart + 1,
+            workspaceId: ws.id,
+          ),
+        );
+
+        final rows = await dao.recordingsByDayWithWorkspace(dayStart);
+        final byId = {for (final r in rows) r.recording.id: r.workspaceName};
+        expect(byId['assigned'], 'Work');
+        expect(byId['inbox'], isNull); // no workspace → null name
+
+        // cardsByDay maps rows → UI cards with the joined name.
+        final cards = await dao.cardsByDay(dayStart);
+        final assignedCard = cards.firstWhere(
+          (RecordingItem c) => c.id == 'assigned',
+        );
+        expect(assignedCard.workspaceName, 'Work');
+      },
+    );
+
+    test('RecordingItem.fromRow maps isProcessing int → bool', () async {
       final dao = db.recordingsDao;
-      const dayStart = 1_700_000_000_000;
-      await db.workspacesDao.createWorkspace('Work');
-      final ws = (await db.workspacesDao.getWorkspaces())
-          .firstWhere((w) => w.name == 'Work');
-
       await dao.insertRecording(
-        _recording(id: 'inbox', createdAt: dayStart, workspaceId: null),
-      );
-      await dao.insertRecording(
-        _recording(id: 'assigned', createdAt: dayStart + 1, workspaceId: ws.id),
-      );
-
-      final rows = await dao.recordingsByDayWithWorkspace(dayStart);
-      final byId = {for (final r in rows) r.recording.id: r.workspaceName};
-      expect(byId['assigned'], 'Work');
-      expect(byId['inbox'], isNull); // no workspace → null name
-
-      // cardsByDay maps rows → UI cards with the joined name.
-      final cards = await dao.cardsByDay(dayStart);
-      final assignedCard =
-          cards.firstWhere((RecordingCard c) => c.id == 'assigned');
-      expect(assignedCard.workspaceName, 'Work');
-    });
-
-    test('RecordingCard.fromRow maps isProcessing int → bool', () async {
-      final dao = db.recordingsDao;
-      await dao.insertRecording(
-        _recording(id: 'p', createdAt: 1, isProcessing: 1, processingStatus: 'processing'),
+        _recording(
+          id: 'p',
+          createdAt: 1,
+          isProcessing: 1,
+          processingStatus: 'processing',
+        ),
       );
       final row = await dao.getRecordingById('p');
-      final card = RecordingCard.fromRow(row!);
+      final card = RecordingItem.fromRow(row!);
       expect(card.isProcessing, isTrue);
       expect(card.processingStatus, 'processing');
     });
@@ -307,49 +350,57 @@ void main() {
   // (d) workspaces CRUD + delete returns recordings to inbox
   // -------------------------------------------------------------------------
   group('workspaces DAO', () {
-    test('create adds a non-default workspace, oldest-first ordering', () async {
-      final dao = db.workspacesDao;
-      final a = await dao.createWorkspace('Alpha');
-      expect(a.isDefault, 0);
-      expect(a.name, 'Alpha');
+    test(
+      'create adds a non-default workspace, oldest-first ordering',
+      () async {
+        final dao = db.workspacesDao;
+        final a = await dao.createWorkspace('Alpha');
+        expect(a.isDefault, 0);
+        expect(a.name, 'Alpha');
 
-      final all = await dao.getWorkspaces();
-      // default seed (createdAt ~now) + Alpha; ordered by createdAt ASC.
-      expect(all.map((w) => w.name), containsAll(<String>['Pessoal', 'Alpha']));
-    });
+        final all = await dao.getWorkspaces();
+        // default seed (createdAt ~now) + Alpha; ordered by createdAt ASC.
+        expect(
+          all.map((w) => w.name),
+          containsAll(<String>['Pessoal', 'Alpha']),
+        );
+      },
+    );
 
     test('createWorkspace trims the name', () async {
       final ws = await db.workspacesDao.createWorkspace('  Spaced  ');
       expect(ws.name, 'Spaced');
     });
 
-    test('deleteWorkspace returns its recordings to the inbox (workspaceId NULL)',
-        () async {
-      final wsDao = db.workspacesDao;
-      final recDao = db.recordingsDao;
+    test(
+      'deleteWorkspace returns its recordings to the inbox (workspaceId NULL)',
+      () async {
+        final wsDao = db.workspacesDao;
+        final recDao = db.recordingsDao;
 
-      final ws = await wsDao.createWorkspace('Temp');
-      await recDao.insertRecording(
-        _recording(id: 'r1', createdAt: 1, workspaceId: ws.id),
-      );
-      await recDao.insertRecording(
-        _recording(id: 'r2', createdAt: 2, workspaceId: ws.id),
-      );
-      // A recording in a different workspace must stay put.
-      final other = await wsDao.createWorkspace('Other');
-      await recDao.insertRecording(
-        _recording(id: 'r3', createdAt: 3, workspaceId: other.id),
-      );
+        final ws = await wsDao.createWorkspace('Temp');
+        await recDao.insertRecording(
+          _recording(id: 'r1', createdAt: 1, workspaceId: ws.id),
+        );
+        await recDao.insertRecording(
+          _recording(id: 'r2', createdAt: 2, workspaceId: ws.id),
+        );
+        // A recording in a different workspace must stay put.
+        final other = await wsDao.createWorkspace('Other');
+        await recDao.insertRecording(
+          _recording(id: 'r3', createdAt: 3, workspaceId: other.id),
+        );
 
-      await wsDao.deleteWorkspace(ws.id);
+        await wsDao.deleteWorkspace(ws.id);
 
-      expect(await wsDao.getWorkspaceById(ws.id), isNull);
-      final inbox = await recDao.getInboxRecordings();
-      expect(inbox.map((r) => r.id), containsAll(<String>['r1', 'r2']));
+        expect(await wsDao.getWorkspaceById(ws.id), isNull);
+        final inbox = await recDao.getInboxRecordings();
+        expect(inbox.map((r) => r.id), containsAll(<String>['r1', 'r2']));
 
-      final r3 = await recDao.getRecordingById('r3');
-      expect(r3?.workspaceId, other.id); // untouched
-    });
+        final r3 = await recDao.getRecordingById('r3');
+        expect(r3?.workspaceId, other.id); // untouched
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -459,17 +510,20 @@ void main() {
       expect(await dao.getAllRecordings(), hasLength(2));
     });
 
-    test('recordingByCoreId resolves the backfilled row after migration', () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'recordingByCoreId resolves the backfilled row after migration',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      final byCore = await upgraded.recordingsDao.recordingByCoreId(42);
-      expect(byCore, isNotNull);
-      expect(byCore!.id, '42');
+        final byCore = await upgraded.recordingsDao.recordingByCoreId(42);
+        expect(byCore, isNotNull);
+        expect(byCore!.id, '42');
 
-      // The local-only row is intentionally not matched (coreId NULL).
-      expect(await upgraded.recordingsDao.recordingByCoreId(999), isNull);
-    });
+        // The local-only row is intentionally not matched (coreId NULL).
+        expect(await upgraded.recordingsDao.recordingByCoreId(999), isNull);
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -487,16 +541,22 @@ void main() {
       expect(isLocalRecordingId('42'), isFalse);
     });
 
-    test('coreId column round-trips through insert + recordingByCoreId', () async {
-      final dao = db.recordingsDao;
-      final localId = mintLocalRecordingId();
-      await dao.insertRecording(
-        _recording(id: localId, createdAt: 1, processingStatus: kProcessingStatusPendingUpload)
-            .copyWith(coreId: const Value(7)),
-      );
-      final byCore = await dao.recordingByCoreId(7);
-      expect(byCore?.id, localId);
-      expect(byCore?.coreId, 7);
-    });
+    test(
+      'coreId column round-trips through insert + recordingByCoreId',
+      () async {
+        final dao = db.recordingsDao;
+        final localId = mintLocalRecordingId();
+        await dao.insertRecording(
+          _recording(
+            id: localId,
+            createdAt: 1,
+            processingStatus: kProcessingStatusPendingUpload,
+          ).copyWith(coreId: const Value(7)),
+        );
+        final byCore = await dao.recordingByCoreId(7);
+        expect(byCore?.id, localId);
+        expect(byCore?.coreId, 7);
+      },
+    );
   });
 }

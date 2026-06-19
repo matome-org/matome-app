@@ -12,7 +12,7 @@ InboxItem _item({
   required DateTime createdAt,
 }) {
   return InboxItem(
-    card: RecordingCard(
+    card: RecordingItem(
       id: id,
       title: title,
       summary: summary,
@@ -33,7 +33,12 @@ void main() {
 
   group('searchItems', () {
     final items = [
-      _item(id: '1', title: 'Standup notes', summary: 'weekly sync', createdAt: now),
+      _item(
+        id: '1',
+        title: 'Standup notes',
+        summary: 'weekly sync',
+        createdAt: now,
+      ),
       _item(id: '2', title: 'Idea dump', notes: 'rocket plans', createdAt: now),
       _item(id: '3', title: 'Groceries', createdAt: now),
     ];
@@ -84,8 +89,10 @@ void main() {
     });
 
     test('empty list yields no sections', () {
-      expect(groupByDate([], todayLabel: 'Today', yesterdayLabel: 'Yesterday'),
-          isEmpty);
+      expect(
+        groupByDate([], todayLabel: 'Today', yesterdayLabel: 'Yesterday'),
+        isEmpty,
+      );
     });
 
     test('older dated sections sort newest-first', () {

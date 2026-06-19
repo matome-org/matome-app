@@ -58,31 +58,32 @@ class _FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthSession> login({required String email, required String password}) =>
-      throw UnimplementedError();
+  Future<AuthSession> login({
+    required String email,
+    required String password,
+  }) => throw UnimplementedError();
   @override
   Future<AuthSession> register({
     required String email,
     required String password,
-  }) =>
-      throw UnimplementedError();
+  }) => throw UnimplementedError();
   @override
   Future<AuthSession> refresh() => throw UnimplementedError();
 }
 
 InboxItem _seedItem() => InboxItem(
-      card: const RecordingCard(
-        id: '1',
-        title: 'Standup notes',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        badge: 'work',
-        isProcessing: false,
-        mediaType: 'audio',
-        processingStatus: 'done',
-      ),
-      createdAt: DateTime(2024).millisecondsSinceEpoch,
-    );
+  card: const RecordingItem(
+    id: '1',
+    title: 'Standup notes',
+    timestamp: '9:00 AM',
+    duration: '0:30',
+    badge: 'work',
+    isProcessing: false,
+    mediaType: 'audio',
+    processingStatus: 'done',
+  ),
+  createdAt: DateTime(2024).millisecondsSinceEpoch,
+);
 
 GoRouter _buildRouter(WidgetRef ref) {
   final rootKey = GlobalKey<NavigatorState>();
@@ -103,27 +104,38 @@ GoRouter _buildRouter(WidgetRef ref) {
       StatefulShellRoute.indexedStack(
         builder: (c, s, shell) => ShellScaffold(navigationShell: shell),
         branches: [
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/inbox',
-              builder: (c, s) => const HomeScreen(),
-              routes: [
-                GoRoute(
-                  path: 'settings',
-                  builder: (c, s) => const SettingsScreen(),
-                ),
-              ],
-            ),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/calendar', builder: (c, s) => const CalendarScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/spaces', builder: (c, s) => const SpacesScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/satori', builder: (c, s) => const SatoriScreen()),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/inbox',
+                builder: (c, s) => const HomeScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'settings',
+                    builder: (c, s) => const SettingsScreen(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/calendar',
+                builder: (c, s) => const CalendarScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/spaces', builder: (c, s) => const SpacesScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/satori', builder: (c, s) => const SatoriScreen()),
+            ],
+          ),
         ],
       ),
     ],
@@ -201,8 +213,9 @@ void main() {
   });
   tearDown(() => db.close());
 
-  testWidgets('Sign out from Settings clears tokens and returns to Welcome',
-      (tester) async {
+  testWidgets('Sign out from Settings clears tokens and returns to Welcome', (
+    tester,
+  ) async {
     await tester.pumpWidget(_pumpApp(db: db, store: store));
     await tester.pumpAndSettle();
 
@@ -229,8 +242,9 @@ void main() {
     expect(find.byType(WelcomeScreen), findsOneWidget);
   });
 
-  testWidgets('Satori tab renders the medallion + roadmap cards',
-      (tester) async {
+  testWidgets('Satori tab renders the medallion + roadmap cards', (
+    tester,
+  ) async {
     await tester.pumpWidget(_pumpApp(db: db, store: store));
     await tester.pumpAndSettle();
 

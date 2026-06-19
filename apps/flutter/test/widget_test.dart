@@ -22,7 +22,7 @@ InboxItem _item({
 }) {
   final at = createdAt ?? DateTime.now();
   return InboxItem(
-    card: RecordingCard(
+    card: RecordingItem(
       id: id,
       title: title,
       summary: summary,
@@ -47,9 +47,7 @@ Widget _pumpHome(AsyncValue<List<InboxItem>> state) {
       // HomeScreen starts the W4 auto-retry service on first frame; stub it so
       // this widget test doesn't spin up a real reachability probe / periodic
       // timer (which would leave a pending Timer at teardown).
-      uploadRetryServiceProvider.overrideWith(
-        (ref) => _NoopRetryService(ref),
-      ),
+      uploadRetryServiceProvider.overrideWith((ref) => _NoopRetryService(ref)),
     ],
     child: MaterialApp(theme: buildAppTheme(), home: const HomeScreen()),
   );
@@ -66,8 +64,9 @@ class _NoopRetryService extends UploadRetryService {
 }
 
 void main() {
-  testWidgets('Inbox renders header and grouped recordings from Drift',
-      (tester) async {
+  testWidgets('Inbox renders header and grouped recordings from Drift', (
+    tester,
+  ) async {
     final now = DateTime.now();
     await tester.pumpWidget(
       _pumpHome(

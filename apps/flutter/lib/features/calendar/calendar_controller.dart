@@ -36,7 +36,7 @@ class CalendarState {
   final Set<int> daysWithRecordings;
 
   /// The selected day's recordings before the space filter is applied.
-  final List<CalendarRecordingCard> rawDayRecordings;
+  final List<CalendarRecordingItem> rawDayRecordings;
 
   final List<CalendarSpace> spaces;
   final String? selectedSpaceId;
@@ -48,7 +48,7 @@ class CalendarState {
   /// Filters on `workspaceId` (not name) so two spaces with identical names
   /// never bleed into each other's list. Ports the `filteredDayRecordings`
   /// memo from CalendarContainer.
-  List<CalendarRecordingCard> get dayRecordings {
+  List<CalendarRecordingItem> get dayRecordings {
     if (selectedSpaceId == null) return rawDayRecordings;
     return rawDayRecordings
         .where((r) => r.workspaceId == selectedSpaceId)
@@ -60,7 +60,7 @@ class CalendarState {
     int? month,
     int? selectedDay,
     Set<int>? daysWithRecordings,
-    List<CalendarRecordingCard>? rawDayRecordings,
+    List<CalendarRecordingItem>? rawDayRecordings,
     List<CalendarSpace>? spaces,
     Object? selectedSpaceId = _noChange,
     bool? isMonthLoading,
@@ -93,9 +93,7 @@ class CalendarState {
 ///     (CRITICAL-2 guard), clamping the selected day to the new month.
 class CalendarController extends StateNotifier<CalendarState> {
   CalendarController(this._ref, {DateTime? now})
-      : super(
-          _initial(now ?? DateTime.now()),
-        ) {
+    : super(_initial(now ?? DateTime.now())) {
     _bootstrap();
   }
 
@@ -121,7 +119,9 @@ class CalendarController extends StateNotifier<CalendarState> {
   Future<void> _bootstrap() async {
     await Future.wait([
       loadMonthDots(state.year, state.month),
-      loadDayRecordings(DateTime(state.year, state.month + 1, state.selectedDay)),
+      loadDayRecordings(
+        DateTime(state.year, state.month + 1, state.selectedDay),
+      ),
       loadSpaces(),
     ]);
   }
@@ -177,14 +177,11 @@ class CalendarController extends StateNotifier<CalendarState> {
   Future<void> changeMonth(int year, int month) async {
     if (!mounted) return;
     final daysInNewMonth = DateTime(year, month + 2, 0).day;
-    final targetDay =
-        state.selectedDay > daysInNewMonth ? 1 : state.selectedDay;
+    final targetDay = state.selectedDay > daysInNewMonth
+        ? 1
+        : state.selectedDay;
 
-    state = state.copyWith(
-      year: year,
-      month: month,
-      selectedDay: targetDay,
-    );
+    state = state.copyWith(year: year, month: month, selectedDay: targetDay);
 
     await Future.wait([
       loadDayRecordings(DateTime(year, month + 1, targetDay)),
@@ -226,5 +223,5 @@ final calendarNowProvider = Provider<DateTime Function()>(
 
 final calendarControllerProvider =
     StateNotifierProvider<CalendarController, CalendarState>(
-  (ref) => CalendarController(ref, now: ref.read(calendarNowProvider)()),
-);
+      (ref) => CalendarController(ref, now: ref.read(calendarNowProvider)()),
+    );

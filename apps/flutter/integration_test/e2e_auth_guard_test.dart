@@ -33,18 +33,18 @@ import '../test/support/fake_inbox.dart';
 // ---------------------------------------------------------------------------
 
 InboxItem _seedItem() => InboxItem(
-      card: const RecordingCard(
-        id: '1',
-        title: 'Standup notes',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        badge: 'work',
-        isProcessing: false,
-        mediaType: 'audio',
-        processingStatus: 'done',
-      ),
-      createdAt: DateTime(2024).millisecondsSinceEpoch,
-    );
+  card: const RecordingItem(
+    id: '1',
+    title: 'Standup notes',
+    timestamp: '9:00 AM',
+    duration: '0:30',
+    badge: 'work',
+    isProcessing: false,
+    mediaType: 'audio',
+    processingStatus: 'done',
+  ),
+  createdAt: DateTime(2024).millisecondsSinceEpoch,
+);
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -60,17 +60,18 @@ void main() {
   tearDown(() => db.close());
 
   List<Override> overrides({required FakeE2EAuthRepository repo}) => [
-        appDatabaseProvider.overrideWithValue(db),
-        tokenStoreProvider.overrideWithValue(store),
-        settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
-        authRepositoryProvider.overrideWithValue(repo),
-        inboxControllerProvider.overrideWith(
-          (ref) => FakeInboxController(ref, AsyncValue.data([_seedItem()])),
-        ),
-      ];
+    appDatabaseProvider.overrideWithValue(db),
+    tokenStoreProvider.overrideWithValue(store),
+    settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
+    authRepositoryProvider.overrideWithValue(repo),
+    inboxControllerProvider.overrideWith(
+      (ref) => FakeInboxController(ref, AsyncValue.data([_seedItem()])),
+    ),
+  ];
 
-  testWidgets('seeded session boots straight into the authed tabs',
-      (tester) async {
+  testWidgets('seeded session boots straight into the authed tabs', (
+    tester,
+  ) async {
     // Persist a valid session so restoreSession() lands authed.
     await store.saveTokens(
       accessToken: kE2ESession.accessToken,
@@ -88,8 +89,9 @@ void main() {
     expect(find.byType(WelcomeScreen), findsNothing);
   });
 
-  testWidgets('logout from Settings clears tokens and returns to Welcome',
-      (tester) async {
+  testWidgets('logout from Settings clears tokens and returns to Welcome', (
+    tester,
+  ) async {
     await store.saveTokens(
       accessToken: kE2ESession.accessToken,
       refreshToken: kE2ESession.refreshToken!,
@@ -117,8 +119,9 @@ void main() {
     expect(find.byType(HomeScreen), findsNothing);
   });
 
-  testWidgets('login from Welcome: Welcome → Login → submit → authed tabs',
-      (tester) async {
+  testWidgets('login from Welcome: Welcome → Login → submit → authed tabs', (
+    tester,
+  ) async {
     final repo = FakeE2EAuthRepository(store); // no seeded session -> Welcome
 
     await tester.pumpWidget(buildE2EApp(overrides: overrides(repo: repo)));
