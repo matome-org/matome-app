@@ -8,6 +8,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/features/matome/matome_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:sqlite3/sqlite3.dart' as raw;
 
@@ -68,12 +69,15 @@ void main() {
   // (a) Schema + migration version (mirrors migrations.unit.test.ts)
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
-    test('schemaVersion is 5 (mobile 001..004 + m005 local-first id)', () {
-      expect(db.schemaVersion, 5);
-    });
+    test(
+      'schemaVersion is 7 (001..004 + m005 id + m006 Space + m007 Matome)',
+      () {
+        expect(db.schemaVersion, 7);
+      },
+    );
 
     test(
-      'onCreate builds recordings/workspaces/recording_drafts tables',
+      'onCreate builds recordings/workspaces/recording_drafts + m006 tables',
       () async {
         final names = await db
             .customSelect(
@@ -84,10 +88,35 @@ void main() {
             .get();
         expect(
           names,
-          containsAll(<String>['recordings', 'workspaces', 'recording_drafts']),
+          containsAll(<String>[
+            'recordings',
+            'workspaces',
+            'recording_drafts',
+            'space_members', // m006
+            'organizations', // m006
+            'matomes', // m007
+          ]),
         );
       },
     );
+
+    test('workspaces has the m006 Space columns', () async {
+      final cols = await db
+          .customSelect('PRAGMA table_info(workspaces)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(
+        cols,
+        containsAll(<String>[
+          'id',
+          'name',
+          'isDefault',
+          'createdAt',
+          'space_type', // m006
+          'owner_id', // m006
+        ]),
+      );
+    });
 
     test('recordings table has the migrated column contract', () async {
       final cols = await db
@@ -111,6 +140,28 @@ void main() {
           'mediaType', // m004
           'processingStatus', // m004
           'coreId', // m005
+          'matome_id', // m007
+        ]),
+      );
+    });
+
+    test('matomes has the m007 column contract', () async {
+      final cols = await db
+          .customSelect('PRAGMA table_info(matomes)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(
+        cols,
+        containsAll(<String>[
+          'id',
+          'space_id',
+          'title',
+          'happened_at',
+          'description',
+          'aggregated_summary',
+          'summary_stale',
+          'created_at',
+          'core_id',
         ]),
       );
     });
@@ -139,6 +190,9 @@ void main() {
         expect(all.single.id, 'ws_default_personal');
         expect(all.single.name, 'Pessoal');
         expect(all.single.isDefault, 1);
+        // m006 — the default Space is the personal triage destination.
+        expect(all.single.spaceType, 'personal');
+        expect(all.single.ownerId, isNull);
       },
     );
   });
@@ -483,7 +537,9 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 5);
+      // A v4-seeded DB now migrates through m005, m006 *and* m007, so the live
+      // schemaVersion getter reports the current constant (7).
+      expect(upgraded.schemaVersion, 7);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -527,7 +583,419 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // (f) local-id minter + status constant (plan #43, Wave 1)
+  // (g) m006 — Space collaboration schema (matome-centric-pivot Wave 1).
+  //
+  // Build a v5-shaped DB by hand (workspaces WITHOUT space_type/owner_id, no
+  // space_members/organizations, user_version=5), seed the default Space plus a
+  // second Space, then open AppDatabase over the same file so onUpgrade(5→6)
+  // runs. Assert: the two columns exist + backfill 'personal', the two reserved
+  // tables exist, the default Space is type=personal, and re-opening is
+  // idempotent (no double-add crash, rows intact).
+  // -------------------------------------------------------------------------
+  group('m006 v5→v6 migration', () {
+    late Directory dir;
+    late File file;
+
+    /// Creates the v5-shaped tables (recordings with coreId, workspaces WITHOUT
+    /// the m006 columns, recording_drafts), seeds two Spaces, sets
+    /// user_version=5, then closes the raw handle.
+    void seedV5Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      // The pre-existing default Space + a user-created Space.
+      sdb.execute(
+        "INSERT INTO workspaces (id, name, isDefault, createdAt) "
+        "VALUES ('ws_default_personal', 'Pessoal', 1, 100);",
+      );
+      sdb.execute(
+        "INSERT INTO workspaces (id, name, isDefault, createdAt) "
+        "VALUES ('ws_work', 'Work', 0, 200);",
+      );
+      sdb.execute('PRAGMA user_version = 5;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m006');
+      file = File('${dir.path}/matome.sqlite');
+      seedV5Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v5 db migrates to v6 (columns, tables, backfill)', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 7);
+
+      // m006 columns now exist on workspaces.
+      final wsCols = await upgraded
+          .customSelect('PRAGMA table_info(workspaces)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(wsCols, containsAll(<String>['space_type', 'owner_id']));
+
+      // Both reserved tables exist.
+      final tables = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%'",
+          )
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(tables, containsAll(<String>['space_members', 'organizations']));
+
+      // Existing rows backfilled to space_type='personal', owner_id NULL.
+      final all = await upgraded.workspacesDao.getWorkspaces();
+      expect(all.map((w) => w.id), containsAll(<String>['ws_default_personal', 'ws_work']));
+      for (final w in all) {
+        expect(w.spaceType, 'personal');
+        expect(w.ownerId, isNull);
+      }
+
+      // The default Space is the personal triage destination.
+      final def =
+          await upgraded.workspacesDao.getWorkspaceById('ws_default_personal');
+      expect(def, isNotNull);
+      expect(def!.spaceType, 'personal');
+      expect(def.isDefault, 1);
+      expect(def.name, 'Pessoal'); // data intact
+    });
+
+    test('m006 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.workspacesDao.getWorkspaces();
+      await first.close();
+
+      // Re-opening at v6 must not re-run m006 (no duplicate-column crash).
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      final all = await second.workspacesDao.getWorkspaces();
+      expect(all, hasLength(2));
+      expect(all.every((w) => w.spaceType == 'personal'), isTrue);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (g2) m007 — Matome central entity (matome-centric-pivot, ADR-0003).
+  //
+  // The KEYSTONE migration. Build a v6-shaped DB by hand (recordings WITHOUT
+  // matome_id, NO matomes table, user_version=6), seed an Inbox recording
+  // (workspaceId NULL) and a filed recording (workspaceId = a Space), then open
+  // AppDatabase so onUpgrade(6→7) runs. Assert the backfill is correct,
+  // FK-resolvable, space-preserving, and idempotent on re-open.
+  // -------------------------------------------------------------------------
+  group('m007 v6→v7 migration (Matome backfill)', () {
+    late Directory dir;
+    late File file;
+
+    /// v6-shaped tables: recordings WITH coreId but WITHOUT matome_id,
+    /// workspaces WITH the m006 columns, no matomes table. user_version=6.
+    void seedV6Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_members (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member'
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE organizations (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+      // A Space the filed recording lives in.
+      sdb.execute(
+        "INSERT INTO workspaces (id, name, isDefault, createdAt, space_type) "
+        "VALUES ('ws_work', 'Work', 0, 100, 'personal');",
+      );
+      // An Inbox recording (workspaceId NULL).
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, processingStatus) "
+        "VALUES ('rec_inbox', 'Inbox Note', '9:00 AM', '0:30', '/tmp/a.m4a', 100, 'done');",
+      );
+      // A filed recording (workspaceId = ws_work).
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, workspaceId, processingStatus) "
+        "VALUES ('rec_filed', 'Work Meeting', '9:05 AM', '1:00', '/tmp/b.m4a', 200, 'ws_work', 'done');",
+      );
+      sdb.execute('PRAGMA user_version = 6;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m007');
+      file = File('${dir.path}/matome.sqlite');
+      seedV6Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v6 db migrates to v7: matomes table + matome_id', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 7);
+
+      final tables = await upgraded
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%'",
+          )
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(tables, contains('matomes'));
+
+      final recCols = await upgraded
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(recCols, contains('matome_id'));
+    });
+
+    test(
+      'backfill: one Matome per recording, every matome_id FK-resolvable, '
+      'space_id == old workspaceId',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
+
+        // count(matomes) == count(distinct recordings).
+        final recCount = await upgraded
+            .customSelect('SELECT COUNT(DISTINCT id) AS c FROM recordings')
+            .map((r) => r.read<int>('c'))
+            .getSingle();
+        final matCount = await upgraded
+            .customSelect('SELECT COUNT(*) AS c FROM matomes')
+            .map((r) => r.read<int>('c'))
+            .getSingle();
+        expect(recCount, 2);
+        expect(matCount, recCount);
+
+        // EVERY recording.matome_id is non-null AND resolves to a matomes row.
+        final orphans = await upgraded
+            .customSelect(
+              'SELECT r.id AS rid FROM recordings r '
+              'LEFT JOIN matomes m ON m.id = r.matome_id '
+              'WHERE r.matome_id IS NULL OR m.id IS NULL',
+            )
+            .get();
+        expect(orphans, isEmpty);
+
+        // The backfilled matome.space_id == the recording's old workspace_id.
+        Future<String?> spaceOf(String recId) async {
+          final row = await upgraded
+              .customSelect(
+                'SELECT m.space_id AS sid FROM recordings r '
+                'JOIN matomes m ON m.id = r.matome_id WHERE r.id = ?',
+                variables: [Variable<String>(recId)],
+              )
+              .getSingle();
+          return row.read<String?>('sid');
+        }
+
+        expect(await spaceOf('rec_inbox'), isNull); // Inbox → Inbox Matome
+        expect(await spaceOf('rec_filed'), 'ws_work'); // filed → filed Matome
+
+        // Backfilled Matome is local-only (mat_local_ prefix, core_id NULL) and
+        // carries the recording's title + happened_at.
+        final filed = await upgraded
+            .customSelect(
+              'SELECT m.* FROM recordings r '
+              'JOIN matomes m ON m.id = r.matome_id WHERE r.id = ?',
+              variables: [Variable<String>('rec_filed')],
+            )
+            .getSingle();
+        expect(isLocalMatomeId(filed.read<String>('id')), isTrue);
+        expect(filed.read<int?>('core_id'), isNull);
+        expect(filed.read<String>('title'), 'Work Meeting');
+        expect(filed.read<int>('happened_at'), 200);
+      },
+    );
+
+    test('m007 backfill is idempotent across re-open (no duplicate Matomes)',
+        () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.recordingsDao.getAllRecordings();
+      final firstCount = await first
+          .customSelect('SELECT COUNT(*) AS c FROM matomes')
+          .map((r) => r.read<int>('c'))
+          .getSingle();
+      await first.close();
+
+      // Re-open: m007 must NOT re-run (already at v7) and the backfill guard
+      // (matome_id IS NULL) means even a forced re-run mints no duplicates.
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      final secondCount = await second
+          .customSelect('SELECT COUNT(*) AS c FROM matomes')
+          .map((r) => r.read<int>('c'))
+          .getSingle();
+      expect(secondCount, firstCount);
+      expect(secondCount, 2);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (h) SpacesDao — m006 reads + reserved (unenforced) CRUD stubs.
+  // -------------------------------------------------------------------------
+  group('SpacesDao (m006, schema-ready/unenforced)', () {
+    test('getSpaceType / getOwnerId read the new columns', () async {
+      final dao = db.spacesDao;
+      // Seeded default Space is personal with no owner.
+      expect(await dao.getSpaceType('ws_default_personal'), 'personal');
+      expect(await dao.getOwnerId('ws_default_personal'), isNull);
+      // Unknown Space → null (not a throw).
+      expect(await dao.getSpaceType('nope'), isNull);
+      expect(await dao.getOwnerId('nope'), isNull);
+    });
+
+    test('ensureDefaultPersonalSpace is idempotent + normalises type', () async {
+      final dao = db.spacesDao;
+      // Force a non-personal type, then ensure it is normalised back.
+      await (db.update(db.workspaces)
+            ..where((w) => w.id.equals('ws_default_personal')))
+          .write(const WorkspacesCompanion(spaceType: Value('shared')));
+
+      final row = await dao.ensureDefaultPersonalSpace();
+      expect(row.id, 'ws_default_personal');
+      expect(row.spaceType, 'personal');
+      expect(row.isDefault, 1);
+
+      // Still exactly one default Space row.
+      final all = await db.workspacesDao.getWorkspaces();
+      expect(all.where((w) => w.id == 'ws_default_personal'), hasLength(1));
+    });
+
+    test('space_members CRUD stub round-trips (no enforcement)', () async {
+      final dao = db.spacesDao;
+      final owner = await dao.addSpaceMember(
+        spaceId: 'ws_default_personal',
+        userId: 'u_owner',
+        role: 'owner',
+      );
+      await dao.addSpaceMember(
+        spaceId: 'ws_default_personal',
+        userId: 'u_view',
+        role: 'viewer',
+      );
+
+      final members = await dao.membersOfSpace('ws_default_personal');
+      expect(members, hasLength(2));
+      expect(
+        {for (final m in members) m.userId: m.role},
+        {'u_owner': 'owner', 'u_view': 'viewer'},
+      );
+
+      await dao.removeSpaceMember(owner.id);
+      final after = await dao.membersOfSpace('ws_default_personal');
+      expect(after.map((m) => m.userId), ['u_view']);
+    });
+
+    test('addSpaceMember defaults role to member', () async {
+      final dao = db.spacesDao;
+      final m = await dao.addSpaceMember(
+        spaceId: 'ws_default_personal',
+        userId: 'u1',
+      );
+      expect(m.role, 'member');
+      final stored = (await dao.membersOfSpace('ws_default_personal')).single;
+      expect(stored.role, 'member');
+    });
+
+    test('organizations CRUD stub round-trips (reserved)', () async {
+      final dao = db.spacesDao;
+      final org = await dao.createOrganization('Acme');
+      expect(org.name, 'Acme');
+
+      final fetched = await dao.getOrganizationById(org.id);
+      expect(fetched?.name, 'Acme');
+
+      await dao.createOrganization('Globex');
+      final all = await dao.getOrganizations();
+      expect(all.map((o) => o.name), containsAll(<String>['Acme', 'Globex']));
+
+      await dao.deleteOrganization(org.id);
+      expect(await dao.getOrganizationById(org.id), isNull);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (i) local-id minter + status constant (plan #43, Wave 1)
   // -------------------------------------------------------------------------
   group('recording id minter', () {
     test('mints rec_local_<uuid> ids that are recognised as local', () {

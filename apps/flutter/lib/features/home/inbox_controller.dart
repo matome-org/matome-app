@@ -61,7 +61,12 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         // stringified-id PK for rows that predate the coreId column.
         final existing = await _dao.recordingByCoreId(recording.id) ??
             await _dao.getRecordingById(coreIdToLocalId(recording.id));
-        await _dao.upsertRecording(
+        // m007 (ADR-0003): a Core-originated recording must also become an Item
+        // of a Matome. `upsertRecordingWithMatome` reuses the existing row's
+        // Matome when there is one (the merge-guard already preserves it) and
+        // otherwise mints a fresh Inbox/filed Matome in the same transaction —
+        // so a first-time Core sync never persists a Matome-less recording.
+        await _dao.upsertRecordingWithMatome(
           recordingToCompanion(recording, existing: existing),
         );
       }
@@ -137,8 +142,13 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// Insert a locally-created (just-uploaded) recording row so it shows in the
   /// Inbox immediately as "processing", before Core confirms. Mirrors
   /// apps/mobile uploadRecordingService createRecording-then-render.
+  ///
+  /// m007 (ADR-0003): a recording is never persisted without a Matome. This
+  /// goes through [RecordingsDao.upsertRecordingWithMatome], which mints the
+  /// Matome in the SAME transaction (Inbox upload → Inbox Matome) so the
+  /// recording.matomeId FK never sees an orphan window.
   Future<void> insertLocalUpload(RecordingsCompanion entry) async {
-    await _dao.upsertRecording(entry);
+    await _dao.upsertRecordingWithMatome(entry);
     await reloadFromLocal();
   }
 

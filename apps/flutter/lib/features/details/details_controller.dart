@@ -147,7 +147,9 @@ class DetailsController extends StateNotifier<DetailsState> {
         try {
           final remote = await _repo.fetchRecording(coreId);
           if (remote != null) {
-            await _dao.upsertRecording(recordingToCompanion(remote));
+            // m007 (ADR-0003): a Core-fetched recording must also be an Item of
+            // a Matome — mint one in the same transaction if absent.
+            await _dao.upsertRecordingWithMatome(recordingToCompanion(remote));
             row = await _dao.getRecordingById(state.id);
           }
         } catch (_) {

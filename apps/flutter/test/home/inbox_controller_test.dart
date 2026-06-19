@@ -206,6 +206,47 @@ void main() {
   });
 
   test(
+      'm007 matomeId merge-guard: a sparse Core refresh must NOT null-clobber '
+      'a local recording.matomeId', () async {
+    // A local-first recording reconciled to coreId 5, already an Item of a
+    // Matome (matome_id set) — mirrors the post-upload steady state.
+    await db.recordingsDao.upsertRecordingWithMatome(
+      RecordingsCompanion.insert(
+        id: '5',
+        title: 'Has a Matome',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: '/tmp/a.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        coreId: const Value(5),
+      ),
+    );
+    final before = await db.recordingsDao.getRecordingById('5');
+    expect(before!.matomeId, isNotNull); // guaranteed by the insert path
+    final matomeId = before.matomeId;
+
+    // Core list reports id 5 with NO matome information at all (the Core
+    // payload doesn't carry one). A naive full-companion upsert would NULL the
+    // column on the conflict-update, orphaning the recording from its Matome.
+    final container = _container(db, recordings: [
+      _remote(id: 5, title: 'Has a Matome'),
+    ]);
+    addTearDown(container.dispose);
+
+    await container.read(inboxControllerProvider.notifier).refresh();
+    await _awaitItems(container);
+
+    final after = await db.recordingsDao.getRecordingById('5');
+    expect(after!.matomeId, matomeId); // local matome_id preserved across sync
+    // And no duplicate/extra Matome was minted by the refresh upsert.
+    final matCount = await db
+        .customSelect('SELECT COUNT(*) AS c FROM matomes')
+        .map((r) => r.read<int>('c'))
+        .getSingle();
+    expect(matCount, 1);
+  });
+
+  test(
       'B2/W3: moveToSpace persists to Core via PATCH using the reconciled '
       'coreId column (not the stringified PK)', () async {
     // A reconciled local row: UUID PK, coreId column = 5 (Core-backed). W3 keys

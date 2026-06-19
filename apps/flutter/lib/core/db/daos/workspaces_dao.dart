@@ -43,12 +43,9 @@ class WorkspacesDao extends DatabaseAccessor<AppDatabase>
     );
     await into(workspaces).insert(companion);
 
-    return WorkspaceRow(
-      id: id,
-      name: trimmed,
-      isDefault: 0,
-      createdAt: createdAt,
-    );
+    // Read back so the returned row reflects column defaults (e.g. m006's
+    // `space_type` 'personal' / `owner_id` NULL) without re-hardcoding them.
+    return (select(workspaces)..where((w) => w.id.equals(id))).getSingle();
   }
 
   /// Delete a workspace. Its recordings are returned to the Inbox

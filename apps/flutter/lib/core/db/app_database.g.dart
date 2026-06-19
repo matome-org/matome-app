@@ -157,6 +157,17 @@ class $RecordingsTable extends Recordings
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _matomeIdMeta = const VerificationMeta(
+    'matomeId',
+  );
+  @override
+  late final GeneratedColumn<String> matomeId = GeneratedColumn<String>(
+    'matome_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -173,6 +184,7 @@ class $RecordingsTable extends Recordings
     mediaType,
     processingStatus,
     coreId,
+    matomeId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -291,6 +303,12 @@ class $RecordingsTable extends Recordings
         coreId.isAcceptableOrUnknown(data['coreId']!, _coreIdMeta),
       );
     }
+    if (data.containsKey('matome_id')) {
+      context.handle(
+        _matomeIdMeta,
+        matomeId.isAcceptableOrUnknown(data['matome_id']!, _matomeIdMeta),
+      );
+    }
     return context;
   }
 
@@ -356,6 +374,10 @@ class $RecordingsTable extends Recordings
         DriftSqlType.int,
         data['${effectivePrefix}coreId'],
       ),
+      matomeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}matome_id'],
+      ),
     );
   }
 
@@ -380,6 +402,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
   final String mediaType;
   final String processingStatus;
   final int? coreId;
+  final String? matomeId;
   const RecordingRow({
     required this.id,
     required this.title,
@@ -395,6 +418,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     required this.mediaType,
     required this.processingStatus,
     this.coreId,
+    this.matomeId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -420,6 +444,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     map['processingStatus'] = Variable<String>(processingStatus);
     if (!nullToAbsent || coreId != null) {
       map['coreId'] = Variable<int>(coreId);
+    }
+    if (!nullToAbsent || matomeId != null) {
+      map['matome_id'] = Variable<String>(matomeId);
     }
     return map;
   }
@@ -448,6 +475,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       coreId: coreId == null && nullToAbsent
           ? const Value.absent()
           : Value(coreId),
+      matomeId: matomeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(matomeId),
     );
   }
 
@@ -471,6 +501,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       mediaType: serializer.fromJson<String>(json['mediaType']),
       processingStatus: serializer.fromJson<String>(json['processingStatus']),
       coreId: serializer.fromJson<int?>(json['coreId']),
+      matomeId: serializer.fromJson<String?>(json['matomeId']),
     );
   }
   @override
@@ -491,6 +522,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       'mediaType': serializer.toJson<String>(mediaType),
       'processingStatus': serializer.toJson<String>(processingStatus),
       'coreId': serializer.toJson<int?>(coreId),
+      'matomeId': serializer.toJson<String?>(matomeId),
     };
   }
 
@@ -509,6 +541,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     String? mediaType,
     String? processingStatus,
     Value<int?> coreId = const Value.absent(),
+    Value<String?> matomeId = const Value.absent(),
   }) => RecordingRow(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -524,6 +557,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     mediaType: mediaType ?? this.mediaType,
     processingStatus: processingStatus ?? this.processingStatus,
     coreId: coreId.present ? coreId.value : this.coreId,
+    matomeId: matomeId.present ? matomeId.value : this.matomeId,
   );
   RecordingRow copyWithCompanion(RecordingsCompanion data) {
     return RecordingRow(
@@ -549,6 +583,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           ? data.processingStatus.value
           : this.processingStatus,
       coreId: data.coreId.present ? data.coreId.value : this.coreId,
+      matomeId: data.matomeId.present ? data.matomeId.value : this.matomeId,
     );
   }
 
@@ -568,7 +603,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           ..write('workspaceId: $workspaceId, ')
           ..write('mediaType: $mediaType, ')
           ..write('processingStatus: $processingStatus, ')
-          ..write('coreId: $coreId')
+          ..write('coreId: $coreId, ')
+          ..write('matomeId: $matomeId')
           ..write(')'))
         .toString();
   }
@@ -589,6 +625,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     mediaType,
     processingStatus,
     coreId,
+    matomeId,
   );
   @override
   bool operator ==(Object other) =>
@@ -607,7 +644,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           other.workspaceId == this.workspaceId &&
           other.mediaType == this.mediaType &&
           other.processingStatus == this.processingStatus &&
-          other.coreId == this.coreId);
+          other.coreId == this.coreId &&
+          other.matomeId == this.matomeId);
 }
 
 class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
@@ -625,6 +663,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
   final Value<String> mediaType;
   final Value<String> processingStatus;
   final Value<int?> coreId;
+  final Value<String?> matomeId;
   final Value<int> rowid;
   const RecordingsCompanion({
     this.id = const Value.absent(),
@@ -641,6 +680,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.mediaType = const Value.absent(),
     this.processingStatus = const Value.absent(),
     this.coreId = const Value.absent(),
+    this.matomeId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RecordingsCompanion.insert({
@@ -658,6 +698,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.mediaType = const Value.absent(),
     this.processingStatus = const Value.absent(),
     this.coreId = const Value.absent(),
+    this.matomeId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title),
@@ -680,6 +721,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Expression<String>? mediaType,
     Expression<String>? processingStatus,
     Expression<int>? coreId,
+    Expression<String>? matomeId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -697,6 +739,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       if (mediaType != null) 'mediaType': mediaType,
       if (processingStatus != null) 'processingStatus': processingStatus,
       if (coreId != null) 'coreId': coreId,
+      if (matomeId != null) 'matome_id': matomeId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -716,6 +759,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Value<String>? mediaType,
     Value<String>? processingStatus,
     Value<int?>? coreId,
+    Value<String?>? matomeId,
     Value<int>? rowid,
   }) {
     return RecordingsCompanion(
@@ -733,6 +777,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       mediaType: mediaType ?? this.mediaType,
       processingStatus: processingStatus ?? this.processingStatus,
       coreId: coreId ?? this.coreId,
+      matomeId: matomeId ?? this.matomeId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -782,6 +827,9 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     if (coreId.present) {
       map['coreId'] = Variable<int>(coreId.value);
     }
+    if (matomeId.present) {
+      map['matome_id'] = Variable<String>(matomeId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -805,6 +853,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
           ..write('mediaType: $mediaType, ')
           ..write('processingStatus: $processingStatus, ')
           ..write('coreId: $coreId, ')
+          ..write('matomeId: $matomeId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -859,8 +908,38 @@ class $WorkspacesTable extends Workspaces
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _spaceTypeMeta = const VerificationMeta(
+    'spaceType',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, name, isDefault, createdAt];
+  late final GeneratedColumn<String> spaceType = GeneratedColumn<String>(
+    'space_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('personal'),
+  );
+  static const VerificationMeta _ownerIdMeta = const VerificationMeta(
+    'ownerId',
+  );
+  @override
+  late final GeneratedColumn<String> ownerId = GeneratedColumn<String>(
+    'owner_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    isDefault,
+    createdAt,
+    spaceType,
+    ownerId,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -900,6 +979,18 @@ class $WorkspacesTable extends Workspaces
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('space_type')) {
+      context.handle(
+        _spaceTypeMeta,
+        spaceType.isAcceptableOrUnknown(data['space_type']!, _spaceTypeMeta),
+      );
+    }
+    if (data.containsKey('owner_id')) {
+      context.handle(
+        _ownerIdMeta,
+        ownerId.isAcceptableOrUnknown(data['owner_id']!, _ownerIdMeta),
+      );
+    }
     return context;
   }
 
@@ -925,6 +1016,14 @@ class $WorkspacesTable extends Workspaces
         DriftSqlType.int,
         data['${effectivePrefix}createdAt'],
       )!,
+      spaceType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}space_type'],
+      )!,
+      ownerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_id'],
+      ),
     );
   }
 
@@ -939,11 +1038,15 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
   final String name;
   final int isDefault;
   final int createdAt;
+  final String spaceType;
+  final String? ownerId;
   const WorkspaceRow({
     required this.id,
     required this.name,
     required this.isDefault,
     required this.createdAt,
+    required this.spaceType,
+    this.ownerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -952,6 +1055,10 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
     map['name'] = Variable<String>(name);
     map['isDefault'] = Variable<int>(isDefault);
     map['createdAt'] = Variable<int>(createdAt);
+    map['space_type'] = Variable<String>(spaceType);
+    if (!nullToAbsent || ownerId != null) {
+      map['owner_id'] = Variable<String>(ownerId);
+    }
     return map;
   }
 
@@ -961,6 +1068,10 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
       name: Value(name),
       isDefault: Value(isDefault),
       createdAt: Value(createdAt),
+      spaceType: Value(spaceType),
+      ownerId: ownerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ownerId),
     );
   }
 
@@ -974,6 +1085,8 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
       name: serializer.fromJson<String>(json['name']),
       isDefault: serializer.fromJson<int>(json['isDefault']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
+      spaceType: serializer.fromJson<String>(json['spaceType']),
+      ownerId: serializer.fromJson<String?>(json['ownerId']),
     );
   }
   @override
@@ -984,6 +1097,8 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
       'name': serializer.toJson<String>(name),
       'isDefault': serializer.toJson<int>(isDefault),
       'createdAt': serializer.toJson<int>(createdAt),
+      'spaceType': serializer.toJson<String>(spaceType),
+      'ownerId': serializer.toJson<String?>(ownerId),
     };
   }
 
@@ -992,11 +1107,15 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
     String? name,
     int? isDefault,
     int? createdAt,
+    String? spaceType,
+    Value<String?> ownerId = const Value.absent(),
   }) => WorkspaceRow(
     id: id ?? this.id,
     name: name ?? this.name,
     isDefault: isDefault ?? this.isDefault,
     createdAt: createdAt ?? this.createdAt,
+    spaceType: spaceType ?? this.spaceType,
+    ownerId: ownerId.present ? ownerId.value : this.ownerId,
   );
   WorkspaceRow copyWithCompanion(WorkspacesCompanion data) {
     return WorkspaceRow(
@@ -1004,6 +1123,8 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
       name: data.name.present ? data.name.value : this.name,
       isDefault: data.isDefault.present ? data.isDefault.value : this.isDefault,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      spaceType: data.spaceType.present ? data.spaceType.value : this.spaceType,
+      ownerId: data.ownerId.present ? data.ownerId.value : this.ownerId,
     );
   }
 
@@ -1013,13 +1134,16 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('isDefault: $isDefault, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('spaceType: $spaceType, ')
+          ..write('ownerId: $ownerId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, isDefault, createdAt);
+  int get hashCode =>
+      Object.hash(id, name, isDefault, createdAt, spaceType, ownerId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1027,7 +1151,9 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
           other.id == this.id &&
           other.name == this.name &&
           other.isDefault == this.isDefault &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.spaceType == this.spaceType &&
+          other.ownerId == this.ownerId);
 }
 
 class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
@@ -1035,12 +1161,16 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
   final Value<String> name;
   final Value<int> isDefault;
   final Value<int> createdAt;
+  final Value<String> spaceType;
+  final Value<String?> ownerId;
   final Value<int> rowid;
   const WorkspacesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.spaceType = const Value.absent(),
+    this.ownerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   WorkspacesCompanion.insert({
@@ -1048,6 +1178,8 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     required String name,
     this.isDefault = const Value.absent(),
     required int createdAt,
+    this.spaceType = const Value.absent(),
+    this.ownerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -1057,6 +1189,8 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     Expression<String>? name,
     Expression<int>? isDefault,
     Expression<int>? createdAt,
+    Expression<String>? spaceType,
+    Expression<String>? ownerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1064,6 +1198,8 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
       if (name != null) 'name': name,
       if (isDefault != null) 'isDefault': isDefault,
       if (createdAt != null) 'createdAt': createdAt,
+      if (spaceType != null) 'space_type': spaceType,
+      if (ownerId != null) 'owner_id': ownerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1073,6 +1209,8 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     Value<String>? name,
     Value<int>? isDefault,
     Value<int>? createdAt,
+    Value<String>? spaceType,
+    Value<String?>? ownerId,
     Value<int>? rowid,
   }) {
     return WorkspacesCompanion(
@@ -1080,6 +1218,8 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
       name: name ?? this.name,
       isDefault: isDefault ?? this.isDefault,
       createdAt: createdAt ?? this.createdAt,
+      spaceType: spaceType ?? this.spaceType,
+      ownerId: ownerId ?? this.ownerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1099,6 +1239,12 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     if (createdAt.present) {
       map['createdAt'] = Variable<int>(createdAt.value);
     }
+    if (spaceType.present) {
+      map['space_type'] = Variable<String>(spaceType.value);
+    }
+    if (ownerId.present) {
+      map['owner_id'] = Variable<String>(ownerId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1112,6 +1258,8 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
           ..write('name: $name, ')
           ..write('isDefault: $isDefault, ')
           ..write('createdAt: $createdAt, ')
+          ..write('spaceType: $spaceType, ')
+          ..write('ownerId: $ownerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1429,6 +1577,1151 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
   }
 }
 
+class $SpaceMembersTable extends SpaceMembers
+    with TableInfo<$SpaceMembersTable, SpaceMemberRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SpaceMembersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _spaceIdMeta = const VerificationMeta(
+    'spaceId',
+  );
+  @override
+  late final GeneratedColumn<String> spaceId = GeneratedColumn<String>(
+    'space_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+    'role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('member'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, spaceId, userId, role];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'space_members';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SpaceMemberRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('space_id')) {
+      context.handle(
+        _spaceIdMeta,
+        spaceId.isAcceptableOrUnknown(data['space_id']!, _spaceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_spaceIdMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SpaceMemberRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SpaceMemberRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      spaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}space_id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}role'],
+      )!,
+    );
+  }
+
+  @override
+  $SpaceMembersTable createAlias(String alias) {
+    return $SpaceMembersTable(attachedDatabase, alias);
+  }
+}
+
+class SpaceMemberRow extends DataClass implements Insertable<SpaceMemberRow> {
+  final String id;
+  final String spaceId;
+  final String userId;
+  final String role;
+  const SpaceMemberRow({
+    required this.id,
+    required this.spaceId,
+    required this.userId,
+    required this.role,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['space_id'] = Variable<String>(spaceId);
+    map['user_id'] = Variable<String>(userId);
+    map['role'] = Variable<String>(role);
+    return map;
+  }
+
+  SpaceMembersCompanion toCompanion(bool nullToAbsent) {
+    return SpaceMembersCompanion(
+      id: Value(id),
+      spaceId: Value(spaceId),
+      userId: Value(userId),
+      role: Value(role),
+    );
+  }
+
+  factory SpaceMemberRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SpaceMemberRow(
+      id: serializer.fromJson<String>(json['id']),
+      spaceId: serializer.fromJson<String>(json['spaceId']),
+      userId: serializer.fromJson<String>(json['userId']),
+      role: serializer.fromJson<String>(json['role']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'spaceId': serializer.toJson<String>(spaceId),
+      'userId': serializer.toJson<String>(userId),
+      'role': serializer.toJson<String>(role),
+    };
+  }
+
+  SpaceMemberRow copyWith({
+    String? id,
+    String? spaceId,
+    String? userId,
+    String? role,
+  }) => SpaceMemberRow(
+    id: id ?? this.id,
+    spaceId: spaceId ?? this.spaceId,
+    userId: userId ?? this.userId,
+    role: role ?? this.role,
+  );
+  SpaceMemberRow copyWithCompanion(SpaceMembersCompanion data) {
+    return SpaceMemberRow(
+      id: data.id.present ? data.id.value : this.id,
+      spaceId: data.spaceId.present ? data.spaceId.value : this.spaceId,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      role: data.role.present ? data.role.value : this.role,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SpaceMemberRow(')
+          ..write('id: $id, ')
+          ..write('spaceId: $spaceId, ')
+          ..write('userId: $userId, ')
+          ..write('role: $role')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, spaceId, userId, role);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SpaceMemberRow &&
+          other.id == this.id &&
+          other.spaceId == this.spaceId &&
+          other.userId == this.userId &&
+          other.role == this.role);
+}
+
+class SpaceMembersCompanion extends UpdateCompanion<SpaceMemberRow> {
+  final Value<String> id;
+  final Value<String> spaceId;
+  final Value<String> userId;
+  final Value<String> role;
+  final Value<int> rowid;
+  const SpaceMembersCompanion({
+    this.id = const Value.absent(),
+    this.spaceId = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.role = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SpaceMembersCompanion.insert({
+    required String id,
+    required String spaceId,
+    required String userId,
+    this.role = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       spaceId = Value(spaceId),
+       userId = Value(userId);
+  static Insertable<SpaceMemberRow> custom({
+    Expression<String>? id,
+    Expression<String>? spaceId,
+    Expression<String>? userId,
+    Expression<String>? role,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (spaceId != null) 'space_id': spaceId,
+      if (userId != null) 'user_id': userId,
+      if (role != null) 'role': role,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SpaceMembersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? spaceId,
+    Value<String>? userId,
+    Value<String>? role,
+    Value<int>? rowid,
+  }) {
+    return SpaceMembersCompanion(
+      id: id ?? this.id,
+      spaceId: spaceId ?? this.spaceId,
+      userId: userId ?? this.userId,
+      role: role ?? this.role,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (spaceId.present) {
+      map['space_id'] = Variable<String>(spaceId.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (role.present) {
+      map['role'] = Variable<String>(role.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SpaceMembersCompanion(')
+          ..write('id: $id, ')
+          ..write('spaceId: $spaceId, ')
+          ..write('userId: $userId, ')
+          ..write('role: $role, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OrganizationsTable extends Organizations
+    with TableInfo<$OrganizationsTable, OrganizationRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OrganizationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'organizations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OrganizationRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  OrganizationRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OrganizationRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $OrganizationsTable createAlias(String alias) {
+    return $OrganizationsTable(attachedDatabase, alias);
+  }
+}
+
+class OrganizationRow extends DataClass implements Insertable<OrganizationRow> {
+  final String id;
+  final String name;
+  final int createdAt;
+  const OrganizationRow({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['created_at'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  OrganizationsCompanion toCompanion(bool nullToAbsent) {
+    return OrganizationsCompanion(
+      id: Value(id),
+      name: Value(name),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory OrganizationRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OrganizationRow(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  OrganizationRow copyWith({String? id, String? name, int? createdAt}) =>
+      OrganizationRow(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  OrganizationRow copyWithCompanion(OrganizationsCompanion data) {
+    return OrganizationRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OrganizationRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OrganizationRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.createdAt == this.createdAt);
+}
+
+class OrganizationsCompanion extends UpdateCompanion<OrganizationRow> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<int> createdAt;
+  final Value<int> rowid;
+  const OrganizationsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OrganizationsCompanion.insert({
+    required String id,
+    required String name,
+    required int createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       createdAt = Value(createdAt);
+  static Insertable<OrganizationRow> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OrganizationsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<int>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return OrganizationsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OrganizationsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MatomesTable extends Matomes with TableInfo<$MatomesTable, MatomeRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MatomesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _spaceIdMeta = const VerificationMeta(
+    'spaceId',
+  );
+  @override
+  late final GeneratedColumn<String> spaceId = GeneratedColumn<String>(
+    'space_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _happenedAtMeta = const VerificationMeta(
+    'happenedAt',
+  );
+  @override
+  late final GeneratedColumn<int> happenedAt = GeneratedColumn<int>(
+    'happened_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _aggregatedSummaryMeta = const VerificationMeta(
+    'aggregatedSummary',
+  );
+  @override
+  late final GeneratedColumn<String> aggregatedSummary =
+      GeneratedColumn<String>(
+        'aggregated_summary',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _summaryStaleMeta = const VerificationMeta(
+    'summaryStale',
+  );
+  @override
+  late final GeneratedColumn<bool> summaryStale = GeneratedColumn<bool>(
+    'summary_stale',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("summary_stale" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _coreIdMeta = const VerificationMeta('coreId');
+  @override
+  late final GeneratedColumn<int> coreId = GeneratedColumn<int>(
+    'core_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    spaceId,
+    title,
+    happenedAt,
+    description,
+    aggregatedSummary,
+    summaryStale,
+    createdAt,
+    coreId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'matomes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MatomeRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('space_id')) {
+      context.handle(
+        _spaceIdMeta,
+        spaceId.isAcceptableOrUnknown(data['space_id']!, _spaceIdMeta),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('happened_at')) {
+      context.handle(
+        _happenedAtMeta,
+        happenedAt.isAcceptableOrUnknown(data['happened_at']!, _happenedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_happenedAtMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('aggregated_summary')) {
+      context.handle(
+        _aggregatedSummaryMeta,
+        aggregatedSummary.isAcceptableOrUnknown(
+          data['aggregated_summary']!,
+          _aggregatedSummaryMeta,
+        ),
+      );
+    }
+    if (data.containsKey('summary_stale')) {
+      context.handle(
+        _summaryStaleMeta,
+        summaryStale.isAcceptableOrUnknown(
+          data['summary_stale']!,
+          _summaryStaleMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('core_id')) {
+      context.handle(
+        _coreIdMeta,
+        coreId.isAcceptableOrUnknown(data['core_id']!, _coreIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MatomeRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MatomeRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      spaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}space_id'],
+      ),
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      happenedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}happened_at'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      aggregatedSummary: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}aggregated_summary'],
+      ),
+      summaryStale: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}summary_stale'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      coreId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}core_id'],
+      ),
+    );
+  }
+
+  @override
+  $MatomesTable createAlias(String alias) {
+    return $MatomesTable(attachedDatabase, alias);
+  }
+}
+
+class MatomeRow extends DataClass implements Insertable<MatomeRow> {
+  final String id;
+  final String? spaceId;
+  final String title;
+  final int happenedAt;
+  final String? description;
+  final String? aggregatedSummary;
+  final bool summaryStale;
+  final int createdAt;
+  final int? coreId;
+  const MatomeRow({
+    required this.id,
+    this.spaceId,
+    required this.title,
+    required this.happenedAt,
+    this.description,
+    this.aggregatedSummary,
+    required this.summaryStale,
+    required this.createdAt,
+    this.coreId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || spaceId != null) {
+      map['space_id'] = Variable<String>(spaceId);
+    }
+    map['title'] = Variable<String>(title);
+    map['happened_at'] = Variable<int>(happenedAt);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || aggregatedSummary != null) {
+      map['aggregated_summary'] = Variable<String>(aggregatedSummary);
+    }
+    map['summary_stale'] = Variable<bool>(summaryStale);
+    map['created_at'] = Variable<int>(createdAt);
+    if (!nullToAbsent || coreId != null) {
+      map['core_id'] = Variable<int>(coreId);
+    }
+    return map;
+  }
+
+  MatomesCompanion toCompanion(bool nullToAbsent) {
+    return MatomesCompanion(
+      id: Value(id),
+      spaceId: spaceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(spaceId),
+      title: Value(title),
+      happenedAt: Value(happenedAt),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      aggregatedSummary: aggregatedSummary == null && nullToAbsent
+          ? const Value.absent()
+          : Value(aggregatedSummary),
+      summaryStale: Value(summaryStale),
+      createdAt: Value(createdAt),
+      coreId: coreId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coreId),
+    );
+  }
+
+  factory MatomeRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MatomeRow(
+      id: serializer.fromJson<String>(json['id']),
+      spaceId: serializer.fromJson<String?>(json['spaceId']),
+      title: serializer.fromJson<String>(json['title']),
+      happenedAt: serializer.fromJson<int>(json['happenedAt']),
+      description: serializer.fromJson<String?>(json['description']),
+      aggregatedSummary: serializer.fromJson<String?>(
+        json['aggregatedSummary'],
+      ),
+      summaryStale: serializer.fromJson<bool>(json['summaryStale']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      coreId: serializer.fromJson<int?>(json['coreId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'spaceId': serializer.toJson<String?>(spaceId),
+      'title': serializer.toJson<String>(title),
+      'happenedAt': serializer.toJson<int>(happenedAt),
+      'description': serializer.toJson<String?>(description),
+      'aggregatedSummary': serializer.toJson<String?>(aggregatedSummary),
+      'summaryStale': serializer.toJson<bool>(summaryStale),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'coreId': serializer.toJson<int?>(coreId),
+    };
+  }
+
+  MatomeRow copyWith({
+    String? id,
+    Value<String?> spaceId = const Value.absent(),
+    String? title,
+    int? happenedAt,
+    Value<String?> description = const Value.absent(),
+    Value<String?> aggregatedSummary = const Value.absent(),
+    bool? summaryStale,
+    int? createdAt,
+    Value<int?> coreId = const Value.absent(),
+  }) => MatomeRow(
+    id: id ?? this.id,
+    spaceId: spaceId.present ? spaceId.value : this.spaceId,
+    title: title ?? this.title,
+    happenedAt: happenedAt ?? this.happenedAt,
+    description: description.present ? description.value : this.description,
+    aggregatedSummary: aggregatedSummary.present
+        ? aggregatedSummary.value
+        : this.aggregatedSummary,
+    summaryStale: summaryStale ?? this.summaryStale,
+    createdAt: createdAt ?? this.createdAt,
+    coreId: coreId.present ? coreId.value : this.coreId,
+  );
+  MatomeRow copyWithCompanion(MatomesCompanion data) {
+    return MatomeRow(
+      id: data.id.present ? data.id.value : this.id,
+      spaceId: data.spaceId.present ? data.spaceId.value : this.spaceId,
+      title: data.title.present ? data.title.value : this.title,
+      happenedAt: data.happenedAt.present
+          ? data.happenedAt.value
+          : this.happenedAt,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      aggregatedSummary: data.aggregatedSummary.present
+          ? data.aggregatedSummary.value
+          : this.aggregatedSummary,
+      summaryStale: data.summaryStale.present
+          ? data.summaryStale.value
+          : this.summaryStale,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      coreId: data.coreId.present ? data.coreId.value : this.coreId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MatomeRow(')
+          ..write('id: $id, ')
+          ..write('spaceId: $spaceId, ')
+          ..write('title: $title, ')
+          ..write('happenedAt: $happenedAt, ')
+          ..write('description: $description, ')
+          ..write('aggregatedSummary: $aggregatedSummary, ')
+          ..write('summaryStale: $summaryStale, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('coreId: $coreId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    spaceId,
+    title,
+    happenedAt,
+    description,
+    aggregatedSummary,
+    summaryStale,
+    createdAt,
+    coreId,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MatomeRow &&
+          other.id == this.id &&
+          other.spaceId == this.spaceId &&
+          other.title == this.title &&
+          other.happenedAt == this.happenedAt &&
+          other.description == this.description &&
+          other.aggregatedSummary == this.aggregatedSummary &&
+          other.summaryStale == this.summaryStale &&
+          other.createdAt == this.createdAt &&
+          other.coreId == this.coreId);
+}
+
+class MatomesCompanion extends UpdateCompanion<MatomeRow> {
+  final Value<String> id;
+  final Value<String?> spaceId;
+  final Value<String> title;
+  final Value<int> happenedAt;
+  final Value<String?> description;
+  final Value<String?> aggregatedSummary;
+  final Value<bool> summaryStale;
+  final Value<int> createdAt;
+  final Value<int?> coreId;
+  final Value<int> rowid;
+  const MatomesCompanion({
+    this.id = const Value.absent(),
+    this.spaceId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.happenedAt = const Value.absent(),
+    this.description = const Value.absent(),
+    this.aggregatedSummary = const Value.absent(),
+    this.summaryStale = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.coreId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MatomesCompanion.insert({
+    required String id,
+    this.spaceId = const Value.absent(),
+    required String title,
+    required int happenedAt,
+    this.description = const Value.absent(),
+    this.aggregatedSummary = const Value.absent(),
+    this.summaryStale = const Value.absent(),
+    required int createdAt,
+    this.coreId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       title = Value(title),
+       happenedAt = Value(happenedAt),
+       createdAt = Value(createdAt);
+  static Insertable<MatomeRow> custom({
+    Expression<String>? id,
+    Expression<String>? spaceId,
+    Expression<String>? title,
+    Expression<int>? happenedAt,
+    Expression<String>? description,
+    Expression<String>? aggregatedSummary,
+    Expression<bool>? summaryStale,
+    Expression<int>? createdAt,
+    Expression<int>? coreId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (spaceId != null) 'space_id': spaceId,
+      if (title != null) 'title': title,
+      if (happenedAt != null) 'happened_at': happenedAt,
+      if (description != null) 'description': description,
+      if (aggregatedSummary != null) 'aggregated_summary': aggregatedSummary,
+      if (summaryStale != null) 'summary_stale': summaryStale,
+      if (createdAt != null) 'created_at': createdAt,
+      if (coreId != null) 'core_id': coreId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MatomesCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? spaceId,
+    Value<String>? title,
+    Value<int>? happenedAt,
+    Value<String?>? description,
+    Value<String?>? aggregatedSummary,
+    Value<bool>? summaryStale,
+    Value<int>? createdAt,
+    Value<int?>? coreId,
+    Value<int>? rowid,
+  }) {
+    return MatomesCompanion(
+      id: id ?? this.id,
+      spaceId: spaceId ?? this.spaceId,
+      title: title ?? this.title,
+      happenedAt: happenedAt ?? this.happenedAt,
+      description: description ?? this.description,
+      aggregatedSummary: aggregatedSummary ?? this.aggregatedSummary,
+      summaryStale: summaryStale ?? this.summaryStale,
+      createdAt: createdAt ?? this.createdAt,
+      coreId: coreId ?? this.coreId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (spaceId.present) {
+      map['space_id'] = Variable<String>(spaceId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (happenedAt.present) {
+      map['happened_at'] = Variable<int>(happenedAt.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (aggregatedSummary.present) {
+      map['aggregated_summary'] = Variable<String>(aggregatedSummary.value);
+    }
+    if (summaryStale.present) {
+      map['summary_stale'] = Variable<bool>(summaryStale.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (coreId.present) {
+      map['core_id'] = Variable<int>(coreId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MatomesCompanion(')
+          ..write('id: $id, ')
+          ..write('spaceId: $spaceId, ')
+          ..write('title: $title, ')
+          ..write('happenedAt: $happenedAt, ')
+          ..write('description: $description, ')
+          ..write('aggregatedSummary: $aggregatedSummary, ')
+          ..write('summaryStale: $summaryStale, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('coreId: $coreId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1437,11 +2730,16 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RecordingDraftsTable recordingDrafts = $RecordingDraftsTable(
     this,
   );
+  late final $SpaceMembersTable spaceMembers = $SpaceMembersTable(this);
+  late final $OrganizationsTable organizations = $OrganizationsTable(this);
+  late final $MatomesTable matomes = $MatomesTable(this);
   late final RecordingsDao recordingsDao = RecordingsDao(this as AppDatabase);
   late final WorkspacesDao workspacesDao = WorkspacesDao(this as AppDatabase);
   late final RecordingDraftsDao recordingDraftsDao = RecordingDraftsDao(
     this as AppDatabase,
   );
+  late final SpacesDao spacesDao = SpacesDao(this as AppDatabase);
+  late final MatomesDao matomesDao = MatomesDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1450,6 +2748,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     recordings,
     workspaces,
     recordingDrafts,
+    spaceMembers,
+    organizations,
+    matomes,
   ];
 }
 
@@ -1469,6 +2770,7 @@ typedef $$RecordingsTableCreateCompanionBuilder =
       Value<String> mediaType,
       Value<String> processingStatus,
       Value<int?> coreId,
+      Value<String?> matomeId,
       Value<int> rowid,
     });
 typedef $$RecordingsTableUpdateCompanionBuilder =
@@ -1487,6 +2789,7 @@ typedef $$RecordingsTableUpdateCompanionBuilder =
       Value<String> mediaType,
       Value<String> processingStatus,
       Value<int?> coreId,
+      Value<String?> matomeId,
       Value<int> rowid,
     });
 
@@ -1566,6 +2869,11 @@ class $$RecordingsTableFilterComposer
 
   ColumnFilters<int> get coreId => $composableBuilder(
     column: $table.coreId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get matomeId => $composableBuilder(
+    column: $table.matomeId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1648,6 +2956,11 @@ class $$RecordingsTableOrderingComposer
     column: $table.coreId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get matomeId => $composableBuilder(
+    column: $table.matomeId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RecordingsTableAnnotationComposer
@@ -1708,6 +3021,9 @@ class $$RecordingsTableAnnotationComposer
 
   GeneratedColumn<int> get coreId =>
       $composableBuilder(column: $table.coreId, builder: (column) => column);
+
+  GeneratedColumn<String> get matomeId =>
+      $composableBuilder(column: $table.matomeId, builder: (column) => column);
 }
 
 class $$RecordingsTableTableManager
@@ -1755,6 +3071,7 @@ class $$RecordingsTableTableManager
                 Value<String> mediaType = const Value.absent(),
                 Value<String> processingStatus = const Value.absent(),
                 Value<int?> coreId = const Value.absent(),
+                Value<String?> matomeId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion(
                 id: id,
@@ -1771,6 +3088,7 @@ class $$RecordingsTableTableManager
                 mediaType: mediaType,
                 processingStatus: processingStatus,
                 coreId: coreId,
+                matomeId: matomeId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1789,6 +3107,7 @@ class $$RecordingsTableTableManager
                 Value<String> mediaType = const Value.absent(),
                 Value<String> processingStatus = const Value.absent(),
                 Value<int?> coreId = const Value.absent(),
+                Value<String?> matomeId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion.insert(
                 id: id,
@@ -1805,6 +3124,7 @@ class $$RecordingsTableTableManager
                 mediaType: mediaType,
                 processingStatus: processingStatus,
                 coreId: coreId,
+                matomeId: matomeId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -1838,6 +3158,8 @@ typedef $$WorkspacesTableCreateCompanionBuilder =
       required String name,
       Value<int> isDefault,
       required int createdAt,
+      Value<String> spaceType,
+      Value<String?> ownerId,
       Value<int> rowid,
     });
 typedef $$WorkspacesTableUpdateCompanionBuilder =
@@ -1846,6 +3168,8 @@ typedef $$WorkspacesTableUpdateCompanionBuilder =
       Value<String> name,
       Value<int> isDefault,
       Value<int> createdAt,
+      Value<String> spaceType,
+      Value<String?> ownerId,
       Value<int> rowid,
     });
 
@@ -1875,6 +3199,16 @@ class $$WorkspacesTableFilterComposer
 
   ColumnFilters<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get spaceType => $composableBuilder(
+    column: $table.spaceType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1907,6 +3241,16 @@ class $$WorkspacesTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get spaceType => $composableBuilder(
+    column: $table.spaceType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$WorkspacesTableAnnotationComposer
@@ -1929,6 +3273,12 @@ class $$WorkspacesTableAnnotationComposer
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get spaceType =>
+      $composableBuilder(column: $table.spaceType, builder: (column) => column);
+
+  GeneratedColumn<String> get ownerId =>
+      $composableBuilder(column: $table.ownerId, builder: (column) => column);
 }
 
 class $$WorkspacesTableTableManager
@@ -1966,12 +3316,16 @@ class $$WorkspacesTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<int> isDefault = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
+                Value<String> spaceType = const Value.absent(),
+                Value<String?> ownerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WorkspacesCompanion(
                 id: id,
                 name: name,
                 isDefault: isDefault,
                 createdAt: createdAt,
+                spaceType: spaceType,
+                ownerId: ownerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1980,12 +3334,16 @@ class $$WorkspacesTableTableManager
                 required String name,
                 Value<int> isDefault = const Value.absent(),
                 required int createdAt,
+                Value<String> spaceType = const Value.absent(),
+                Value<String?> ownerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WorkspacesCompanion.insert(
                 id: id,
                 name: name,
                 isDefault: isDefault,
                 createdAt: createdAt,
+                spaceType: spaceType,
+                ownerId: ownerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -2198,6 +3556,627 @@ typedef $$RecordingDraftsTableProcessedTableManager =
       RecordingDraftRow,
       PrefetchHooks Function()
     >;
+typedef $$SpaceMembersTableCreateCompanionBuilder =
+    SpaceMembersCompanion Function({
+      required String id,
+      required String spaceId,
+      required String userId,
+      Value<String> role,
+      Value<int> rowid,
+    });
+typedef $$SpaceMembersTableUpdateCompanionBuilder =
+    SpaceMembersCompanion Function({
+      Value<String> id,
+      Value<String> spaceId,
+      Value<String> userId,
+      Value<String> role,
+      Value<int> rowid,
+    });
+
+class $$SpaceMembersTableFilterComposer
+    extends Composer<_$AppDatabase, $SpaceMembersTable> {
+  $$SpaceMembersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get spaceId => $composableBuilder(
+    column: $table.spaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SpaceMembersTableOrderingComposer
+    extends Composer<_$AppDatabase, $SpaceMembersTable> {
+  $$SpaceMembersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get spaceId => $composableBuilder(
+    column: $table.spaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SpaceMembersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SpaceMembersTable> {
+  $$SpaceMembersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get spaceId =>
+      $composableBuilder(column: $table.spaceId, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumn<String> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+}
+
+class $$SpaceMembersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SpaceMembersTable,
+          SpaceMemberRow,
+          $$SpaceMembersTableFilterComposer,
+          $$SpaceMembersTableOrderingComposer,
+          $$SpaceMembersTableAnnotationComposer,
+          $$SpaceMembersTableCreateCompanionBuilder,
+          $$SpaceMembersTableUpdateCompanionBuilder,
+          (
+            SpaceMemberRow,
+            BaseReferences<_$AppDatabase, $SpaceMembersTable, SpaceMemberRow>,
+          ),
+          SpaceMemberRow,
+          PrefetchHooks Function()
+        > {
+  $$SpaceMembersTableTableManager(_$AppDatabase db, $SpaceMembersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SpaceMembersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SpaceMembersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SpaceMembersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> spaceId = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SpaceMembersCompanion(
+                id: id,
+                spaceId: spaceId,
+                userId: userId,
+                role: role,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String spaceId,
+                required String userId,
+                Value<String> role = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SpaceMembersCompanion.insert(
+                id: id,
+                spaceId: spaceId,
+                userId: userId,
+                role: role,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SpaceMembersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SpaceMembersTable,
+      SpaceMemberRow,
+      $$SpaceMembersTableFilterComposer,
+      $$SpaceMembersTableOrderingComposer,
+      $$SpaceMembersTableAnnotationComposer,
+      $$SpaceMembersTableCreateCompanionBuilder,
+      $$SpaceMembersTableUpdateCompanionBuilder,
+      (
+        SpaceMemberRow,
+        BaseReferences<_$AppDatabase, $SpaceMembersTable, SpaceMemberRow>,
+      ),
+      SpaceMemberRow,
+      PrefetchHooks Function()
+    >;
+typedef $$OrganizationsTableCreateCompanionBuilder =
+    OrganizationsCompanion Function({
+      required String id,
+      required String name,
+      required int createdAt,
+      Value<int> rowid,
+    });
+typedef $$OrganizationsTableUpdateCompanionBuilder =
+    OrganizationsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<int> createdAt,
+      Value<int> rowid,
+    });
+
+class $$OrganizationsTableFilterComposer
+    extends Composer<_$AppDatabase, $OrganizationsTable> {
+  $$OrganizationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OrganizationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $OrganizationsTable> {
+  $$OrganizationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OrganizationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OrganizationsTable> {
+  $$OrganizationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$OrganizationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $OrganizationsTable,
+          OrganizationRow,
+          $$OrganizationsTableFilterComposer,
+          $$OrganizationsTableOrderingComposer,
+          $$OrganizationsTableAnnotationComposer,
+          $$OrganizationsTableCreateCompanionBuilder,
+          $$OrganizationsTableUpdateCompanionBuilder,
+          (
+            OrganizationRow,
+            BaseReferences<_$AppDatabase, $OrganizationsTable, OrganizationRow>,
+          ),
+          OrganizationRow,
+          PrefetchHooks Function()
+        > {
+  $$OrganizationsTableTableManager(_$AppDatabase db, $OrganizationsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OrganizationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OrganizationsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OrganizationsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OrganizationsCompanion(
+                id: id,
+                name: name,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required int createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => OrganizationsCompanion.insert(
+                id: id,
+                name: name,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OrganizationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $OrganizationsTable,
+      OrganizationRow,
+      $$OrganizationsTableFilterComposer,
+      $$OrganizationsTableOrderingComposer,
+      $$OrganizationsTableAnnotationComposer,
+      $$OrganizationsTableCreateCompanionBuilder,
+      $$OrganizationsTableUpdateCompanionBuilder,
+      (
+        OrganizationRow,
+        BaseReferences<_$AppDatabase, $OrganizationsTable, OrganizationRow>,
+      ),
+      OrganizationRow,
+      PrefetchHooks Function()
+    >;
+typedef $$MatomesTableCreateCompanionBuilder =
+    MatomesCompanion Function({
+      required String id,
+      Value<String?> spaceId,
+      required String title,
+      required int happenedAt,
+      Value<String?> description,
+      Value<String?> aggregatedSummary,
+      Value<bool> summaryStale,
+      required int createdAt,
+      Value<int?> coreId,
+      Value<int> rowid,
+    });
+typedef $$MatomesTableUpdateCompanionBuilder =
+    MatomesCompanion Function({
+      Value<String> id,
+      Value<String?> spaceId,
+      Value<String> title,
+      Value<int> happenedAt,
+      Value<String?> description,
+      Value<String?> aggregatedSummary,
+      Value<bool> summaryStale,
+      Value<int> createdAt,
+      Value<int?> coreId,
+      Value<int> rowid,
+    });
+
+class $$MatomesTableFilterComposer
+    extends Composer<_$AppDatabase, $MatomesTable> {
+  $$MatomesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get spaceId => $composableBuilder(
+    column: $table.spaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get happenedAt => $composableBuilder(
+    column: $table.happenedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get aggregatedSummary => $composableBuilder(
+    column: $table.aggregatedSummary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get summaryStale => $composableBuilder(
+    column: $table.summaryStale,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get coreId => $composableBuilder(
+    column: $table.coreId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MatomesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MatomesTable> {
+  $$MatomesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get spaceId => $composableBuilder(
+    column: $table.spaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get happenedAt => $composableBuilder(
+    column: $table.happenedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get aggregatedSummary => $composableBuilder(
+    column: $table.aggregatedSummary,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get summaryStale => $composableBuilder(
+    column: $table.summaryStale,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get coreId => $composableBuilder(
+    column: $table.coreId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MatomesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MatomesTable> {
+  $$MatomesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get spaceId =>
+      $composableBuilder(column: $table.spaceId, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<int> get happenedAt => $composableBuilder(
+    column: $table.happenedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get aggregatedSummary => $composableBuilder(
+    column: $table.aggregatedSummary,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get summaryStale => $composableBuilder(
+    column: $table.summaryStale,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get coreId =>
+      $composableBuilder(column: $table.coreId, builder: (column) => column);
+}
+
+class $$MatomesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MatomesTable,
+          MatomeRow,
+          $$MatomesTableFilterComposer,
+          $$MatomesTableOrderingComposer,
+          $$MatomesTableAnnotationComposer,
+          $$MatomesTableCreateCompanionBuilder,
+          $$MatomesTableUpdateCompanionBuilder,
+          (MatomeRow, BaseReferences<_$AppDatabase, $MatomesTable, MatomeRow>),
+          MatomeRow,
+          PrefetchHooks Function()
+        > {
+  $$MatomesTableTableManager(_$AppDatabase db, $MatomesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MatomesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MatomesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MatomesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String?> spaceId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<int> happenedAt = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String?> aggregatedSummary = const Value.absent(),
+                Value<bool> summaryStale = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int?> coreId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MatomesCompanion(
+                id: id,
+                spaceId: spaceId,
+                title: title,
+                happenedAt: happenedAt,
+                description: description,
+                aggregatedSummary: aggregatedSummary,
+                summaryStale: summaryStale,
+                createdAt: createdAt,
+                coreId: coreId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String?> spaceId = const Value.absent(),
+                required String title,
+                required int happenedAt,
+                Value<String?> description = const Value.absent(),
+                Value<String?> aggregatedSummary = const Value.absent(),
+                Value<bool> summaryStale = const Value.absent(),
+                required int createdAt,
+                Value<int?> coreId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MatomesCompanion.insert(
+                id: id,
+                spaceId: spaceId,
+                title: title,
+                happenedAt: happenedAt,
+                description: description,
+                aggregatedSummary: aggregatedSummary,
+                summaryStale: summaryStale,
+                createdAt: createdAt,
+                coreId: coreId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MatomesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MatomesTable,
+      MatomeRow,
+      $$MatomesTableFilterComposer,
+      $$MatomesTableOrderingComposer,
+      $$MatomesTableAnnotationComposer,
+      $$MatomesTableCreateCompanionBuilder,
+      $$MatomesTableUpdateCompanionBuilder,
+      (MatomeRow, BaseReferences<_$AppDatabase, $MatomesTable, MatomeRow>),
+      MatomeRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2208,4 +4187,10 @@ class $AppDatabaseManager {
       $$WorkspacesTableTableManager(_db, _db.workspaces);
   $$RecordingDraftsTableTableManager get recordingDrafts =>
       $$RecordingDraftsTableTableManager(_db, _db.recordingDrafts);
+  $$SpaceMembersTableTableManager get spaceMembers =>
+      $$SpaceMembersTableTableManager(_db, _db.spaceMembers);
+  $$OrganizationsTableTableManager get organizations =>
+      $$OrganizationsTableTableManager(_db, _db.organizations);
+  $$MatomesTableTableManager get matomes =>
+      $$MatomesTableTableManager(_db, _db.matomes);
 }

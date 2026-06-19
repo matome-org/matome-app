@@ -1,9 +1,12 @@
 import 'package:drift/drift.dart';
 
+import '../../features/matome/matome_ids.dart';
 import 'connection.dart';
 import 'db_encryption.dart';
+import 'daos/matomes_dao.dart';
 import 'daos/recordings_dao.dart';
 import 'daos/recording_drafts_dao.dart';
+import 'daos/spaces_dao.dart';
 import 'daos/workspaces_dao.dart';
 import 'tables.dart';
 
@@ -14,7 +17,20 @@ part 'app_database.g.dart';
 /// 001..004, which map to SQLite `user_version` 4 on a fully-migrated mobile
 /// device. New schema changes are append-only: bump this and add a step in
 /// [MigrationStrategy.onUpgrade].
-const int kSchemaVersion = 5;
+///
+/// v6 (m006, matome-centric-pivot Wave 1) adds collaboration *schema* to the
+/// Space (the `workspaces` table): `space_type` + `owner_id` columns and the
+/// `space_members` / `organizations` tables. Reserved/UNENFORCED — no ACL
+/// behaviour ships until the `matome-collaboration` plan (ADR-0004).
+///
+/// v7 (m007, matome-centric-pivot — the KEYSTONE data slice) makes the
+/// **Matome** the central entity (ADR-0003): adds the `matomes` table and the
+/// `recordings.matome_id` FK, and BACKFILLS one Matome per existing recording
+/// so every recording is an Item of exactly one Matome. (Note: ADR-0003 drafts
+/// this as "m006"; m006 was taken by the Space-evolution slice above, so the
+/// Matome slice lands as m007 — the version number, not the ADR prose, is
+/// authoritative.)
+const int kSchemaVersion = 7;
 
 /// The offline-first local store.
 ///
@@ -23,8 +39,21 @@ const int kSchemaVersion = 5;
 /// repositories expose plain Dart; the sync layer (Wave 3) decides when to pull
 /// from Core and write through these DAOs.
 @DriftDatabase(
-  tables: [Recordings, Workspaces, RecordingDrafts],
-  daos: [RecordingsDao, WorkspacesDao, RecordingDraftsDao],
+  tables: [
+    Recordings,
+    Workspaces,
+    RecordingDrafts,
+    SpaceMembers,
+    Organizations,
+    Matomes,
+  ],
+  daos: [
+    RecordingsDao,
+    WorkspacesDao,
+    RecordingDraftsDao,
+    SpacesDao,
+    MatomesDao,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   /// Production constructor: opens the platform connection, SQLCipher-encrypted
@@ -91,14 +120,84 @@ class AppDatabase extends _$AppDatabase {
               "AND id GLOB '*[0-9]*'",
             );
           }
+          // m006 — Space collaboration schema (matome-centric-pivot Wave 1,
+          // ADR-0003/0004). The Space rename is LOGICAL: the table stays named
+          // `workspaces`. Two columns are added to it and two reserved tables
+          // are created. All collaboration columns are UNENFORCED — no ACL
+          // logic reads them until the `matome-collaboration` plan.
+          //
+          // Both columns are NULLABLE/defaulted, so Drift's ALTER ADD COLUMN
+          // backfills existing rows: `space_type` → 'personal' (its column
+          // default), `owner_id` → NULL. The seeded default Space ('Pessoal',
+          // isDefault=1) therefore becomes type 'personal' — it is the default
+          // triage destination (ADR-0004). The explicit UPDATE below is a
+          // belt-and-braces backfill in case a prior build had already created
+          // the column without the default.
+          //
+          // DOWN-migration / reversal (no automatic downgrade path in Drift;
+          // documented for discipline — additive, low-risk, no prod users):
+          //   DROP TABLE IF EXISTS organizations;
+          //   DROP TABLE IF EXISTS space_members;
+          //   -- SQLite < 3.35 cannot DROP COLUMN; rebuild `workspaces` without
+          //   -- space_type/owner_id via a copy table if a true v5 shape is
+          //   -- required. Leaving the columns in place is otherwise harmless.
+          //   PRAGMA user_version = 5;
+          if (from < 6) {
+            await m.addColumn(workspaces, workspaces.spaceType);
+            await m.addColumn(workspaces, workspaces.ownerId);
+            await customStatement(
+              "UPDATE workspaces SET space_type = 'personal' "
+              "WHERE space_type IS NULL",
+            );
+            await m.createTable(spaceMembers);
+            await m.createTable(organizations);
+          }
+          // m007 — Matome becomes the central entity (matome-centric-pivot,
+          // ADR-0003 — the KEYSTONE data slice). Adds the `matomes` table and
+          // the `recordings.matome_id` FK, then BACKFILLS one Matome per
+          // existing recording so every recording is an Item of exactly one
+          // Matome (ADR-0003 invariant 1/2). The Matome is minted local-only
+          // (`mat_local_<uuid>`, `core_id` NULL — Inbox/untriaged until
+          // triaged into a Space; ADR-0004) and takes its `space_id` from the
+          // recording's existing `workspaceId` so a recording already filed in a
+          // Space yields a Space-filed Matome, and an Inbox recording
+          // (workspaceId NULL) yields an Inbox Matome.
+          //
+          // ORDERING: the Matome row is INSERTed BEFORE the recording is
+          // pointed at it, so the (eventually-non-null) FK never sees an orphan
+          // window (ADR-0003 invariant 4). `recordings.matomeId` is added as a
+          // nullable column (Drift ALTER ADD can't add a NOT NULL column to a
+          // populated table), then the backfill makes it non-null for every
+          // row; the WHERE matome_id IS NULL guard makes the whole step
+          // IDEMPOTENT (a re-run finds no un-backfilled rows and creates no
+          // duplicate Matomes).
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, low-risk, no prod users):
+          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v6 shape,
+          //   -- rebuild `recordings` without `matome_id` via a copy table.
+          //   -- Leaving the column in place is otherwise harmless.
+          //   DROP TABLE IF EXISTS matomes;
+          //   PRAGMA user_version = 6;
+          if (from < 7) {
+            await m.createTable(matomes);
+            await m.addColumn(recordings, recordings.matomeId);
+            await _backfillMatomesPerRecording();
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
         },
       );
 
-  /// Inserts the seeded "Pessoal" default workspace, mirroring migration 002's
-  /// `INSERT OR IGNORE`. Idempotent.
+  /// Inserts the seeded "Pessoal" default workspace (the default personal
+  /// Space), mirroring migration 002's `INSERT OR IGNORE`. Idempotent.
+  ///
+  /// `spaceType` is pinned to 'personal' — this is the default triage
+  /// destination (ADR-0004). On a fresh install (onCreate) the column exists
+  /// from `createAll()`; on the m002 upgrade path the column is absent until
+  /// m006 runs, so the companion only sets it when meaningful (the column
+  /// default 'personal' covers the pre-m006 insert).
   Future<void> _seedDefaultWorkspace() async {
     await into(workspaces).insert(
       WorkspacesCompanion.insert(
@@ -106,8 +205,57 @@ class AppDatabase extends _$AppDatabase {
         name: 'Pessoal',
         isDefault: const Value(1),
         createdAt: DateTime.now().millisecondsSinceEpoch,
+        spaceType: const Value('personal'),
       ),
       mode: InsertMode.insertOrIgnore,
     );
+  }
+
+  /// m007 backfill: create exactly one Matome per existing recording and point
+  /// the recording at it (ADR-0003 invariant 1/2 — every recording ∈ exactly
+  /// one Matome). Each Matome is minted local-only (`mat_local_<uuid>`,
+  /// `core_id` NULL); its `space_id` is the recording's existing `workspaceId`
+  /// (so an Inbox recording → an Inbox Matome, a filed recording → a filed
+  /// Matome) and `happened_at` is the recording's `createdAt`.
+  ///
+  /// Per row the Matome is INSERTED FIRST, then the recording's `matome_id` is
+  /// set — the FK never sees an orphan window. The `matome_id IS NULL` filter
+  /// makes the whole backfill IDEMPOTENT: a re-run (or a partial prior run)
+  /// only touches recordings that still lack a Matome, so no duplicate Matomes
+  /// are ever created. Runs inside the surrounding migration so a failure rolls
+  /// the whole step back.
+  Future<void> _backfillMatomesPerRecording() async {
+    // Read raw so this does not depend on the generated row mapper being in
+    // sync with intermediate migration shapes.
+    final rows = await customSelect(
+      'SELECT id, title, createdAt, workspaceId FROM recordings '
+      'WHERE matome_id IS NULL',
+    ).get();
+
+    for (final row in rows) {
+      final recordingId = row.read<String>('id');
+      final title = row.read<String>('title');
+      final createdAt = row.read<int>('createdAt');
+      final workspaceId = row.read<String?>('workspaceId');
+      final matomeId = mintLocalMatomeId();
+
+      // 1. Insert the Matome FIRST so the FK target exists before any recording
+      //    references it (no orphan / NOT-NULL-after-backfill violation).
+      await into(matomes).insert(
+        MatomesCompanion.insert(
+          id: matomeId,
+          spaceId: Value(workspaceId),
+          title: title,
+          happenedAt: createdAt,
+          createdAt: createdAt,
+        ),
+      );
+
+      // 2. Point the recording at its freshly-created Matome.
+      await customStatement(
+        'UPDATE recordings SET matome_id = ? WHERE id = ?',
+        [matomeId, recordingId],
+      );
+    }
   }
 }

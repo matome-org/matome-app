@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../../features/matome/matome_ids.dart';
 import '../../../features/recordings/recording_ids.dart'
     show kProcessingStatusPendingUpload;
 import '../app_database.dart';
@@ -24,7 +25,7 @@ const int _kMsPerDay = 24 * 60 * 60 * 1000;
 ///
 /// Pure-Dart surface: no HTTP. The sync layer (Wave 3) decides when to pull
 /// from Core and writes through [upsertRecording].
-@DriftAccessor(tables: [Recordings, Workspaces])
+@DriftAccessor(tables: [Recordings, Workspaces, Matomes])
 class RecordingsDao extends DatabaseAccessor<AppDatabase>
     with _$RecordingsDaoMixin {
   RecordingsDao(super.db);
@@ -94,6 +95,66 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// path (mobile `upsertCachedRecording`).
   Future<void> upsertRecording(RecordingsCompanion entry) {
     return into(recordings).insertOnConflictUpdate(entry);
+  }
+
+  /// Local-first upsert that GUARANTEES the recording is an Item of a Matome
+  /// (ADR-0003 invariant 1/4 — a recording is never persisted without a Matome,
+  /// created in the SAME transaction so the FK never sees an orphan window).
+  ///
+  /// If [entry] already carries a `matome_id`, it is upserted unchanged (the
+  /// caller owns the Matome). Otherwise — and when no row with this PK already
+  /// has a Matome — a fresh local Matome (`mat_local_<uuid>`, `core_id` NULL) is
+  /// minted FIRST, its `space_id` taken from the recording's `workspaceId` (so
+  /// an Inbox upload → an Inbox Matome) and `happened_at`/`createdAt` from the
+  /// recording's `createdAt`, then the recording is upserted pointing at it.
+  ///
+  /// Re-upserting an existing row (the W3 Core reconcile re-running over a
+  /// local-first row) does NOT mint a second Matome: the existing row's
+  /// `matome_id` is reused. Runs in a single transaction.
+  Future<void> upsertRecordingWithMatome(RecordingsCompanion entry) {
+    return transaction(() async {
+      // Caller already supplied a Matome — respect it verbatim.
+      if (entry.matomeId.present && entry.matomeId.value != null) {
+        await into(recordings).insertOnConflictUpdate(entry);
+        return;
+      }
+
+      // Reuse an existing row's Matome if this PK already has one (idempotent
+      // re-upsert / reconcile), so a refresh never duplicates the Matome.
+      final id = entry.id.value;
+      final existing = await (select(
+        recordings,
+      )..where((r) => r.id.equals(id))).getSingleOrNull();
+      if (existing?.matomeId != null) {
+        await into(recordings).insertOnConflictUpdate(
+          entry.copyWith(matomeId: Value(existing!.matomeId)),
+        );
+        return;
+      }
+
+      // Mint a fresh local Matome FIRST (FK target exists before the recording
+      // references it), mirroring the m007 backfill: space_id = workspaceId,
+      // happened_at/created_at = the recording's createdAt.
+      final matomeId = mintLocalMatomeId();
+      final happenedAt =
+          entry.createdAt.present ? entry.createdAt.value : 0;
+      final spaceId = entry.workspaceId.present
+          ? entry.workspaceId.value
+          : null;
+      final title = entry.title.present ? entry.title.value : 'Untitled';
+      await into(matomes).insert(
+        MatomesCompanion.insert(
+          id: matomeId,
+          spaceId: Value(spaceId),
+          title: title,
+          happenedAt: happenedAt,
+          createdAt: happenedAt,
+        ),
+      );
+      await into(recordings).insertOnConflictUpdate(
+        entry.copyWith(matomeId: Value(matomeId)),
+      );
+    });
   }
 
   /// Partial update. Only the provided companion fields are written, mirroring

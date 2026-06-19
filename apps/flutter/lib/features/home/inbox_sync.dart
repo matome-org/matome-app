@@ -120,6 +120,20 @@ RecordingsCompanion recordingToCompanion(
           ? existing!.workspaceId
           : coreWorkspaceId;
 
+  // matomeId merge-guard (m007, ADR-0003): every local recording is an Item of
+  // exactly one Matome, but Core does NOT yet carry a Matome id on its
+  // recording payload. A naive upsert that left `matome_id` ABSENT would be
+  // fine on update, but `recordingToCompanion` builds a FULL companion used
+  // with `insertOnConflictUpdate`, so an absent value would NULL the column on
+  // the conflict-update — orphaning the recording from its Matome on the very
+  // next `refresh()`. Mirror the workspaceId/B2 guard: preserve the existing
+  // local `matome_id` (and emit `Value.absent()` for a first-time insert, which
+  // can't happen via this path today but keeps the companion well-formed). A
+  // Core refresh must NEVER null-clobber a local recording.matomeId.
+  final matomeIdValue = (existing?.matomeId != null)
+      ? Value<String?>(existing!.matomeId)
+      : const Value<String?>.absent();
+
   final coreNotes = recording.transcript;
   // Keep local notes if Core has none yet but we already cached some.
   final mergedNotes = (coreNotes == null && existing?.notes != null)
@@ -168,5 +182,6 @@ RecordingsCompanion recordingToCompanion(
     workspaceId: Value(mergedWorkspaceId),
     mediaType: Value(recording.mediaType ?? 'audio'),
     processingStatus: Value(local.processingStatus),
+    matomeId: matomeIdValue,
   );
 }

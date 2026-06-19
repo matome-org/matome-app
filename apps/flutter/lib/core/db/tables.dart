@@ -64,11 +64,86 @@ class Recordings extends Table {
   // whose id is a stringified Core id, so they reconcile without a PK remap.
   IntColumn get coreId => integer().named('coreId').nullable()();
 
+  // m007 — matome-centric-pivot (ADR-0003). Every recording is an *Item* of
+  // exactly ONE Matome (`recording.matomeId` FK → matomes(id); 1 recording → 1
+  // Matome, move never copy). The column is declared NULLABLE here so Drift's
+  // ALTER ADD COLUMN can land on legacy rows; the m007 migration then BACKFILLS
+  // one Matome per recording and points every row at it, after which the column
+  // is non-null for every persisted row. New write paths must create the Matome
+  // in the SAME transaction as the recording so the FK never sees an orphan
+  // (ADR-0003 invariant 4). The DB keeps it nullable only to allow the additive
+  // ALTER without a table rebuild — the contract is "non-null after backfill".
+  TextColumn get matomeId =>
+      text().named('matome_id').nullable().references(Matomes, #id)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// The **Matome** — the central entity of the matome-centric pivot (ADR-0003).
+///
+/// A Matome (まとめ — "a compiled whole") aggregates Items (recordings of
+/// `mediaType` audio|image), contacts, notes and summaries about one happening.
+/// Every recording belongs to exactly one Matome; a quick voice note is a
+/// Matome with a single item.
+///
+/// Local-first lifecycle (ADR-0004): a Matome is minted `mat_local_<uuid>` and
+/// stays Core-less (`coreId` NULL) while in the Inbox (`spaceId == null` —
+/// untriaged, local-only, NOT synced). `coreId` is assigned on first sync,
+/// which only happens once the Matome is filed into a (synced) Space. This
+/// mirrors the proven `recording_ids.dart` / m005 reconciliation pattern.
+///
+/// `space_id` reuses the existing `workspaces` table (the Space rename is
+/// logical — ADR-0003). NULL ⟺ Inbox.
+@DataClassName('MatomeRow')
+class Matomes extends Table {
+  @override
+  String get tableName => 'matomes';
+
+  TextColumn get id => text()();
+
+  // FK → workspaces(id) (the Space). NULL ⟺ Inbox ⟺ local-only/untriaged/
+  // unsynced (ADR-0004). A Matome enters the sync domain only when filed into a
+  // Space.
+  TextColumn get spaceId =>
+      text().named('space_id').nullable().references(Workspaces, #id)();
+
+  TextColumn get title => text()();
+
+  // Epoch ms of the happening this Matome gathers. Backfilled from the seed
+  // recording's `createdAt` (m007).
+  IntColumn get happenedAt => integer().named('happened_at')();
+
+  TextColumn get description => text().nullable()();
+
+  // ADR-0003 "open decisions resolved": the aggregated (Matome-level) summary is
+  // STORED (denormalized), regenerated when the item set changes. `summaryStale`
+  // flags pending regeneration. This task only adds the columns; regeneration is
+  // a later wave. The aggregated summary syncs as its own field with a
+  // `mergeText`-style null-wipe guard (a sparse Core payload must not erase it).
+  TextColumn get aggregatedSummary =>
+      text().named('aggregated_summary').nullable()();
+  BoolColumn get summaryStale =>
+      boolean().named('summary_stale').withDefault(const Constant(false))();
+
+  IntColumn get createdAt => integer().named('created_at')();
+
+  // Reconciled Core numeric id, NULL until the Matome is triaged into a Space
+  // and the first sync succeeds (mirrors recordings.coreId / m005).
+  IntColumn get coreId => integer().named('core_id').nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
 
 /// Mirrors the `workspaces` table created by migration 002.
+///
+/// The physical table is kept named `workspaces` (preserving m002 history and
+/// the `recordings.workspaceId` FK lineage). The code/UI concept is **Space**
+/// (ADR-0003 — the rename is logical, not physical). m006 extends it with two
+/// collaboration-schema columns that are reserved/unenforced (ADR-0004):
+///   * `space_type` ∈ { personal | shared | org } (NOT NULL default 'personal')
+///   * `owner_id`   — reserved Space owner user id (nullable, unenforced)
 @DataClassName('WorkspaceRow')
 class Workspaces extends Table {
   @override
@@ -79,6 +154,53 @@ class Workspaces extends Table {
   IntColumn get isDefault =>
       integer().named('isDefault').withDefault(const Constant(0))();
   IntColumn get createdAt => integer().named('createdAt')();
+
+  // m006 — Space type discriminator. NOT NULL with a 'personal' default so
+  // legacy rows backfill cleanly and the seeded default Space stays personal.
+  TextColumn get spaceType =>
+      text().named('space_type').withDefault(const Constant('personal'))();
+
+  // m006 — reserved Space owner (user id). Nullable + UNENFORCED until the
+  // `matome-collaboration` plan builds ACLs (ADR-0004 "schema-ready").
+  TextColumn get ownerId => text().named('owner_id').nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Membership edge of a Space (the RBAC join — ADR-0004).
+///
+/// m006, reserved/UNENFORCED: the columns and table exist so the collaboration
+/// plan can land behaviour later, but no ACL logic reads them today.
+/// `role` ∈ { owner | admin | member | viewer }.
+@DataClassName('SpaceMemberRow')
+class SpaceMembers extends Table {
+  @override
+  String get tableName => 'space_members';
+
+  TextColumn get id => text()();
+  // FK → workspaces(id) (the Space). Reserved; not enforced behaviourally.
+  TextColumn get spaceId =>
+      text().named('space_id').references(Workspaces, #id)();
+  TextColumn get userId => text().named('user_id')();
+  TextColumn get role => text().withDefault(const Constant('member'))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// An organization that may own Spaces (multi-tenant — ADR-0004).
+///
+/// m006, reserved/UNENFORCED: present so org-owned Spaces can be modelled by
+/// the collaboration plan; no org management exists yet.
+@DataClassName('OrganizationRow')
+class Organizations extends Table {
+  @override
+  String get tableName => 'organizations';
+
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  IntColumn get createdAt => integer().named('created_at')();
 
   @override
   Set<Column> get primaryKey => {id};
