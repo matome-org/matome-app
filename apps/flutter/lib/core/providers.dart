@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
+import '../features/contacts/contacts_repository.dart';
+import '../features/matome/matomes_repository.dart';
 import '../features/recordings/recordings_repository.dart';
 import 'db/app_database.dart';
 import 'http/api_client.dart';
@@ -50,6 +52,17 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 
 final recordingsRepositoryProvider = Provider<RecordingsRepository>((ref) {
   return RecordingsRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+/// HTTP repository for space-scoped Matome sync (task #1377). Overridden in
+/// tests with a fake/mock-adapter-backed repo (mirrors recordings).
+final matomesRepositoryProvider = Provider<MatomesRepository>((ref) {
+  return MatomesRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+/// HTTP repository for Contact sync (task #1377). Overridable in tests.
+final contactsRepositoryProvider = Provider<ContactsRepository>((ref) {
+  return ContactsRepository(apiClient: ref.watch(apiClientProvider));
 });
 
 /// Offline-first local store (Drift). Opened once and disposed with the

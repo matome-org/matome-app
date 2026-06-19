@@ -85,6 +85,16 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
         .get();
   }
 
+  /// Filed Matomes — `space_id IS NOT NULL` (triaged), newest first. These are
+  /// exactly the Matomes eligible for Core push (ADR-0004 space-scoped sync,
+  /// task #1377); Inbox Matomes (`space_id IS NULL`) stay local-only.
+  Future<List<MatomeRow>> listFiledMatomes() {
+    return (select(matomes)
+          ..where((m) => m.spaceId.isNotNull())
+          ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
+        .get();
+  }
+
   /// Matomes filed into a given Space, newest first.
   Future<List<MatomeRow>> listMatomesInSpace(String spaceId) {
     return (select(matomes)

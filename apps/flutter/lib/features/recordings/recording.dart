@@ -43,6 +43,7 @@ class Recording {
     this.duration,
     this.badge,
     this.workspaceId,
+    this.matomeId,
     this.insertedAt,
     this.updatedAt,
   });
@@ -59,6 +60,11 @@ class Recording {
   final int? duration;
   final String? badge;
   final int? workspaceId;
+
+  /// REMOTE (Core) Matome id this recording belongs to (task #1377). Carried so
+  /// the child-before-parent sync can map it back to a local Matome by `core_id`.
+  final int? matomeId;
+
   final DateTime? insertedAt;
   final DateTime? updatedAt;
 
@@ -76,6 +82,7 @@ class Recording {
       duration: asIntOrNull(json['duration']),
       badge: asStringOrNull(json['badge']),
       workspaceId: asIntOrNull(json['workspace_id']),
+      matomeId: asIntOrNull(json['matome_id']),
       insertedAt: asDateTimeOrNull(json['inserted_at']),
       updatedAt: asDateTimeOrNull(json['updated_at']),
     );

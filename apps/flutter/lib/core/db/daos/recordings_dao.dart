@@ -59,6 +59,16 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     )..where((r) => r.id.equals(id))).getSingleOrNull();
   }
 
+  /// All recordings that are Items of [matomeId], newest first. The child set
+  /// the space-scoped sync (task #1377) pushes once their parent Matome has a
+  /// Core id (child-before-parent ordering).
+  Future<List<RecordingRow>> recordingsForMatome(String matomeId) {
+    return (select(recordings)
+          ..where((r) => r.matomeId.equals(matomeId))
+          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
+        .get();
+  }
+
   /// Local row whose reconciled Core id is [coreId], or null if none has been
   /// reconciled yet. Used by the Wave 3 socket/poll reconcile path, which is
   /// keyed on the Core numeric id and must map it back to the local UUID PK

@@ -219,6 +219,7 @@ class RecordingsRepository {
     String? title,
     String? badge,
     int? workspaceId,
+    int? matomeId,
     bool clearWorkspace = false,
   }) async {
     try {
@@ -229,6 +230,9 @@ class RecordingsRepository {
           'summary': ?summary,
           'title': ?title,
           'badge': ?badge,
+          // child-before-parent (task #1377): the recording's remote matome_id
+          // is only sent once its Matome has a Core id; never null-clobbered.
+          'matome_id': ?matomeId,
           if (clearWorkspace) 'workspace_id': null else 'workspace_id': ?workspaceId,
         },
       );
