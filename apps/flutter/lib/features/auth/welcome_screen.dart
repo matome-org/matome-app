@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/app_button.dart';
 
 /// Max width of the content column on wide (web/desktop) viewports.
 const double _contentMaxWidth = 440;
@@ -16,8 +17,10 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
     final features = [
       (
         Icons.mic_none_outlined,
@@ -43,7 +46,12 @@ class WelcomeScreen extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
+              padding: EdgeInsets.fromLTRB(
+                spacing.lg,
+                spacing.xl + spacing.xs,
+                spacing.lg,
+                spacing.lg,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -53,19 +61,17 @@ class WelcomeScreen extends StatelessWidget {
                     children: [
                       Text(
                         'マトメ',
-                        style: TextStyle(
-                          fontSize: 30,
+                        style: typography.display.copyWith(
                           fontWeight: FontWeight.w800,
                           color: colors.textPrimary,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: spacing.xs),
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: EdgeInsets.only(bottom: spacing.xxs),
                         child: Text(
                           'MATOME',
-                          style: TextStyle(
-                            fontSize: 14,
+                          style: typography.bodySmall.copyWith(
                             letterSpacing: 3,
                             fontWeight: FontWeight.w700,
                             color: colors.accentDark,
@@ -74,13 +80,11 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 40),
+                  SizedBox(height: spacing.xl + spacing.xs),
                   // Headline.
                   Text.rich(
                     TextSpan(
-                      style: TextStyle(
-                        fontSize: 34,
-                        height: 1.15,
+                      style: typography.display.copyWith(
                         fontWeight: FontWeight.w800,
                         color: colors.textPrimary,
                       ),
@@ -89,64 +93,62 @@ class WelcomeScreen extends StatelessWidget {
                         TextSpan(text: '${t.welcome.headlineLine2}\n'),
                         TextSpan(
                           text: t.welcome.headlineAccent,
-                          style: TextStyle(color: colors.accentDark),
+                          style: typography.display.copyWith(
+                            color: colors.accentDark,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: spacing.md),
                   Text(
                     t.welcome.subheadline,
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.4,
+                    style: typography.bodySmall.copyWith(
                       color: colors.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: spacing.xl),
                   // Feature cards.
                   for (final f in features) ...[
                     _FeatureRow(icon: f.$1, title: f.$2, subtitle: f.$3),
-                    const SizedBox(height: 16),
+                    SizedBox(height: spacing.md),
                   ],
-                  const SizedBox(height: 16),
+                  SizedBox(height: spacing.md),
                   // CTAs.
                   SizedBox(
                     width: double.infinity,
-                    child: FilledButton(
+                    child: PrimaryButton(
                       onPressed: () => context.go('/signup'),
                       style: FilledButton.styleFrom(
                         backgroundColor: colors.textPrimary,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(52),
+                        foregroundColor: colors.onTextPrimary,
+                        minimumSize: Size.fromHeight(spacing.xxl + spacing.xxs),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(radius.lg),
                         ),
                       ),
                       child: Text(
                         t.auth.createAccount,
-                        style: const TextStyle(
-                          fontSize: 16,
+                        style: typography.body.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: spacing.sm),
                   Center(
-                    child: TextButton(
+                    child: AppTextButton(
                       onPressed: () => context.go('/login'),
                       child: Text.rich(
                         TextSpan(
-                          style: TextStyle(
-                            fontSize: 14,
+                          style: typography.bodySmall.copyWith(
                             color: colors.textSecondary,
                           ),
                           children: [
                             TextSpan(text: t.welcome.haveAccount),
                             TextSpan(
                               text: t.welcome.signIn,
-                              style: TextStyle(
+                              style: typography.bodySmall.copyWith(
                                 fontWeight: FontWeight.w700,
                                 color: colors.textPrimary,
                               ),
@@ -179,38 +181,43 @@ class _FeatureRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 44,
-          height: 44,
+          width: spacing.xl + spacing.sm,
+          height: spacing.xl + spacing.sm,
           decoration: BoxDecoration(
             color: colors.accentSoft,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(radius.md),
           ),
-          child: Icon(icon, size: 22, color: colors.accentDark),
+          child: Icon(
+            icon,
+            size: typography.title.fontSize,
+            color: colors.accentDark,
+          ),
         ),
-        const SizedBox(width: 14),
+        SizedBox(width: spacing.sm),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: TextStyle(
-                  fontSize: 15,
+                style: typography.bodySmall.copyWith(
                   fontWeight: FontWeight.w700,
                   color: colors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: spacing.xxs),
               Text(
                 subtitle,
-                style: TextStyle(fontSize: 13, color: colors.textSecondary),
+                style: typography.label.copyWith(color: colors.textSecondary),
               ),
             ],
           ),

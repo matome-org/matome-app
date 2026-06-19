@@ -8,6 +8,10 @@ import '../../features/recording/meeting_recorder.dart';
 import '../../features/recording/recording_controller.dart';
 import '../../features/recording/recording_finish.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/app_button.dart';
+import '../../ui/app_dialog.dart';
+import '../../ui/avatar.dart';
+import '../../ui/loading_indicator.dart';
 
 /// Which recorder a [RecordingScreen] drives. The default mic recorder, or the
 /// desktop **meeting** recorder (loopback + mic mixed via ffmpeg). Both share
@@ -274,16 +278,16 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   Future<bool> _confirmDiscard() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: Text(t.recording.discardConfirmTitle),
         content: Text(t.recording.discardConfirmBody),
         actions: [
-          TextButton(
+          AppTextButton(
             key: const Key('discard-keep-button'),
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(t.recording.discardConfirmKeep),
           ),
-          FilledButton(
+          PrimaryButton(
             key: const Key('discard-confirm-button'),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(t.recording.discardConfirmDiscard),
@@ -352,6 +356,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(_controllerProvider);
+    final spacing = context.spacing;
     return Scaffold(
       body: SafeArea(
         child: Stack(
@@ -361,7 +366,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
               Align(
                 alignment: Alignment.topRight,
                 child: Padding(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(spacing.xs),
                   child: IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: t.common.cancel,
@@ -428,17 +433,18 @@ class _ProcessingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.symmetric(horizontal: spacing.xl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 20),
+          const LoadingIndicator(),
+          SizedBox(height: spacing.md + spacing.xxs),
           Text(label, style: theme.textTheme.titleMedium),
           if (onBackground != null) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: spacing.sm),
             Text(
               t.recording.processingHint,
               textAlign: TextAlign.center,
@@ -446,7 +452,7 @@ class _ProcessingView extends StatelessWidget {
                 color: colors.textSecondary,
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: spacing.md + spacing.xxs),
             OutlinedButton(
               key: const Key('processing-background-button'),
               onPressed: onBackground,
@@ -469,18 +475,23 @@ class _UnsupportedView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.symmetric(horizontal: spacing.xl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
-            radius: 48,
+          Avatar(
+            size: spacing.xxl + spacing.xxl,
             backgroundColor: colors.accentSoft,
-            child: Icon(Icons.mic_off, size: 44, color: colors.accentDark),
+            child: Icon(
+              Icons.mic_off,
+              size: spacing.xl + spacing.sm,
+              color: colors.accentDark,
+            ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: spacing.lg),
           Text(
             t.recording.unsupportedTitle,
             textAlign: TextAlign.center,
@@ -488,7 +499,7 @@ class _UnsupportedView extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: spacing.xs),
           Text(
             reason ?? t.recording.unsupportedHint,
             textAlign: TextAlign.center,
@@ -496,8 +507,8 @@ class _UnsupportedView extends StatelessWidget {
               color: colors.textSecondary,
             ),
           ),
-          const SizedBox(height: 24),
-          FilledButton(onPressed: onClose, child: Text(t.common.cancel)),
+          SizedBox(height: spacing.lg),
+          PrimaryButton(onPressed: onClose, child: Text(t.common.cancel)),
         ],
       ),
     );
@@ -518,18 +529,23 @@ class _DraftPromptView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.symmetric(horizontal: spacing.xl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
-            radius: 48,
+          Avatar(
+            size: spacing.xxl + spacing.xxl,
             backgroundColor: colors.accentSoft,
-            child: Icon(Icons.mic, size: 44, color: colors.accentDark),
+            child: Icon(
+              Icons.mic,
+              size: spacing.xl + spacing.sm,
+              color: colors.accentDark,
+            ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: spacing.lg),
           Text(
             t.recording.draftFound,
             textAlign: TextAlign.center,
@@ -537,7 +553,7 @@ class _DraftPromptView extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: spacing.xs),
           Text(
             t.recording.draftHint,
             textAlign: TextAlign.center,
@@ -546,7 +562,7 @@ class _DraftPromptView extends StatelessWidget {
             ),
           ),
           if (durationSeconds > 0) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: spacing.md),
             Text(
               AudioRecordingService.formatDuration(durationSeconds),
               style: theme.textTheme.headlineSmall?.copyWith(
@@ -554,7 +570,7 @@ class _DraftPromptView extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 24),
+          SizedBox(height: spacing.lg),
           Row(
             children: [
               Expanded(
@@ -564,9 +580,9 @@ class _DraftPromptView extends StatelessWidget {
                   child: Text(t.recording.draftDiscard),
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: spacing.sm),
               Expanded(
-                child: FilledButton(
+                child: PrimaryButton(
                   key: const Key('draft-resume-button'),
                   onPressed: onResume,
                   child: Text(t.recording.draftResume),
@@ -638,10 +654,12 @@ class _ActiveView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final barRadius = context.radius.sm / 4;
     final primaryColor = _isRecording ? colors.failed : colors.accent;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.symmetric(horizontal: spacing.xl),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -652,7 +670,7 @@ class _ActiveView extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: spacing.xxs),
           Text(
             _hintLabel,
             textAlign: TextAlign.center,
@@ -660,7 +678,7 @@ class _ActiveView extends StatelessWidget {
               color: colors.textSecondary,
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: spacing.lg),
           Text(
             AudioRecordingService.formatDuration(durationSeconds),
             key: const Key('recording-timer'),
@@ -669,29 +687,29 @@ class _ActiveView extends StatelessWidget {
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: spacing.md),
           SizedBox(
-            height: 48,
+            height: spacing.xxl,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 for (var i = 0; i < bars.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 4),
+                  if (i > 0) SizedBox(width: spacing.xxs),
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 80),
-                    width: 4,
+                    width: spacing.xxs,
                     height: bars[i],
                     decoration: BoxDecoration(
                       color: _isRecording ? colors.accent : colors.border,
-                      borderRadius: BorderRadius.circular(2),
+                      borderRadius: BorderRadius.circular(barRadius),
                     ),
                   ),
                 ],
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: spacing.xl),
           // Primary circular button. With pause support: record→pause→resume.
           // Without (meeting): the primary button finishes straight through
           // while recording — it must NEVER map to the throwing `pause()`
@@ -704,8 +722,8 @@ class _ActiveView extends StatelessWidget {
                 ? onResume
                 : onStart,
             child: Container(
-              width: 96,
-              height: 96,
+              width: spacing.xxl + spacing.xxl,
+              height: spacing.xxl + spacing.xxl,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: primaryColor.withValues(alpha: 0.15),
@@ -715,13 +733,13 @@ class _ActiveView extends StatelessWidget {
                   _isRecording
                       ? (supportsPause ? Icons.pause : Icons.stop)
                       : Icons.mic,
-                  size: 40,
+                  size: spacing.xl + spacing.xs,
                   color: primaryColor,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: spacing.xl),
           if (_isRecording || _isPaused)
             Row(
               children: [
@@ -743,9 +761,9 @@ class _ActiveView extends StatelessWidget {
                       child: Text(t.recording.resume),
                     ),
                   ),
-                if (supportsPause) const SizedBox(width: 12),
+                if (supportsPause) SizedBox(width: spacing.sm),
                 Expanded(
-                  child: FilledButton(
+                  child: PrimaryButton(
                     key: const Key('finish-button'),
                     onPressed: onFinish,
                     child: Text(t.recording.finish),

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/http/api_exception.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/app_button.dart';
+import '../../ui/app_text_field.dart';
 import 'auth_controller.dart';
 import 'auth_widgets.dart';
 
@@ -65,12 +68,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final loading = ref.watch(authControllerProvider).isLoading;
+    final spacing = context.spacing;
 
     return AuthScaffold(
       title: t.welcome.signIn,
       onBack: () => context.go('/'),
       children: [
-        AuthField(
+        AppTextField(
           controller: _email,
           label: t.auth.email,
           hint: t.auth.emailPlaceholder,
@@ -79,8 +83,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           autofillHints: const [AutofillHints.email],
           enabled: !loading,
         ),
-        const SizedBox(height: 16),
-        AuthField(
+        SizedBox(height: spacing.md),
+        AppTextField(
           controller: _password,
           label: t.auth.password,
           hint: t.auth.passwordPlaceholder,
@@ -91,18 +95,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           onSubmitted: (_) => _submit(),
         ),
         if (_error != null) ...[
-          const SizedBox(height: 16),
+          SizedBox(height: spacing.md),
           AuthErrorBanner(message: _error!),
         ],
-        const SizedBox(height: 24),
+        SizedBox(height: spacing.lg),
         AuthSubmitButton(
           label: t.welcome.signIn,
           loading: loading,
           onPressed: _submit,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.sm),
         Center(
-          child: TextButton(
+          child: AppTextButton(
             onPressed: loading ? null : () => context.go('/signup'),
             child: Text(t.auth.createAccount),
           ),

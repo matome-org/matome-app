@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/http/api_exception.dart';
+import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/app_button.dart';
+import '../../ui/app_text_field.dart';
 import 'auth_controller.dart';
 import 'auth_widgets.dart';
 
@@ -51,7 +54,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         .read(authControllerProvider.notifier)
         .register(email: email, password: password);
     if (!mounted) return;
-    ref.read(authControllerProvider).whenOrNull(
+    ref
+        .read(authControllerProvider)
+        .whenOrNull(
           error: (err, _) => setState(() => _error = _messageFor(err)),
         );
   }
@@ -73,12 +78,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     final loading = ref.watch(authControllerProvider).isLoading;
+    final spacing = context.spacing;
 
     return AuthScaffold(
       title: t.auth.createAccount,
       onBack: () => context.go('/'),
       children: [
-        AuthField(
+        AppTextField(
           controller: _name,
           label: t.auth.name,
           hint: t.auth.namePlaceholder,
@@ -86,8 +92,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           autofillHints: const [AutofillHints.name],
           enabled: !loading,
         ),
-        const SizedBox(height: 16),
-        AuthField(
+        SizedBox(height: spacing.md),
+        AppTextField(
           controller: _email,
           label: t.auth.email,
           hint: t.auth.emailPlaceholder,
@@ -96,8 +102,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           autofillHints: const [AutofillHints.email],
           enabled: !loading,
         ),
-        const SizedBox(height: 16),
-        AuthField(
+        SizedBox(height: spacing.md),
+        AppTextField(
           controller: _password,
           label: t.auth.password,
           hint: t.auth.passwordPlaceholder,
@@ -106,8 +112,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           autofillHints: const [AutofillHints.newPassword],
           enabled: !loading,
         ),
-        const SizedBox(height: 16),
-        AuthField(
+        SizedBox(height: spacing.md),
+        AppTextField(
           controller: _confirm,
           label: t.auth.confirmPassword,
           hint: t.auth.confirmPasswordPlaceholder,
@@ -117,18 +123,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           onSubmitted: (_) => _submit(),
         ),
         if (_error != null) ...[
-          const SizedBox(height: 16),
+          SizedBox(height: spacing.md),
           AuthErrorBanner(message: _error!),
         ],
-        const SizedBox(height: 24),
+        SizedBox(height: spacing.lg),
         AuthSubmitButton(
           label: t.welcome.signUp,
           loading: loading,
           onPressed: _submit,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: spacing.sm),
         Center(
-          child: TextButton(
+          child: AppTextButton(
             onPressed: loading ? null : () => context.go('/login'),
             child: Text(t.auth.alreadyHaveAccount),
           ),

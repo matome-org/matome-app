@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../ui/app_button.dart';
+import '../../ui/app_text_field.dart';
+import '../../ui/loading_indicator.dart';
 
 /// Max width of the auth form column on wide (web/desktop) viewports.
 const double authFormMaxWidth = 440;
@@ -51,15 +54,17 @@ class AuthScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final elevation = context.elevation;
 
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
         backgroundColor: colors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
+        elevation: elevation.level0,
+        scrolledUnderElevation: elevation.level0,
         leading: onBack == null
             ? null
             : IconButton(
@@ -72,19 +77,23 @@ class AuthScaffold extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: authFormMaxWidth),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              padding: EdgeInsets.fromLTRB(
+                spacing.lg,
+                spacing.xs,
+                spacing.lg,
+                spacing.lg,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
-                      fontSize: 28,
+                    style: typography.display.copyWith(
                       fontWeight: FontWeight.w800,
                       color: colors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  SizedBox(height: spacing.xl),
                   ...children,
                 ],
               ),
@@ -123,56 +132,16 @@ class AuthField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: colors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          obscureText: obscure,
-          enabled: enabled,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-          autocorrect: false,
-          enableSuggestions: !obscure,
-          autofillHints: autofillHints,
-          onSubmitted: onSubmitted,
-          style: TextStyle(fontSize: 15, color: colors.textPrimary),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: colors.textMuted),
-            filled: true,
-            fillColor: colors.surface,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: colors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: colors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: colors.accent),
-            ),
-          ),
-        ),
-      ],
+    return AppTextField(
+      controller: controller,
+      label: label,
+      hint: hint,
+      obscure: obscure,
+      keyboardType: keyboardType,
+      enabled: enabled,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      autofillHints: autofillHints,
     );
   }
 }
@@ -185,25 +154,34 @@ class AuthErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.sm,
+      ),
       decoration: BoxDecoration(
         color: colors.failed.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(radius.md),
         border: Border.all(color: colors.failed.withValues(alpha: 0.35)),
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline, size: 18, color: colors.failed),
-          const SizedBox(width: 8),
+          Icon(
+            Icons.error_outline,
+            size: spacing.md + spacing.xs / spacing.xxs,
+            color: colors.failed,
+          ),
+          SizedBox(width: spacing.xs),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(fontSize: 13, color: colors.failed),
+              style: typography.label.copyWith(color: colors.failed),
             ),
           ),
         ],
@@ -227,30 +205,32 @@ class AuthSubmitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors =
-        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+    final strokeWidth = spacing.xs / spacing.xxs;
 
-    return FilledButton(
+    return PrimaryButton(
       onPressed: loading ? null : onPressed,
       style: FilledButton.styleFrom(
         backgroundColor: colors.textPrimary,
-        foregroundColor: Colors.white,
+        foregroundColor: colors.onTextPrimary,
         disabledBackgroundColor: colors.textMuted,
-        minimumSize: const Size.fromHeight(52),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        minimumSize: Size.fromHeight(spacing.xxl + spacing.xxs),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius.lg),
+        ),
       ),
       child: loading
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
+          ? LoadingIndicator(
+              size: spacing.md + spacing.xxs,
+              strokeWidth: strokeWidth,
+              color: colors.onTextPrimary,
             )
           : Text(
               label,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: typography.body.copyWith(fontWeight: FontWeight.w700),
             ),
     );
   }
