@@ -4,7 +4,7 @@ defmodule MatomeApi.Content do
   alias Ecto.Changeset
   alias MatomeApi.AIEngine.DispatchJob
   alias MatomeApi.Auth.User
-  alias MatomeApi.Content.{Recording, Workspace}
+  alias MatomeApi.Content.{Contact, Matome, MatomeContact, Recording, Workspace}
   alias MatomeApi.Repo
 
   def list_workspaces(%User{id: owner_id}, params \\ %{}) do
@@ -56,6 +56,7 @@ defmodule MatomeApi.Content do
     %Recording{owner_id: owner.id}
     |> Recording.changeset(attrs)
     |> validate_workspace_owner(owner)
+    |> validate_matome_owner(owner)
     |> Repo.insert()
     |> put_recording_storage_key()
   end
@@ -66,6 +67,7 @@ defmodule MatomeApi.Content do
         recording
         |> Recording.changeset(attrs)
         |> validate_workspace_owner(owner)
+        |> validate_matome_owner(owner)
 
       status_changed? = Changeset.get_change(changeset, :status) != nil
 
@@ -146,6 +148,111 @@ defmodule MatomeApi.Content do
     end
   end
 
+  ## Matomes
+
+  def list_matomes(%User{id: owner_id}, params \\ %{}) do
+    Matome
+    |> where([matome], matome.owner_id == ^owner_id)
+    |> maybe_filter_workspace(params["workspace_id"] || params[:workspace_id])
+    |> search_by(:title, params["q"] || params[:q])
+    |> order_by([matome], desc: matome.inserted_at)
+    |> Repo.all()
+    |> Repo.preload(:matome_contacts)
+  end
+
+  def get_matome(%User{id: owner_id}, id) do
+    case Repo.get_by(Matome, id: id, owner_id: owner_id) do
+      nil -> nil
+      matome -> Repo.preload(matome, :matome_contacts)
+    end
+  end
+
+  def create_matome(%User{} = owner, attrs) do
+    %Matome{owner_id: owner.id}
+    |> Matome.changeset(attrs)
+    |> validate_workspace_owner(owner)
+    |> Repo.insert()
+    |> preload_matome_contacts()
+  end
+
+  def update_matome(%User{} = owner, id, attrs) do
+    with %Matome{} = matome <- get_matome(owner, id) do
+      matome
+      |> Matome.changeset(attrs)
+      |> validate_workspace_owner(owner)
+      |> Repo.update()
+      |> preload_matome_contacts()
+    end
+  end
+
+  def delete_matome(%User{} = owner, id) do
+    with %Matome{} = matome <- get_matome(owner, id) do
+      Repo.delete(matome)
+    end
+  end
+
+  def attach_contact(%User{} = owner, matome_id, contact_id, attrs \\ %{}) do
+    with %Matome{} = matome <- get_matome(owner, matome_id),
+         %Contact{} = contact <- get_contact(owner, contact_id) do
+      %MatomeContact{}
+      |> MatomeContact.changeset(
+        Map.merge(attrs, %{"matome_id" => matome.id, "contact_id" => contact.id})
+      )
+      |> Repo.insert(
+        on_conflict: {:replace, [:role, :updated_at]},
+        conflict_target: [:matome_id, :contact_id]
+      )
+    end
+  end
+
+  def detach_contact(%User{} = owner, matome_id, contact_id) do
+    with %Matome{} = matome <- get_matome(owner, matome_id),
+         %Contact{} = contact <- get_contact(owner, contact_id),
+         %MatomeContact{} = join <-
+           Repo.get_by(MatomeContact, matome_id: matome.id, contact_id: contact.id) do
+      Repo.delete(join)
+    end
+  end
+
+  ## Contacts
+
+  def list_contacts(%User{id: owner_id}, params \\ %{}) do
+    Contact
+    |> where([contact], contact.owner_id == ^owner_id)
+    |> search_by(:display_name, params["q"] || params[:q])
+    |> order_by([contact], asc: contact.display_name)
+    |> Repo.all()
+  end
+
+  def get_contact(%User{id: owner_id}, id) do
+    Repo.get_by(Contact, id: id, owner_id: owner_id)
+  end
+
+  def create_contact(%User{id: owner_id}, attrs) do
+    %Contact{owner_id: owner_id}
+    |> Contact.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_contact(%User{} = owner, id, attrs) do
+    with %Contact{} = contact <- get_contact(owner, id) do
+      contact
+      |> Contact.changeset(attrs)
+      |> Repo.update()
+    end
+  end
+
+  def delete_contact(%User{} = owner, id) do
+    with %Contact{} = contact <- get_contact(owner, id) do
+      Repo.delete(contact)
+    end
+  end
+
+  defp preload_matome_contacts({:ok, %Matome{} = matome}),
+    do: {:ok, Repo.preload(matome, :matome_contacts)}
+
+  defp preload_matome_contacts(result), do: result
+
   defp put_recording_storage_key({:ok, %Recording{} = recording}) do
     recording
     |> Changeset.change(storage_key: recording_storage_key(recording))
@@ -182,6 +289,16 @@ defmodule MatomeApi.Content do
       is_nil(workspace_id) -> changeset
       get_workspace(owner, workspace_id) -> changeset
       true -> Changeset.add_error(changeset, :workspace_id, "is invalid")
+    end
+  end
+
+  defp validate_matome_owner(changeset, owner) do
+    matome_id = Changeset.get_field(changeset, :matome_id)
+
+    cond do
+      is_nil(matome_id) -> changeset
+      get_matome(owner, matome_id) -> changeset
+      true -> Changeset.add_error(changeset, :matome_id, "is invalid")
     end
   end
 

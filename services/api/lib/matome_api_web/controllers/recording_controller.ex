@@ -96,6 +96,7 @@ defmodule MatomeApiWeb.RecordingController do
       duration: recording.duration,
       badge: recording.badge,
       workspace_id: recording.workspace_id,
+      matome_id: recording.matome_id,
       inserted_at: recording.inserted_at,
       updated_at: recording.updated_at
     }

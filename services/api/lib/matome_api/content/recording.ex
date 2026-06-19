@@ -3,7 +3,7 @@ defmodule MatomeApi.Content.Recording do
   import Ecto.Changeset
 
   alias MatomeApi.Auth.User
-  alias MatomeApi.Content.Workspace
+  alias MatomeApi.Content.{Matome, Workspace}
 
   @statuses [:pending, :processing, :done, :failed]
 
@@ -20,6 +20,7 @@ defmodule MatomeApi.Content.Recording do
 
     belongs_to :owner, User
     belongs_to :workspace, Workspace
+    belongs_to :matome, Matome
 
     timestamps(type: :utc_datetime)
   end
@@ -35,11 +36,13 @@ defmodule MatomeApi.Content.Recording do
       :error_reason,
       :duration,
       :badge,
-      :workspace_id
+      :workspace_id,
+      :matome_id
     ])
     |> validate_required([:title])
     |> validate_number(:duration, greater_than_or_equal_to: 0)
     |> foreign_key_constraint(:workspace_id)
+    |> foreign_key_constraint(:matome_id)
     |> check_constraint(:status, name: :recordings_status_check)
   end
 end

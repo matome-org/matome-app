@@ -61,6 +61,105 @@ defmodule MatomeApi.ContentTest do
     assert Content.update_workspace(other_owner, workspace.id, %{name: "Stolen"}) == nil
   end
 
+  test "matomes CRUD is scoped by owner" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Kickoff"})
+    assert matome.owner_id == owner.id
+    assert Content.get_matome(owner, matome.id).id == matome.id
+    assert Content.get_matome(other_owner, matome.id) == nil
+    assert Content.list_matomes(other_owner) == []
+
+    assert {:ok, updated} = Content.update_matome(owner, matome.id, %{description: "Notes"})
+    assert updated.description == "Notes"
+    assert Content.update_matome(other_owner, matome.id, %{title: "Stolen"}) == nil
+    assert Content.delete_matome(other_owner, matome.id) == nil
+    assert {:ok, _} = Content.delete_matome(owner, matome.id)
+  end
+
+  test "matomes reject workspaces owned by another user" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+    assert {:ok, other_workspace} = Content.create_workspace(other_owner, %{name: "Other"})
+
+    assert {:error, changeset} =
+             Content.create_matome(owner, %{title: "Draft", workspace_id: other_workspace.id})
+
+    assert %{workspace_id: ["is invalid"]} = errors_on(changeset)
+  end
+
+  test "recordings reject matomes owned by another user" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+    assert {:ok, other_matome} = Content.create_matome(other_owner, %{title: "Other"})
+
+    assert {:error, changeset} =
+             Content.create_recording(owner, %{title: "Draft", matome_id: other_matome.id})
+
+    assert %{matome_id: ["is invalid"]} = errors_on(changeset)
+  end
+
+  test "recordings accept matomes owned by the same user" do
+    owner = user_fixture()
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Mine"})
+
+    assert {:ok, recording} =
+             Content.create_recording(owner, %{title: "Item", matome_id: matome.id})
+
+    assert recording.matome_id == matome.id
+  end
+
+  test "contacts CRUD is scoped by owner" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+
+    assert {:ok, contact} = Content.create_contact(owner, %{display_name: "Alice"})
+    assert contact.metadata == %{}
+    assert Content.get_contact(owner, contact.id).id == contact.id
+    assert Content.get_contact(other_owner, contact.id) == nil
+    assert Content.list_contacts(other_owner, %{"q" => "Alice"}) == []
+
+    assert {:ok, updated} =
+             Content.update_contact(owner, contact.id, %{metadata: %{"company" => "Acme"}})
+
+    assert updated.metadata == %{"company" => "Acme"}
+    assert Content.update_contact(other_owner, contact.id, %{display_name: "Bob"}) == nil
+    assert Content.delete_contact(other_owner, contact.id) == nil
+    assert {:ok, _} = Content.delete_contact(owner, contact.id)
+  end
+
+  test "attach and detach contacts on a matome are owner scoped" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Standup"})
+    assert {:ok, contact} = Content.create_contact(owner, %{display_name: "Alice"})
+    assert {:ok, other_contact} = Content.create_contact(other_owner, %{display_name: "Mallory"})
+
+    assert {:ok, join} =
+             Content.attach_contact(owner, matome.id, contact.id, %{"role" => "speaker"})
+
+    assert join.role == "speaker"
+
+    reloaded = Content.get_matome(owner, matome.id)
+    assert [%{contact_id: cid, role: "speaker"}] = Enum.map(reloaded.matome_contacts, & &1)
+    assert cid == contact.id
+
+    # idempotent upsert updates role
+    assert {:ok, _} = Content.attach_contact(owner, matome.id, contact.id, %{"role" => "attendee"})
+    reloaded = Content.get_matome(owner, matome.id)
+    assert length(reloaded.matome_contacts) == 1
+
+    # cannot attach another owner's contact
+    assert Content.attach_contact(owner, matome.id, other_contact.id) == nil
+    # cannot attach to another owner's matome
+    assert Content.attach_contact(other_owner, matome.id, contact.id) == nil
+
+    assert {:ok, _} = Content.detach_contact(owner, matome.id, contact.id)
+    assert Content.get_matome(owner, matome.id).matome_contacts == []
+  end
+
   defp user_fixture do
     email = "user-#{System.unique_integer([:positive])}@example.com"
     assert {:ok, %{user: user}} = Auth.register_user(%{email: email, password: @password})

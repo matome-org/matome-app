@@ -3,7 +3,7 @@ defmodule MatomeApi.Content.Workspace do
   import Ecto.Changeset
 
   alias MatomeApi.Auth.User
-  alias MatomeApi.Content.Recording
+  alias MatomeApi.Content.{Matome, Recording}
 
   schema "workspaces" do
     field :name, :string
@@ -11,6 +11,7 @@ defmodule MatomeApi.Content.Workspace do
 
     belongs_to :owner, User
     has_many :recordings, Recording
+    has_many :matomes, Matome
 
     timestamps(type: :utc_datetime)
   end
