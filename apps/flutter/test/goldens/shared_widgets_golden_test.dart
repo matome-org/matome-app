@@ -6,10 +6,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
-import 'package:matome_flutter/features/home/widgets/inbox_recording_card.dart';
-import 'package:matome_flutter/features/home/widgets/sync_badge.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+import 'package:matome_flutter/ui/app_bottom_sheet.dart';
+import 'package:matome_flutter/ui/app_button.dart';
+import 'package:matome_flutter/ui/app_card.dart';
+import 'package:matome_flutter/ui/app_dialog.dart';
+import 'package:matome_flutter/ui/app_text_field.dart';
+import 'package:matome_flutter/ui/avatar.dart';
+import 'package:matome_flutter/ui/empty_state.dart';
+import 'package:matome_flutter/ui/loading_indicator.dart';
+import 'package:matome_flutter/ui/status_badge.dart';
 
 void main() {
   group('shared widget goldens', () {
@@ -17,7 +24,7 @@ void main() {
       goldenTest(
         'renders ${variant.label}',
         fileName: 'shared_widgets_${variant.fileSuffix}',
-        constraints: const BoxConstraints.tightFor(width: 1040, height: 900),
+        constraints: const BoxConstraints.tightFor(width: 1040, height: 1600),
         pumpBeforeTest: pumpOnce,
         builder: () {
           LocaleSettings.setLocaleSync(variant.locale);
@@ -36,26 +43,60 @@ void main() {
                   child: _AuthFeedbackSample(),
                 ),
                 GoldenTestScenario(
-                  name: 'inbox card - done',
-                  child: _InboxCardSample(state: _CardSampleState.done),
+                  name: 'catalog primary buttons',
+                  child: _PrimaryButtonsSample(),
                 ),
                 GoldenTestScenario(
-                  name: 'inbox card - pending upload',
-                  child: _InboxCardSample(
-                    state: _CardSampleState.pendingUpload,
-                  ),
+                  name: 'catalog text buttons',
+                  child: _TextButtonsSample(),
                 ),
                 GoldenTestScenario(
-                  name: 'inbox card - processing',
-                  child: _InboxCardSample(state: _CardSampleState.processing),
+                  name: 'catalog text fields',
+                  child: _TextFieldsSample(),
                 ),
                 GoldenTestScenario(
-                  name: 'inbox card - failed',
-                  child: _InboxCardSample(state: _CardSampleState.failed),
+                  name: 'catalog avatars',
+                  child: _AvatarsSample(),
                 ),
                 GoldenTestScenario(
-                  name: 'sync badges',
-                  child: _SyncBadgesSample(),
+                  name: 'app card - done',
+                  child: _AppCardSample(state: _CardSampleState.done),
+                ),
+                GoldenTestScenario(
+                  name: 'app card - pending upload',
+                  child: _AppCardSample(state: _CardSampleState.pendingUpload),
+                ),
+                GoldenTestScenario(
+                  name: 'app card - processing',
+                  child: _AppCardSample(state: _CardSampleState.processing),
+                ),
+                GoldenTestScenario(
+                  name: 'app card - failed',
+                  child: _AppCardSample(state: _CardSampleState.failed),
+                ),
+                GoldenTestScenario(
+                  name: 'app card - calendar row',
+                  child: _CalendarAppCardSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'status badges',
+                  child: _StatusBadgesSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'bottom sheet shell',
+                  child: _BottomSheetSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'dialog shell',
+                  child: _DialogSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'loading indicators',
+                  child: _LoadingIndicatorSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'empty state',
+                  child: _EmptyStateSample(),
                 ),
               ],
             ),
@@ -167,7 +208,7 @@ class _AuthControlsSampleState extends State<_AuthControlsSample> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        AuthField(
+        AppTextField(
           controller: _email,
           label: t.auth.email,
           hint: t.auth.emailPlaceholder,
@@ -176,7 +217,7 @@ class _AuthControlsSampleState extends State<_AuthControlsSample> {
           autofillHints: const [AutofillHints.email],
         ),
         const SizedBox(height: 16),
-        AuthField(
+        AppTextField(
           controller: _password,
           label: t.auth.password,
           hint: t.auth.passwordPlaceholder,
@@ -189,6 +230,174 @@ class _AuthControlsSampleState extends State<_AuthControlsSample> {
           label: t.welcome.signIn,
           loading: false,
           onPressed: () {},
+        ),
+      ],
+    );
+  }
+}
+
+class _PrimaryButtonsSample extends StatelessWidget {
+  const _PrimaryButtonsSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PrimaryButton(
+          onPressed: () {},
+          style: FilledButton.styleFrom(
+            backgroundColor: colors.textPrimary,
+            foregroundColor: colors.onTextPrimary,
+            minimumSize: const Size.fromHeight(52),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: const Text(
+            'Create account',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(height: 12),
+        PrimaryButton.icon(
+          onPressed: () {},
+          icon: Icon(Icons.auto_awesome, color: colors.accent),
+          style: FilledButton.styleFrom(
+            backgroundColor: colors.surface,
+            foregroundColor: colors.textPrimary,
+            minimumSize: const Size.fromHeight(48),
+          ),
+          label: const Text('Notify me'),
+        ),
+        const SizedBox(height: 12),
+        PrimaryButton(onPressed: null, child: const Text('Disabled')),
+      ],
+    );
+  }
+}
+
+class _TextButtonsSample extends StatelessWidget {
+  const _TextButtonsSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        AppTextButton(onPressed: () {}, child: const Text('Sign in')),
+        AppTextButton.icon(
+          onPressed: () {},
+          icon: const Icon(Icons.refresh, size: 16),
+          label: const Text('Retry'),
+        ),
+        AppTextButton(
+          onPressed: () {},
+          style: TextButton.styleFrom(foregroundColor: colors.failed),
+          child: const Text('Discard'),
+        ),
+      ],
+    );
+  }
+}
+
+class _TextFieldsSample extends StatefulWidget {
+  const _TextFieldsSample();
+
+  @override
+  State<_TextFieldsSample> createState() => _TextFieldsSampleState();
+}
+
+class _TextFieldsSampleState extends State<_TextFieldsSample> {
+  late final TextEditingController _email = TextEditingController(
+    text: 'demo@matome.app',
+  );
+  late final TextEditingController _disabled = TextEditingController(
+    text: 'Read-only state',
+  );
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _disabled.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AppTextField(
+          controller: _email,
+          label: 'Email',
+          hint: 'you@example.com',
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _disabled,
+          label: 'Disabled',
+          hint: 'Unavailable',
+          enabled: false,
+        ),
+      ],
+    );
+  }
+}
+
+class _AvatarsSample extends StatelessWidget {
+  const _AvatarsSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return Wrap(
+      spacing: 14,
+      runSpacing: 14,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Avatar(
+          initials: 'M',
+          size: 44,
+          backgroundColor: colors.textPrimary,
+          foregroundColor: colors.onTextPrimary,
+        ),
+        Avatar(
+          icon: Icons.mic,
+          size: 44,
+          backgroundColor: colors.accentSoft,
+          foregroundColor: colors.accentDark,
+        ),
+        Avatar(
+          size: 44,
+          backgroundColor: colors.failed.withValues(alpha: 0.13),
+          child: Icon(Icons.warning_amber_rounded, color: colors.failed),
+        ),
+        Avatar(
+          size: 44,
+          backgroundColor: colors.accent.withValues(alpha: 0.13),
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: colors.accent,
+            ),
+          ),
         ),
       ],
     );
@@ -218,14 +427,14 @@ class _AuthFeedbackSample extends StatelessWidget {
 
 enum _CardSampleState { done, pendingUpload, processing, failed }
 
-class _InboxCardSample extends StatelessWidget {
-  const _InboxCardSample({required this.state});
+class _AppCardSample extends StatelessWidget {
+  const _AppCardSample({required this.state});
 
   final _CardSampleState state;
 
   @override
   Widget build(BuildContext context) {
-    return InboxRecordingCard(
+    return AppCard.recording(
       card: _recordingCard(state),
       relativeTime: '3h',
       onRetry: state == _CardSampleState.failed ? () {} : null,
@@ -233,8 +442,8 @@ class _InboxCardSample extends StatelessWidget {
   }
 }
 
-class _SyncBadgesSample extends StatelessWidget {
-  const _SyncBadgesSample();
+class _StatusBadgesSample extends StatelessWidget {
+  const _StatusBadgesSample();
 
   @override
   Widget build(BuildContext context) {
@@ -242,19 +451,135 @@ class _SyncBadgesSample extends StatelessWidget {
       spacing: 12,
       runSpacing: 12,
       children: [
-        SyncBadge(
+        StatusBadge.label(label: 'Work', color: Color(0xFFE1B346)),
+        StatusBadge.sync(
           coreId: null,
           processingStatus: kProcessingStatusPendingUpload,
         ),
-        SyncBadge(coreId: 42, processingStatus: 'done'),
+        StatusBadge.sync(coreId: 42, processingStatus: 'done'),
       ],
     );
   }
 }
 
-RecordingCard _recordingCard(_CardSampleState state) {
+class _BottomSheetSample extends StatelessWidget {
+  const _BottomSheetSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+      ),
+      child: AppBottomSheet(
+        title: Text(
+          'Move to space',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: colors.textPrimary,
+          ),
+        ),
+        children: [
+          ListTile(
+            leading: Icon(Icons.folder_outlined, color: colors.textSecondary),
+            title: const Text('Design Lab'),
+          ),
+          ListTile(
+            leading: Icon(Icons.folder_outlined, color: colors.textSecondary),
+            title: const Text('Personal'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DialogSample extends StatelessWidget {
+  const _DialogSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return AppDialog(
+      backgroundColor: colors.surface,
+      title: const Text('Discard recording?'),
+      content: const Text('This take has not been saved yet.'),
+      actions: [
+        AppTextButton(onPressed: () {}, child: const Text('Keep editing')),
+        PrimaryButton(
+          onPressed: () {},
+          style: FilledButton.styleFrom(backgroundColor: colors.failed),
+          child: const Text('Discard'),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoadingIndicatorSample extends StatelessWidget {
+  const _LoadingIndicatorSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return Wrap(
+      spacing: 24,
+      runSpacing: 16,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        LoadingIndicator(size: 16, strokeWidth: 2, color: colors.accent),
+        LoadingIndicator(size: 24, strokeWidth: 2, color: colors.primary),
+        LoadingIndicator(size: 36, color: colors.textSecondary),
+      ],
+    );
+  }
+}
+
+class _EmptyStateSample extends StatelessWidget {
+  const _EmptyStateSample();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 220,
+      child: EmptyState(
+        icon: Icons.inbox_outlined,
+        title: 'No recordings yet',
+        message: 'Recordings you capture or upload will show up here.',
+      ),
+    );
+  }
+}
+
+class _CalendarAppCardSample extends StatelessWidget {
+  const _CalendarAppCardSample();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard.calendar(
+      id: 'rec_calendar_golden',
+      title: 'Roadmap review',
+      badge: 'Work',
+      statusLabel: 'Design Lab',
+      durationLabel: '8:42',
+      onTap: () {},
+    );
+  }
+}
+
+RecordingItem _recordingCard(_CardSampleState state) {
   return switch (state) {
-    _CardSampleState.done => const RecordingCard(
+    _CardSampleState.done => const RecordingItem(
       id: 'rec_42',
       title: 'Design sync',
       summary: 'Decisions, owners, and next steps from the product review.',
@@ -266,7 +591,7 @@ RecordingCard _recordingCard(_CardSampleState state) {
       processingStatus: 'done',
       coreId: 42,
     ),
-    _CardSampleState.pendingUpload => RecordingCard(
+    _CardSampleState.pendingUpload => RecordingItem(
       id: 'rec_local_golden_pending',
       title: 'Offline capture',
       summary: null,
@@ -278,7 +603,7 @@ RecordingCard _recordingCard(_CardSampleState state) {
       processingStatus: kProcessingStatusPendingUpload,
       coreId: null,
     ),
-    _CardSampleState.processing => const RecordingCard(
+    _CardSampleState.processing => const RecordingItem(
       id: 'rec_77',
       title: 'Interview notes',
       summary: null,
@@ -290,7 +615,7 @@ RecordingCard _recordingCard(_CardSampleState state) {
       processingStatus: 'processing',
       coreId: 77,
     ),
-    _CardSampleState.failed => const RecordingCard(
+    _CardSampleState.failed => const RecordingItem(
       id: 'rec_failed',
       title: 'Retry upload',
       summary: null,

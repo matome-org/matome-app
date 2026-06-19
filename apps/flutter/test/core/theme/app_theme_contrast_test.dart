@@ -53,6 +53,35 @@ void main() {
       }
     });
 
+    test('filled control foregrounds clear AA in both themes', () {
+      final pairs = <String, ({Color foreground, Color background})>{
+        'light textPrimary fill': (
+          foreground: MatomeColors.light.onTextPrimary,
+          background: MatomeColors.light.textPrimary,
+        ),
+        'dark textPrimary fill': (
+          foreground: MatomeColors.dark.onTextPrimary,
+          background: MatomeColors.dark.textPrimary,
+        ),
+        'light accent fill': (
+          foreground: MatomeColors.light.onAccent,
+          background: MatomeColors.light.accent,
+        ),
+        'dark accent fill': (
+          foreground: MatomeColors.dark.onAccent,
+          background: MatomeColors.dark.accent,
+        ),
+      };
+
+      for (final MapEntry(:key, :value) in pairs.entries) {
+        expect(
+          _contrastRatio(value.foreground, value.background),
+          greaterThanOrEqualTo(4.5),
+          reason: '$key must clear AA for filled controls',
+        );
+      }
+    });
+
     test('badge resolvers return theme tokens', () {
       expect(badgeColor('Work'), MatomeColors.light.badgeWork);
       expect(badgeColor('Personal'), MatomeColors.light.badgePersonal);
@@ -138,6 +167,7 @@ void _expectFoundationExtensions(ThemeData theme, MatomeColors expectedColors) {
   expect(colors, isNotNull);
   expect(colors!.background, expectedColors.background);
   expect(colors.surface, expectedColors.surface);
+  expect(colors.onTextPrimary, expectedColors.onTextPrimary);
   expect(colors.textPrimary, expectedColors.textPrimary);
   expect(colors.failed, expectedColors.failed);
 
@@ -154,6 +184,7 @@ Map<String, Color> _matomeColorFields(MatomeColors colors) {
     'accentDark': colors.accentDark,
     'accentSoft': colors.accentSoft,
     'onAccent': colors.onAccent,
+    'onTextPrimary': colors.onTextPrimary,
     'background': colors.background,
     'surface': colors.surface,
     'border': colors.border,

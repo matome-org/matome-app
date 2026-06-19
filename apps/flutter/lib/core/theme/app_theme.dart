@@ -10,6 +10,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
     required this.accentDark,
     required this.accentSoft,
     required this.onAccent,
+    required this.onTextPrimary,
     required this.background,
     required this.surface,
     required this.border,
@@ -40,21 +41,27 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
   static const Color _accentSoft = Color(0xFFF6E8C0); // ACCENT_SOFT
   static const Color _onAccent = _textPrimary;
 
-  // Light surfaces (UI-Kitten color-basic-100..400).
-  static const Color _background = Color(0xFFF4F5F6); // color-basic-200
-  static const Color _surface = Color(0xFFFFFFFF); // color-basic-100
-  static const Color _border = Color(0xFFE4E7EB); // color-basic-400
+  // Light surfaces — warm off-whites tinted toward the gold hue so the accent
+  // reads as the spine of the palette, not a sticker. No pure #FFF.
+  static const Color _background = Color(0xFFF6F4EF);
+  static const Color _surface = Color(0xFFFDFCF9);
+  static const Color _border = Color(0xFFE7E2D7);
 
-  // Dark surfaces.
-  static const Color _backgroundDark = Color(0xFF1A1A1A);
-  static const Color _surfaceDark = Color(0xFF2A2A2A);
-  static const Color _borderDark = Color(0xFF3A3A3A);
+  // Dark surfaces — warm charcoal, not neutral grey, for the same cohesion.
+  static const Color _backgroundDark = Color(0xFF1A1714);
+  static const Color _surfaceDark = Color(0xFF252119);
+  static const Color _borderDark = Color(0xFF38322A);
 
-  // Tokenized translucent fills that were previously ad-hoc Color() literals.
-  static const Color _subtleFill = Color(0x0A0E0F10);
-  static const Color _subtleFillStrong = Color(0x0D0E0F10);
-  static const Color _subtleFillDark = Color(0x1AF4F5F6);
-  static const Color _subtleFillStrongDark = Color(0x1AF4F5F6);
+  // Foreground for filled controls that intentionally use textPrimary as fill.
+  static const Color _onTextPrimary = _surface;
+  static const Color _onTextPrimaryDark = _backgroundDark;
+
+  // Tokenized translucent fills, warm-tinted and now perceptibly distinct
+  // (the old pair differed by 1% alpha and were identical in dark).
+  static const Color _subtleFill = Color(0x0F1A1712);
+  static const Color _subtleFillStrong = Color(0x1A1A1712);
+  static const Color _subtleFillDark = Color(0x14F4F1E9);
+  static const Color _subtleFillStrongDark = Color(0x29F4F1E9);
 
   // Text greys (color-basic-500..800).
   //
@@ -62,24 +69,14 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
   // annotations are kept verbatim, then extended with measured dark-surface
   // ratios in `backgroundDark / surfaceDark` order. Dark tokens are the
   // ThemeExtension-ready AA pairs for dark surfaces.
-  static const Color _textPrimary = Color(
-    0xFF1A2138,
-  ); // 15.93:1 on white; 1.09:1 / 1.11:1 on dark
-  static const Color _textSecondary = Color(
-    0xFF595F6B,
-  ); // 6.0:1 (was #6B7280); 2.71:1 / 2.24:1 on dark
-  static const Color _textMuted = Color(
-    0xFF6B7280,
-  ); // 4.83:1 (was #9AA1AC, 2.6); 3.60:1 / 2.97:1 on dark
-  static const Color _textPrimaryDark = Color(
-    0xFFF4F5F6,
-  ); // 1.09:1 on white; 15.94:1 / 13.15:1 on dark
-  static const Color _textSecondaryDark = Color(
-    0xFFC0C0C0,
-  ); // 1.82:1 on white; 9.57:1 / 7.89:1 on dark
-  static const Color _textMutedDark = Color(
-    0xFFA6ADB8,
-  ); // 2.26:1 on white; 7.70:1 / 6.35:1 on dark
+  // Warm-tinted greys (hue nudged toward gold, luminance held to preserve the
+  // audited AA headroom). Re-verified by app_theme_contrast_test.
+  static const Color _textPrimary = Color(0xFF221E16); // warm near-black
+  static const Color _textSecondary = Color(0xFF585249); // ~6:1 on surface
+  static const Color _textMuted = Color(0xFF655D4F); // AA on warm surface
+  static const Color _textPrimaryDark = Color(0xFFF4F1E9); // warm off-white
+  static const Color _textSecondaryDark = Color(0xFFC4BCAD);
+  static const Color _textMutedDark = Color(0xFFAAA08D);
 
   // Status. Darkened from #C64A3D (4.72:1) to keep headroom now that it also
   // backs error TEXT on white, not just icons. `failedDark` starts from Eva
@@ -123,16 +120,18 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
     0xFFA6ADB8,
   ); // 2.26:1 on white; 7.70:1 / 6.35:1 on dark
 
-  // Spaces accent palette (RN SPACE_COLORS), theme-owned so space chrome uses
-  // the active ThemeExtension instead of app-local Color() literals.
-  static const Color _spaceGold = _accent;
-  static const Color _spaceGreen = Color(0xFF6FB180);
-  static const Color _spaceBlue = Color(0xFF6A8AD9);
-  static const Color _spaceOrange = Color(0xFFD98A55);
-  static const Color _spaceRose = Color(0xFFC97A9C);
-  static const Color _spacePurple = Color(0xFFA089CC);
-  static const Color _spaceTeal = Color(0xFF14B8A6);
-  static const Color _spaceRed = Color(0xFFEF4444);
+  // Spaces accent palette — re-derived as one harmonized, low-chroma band
+  // (equal-ish saturation/lightness, no raw Tailwind values). Reads as a
+  // considered set rather than a rainbow, so spaces stay distinguishable
+  // without fighting the single-accent gold brand.
+  static const Color _spaceGold = Color(0xFFC8A24E);
+  static const Color _spaceGreen = Color(0xFF7E9B6E);
+  static const Color _spaceBlue = Color(0xFF6E86A8);
+  static const Color _spaceOrange = Color(0xFFC68A5E);
+  static const Color _spaceRose = Color(0xFFBC8497);
+  static const Color _spacePurple = Color(0xFF9587AE);
+  static const Color _spaceTeal = Color(0xFF6FA39A);
+  static const Color _spaceRed = Color(0xFFC2705F);
 
   static const MatomeColors light = MatomeColors(
     primary: _accent,
@@ -140,6 +139,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
     accentDark: _accentDark,
     accentSoft: _accentSoft,
     onAccent: _onAccent,
+    onTextPrimary: _onTextPrimary,
     background: _background,
     surface: _surface,
     border: _border,
@@ -170,6 +170,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
     accentDark: _accentDark,
     accentSoft: _accentSoft,
     onAccent: _onAccent,
+    onTextPrimary: _onTextPrimaryDark,
     background: _backgroundDark,
     surface: _surfaceDark,
     border: _borderDark,
@@ -199,6 +200,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
   final Color accentDark;
   final Color accentSoft;
   final Color onAccent;
+  final Color onTextPrimary;
   final Color background;
   final Color surface;
   final Color border;
@@ -263,6 +265,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
     Color? accentDark,
     Color? accentSoft,
     Color? onAccent,
+    Color? onTextPrimary,
     Color? background,
     Color? surface,
     Color? border,
@@ -292,6 +295,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
       accentDark: accentDark ?? this.accentDark,
       accentSoft: accentSoft ?? this.accentSoft,
       onAccent: onAccent ?? this.onAccent,
+      onTextPrimary: onTextPrimary ?? this.onTextPrimary,
       background: background ?? this.background,
       surface: surface ?? this.surface,
       border: border ?? this.border,
@@ -329,6 +333,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
       accentDark: Color.lerp(accentDark, other.accentDark, t)!,
       accentSoft: Color.lerp(accentSoft, other.accentSoft, t)!,
       onAccent: Color.lerp(onAccent, other.onAccent, t)!,
+      onTextPrimary: Color.lerp(onTextPrimary, other.onTextPrimary, t)!,
       background: Color.lerp(background, other.background, t)!,
       surface: Color.lerp(surface, other.surface, t)!,
       border: Color.lerp(border, other.border, t)!,
@@ -492,39 +497,55 @@ final class AppTypography extends ThemeExtension<AppTypography> {
     required this.label,
   });
 
+  // Type families. Display/title use Schibsted Grotesk (editorial geometric
+  // grotesk); body/label use Hanken Grotesk (humanist, tuned for small sizes).
+  // Zen Kaku Gothic New is the Japanese fallback so JA glyphs render in a
+  // deliberate gothic rather than the platform default. Both latin faces are
+  // variable fonts — Flutter maps `fontWeight` onto the `wght` axis.
+  static const String displayFamily = 'Schibsted Grotesk';
+  static const String bodyFamily = 'Hanken Grotesk';
+  static const List<String> _jaFallback = ['Zen Kaku Gothic New'];
+
+  // Scale favours contrast over rungs: display (44) → title (24) → body (16)
+  // is ~1.8×/1.5×, so one element per screen reads unambiguously largest.
   static const AppTypography standard = AppTypography(
     display: TextStyle(
-      fontFamily: 'Roboto',
-      fontSize: 32,
+      fontFamily: displayFamily,
+      fontFamilyFallback: _jaFallback,
+      fontSize: 44,
       fontWeight: FontWeight.w700,
-      height: 1.12,
-      letterSpacing: -0.6,
+      height: 1.04,
+      letterSpacing: -1.0,
     ),
     title: TextStyle(
-      fontFamily: 'Roboto',
-      fontSize: 22,
+      fontFamily: displayFamily,
+      fontFamilyFallback: _jaFallback,
+      fontSize: 24,
       fontWeight: FontWeight.w700,
-      height: 1.2,
-      letterSpacing: -0.2,
+      height: 1.16,
+      letterSpacing: -0.4,
     ),
     body: TextStyle(
-      fontFamily: 'Roboto',
+      fontFamily: bodyFamily,
+      fontFamilyFallback: _jaFallback,
       fontSize: 16,
+      fontWeight: FontWeight.w400,
+      height: 1.5,
+    ),
+    bodySmall: TextStyle(
+      fontFamily: bodyFamily,
+      fontFamilyFallback: _jaFallback,
+      fontSize: 14,
       fontWeight: FontWeight.w400,
       height: 1.45,
     ),
-    bodySmall: TextStyle(
-      fontFamily: 'Roboto',
-      fontSize: 14,
-      fontWeight: FontWeight.w400,
-      height: 1.4,
-    ),
     label: TextStyle(
-      fontFamily: 'Roboto',
+      fontFamily: bodyFamily,
+      fontFamilyFallback: _jaFallback,
       fontSize: 12,
       fontWeight: FontWeight.w600,
       height: 1.25,
-      letterSpacing: 0.2,
+      letterSpacing: 0.4,
     ),
   );
 
@@ -617,6 +638,30 @@ final class AppElevation extends ThemeExtension<AppElevation> {
   }
 }
 
+extension MatomeThemeContext on BuildContext {
+  MatomeColors get colors => _themeExtension<MatomeColors>('MatomeColors');
+
+  AppSpacing get spacing => _themeExtension<AppSpacing>('AppSpacing');
+
+  AppRadius get radius => _themeExtension<AppRadius>('AppRadius');
+
+  AppTypography get typography =>
+      _themeExtension<AppTypography>('AppTypography');
+
+  AppElevation get elevation => _themeExtension<AppElevation>('AppElevation');
+
+  T _themeExtension<T extends ThemeExtension<T>>(String name) {
+    final extension = Theme.of(this).extension<T>();
+    if (extension == null) {
+      throw StateError(
+        '$name is missing from ThemeData.extensions. Use buildLightTheme() '
+        'or buildDarkTheme().',
+      );
+    }
+    return extension;
+  }
+}
+
 /// Resolves a free-form `badge` string to a stable accent color.
 Color badgeColor(String? badge) {
   return MatomeColors.light.badgeColor(badge);
@@ -652,7 +697,8 @@ ThemeData _baseTheme(
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: scaffold,
-    fontFamily: 'Roboto',
+    fontFamily: AppTypography.bodyFamily,
+    fontFamilyFallback: AppTypography._jaFallback,
     extensions: extensions,
   );
 }
@@ -666,12 +712,13 @@ ThemeData buildLightTheme() {
     surface: colors.surface,
     brightness: Brightness.light,
   );
-  return _baseTheme(
+  final theme = _baseTheme(
     scheme,
     scaffold: colors.background,
     extensions: _lightThemeExtensions,
-  ).copyWith(
-    textTheme: const TextTheme().apply(
+  );
+  return theme.copyWith(
+    textTheme: theme.textTheme.apply(
       bodyColor: colors.textPrimary,
       displayColor: colors.textPrimary,
     ),
@@ -687,12 +734,13 @@ ThemeData buildDarkTheme() {
     surface: colors.surface,
     brightness: Brightness.dark,
   );
-  return _baseTheme(
+  final theme = _baseTheme(
     scheme,
     scaffold: colors.background,
     extensions: _darkThemeExtensions,
-  ).copyWith(
-    textTheme: const TextTheme().apply(
+  );
+  return theme.copyWith(
+    textTheme: theme.textTheme.apply(
       bodyColor: colors.textPrimary,
       displayColor: colors.textPrimary,
     ),
