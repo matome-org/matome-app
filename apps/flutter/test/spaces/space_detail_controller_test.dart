@@ -27,7 +27,7 @@ void main() {
 
     // Subscribe (so the autoDispose provider is created + kept alive) and grab
     // the concrete notifier instance.
-    final sub = container.listen(provider, (_, __) {});
+    final sub = container.listen(provider, (_, _) {});
     final notifier = container.read(provider.notifier);
     expect(notifier.mounted, isTrue);
 

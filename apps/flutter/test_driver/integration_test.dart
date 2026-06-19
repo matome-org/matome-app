@@ -6,5 +6,5 @@ import 'package:integration_test/integration_test_driver.dart';
 /// (which `flutter test -d chrome` does not support), via:
 ///   chromedriver --port=4444 &
 ///   flutter drive --driver=test_driver/integration_test.dart \
-///     --target=integration_test/<file>.dart -d web-server --browser-name=chrome
+///     --target=`integration_test/<file>.dart` -d web-server --browser-name=chrome
 Future<void> main() => integrationDriver();

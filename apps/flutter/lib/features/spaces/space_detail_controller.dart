@@ -20,7 +20,7 @@ class SpaceDetailState {
 class SpaceDetailController
     extends StateNotifier<AsyncValue<SpaceDetailState>> {
   SpaceDetailController(this._ref, this.spaceId)
-      : super(const AsyncValue.loading()) {
+    : super(const AsyncValue.loading()) {
     load();
   }
 
@@ -36,7 +36,7 @@ class SpaceDetailController
     final items = rows
         .map(
           (row) => InboxItem(
-            card: RecordingCard.fromRow(row, workspaceName: workspace?.name),
+            card: RecordingItem.fromRow(row, workspaceName: workspace?.name),
             createdAt: row.createdAt,
           ),
         )
@@ -58,7 +58,7 @@ class SpaceDetailController
 /// `autoDispose` so the notifier (and its Drift load) is torn down when the
 /// Space detail route is popped — mirroring [detailsControllerProvider]. Without
 /// it, one notifier leaks per visited workspaceId for the app's lifetime.
-final spaceDetailControllerProvider = StateNotifierProvider.autoDispose.family<
-    SpaceDetailController, AsyncValue<SpaceDetailState>, String>(
-  (ref, spaceId) => SpaceDetailController(ref, spaceId),
-);
+final spaceDetailControllerProvider = StateNotifierProvider.autoDispose
+    .family<SpaceDetailController, AsyncValue<SpaceDetailState>, String>(
+      (ref, spaceId) => SpaceDetailController(ref, spaceId),
+    );

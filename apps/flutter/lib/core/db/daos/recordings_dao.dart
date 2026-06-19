@@ -31,9 +31,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
 
   /// All recordings, newest first.
   Future<List<RecordingRow>> getAllRecordings() {
-    return (select(recordings)
-          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
-        .get();
+    return (select(
+      recordings,
+    )..orderBy([(r) => OrderingTerm.desc(r.createdAt)])).get();
   }
 
   /// Inbox recordings — `workspaceId IS NULL`, newest first.
@@ -53,8 +53,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<RecordingRow?> getRecordingById(String id) {
-    return (select(recordings)..where((r) => r.id.equals(id)))
-        .getSingleOrNull();
+    return (select(
+      recordings,
+    )..where((r) => r.id.equals(id))).getSingleOrNull();
   }
 
   /// Local row whose reconciled Core id is [coreId], or null if none has been
@@ -63,8 +64,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// (rows minted with `rec_local_<uuid>` keep `coreId` NULL until upload
   /// succeeds, so those are intentionally not matched here).
   Future<RecordingRow?> recordingByCoreId(int coreId) {
-    return (select(recordings)..where((r) => r.coreId.equals(coreId)))
-        .getSingleOrNull();
+    return (select(
+      recordings,
+    )..where((r) => r.coreId.equals(coreId))).getSingleOrNull();
   }
 
   /// Rows still awaiting a confirmed Core upload — `processingStatus` is the
@@ -75,7 +77,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// Newest first so a backlog drains most-recent-first.
   Future<List<RecordingRow>> getPendingUploadRecordings() {
     return (select(recordings)
-          ..where((r) => r.processingStatus.equals(kProcessingStatusPendingUpload))
+          ..where(
+            (r) => r.processingStatus.equals(kProcessingStatusPendingUpload),
+          )
           ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
         .get();
   }
@@ -129,14 +133,15 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     final dayStart = dayEpoch;
     final dayEnd = dayEpoch + _kMsPerDay - 1;
 
-    final query = select(recordings).join([
-      leftOuterJoin(
-        workspaces,
-        workspaces.id.equalsExp(recordings.workspaceId),
-      ),
-    ])
-      ..where(recordings.createdAt.isBetweenValues(dayStart, dayEnd))
-      ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
+    final query =
+        select(recordings).join([
+            leftOuterJoin(
+              workspaces,
+              workspaces.id.equalsExp(recordings.workspaceId),
+            ),
+          ])
+          ..where(recordings.createdAt.isBetweenValues(dayStart, dayEnd))
+          ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
 
     final rows = await query.get();
     return rows
@@ -150,11 +155,11 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   }
 
   /// Convenience: load a day's recordings already mapped to UI cards.
-  Future<List<RecordingCard>> cardsByDay(int dayEpoch) async {
+  Future<List<RecordingItem>> cardsByDay(int dayEpoch) async {
     final rows = await recordingsByDayWithWorkspace(dayEpoch);
     return rows
         .map(
-          (r) => RecordingCard.fromRow(
+          (r) => RecordingItem.fromRow(
             r.recording,
             workspaceName: r.workspaceName,
           ),
