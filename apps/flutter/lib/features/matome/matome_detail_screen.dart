@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/app_database.dart';
+import '../../core/db/daos/contacts_dao.dart' show MatomeContactEntry;
 import '../../core/db/daos/spaces_dao.dart';
 import '../../core/db/matome_card.dart';
 import '../../core/db/recording_card.dart';
@@ -183,9 +184,11 @@ class _MatomeHeader extends StatelessWidget {
             ),
           ],
         ),
-        // Contact-chips slot — contacts land in W3 (#1378 nav reframe). Render
-        // nothing rather than invent a contacts model; the slot is reserved.
-        const _ContactChipsSlot(),
+        // Contact-chips slot (#1375): the attached contacts as role-bearing
+        // chips, plus an "Add contact" action that picks from the owner's
+        // directory.
+        SizedBox(height: spacing.sm),
+        _ContactChipsSlot(matomeId: matome.id),
         if (matome.isInbox) ...[
           SizedBox(height: spacing.sm),
           _OnDeviceHint(localOnly: matome.isLocalOnly),
@@ -195,13 +198,251 @@ class _MatomeHeader extends StatelessWidget {
   }
 }
 
-/// Placeholder for the contact chips that arrive in W3. Intentionally renders
-/// nothing today — kept as a named widget so the slot is discoverable.
-class _ContactChipsSlot extends StatelessWidget {
-  const _ContactChipsSlot();
+/// The contact-chips header slot (#1375): renders the Matome's attached
+/// contacts as role-bearing chips (each with a detach affordance) and an
+/// "Add contact" action that opens a directory picker. Only the local
+/// `matome_contacts` edge is touched here — viewing the linked-user PROFILE and
+/// SHARING the Matome stay deferred (ADR-0004 / matome-collaboration).
+class _ContactChipsSlot extends ConsumerWidget {
+  const _ContactChipsSlot({required this.matomeId});
+
+  final String matomeId;
+
+  Future<void> _openPicker(BuildContext context, WidgetRef ref) async {
+    final controller =
+        ref.read(matomeDetailControllerProvider(matomeId).notifier);
+    final directory = await controller.directoryContacts();
+    if (!context.mounted) return;
+    final attachedIds = ref
+        .read(matomeDetailControllerProvider(matomeId))
+        .contacts
+        .map((e) => e.contact.id)
+        .toSet();
+    final picked = await showAppBottomSheet<ContactRow>(
+      context: context,
+      builder: (_) => _AddContactSheet(
+        contacts: directory,
+        attachedIds: attachedIds,
+      ),
+    );
+    if (picked == null) return;
+    await controller.attachContact(picked.id);
+  }
 
   @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spacing = context.spacing;
+    final contacts =
+        ref.watch(matomeDetailControllerProvider(matomeId)).contacts;
+    final controller =
+        ref.read(matomeDetailControllerProvider(matomeId).notifier);
+
+    return Column(
+      key: const ValueKey('matome-contacts'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: spacing.xs,
+          runSpacing: spacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final entry in contacts)
+              _ContactChip(
+                entry: entry,
+                onDelete: () => controller.detachContact(entry.contact.id),
+              ),
+            _AddContactButton(onPressed: () => _openPicker(context, ref)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One attached contact rendered as a role-bearing chip with a detach
+/// affordance.
+class _ContactChip extends StatelessWidget {
+  const _ContactChip({required this.entry, required this.onDelete});
+
+  final MatomeContactEntry entry;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+
+    return Container(
+      key: ValueKey('matome-contact-${entry.contact.id}'),
+      padding: EdgeInsets.fromLTRB(
+        spacing.sm,
+        spacing.xxs,
+        spacing.xs,
+        spacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: colors.subtleFill,
+        borderRadius: BorderRadius.circular(radius.pill),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.person_outline,
+            size: spacing.md,
+            color: colors.textSecondary,
+          ),
+          SizedBox(width: spacing.xs),
+          Text(
+            entry.contact.displayName,
+            style: typography.label.copyWith(
+              fontWeight: FontWeight.w600,
+              color: colors.textPrimary,
+            ),
+          ),
+          SizedBox(width: spacing.xs),
+          Text(
+            _roleLabel(entry.role),
+            style: typography.label.copyWith(color: colors.textMuted),
+          ),
+          SizedBox(width: spacing.xxs),
+          InkWell(
+            key: ValueKey('matome-contact-remove-${entry.contact.id}'),
+            onTap: onDelete,
+            borderRadius: BorderRadius.circular(radius.pill),
+            child: Semantics(
+              button: true,
+              label: t.matome.removeContact,
+              child: Icon(
+                Icons.close,
+                size: spacing.md,
+                color: colors.textMuted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The pill that opens the directory picker.
+class _AddContactButton extends StatelessWidget {
+  const _AddContactButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(radius.pill),
+      child: InkWell(
+        key: const ValueKey('matome-add-contact'),
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(radius.pill),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.sm,
+            vertical: spacing.xxs,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius.pill),
+            border: Border.all(color: colors.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.person_add_alt_outlined,
+                size: spacing.md,
+                color: colors.accent,
+              ),
+              SizedBox(width: spacing.xs),
+              Text(
+                t.matome.addContact,
+                style: typography.label.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: colors.accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The directory picker sheet: the owner's contacts; already-attached contacts
+/// are flagged (re-tap is a harmless idempotent no-op). Selecting one pops it
+/// back to attach with the default 'attendee' role.
+class _AddContactSheet extends StatelessWidget {
+  const _AddContactSheet({required this.contacts, required this.attachedIds});
+
+  final List<ContactRow> contacts;
+  final Set<String> attachedIds;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return AppBottomSheet(
+      title: Text(
+        t.matome.addContactSheetTitle,
+        style: typography.body.copyWith(
+          fontWeight: FontWeight.w700,
+          color: colors.textPrimary,
+        ),
+      ),
+      children: [
+        if (contacts.isEmpty)
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.md,
+              vertical: spacing.sm,
+            ),
+            child: Text(
+              t.matome.noDirectoryContacts,
+              style: typography.bodySmall.copyWith(color: colors.textMuted),
+            ),
+          )
+        else
+          for (final contact in contacts)
+            ListTile(
+              key: ValueKey('matome-pick-contact-${contact.id}'),
+              leading: Icon(Icons.person_outline, color: colors.textSecondary),
+              title: Text(contact.displayName),
+              trailing: attachedIds.contains(contact.id)
+                  ? Icon(Icons.check, color: colors.accent)
+                  : null,
+              onTap: () => Navigator.of(context).pop(contact),
+            ),
+      ],
+    );
+  }
+}
+
+String _roleLabel(String role) {
+  switch (role) {
+    case 'organizer':
+      return t.matome.roleOrganizer;
+    case 'speaker':
+      return t.matome.roleSpeaker;
+    case 'attendee':
+    default:
+      return t.matome.roleAttendee;
+  }
 }
 
 class _OnDeviceHint extends StatelessWidget {
@@ -713,24 +954,18 @@ class _NotesSectionState extends State<_NotesSection> {
 
 // ─── Deferred actions (W3) ───────────────────────────────────────────────────
 
-/// Tag-contacts and Share are DEFERRED to W3 / the collaboration plan
-/// (ADR-0004). Surfaced as disabled "coming soon" rows so the affordance is
-/// discoverable without inventing a contacts/share model.
+/// Share is the only remaining DEFERRED affordance (ADR-0004 / the
+/// matome-collaboration plan): surfaced as a disabled "coming soon" row so it
+/// stays discoverable without inventing a sharing model. (Tag-contacts shipped
+/// in #1375 — it is now the real header contact slot.)
 class _DeferredActions extends StatelessWidget {
   const _DeferredActions();
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _DeferredActionRow(
-          key: const ValueKey('matome-tag-contacts'),
-          icon: Icons.person_add_alt_outlined,
-          label: t.matome.tagContacts,
-        ),
-        SizedBox(height: spacing.xs),
         _DeferredActionRow(
           key: const ValueKey('matome-share'),
           icon: Icons.ios_share_outlined,

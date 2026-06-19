@@ -4,12 +4,15 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/auth_state.dart';
 import '../../core/db/app_database.dart';
+import '../../core/db/daos/contacts_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/spaces_dao.dart';
 import '../../core/db/matome_card.dart';
 import '../../core/providers.dart';
+import '../contacts/contacts_controller.dart' show kPlaceholderContactOwnerId;
 import '../home/inbox_upload.dart'
     show DurableImportCopy, PickedUpload, durableImportCopy, mediaTypeForPath;
 import '../recordings/recording_ids.dart';
@@ -24,6 +27,7 @@ class MatomeDetailState {
     required this.id,
     this.matome,
     this.spaces = const [],
+    this.contacts = const [],
     this.isLoading = true,
     this.notFound = false,
   });
@@ -35,12 +39,17 @@ class MatomeDetailState {
   /// be present and is the default/most-prominent destination (ADR-0004).
   final List<WorkspaceRow> spaces;
 
+  /// Contacts tagged in this Matome (the `matome_contacts` edges), each paired
+  /// with its edge role — display-name ascending (#1375).
+  final List<MatomeContactEntry> contacts;
+
   final bool isLoading;
   final bool notFound;
 
   MatomeDetailState copyWith({
     MatomeItem? matome,
     List<WorkspaceRow>? spaces,
+    List<MatomeContactEntry>? contacts,
     bool? isLoading,
     bool? notFound,
   }) {
@@ -48,6 +57,7 @@ class MatomeDetailState {
       id: id,
       matome: matome ?? this.matome,
       spaces: spaces ?? this.spaces,
+      contacts: contacts ?? this.contacts,
       isLoading: isLoading ?? this.isLoading,
       notFound: notFound ?? this.notFound,
     );
@@ -78,6 +88,15 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   MatomesDao get _dao => _ref.read(matomesDaoProvider);
   SpacesDao get _spacesDao => _ref.read(spacesDaoProvider);
   RecordingsDao get _recordingsDao => _ref.read(recordingsDaoProvider);
+  ContactsDao get _contactsDao => _ref.read(contactsDaoProvider);
+
+  /// The current owner id used to scope the directory picker — `user_<coreId>`
+  /// for a signed-in user, otherwise the single-user placeholder. Mirrors
+  /// [ContactsController.ownerId] so the picker lists the same directory.
+  String get _ownerId {
+    final user = _ref.read(authStateProvider).user;
+    return user == null ? kPlaceholderContactOwnerId : 'user_${user.id}';
+  }
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true, notFound: false);
@@ -88,13 +107,54 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
       return;
     }
     final spaces = await _loadSpaces();
+    final contacts = await _contactsDao.listContactsForMatome(state.id);
     if (!mounted) return;
     state = state.copyWith(
       matome: matome,
       spaces: spaces,
+      contacts: contacts,
       isLoading: false,
       notFound: false,
     );
+  }
+
+  /// The owner's directory contacts — the candidates surfaced in the
+  /// "Add contact" picker (ContactsDao.listContactsForOwner, same owner-id
+  /// source as the Contacts tab).
+  Future<List<ContactRow>> directoryContacts() =>
+      _contactsDao.listContactsForOwner(_ownerId);
+
+  /// Tag [contactId] in this Matome with [role] (default 'attendee'). The
+  /// (matome_id, contact_id) UNIQUE makes a re-add a no-op (set-merge rule), so
+  /// attaching is idempotent. Reloads so the chip appears.
+  Future<void> attachContact(String contactId, {String role = 'attendee'}) async {
+    await _contactsDao.addContactToMatome(
+      matomeId: state.id,
+      contactId: contactId,
+      role: role,
+    );
+    await load();
+  }
+
+  /// Untag [contactId] from this Matome — EXPLICIT removal of the
+  /// `matome_contacts` edge (set-merge rule: membership is never trimmed
+  /// implicitly). Reloads so the chip disappears.
+  Future<void> detachContact(String contactId) async {
+    await _contactsDao.removeContactFromMatome(
+      matomeId: state.id,
+      contactId: contactId,
+    );
+    await load();
+  }
+
+  /// Change the edge [role] of an already-attached [contactId]. Reloads.
+  Future<void> setContactRole(String contactId, String role) async {
+    await _contactsDao.setMatomeContactRole(
+      matomeId: state.id,
+      contactId: contactId,
+      role: role,
+    );
+    await load();
   }
 
   /// All Spaces available as triage destinations, with the seeded default
