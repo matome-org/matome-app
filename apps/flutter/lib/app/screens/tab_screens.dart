@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../features/contacts/contacts_screen.dart' as contacts;
 import '../../features/details/details_screen.dart';
 import '../../features/spaces/space_detail_screen.dart' as spaces;
 import '../../features/spaces/spaces_screen.dart' as spaces;
@@ -21,6 +22,14 @@ class SatoriScreen extends StatelessWidget {
   const SatoriScreen({super.key});
   @override
   Widget build(BuildContext context) => const satori.SatoriScreen();
+}
+
+/// Contacts tab root (#1374): the owner's manual directory with create / edit /
+/// delete. Manual entry only — linked-user / sharing / ACL is deferred (#1373).
+class ContactsScreen extends StatelessWidget {
+  const ContactsScreen({super.key});
+  @override
+  Widget build(BuildContext context) => const contacts.ContactsScreen();
 }
 
 /// Recording details (S2, #781), reachable as `/inbox/:id` and `/calendar/:id`.

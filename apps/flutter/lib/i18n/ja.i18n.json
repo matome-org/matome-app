@@ -115,7 +115,16 @@
     "cancel": "キャンセル",
     "tagContacts": "連絡先をタグ付け",
     "share": "共有",
-    "comingSoon": "近日公開"
+    "comingSoon": "近日公開",
+    "contacts": "連絡先",
+    "addContact": "連絡先を追加",
+    "noContacts": "連絡先は追加されていません",
+    "addContactSheetTitle": "連絡先を追加",
+    "noDirectoryContacts": "ディレクトリに連絡先がありません",
+    "removeContact": "連絡先を削除",
+    "roleAttendee": "参加者",
+    "roleOrganizer": "主催者",
+    "roleSpeaker": "発表者"
   },
   "spaces": {
     "title": "スペース",
@@ -135,6 +144,24 @@
     "title": "カレンダー",
     "noRecordings": "この日の録音はありません",
     "allSpaces": "すべて"
+  },
+  "contacts": {
+    "title": "連絡先",
+    "count": "$n 件の連絡先",
+    "empty": "連絡先がありません",
+    "emptyHint": "+ をタップして連絡先を追加しましょう",
+    "createTitle": "新しい連絡先",
+    "editTitle": "連絡先を編集",
+    "nameLabel": "名前",
+    "nameHint": "表示名",
+    "notesLabel": "メモ",
+    "notesHint": "メール、電話番号、その他の詳細",
+    "create": "追加",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "deleteTitle": "連絡先を削除しますか？",
+    "deleteBody": "この連絡先はディレクトリから削除されます。",
+    "delete": "削除"
   },
   "satori": {
     "title": "悟り",

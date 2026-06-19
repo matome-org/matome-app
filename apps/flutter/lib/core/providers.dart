@@ -73,3 +73,5 @@ final spacesDaoProvider =
     Provider((ref) => ref.watch(appDatabaseProvider).spacesDao);
 final recordingDraftsDaoProvider =
     Provider((ref) => ref.watch(appDatabaseProvider).recordingDraftsDao);
+final contactsDaoProvider =
+    Provider((ref) => ref.watch(appDatabaseProvider).contactsDao);

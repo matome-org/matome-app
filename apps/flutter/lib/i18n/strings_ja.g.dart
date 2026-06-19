@@ -49,6 +49,7 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$matome$ja matome = _Translations$matome$ja._(_root);
 	@override late final _Translations$spaces$ja spaces = _Translations$spaces$ja._(_root);
 	@override late final _Translations$calendar$ja calendar = _Translations$calendar$ja._(_root);
+	@override late final _Translations$contacts$ja contacts = _Translations$contacts$ja._(_root);
 	@override late final _Translations$satori$ja satori = _Translations$satori$ja._(_root);
 	@override late final _Translations$welcome$ja welcome = _Translations$welcome$ja._(_root);
 	@override late final _Translations$auth$ja auth = _Translations$auth$ja._(_root);
@@ -226,6 +227,15 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get tagContacts => '連絡先をタグ付け';
 	@override String get share => '共有';
 	@override String get comingSoon => '近日公開';
+	@override String get contacts => '連絡先';
+	@override String get addContact => '連絡先を追加';
+	@override String get noContacts => '連絡先は追加されていません';
+	@override String get addContactSheetTitle => '連絡先を追加';
+	@override String get noDirectoryContacts => 'ディレクトリに連絡先がありません';
+	@override String get removeContact => '連絡先を削除';
+	@override String get roleAttendee => '参加者';
+	@override String get roleOrganizer => '主催者';
+	@override String get roleSpeaker => '発表者';
 }
 
 // Path: spaces
@@ -259,6 +269,31 @@ class _Translations$calendar$ja extends Translations$calendar$en {
 	@override String get title => 'カレンダー';
 	@override String get noRecordings => 'この日の録音はありません';
 	@override String get allSpaces => 'すべて';
+}
+
+// Path: contacts
+class _Translations$contacts$ja extends Translations$contacts$en {
+	_Translations$contacts$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '連絡先';
+	@override String count({required Object n}) => '${n} 件の連絡先';
+	@override String get empty => '連絡先がありません';
+	@override String get emptyHint => '+ をタップして連絡先を追加しましょう';
+	@override String get createTitle => '新しい連絡先';
+	@override String get editTitle => '連絡先を編集';
+	@override String get nameLabel => '名前';
+	@override String get nameHint => '表示名';
+	@override String get notesLabel => 'メモ';
+	@override String get notesHint => 'メール、電話番号、その他の詳細';
+	@override String get create => '追加';
+	@override String get save => '保存';
+	@override String get cancel => 'キャンセル';
+	@override String get deleteTitle => '連絡先を削除しますか？';
+	@override String get deleteBody => 'この連絡先はディレクトリから削除されます。';
+	@override String get delete => '削除';
 }
 
 // Path: satori
@@ -445,6 +480,15 @@ extension on TranslationsJa {
 			'matome.tagContacts' => '連絡先をタグ付け',
 			'matome.share' => '共有',
 			'matome.comingSoon' => '近日公開',
+			'matome.contacts' => '連絡先',
+			'matome.addContact' => '連絡先を追加',
+			'matome.noContacts' => '連絡先は追加されていません',
+			'matome.addContactSheetTitle' => '連絡先を追加',
+			'matome.noDirectoryContacts' => 'ディレクトリに連絡先がありません',
+			'matome.removeContact' => '連絡先を削除',
+			'matome.roleAttendee' => '参加者',
+			'matome.roleOrganizer' => '主催者',
+			'matome.roleSpeaker' => '発表者',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',
@@ -460,6 +504,22 @@ extension on TranslationsJa {
 			'calendar.title' => 'カレンダー',
 			'calendar.noRecordings' => 'この日の録音はありません',
 			'calendar.allSpaces' => 'すべて',
+			'contacts.title' => '連絡先',
+			'contacts.count' => ({required Object n}) => '${n} 件の連絡先',
+			'contacts.empty' => '連絡先がありません',
+			'contacts.emptyHint' => '+ をタップして連絡先を追加しましょう',
+			'contacts.createTitle' => '新しい連絡先',
+			'contacts.editTitle' => '連絡先を編集',
+			'contacts.nameLabel' => '名前',
+			'contacts.nameHint' => '表示名',
+			'contacts.notesLabel' => 'メモ',
+			'contacts.notesHint' => 'メール、電話番号、その他の詳細',
+			'contacts.create' => '追加',
+			'contacts.save' => '保存',
+			'contacts.cancel' => 'キャンセル',
+			'contacts.deleteTitle' => '連絡先を削除しますか？',
+			'contacts.deleteBody' => 'この連絡先はディレクトリから削除されます。',
+			'contacts.delete' => '削除',
 			'satori.title' => '悟り',
 			'satori.subtitle' => '悟 · あなたのAIアシスタント',
 			'satori.soon' => '近日公開',

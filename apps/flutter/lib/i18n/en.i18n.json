@@ -115,7 +115,16 @@
     "cancel": "Cancel",
     "tagContacts": "Tag contacts",
     "share": "Share",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "contacts": "Contacts",
+    "addContact": "Add contact",
+    "noContacts": "No contacts attached",
+    "addContactSheetTitle": "Add a contact",
+    "noDirectoryContacts": "No contacts in your directory yet",
+    "removeContact": "Remove contact",
+    "roleAttendee": "Attendee",
+    "roleOrganizer": "Organizer",
+    "roleSpeaker": "Speaker"
   },
   "spaces": {
     "title": "Spaces",
@@ -135,6 +144,24 @@
     "title": "Calendar",
     "noRecordings": "No recordings for this day",
     "allSpaces": "All"
+  },
+  "contacts": {
+    "title": "Contacts",
+    "count": "$n contacts",
+    "empty": "No contacts yet",
+    "emptyHint": "Tap + to add people to your directory",
+    "createTitle": "New contact",
+    "editTitle": "Edit contact",
+    "nameLabel": "Name",
+    "nameHint": "Display name",
+    "notesLabel": "Notes",
+    "notesHint": "Email, phone, or other details",
+    "create": "Add",
+    "save": "Save",
+    "cancel": "Cancel",
+    "deleteTitle": "Delete contact?",
+    "deleteBody": "This contact will be removed from your directory.",
+    "delete": "Delete"
   },
   "satori": {
     "title": "Satori",

@@ -19,8 +19,9 @@ bool get _isDesktop {
   }
 }
 
-/// Bottom navigation shell mirroring the RN `NavBar`: four tabs split around a
-/// raised center mic FAB (Inbox / Calendar — [mic] — Spaces / Satori). The FAB
+/// Bottom navigation shell mirroring the RN `NavBar`: five tabs split around a
+/// raised center mic FAB (Inbox / Calendar — [mic] — Spaces / Satori /
+/// Contacts). The FAB
 /// pushes the `/recording` fullscreen modal; the tabs swap the inner
 /// [StatefulNavigationShell] branch (preserving each tab's own stack).
 ///
@@ -173,6 +174,11 @@ class _DesktopShell extends StatelessWidget {
                       selectedIcon: const Icon(Icons.auto_awesome),
                       label: Text(t.satori.title),
                     ),
+                    NavigationRailDestination(
+                      icon: const Icon(Icons.contacts_outlined),
+                      selectedIcon: const Icon(Icons.contacts),
+                      label: Text(t.contacts.title),
+                    ),
                   ],
                 ),
               ),
@@ -276,6 +282,12 @@ class _ShellBottomBar extends StatelessWidget {
             label: t.satori.title,
             selected: currentIndex == 3,
             onTap: () => onTap(3),
+          ),
+          _NavItem(
+            icon: Icons.contacts_outlined,
+            label: t.contacts.title,
+            selected: currentIndex == 4,
+            onTap: () => onTap(4),
           ),
         ],
       ),

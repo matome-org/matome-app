@@ -20,6 +20,7 @@ final _inboxKey = GlobalKey<NavigatorState>(debugLabel: 'inbox');
 final _calendarKey = GlobalKey<NavigatorState>(debugLabel: 'calendar');
 final _spacesKey = GlobalKey<NavigatorState>(debugLabel: 'spaces');
 final _satoriKey = GlobalKey<NavigatorState>(debugLabel: 'satori');
+final _contactsKey = GlobalKey<NavigatorState>(debugLabel: 'contacts');
 
 /// Bridges Riverpod auth state into go_router's [GoRouter.refreshListenable]
 /// so the redirect re-runs whenever auth resolves.
@@ -44,7 +45,7 @@ class _AuthListenable extends ChangeNotifier {
 /// The app router. Mirrors the expo-router tree:
 ///   /                       welcome (unauthenticated landing)
 ///   /recording              fullscreen modal (root navigator, above the shell)
-///   [shell]                 4 stateful tab branches:
+///   [shell]                 5 stateful tab branches:
 ///     /inbox                inbox root (lab HomeScreen)
 ///       /inbox/settings     settings
 ///       /inbox/:id          recording details
@@ -54,6 +55,7 @@ class _AuthListenable extends ChangeNotifier {
 ///       /spaces/:spaceId    space details
 ///       /spaces/recording/:id  recording in a space
 ///     /satori               satori root
+///     /contacts             contacts directory root (#1374)
 final routerProvider = Provider<GoRouter>((ref) {
   // Real auth: the AuthController restores the persisted session on creation
   // (validates tokens via /api/auth/me). Touch it so that bootstrap kicks off
@@ -184,6 +186,15 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/satori',
                 builder: (context, state) => const SatoriScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _contactsKey,
+            routes: [
+              GoRoute(
+                path: '/contacts',
+                builder: (context, state) => const ContactsScreen(),
               ),
             ],
           ),

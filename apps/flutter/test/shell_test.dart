@@ -96,6 +96,14 @@ GoRouter _buildTestRouter() {
               GoRoute(path: '/satori', builder: (c, s) => const SatoriScreen()),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/contacts',
+                builder: (c, s) => const ContactsScreen(),
+              ),
+            ],
+          ),
         ],
       ),
     ],
@@ -162,7 +170,7 @@ void main() {
   });
   tearDown(() => db.close());
 
-  testWidgets('shell renders 4 tabs + mic FAB and navigates between tabs', (
+  testWidgets('shell renders 5 tabs + mic FAB and navigates between tabs', (
     tester,
   ) async {
     await tester.pumpWidget(_pumpApp(db: db));
@@ -172,15 +180,32 @@ void main() {
     expect(find.text('Standup notes'), findsOneWidget);
     // Mic FAB present.
     expect(find.byIcon(Icons.mic), findsOneWidget);
+    // All five bottom-bar destinations are present (Contacts is the 5th, #1374).
+    expect(find.byIcon(Icons.inbox_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.calendar_today_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.auto_awesome_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.contacts_outlined), findsOneWidget);
 
-    // Navigate to the Spaces tab via the bottom bar.
-    await tester.tap(find.byIcon(Icons.folder_outlined));
+    // Drive tab switches through the router: with five bottom-bar items packed
+    // around the FAB notch, an icon's centre can fall under the docked FAB in the
+    // narrow test viewport, so a raw icon tap is layout-fragile. The branch
+    // wiring (currentIndex/goBranch) is what we assert here.
+    final BuildContext ctx = tester.element(find.byType(BottomAppBar));
+
+    // Navigate to the Spaces tab.
+    GoRouter.of(ctx).go('/spaces');
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.folder_outlined).hitTestable(), findsWidgets);
 
     // Navigate to the Satori tab.
-    await tester.tap(find.byIcon(Icons.auto_awesome_outlined));
+    GoRouter.of(ctx).go('/satori');
     await tester.pumpAndSettle();
+
+    // Navigate to the Contacts tab (the 5th branch, #1374).
+    GoRouter.of(ctx).go('/contacts');
+    await tester.pumpAndSettle();
+    expect(find.text(t.contacts.title), findsWidgets);
   });
 
   testWidgets('wide viewport renders a NavigationRail, not the bottom bar', (

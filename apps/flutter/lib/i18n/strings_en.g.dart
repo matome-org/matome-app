@@ -50,6 +50,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$matome$en matome = Translations$matome$en.internal(_root);
 	late final Translations$spaces$en spaces = Translations$spaces$en.internal(_root);
 	late final Translations$calendar$en calendar = Translations$calendar$en.internal(_root);
+	late final Translations$contacts$en contacts = Translations$contacts$en.internal(_root);
 	late final Translations$satori$en satori = Translations$satori$en.internal(_root);
 	late final Translations$welcome$en welcome = Translations$welcome$en.internal(_root);
 	late final Translations$auth$en auth = Translations$auth$en.internal(_root);
@@ -431,6 +432,33 @@ class Translations$matome$en {
 
 	/// en: 'Coming soon'
 	String get comingSoon => 'Coming soon';
+
+	/// en: 'Contacts'
+	String get contacts => 'Contacts';
+
+	/// en: 'Add contact'
+	String get addContact => 'Add contact';
+
+	/// en: 'No contacts attached'
+	String get noContacts => 'No contacts attached';
+
+	/// en: 'Add a contact'
+	String get addContactSheetTitle => 'Add a contact';
+
+	/// en: 'No contacts in your directory yet'
+	String get noDirectoryContacts => 'No contacts in your directory yet';
+
+	/// en: 'Remove contact'
+	String get removeContact => 'Remove contact';
+
+	/// en: 'Attendee'
+	String get roleAttendee => 'Attendee';
+
+	/// en: 'Organizer'
+	String get roleOrganizer => 'Organizer';
+
+	/// en: 'Speaker'
+	String get roleSpeaker => 'Speaker';
 }
 
 // Path: spaces
@@ -494,6 +522,63 @@ class Translations$calendar$en {
 
 	/// en: 'All'
 	String get allSpaces => 'All';
+}
+
+// Path: contacts
+class Translations$contacts$en {
+	Translations$contacts$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Contacts'
+	String get title => 'Contacts';
+
+	/// en: '$n contacts'
+	String count({required Object n}) => '${n} contacts';
+
+	/// en: 'No contacts yet'
+	String get empty => 'No contacts yet';
+
+	/// en: 'Tap + to add people to your directory'
+	String get emptyHint => 'Tap + to add people to your directory';
+
+	/// en: 'New contact'
+	String get createTitle => 'New contact';
+
+	/// en: 'Edit contact'
+	String get editTitle => 'Edit contact';
+
+	/// en: 'Name'
+	String get nameLabel => 'Name';
+
+	/// en: 'Display name'
+	String get nameHint => 'Display name';
+
+	/// en: 'Notes'
+	String get notesLabel => 'Notes';
+
+	/// en: 'Email, phone, or other details'
+	String get notesHint => 'Email, phone, or other details';
+
+	/// en: 'Add'
+	String get create => 'Add';
+
+	/// en: 'Save'
+	String get save => 'Save';
+
+	/// en: 'Cancel'
+	String get cancel => 'Cancel';
+
+	/// en: 'Delete contact?'
+	String get deleteTitle => 'Delete contact?';
+
+	/// en: 'This contact will be removed from your directory.'
+	String get deleteBody => 'This contact will be removed from your directory.';
+
+	/// en: 'Delete'
+	String get delete => 'Delete';
 }
 
 // Path: satori
@@ -774,6 +859,15 @@ extension on Translations {
 			'matome.tagContacts' => 'Tag contacts',
 			'matome.share' => 'Share',
 			'matome.comingSoon' => 'Coming soon',
+			'matome.contacts' => 'Contacts',
+			'matome.addContact' => 'Add contact',
+			'matome.noContacts' => 'No contacts attached',
+			'matome.addContactSheetTitle' => 'Add a contact',
+			'matome.noDirectoryContacts' => 'No contacts in your directory yet',
+			'matome.removeContact' => 'Remove contact',
+			'matome.roleAttendee' => 'Attendee',
+			'matome.roleOrganizer' => 'Organizer',
+			'matome.roleSpeaker' => 'Speaker',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',
@@ -789,6 +883,22 @@ extension on Translations {
 			'calendar.title' => 'Calendar',
 			'calendar.noRecordings' => 'No recordings for this day',
 			'calendar.allSpaces' => 'All',
+			'contacts.title' => 'Contacts',
+			'contacts.count' => ({required Object n}) => '${n} contacts',
+			'contacts.empty' => 'No contacts yet',
+			'contacts.emptyHint' => 'Tap + to add people to your directory',
+			'contacts.createTitle' => 'New contact',
+			'contacts.editTitle' => 'Edit contact',
+			'contacts.nameLabel' => 'Name',
+			'contacts.nameHint' => 'Display name',
+			'contacts.notesLabel' => 'Notes',
+			'contacts.notesHint' => 'Email, phone, or other details',
+			'contacts.create' => 'Add',
+			'contacts.save' => 'Save',
+			'contacts.cancel' => 'Cancel',
+			'contacts.deleteTitle' => 'Delete contact?',
+			'contacts.deleteBody' => 'This contact will be removed from your directory.',
+			'contacts.delete' => 'Delete',
 			'satori.title' => 'Satori',
 			'satori.subtitle' => '悟 · your AI assistant',
 			'satori.soon' => 'SOON',
