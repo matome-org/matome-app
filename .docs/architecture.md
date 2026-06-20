@@ -189,7 +189,7 @@ sequenceDiagram
 
 ## 8. Data model
 
-The server-authoritative store lives in the Core's Postgres; the client mirrors it in Drift. The central entity is the **Matome** — a per-happening collection of items (recordings) that files into a space and syncs to the cloud (see [ADR-0003](decisions/ADR-0003-matome-central-entity.md) for the full entity model, and [ADR-0004](decisions/ADR-0004-identity-permissions-triage.md) for identity/permissions/triage).
+The server-authoritative store lives in the Core's Postgres; the client mirrors it in Drift. The central entity is the **Matome** — a per-happening collection of items (recordings) that files into a space and syncs to the cloud (see [ADR-0003](decisions/ADR-0003-matome-central-entity.md) for the full entity model, [ADR-0004](decisions/ADR-0004-identity-permissions-triage.md) for identity/permissions/triage, and [matome-lifecycle.md](matome-lifecycle.md) for its cradle-to-grave flow).
 
 Recordings (the items) carry, in essence:
 

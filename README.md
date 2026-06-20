@@ -30,6 +30,7 @@ Stop everything with `mise run down`; wipe the local stack with `mise run nuke`.
 ## Documentation
 
 - Architecture and data flow: [.docs/architecture.md](.docs/architecture.md)
+- Matome lifecycle (cradle-to-grave): [.docs/matome-lifecycle.md](.docs/matome-lifecycle.md)
 - Local build details: [.docs/build-local.md](.docs/build-local.md)
 - Design decisions (ADRs): [.docs/decisions/](.docs/decisions/)
 - Domain glossary: [.docs/glossary.md](.docs/glossary.md)
