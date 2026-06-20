@@ -20,6 +20,7 @@ class RecordingItem {
     this.notes,
     this.workspaceName,
     this.coreId,
+    this.filePath,
   });
 
   final String id;
@@ -44,6 +45,10 @@ class RecordingItem {
   /// (see [RecordingsDao.recordingsByDayWithWorkspace]); NULL == Inbox.
   final String? workspaceName;
 
+  /// On-device path to the item's media (audio file or imported photo). Drives
+  /// the image thumbnail/preview in the matome hub.
+  final String? filePath;
+
   /// Maps a persisted DB row to the UI card, mirroring `recordToCard`:
   ///   * `isProcessing` int → bool,
   ///   * `processingStatus` falls back to processing/done from the flag.
@@ -63,6 +68,7 @@ class RecordingItem {
           : (row.isProcessing == 1 ? 'processing' : 'done'),
       workspaceName: workspaceName,
       coreId: row.coreId,
+      filePath: row.audioFilePath,
     );
   }
 }

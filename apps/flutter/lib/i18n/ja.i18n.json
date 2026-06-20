@@ -136,7 +136,11 @@
     "roleOrganizer": "主催者",
     "roleSpeaker": "発表者",
     "itemCount": "$n 件のアイテム",
-    "onDeviceShort": "端末内"
+    "onDeviceShort": "端末内",
+    "remove": "削除",
+    "removeItemTitle": "アイテムを削除",
+    "removeItemBody": "「$title」をこのまとめから削除しますか？",
+    "imageUnavailable": "画像を表示できません"
   },
   "spaces": {
     "title": "スペース",

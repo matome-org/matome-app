@@ -248,6 +248,10 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get roleSpeaker => '発表者';
 	@override String itemCount({required Object n}) => '${n} 件のアイテム';
 	@override String get onDeviceShort => '端末内';
+	@override String get remove => '削除';
+	@override String get removeItemTitle => 'アイテムを削除';
+	@override String removeItemBody({required Object title}) => '「${title}」をこのまとめから削除しますか？';
+	@override String get imageUnavailable => '画像を表示できません';
 }
 
 // Path: spaces
@@ -517,6 +521,10 @@ extension on TranslationsJa {
 			'matome.roleSpeaker' => '発表者',
 			'matome.itemCount' => ({required Object n}) => '${n} 件のアイテム',
 			'matome.onDeviceShort' => '端末内',
+			'matome.remove' => '削除',
+			'matome.removeItemTitle' => 'アイテムを削除',
+			'matome.removeItemBody' => ({required Object title}) => '「${title}」をこのまとめから削除しますか？',
+			'matome.imageUnavailable' => '画像を表示できません',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

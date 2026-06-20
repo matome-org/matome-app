@@ -15,6 +15,7 @@ import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_bottom_sheet.dart';
 import '../../ui/app_button.dart';
+import '../../ui/app_dialog.dart';
 import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/loading_indicator.dart';
@@ -712,7 +713,7 @@ class _RecordingsSection extends ConsumerWidget {
             (item) => Padding(
               key: ValueKey('matome-item-${item.id}'),
               padding: EdgeInsets.only(bottom: spacing.sm),
-              child: _RecordingTile(item: item),
+              child: _RecordingTile(item: item, matomeId: matomeId),
             ),
           ),
       ],
@@ -723,14 +724,15 @@ class _RecordingsSection extends ConsumerWidget {
 /// One child Item. Image Items get a media-forward tile; everything else (audio,
 /// documents) reuses the shared [AppCard.recording]. Tapping opens the existing
 /// recording Details route (reused, scope-tight).
-class _RecordingTile extends StatelessWidget {
-  const _RecordingTile({required this.item});
+class _RecordingTile extends ConsumerWidget {
+  const _RecordingTile({required this.item, required this.matomeId});
 
   final RecordingItem item;
+  final String matomeId;
 
   bool get _isImage => item.mediaType.startsWith('image');
 
-  void _open(BuildContext context) {
+  void _openRecording(BuildContext context) {
     // The single-recording DetailsScreen, reached from INSIDE the matome hub for
     // one Item (#1378). This is its own non-redirecting route — the old
     // recording-centric deep-links (`/inbox/:id`, `/calendar/:id`,
@@ -739,26 +741,104 @@ class _RecordingTile extends StatelessWidget {
     context.push('/recording/detail/${item.id}');
   }
 
+  void _previewImage(BuildContext context) {
+    final path = item.filePath;
+    if (path == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => _ImagePreviewDialog(path: path, title: item.title),
+    );
+  }
+
+  Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AppDialog(
+        title: Text(t.matome.removeItemTitle),
+        content: Text(t.matome.removeItemBody(title: item.title)),
+        actions: [
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(t.matome.cancel),
+          ),
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(t.matome.remove),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    // Read the controller fresh (the dialog gap can autoDispose a captured one).
+    await ref
+        .read(matomeDetailControllerProvider(matomeId).notifier)
+        .removeItem(item.id, filePath: item.filePath);
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (_isImage) {
-      return _ImageItemTile(item: item, onTap: () => _open(context));
+      return _ImageItemTile(
+        item: item,
+        onTap: () => _previewImage(context),
+        onRemove: () => _confirmRemove(context, ref),
+      );
     }
     return AppCard.recording(
       card: item,
       relativeTime: formatTimestamp(
         DateTime.tryParse(item.timestamp),
       ),
-      onTap: () => _open(context),
+      onTap: () => _openRecording(context),
+    );
+  }
+}
+
+/// Full-image lightbox for a photo Item.
+class _ImagePreviewDialog extends StatelessWidget {
+  const _ImagePreviewDialog({required this.path, required this.title});
+
+  final String path;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    return Dialog(
+      backgroundColor: colors.surface,
+      insetPadding: EdgeInsets.all(context.spacing.lg),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius.lg),
+        child: InteractiveViewer(
+          child: Image.file(
+            File(path),
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => Padding(
+              padding: EdgeInsets.all(context.spacing.xl),
+              child: Text(
+                t.matome.imageUnavailable,
+                style: context.typography.bodySmall
+                    .copyWith(color: colors.textMuted),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 class _ImageItemTile extends StatelessWidget {
-  const _ImageItemTile({required this.item, required this.onTap});
+  const _ImageItemTile({
+    required this.item,
+    required this.onTap,
+    required this.onRemove,
+  });
 
   final RecordingItem item;
   final VoidCallback onTap;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -767,6 +847,28 @@ class _ImageItemTile extends StatelessWidget {
     final radius = context.radius;
     final typography = context.typography;
     final accent = colors.badgeColor(item.badge);
+    final path = item.filePath;
+
+    final Widget thumb = ClipRRect(
+      borderRadius: BorderRadius.circular(radius.md),
+      child: SizedBox(
+        width: spacing.xxl,
+        height: spacing.xxl,
+        child: path == null
+            ? ColoredBox(
+                color: accent.withValues(alpha: 0.13),
+                child: Icon(Icons.image_outlined, color: accent),
+              )
+            : Image.file(
+                File(path),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => ColoredBox(
+                  color: accent.withValues(alpha: 0.13),
+                  child: Icon(Icons.broken_image_outlined, color: accent),
+                ),
+              ),
+      ),
+    );
 
     return Material(
       color: colors.surface,
@@ -783,20 +885,7 @@ class _ImageItemTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: spacing.xxl,
-                height: spacing.xxl,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(radius.md),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.image_outlined,
-                  size: spacing.lg,
-                  color: accent,
-                ),
-              ),
+              thumb,
               SizedBox(width: spacing.sm),
               Expanded(
                 child: Text(
@@ -808,6 +897,12 @@ class _ImageItemTile extends StatelessWidget {
                     color: colors.textPrimary,
                   ),
                 ),
+              ),
+              IconButton(
+                key: ValueKey('matome-image-remove-${item.id}'),
+                tooltip: t.matome.remove,
+                onPressed: onRemove,
+                icon: Icon(Icons.delete_outline, color: colors.textMuted),
               ),
             ],
           ),

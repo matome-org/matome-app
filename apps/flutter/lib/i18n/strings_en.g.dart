@@ -495,6 +495,18 @@ class Translations$matome$en {
 
 	/// en: 'On device'
 	String get onDeviceShort => 'On device';
+
+	/// en: 'Remove'
+	String get remove => 'Remove';
+
+	/// en: 'Remove item'
+	String get removeItemTitle => 'Remove item';
+
+	/// en: 'Remove "$title" from this matome?'
+	String removeItemBody({required Object title}) => 'Remove "${title}" from this matome?';
+
+	/// en: 'Image unavailable'
+	String get imageUnavailable => 'Image unavailable';
 }
 
 // Path: spaces
@@ -928,6 +940,10 @@ extension on Translations {
 			'matome.roleSpeaker' => 'Speaker',
 			'matome.itemCount' => ({required Object n}) => '${n} items',
 			'matome.onDeviceShort' => 'On device',
+			'matome.remove' => 'Remove',
+			'matome.removeItemTitle' => 'Remove item',
+			'matome.removeItemBody' => ({required Object title}) => 'Remove "${title}" from this matome?',
+			'matome.imageUnavailable' => 'Image unavailable',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

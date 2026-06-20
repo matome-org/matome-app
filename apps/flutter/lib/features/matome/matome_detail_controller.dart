@@ -239,6 +239,25 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     if (!mounted) return;
     await load();
   }
+
+  /// Remove an Item (recording) from this Matome: delete the row, its on-device
+  /// file (best-effort), mark the aggregated summary stale (the item set
+  /// changed), and reload so the hub drops it.
+  Future<void> removeItem(String recordingId, {String? filePath}) async {
+    final matomeId = state.id;
+    await _recordingsDao.deleteRecording(recordingId);
+    if (filePath != null && filePath.isNotEmpty) {
+      try {
+        final f = File(filePath);
+        if (await f.exists()) await f.delete();
+      } catch (_) {
+        // Best-effort: a missing/locked file must not block removal.
+      }
+    }
+    await _dao.markSummaryStale(matomeId, true);
+    if (!mounted) return;
+    await load();
+  }
 }
 
 String _titleFromName(String name) {

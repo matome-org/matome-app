@@ -136,7 +136,11 @@
     "roleOrganizer": "Organizer",
     "roleSpeaker": "Speaker",
     "itemCount": "$n items",
-    "onDeviceShort": "On device"
+    "onDeviceShort": "On device",
+    "remove": "Remove",
+    "removeItemTitle": "Remove item",
+    "removeItemBody": "Remove \"$title\" from this matome?",
+    "imageUnavailable": "Image unavailable"
   },
   "spaces": {
     "title": "Spaces",
