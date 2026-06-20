@@ -8,7 +8,7 @@ flutter = "latest"
 "aqua:supabase/cli" = "2.84.2"
 
 [tasks.up]
-description = "Start the full local backend (Supabase + Core API + AI stub), seed dev user, idempotent. apps/web retired — use a flutter-* client. (Effectively the same as `backend`.)"
+description = "Start the full local backend (Supabase + Core API + AI stub), seed dev user, idempotent. Pair with a `mise run flutter-*` client. (Same as `backend`.)"
 run = """
 set -e
 ROOT="$(pwd)"
@@ -79,7 +79,7 @@ else
 fi
 
 echo ''
-echo '✓ stack up (backend; apps/web retired — the Flutter app is the client):'
+echo '✓ stack up (backend — pair with a mise run flutter-* client):'
 echo '   Supabase Studio  http://127.0.0.1:54323'
 echo '   Core API         http://127.0.0.1:4000   (logs: tail -f .dev/core.log)'
 echo '   AI stub          http://127.0.0.1:5055   (logs: tail -f .dev/ai-stub.log)'
@@ -108,7 +108,7 @@ echo '✓ Supabase up — Studio http://127.0.0.1:54323'
 """
 
 [tasks.backend]
-description = "Start the SHARED BACKEND (Supabase + Core API + AI stub), seed dev user — NO client. Run before a flutter-* client. (Since apps/web was retired this is equivalent to `up`.)"
+description = "Start the SHARED BACKEND (Supabase + Core API + AI stub), seed dev user — NO client. Run before a `mise run flutter-*` client. (Equivalent to `up`.)"
 run = """
 set -e
 ROOT="$(pwd)"
@@ -322,19 +322,16 @@ flutter build web -t lib/widgetbook.dart
 """
 
 [tasks.down]
-description = "Stop the whole stack: Core API, AI stub, Metro, Supabase, emulator"
+description = "Stop the whole stack: Core API, AI stub, Supabase, emulator"
 run = """
 set +e
 ROOT="$(pwd)"
 RUN_DIR="$ROOT/.dev"
 
 # Services started by `mise run up` (kill by port, then clear pidfiles)
-fuser -k 3000/tcp 2>/dev/null   # Web app
 fuser -k 4000/tcp 2>/dev/null   # Core API
 fuser -k 5055/tcp 2>/dev/null   # AI stub
-rm -f "$RUN_DIR/web.pid" "$RUN_DIR/core.pid" "$RUN_DIR/ai-stub.pid"
-
-fuser -k 8081/tcp 2>/dev/null   # Metro
+rm -f "$RUN_DIR/core.pid" "$RUN_DIR/ai-stub.pid"
 
 # Supabase: stop only if running (idempotent — no error when already down)
 if supabase status >/dev/null 2>&1; then
@@ -357,10 +354,8 @@ ROOT="$(pwd)"
 RUN_DIR="$ROOT/.dev"
 
 echo '→ stopping local services...'
-fuser -k 3000/tcp 2>/dev/null   # Web app
 fuser -k 4000/tcp 2>/dev/null   # Core API
 fuser -k 5055/tcp 2>/dev/null   # AI stub
-fuser -k 8081/tcp 2>/dev/null   # Metro
 
 # Supabase: stop and discard its data volumes (--no-backup drops the local DB).
 echo '→ stopping Supabase + dropping volumes...'

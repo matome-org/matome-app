@@ -35,14 +35,13 @@ config :matome_api, MatomeApi.Storage.Presigner,
   upload_expires_in: String.to_integer(System.get_env("STORAGE_UPLOAD_URL_TTL") || "900"),
   download_expires_in: String.to_integer(System.get_env("STORAGE_DOWNLOAD_URL_TTL") || "300")
 
-# CORS allowed origins for browser clients (Flutter Web, etc.).
+# CORS allowed origins for browser clients (Flutter Web).
 # Overridden at runtime via CORS_ORIGINS (comma-separated) in runtime.exs.
-# Defaults below cover the common dev origins for `flutter run -d chrome`
-# (Flutter picks an ephemeral port unless --web-port is passed) plus the
-# Next.js web client. For prod set CORS_ORIGINS explicitly.
+# Defaults cover the `mise run flutter-web` dev origin (port 8080). For prod
+# set CORS_ORIGINS explicitly.
 config :matome_api, :cors_origins,
   System.get_env("CORS_ORIGINS") ||
-    "http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000"
+    "http://localhost:8080,http://127.0.0.1:8080"
 
 # Configures the endpoint
 config :matome_api, MatomeApiWeb.Endpoint,

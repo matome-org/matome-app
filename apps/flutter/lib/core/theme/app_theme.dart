@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Matome "Eva" palette + greys. Mirrors `@matome/ui` eva theme tokens and the
-/// UI-Kitten `color-basic-*` surfaces used by the RN app, so the Flutter shell
-/// renders with the same accent gold and neutral surfaces.
+/// Matome "Eva" palette + greys. These were ported from the original Eva
+/// Design System theme tokens (UI-Kitten `color-basic-*` surfaces), so the
+/// Flutter shell renders with the same accent gold and neutral surfaces.
 final class MatomeColors extends ThemeExtension<MatomeColors> {
   const MatomeColors({
     required this.primary,
