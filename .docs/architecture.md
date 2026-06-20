@@ -19,7 +19,7 @@
 3. **Server is the source of truth.** Records live in the Core API's Postgres. The client's local Drift (SQLite) store is an offline mirror, reconciled against the Core — not the authority.
 4. **One ingestion contract for every media type.** Audio, meeting recordings, conversation screenshots, and future formats flow through one `upload → pending → process → done` path. The client is media-agnostic.
 5. **Owned backends, one client language.** Core API is Elixir; the AI engine is Python. The client is Dart/Flutter.
-6. **Contract-first.** The Core API publishes a REST (OpenAPI) surface; the Flutter client consumes it through its own Dart HTTP layer (`dio`). Status reconciles through the client's sync layer.
+6. **Contract-first.** The Core API publishes a REST (OpenAPI) surface; the Flutter client consumes it through its own Dart HTTP layer (`dio`). Ingestion status is pushed over **Phoenix Channels** (`RecordingStatusChannel`), which the client races against a periodic `GET /recordings/:id` poll as a fallback.
 
 ---
 
@@ -35,6 +35,7 @@ flowchart LR
     PH[Phoenix\nauth · CRUD · gateway]
     PG[(PostgreSQL\nsource of truth)]
     OB[Oban\njob queue]
+    CH[Channels\nrealtime status]
   end
 
   ST[(Object Storage\nSupabase Storage / S3)]
@@ -47,9 +48,11 @@ flowchart LR
   F -- "presigned upload" --> ST
   PH --- PG
   PH --- OB
+  PH --- CH
   OB -- "enqueue job" --> P
   P -- "download raw" --> ST
   P -- "callback: result" --> PH
+  CH -- "status push (poll fallback)" --> F
 ```
 
 Plain-text fallback:
@@ -64,7 +67,7 @@ Plain-text fallback:
    |   Oban (queue) ──enqueue──→ [Backend B — FastAPI] ──┘
    |                                   |
    |   ←──────── callback: result ─────┘
-   └── status (pending→processing→done) reconciled by the client
+   └── Channels push (pending→processing→done) ──→ client (poll fallback)
 ```
 
 **Hard rule:** the client talks only to the Core API + Storage. Only the Core API talks to the AI Engine. The AI Engine is never client-facing.
@@ -84,8 +87,9 @@ Owns everything except AI.
 | Auth | **Guardian** (JWT access + refresh), argon2 password hashing — users table in Postgres. Authz is app-level (no Supabase Auth/RLS). |
 | Authorization | app-level scoping by `owner_id` (Ecto query scopes / policies) |
 | Job queue | **Oban** (Postgres-backed) — dispatch + retry of AI jobs, no separate Redis |
+| Realtime | **Phoenix Channels** + PubSub (`RecordingStatusChannel` on `user:*`) — push `pending→processing→done` to the client |
 | Object storage | **Supabase Storage** — Core issues presigned PUT/GET URLs |
-| API surface | REST, documented as **OpenAPI** |
+| API surface | REST, documented as **OpenAPI** (`open_api_spex`) |
 
 Responsibilities: register/login, issue tokens, CRUD on matomes/recordings/spaces/contacts/notes, create the `pending` record, issue presigned upload URLs, enqueue ingestion jobs (Oban), receive AI results via internal callback.
 
@@ -139,7 +143,8 @@ A single Flutter codebase (`apps/flutter`) targets mobile, Linux desktop, and we
 
 ## 6. Contract
 
-- **REST**: the Core API publishes an **OpenAPI** surface. The Flutter client consumes it through a hand-written Dart HTTP layer (`dio`) under `lib/core/http`.
+- **REST**: the Core API publishes an **OpenAPI** surface (`open_api_spex`). The Flutter client consumes it through a hand-written Dart HTTP layer (`dio`) under `lib/core/http`.
+- **Realtime**: **Phoenix Channels** — the Core's `RecordingStatusChannel` (`user:*` socket) pushes ingestion status; the Flutter client (`lib/features/recordings/recording_status_socket.dart`) subscribes, and `recording_result_waiter.dart` races that channel against a 2 s `GET /recordings/:id` poll fallback.
 - **Internal A↔B**: Core enqueues via Oban; the AI engine calls back over an authenticated internal endpoint. Not part of the public API.
 
 ---
@@ -172,6 +177,8 @@ sequenceDiagram
   AI->>AI: summarize
   AI->>API: POST /internal/jobs/:id/result {transcript, summary, title}
   API->>API: update record, status='done'
+  API-->>C: Channels push {id, status:'done', summary, ...}
+  Note over C: a 2 s GET /recordings/:id poll also resolves it (fallback)
 ```
 
 - **Statuses**: `pending → processing → done | failed`. The client renders each (with `failed` + retry).
