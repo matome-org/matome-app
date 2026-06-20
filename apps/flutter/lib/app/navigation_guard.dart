@@ -16,6 +16,9 @@
 ///   - otherwise                → null
 library;
 
+
+import '../core/observability/app_log.dart';
+
 /// Redirect targets the guard may emit.
 abstract final class GuardTargets {
   /// Welcome / unauthenticated landing route.
@@ -52,9 +55,17 @@ String? decideRedirect({
   final inRecording = _recordingPrefixes.any((p) => _hasPrefix(location, p));
 
   if (isAuthenticated && !inTabs && !inRecording) {
+    AppLog.event(
+      LogCat.lifecycle,
+      'guard redirect $location -> ${GuardTargets.home}',
+    );
     return GuardTargets.home;
   }
   if (!isAuthenticated && (inTabs || inRecording)) {
+    AppLog.event(
+      LogCat.lifecycle,
+      'guard redirect $location -> ${GuardTargets.welcome}',
+    );
     return GuardTargets.welcome;
   }
   return null;

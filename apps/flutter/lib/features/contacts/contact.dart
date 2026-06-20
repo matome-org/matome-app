@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../core/http/json_utils.dart';
+import '../../core/observability/app_log.dart';
 
 /// A user's Contact, per the `/api/contacts` contract (ADR-0004, task #1377).
 ///
@@ -65,7 +66,8 @@ String? _metadataAsString(Object? value) {
   // (a bare `toString()` of a Map is not parseable JSON).
   try {
     return jsonEncode(value);
-  } catch (_) {
+  } catch (e, st) {
+    AppLog.error(LogCat.error, 'contact metadata re-encode failed', e, st);
     return value.toString();
   }
 }

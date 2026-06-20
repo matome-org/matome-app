@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/http/api_client.dart';
 import '../../core/http/api_exception.dart';
+import '../../core/observability/app_log.dart';
 import 'recording.dart';
 import 'upload_descriptor.dart';
 
@@ -44,8 +45,9 @@ class RecordingsRepository {
       }
       final data = response.data ?? const <String, dynamic>{};
       return Recording.listFromEnvelope(data);
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
+    } on DioException catch (e, st) {
+      AppLog.error(LogCat.upload, 'fetchRecordings: transport failed', e, st);
+      throw ApiException.fromDio(e);
     }
   }
 
@@ -77,8 +79,10 @@ class RecordingsRepository {
       final raw = response.data?['recording'];
       if (raw is! Map<String, dynamic>) return null;
       return Recording.fromJson(raw);
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
+    } on DioException catch (e, st) {
+      AppLog.error(
+          LogCat.upload, 'fetchRecording: transport failed for id=$id', e, st);
+      throw ApiException.fromDio(e);
     }
   }
 
@@ -91,6 +95,7 @@ class RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
   }) async {
+    AppLog.event(LogCat.upload, 'createRecording: $title');
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/api/recordings',
@@ -133,8 +138,10 @@ class RecordingsRepository {
         recording: Recording.fromJson(recordingRaw),
         upload: UploadDescriptor.fromJson(uploadRaw),
       );
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
+    } on DioException catch (e, st) {
+      AppLog.error(
+          LogCat.upload, 'createRecording: transport failed', e, st);
+      throw ApiException.fromDio(e);
     }
   }
 
@@ -147,6 +154,7 @@ class RecordingsRepository {
   /// the signature.
   Future<void> uploadFile(UploadDescriptor upload, File file) async {
     final length = await file.length();
+    AppLog.event(LogCat.upload, 'uploadFile: $length bytes -> presign');
     final stream = file.openRead();
     await _uploadStream(upload, stream, length);
   }
@@ -196,8 +204,10 @@ class RecordingsRepository {
           code: 'upload_failed',
         );
       }
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
+    } on DioException catch (e, st) {
+      AppLog.error(
+          LogCat.upload, '_uploadStream: presigned PUT/POST failed', e, st);
+      throw ApiException.fromDio(e);
     } finally {
       rawDio.close(force: true);
     }
@@ -222,6 +232,7 @@ class RecordingsRepository {
     int? matomeId,
     bool clearWorkspace = false,
   }) async {
+    AppLog.event(LogCat.upload, 'updateRecording: id=$id');
     try {
       final response = await _apiClient.dio.patch<Map<String, dynamic>>(
         '/api/recordings/$id',
@@ -260,14 +271,17 @@ class RecordingsRepository {
         );
       }
       return Recording.fromJson(raw);
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
+    } on DioException catch (e, st) {
+      AppLog.error(
+          LogCat.upload, 'updateRecording: transport failed for id=$id', e, st);
+      throw ApiException.fromDio(e);
     }
   }
 
   /// `DELETE /api/recordings/{id}` (Bearer). Removes the Core record.
   /// Treats 204/200 (and a 404 — already gone) as success.
   Future<void> deleteRecording(int id) async {
+    AppLog.event(LogCat.upload, 'deleteRecording: id=$id');
     try {
       final response = await _apiClient.dio.delete<dynamic>(
         '/api/recordings/$id',
@@ -287,8 +301,10 @@ class RecordingsRepository {
           code: errorCodeFromBody(response.data),
         );
       }
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
+    } on DioException catch (e, st) {
+      AppLog.error(
+          LogCat.upload, 'deleteRecording: transport failed for id=$id', e, st);
+      throw ApiException.fromDio(e);
     }
   }
 
@@ -316,14 +332,17 @@ class RecordingsRepository {
         return download['url'] as String;
       }
       return null;
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
+    } on DioException catch (e, st) {
+      AppLog.error(
+          LogCat.upload, 'downloadUrl: transport failed for id=$id', e, st);
+      throw ApiException.fromDio(e);
     }
   }
 
   /// `POST /api/recordings/{id}/process` (Bearer). Enqueues processing.
   /// Returns the (still-pending) recording echoed by the backend.
   Future<Recording> enqueueProcessing(int id) async {
+    AppLog.event(LogCat.upload, 'enqueueProcessing: id=$id');
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/api/recordings/$id/process',
@@ -353,8 +372,10 @@ class RecordingsRepository {
         );
       }
       return Recording.fromJson(raw);
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
+    } on DioException catch (e, st) {
+      AppLog.error(
+          LogCat.upload, 'enqueueProcessing: transport failed for id=$id', e, st);
+      throw ApiException.fromDio(e);
     }
   }
 }

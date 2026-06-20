@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/observability/app_log.dart';
 import '../home/inbox_upload.dart';
 import 'audio_recording_service.dart';
 import 'meeting_recorder.dart';
@@ -79,6 +80,7 @@ class RecordingFinisher {
   /// tolerant of a Core failure, so finish() no longer throws on an unreachable
   /// Core — the row + audio survive in `pending_upload` for W4's retry queue.
   Future<String> finish({String? title}) async {
+    AppLog.event(LogCat.action, 'finish: finalizing recording session');
     // 1. F3 finalizes the single session file into a durable documents-dir copy.
     final path = await _controller.finish();
     final durationSeconds = _ref.read(_controllerProvider).durationSeconds;
@@ -114,6 +116,7 @@ class RecordingFinisher {
     //    draft survives. Best-effort inside — never regresses the finish.
     await audioService.clearDraftForSession(sessionPaths);
 
+    AppLog.event(LogCat.action, 'finish: persisted local-first ($localId)');
     return localId;
   }
 }

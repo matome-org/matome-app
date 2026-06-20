@@ -6,6 +6,7 @@ import 'package:record/record.dart';
 
 import '../../core/audio/audio_playback.dart';
 import '../../core/db/daos/recording_drafts_dao.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/storage/app_storage.dart';
 import 'recorder_backend.dart';
 
@@ -125,7 +126,8 @@ class AudioRecordingService {
     try {
       final result = await Process.run('which', ['fmedia']);
       return result.exitCode == 0;
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(LogCat.error, '_hasFmedia: which fmedia failed', e, st);
       return false;
     }
   }
@@ -134,7 +136,13 @@ class AudioRecordingService {
   Future<bool> requestPermissions() async {
     try {
       return await _recorder.hasPermission();
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        'requestPermissions: permission check failed',
+        e,
+        st,
+      );
       return false;
     }
   }
@@ -168,6 +176,7 @@ class AudioRecordingService {
     await _recorder.start(path);
     _liveFilePath = path;
     _startDurationTimer();
+    AppLog.event(LogCat.action, 'startRecording: started session');
   }
 
   /// Pause the active recording WITHOUT splitting the file. `record`'s native
@@ -193,7 +202,13 @@ class AudioRecordingService {
       final dir = await _documentsDirProvider();
       snapshot = '${dir.path}/${_segmentFileName()}';
       await File(live).copy(snapshot);
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        'pauseRecording: durable snapshot copy failed',
+        e,
+        st,
+      );
       snapshot = live;
     }
 
@@ -205,6 +220,7 @@ class AudioRecordingService {
 
     // Autosave draft to Drift on pause (F2). Crash recovery reads this back.
     await _draftsDao.saveDraft(_sessionSegments, _lastDurationMs);
+    AppLog.event(LogCat.action, 'pauseRecording: paused + draft saved');
 
     return snapshot;
   }
@@ -217,6 +233,7 @@ class AudioRecordingService {
     }
     await _recorder.resume();
     _startDurationTimer();
+    AppLog.event(LogCat.action, 'resumeRecording: resumed session');
   }
 
   /// Stop the recorder, persist the finalized file as a durable segment, and
@@ -252,6 +269,11 @@ class AudioRecordingService {
     } else {
       _sessionSegments = [..._sessionSegments, segmentPath];
     }
+    AppLog.event(
+      LogCat.action,
+      'stopRecording: finalized (continuous=$wasContinuous, '
+      'segments=${_sessionSegments.length})',
+    );
     return segmentPath;
   }
 
@@ -320,7 +342,13 @@ class AudioRecordingService {
     try {
       final draft = await _draftsDao.loadDraft();
       if (draft != null) paths.addAll(draft.segments);
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        'snapshotSessionCleanupPaths: draft load failed',
+        e,
+        st,
+      );
       // best effort — a missing/corrupt draft just means fewer paths to bind.
     }
     return paths.toList(growable: false);
@@ -353,8 +381,16 @@ class AudioRecordingService {
     if (existing.isEmpty) {
       // Stale draft — files gone (e.g. OS cleared cache). Discard it.
       await _draftsDao.deleteDraft();
+      AppLog.event(
+        LogCat.action,
+        'detectRecoverableDraft: swept stale draft (no files)',
+      );
       return null;
     }
+    AppLog.event(
+      LogCat.action,
+      'detectRecoverableDraft: recoverable (${existing.length} segment(s))',
+    );
     return RecordingDraft(segments: existing, durationMs: draft.durationMs);
   }
 
@@ -364,6 +400,10 @@ class AudioRecordingService {
     restoreSegments(draft.segments);
     _lastDurationMs = draft.durationMs;
     _runBaseMs = draft.durationMs;
+    AppLog.event(
+      LogCat.action,
+      'resumeFromDraft: restored ${draft.segments.length} segment(s)',
+    );
   }
 
   /// Resolve the session audio file. Single segment → that file (the complete
@@ -390,6 +430,10 @@ class AudioRecordingService {
     final toDelete = List<String>.from(_sessionSegments);
     _sessionSegments = const [];
     _liveFilePath = null;
+    AppLog.event(
+      LogCat.action,
+      'discardSegments: deleting ${toDelete.length} segment(s) + draft',
+    );
     await _safeDeleteAll(toDelete);
     await _draftsDao.deleteDraft();
   }
@@ -420,7 +464,13 @@ class AudioRecordingService {
       if (ownedByThisSession) {
         await _draftsDao.deleteDraft();
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        'clearDraftForSession: draft clear failed',
+        e,
+        st,
+      );
       // best effort — never throw on draft clear.
     }
   }
@@ -453,7 +503,13 @@ class AudioRecordingService {
       if (ownedByThisSession) {
         await _draftsDao.deleteDraft();
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        'discardSegmentPaths: draft clear failed',
+        e,
+        st,
+      );
       // best effort — never throw on cleanup.
     }
   }
@@ -462,10 +518,17 @@ class AudioRecordingService {
   /// Mirrors RN `cancelRecording`.
   Future<void> cancelRecording() async {
     _cancelDurationTimer();
+    AppLog.event(LogCat.action, 'cancelRecording: cancel + discard');
     if (_liveFilePath != null) {
       try {
         await _recorder.cancel();
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.error,
+          'cancelRecording: recorder cancel failed',
+          e,
+          st,
+        );
         // best effort
       }
       _liveFilePath = null;
@@ -483,7 +546,13 @@ class AudioRecordingService {
     if (_liveFilePath != null) {
       try {
         await _recorder.stop();
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.error,
+          'releaseRecorder: recorder stop failed',
+          e,
+          st,
+        );
         // best effort
       }
       _liveFilePath = null;
@@ -507,7 +576,13 @@ class AudioRecordingService {
         try {
           final f = File(p);
           if (await f.exists()) await f.delete();
-        } catch (_) {
+        } catch (e, st) {
+          AppLog.error(
+            LogCat.error,
+            '_safeDeleteAll: failed to delete segment file',
+            e,
+            st,
+          );
           // best effort — never throw on cleanup.
         }
       }),
@@ -530,7 +605,13 @@ class AudioRecordingService {
     try {
       final dur = await player.setFilePath(path);
       return dur?.inMilliseconds;
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        '_probeDurationMs: duration probe failed',
+        e,
+        st,
+      );
       return null;
     } finally {
       await player.dispose();

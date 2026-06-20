@@ -7,6 +7,7 @@ import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recordings_repository.dart';
@@ -46,11 +47,13 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// Pull from Core, upsert into Drift, then render from Drift. Network errors
   /// are swallowed so the offline cache still displays.
   Future<void> refresh() async {
+    AppLog.event(LogCat.sync, 'inbox refresh start');
     // Show whatever is already cached first (offline-first).
     final cached = await AsyncValue.guard(_loadItems);
     if (!mounted) return;
     state = cached;
 
+    var upserted = 0;
     try {
       final remote = await _repo.fetchRecordings();
       for (final recording in remote) {
@@ -69,8 +72,13 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         await _dao.upsertRecordingWithMatome(
           recordingToCompanion(recording, existing: existing),
         );
+        upserted++;
       }
-    } on ApiException catch (error) {
+      AppLog.event(
+        LogCat.sync,
+        'inbox refresh ok fetched=${remote.length} upserted=$upserted',
+      );
+    } on ApiException catch (error, stack) {
       // Network/offline OR auth/server error. We keep the cached rows either
       // way (offline-first), but a 401 / non-network failure is NOT "offline" —
       // surface it so it isn't silently masked as a connectivity blip.
@@ -79,6 +87,12 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
           'Inbox sync failed (not offline)',
           name: 'inbox.sync',
           error: error,
+        );
+        AppLog.error(
+          LogCat.sync,
+          'inbox refresh failed (not offline)',
+          error,
+          stack,
         );
       }
       // else: transport-level (no statusCode) → genuine offline, stay quiet.
@@ -90,6 +104,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         error: error,
         stackTrace: stack,
       );
+      AppLog.error(LogCat.sync, 'inbox refresh write failed', error, stack);
     }
 
     final next = await AsyncValue.guard(_loadItems);
@@ -103,6 +118,10 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// the local move still holds and the merge-upsert in [refresh] preserves it
   /// until the next successful sync.
   Future<void> moveToSpace(String recordingId, String workspaceId) async {
+    AppLog.event(
+      LogCat.action,
+      'moveToSpace recording=$recordingId space=$workspaceId',
+    );
     await _dao.updateRecording(
       recordingId,
       RecordingsCompanion(workspaceId: Value(workspaceId)),
@@ -122,7 +141,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     if (coreId != null && coreWorkspaceId != null) {
       try {
         await _repo.updateRecording(coreId, workspaceId: coreWorkspaceId);
-      } on ApiException catch (error) {
+      } on ApiException catch (error, stack) {
         // Best-effort: the local move + merge-upsert guard keep the recording
         // in its space until Core catches up. Log non-offline failures.
         if (error.isUnauthorized || error.statusCode != null) {
@@ -130,6 +149,12 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
             'moveToSpace Core PATCH failed',
             name: 'inbox.move',
             error: error,
+          );
+          AppLog.error(
+            LogCat.sync,
+            'moveToSpace Core PATCH failed recording=$recordingId',
+            error,
+            stack,
           );
         }
       }

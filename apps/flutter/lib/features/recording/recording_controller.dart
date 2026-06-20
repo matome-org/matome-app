@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:record/record.dart';
 
 import '../../core/db/daos/recording_drafts_dao.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import 'audio_recording_service.dart';
 
@@ -72,6 +73,10 @@ class RecordingController extends StateNotifier<RecordingState> {
   Future<RecordingDraftDetection> detectDraft() async {
     final draft = await _service.detectRecoverableDraft();
     state = state.copyWith(hasRecoverableDraft: draft != null);
+    AppLog.event(
+      LogCat.action,
+      'detectDraft: recoverable=${draft != null}',
+    );
     return RecordingDraftDetection(draft: draft);
   }
 
@@ -84,7 +89,9 @@ class RecordingController extends StateNotifier<RecordingState> {
         durationSeconds: 0,
         error: null,
       );
-    } catch (e) {
+      AppLog.event(LogCat.action, 'start: recording started');
+    } catch (e, st) {
+      AppLog.error(LogCat.error, 'start: startRecording failed', e, st);
       state = state.copyWith(phase: RecordingPhase.idle, error: e.toString());
       rethrow;
     }
@@ -97,12 +104,14 @@ class RecordingController extends StateNotifier<RecordingState> {
       phase: RecordingPhase.paused,
       durationSeconds: _service.recordingDurationSeconds,
     );
+    AppLog.event(LogCat.action, 'pause: recording paused');
   }
 
   Future<void> resume() async {
     await _service.resumeRecording();
     _ampSub?.resume();
     state = state.copyWith(phase: RecordingPhase.recording);
+    AppLog.event(LogCat.action, 'resume: recording resumed');
   }
 
   /// Resume a recovered draft and continue recording the same session.
@@ -118,6 +127,10 @@ class RecordingController extends StateNotifier<RecordingState> {
       durationSeconds: draft.durationMs / 1000.0,
       hasRecoverableDraft: false,
     );
+    AppLog.event(
+      LogCat.action,
+      'resumeFromDraft: resumed ${draft.segments.length} segment(s)',
+    );
   }
 
   /// Finalize the session → returns the single resolved audio file path.
@@ -131,6 +144,7 @@ class RecordingController extends StateNotifier<RecordingState> {
       phase: RecordingPhase.finished,
       durationSeconds: await _service.getAudioDurationSeconds(path),
     );
+    AppLog.event(LogCat.action, 'finish: session finalized');
     return path;
   }
 
@@ -139,6 +153,7 @@ class RecordingController extends StateNotifier<RecordingState> {
     _teardownStreams();
     await _service.cancelRecording();
     state = const RecordingState();
+    AppLog.event(LogCat.action, 'discard: session discarded + reset');
   }
 
   void _subscribe() {

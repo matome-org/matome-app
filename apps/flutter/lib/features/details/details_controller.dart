@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recordings_repository.dart';
@@ -152,8 +153,14 @@ class DetailsController extends StateNotifier<DetailsState> {
             await _dao.upsertRecordingWithMatome(recordingToCompanion(remote));
             row = await _dao.getRecordingById(state.id);
           }
-        } catch (_) {
+        } catch (e, st) {
           // Offline / auth error — fall through to not-found below.
+          AppLog.error(
+            LogCat.sync,
+            'details load Core fetch failed id=${state.id}',
+            e,
+            st,
+          );
         }
       }
     }
@@ -195,8 +202,14 @@ class DetailsController extends StateNotifier<DetailsState> {
         if (url != null && url.isNotEmpty) {
           return AudioSource(AudioSourceKind.remoteUrl, url);
         }
-      } catch (_) {
+      } catch (e, st) {
         // No remote source available.
+        AppLog.error(
+          LogCat.error,
+          'details resolve audio downloadUrl failed coreId=$coreId',
+          e,
+          st,
+        );
       }
     }
     return const AudioSource.none();
@@ -210,6 +223,7 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// the two stores consistent. Mirrors apps/mobile handleSave (patch Core when
   /// the id is numeric, then update the local row).
   Future<void> save(String text) async {
+    AppLog.event(LogCat.action, 'save recording=${state.id}');
     // Drift is the source of truth for display — write it first so the UI
     // reflects the save even if Core is unreachable.
     await _dao.updateRecording(
@@ -235,6 +249,7 @@ class DetailsController extends StateNotifier<DetailsState> {
   ///    via the F4 pipeline: `POST /process` then race the `recording:status`
   ///    channel against the poll. Marks the row processing immediately.
   Future<void> retry() async {
+    AppLog.event(LogCat.action, 'retry recording=${state.id}');
     final coreId = state.coreId;
     if (coreId == null) {
       await _retryUpload();
@@ -269,7 +284,13 @@ class DetailsController extends StateNotifier<DetailsState> {
           notes: done?.transcript,
         );
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.action,
+        'retry processing failed recording=${state.id}',
+        e,
+        st,
+      );
       await _applyTerminal(failed: true);
     }
   }
@@ -333,6 +354,7 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// scenario) still has that file freed. A synced-only row whose path is a Core
   /// object key is skipped — there is no local file to remove.
   Future<void> delete() async {
+    AppLog.event(LogCat.action, 'delete recording=${state.id}');
     final path = state.row?.audioFilePath ?? '';
     if (path.isNotEmpty && (path.startsWith('/') || path.startsWith('file:'))) {
       // Reuse the queue's best-effort path delete (never throws).
@@ -343,9 +365,15 @@ class DetailsController extends StateNotifier<DetailsState> {
     if (coreId != null) {
       try {
         await _repo.deleteRecording(coreId);
-      } catch (_) {
+      } catch (e, st) {
         // Local row already gone; tolerate a Core failure (e.g. already
         // deleted server-side) so the UX still navigates away.
+        AppLog.error(
+          LogCat.sync,
+          'delete Core failed coreId=$coreId',
+          e,
+          st,
+        );
       }
     }
   }
@@ -355,6 +383,10 @@ class DetailsController extends StateNotifier<DetailsState> {
 
   /// Moves the recording into [workspaceId] (Drift-local, S1 convention).
   Future<void> moveToSpace(String workspaceId) async {
+    AppLog.event(
+      LogCat.action,
+      'moveToSpace recording=${state.id} space=$workspaceId',
+    );
     await _dao.updateRecording(
       state.id,
       RecordingsCompanion(workspaceId: Value(workspaceId)),

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/daos/workspaces_dao.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import 'calendar_data.dart';
 
@@ -140,8 +141,14 @@ class CalendarController extends StateNotifier<CalendarState> {
       final days = await _data.fetchDaysWithMatomes(year, month);
       if (!mounted) return;
       state = state.copyWith(daysWithMatomes: days);
-    } catch (_) {
+    } catch (e, st) {
       // Swallow — keep whatever dots are already shown (offline-first).
+      AppLog.error(
+        LogCat.error,
+        'calendar loadMonthDots failed year=$year month=$month',
+        e,
+        st,
+      );
     } finally {
       if (mounted) state = state.copyWith(isMonthLoading: false);
     }
@@ -150,6 +157,10 @@ class CalendarController extends StateNotifier<CalendarState> {
   /// Reload the day list for [date].
   Future<void> loadDayMatomes(DateTime date) async {
     if (!mounted) return;
+    AppLog.event(
+      LogCat.action,
+      'loadDayMatomes date=${date.toIso8601String()}',
+    );
     state = state.copyWith(isDayLoading: true);
     try {
       final matomes = await _data.fetchDayMatomes(
@@ -158,7 +169,13 @@ class CalendarController extends StateNotifier<CalendarState> {
       );
       if (!mounted) return;
       state = state.copyWith(rawDayMatomes: matomes);
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        'calendar loadDayMatomes failed date=${date.toIso8601String()}',
+        e,
+        st,
+      );
       if (mounted) state = state.copyWith(rawDayMatomes: const []);
     } finally {
       if (mounted) state = state.copyWith(isDayLoading: false);
@@ -176,8 +193,9 @@ class CalendarController extends StateNotifier<CalendarState> {
             .map((w) => CalendarSpace(id: w.id, name: w.name))
             .toList(growable: false),
       );
-    } catch (_) {
+    } catch (e, st) {
       // Non-fatal; the strip just shows "All" with no chips.
+      AppLog.error(LogCat.error, 'calendar loadSpaces failed', e, st);
     }
   }
 
@@ -214,6 +232,7 @@ class CalendarController extends StateNotifier<CalendarState> {
   /// Select [day] in the current month and load its matomes.
   Future<void> selectDay(int day) async {
     if (!mounted) return;
+    AppLog.event(LogCat.action, 'selectDay day=$day');
     state = state.copyWith(selectedDay: day);
     await loadDayMatomes(DateTime(state.year, state.month + 1, day));
   }

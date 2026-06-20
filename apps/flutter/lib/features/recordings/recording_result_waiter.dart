@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import '../../core/observability/app_log.dart';
 import 'recording.dart';
 import 'recording_status_event.dart';
 
@@ -63,6 +64,7 @@ class RecordingResultWaiter {
   /// the poll loop, or rejects-as-failed (`errorReason: 'timeout'`) at
   /// [timeout].
   Future<RecordingResult> wait() {
+    AppLog.event(LogCat.upload, 'wait: awaiting terminal for $_recordingId');
     _eventSub = _statusEvents.listen(_onEvent, onError: (_) {/* poll covers */});
 
     _pollTimer = Timer.periodic(_pollInterval, (_) => _pollOnce());
@@ -97,7 +99,13 @@ class RecordingResultWaiter {
           latest.errorReason ?? 'recording_processing_failed',
         ));
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.upload,
+        '_pollOnce: poll failed for $_recordingId (channel still primary)',
+        e,
+        st,
+      );
       // The channel remains the primary path; ignore transient poll errors.
     }
   }

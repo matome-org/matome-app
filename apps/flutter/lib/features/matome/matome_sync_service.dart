@@ -8,6 +8,7 @@ import '../../core/db/daos/contacts_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/http/api_exception.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../contacts/contacts_repository.dart';
 import '../recordings/recordings_repository.dart';
@@ -49,17 +50,22 @@ class MatomeSyncService {
   /// down. Best-effort — network/auth failures are logged (non-offline) and
   /// swallowed so the local store keeps rendering.
   Future<void> sync() async {
+    AppLog.event(LogCat.sync, 'sync: start');
     try {
       await pushFiled();
       await pull();
-    } on ApiException catch (error) {
+      AppLog.event(LogCat.sync, 'sync: done');
+    } on ApiException catch (error, stack) {
       if (error.isUnauthorized || error.statusCode != null) {
         developer.log('Matome sync failed (not offline)',
             name: 'matome.sync', error: error);
+        AppLog.error(
+            LogCat.sync, 'sync: failed (not offline)', error, stack);
       }
     } catch (error, stack) {
       developer.log('Matome sync write failed',
           name: 'matome.sync', error: error, stackTrace: stack);
+      AppLog.error(LogCat.sync, 'sync: write failed', error, stack);
     }
   }
 
@@ -71,6 +77,8 @@ class MatomeSyncService {
   /// child recordings (child-before-parent). Inbox Matomes are never pushed.
   Future<void> pushFiled() async {
     final filed = await _matomesDao.listFiledMatomes();
+    AppLog.event(LogCat.sync, 'pushFiled: ${filed.length} filed matomes');
+    var pushed = 0;
     for (final matome in filed) {
       // Space-scoped guard (defensive — the query already filters): an untriaged
       // Matome must never reach Core.
@@ -101,7 +109,9 @@ class MatomeSyncService {
 
       await _pushContacts(matome.id, coreId);
       await _pushChildren(matome.id, coreId);
+      pushed++;
     }
+    AppLog.event(LogCat.sync, 'pushFiled: pushed $pushed');
   }
 
   /// Push the Matome's local contact edges: ensure each tagged Contact has a
@@ -170,6 +180,7 @@ class MatomeSyncService {
           await _contactsDao.getById(coreIdToLocalId(contact.id));
       await _contactsDao.upsert(contactToCompanion(contact, existing: existing));
     }
+    AppLog.event(LogCat.sync, 'pullContacts: upserted ${remote.length}');
   }
 
   /// Pull Matomes and upsert by `core_id`, then reconcile each Matome's contact
@@ -187,6 +198,7 @@ class MatomeSyncService {
       final localMatomeId = existing?.id ?? coreIdToLocalId(matome.id);
       await _reconcileContactEdges(localMatomeId, matome.contacts);
     }
+    AppLog.event(LogCat.sync, 'pullMatomes: upserted ${remote.length}');
   }
 
   /// Merge the pulled `matome_contacts` edge set onto the local Matome. Each

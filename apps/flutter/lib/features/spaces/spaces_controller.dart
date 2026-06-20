@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import 'space_card.dart';
 
@@ -47,6 +48,7 @@ class SpacesController extends StateNotifier<AsyncValue<List<SpaceCard>>> {
   /// name is ignored (no-op), matching the RN container's guard.
   Future<void> createSpace(String name) async {
     if (name.trim().isEmpty) return;
+    AppLog.event(LogCat.action, 'createSpace');
     await _workspacesDao.createWorkspace(name);
     await load();
   }
@@ -55,6 +57,7 @@ class SpacesController extends StateNotifier<AsyncValue<List<SpaceCard>>> {
   /// (`workspaceId = NULL`) inside the DAO transaction. Mirrors
   /// `deleteWorkspace`.
   Future<void> deleteSpace(String id) async {
+    AppLog.event(LogCat.action, 'deleteSpace $id');
     await _workspacesDao.deleteWorkspace(id);
     await load();
   }

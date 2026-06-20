@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 
+import '../observability/app_log.dart';
 import 'token_store.dart';
 
 /// Outcome of an attempted token refresh.
@@ -154,7 +155,13 @@ class AuthRefreshInterceptor extends Interceptor {
       if (handler is ErrorInterceptorHandler) {
         return handler.resolve(retried);
       }
-    } on DioException catch (e) {
+    } on DioException catch (e, st) {
+      AppLog.error(
+        LogCat.auth,
+        '_recover: retry of original request failed after refresh',
+        e,
+        st,
+      );
       if (handler is ErrorInterceptorHandler) return handler.next(e);
       if (handler is ResponseInterceptorHandler && response != null) {
         return handler.next(response);
@@ -163,9 +170,13 @@ class AuthRefreshInterceptor extends Interceptor {
   }
 
   Future<bool> _runRefresh() async {
+    AppLog.event(LogCat.auth, 'token refresh start');
     try {
-      return await onRefresh();
-    } catch (_) {
+      final ok = await onRefresh();
+      AppLog.event(LogCat.auth, 'token refresh ${ok ? 'ok' : 'fail'}');
+      return ok;
+    } catch (e, st) {
+      AppLog.error(LogCat.auth, '_runRefresh: token refresh threw', e, st);
       return false;
     }
   }

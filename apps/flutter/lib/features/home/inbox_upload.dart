@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/audio/audio_playback.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/storage/app_storage.dart';
 import '../../core/config/app_config.dart';
 import '../../core/db/app_database.dart';
@@ -81,12 +82,19 @@ Future<PickedUpload> durableImportCopy(PickedUpload picked) async {
     final destPath = '${dir.path}/import_'
         '${DateTime.now().millisecondsSinceEpoch}_${_randSuffix(6)}.$ext';
     final durable = await picked.file.copy(destPath);
+    AppLog.event(LogCat.upload, 'durableImportCopy ok -> $destPath');
     return PickedUpload(
       file: durable,
       title: picked.title,
       mediaType: picked.mediaType,
     );
-  } catch (_) {
+  } catch (e, st) {
+    AppLog.error(
+      LogCat.upload,
+      'durableImportCopy fell back, kept source ${picked.file.path}',
+      e,
+      st,
+    );
     // Best-effort: if the copy fails (e.g. no storage), fall back to the source
     // path so the import is no WORSE than before — the local-first insert still
     // happens and the queue can still try to upload the source while it exists.
@@ -115,7 +123,13 @@ Future<int> probeImportDurationSeconds(String path) async {
     final dur = await player.setFilePath(path);
     final ms = dur?.inMilliseconds ?? 0;
     return ms > 0 ? (ms / 1000).round() : 0;
-  } catch (_) {
+  } catch (e, st) {
+    AppLog.error(
+      LogCat.upload,
+      'probeImportDurationSeconds: probe failed for $path (duration 0)',
+      e,
+      st,
+    );
     return 0;
   } finally {
     await player.dispose();
@@ -210,6 +224,10 @@ class InboxUploader {
     Future<void> Function()? onConfirmed,
     bool importFromExternalSource = false,
   }) async {
+    AppLog.event(
+      LogCat.upload,
+      'upload: ${picked.mediaType} import=$importFromExternalSource',
+    );
     // 0. DURABLE-COPY (plan #45 W1): a file-picker import names the user's SOURCE
     //    file (e.g. ~/Videos/…mp3) which can vanish, leaving playback dead. The
     //    import must enter the SAME pipeline as a captured recording — copy the
@@ -246,7 +264,13 @@ class InboxUploader {
         stored.mediaType == 'audio') {
       try {
         resolvedDuration = await _durationProbe(stored.file.path);
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.upload,
+          'upload: duration probe failed (duration unknown)',
+          e,
+          st,
+        );
         // Best-effort: a probe failure just leaves the duration unknown (0) —
         // no worse than before; Core may still backfill it.
         resolvedDuration = 0;
@@ -315,7 +339,13 @@ Future<RecordingResult> liveRecordingResultAwaiter({
   try {
     try {
       await socket.connectAndJoin();
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.upload,
+        'liveRecordingResultAwaiter: socket connect/join failed (poll fallback)',
+        e,
+        st,
+      );
       // Socket unavailable — the poll fallback takes over.
     }
 

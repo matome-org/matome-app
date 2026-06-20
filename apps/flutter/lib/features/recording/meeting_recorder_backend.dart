@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:record/record.dart';
 
+import '../../core/observability/app_log.dart';
 import 'meeting_loopback_source.dart';
 import 'recorder_backend.dart';
 
@@ -127,7 +128,13 @@ class MeetingRecorderBackend implements RecorderBackend {
     final Process process;
     try {
       process = await _spawn('ffmpeg', args);
-    } catch (e) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        'start: failed to launch ffmpeg',
+        e,
+        st,
+      );
       throw MeetingCaptureUnsupportedError('failed to launch ffmpeg: $e');
     }
 
@@ -144,6 +151,10 @@ class MeetingRecorderBackend implements RecorderBackend {
     });
 
     _stateCtrl.add(RecordState.record);
+    AppLog.event(
+      LogCat.action,
+      'start: meeting capture started (monitor=$monitor)',
+    );
   }
 
   /// Not supported — see class doc. A meeting is captured straight through.
@@ -184,7 +195,13 @@ class MeetingRecorderBackend implements RecorderBackend {
     try {
       process.stdin.write('q');
       await process.stdin.flush();
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        'stop: ffmpeg stdin q write failed (escalation will handle)',
+        e,
+        st,
+      );
       // stdin already closed / unavailable — escalation below handles it.
     }
 
@@ -226,6 +243,11 @@ class MeetingRecorderBackend implements RecorderBackend {
       );
     }
     _stateCtrl.add(RecordState.stop);
+    AppLog.event(
+      LogCat.action,
+      'stop: meeting capture finalized (exit $exitLabel, escalated=$escalated, '
+      '${size}B)',
+    );
     return path;
   }
 
@@ -245,11 +267,18 @@ class MeetingRecorderBackend implements RecorderBackend {
   Future<void> cancel() async {
     final process = _process;
     final path = _outputPath;
+    AppLog.event(LogCat.action, 'cancel: kill ffmpeg + discard partial');
     if (process != null) {
       process.kill(ProcessSignal.sigkill);
       try {
         await process.exitCode;
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.error,
+          'cancel: awaiting ffmpeg exit failed',
+          e,
+          st,
+        );
         // best effort
       }
     }
@@ -258,7 +287,13 @@ class MeetingRecorderBackend implements RecorderBackend {
       try {
         final f = File(path);
         if (await f.exists()) await f.delete();
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.error,
+          'cancel: deleting partial WAV failed',
+          e,
+          st,
+        );
         // best effort
       }
     }
@@ -289,7 +324,8 @@ class MeetingRecorderBackend implements RecorderBackend {
     if (_process != null) {
       try {
         await cancel();
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.error(LogCat.error, 'dispose: cancel failed', e, st);
         // best effort
       }
     }

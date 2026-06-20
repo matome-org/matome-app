@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../features/matome/matome_ids.dart';
+import '../observability/app_log.dart';
 import '../storage/app_storage.dart';
 import 'connection.dart';
 import 'db_encryption.dart';
@@ -87,6 +88,7 @@ class AppDatabase extends _$AppDatabase {
         // generated `createAll()` produces the same final tables/columns the
         // mobile app reaches after running 001..004.
         onCreate: (m) async {
+          AppLog.event(LogCat.db, 'db onCreate version=$kSchemaVersion');
           await m.createAll();
           await _seedDefaultWorkspace();
         },
@@ -94,6 +96,7 @@ class AppDatabase extends _$AppDatabase {
         // opened at an older version reaches the current schema identically to
         // the mobile runner (index == version).
         onUpgrade: (m, from, to) async {
+          AppLog.event(LogCat.db, 'db onUpgrade $from->$to');
           // m001 — add `notes` to recordings.
           if (from < 1) {
             await m.addColumn(recordings, recordings.notes);
@@ -260,8 +263,13 @@ class AppDatabase extends _$AppDatabase {
           '${moved.oldDir}/segment_%',
         ],
       );
-    } catch (_) {
+      AppLog.event(
+        LogCat.db,
+        'legacy media relocated ${moved.oldDir} -> ${moved.newDir}',
+      );
+    } catch (e, st) {
       // Best-effort relocation — never block app start on it.
+      AppLog.error(LogCat.db, 'legacy media relocation failed', e, st);
     }
   }
 

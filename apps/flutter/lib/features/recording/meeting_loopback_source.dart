@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../../core/observability/app_log.dart';
+
 /// Result of running an external command, narrowed to what the loopback
 /// resolver needs. Mirrors `ProcessResult` so the production runner is a 1:1
 /// delegate while tests inject canned stdout/exit codes (no real `pactl`).
@@ -74,7 +76,8 @@ class MeetingLoopbackSource {
     try {
       final result = await _run('which', ['ffmpeg']);
       return result.exitCode == 0;
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(LogCat.error, 'hasFfmpeg: which ffmpeg failed', e, st);
       return false;
     }
   }
@@ -85,7 +88,8 @@ class MeetingLoopbackSource {
     try {
       final result = await _run('which', ['pactl']);
       return result.exitCode == 0;
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(LogCat.error, 'hasPactl: which pactl failed', e, st);
       return false;
     }
   }
@@ -131,7 +135,13 @@ class MeetingLoopbackSource {
       if (result.exitCode != 0) return null;
       final name = result.stdout.trim();
       return name.isEmpty ? null : name;
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        '_defaultSink: pactl get-default-sink failed',
+        e,
+        st,
+      );
       return null;
     }
   }
@@ -143,7 +153,13 @@ class MeetingLoopbackSource {
       final result = await _run('pactl', ['list', 'short', 'sources']);
       if (result.exitCode != 0) return const [];
       return parseMonitorSources(result.stdout);
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.error,
+        '_listMonitorSources: pactl list short sources failed',
+        e,
+        st,
+      );
       return const [];
     }
   }

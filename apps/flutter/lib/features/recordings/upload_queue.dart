@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/http/api_exception.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../../i18n/strings.g.dart';
 import '../home/inbox_controller.dart';
@@ -31,14 +32,21 @@ typedef AudioCleanup = Future<void> Function(String audioFilePath);
 /// retained for the user-controlled delete affordance to reuse.
 Future<void> deleteAudioFile(String audioFilePath) async {
   if (audioFilePath.isEmpty) return;
+  AppLog.event(LogCat.upload, 'deleteAudioFile: $audioFilePath');
   try {
     final file = File(audioFilePath);
     if (await file.exists()) await file.delete();
-  } catch (error) {
+  } catch (e, st) {
+    AppLog.error(
+      LogCat.upload,
+      'deleteAudioFile: best-effort delete failed for $audioFilePath',
+      e,
+      st,
+    );
     developer.log(
       'upload-queue audio cleanup failed',
       name: 'upload.queue',
-      error: error,
+      error: e,
     );
   }
 }
@@ -122,17 +130,25 @@ class UploadQueue {
   /// Drain every `pending_upload` row. Safe to call repeatedly; never throws.
   /// Returns when all currently-pending rows have been attempted once.
   Future<void> drain() async {
+    AppLog.event(LogCat.upload, 'drain: start');
     final List<RecordingRow> pending;
     try {
       pending = await _dao.getPendingUploadRecordings();
-    } catch (error) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.upload,
+        'drain: could not read pending rows',
+        e,
+        st,
+      );
       developer.log(
         'upload-queue could not read pending rows',
         name: 'upload.queue',
-        error: error,
+        error: e,
       );
       return;
     }
+    AppLog.event(LogCat.upload, 'drain: ${pending.length} pending rows');
     // Sequential drain: keeps Core load modest and avoids interleaving socket
     // waiters. Single-flight still guards the same row across overlapping calls.
     for (final row in pending) {
@@ -144,6 +160,7 @@ class UploadQueue {
   /// is mid-drain, no longer `pending_upload`, or missing is a no-op.
   Future<void> drainRow(String localId) async {
     if (_inFlight.contains(localId)) return;
+    AppLog.event(LogCat.upload, 'drainRow: $localId');
     _inFlight.add(localId);
     try {
       final row = await _dao.getRecordingById(localId);
@@ -175,7 +192,13 @@ class UploadQueue {
           durationSeconds: _durationSecondsFor(row),
           mediaType: row.mediaType,
         );
-      } catch (_) {
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.upload,
+          '_drainRow: createRecording failed (retry later) $localId',
+          e,
+          st,
+        );
         // Core unreachable / rejected — retryable transport state. Leave the
         // row pending_upload + audio on disk; the next trigger retries.
         return;
@@ -203,11 +226,17 @@ class UploadQueue {
       // the await still resolves the real terminal state — never block it.
       try {
         await _repo.enqueueProcessing(coreId);
-      } catch (error) {
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.upload,
+          '_drainRow: resume re-enqueue best-effort failed $localId',
+          e,
+          st,
+        );
         developer.log(
           'upload-queue resume re-enqueue best-effort failed',
           name: 'upload.queue',
-          error: error,
+          error: e,
         );
       }
     }
@@ -259,7 +288,7 @@ class UploadQueue {
       // should let the user reclaim disk for already-synced recordings. Do NOT
       // auto-evict here — that reintroduces exactly the data-loss this reverses.
       _confirmHooks.remove(localId);
-    } catch (error) {
+    } catch (e, st) {
       // Terminal processing failure (the row already carries a coreId, so this
       // is a genuine post-create failure, not "Core unreachable"). Persist a
       // SANITIZED reason and KEEP the audio for inspection / a manual retry.
@@ -269,15 +298,21 @@ class UploadQueue {
       // so raw `error.toString()` / an arbitrary transport message must NEVER
       // reach it. We persist a curated string and keep the full detail in the
       // developer log only.
+      AppLog.error(
+        LogCat.upload,
+        '_drainRow: terminal processing failure $localId',
+        e,
+        st,
+      );
       developer.log(
         'upload-queue terminal failure',
         name: 'upload.queue',
-        error: error,
+        error: e,
       );
       await _inbox.applyUploadResult(
         localId,
         failed: true,
-        errorReason: _sanitizeFailureReason(error),
+        errorReason: _sanitizeFailureReason(e),
       );
     }
   }
@@ -313,7 +348,13 @@ class UploadQueue {
   Future<Recording?> _safeFetch(int coreId) async {
     try {
       return await _repo.fetchRecording(coreId);
-    } catch (_) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.upload,
+        '_safeFetch: fetchRecording failed for coreId=$coreId',
+        e,
+        st,
+      );
       return null;
     }
   }

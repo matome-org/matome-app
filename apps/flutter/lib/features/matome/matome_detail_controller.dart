@@ -11,6 +11,7 @@ import '../../core/db/daos/matomes_dao.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/spaces_dao.dart';
 import '../../core/db/matome_card.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../contacts/contacts_controller.dart' show kPlaceholderContactOwnerId;
 import '../home/inbox_upload.dart'
@@ -128,6 +129,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// (matome_id, contact_id) UNIQUE makes a re-add a no-op (set-merge rule), so
   /// attaching is idempotent. Reloads so the chip appears.
   Future<void> attachContact(String contactId, {String role = 'attendee'}) async {
+    AppLog.event(
+        LogCat.action, 'attachContact $contactId to ${state.id} ($role)');
     await _contactsDao.addContactToMatome(
       matomeId: state.id,
       contactId: contactId,
@@ -140,6 +143,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// `matome_contacts` edge (set-merge rule: membership is never trimmed
   /// implicitly). Reloads so the chip disappears.
   Future<void> detachContact(String contactId) async {
+    AppLog.event(
+        LogCat.action, 'detachContact $contactId from ${state.id}');
     await _contactsDao.removeContactFromMatome(
       matomeId: state.id,
       contactId: contactId,
@@ -149,6 +154,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
 
   /// Change the edge [role] of an already-attached [contactId]. Reloads.
   Future<void> setContactRole(String contactId, String role) async {
+    AppLog.event(
+        LogCat.action, 'setContactRole $contactId on ${state.id} -> $role');
     await _contactsDao.setMatomeContactRole(
       matomeId: state.id,
       contactId: contactId,
@@ -175,6 +182,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// `space_id`, moving it out of the Inbox into the sync domain. Reloads so the
   /// screen reflects the filed state (and any inbox list elsewhere drops it).
   Future<void> fileIntoSpace(String spaceId) async {
+    AppLog.event(
+        LogCat.action, 'fileIntoSpace ${state.id} -> $spaceId');
     await _dao.fileIntoSpace(state.id, spaceId);
     await load();
   }
@@ -182,6 +191,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// Edit the Matome's notes (`description`). Marks the aggregated summary stale
   /// when the notes actually changed (the Matome content moved on).
   Future<void> saveNotes(String notes) async {
+    AppLog.event(LogCat.action, 'saveNotes ${state.id}');
     final trimmed = notes.trim();
     final current = state.matome?.description?.trim() ?? '';
     await _dao.updateMatome(
@@ -199,6 +209,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// call. Stores the rollup and clears the stale flag (or NULLs it when no Item
   /// has a summary yet). Reloads so the hub reflects the fresh summary.
   Future<void> regenerateSummary() async {
+    AppLog.event(LogCat.action, 'regenerateSummary ${state.id}');
     await _dao.regenerateSummary(state.id);
     await load();
   }
@@ -245,6 +256,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// changed), and reload so the hub drops it.
   Future<void> removeItem(String recordingId, {String? filePath}) async {
     final matomeId = state.id;
+    AppLog.event(LogCat.action, 'removeItem $recordingId from $matomeId');
     await _recordingsDao.deleteRecording(recordingId);
     if (filePath != null && filePath.isNotEmpty) {
       try {

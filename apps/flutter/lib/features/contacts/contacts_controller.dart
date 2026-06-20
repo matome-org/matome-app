@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
@@ -7,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../app/auth_state.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 
 const _uuid = Uuid();
@@ -60,6 +62,7 @@ class ContactsController extends StateNotifier<AsyncValue<List<ContactRow>>> {
   }) async {
     final name = displayName.trim();
     if (name.isEmpty) return;
+    AppLog.event(LogCat.action, 'createContact owner=$ownerId');
     await _dao.create(
       ContactsCompanion.insert(
         id: 'contact_local_${_uuid.v4()}',
@@ -81,6 +84,7 @@ class ContactsController extends StateNotifier<AsyncValue<List<ContactRow>>> {
   }) async {
     final name = displayName.trim();
     if (name.isEmpty) return;
+    AppLog.event(LogCat.action, 'updateContact $id');
     await _dao.updateContact(
       id,
       ContactsCompanion(
@@ -93,6 +97,7 @@ class ContactsController extends StateNotifier<AsyncValue<List<ContactRow>>> {
 
   /// Delete a contact and refresh.
   Future<void> deleteContact(String id) async {
+    AppLog.event(LogCat.action, 'deleteContact $id');
     await _dao.deleteContact(id);
     await load();
   }
@@ -115,8 +120,9 @@ String contactNotes(ContactRow contact) {
     if (decoded is Map && decoded['notes'] is String) {
       return decoded['notes'] as String;
     }
-  } catch (_) {
+  } catch (e, st) {
     // Malformed metadata — treat as no notes.
+    AppLog.error(LogCat.error, 'contactNotes decode failed', e, st);
   }
   return '';
 }

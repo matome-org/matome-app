@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/observability/app_log.dart';
 import 'upload_queue.dart';
 
 /// A reachability check for Core — returns `true` when `AppConfig.apiBaseUrl`
@@ -29,7 +30,13 @@ Future<bool> probeApiReachability() async {
   try {
     final res = await dio.get<void>('/');
     return res.statusCode != null;
-  } catch (_) {
+  } catch (e, st) {
+    AppLog.error(
+      LogCat.upload,
+      'probeApiReachability: probe failed (treated as offline)',
+      e,
+      st,
+    );
     return false;
   } finally {
     dio.close(force: true);
@@ -72,6 +79,7 @@ class UploadRetryService {
   /// re-draining whenever connectivity is regained. Idempotent.
   Future<void> start() async {
     if (_started) return;
+    AppLog.event(LogCat.upload, 'start: retry service starting');
     _started = true;
 
     // (a) App-start drain — clears any backlog left by a previous session that
@@ -91,22 +99,32 @@ class UploadRetryService {
     final regained = reachable && !_lastReachable;
     _lastReachable = reachable;
     if (regained) {
+      AppLog.event(LogCat.upload, '_tick: connectivity regained, draining');
       unawaited(_queue.drain());
     }
   }
 
   /// Manually nudge a drain (used by triggers that already know Core is up,
   /// e.g. a successful foreground sync). Best-effort.
-  Future<void> drainNow() => _queue.drain();
+  Future<void> drainNow() {
+    AppLog.event(LogCat.upload, 'drainNow: manual drain');
+    return _queue.drain();
+  }
 
   Future<bool> _safeProbe() async {
     try {
       return await probe();
-    } catch (error) {
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.upload,
+        '_safeProbe: reachability probe threw',
+        e,
+        st,
+      );
       developer.log(
         'reachability probe threw',
         name: 'upload.retry',
-        error: error,
+        error: e,
       );
       return false;
     }
@@ -114,6 +132,7 @@ class UploadRetryService {
 
   /// Stop polling and release the timer. Idempotent.
   void dispose() {
+    AppLog.event(LogCat.upload, 'dispose: retry service stopped');
     _timer?.cancel();
     _timer = null;
     _started = false;

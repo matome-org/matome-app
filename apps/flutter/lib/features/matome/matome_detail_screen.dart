@@ -6,6 +6,8 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/observability/app_log.dart';
+
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart' show MatomeContactEntry;
 import '../../core/db/daos/spaces_dao.dart';
@@ -676,9 +678,13 @@ class _RecordingsSection extends ConsumerWidget {
 
   Future<void> _addPhoto(BuildContext context, WidgetRef ref) async {
     try {
+      AppLog.event(LogCat.action, 'addPhoto: picker opening');
       final result = await FilePicker.platform.pickFiles(type: FileType.image);
       final path = result?.files.single.path;
-      if (path == null) return; // user cancelled the picker
+      if (path == null) {
+        AppLog.event(LogCat.action, 'addPhoto: cancelled (no path)');
+        return; // user cancelled the picker
+      }
       // Read the controller AFTER the picker: a captured instance can be
       // autoDisposed while the native dialog is open; ref.read returns the live
       // (or freshly-recreated) notifier so the photo persists and the hub
@@ -686,7 +692,9 @@ class _RecordingsSection extends ConsumerWidget {
       await ref
           .read(matomeDetailControllerProvider(matomeId).notifier)
           .addPhoto(file: File(path), name: result!.files.single.name);
-    } catch (e) {
+      AppLog.event(LogCat.action, 'addPhoto: imported ${path.split('/').last}');
+    } catch (e, st) {
+      AppLog.error(LogCat.action, 'addPhoto failed', e, st);
       // Surface the failure instead of swallowing it in an onPressed callback —
       // the picker/durable-copy/insert can throw on desktop and a silent no-op
       // is indistinguishable from "nothing happened".
