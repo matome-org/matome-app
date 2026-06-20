@@ -676,7 +676,15 @@ class _RecordingsSection extends ConsumerWidget {
   final List<RecordingItem> recordings;
   final String matomeId;
 
-  Future<void> _addPhoto(BuildContext context, WidgetRef ref) async {
+  Future<void> _addPhoto(BuildContext context) async {
+    // Capture the app-lifetime container BEFORE opening the picker. This
+    // widget's element (and the `ref` bound to it) can be disposed while the
+    // native dialog is open — `ref.read` then throws "Cannot use ref after the
+    // widget was disposed" and the photo is silently lost. The root container
+    // outlives the widget; the autoDispose provider is revived on read and
+    // `addPhoto` persists to Drift regardless, so the live screen (watching the
+    // same family key) refreshes even across a mid-picker dispose.
+    final container = ProviderScope.containerOf(context, listen: false);
     try {
       AppLog.event(LogCat.action, 'addPhoto: picker opening');
       final result = await FilePicker.platform.pickFiles(type: FileType.image);
@@ -685,11 +693,7 @@ class _RecordingsSection extends ConsumerWidget {
         AppLog.event(LogCat.action, 'addPhoto: cancelled (no path)');
         return; // user cancelled the picker
       }
-      // Read the controller AFTER the picker: a captured instance can be
-      // autoDisposed while the native dialog is open; ref.read returns the live
-      // (or freshly-recreated) notifier so the photo persists and the hub
-      // refreshes.
-      await ref
+      await container
           .read(matomeDetailControllerProvider(matomeId).notifier)
           .addPhoto(file: File(path), name: result!.files.single.name);
       AppLog.event(LogCat.action, 'addPhoto: imported ${path.split('/').last}');
@@ -717,7 +721,7 @@ class _RecordingsSection extends ConsumerWidget {
             Expanded(child: _SectionLabel(text: t.matome.recordings)),
             AppTextButton.icon(
               key: const ValueKey('matome-add-photo'),
-              onPressed: () => _addPhoto(context, ref),
+              onPressed: () => _addPhoto(context),
               icon: Icon(Icons.add_photo_alternate_outlined, size: spacing.md),
               label: Text(t.matome.addPhoto),
             ),

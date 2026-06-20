@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,6 +14,8 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/home/inbox_upload.dart'
+    show PickedUpload;
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -58,6 +61,30 @@ class _FakeFilePicker extends FilePicker with MockPlatformInterfaceMixin {
       ),
     ]);
   }
+}
+
+/// Fake picker whose result is deferred behind a [Completer] the test resolves
+/// by hand. Lets a test dispose the screen WHILE the native dialog is "open"
+/// (the future is pending), then complete it — reproducing the autoDispose race
+/// that threw "Cannot use ref after the widget was disposed".
+class _DeferredFilePicker extends FilePicker with MockPlatformInterfaceMixin {
+  final Completer<FilePickerResult?> completer = Completer<FilePickerResult?>();
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = false,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) =>
+      completer.future;
 }
 
 /// End-to-end proof of the photo import path WITHOUT the GUI: the picker result
@@ -310,5 +337,101 @@ void main() {
       findsOneWidget,
       reason: 'tapping Add photo must import the image and render its tile',
     );
+  });
+
+  testWidgets('the photo still persists when the screen is DISPOSED while the '
+      'picker is open (autoDispose race — was: "Cannot use ref after the widget '
+      'was disposed")', (tester) async {
+    await db.matomesDao.create(
+      MatomesCompanion(
+        id: const Value('m_race'),
+        title: const Value('Standup'),
+        happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+      ),
+    );
+
+    final source = File(
+      '${Directory.systemTemp.path}/e2e_race_${DateTime.now().microsecondsSinceEpoch}.png',
+    )..writeAsBytesSync(<int>[0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
+    addTearDown(() {
+      if (source.existsSync()) source.deleteSync();
+    });
+
+    // Deferred picker: pickFiles stays pending until we complete it, so we can
+    // tear the screen down mid-dialog.
+    final picker = _DeferredFilePicker();
+    FilePicker.platform = picker;
+    addTearDown(() => FilePicker.platform = _FakeFilePicker(null));
+
+    // Stub the durable copy to a no-op identity so the whole flow stays in the
+    // fake-async zone (no real file I/O → no runAsync → pumpAndSettle works and
+    // the mid-picker dispose can be driven deterministically). The durable copy
+    // itself is covered by the other tests; here we only assert persistence
+    // survives the widget being disposed.
+    final c = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        matomeDetailControllerProvider.overrideWith(
+          (ref, id) => MatomeDetailController(
+            ref,
+            id,
+            durableCopy: (PickedUpload p) async => p,
+          ),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: TranslationProvider(
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const MatomeDetailScreen(id: 'm_race'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Open the picker — _addPhoto parks on the pending pickFiles future.
+    await tester.tap(find.byKey(const ValueKey('matome-add-photo')));
+    await tester.pump();
+
+    // DISPOSE the whole detail screen (and _RecordingsSection with it) while the
+    // dialog is still "open". The old code captured the widget's `ref` and threw
+    // on resume; the fix captured the app-lifetime container.
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Picker returns — _addPhoto resumes against the disposed widget, reads the
+    // notifier off the container (not the dead `ref`), and persists.
+    picker.completer.complete(
+      FilePickerResult([
+        PlatformFile(
+          name: 'whiteboard.png',
+          path: source.path,
+          size: source.lengthSync(),
+        ),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    final matome = await db.matomesDao.getMatomeWithRecordings('m_race');
+    final images =
+        matome!.recordings.where((r) => r.mediaType == 'image').toList();
+    expect(
+      images,
+      hasLength(1),
+      reason: 'photo picked after the screen was disposed must still persist',
+    );
+    expect(images.single.title, 'whiteboard');
   });
 }
