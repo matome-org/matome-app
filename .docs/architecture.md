@@ -156,29 +156,30 @@ One path for every media type.
 ```mermaid
 sequenceDiagram
   participant C as Flutter client
-  participant API as Core API (Phoenix)
+  participant API as Core API
   participant ST as Object Storage
   participant OB as Oban
-  participant AI as AI Engine (FastAPI)
+  participant AI as AI Engine
 
-  C->>API: POST /recordings {mediaType} → {id, presignedPutUrl}
-  Note over API: record created, status='pending'
-  C->>ST: PUT raw file (presigned)
+  C->>API: POST /recordings mediaType
+  API-->>C: id plus presigned put url
+  Note over API: record created, status pending
+  C->>ST: PUT raw file, presigned
   C->>API: POST /recordings/:id/uploaded
-  API->>OB: enqueue ingestion job {id, mediaType, fileKey}
-  API-->>C: 202 (status='pending')
+  API->>OB: enqueue ingestion job
+  API-->>C: 202 status pending
   OB->>AI: dispatch job
-  AI->>ST: GET raw file (presigned)
-  alt audio / meeting
+  AI->>ST: GET raw file, presigned
+  alt audio or meeting
     AI->>AI: transcribe
-  else image (screenshot)
+  else image
     AI->>AI: ocr
   end
   AI->>AI: summarize
-  AI->>API: POST /internal/jobs/:id/result {transcript, summary, title}
-  API->>API: update record, status='done'
-  API-->>C: Channels push {id, status:'done', summary, ...}
-  Note over C: a 2 s GET /recordings/:id poll also resolves it (fallback)
+  AI->>API: POST /internal/jobs/:id/result
+  API->>API: update record, status done
+  API-->>C: Channels push status done
+  Note over C: a 2s GET /recordings/:id poll also resolves it
 ```
 
 - **Statuses**: `pending → processing → done | failed`. The client renders each (with `failed` + retry).

@@ -27,9 +27,9 @@ They are decoupled by design: an item can reach the cloud before its parent Mato
 stateDiagram-v2
   direction LR
   state "Triage" as T {
-    Inbox --> Filed: fileIntoSpace(spaceId)
+    Inbox --> Filed: file into a space
   }
-  state "Sync rollup (from items)" as S {
+  state "Sync rollup from items" as S {
     onDevice --> partial: some items reach Core
     partial --> cloud: all items reach Core
     onDevice --> cloud: single item synced
@@ -101,21 +101,22 @@ Each item runs the one ingestion path. Status moves `pending_upload → processi
 
 ```mermaid
 sequenceDiagram
-  participant App as Flutter (UploadQueue)
+  participant App as Flutter UploadQueue
   participant API as Core API
-  participant S3 as Supabase Storage (S3)
+  participant S3 as Supabase Storage
   participant AI as AI Engine
 
-  Note over App: item persisted locally, processingStatus='pending_upload'
-  App->>API: POST /api/recordings  → {coreId, presigned UploadDescriptor}
-  App->>App: reconcileCoreId(localId, coreId); status='processing'
-  App->>S3: PUT bytes (presigned, streamed, SigV4)
-  App->>API: POST /api/recordings/{id}/process  (enqueue)
-  API->>AI: dispatch (Oban)
-  AI->>S3: GET raw bytes (presigned)
-  AI->>API: callback: {transcript, summary, title}
-  API-->>App: Channels push {status:'done', summary, ...}
-  Note over App: a 2 s GET /api/recordings/{id} poll also resolves it (fallback)
+  Note over App: item saved locally, status pending_upload
+  App->>API: POST /api/recordings
+  API-->>App: coreId plus presigned upload URL
+  App->>App: reconcileCoreId, status processing
+  App->>S3: PUT bytes, presigned and streamed
+  App->>API: POST /api/recordings/:id/process
+  API->>AI: dispatch via Oban
+  AI->>S3: GET raw bytes
+  AI->>API: callback with transcript, summary, title
+  API-->>App: Channels push, status done
+  Note over App: a 2s GET /api/recordings/:id poll also resolves it
 ```
 
 Code anchors:
