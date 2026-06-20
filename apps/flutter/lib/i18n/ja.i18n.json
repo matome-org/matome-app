@@ -105,6 +105,8 @@
     "title": "まとめ",
     "notFound": "まとめが見つかりません",
     "onDevice": "端末に保存 · 未整理",
+    "syncedNotFiled": "同期済み · 未整理",
+    "syncingNotFiled": "同期中 · 未整理",
     "recordings": "アイテム",
     "noRecordings": "アイテムはまだありません",
     "summary": "要約",

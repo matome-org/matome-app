@@ -49,6 +49,15 @@ class RecordingItem {
   /// the image thumbnail/preview in the matome hub.
   final String? filePath;
 
+  /// Reconciled to Core AND not mid-upload — the single rule behind both the
+  /// per-tile sync badge (StatusBadge.syncState) and the Matome-level sync
+  /// rollup (MatomeItem.syncRollup), so a Matome pill can never contradict the
+  /// "Cloud"/"On device" state of its own child tiles.
+  bool get isOnCloud =>
+      coreId != null &&
+      processingStatus != 'pending_upload' &&
+      processingStatus != 'failed';
+
   /// Maps a persisted DB row to the UI card, mirroring `recordToCard`:
   ///   * `isProcessing` int → bool,
   ///   * `processingStatus` falls back to processing/done from the flag.

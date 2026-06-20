@@ -1,6 +1,14 @@
 import 'app_database.dart';
 import 'recording_card.dart';
 
+/// Sync state of a Matome rolled up from its child Items, so the Matome pill
+/// speaks the same "Cloud"/"On device" language as the per-tile badges instead
+/// of contradicting them:
+///   * [cloud]    — every hydrated child is reconciled to Core,
+///   * [partial]  — some children are still uploading (mixed),
+///   * [onDevice] — no child has reached Core yet.
+enum MatomeSyncRollup { onDevice, partial, cloud }
+
 /// UI-facing **Matome** item — the display-ready view of a [MatomeRow] plus its
 /// child Items (recordings) and aggregated state. Mirrors [RecordingItem]: the
 /// DB row keeps the raw SQLite columns, this card exposes the typed view the
@@ -64,6 +72,20 @@ class MatomeItem {
 
   /// Local-only / not-yet-synced — no reconciled Core id yet (ADR-0004).
   bool get isLocalOnly => coreId == null;
+
+  /// Sync state rolled up from the hydrated child Items, using the same
+  /// [RecordingItem.isOnCloud] rule the per-tile badges use. Falls back to the
+  /// Matome's own [coreId] when no children are loaded (count-only / empty), so
+  /// the pill stays meaningful even without hydrated rows.
+  MatomeSyncRollup get syncRollup {
+    if (recordings.isEmpty) {
+      return coreId != null ? MatomeSyncRollup.cloud : MatomeSyncRollup.onDevice;
+    }
+    final synced = recordings.where((r) => r.isOnCloud).length;
+    if (synced == 0) return MatomeSyncRollup.onDevice;
+    if (synced == recordings.length) return MatomeSyncRollup.cloud;
+    return MatomeSyncRollup.partial;
+  }
 
   /// Maps a persisted [MatomeRow] (+ optional hydrated children) to the UI card.
   factory MatomeItem.fromRow(

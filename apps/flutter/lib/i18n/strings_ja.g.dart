@@ -216,6 +216,8 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get title => 'まとめ';
 	@override String get notFound => 'まとめが見つかりません';
 	@override String get onDevice => '端末に保存 · 未整理';
+	@override String get syncedNotFiled => '同期済み · 未整理';
+	@override String get syncingNotFiled => '同期中 · 未整理';
 	@override String get recordings => 'アイテム';
 	@override String get noRecordings => 'アイテムはまだありません';
 	@override String get summary => '要約';
@@ -489,6 +491,8 @@ extension on TranslationsJa {
 			'matome.title' => 'まとめ',
 			'matome.notFound' => 'まとめが見つかりません',
 			'matome.onDevice' => '端末に保存 · 未整理',
+			'matome.syncedNotFiled' => '同期済み · 未整理',
+			'matome.syncingNotFiled' => '同期中 · 未整理',
 			'matome.recordings' => 'アイテム',
 			'matome.noRecordings' => 'アイテムはまだありません',
 			'matome.summary' => '要約',

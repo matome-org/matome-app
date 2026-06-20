@@ -400,6 +400,12 @@ class Translations$matome$en {
 	/// en: 'On device · not filed'
 	String get onDevice => 'On device · not filed';
 
+	/// en: 'Synced · not filed'
+	String get syncedNotFiled => 'Synced · not filed';
+
+	/// en: 'Syncing · not filed'
+	String get syncingNotFiled => 'Syncing · not filed';
+
 	/// en: 'Items'
 	String get recordings => 'Items';
 
@@ -908,6 +914,8 @@ extension on Translations {
 			'matome.title' => 'Matome',
 			'matome.notFound' => 'Matome not found',
 			'matome.onDevice' => 'On device · not filed',
+			'matome.syncedNotFiled' => 'Synced · not filed',
+			'matome.syncingNotFiled' => 'Syncing · not filed',
 			'matome.recordings' => 'Items',
 			'matome.noRecordings' => 'No items yet',
 			'matome.summary' => 'Summary',

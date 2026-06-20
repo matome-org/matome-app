@@ -193,7 +193,7 @@ class _MatomeHeader extends StatelessWidget {
         _ContactChipsSlot(matomeId: matome.id),
         if (matome.isInbox) ...[
           SizedBox(height: spacing.sm),
-          _OnDeviceHint(localOnly: matome.isLocalOnly),
+          _OnDeviceHint(rollup: matome.syncRollup),
         ],
       ],
     );
@@ -447,10 +447,15 @@ String _roleLabel(String role) {
   }
 }
 
+/// The Inbox triage pill. Its sync word is rolled up from the Matome's child
+/// Items ([MatomeItem.syncRollup]) so it agrees with the per-tile "Cloud" /
+/// "On device" badges instead of contradicting them — the triage suffix
+/// ("· not filed") is constant here because the pill only renders for an Inbox
+/// (unfiled) Matome.
 class _OnDeviceHint extends StatelessWidget {
-  const _OnDeviceHint({required this.localOnly});
+  const _OnDeviceHint({required this.rollup});
 
-  final bool localOnly;
+  final MatomeSyncRollup rollup;
 
   @override
   Widget build(BuildContext context) {
@@ -458,6 +463,24 @@ class _OnDeviceHint extends StatelessWidget {
     final spacing = context.spacing;
     final radius = context.radius;
     final typography = context.typography;
+
+    final (IconData icon, String label, Color color) = switch (rollup) {
+      MatomeSyncRollup.cloud => (
+        Icons.cloud_done_outlined,
+        t.matome.syncedNotFiled,
+        colors.badgePersonal,
+      ),
+      MatomeSyncRollup.partial => (
+        Icons.cloud_sync_outlined,
+        t.matome.syncingNotFiled,
+        colors.textSecondary,
+      ),
+      MatomeSyncRollup.onDevice => (
+        Icons.cloud_off_outlined,
+        t.matome.onDevice,
+        colors.textMuted,
+      ),
+    };
 
     return Container(
       key: const ValueKey('matome-on-device'),
@@ -472,15 +495,11 @@ class _OnDeviceHint extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            localOnly ? Icons.cloud_off_outlined : Icons.inbox_outlined,
-            size: spacing.md,
-            color: colors.textMuted,
-          ),
+          Icon(icon, size: spacing.md, color: color),
           SizedBox(width: spacing.xs),
           Text(
-            t.matome.onDevice,
-            style: typography.label.copyWith(color: colors.textSecondary),
+            label,
+            style: typography.label.copyWith(color: color),
           ),
         ],
       ),

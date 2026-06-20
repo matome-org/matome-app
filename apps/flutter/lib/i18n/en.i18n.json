@@ -105,6 +105,8 @@
     "title": "Matome",
     "notFound": "Matome not found",
     "onDevice": "On device · not filed",
+    "syncedNotFiled": "Synced · not filed",
+    "syncingNotFiled": "Syncing · not filed",
     "recordings": "Items",
     "noRecordings": "No items yet",
     "summary": "Summary",
