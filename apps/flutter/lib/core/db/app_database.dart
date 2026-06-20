@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../features/matome/matome_ids.dart';
 import '../observability/app_log.dart';
@@ -252,17 +253,7 @@ class AppDatabase extends _$AppDatabase {
       final dir = await matomeStorageDir();
       final moved = await moveLegacyMediaInto(dir);
       if (moved == null || moved.oldDir == moved.newDir) return;
-      await customStatement(
-        'UPDATE recordings SET audio_file_path = '
-        '? || substr(audio_file_path, ?) '
-        'WHERE audio_file_path LIKE ? OR audio_file_path LIKE ?',
-        [
-          '${moved.newDir}/',
-          moved.oldDir.length + 2, // skip the "<oldDir>/" prefix (1-indexed)
-          '${moved.oldDir}/import_%',
-          '${moved.oldDir}/segment_%',
-        ],
-      );
+      await rewriteLegacyMediaPaths(moved.oldDir, moved.newDir);
       AppLog.event(
         LogCat.db,
         'legacy media relocated ${moved.oldDir} -> ${moved.newDir}',
@@ -271,6 +262,30 @@ class AppDatabase extends _$AppDatabase {
       // Best-effort relocation — never block app start on it.
       AppLog.error(LogCat.db, 'legacy media relocation failed', e, st);
     }
+  }
+
+  /// Rewrites the stored absolute media paths of legacy `import_*` / `segment_*`
+  /// rows from under [oldDir] to [newDir] (the new Matome folder), preserving the
+  /// filename. Split out from [_relocateLegacyMedia] (which is gated off under
+  /// `flutter test`) so the raw SQL — and the column name — can be unit-tested.
+  ///
+  /// NB: the SQL column is camelCase `audioFilePath` (a legacy name carried over
+  /// from the original schema), NOT snake_case — only `matome_id` and the
+  /// contacts tables use snake_case. Referencing `audio_file_path` here threw
+  /// "no such column" and silently skipped every relocation.
+  @visibleForTesting
+  Future<void> rewriteLegacyMediaPaths(String oldDir, String newDir) {
+    return customStatement(
+      'UPDATE recordings SET audioFilePath = '
+      '? || substr(audioFilePath, ?) '
+      'WHERE audioFilePath LIKE ? OR audioFilePath LIKE ?',
+      [
+        '$newDir/',
+        oldDir.length + 2, // skip the "<oldDir>/" prefix (1-indexed)
+        '$oldDir/import_%',
+        '$oldDir/segment_%',
+      ],
+    );
   }
 
   /// Inserts the seeded "Pessoal" default workspace (the default personal
