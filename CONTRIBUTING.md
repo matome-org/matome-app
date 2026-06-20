@@ -2,47 +2,62 @@
 
 ## Scope
 
-This project is a React Native app using Expo SDK 54, Expo Router v6, React 19, Zustand, UI Kitten, and SQLite (`expo-sqlite`).
+Matome is a cross-platform **Flutter** client (`apps/flutter`) backed by an
+**Elixir / Phoenix** Core API (`services/api`), with a Node mock of the AI
+engine (`services/ai-stub`) and Supabase (Postgres + S3) for local development.
+The toolchain is managed by [mise](https://mise.jdx.dev/).
 
-## Development Workflow
+## Development workflow
 
 ```bash
-bun install
-npx expo start
-npx expo start --ios
-npx expo start --android
-npx expo lint
+mise run up             # Start the backend (Supabase + Core API + AI stub)
+mise run flutter-linux  # Run a Flutter client (or flutter-web / flutter-android)
 ```
 
-## Project Standards
+Before opening a PR:
 
-- Keep route files in `app/` thin. Route files should primarily render Containers.
-- Follow the Container/Presenter pattern inside `Views/`.
-- Reusable UI belongs in `components/`.
-- Data fetching and transformation belong in `processes/`.
-- Business and persistence logic belong in `services/`.
-- Global app state belongs in `stores/` (Zustand).
-- Shared utilities belong in `utils/`.
-- Use the `@/*` path alias from `tsconfig.json`.
+```bash
+cd apps/flutter && flutter analyze && flutter test
+cd services/api && mix test
+```
 
-## Commit Standards
+## Project standards
 
-- Use **semantic commits** (Conventional Commits), for example:
-  - `feat: add recording duration badge`
-  - `fix: prevent duplicate sqlite insert on save`
-  - `docs: update auth flow documentation`
-- Write all commit messages in **English**.
-- Keep commit scope clear and focused.
+### Flutter (`apps/flutter/lib`)
 
-## Documentation Standards
+- Keep feature code under `features/<feature>/`; cross-cutting infra under
+  `core/`; shared widgets under `ui/`.
+- Use Riverpod for state; do not use a `WidgetRef` after an async gap (capture a
+  `ProviderContainer` first).
+- Drift is the offline-first source of truth the UI watches; sync to Core runs
+  through the upload queue, not inline.
+- Edit translations in `lib/i18n/{en,ja}.i18n.json`, then run `dart run slang`.
+- Respect the design-system gate (`mise run flutter-design-system-check`).
+- Never log credentials — only a non-sensitive email domain.
 
-- All documentation must be written in **English**.
-- Keep `README.md` concise and high-level.
-- Any README section longer than 2 paragraphs must be moved to `.docs/`.
-- When content is moved to `.docs/`, keep a short summary in `README.md` and link to the detailed file in `.docs/`.
+### Core API (`services/api`)
 
-## Pull Request Expectations
+- Follow standard Phoenix/Ecto structure; run `mix format` and `mix test`.
+- The client talks to Core only; Core owns DB/storage/AI access.
 
-- Ensure lint passes before opening a PR.
-- Keep changes consistent with existing architecture and file organization.
+## Commit standards
+
+- Use **Conventional Commits**, written in **English**, for example:
+  - `feat(matome): add sync rollup pill`
+  - `fix(recording): prevent duplicate insert on save`
+  - `docs: update architecture overview`
+- One intent per commit; split mixed trees via non-interactive staging.
+- Never attribute a commit to an AI agent (no `Co-Authored-By` trailer).
+- Never `git push` without explicit authorization.
+
+## Documentation standards
+
+- All documentation is written in **English**.
+- Keep `README.md` concise and high-level; move detail into `.docs/`.
+- When content moves to `.docs/`, keep a short summary + link in `README.md`.
 - Update docs when behavior, architecture, or workflows change.
+
+## Pull request expectations
+
+- Ensure `flutter analyze`, `flutter test`, and `mix test` pass before opening a PR.
+- Keep changes consistent with the existing architecture and file organization.

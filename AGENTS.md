@@ -4,57 +4,86 @@ This file provides guidance to coding agents working with code in this repositor
 
 ## Project Overview
 
-Matome is a React Native mobile app built with **Expo SDK 55** and **Expo Router v6** (file-based routing). It records audio, transcribes it via an external API, and stores recordings locally with SQLite. It uses React 19 with the new architecture and experimental React compiler enabled. The Expo app lives in `apps/mobile` inside a Bun workspaces + Turborepo monorepo.
+Matome captures audio and photos, transcribes and summarizes them through an AI
+engine, and organizes them into **matomes** (per-happening collections of items)
+that file into spaces and sync to the cloud.
+
+The client is a cross-platform **Flutter** app (`apps/flutter`) — mobile, Linux
+desktop, and web from one codebase. It talks to an **Elixir / Phoenix** Core API
+(`services/api`), which owns Postgres, S3 storage, Guardian auth, and AI
+orchestration. A small Node mock of the AI engine (`services/ai-stub`) stands in
+for the real transcription/summarization service during local development.
 
 ## Commands
 
+The toolchain is driven by [mise](https://mise.jdx.dev/):
+
 ```bash
-bun install              # Install dependencies (uses Bun, not npm)
-bun run web              # Start the Next.js web app through Turbo
-bun run ios              # Run on iOS simulator through Turbo
-bun run android          # Run on Android emulator through Turbo
-bun run lint             # Run ESLint through Turbo
+mise run up             # Backend: Supabase + Core API (:4000) + AI stub (:5055)
+mise run backend        # Same as `up` (no client)
+mise run flutter-linux  # Flutter on Linux desktop  → local Core
+mise run flutter-web    # Flutter on Chromium (:8080)
+mise run flutter-android# Flutter on the pixel7 emulator
+mise run storybook      # Widgetbook design catalog
+mise run down           # Stop the stack
+mise run nuke           # Wipe the local environment
 ```
 
-### Testing
-
-Tests run on **Jest 30** with the **jest-expo 55** preset and
-**@testing-library/react-native 13**. Suites live in `apps/mobile/__tests__/unit/` and
-`apps/mobile/__tests__/integration/`. Run all workspace tests with `bun run test`, or mobile-specific watch/coverage commands from `apps/mobile`. An Expo SDK 55 winter-runtime shim in `apps/mobile/jest.setup.js`
-is required — **do not remove it** or every suite crashes on import. Maestro E2E
-is planned but not yet configured. See `.docs/TESTING.md` for conventions,
-structure, mock patterns, and the risk-priority order.
+Run `mise run up` before any `mise run flutter-*` client.
 
 ## Architecture
 
-### Layered Structure
+### Flutter client (`apps/flutter/lib`)
 
 ```
-apps/mobile/app/          -> Expo Router routes (file-based). Thin wrappers that render Containers.
-apps/mobile/Views/        -> Container/Presenter pattern per feature (Home, Details, Login, welcome)
-apps/mobile/components/   -> Reusable UI components (NavBar, RecordingModal)
-apps/mobile/processes/    -> Data fetching & transformation (homeData, auth)
-apps/mobile/services/     -> Business logic (audioRecordingService, recordingService)
-apps/mobile/stores/       -> Zustand global state (authStore, themeStore)
-apps/mobile/utils/        -> Utilities (database.ts for SQLite, storage.ts for SecureStore)
-apps/mobile/config/       -> API config (axios instances, interceptors), theme definitions
+app/       -> App wiring: go_router routes, the shell scaffold, auth guard
+core/      -> Cross-cutting infra: Drift DB, HTTP (dio), config, theme,
+              providers, observability
+features/  -> Feature modules (matome, home/inbox, auth, recording, calendar,
+              contacts, spaces, satori, details)
+ui/        -> Shared widgets (cards, badges, dialogs)
+i18n/      -> slang translations (en/ja JSON → generated strings)
 ```
 
-### Key Patterns
+### Key patterns
 
-- **Container/Presenter**: Each feature in `Views/` has a `*Container.tsx` (state/logic) and a presenter (pure UI). Each component directory includes `.tsx`, `.types.ts`, `.styles.ts`, and `index.ts` barrel.
-- **Path alias**: `@/*` maps to `apps/mobile` (configured in `apps/mobile/tsconfig.json`).
-- **Routing**: `apps/mobile/app/(tabs)/` contains tab groups (`inbox/`, `explore/`). Dynamic routes use `[id].tsx`. Auth guard in `apps/mobile/app/_layout.tsx` redirects based on `useAuthStore`.
-- **State**: Zustand for global state (auth, theme). TanStack Query is wired up but not actively used yet.
-- **Data flow**: Route -> Container -> `processes/` (fetching/transforms) -> `services/` (SQLite CRUD, audio recording) -> `utils/database.ts`.
-- **UI framework**: UI Kitten (`@ui-kitten/components`) with Eva Design System. Themes are defined in `config/themes.ts`.
-- **Storage**: SQLite via `expo-sqlite` for recordings. `expo-secure-store` for auth tokens.
-- **API**: Axios with request interceptor for auth token injection. API wrapper unwraps `response.data.data`.
+- **State**: Riverpod (`flutter_riverpod`). Feature controllers are
+  `StateNotifier`s exposed via providers; screens watch them. `WidgetRef` is
+  bound to the widget element — never use it after an async gap; capture a
+  `ProviderContainer` first.
+- **Persistence**: Drift (SQLite), offline-first. The DB is the source of truth
+  the UI watches; the upload queue syncs local → Core in the background.
+- **Routing**: go_router with a `StatefulShellRoute.indexedStack`. The shell
+  tabs are a single ordered registry (`lib/app/shell_tabs.dart`) gated by
+  build-time feature flags (see below).
+- **i18n**: slang. Edit `lib/i18n/{en,ja}.i18n.json`, then run `dart run slang`.
+- **Auth**: Guardian-issued JWTs from the Core API. Never log credentials —
+  only a non-sensitive email domain.
+- **Feature flags**: build-time `const bool.fromEnvironment` flags in
+  `lib/core/config/feature_flags.dart`, supplied by the root
+  `apps/flutter/feature_flags.json` via `--dart-define-from-file`. A disabled
+  screen is tree-shaken out, not merely hidden.
 
-### Database
+### Core API (`services/api`)
 
-SQLite `recordings` table: `id`, `title`, `summary`, `notes`, `timestamp`, `duration`, `badge`, `isProcessing`, `audioFilePath`, `createdAt`. Managed through `apps/mobile/services/recordingService.ts`.
+Elixir / Phoenix 1.7 with Ecto (Postgres), Guardian for JWT auth, and
+`cors_plug`. Runs on `:4000`. Owns database/storage access and AI orchestration
+behind the API boundary; the Flutter client never touches Postgres or S3
+directly.
 
-### Auth Flow
+## Testing
 
-The current auth flow uses a fake login (`processes/auth.ts`). Auth state is stored in Zustand. Root layout guards routes: authenticated users go to `(tabs)/explore`, unauthenticated users go to the welcome screen.
+```bash
+cd apps/flutter && flutter test     # Flutter unit + widget tests (~65 suites)
+cd services/api && mix test         # Core API tests (creates + migrates a test DB)
+bun run check                       # AI-stub server test
+```
+
+Regression discipline: a test that passes against both the old and fixed code
+proves nothing — verify it goes red on the unfixed code before trusting it.
+
+## Conventions
+
+- Conventional Commits, written in English, one intent per commit.
+- Never attribute commits to an AI agent (no `Co-Authored-By` trailer).
+- Never `git push` without explicit authorization — the human owns publication.

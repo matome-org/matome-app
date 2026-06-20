@@ -1,27 +1,25 @@
 # Matome — Architecture
 
-> Status: agreed · Last updated: 2026-06-04
-> Two owned backends (no Supabase/BaaS), three JS/TS clients, one OpenAPI contract.
-
-> ⚠️ **SUPERSEDED IN PART (2026-06-18) — see [ADR-0001](decisions/ADR-0001-consolidate-to-flutter.md).**
-> The **client topology below is being reversed**: the three JS/TS clients (Expo RN, Next.js,
-> Tauri) are being consolidated into a **single Flutter codebase** (`apps/flutter`) for
-> web + desktop + mobile. §1.5 ("No Dart/Flutter"), §5 (client table), §6 (TS client), §10
-> (monorepo layout), §11 (design system), and §13 (Locked list) are superseded by ADR-0001.
-> The **backend is unchanged** (Elixir Core API + Python AI engine stay exactly as documented).
-> This doc's full rewrite is deferred to the consolidation cleanup wave; until then, read client
-> sections through ADR-0001. Plan: `flutter-consolidation` (#82).
+> Status: agreed · Last updated: 2026-06-20
+> One Flutter client, one Elixir Core API, one external Python AI engine, one
+> ingestion contract.
+>
+> **History.** The client tier was originally three JS/TS apps (Expo RN, Next.js,
+> Tauri) over a generated TypeScript API client. They were consolidated into a
+> single Flutter codebase — see
+> [ADR-0001](decisions/ADR-0001-consolidate-to-flutter.md). The backend topology
+> below is unchanged from that consolidation.
 
 ---
 
 ## 1. Principles
 
-1. **Thin clients.** Mobile, web, and desktop only *capture* (record / pick a file), *upload raw bytes*, and *read results*. They never run transcription, OCR, summarization, or any AI.
-2. **The backend owns all processing.** Audio transcription, image OCR, video handling, and summarization happen server-side. Adding a media type or model is a backend change — clients don't ship.
-3. **Server is the source of truth.** Records live in the Core API's Postgres. Local stores (mobile SQLite, web cache) are offline mirrors, not authorities. This is what lets three clients share one dataset.
-4. **One ingestion contract for every media type.** Audio, meeting recordings, conversation screenshots, and future formats flow through one `upload → pending → process → done` path. Clients are media-agnostic.
-5. **No JavaScript in the backend.** Core API is Elixir; AI engine is Python. Clients are JS/TS (JS in the front is fine).
-6. **Contract-first across languages.** The Core API publishes an OpenAPI spec; the TS client and Dart-free JS clients are generated from it. Realtime via Phoenix Channels.
+1. **Thin client.** The app only *captures* (record / pick a file), *uploads raw bytes*, and *reads results*. It never runs transcription, OCR, summarization, or any AI.
+2. **The backend owns all processing.** Audio transcription, image OCR, and summarization happen server-side. Adding a media type or model is a backend change — the client doesn't ship.
+3. **Server is the source of truth.** Records live in the Core API's Postgres. The client's local Drift (SQLite) store is an offline mirror, reconciled against the Core — not the authority.
+4. **One ingestion contract for every media type.** Audio, meeting recordings, conversation screenshots, and future formats flow through one `upload → pending → process → done` path. The client is media-agnostic.
+5. **Owned backends, one client language.** Core API is Elixir; the AI engine is Python. The client is Dart/Flutter.
+6. **Contract-first.** The Core API publishes a REST (OpenAPI) surface; the Flutter client consumes it through its own Dart HTTP layer (`dio`). Status reconciles through the client's sync layer.
 
 ---
 
@@ -29,58 +27,53 @@
 
 ```mermaid
 flowchart LR
-  subgraph Clients["Clients (JS/TS)"]
-    M[Mobile · Expo RN]
-    W[Web · Next.js]
-    D[Desktop · Tauri]
+  subgraph Client["Client (Flutter)"]
+    F[apps/flutter\nmobile · desktop · web]
   end
 
   subgraph Core["Backend A — Core API (Elixir/Phoenix)"]
     PH[Phoenix\nauth · CRUD · gateway]
     PG[(PostgreSQL\nsource of truth)]
     OB[Oban\njob queue]
-    CH[Channels\nrealtime]
   end
 
-  ST[(Object Storage\nR2 / MinIO)]
+  ST[(Object Storage\nSupabase Storage / S3)]
 
   subgraph AI["Backend B — AI Engine (Python/FastAPI)"]
-    F[transcribe · ocr · summarize]
+    P[transcribe · ocr · summarize]
   end
 
-  M & W & D -- "REST (OpenAPI) + Channels" --> PH
-  M & W & D -- "presigned upload" --> ST
+  F -- "REST (OpenAPI)" --> PH
+  F -- "presigned upload" --> ST
   PH --- PG
   PH --- OB
-  PH --- CH
-  OB -- "enqueue job" --> F
-  F -- "download raw" --> ST
-  F -- "callback: result" --> PH
-  PH -- "push status" --> CH
+  OB -- "enqueue job" --> P
+  P -- "download raw" --> ST
+  P -- "callback: result" --> PH
 ```
 
 Plain-text fallback:
 
 ```
-[Mobile] [Web] [Desktop]            (JS/TS clients)
-   |  \________ presigned upload ________→ [Object Storage: R2/MinIO]
+[Flutter client]
+   |  \________ presigned upload ________→ [Object Storage: Supabase/S3]
    |                                              ^
-   | REST(OpenAPI) + Channels(realtime)           | download raw
+   | REST (OpenAPI)                               | download raw
    v                                              |
 [Backend A — Phoenix] ── Postgres (SoR)           |
    |   Oban (queue) ──enqueue──→ [Backend B — FastAPI] ──┘
    |                                   |
    |   ←──────── callback: result ─────┘
-   └── Channels push (pending→processing→done) ──→ clients
+   └── status (pending→processing→done) reconciled by the client
 ```
 
-**Hard rule:** clients talk only to the Core API + Storage. Only the Core API talks to the AI Engine. The AI Engine is never client-facing.
+**Hard rule:** the client talks only to the Core API + Storage. Only the Core API talks to the AI Engine. The AI Engine is never client-facing.
 
 ---
 
 ## 3. Backend A — Core API (Elixir / Phoenix)
 
-Owns everything except AI. No Supabase.
+Owns everything except AI.
 
 | Concern | Choice |
 |---|---|
@@ -88,20 +81,19 @@ Owns everything except AI. No Supabase.
 | Language | **Elixir** (BEAM) |
 | DB | **Supabase Postgres** (managed) — Ecto connects directly via connection string; system of record |
 | ORM | **Ecto** |
-| Auth (own) | **Guardian** (JWT access + refresh), argon2 password hashing — users table in Supabase Postgres. No Supabase Auth/RLS; authz is app-level. |
+| Auth | **Guardian** (JWT access + refresh), argon2 password hashing — users table in Postgres. Authz is app-level (no Supabase Auth/RLS). |
 | Authorization | app-level scoping by `owner_id` (Ecto query scopes / policies) |
-| Job queue | **Oban** (Postgres-backed, same Supabase DB) — dispatch + retry of AI jobs, no separate Redis |
-| Realtime | **Phoenix Channels** + PubSub — push `pending→processing→done` to clients |
+| Job queue | **Oban** (Postgres-backed) — dispatch + retry of AI jobs, no separate Redis |
 | Object storage | **Supabase Storage** — Core issues presigned PUT/GET URLs |
-| API surface | REST, documented as **OpenAPI** (e.g. `open_api_spex`) |
+| API surface | REST, documented as **OpenAPI** |
 
-Responsibilities: register/login, issue tokens, CRUD on recordings/spaces/notes, create the `pending` record, issue presigned upload URLs, enqueue ingestion jobs (Oban), receive AI results via internal callback, push status over Channels.
+Responsibilities: register/login, issue tokens, CRUD on matomes/recordings/spaces/contacts/notes, create the `pending` record, issue presigned upload URLs, enqueue ingestion jobs (Oban), receive AI results via internal callback.
 
 ---
 
 ## 4. Backend B — AI Engine (Python / FastAPI)
 
-> **Lives in its own repository — NOT in this monorepo.** This repo only owns the clients + Core API + shared packages. The AI Engine is integrated purely via its HTTP contract (job dispatch + result callback). It versions and deploys independently.
+> **Lives in its own repository — NOT in this monorepo.** This repo integrates it purely via its HTTP contract (job dispatch + result callback) and ships a local mock at `services/ai-stub` for development. See [ai-engine-contract.md](ai-engine-contract.md).
 
 Stateless processors. Only the Core API reaches it (service token, private network).
 
@@ -109,43 +101,46 @@ Stateless processors. Only the Core API reaches it (service token, private netwo
 |---|---|
 | Framework | **FastAPI** (Python) |
 | Processors | `transcribe` (audio→text), `ocr` (image→text), `summarize` (text→summary) |
-| Job intake | consumes from Oban-dispatched jobs (HTTP enqueue) or pulls a queue |
 | Media access | downloads raw bytes from Object Storage via presigned GET |
 | Result return | HTTP **callback** to the Core API (`/internal/jobs/:id/result`) |
-| Auth | service token, never exposed to clients |
+| Auth | service token, never exposed to the client |
 
 This is the home of the heavy ML (whisper, vision/OCR, LLM summarization). It stores nothing durable; the Core API is the SoR.
 
 ---
 
-## 5. Clients (JS/TS)
+## 5. Client (Flutter)
 
-| Client | Stack | Role | Capture |
-|---|---|---|---|
-| **Mobile** | Expo RN (current app, kept) | full | record audio (mic) + upload |
-| **Web** | Next.js (React, SSR/SEO) | review-first | upload |
-| **Desktop** | **Tauri** (Rust shell + system webview) reusing the web React | full | record audio (native mic) + upload |
+A single Flutter codebase (`apps/flutter`) targets mobile, Linux desktop, and web. `apps/flutter_widgetbook` is an isolated design catalog.
 
-- **Desktop is native, not Electron**: Tauri = Rust core + OS webview (~3–10 MB), native capabilities (mic, fs, drag-drop, notifications) via Tauri commands.
-- **Web reuse for desktop**: ship the same React components; desktop loads a static/SPA build (Next `output: 'export'` or a thin Vite shell in `apps/desktop`) inside Tauri.
-- The earlier react-native-web "port" of the mobile app is **dropped** in favor of a purpose-built Next.js web app.
+| Layer (`lib/`) | Responsibility |
+|---|---|
+| `app/` | go_router routes, the shell scaffold, auth guard |
+| `core/` | Drift DB, HTTP (`dio`), config, theme, providers, observability |
+| `features/` | feature modules (matome, home/inbox, auth, recording, calendar, contacts, spaces, satori) |
+| `ui/` | shared widgets (cards, badges, dialogs) |
+| `i18n/` | slang translations (en/ja) |
+
+- **State**: Riverpod. Controllers are `StateNotifier`s behind providers.
+- **Persistence**: Drift (SQLite), offline-first — the UI watches the DB; an upload queue syncs local → Core in the background.
+- **Capture**: native mic recording on mobile/desktop; loopback meeting capture on Linux desktop (ffmpeg); file import (audio/image) on every platform.
+- **Design system**: Flutter `ThemeExtension`s governed by Widgetbook — see [ADR-0002](decisions/ADR-0002-flutter-design-system-foundation.md).
 
 ### Capability matrix
-| Capability | Mobile | Web | Desktop |
+| Capability | Mobile | Desktop | Web |
 |---|---|---|---|
-| Record audio | ✅ | ❌ | ✅ |
-| Upload file (audio/image/video) | ✅ | ✅ | ✅ |
-| Read / search / organize | ✅ | ✅ (primary) | ✅ |
-| Offline cache | ✅ SQLite | ⚠️ optional | ⚠️ optional |
-| Realtime (Channels) | ✅ | ✅ | ✅ |
+| Record audio (mic) | ✅ | ✅ | ⚠️ platform-dependent |
+| Record meeting (loopback) | ❌ | ✅ Linux (ffmpeg) | ❌ |
+| Import file (audio/image) | ✅ | ✅ | ✅ |
+| Read / search / organize | ✅ | ✅ | ✅ |
+| Offline mirror (Drift) | ✅ | ✅ | ⚠️ online-first |
 
 ---
 
-## 6. Cross-language contract
+## 6. Contract
 
-- **REST**: Core API publishes **OpenAPI**. Generate a **TS client** into `packages/api-client`, consumed by all three clients. One source of truth for request/response shapes.
-- **Realtime**: **Phoenix Channels** — official JS client (`phoenix` npm) works in RN, Next.js, and the Tauri webview. Clients subscribe to a per-user channel for record status updates.
-- **Internal A↔B**: Core enqueues via Oban; AI calls back over an authenticated internal endpoint. Not part of the public OpenAPI.
+- **REST**: the Core API publishes an **OpenAPI** surface. The Flutter client consumes it through a hand-written Dart HTTP layer (`dio`) under `lib/core/http`.
+- **Internal A↔B**: Core enqueues via Oban; the AI engine calls back over an authenticated internal endpoint. Not part of the public API.
 
 ---
 
@@ -155,7 +150,7 @@ One path for every media type.
 
 ```mermaid
 sequenceDiagram
-  participant C as Client
+  participant C as Flutter client
   participant API as Core API (Phoenix)
   participant ST as Object Storage
   participant OB as Oban
@@ -177,114 +172,93 @@ sequenceDiagram
   AI->>AI: summarize
   AI->>API: POST /internal/jobs/:id/result {transcript, summary, title}
   API->>API: update record, status='done'
-  API-->>C: Channels push {id, status:'done', summary, ...}
 ```
 
-- **Statuses**: `pending → processing → done | failed`. Clients render each (extend `RecordingCard` with `failed` + retry).
-- **mediaType**: `audio | meeting | image | (future: video, pdf)`. Client sets it at upload; the AI Engine routes on it.
+- **Statuses**: `pending → processing → done | failed`. The client renders each (with `failed` + retry).
+- **mediaType**: `audio | meeting | image | (future: video, pdf)`. The client sets it at upload; the AI Engine routes on it.
 - **Retry**: on processor error the Core sets `status='failed'`; client retry re-enqueues server-side (Oban), never processes locally.
 
 ---
 
-## 8. Data model (Core Postgres, server-authoritative)
+## 8. Data model
+
+The server-authoritative store lives in the Core's Postgres; the client mirrors it in Drift. The central entity is the **Matome** — a per-happening collection of items (recordings) that files into a space and syncs to the cloud (see [ADR-0003](decisions/ADR-0003-matome-central-entity.md) for the full entity model, and [ADR-0004](decisions/ADR-0004-identity-permissions-triage.md) for identity/permissions/triage).
+
+Recordings (the items) carry, in essence:
 
 ```
 recordings
-  id            uuid pk
+  id            uuid pk          -- Core id; local rows keep a rec_local_<uuid> until reconciled
   owner_id      uuid (users)
+  matome_id     uuid (matomes)   -- the collection this item belongs to
   title         text
   summary       text
   transcript    text
-  media_type    text            -- 'audio' | 'meeting' | 'image' | ...
-  storage_key   text            -- object key in the media bucket
-  status        text            -- 'pending'|'processing'|'done'|'failed'
-  error_reason  text null
-  duration      text null
-  badge         text default 'Inbox'
-  workspace_id  uuid null       -- null = inbox
-  inserted_at   timestamptz
-  updated_at    timestamptz
+  media_type    text             -- 'audio' | 'meeting' | 'image' | ...
+  storage_key   text             -- object key in the media bucket
+  status        text             -- 'pending'|'processing'|'done'|'failed'
+  ...
 ```
 
-- Authorization is enforced in Ecto query scopes by `owner_id` (no Supabase RLS).
-- **Mobile SQLite** keeps a per-user mirror as an **offline cache**, reconciled against the Core API. Not the source of truth.
+- Authorization is enforced in Ecto query scopes by `owner_id`.
+- The client's Drift store is a per-user offline mirror, reconciled against the Core. A row is "on cloud" once it reconciles to a Core id; a matome's sync state rolls up from its items.
 
 ---
 
-## 9. What moves off the clients
+## 9. What lives where
 
-| Removed from clients | New home |
+| Concern | Home |
 |---|---|
-| `services/audioRecordingService.transcribeAudio` (client→AI) | AI Engine, dispatched by Core |
-| `services/summarizeService` (client→AI) | AI Engine |
-| in-app create→transcribe→summarize→update orchestration | Core API (Oban) |
-| `EXPO_PUBLIC_TRANSCRIBE_API_URL` | gone from clients; AI is internal-only |
+| Transcribe / OCR / summarize | AI Engine, dispatched by the Core (Oban) |
+| create→process→update orchestration | Core API |
+| Capture (record / import) | Flutter client |
+| Offline mirror + upload queue | Flutter client (Drift) |
 
-Clients keep: capture (record/pick), presigned upload, create the `pending` record, read/subscribe. Recording capture stays on mobile/desktop; only processing leaves.
+The client keeps: capture, presigned upload, creating the `pending` record, and reading/reconciling. Only processing lives on the backend.
 
 ---
 
-## 10. Monorepo layout (polyglot)
+## 10. Monorepo layout
 
 ```
 matome/
 ├── apps/
-│   ├── mobile/          # Expo RN — iOS, Android (current app moves here)
-│   ├── web/             # Next.js — desktop browsers, SSR/SEO
-│   └── desktop/         # Tauri — macOS, Windows, Linux (reuses web React)
+│   ├── flutter/             # The client — mobile, Linux desktop, web
+│   └── flutter_widgetbook/  # Isolated Widgetbook design catalog
 ├── services/
-│   └── api/             # Backend A — Elixir/Phoenix (outside JS workspace)
-│                        # Backend B (AI/FastAPI) is a SEPARATE repo — not here
-├── packages/
-│   ├── api-client/      # TS client generated from the Core OpenAPI spec
-│   ├── ui/              # design tokens (Figma) + shared React primitives
-│   └── config/          # shared tsconfig, eslint, tailwind preset
-├── .docs/
-└── turbo.json           # JS workspaces via bun + Turborepo; Elixir/Python via task wrappers
+│   ├── api/                 # Backend A — Elixir/Phoenix (own toolchain)
+│   └── ai-stub/             # Local Node mock of the AI engine (Backend B is a separate repo)
+├── supabase/                # Local Postgres + S3 storage for dev
+└── .docs/
 ```
 
-JS/TS apps + packages use bun workspaces + Turborepo. `services/api` (Elixir, mix) lives in this repo and builds with its own toolchain. The real AI Engine is an external Python/FastAPI repo; this monorepo only includes the `services/ai-stub` local integration stub.
+The toolchain is managed by [mise](https://mise.jdx.dev/) (`mise run up`, `mise run flutter-*`). `services/ai-stub` is the only remaining Node component; everything client-side is Flutter and the Core is Elixir.
 
 ---
 
 ## 11. Design system
 
-Canonical tokens live in Figma (`LxpS0mmXZHPZ17qLufN7wB`): colors (light/dark), spacing, radius, typography — exported with web `var(--...)` code-syntax.
-
-- `packages/ui` is the single token source: **CSS variables** for web + desktop, and an **RN/UI-Kitten theme** for mobile. One palette, two bindings.
-- Components are not shared across the RN/DOM boundary; tokens are. Web and desktop share React components directly.
+Canonical tokens originate in Figma (`LxpS0mmXZHPZ17qLufN7wB`): colors (light/dark), spacing, radius, typography. They are bound in Flutter as `ThemeExtension`s (`MatomeColors`, etc.) under `lib/core/theme`, exercised and governed by the Widgetbook catalog in `apps/flutter_widgetbook` and the `mise run flutter-design-system-check` gate. See [ADR-0002](decisions/ADR-0002-flutter-design-system-foundation.md).
 
 ---
 
-## 12. Migration roadmap
+## 12. History
 
-Each phase shippable and reversible.
-
-1. **Workspace conversion** — bun workspaces + Turborepo; move current app → `apps/mobile`; create `packages/{api-client, ui, config}`. Extract design tokens. No behavior change.
-2. **Core API (Phoenix)** — scaffold `services/api`: auth (Guardian), Postgres + Ecto schema, recordings CRUD, presigned upload (R2/MinIO), Oban, Channels, OpenAPI spec. Generate `packages/api-client`.
-3. **AI Engine contract** — define the HTTP contract and local stub here; scaffold/implement the real Python/FastAPI engine in its external repo. Wire Oban dispatch + result callback from Core against that contract.
-4. **Decouple mobile** — replace client-side transcribe/summarize with: create `pending` via Core + presigned upload + Channels subscription. Remove AI URL from client config. Add the **upload feature** (`expo-document-picker`, `expo-image-picker`) on this path.
-5. **Web app** — `apps/web` (Next.js) on the Core API: auth, inbox, detail, search, spaces, calendar, upload.
-6. **Desktop** — `apps/desktop` (Tauri) reusing the web React; native mic capture so desktop records too.
-7. **Retire RN-web path** — drop the web target + hacks (`metro.config` wasm/COEP, secure-store web shim) from `apps/mobile`. Mobile = iOS/Android.
+The migration from the three JS/TS clients to Flutter is recorded in
+[ADR-0001](decisions/ADR-0001-consolidate-to-flutter.md), the
+[flutter-migration-report](flutter-migration-report.md), the
+[flutter-lab-report](flutter-lab-report.md), and the
+[parity-matrix](parity-matrix.md). Those documents are kept as the historical
+record; this file describes the system as it stands now.
 
 ---
 
-## 13. Decisions
-
-**Locked:** Core API = Elixir/Phoenix (Ecto, Guardian, Oban, Channels) · AI = Python/FastAPI **in a separate repo** (HTTP contract only) · **DB + Storage = Supabase** (managed Postgres via Ecto + Supabase Storage; no Supabase Auth/RLS/Edge) · clients = Expo RN + Next.js + Tauri (JS in front is fine) · contract = OpenAPI → generated TS client + Phoenix Channels · desktop native via Tauri (not Electron).
-
-**Open:**
-- AI job intake: Oban → HTTP dispatch to the AI repo, vs the AI service pulling a shared queue.
-- Desktop bundle: Next `output: 'export'` vs a dedicated Vite React shell.
-- Mobile offline writes: read-through cache only, or queue captures for upload-on-reconnect.
-- Web SEO: Next.js SSR covers it; decide if a separate marketing site is needed.
-
----
-
-## 14. Glossary
+## 13. Glossary
 
 - **SoR** — System of Record (authoritative store = Core Postgres).
 - **Core API** — Elixir/Phoenix backend: auth, CRUD, storage gateway, orchestration.
-- **AI Engine** — Python/FastAPI service running the ML processors; internal-only.
-- **Capture** — recording audio or picking a file on a client.
+- **AI Engine** — Python/FastAPI service running the ML processors; internal-only, separate repo.
+- **Matome** — a per-happening collection of items (recordings) that files into a space.
+- **Capture** — recording audio or picking a file on the client.
+
+See the full domain glossary in [glossary.md](glossary.md).
