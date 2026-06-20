@@ -26,7 +26,14 @@ abstract final class GuardTargets {
 }
 
 /// Route prefixes that belong to the authenticated shell.
-const _tabPrefixes = ['/inbox', '/calendar', '/spaces', '/satori'];
+const _tabPrefixes = [
+  '/inbox',
+  '/calendar',
+  '/spaces',
+  '/satori',
+  '/contacts',
+  '/matome',
+];
 // Capture modals living above the shell on the root navigator: the mic
 // recorder (`/recording`) and the desktop meeting recorder (`/meeting`).
 const _recordingPrefixes = ['/recording', '/meeting'];

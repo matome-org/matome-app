@@ -210,6 +210,49 @@ void main() {
     expect(find.text(t.contacts.title), findsWidgets);
   });
 
+  // Real user interaction: TAP each rail destination and assert the screen
+  // actually switches. The prior test only drove GoRouter.go() programmatically
+  // AND asserted the nav LABEL (a false positive), so it never exercised the
+  // tap → goBranch → guard path — where the bug lived: the auth guard's
+  // allow-list omitted /contacts (and /matome), so navigating there bounced
+  // back to /inbox. (Bottom-bar taps are covered separately; the 5-item bar
+  // packs an icon under the FAB notch on narrow widths — a distinct layout
+  // follow-up.)
+  testWidgets('tapping each rail destination navigates to its screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_pumpApp(db: db));
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationRail), findsOneWidget);
+
+    Future<void> tapRail(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(NavigationRail),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await tapRail(t.calendar.title);
+    expect(find.byType(CalendarScreen), findsOneWidget, reason: 'calendar');
+
+    await tapRail(t.spaces.title);
+    expect(find.byType(SpacesScreen), findsOneWidget, reason: 'spaces');
+
+    await tapRail(t.satori.title);
+    expect(find.byType(SatoriScreen), findsOneWidget, reason: 'satori');
+
+    await tapRail(t.contacts.title);
+    expect(find.byType(ContactsScreen), findsOneWidget, reason: 'contacts');
+  });
+
   testWidgets('wide viewport renders a NavigationRail, not the bottom bar', (
     tester,
   ) async {

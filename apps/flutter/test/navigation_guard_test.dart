@@ -25,7 +25,28 @@ void main() {
     });
 
     test('authed already in a tab stays put', () {
-      for (final loc in ['/inbox', '/calendar', '/spaces', '/satori']) {
+      for (final loc in [
+        '/inbox',
+        '/calendar',
+        '/spaces',
+        '/satori',
+        '/contacts',
+      ]) {
+        expect(
+          decideRedirect(
+              isAuthenticated: true, isLoading: false, location: loc),
+          isNull,
+          reason: loc,
+        );
+      }
+    });
+
+    // Regression: the matome-centric pivot added /contacts (#1374) and the
+    // matome hub /matome/:id (#1378) as authenticated routes. The guard's
+    // allow-list was not updated, so it bounced them to /inbox — tapping
+    // Contacts (or navigating to a matome) silently went nowhere.
+    test('authed on pivot routes (/contacts, /matome/:id) stays put', () {
+      for (final loc in ['/contacts', '/matome/mat_local_abc', '/matome/42']) {
         expect(
           decideRedirect(
               isAuthenticated: true, isLoading: false, location: loc),
