@@ -772,7 +772,12 @@ class _RecordingTile extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmRemove(BuildContext context) async {
+    // Capture the app-lifetime container BEFORE the dialog: this tile's element
+    // (and its `ref`) can be disposed while the confirm dialog is open — reading
+    // `ref` afterwards throws "Cannot use ref after the widget was disposed" and
+    // the removal silently dies (the exact addPhoto failure, one layer over).
+    final container = ProviderScope.containerOf(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AppDialog(
@@ -790,11 +795,19 @@ class _RecordingTile extends ConsumerWidget {
         ],
       ),
     );
-    if (confirmed != true) return;
-    // Read the controller fresh (the dialog gap can autoDispose a captured one).
-    await ref
-        .read(matomeDetailControllerProvider(matomeId).notifier)
-        .removeItem(item.id, filePath: item.filePath);
+    if (confirmed != true) {
+      AppLog.event(LogCat.action, 'removeItem: cancelled ${item.id}');
+      return;
+    }
+    try {
+      AppLog.event(LogCat.action, 'removeItem: confirmed ${item.id}');
+      await container
+          .read(matomeDetailControllerProvider(matomeId).notifier)
+          .removeItem(item.id, filePath: item.filePath);
+      AppLog.event(LogCat.action, 'removeItem: done ${item.id}');
+    } catch (e, st) {
+      AppLog.error(LogCat.action, 'removeItem failed ${item.id}', e, st);
+    }
   }
 
   @override
@@ -803,7 +816,7 @@ class _RecordingTile extends ConsumerWidget {
       return _ImageItemTile(
         item: item,
         onTap: () => _previewImage(context),
-        onRemove: () => _confirmRemove(context, ref),
+        onRemove: () => _confirmRemove(context),
       );
     }
     return AppCard.recording(
