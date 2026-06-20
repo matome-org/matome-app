@@ -76,7 +76,7 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
   }
 
   Future<void> login({required String email, required String password}) async {
-    AppLog.event(LogCat.auth, 'login start (${_emailDomain(email)})');
+    AppLog.event(LogCat.auth, 'login start (${emailDomainForLog(email)})');
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       return _ref
@@ -93,7 +93,7 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
     required String email,
     required String password,
   }) async {
-    AppLog.event(LogCat.auth, 'register start (${_emailDomain(email)})');
+    AppLog.event(LogCat.auth, 'register start (${emailDomainForLog(email)})');
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       return _ref
@@ -113,15 +113,6 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
     AppLog.event(LogCat.auth, 'logout ok');
   }
 
-  /// Extracts the email domain for non-sensitive breadcrumbs. Never logs the
-  /// local-part (the user identity) or any credential.
-  static String _emailDomain(String email) {
-    final at = email.lastIndexOf('@');
-    return at >= 0 && at < email.length - 1
-        ? email.substring(at + 1)
-        : 'unknown';
-  }
-
   /// Invoked by the dio 401-retry interceptor when a token refresh fails: the
   /// session is unrecoverable, so clear tokens and drop to signed-out. The nav
   /// guard then redirects to welcome.
@@ -137,3 +128,14 @@ final authControllerProvider =
     StateNotifierProvider<AuthController, AsyncValue<AuthSession?>>(
   (ref) => AuthController(ref),
 );
+
+/// Reduces an email to just its domain for non-sensitive auth breadcrumbs.
+///
+/// SECURITY: the local-part (the user identity) and any credential MUST NEVER
+/// reach the log. Only the domain after the last `@` is returned; a string with
+/// no usable domain collapses to `'unknown'`. Covered by
+/// `test/features/auth/auth_log_redaction_test.dart`.
+String emailDomainForLog(String email) {
+  final at = email.lastIndexOf('@');
+  return at >= 0 && at < email.length - 1 ? email.substring(at + 1) : 'unknown';
+}

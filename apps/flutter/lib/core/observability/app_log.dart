@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../storage/app_storage.dart' show isRunningFlutterTest, kMatomeFolderName;
@@ -48,7 +48,17 @@ class AppLog {
   /// `false` to silence the breadcrumbs while keeping error capture.
   static bool verbose = true;
 
-  static const int _maxBytes = 1024 * 1024; // 1 MB
+  /// Rotation threshold in bytes. Overridable in tests so rotation can be
+  /// exercised without writing a real megabyte.
+  @visibleForTesting
+  static int maxBytes = 1024 * 1024; // 1 MB
+
+  /// Test seam: when set, each formatted line is delivered here synchronously
+  /// instead of the file. Lets unit tests assert formatting / level routing /
+  /// [verbose] gating / call-site redaction without the path_provider channel
+  /// (which hangs under `flutter test`). Production leaves this null.
+  @visibleForTesting
+  static void Function(String line)? testSink;
 
   /// Record a caught failure. ALWAYS written (ignores [verbose]).
   ///
@@ -62,33 +72,61 @@ class AppLog {
     StackTrace? stack,
   ]) {
     final detail = err == null ? message : '$message — $err';
-    unawaited(_write('ERR', cat, stack == null ? detail : '$detail\n$stack'));
+    _emit('ERR', cat, stack == null ? detail : '$detail\n$stack');
   }
 
   /// Record a normal breadcrumb (action/sync/lifecycle). Gated by [verbose].
   /// Fire-and-forget (see [error]).
   static void event(LogCat cat, String message) {
     if (!verbose) return;
-    unawaited(_write('INF', cat, message));
+    _emit('INF', cat, message);
   }
 
-  static Future<void> _write(String level, LogCat cat, String message) async {
+  /// Routes a formatted line to the test sink when present (synchronous), else
+  /// to the detached file writer (production). Keeping this the single funnel
+  /// means tests observe exactly what production would write.
+  static void _emit(String level, LogCat cat, String message) {
+    final sink = testSink;
+    if (sink != null) {
+      sink(formatLine(level, cat, message));
+      return;
+    }
+    unawaited(_writeToFile(level, cat, message));
+  }
+
+  /// The exact on-disk line shape (sans trailing newline). Pure: same inputs →
+  /// same string (modulo the timestamp), so it is unit-testable.
+  @visibleForTesting
+  static String formatLine(String level, LogCat cat, String message) =>
+      '${DateTime.now().toIso8601String()} [$level] ${cat.name}: $message';
+
+  static Future<void> _writeToFile(
+    String level,
+    LogCat cat,
+    String message,
+  ) async {
     if (isRunningFlutterTest || kIsWeb) return;
     try {
       final docs = await getApplicationDocumentsDirectory();
-      final f = File('${docs.path}/$kMatomeFolderName/app.log');
-      await f.parent.create(recursive: true);
-      if (await f.exists() && await f.length() > _maxBytes) {
-        try {
-          await f.rename('${f.path}.1'); // keep one previous file
-        } catch (_) {}
-      }
-      await f.writeAsString(
-        '${DateTime.now().toIso8601String()} [$level] ${cat.name}: $message\n',
-        mode: FileMode.append,
-      );
+      await writeLineTo(docs, formatLine(level, cat, message));
     } catch (_) {
       // Observability must never throw into a caller.
     }
+  }
+
+  /// Appends [line] to `<baseDir>/Matome/app.log`, rotating to `app.log.1`
+  /// first when the file already exceeds [maxBytes]. Exposed for tests so the
+  /// rotation path can run against a real temp dir (production routes here via
+  /// [getApplicationDocumentsDirectory]).
+  @visibleForTesting
+  static Future<void> writeLineTo(Directory baseDir, String line) async {
+    final f = File('${baseDir.path}/$kMatomeFolderName/app.log');
+    await f.parent.create(recursive: true);
+    if (await f.exists() && await f.length() > maxBytes) {
+      try {
+        await f.rename('${f.path}.1'); // keep one previous file
+      } catch (_) {}
+    }
+    await f.writeAsString('$line\n', mode: FileMode.append);
   }
 }
