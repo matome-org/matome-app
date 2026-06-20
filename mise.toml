@@ -90,7 +90,6 @@ echo '   Start a client:'
 echo '     mise run flutter-web      Flutter web (Chromium)'
 echo '     mise run flutter-linux    Flutter Linux desktop'
 echo '     mise run flutter-android  Flutter on pixel7 emulator'
-echo '     mise run mobile / desktop legacy RN / Tauri (not yet retired)'
 echo ''
 echo '   Stop: mise run down   |   Reset everything: mise run nuke'
 """
@@ -109,7 +108,7 @@ echo '✓ Supabase up — Studio http://127.0.0.1:54323'
 """
 
 [tasks.backend]
-description = "Start the SHARED BACKEND (Supabase + Core API + AI stub), seed dev user — NO client. Run before a flutter-* / desktop client. (Since apps/web was retired this is equivalent to `up`.)"
+description = "Start the SHARED BACKEND (Supabase + Core API + AI stub), seed dev user — NO client. Run before a flutter-* client. (Since apps/web was retired this is equivalent to `up`.)"
 run = """
 set -e
 ROOT="$(pwd)"
@@ -189,63 +188,6 @@ echo '     mise run flutter-web      Flutter web (Chromium)'
 echo '     mise run flutter-linux    Flutter Linux desktop'
 echo '     mise run flutter-android  Flutter on pixel7 emulator'
 echo '   Stop: mise run down'
-"""
-
-[tasks.mobile]
-description = "Start emulator + local backend DB + Metro (idempotent)"
-run = """
-set -e
-
-# 1. Emulator: start only if no emulator-* is online
-if ! adb devices | grep -qE '^emulator-[0-9]+\\s+device$'; then
-  echo '→ starting emulator pixel7...'
-  ANDROID_AVD_HOME=$HOME/.config/.android/avd \
-    nohup $HOME/Android/Sdk/emulator/emulator -avd pixel7 -no-boot-anim -no-snapshot-load \
-    >/tmp/emulator.log 2>&1 &
-  disown 2>/dev/null || true
-  echo '→ waiting for boot...'
-  adb wait-for-device
-  until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')" = "1" ]; do
-    sleep 2
-  done
-  echo '→ emulator ready'
-else
-  echo '→ emulator already running'
-fi
-
-# 2. Supabase (idempotent — re-running is a no-op if already up)
-[ -f supabase/config.toml ] || supabase init
-supabase start
-
-# 3. Regenerate the mobile app env. Mobile talks to Core only; Core owns
-#    database/storage access and AI orchestration behind the API boundary.
-{
-  echo 'EXPO_PUBLIC_CORE_API_URL=http://localhost:4000'
-} > apps/mobile/.env.local
-
-# 4. Make local Core reachable from emulator/device
-adb reverse tcp:4000 tcp:4000 >/dev/null 2>&1 || true
-
-# 5. Free port 8081 (kills any stale Metro)
-fuser -k 8081/tcp 2>/dev/null || true
-sleep 1
-
-# 6. Metro (foreground, Ctrl+C to stop)
-exec bun --cwd apps/mobile expo start --dev-client
-"""
-
-[tasks.desktop]
-description = "Start the Tauri desktop client (foreground; backend must be up via `mise run backend`)"
-run = """
-set -e
-
-if ! fuser -s 4000/tcp 2>/dev/null; then
-  echo '✗ Core API not on :4000. Boot the backend first: mise run backend'
-  exit 1
-fi
-
-# Tauri dev app (foreground, Ctrl+C to stop). Talks to local Core by default.
-exec bun --cwd apps/desktop run desktop
 """
 
 # --- Flutter lab (apps/flutter) — Home/Today on each platform vs local Core ---
@@ -379,33 +321,6 @@ flutter test -d chrome test/widgetbook_smoke_test.dart
 flutter build web -t lib/widgetbook.dart
 """
 
-[tasks.e2e]
-description = "Run Maestro E2E flows against the running emulator (requires `mise run mobile` + app installed)"
-run = """
-set -e
-
-# Preconditions: emulator online + app installed; scripts/e2e-preflight.sh also
-# checks Maestro plus recording-flow safety boundaries before Maestro launches.
-if ! adb devices | grep -qE '^emulator-[0-9]+\\s+device$'; then
-  echo '✗ no emulator online. Boot the emulator first: mise run mobile'
-  exit 1
-fi
-
-# The app (com.anonymous.matomeapp) must already be installed on the emulator.
-# `mise run mobile` runs `expo start --dev-client`, which serves the JS bundle to a
-# DEV-CLIENT build that must be installed separately (expo run:android or an EAS
-# dev build) — Expo Go cannot host this project's native modules. See TESTING.md.
-if ! adb shell pm list packages 2>/dev/null | grep -q 'com.anonymous.matomeapp'; then
-  echo '✗ com.anonymous.matomeapp not installed on the emulator.'
-  echo '  Build + install a dev-client first:  expo run:android   (or an EAS dev build)'
-  exit 1
-fi
-
-cd apps/mobile
-sh ./scripts/e2e-preflight.sh all
-exec maestro test .maestro
-"""
-
 [tasks.down]
 description = "Stop the whole stack: Core API, AI stub, Metro, Supabase, emulator"
 run = """
@@ -463,10 +378,9 @@ docker volume ls -q --filter 'name=supabase_' | xargs -r docker volume rm -f
 docker images -q --filter 'reference=supabase/*' | xargs -r docker rmi -f
 docker images -q --filter 'reference=public.ecr.aws/supabase/*' | xargs -r docker rmi -f
 
-# Local runtime + generated state (pidfiles, logs, mobile env, supabase scaffolding).
+# Local runtime + generated state (pidfiles, logs, supabase scaffolding).
 echo '→ clearing local caches + generated state...'
 rm -rf "$RUN_DIR"
-rm -f apps/mobile/.env.local apps/web/.env.local
 rm -rf supabase/.branches supabase/.temp
 
 echo '✓ environment wiped. Next `mise run up` rebuilds from scratch.'
