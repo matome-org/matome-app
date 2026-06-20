@@ -277,6 +277,12 @@ if ! fuser -s 4000/tcp 2>/dev/null; then
   exit 1
 fi
 cd apps/flutter
+# Force a from-scratch build every launch so Dart/native changes are never
+# served from a stale incremental cache (flutter run keeps the native runner
+# binary even when Dart changes, which made rebuilds look like no-ops).
+echo '→ flutter clean (forcing a fresh build)...'
+flutter clean
+flutter pub get
 exec flutter run -d linux \
   --dart-define=API_BASE_URL=http://localhost:4000
 """
