@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -9,7 +11,10 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
+import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
+import 'package:matome_flutter/i18n/strings.g.dart';
 
 /// Fake path_provider that points the app "documents" dir at a real temp dir,
 /// so the REAL [durableImportCopy] (matomeStorageDir → getApplicationDocuments
@@ -95,5 +100,99 @@ void main() {
 
     // 3. The hub state reflects the new photo (what the screen renders).
     expect(controller.state.matome?.recordings, hasLength(1));
+  });
+
+  testWidgets('the detail screen shows the image tile after addPhoto without a '
+      'manual reload (live add → render)', (tester) async {
+    // Seed a matome with one audio Item so the screen starts with NO image.
+    await db.matomesDao.create(
+      MatomesCompanion(
+        id: const Value('m_live'),
+        title: const Value('Standup'),
+        happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+      ),
+    );
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion(
+        id: const Value('rec_audio'),
+        matomeId: const Value('m_live'),
+        title: const Value('Audio note'),
+        timestamp: const Value('9:00 AM'),
+        duration: const Value('0:30'),
+        badge: const Value('Inbox'),
+        isProcessing: const Value(0),
+        audioFilePath: const Value(''),
+        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+        mediaType: const Value('audio'),
+        processingStatus: const Value('done'),
+      ),
+    );
+
+    final c = ProviderContainer(
+      overrides: [appDatabaseProvider.overrideWithValue(db)],
+    );
+    addTearDown(c.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: TranslationProvider(
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const MatomeDetailScreen(id: 'm_live'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // No image tile before the import.
+    expect(find.byType(Image), findsNothing);
+
+    // Drive the SAME call the Add-photo button makes after the picker returns,
+    // against a real source file + the production durable copy.
+    // A REAL 1x1 PNG so Image.file decodes and pumpAndSettle settles (invalid
+    // bytes route through errorBuilder but can leave the frame pump spinning).
+    final source = File(
+      '${Directory.systemTemp.path}/e2e_live_${DateTime.now().microsecondsSinceEpoch}.png',
+    )..writeAsBytesSync(
+        base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+          '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+        ),
+      );
+    addTearDown(() {
+      if (source.existsSync()) source.deleteSync();
+    });
+    // addPhoto does REAL file I/O (durable copy) — that only progresses inside
+    // runAsync; under the default fake-async zone the copy future never
+    // completes and the test would hang.
+    await tester.runAsync(() async {
+      await c
+          .read(matomeDetailControllerProvider('m_live').notifier)
+          .addPhoto(file: source, name: 'whiteboard.png');
+    });
+
+    // The screen reacts (ref.watch). A couple of bounded frames are enough for
+    // the rebuild to mount the new tile — pumpAndSettle would block on the
+    // Image.file decode stream, so avoid it here.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final imageItem =
+        (await db.matomesDao.getMatomeWithRecordings('m_live'))!
+            .recordings
+            .firstWhere((r) => r.mediaType == 'image');
+    expect(
+      find.byKey(ValueKey('matome-image-${imageItem.id}')),
+      findsOneWidget,
+      reason: 'the new photo tile must render without reopening the screen',
+    );
+    expect(
+      find.byKey(ValueKey('matome-image-remove-${imageItem.id}')),
+      findsOneWidget,
+    );
+    expect(find.byType(Image), findsWidgets);
   });
 }
