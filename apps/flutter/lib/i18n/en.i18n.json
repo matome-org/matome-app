@@ -24,6 +24,12 @@
     "langEn": "English",
     "langJa": "日本語"
   },
+  "nav": {
+    "createNew": "New",
+    "recordAudio": "Record audio",
+    "recordMeeting": "Record meeting",
+    "importFile": "Import file"
+  },
   "inbox": {
     "title": "Inbox",
     "searchPlaceholder": "Search transcripts, tags, spaces…",

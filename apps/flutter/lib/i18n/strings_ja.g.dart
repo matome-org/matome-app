@@ -42,6 +42,7 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$common$ja common = _Translations$common$ja._(_root);
 	@override late final _Translations$a11y$ja a11y = _Translations$a11y$ja._(_root);
 	@override late final _Translations$settings$ja settings = _Translations$settings$ja._(_root);
+	@override late final _Translations$nav$ja nav = _Translations$nav$ja._(_root);
 	@override late final _Translations$inbox$ja inbox = _Translations$inbox$ja._(_root);
 	@override late final _Translations$cardStatus$ja cardStatus = _Translations$cardStatus$ja._(_root);
 	@override late final _Translations$recording$ja recording = _Translations$recording$ja._(_root);
@@ -99,6 +100,19 @@ class _Translations$settings$ja extends Translations$settings$en {
 	@override String get themeSystem => 'システム';
 	@override String get langEn => 'English';
 	@override String get langJa => '日本語';
+}
+
+// Path: nav
+class _Translations$nav$ja extends Translations$nav$en {
+	_Translations$nav$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get createNew => '新規';
+	@override String get recordAudio => '音声を録音';
+	@override String get recordMeeting => '会議を録音';
+	@override String get importFile => 'ファイルを取り込む';
 }
 
 // Path: inbox
@@ -419,6 +433,10 @@ extension on TranslationsJa {
 			'settings.themeSystem' => 'システム',
 			'settings.langEn' => 'English',
 			'settings.langJa' => '日本語',
+			'nav.createNew' => '新規',
+			'nav.recordAudio' => '音声を録音',
+			'nav.recordMeeting' => '会議を録音',
+			'nav.importFile' => 'ファイルを取り込む',
 			'inbox.title' => '受信箱',
 			'inbox.searchPlaceholder' => 'トランスクリプト、タグ、スペースを検索...',
 			'inbox.noResults' => '録音が見つかりません',

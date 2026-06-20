@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_theme.dart';
+import '../features/home/inbox_upload.dart';
 import '../features/recording/meeting_recorder.dart';
 import '../i18n/strings.g.dart';
 
@@ -137,21 +140,7 @@ class _DesktopShell extends StatelessWidget {
                   groupAlignment: -1,
                   leading: Padding(
                     padding: EdgeInsets.symmetric(vertical: spacing.md),
-                    child: Column(
-                      children: [
-                        FloatingActionButton(
-                          heroTag: 'mic-fab',
-                          tooltip: t.recording.title,
-                          elevation: context.elevation.level0,
-                          onPressed: () => context.push('/recording'),
-                          child: const Icon(Icons.mic),
-                        ),
-                        if (_isDesktop) ...[
-                          SizedBox(height: spacing.sm),
-                          _MeetingFab(extended: extended),
-                        ],
-                      ],
-                    ),
+                    child: _NewCaptureMenu(extended: extended),
                   ),
                   destinations: [
                     NavigationRailDestination(
@@ -192,15 +181,14 @@ class _DesktopShell extends StatelessWidget {
   }
 }
 
-/// Desktop "Record meeting" FAB. Probes the loopback capability gate: enabled
-/// when the host can capture (Linux + ffmpeg + a monitor source), otherwise
-/// rendered disabled with the precise unsupported reason as its tooltip. Never
-/// hidden — a disabled-with-reason entry is clearer than a missing one.
+/// Mobile "Record meeting" FAB (narrow desktop windows only). Probes the
+/// loopback capability gate: enabled when the host can capture (Linux + ffmpeg
+/// + a monitor source), otherwise rendered disabled with the precise
+/// unsupported reason as its tooltip. Never hidden — a disabled-with-reason
+/// entry is clearer than a missing one. The wide-desktop rail uses the
+/// consolidated [_NewCaptureMenu] instead.
 class _MeetingFab extends ConsumerWidget {
-  const _MeetingFab({this.extended = true});
-
-  /// When false, renders an icon-only FAB so it fits a collapsed rail.
-  final bool extended;
+  const _MeetingFab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -216,16 +204,6 @@ class _MeetingFab extends ConsumerWidget {
         final onPressed = supported ? () => context.push('/meeting') : null;
         final disabledColor = Theme.of(context).disabledColor;
         final icon = Icon(Icons.groups, size: spacing.md + spacing.xxs);
-        if (!extended) {
-          return FloatingActionButton(
-            heroTag: 'meeting-fab',
-            tooltip: supported ? 'Meeting' : reason,
-            elevation: context.elevation.level0,
-            backgroundColor: supported ? null : disabledColor,
-            onPressed: onPressed,
-            child: icon,
-          );
-        }
         return FloatingActionButton.extended(
           heroTag: 'meeting-fab',
           tooltip: supported ? null : reason,
@@ -234,6 +212,111 @@ class _MeetingFab extends ConsumerWidget {
           icon: icon,
           label: const Text('Meeting'),
         );
+      },
+    );
+  }
+}
+
+/// Desktop "+ New" capture entry: a single primary button in the rail's
+/// leading slot that opens a menu of the creation actions (record audio, record
+/// meeting, import file). Consolidating them here replaces the two stacked
+/// amber FABs that competed with the navigation destinations, and keeps the
+/// rail itself purely for navigation.
+class _NewCaptureMenu extends ConsumerWidget {
+  const _NewCaptureMenu({required this.extended});
+
+  /// When false the trigger collapses to an icon-only FAB for a narrow rail.
+  final bool extended;
+
+  Future<void> _importFile(BuildContext context, WidgetRef ref) async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.any);
+    final path = result?.files.single.path;
+    if (path == null || !context.mounted) return;
+
+    final name = result!.files.single.name;
+    final dot = name.lastIndexOf('.');
+    final base = (dot > 0 ? name.substring(0, dot) : name).trim();
+    final picked = PickedUpload(
+      file: File(path),
+      title: base.isEmpty ? 'Untitled' : base,
+      mediaType: mediaTypeForPath(path),
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Uploading "${picked.title}"…')),
+    );
+    // Same pipeline as the Inbox import: the uploader inserts a local recording
+    // row into a fresh Inbox matome immediately, then syncs in the background.
+    unawaited(
+      ref
+          .read(inboxUploaderProvider)
+          .upload(picked, importFromExternalSource: true),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return MenuAnchor(
+      builder: (context, controller, child) {
+        void toggle() =>
+            controller.isOpen ? controller.close() : controller.open();
+        if (!extended) {
+          return FloatingActionButton(
+            heroTag: 'new-fab',
+            tooltip: t.nav.createNew,
+            elevation: context.elevation.level0,
+            onPressed: toggle,
+            child: const Icon(Icons.add),
+          );
+        }
+        return FloatingActionButton.extended(
+          heroTag: 'new-fab',
+          elevation: context.elevation.level0,
+          onPressed: toggle,
+          icon: const Icon(Icons.add),
+          label: Text(t.nav.createNew),
+        );
+      },
+      menuChildren: [
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.mic),
+          onPressed: () => context.push('/recording'),
+          child: Text(t.nav.recordAudio),
+        ),
+        const _MeetingMenuItem(),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.upload_file),
+          onPressed: () => _importFile(context, ref),
+          child: Text(t.nav.importFile),
+        ),
+      ],
+    );
+  }
+}
+
+/// "Record meeting" menu entry. Like [_MeetingFab] it probes the loopback
+/// capability gate: enabled on a capable host, otherwise rendered disabled with
+/// the precise unsupported reason as a tooltip. Hidden entirely off-desktop,
+/// where loopback capture cannot exist.
+class _MeetingMenuItem extends ConsumerWidget {
+  const _MeetingMenuItem();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!_isDesktop) return const SizedBox.shrink();
+    final capability = ref.watch(meetingCaptureCapabilityProvider);
+    return FutureBuilder<String?>(
+      future: capability.unsupportedReason(),
+      builder: (context, snapshot) {
+        final reason = snapshot.data;
+        final probing = snapshot.connectionState == ConnectionState.waiting;
+        final supported = probing || reason == null;
+        final item = MenuItemButton(
+          leadingIcon: const Icon(Icons.groups),
+          onPressed: supported ? () => context.push('/meeting') : null,
+          child: Text(t.nav.recordMeeting),
+        );
+        return supported ? item : Tooltip(message: reason, child: item);
       },
     );
   }

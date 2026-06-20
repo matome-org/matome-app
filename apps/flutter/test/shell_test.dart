@@ -264,10 +264,14 @@ void main() {
     await tester.pumpWidget(_pumpApp(db: db));
     await tester.pumpAndSettle();
 
-    // Desktop layout: side rail replaces the bottom bar; mic FAB rehomed.
+    // Desktop layout: side rail replaces the bottom bar; the capture actions
+    // are consolidated into the rail's single "+ New" menu, so there are no
+    // loose mic/meeting FABs competing with the nav destinations (the mic icon
+    // lives inside the menu and only mounts once it is opened).
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(BottomAppBar), findsNothing);
-    expect(find.byIcon(Icons.mic), findsOneWidget);
+    expect(find.byIcon(Icons.add), findsOneWidget);
+    expect(find.byIcon(Icons.mic), findsNothing);
 
     // Inbox is a two-pane: the list is visible AND the empty detail pane shows
     // its teaching placeholder (nothing selected yet).
@@ -280,6 +284,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Standup notes'), findsWidgets); // list row still present
     expect(find.text(t.inbox.selectHint), findsNothing);
+  });
+
+  testWidgets('the rail "+ New" menu exposes the capture actions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_pumpApp(db: db));
+    await tester.pumpAndSettle();
+
+    // Closed: the action labels are not mounted yet.
+    expect(find.text(t.nav.recordAudio), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    // Opened: record audio + import file are reachable from the one entry point.
+    expect(find.text(t.nav.recordAudio), findsOneWidget);
+    expect(find.text(t.nav.importFile), findsOneWidget);
   });
 
   testWidgets('mic FAB opens the recording fullscreen modal', (tester) async {

@@ -43,6 +43,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$common$en common = Translations$common$en.internal(_root);
 	late final Translations$a11y$en a11y = Translations$a11y$en.internal(_root);
 	late final Translations$settings$en settings = Translations$settings$en.internal(_root);
+	late final Translations$nav$en nav = Translations$nav$en.internal(_root);
 	late final Translations$inbox$en inbox = Translations$inbox$en.internal(_root);
 	late final Translations$cardStatus$en cardStatus = Translations$cardStatus$en.internal(_root);
 	late final Translations$recording$en recording = Translations$recording$en.internal(_root);
@@ -138,6 +139,27 @@ class Translations$settings$en {
 
 	/// en: '日本語'
 	String get langJa => '日本語';
+}
+
+// Path: nav
+class Translations$nav$en {
+	Translations$nav$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'New'
+	String get createNew => 'New';
+
+	/// en: 'Record audio'
+	String get recordAudio => 'Record audio';
+
+	/// en: 'Record meeting'
+	String get recordMeeting => 'Record meeting';
+
+	/// en: 'Import file'
+	String get importFile => 'Import file';
 }
 
 // Path: inbox
@@ -842,6 +864,10 @@ extension on Translations {
 			'settings.themeSystem' => 'System',
 			'settings.langEn' => 'English',
 			'settings.langJa' => '日本語',
+			'nav.createNew' => 'New',
+			'nav.recordAudio' => 'Record audio',
+			'nav.recordMeeting' => 'Record meeting',
+			'nav.importFile' => 'Import file',
 			'inbox.title' => 'Inbox',
 			'inbox.searchPlaceholder' => 'Search transcripts, tags, spaces…',
 			'inbox.noResults' => 'No recordings found',

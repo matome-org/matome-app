@@ -24,6 +24,12 @@
     "langEn": "English",
     "langJa": "日本語"
   },
+  "nav": {
+    "createNew": "新規",
+    "recordAudio": "音声を録音",
+    "recordMeeting": "会議を録音",
+    "importFile": "ファイルを取り込む"
+  },
   "inbox": {
     "title": "受信箱",
     "searchPlaceholder": "トランスクリプト、タグ、スペースを検索...",
