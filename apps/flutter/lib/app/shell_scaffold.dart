@@ -10,6 +10,7 @@ import '../core/theme/app_theme.dart';
 import '../features/home/inbox_upload.dart';
 import '../features/recording/meeting_recorder.dart';
 import '../i18n/strings.g.dart';
+import 'shell_tabs.dart';
 
 /// True on a desktop OS where the loopback meeting recorder could exist (MVP:
 /// Linux; macOS/Windows are future phases but the desktop entry is shown so the
@@ -123,6 +124,13 @@ class _DesktopShell extends StatelessWidget {
     final colors = context.colors;
     final spacing = context.spacing;
 
+    // NavigationRail requires at least two destinations; if the flags leave
+    // only the home tab, there is nothing to navigate between — drop the rail
+    // and give the single screen the whole window.
+    if (enabledTabs.length < 2) {
+      return Scaffold(body: navigationShell);
+    }
+
     return Scaffold(
       body: Row(
         children: [
@@ -143,31 +151,12 @@ class _DesktopShell extends StatelessWidget {
                     child: _NewCaptureMenu(extended: extended),
                   ),
                   destinations: [
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.inbox_outlined),
-                      selectedIcon: const Icon(Icons.inbox),
-                      label: Text(t.inbox.title),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.calendar_today_outlined),
-                      selectedIcon: const Icon(Icons.calendar_today),
-                      label: Text(t.calendar.title),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.folder_outlined),
-                      selectedIcon: const Icon(Icons.folder),
-                      label: Text(t.spaces.title),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.auto_awesome_outlined),
-                      selectedIcon: const Icon(Icons.auto_awesome),
-                      label: Text(t.satori.title),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.contacts_outlined),
-                      selectedIcon: const Icon(Icons.contacts),
-                      label: Text(t.contacts.title),
-                    ),
+                    for (final tab in enabledTabs)
+                      NavigationRailDestination(
+                        icon: Icon(tab.icon),
+                        selectedIcon: Icon(tab.selectedIcon),
+                        label: Text(tab.label),
+                      ),
                   ],
                 ),
               ),
@@ -333,6 +322,18 @@ class _ShellBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
 
+    final tabs = enabledTabs;
+    // Split the enabled tabs evenly around the docked mic FAB notch (with the
+    // canonical five tabs this is the original 2 | FAB | 3 layout).
+    final split = tabs.length ~/ 2;
+
+    Widget item(int i) => _NavItem(
+          icon: tabs[i].icon,
+          label: tabs[i].label,
+          selected: currentIndex == i,
+          onTap: () => onTap(i),
+        );
+
     return BottomAppBar(
       height: spacing.xxl + spacing.md,
       padding: EdgeInsets.zero,
@@ -341,37 +342,9 @@ class _ShellBottomBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _NavItem(
-            icon: Icons.inbox_outlined,
-            label: t.inbox.title,
-            selected: currentIndex == 0,
-            onTap: () => onTap(0),
-          ),
-          _NavItem(
-            icon: Icons.calendar_today_outlined,
-            label: t.calendar.title,
-            selected: currentIndex == 1,
-            onTap: () => onTap(1),
-          ),
+          for (var i = 0; i < split; i++) item(i),
           SizedBox(width: spacing.xxl), // gap for the FAB notch
-          _NavItem(
-            icon: Icons.folder_outlined,
-            label: t.spaces.title,
-            selected: currentIndex == 2,
-            onTap: () => onTap(2),
-          ),
-          _NavItem(
-            icon: Icons.auto_awesome_outlined,
-            label: t.satori.title,
-            selected: currentIndex == 3,
-            onTap: () => onTap(3),
-          ),
-          _NavItem(
-            icon: Icons.contacts_outlined,
-            label: t.contacts.title,
-            selected: currentIndex == 4,
-            onTap: () => onTap(4),
-          ),
+          for (var i = split; i < tabs.length; i++) item(i),
         ],
       ),
     );

@@ -265,7 +265,8 @@ fi
 export CHROME_EXECUTABLE=/usr/bin/chromium
 cd apps/flutter
 exec flutter run -d chrome --web-port 8080 \
-  --dart-define=API_BASE_URL=http://localhost:4000
+  --dart-define=API_BASE_URL=http://localhost:4000 \
+  --dart-define-from-file=feature_flags.json
 """
 
 [tasks."flutter-linux"]
@@ -289,7 +290,8 @@ echo '→ flutter clean (forcing a fresh build)...'
 flutter clean
 flutter pub get
 exec flutter run -d linux \
-  --dart-define=API_BASE_URL=http://localhost:4000
+  --dart-define=API_BASE_URL=http://localhost:4000 \
+  --dart-define-from-file=feature_flags.json
 """
 
 [tasks."flutter-android"]
@@ -320,7 +322,8 @@ adb reverse tcp:4000 tcp:4000 >/dev/null 2>&1 || true
 DEV=$(adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ {print $1; exit}')
 cd apps/flutter
 exec flutter run -d "$DEV" \
-  --dart-define=API_BASE_URL=http://localhost:4000
+  --dart-define=API_BASE_URL=http://localhost:4000 \
+  --dart-define-from-file=feature_flags.json
 """
 
 [tasks.storybook]

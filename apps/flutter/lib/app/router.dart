@@ -16,6 +16,7 @@ import 'screens/recording_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/tab_screens.dart';
 import 'shell_scaffold.dart';
+import 'shell_tabs.dart';
 
 final _rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 final _inboxKey = GlobalKey<NavigatorState>(debugLabel: 'inbox');
@@ -149,8 +150,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             ShellScaffold(navigationShell: navigationShell),
+        // Branches are gated by the same build-time flags as the shell's
+        // destinations (see [ShellTab]/[enabledTabs]); a disabled tab drops its
+        // whole branch here AND its destination there, so the StatefulShell
+        // indices stay aligned. Inbox is the fixed home and is always present.
         branches: [
-          StatefulShellBranch(
+          if (ShellTab.inbox.enabled)
+            StatefulShellBranch(
             navigatorKey: _inboxKey,
             routes: [
               GoRoute(
@@ -176,7 +182,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          StatefulShellBranch(
+          if (ShellTab.calendar.enabled)
+            StatefulShellBranch(
             navigatorKey: _calendarKey,
             routes: [
               GoRoute(
@@ -198,7 +205,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          StatefulShellBranch(
+          if (ShellTab.spaces.enabled)
+            StatefulShellBranch(
             navigatorKey: _spacesKey,
             routes: [
               GoRoute(
@@ -226,7 +234,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          StatefulShellBranch(
+          if (ShellTab.satori.enabled)
+            StatefulShellBranch(
             navigatorKey: _satoriKey,
             routes: [
               GoRoute(
@@ -235,7 +244,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          StatefulShellBranch(
+          if (ShellTab.contacts.enabled)
+            StatefulShellBranch(
             navigatorKey: _contactsKey,
             routes: [
               GoRoute(
