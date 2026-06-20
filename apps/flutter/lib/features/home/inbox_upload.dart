@@ -4,9 +4,9 @@ import 'dart:math';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/audio/audio_playback.dart';
+import '../../core/storage/app_storage.dart';
 import '../../core/config/app_config.dart';
 import '../../core/db/app_database.dart';
 import '../../core/providers.dart';
@@ -70,9 +70,9 @@ Future<PickedUpload> durableImportCopy(PickedUpload picked) async {
   // WEB: cloud-direct — no durable local FS, return the picked file unchanged.
   if (kIsWeb) return picked;
 
-  // NATIVE: copy bytes into durable app storage and point at the copy.
+  // NATIVE: copy bytes into the dedicated Matome folder and point at the copy.
   try {
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await matomeStorageDir();
     // Derive the extension from the BASENAME only: splitting the FULL path on
     // '.' breaks when a PARENT dir has a dot (e.g. `/home/a.b/file` → `b/file`).
     // Take the last path segment first, then its last '.'-suffix.

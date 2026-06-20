@@ -1,7 +1,17 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../storage/app_storage.dart';
 import 'db_encryption.dart';
+
+/// Drift's `databaseDirectory` hook: resolve the dedicated Matome folder and
+/// move a legacy `matome.sqlite` (from the old Documents-root location) into it
+/// BEFORE the database file is opened, so existing data survives.
+Future<String> _matomeDbDirectory() async {
+  final dir = await matomeStorageDir();
+  await moveLegacyDatabaseInto(dir);
+  return dir.path;
+}
 
 /// Whether to apply SQLCipher at-rest encryption on native platforms.
 ///
@@ -34,6 +44,7 @@ QueryExecutor openPlatformConnection({SecureKeyStore? keyStore}) {
   if (!kSqlCipherEnabled) {
     return driftDatabase(
       name: 'matome',
+      native: DriftNativeOptions(databaseDirectory: _matomeDbDirectory),
       web: DriftWebOptions(
         sqlite3Wasm: Uri.parse('sqlite3.wasm'),
         driftWorker: Uri.parse('drift_worker.js'),
@@ -50,6 +61,7 @@ QueryExecutor openPlatformConnection({SecureKeyStore? keyStore}) {
     return driftDatabase(
       name: 'matome',
       native: DriftNativeOptions(
+        databaseDirectory: _matomeDbDirectory,
         setup: (db) {
           db.execute(DbEncryptionKeyManager.pragmaKeyStatement(hexKey));
           final cipher = db.select('PRAGMA cipher_version');

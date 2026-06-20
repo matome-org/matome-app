@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../features/matome/matome_ids.dart';
+import '../storage/app_storage.dart';
 import 'connection.dart';
 import 'db_encryption.dart';
 import 'daos/contacts_dao.dart';
@@ -228,8 +229,36 @@ class AppDatabase extends _$AppDatabase {
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
+          await _relocateLegacyMedia();
         },
       );
+
+  /// One-time, best-effort: move pre-existing `import_*` / `segment_*` media out
+  /// of the Documents root into the dedicated Matome folder, then rewrite the
+  /// absolute paths stored on `recordings.audio_file_path` so the moved files
+  /// stay playable. Idempotent (only rows still pointing at the old root match)
+  /// and guarded — a fresh install, web, or a test in-memory DB (no documents
+  /// dir plugin) simply skips it.
+  Future<void> _relocateLegacyMedia() async {
+    try {
+      final dir = await matomeStorageDir();
+      final moved = await moveLegacyMediaInto(dir);
+      if (moved == null || moved.oldDir == moved.newDir) return;
+      await customStatement(
+        'UPDATE recordings SET audio_file_path = '
+        '? || substr(audio_file_path, ?) '
+        'WHERE audio_file_path LIKE ? OR audio_file_path LIKE ?',
+        [
+          '${moved.newDir}/',
+          moved.oldDir.length + 2, // skip the "<oldDir>/" prefix (1-indexed)
+          '${moved.oldDir}/import_%',
+          '${moved.oldDir}/segment_%',
+        ],
+      );
+    } catch (_) {
+      // Best-effort relocation — never block app start on it.
+    }
+  }
 
   /// Inserts the seeded "Pessoal" default workspace (the default personal
   /// Space), mirroring migration 002's `INSERT OR IGNORE`. Idempotent.

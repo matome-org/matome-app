@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 import '../../core/audio/audio_playback.dart';
 import '../../core/db/daos/recording_drafts_dao.dart';
+import '../../core/storage/app_storage.dart';
 import 'recorder_backend.dart';
 
 /// Direct port of `apps/mobile/services/audioRecordingService.ts` (1070 lines)
@@ -52,8 +52,7 @@ class AudioRecordingService {
     Future<bool> Function()? captureSupportedProbe,
     this.segmentExtension = 'm4a',
   })  : _recorder = recorder ?? RecordRecorderBackend(),
-        _documentsDirProvider =
-            documentsDirProvider ?? getApplicationDocumentsDirectory,
+        _documentsDirProvider = documentsDirProvider ?? matomeStorageDir,
         _durationProbe = durationProbe ?? _probeDurationMs,
         // ignore: prefer_initializing_formals
         _captureSupportedProbe = captureSupportedProbe,
