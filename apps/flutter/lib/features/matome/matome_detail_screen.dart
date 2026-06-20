@@ -675,16 +675,26 @@ class _RecordingsSection extends ConsumerWidget {
   final String matomeId;
 
   Future<void> _addPhoto(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    final path = result?.files.single.path;
-    if (path == null) return;
-    // Read the controller AFTER the picker: a captured instance can be
-    // autoDisposed while the native dialog is open; ref.read returns the live
-    // (or freshly-recreated) notifier so the photo persists and the hub
-    // refreshes.
-    await ref
-        .read(matomeDetailControllerProvider(matomeId).notifier)
-        .addPhoto(file: File(path), name: result!.files.single.name);
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
+      final path = result?.files.single.path;
+      if (path == null) return; // user cancelled the picker
+      // Read the controller AFTER the picker: a captured instance can be
+      // autoDisposed while the native dialog is open; ref.read returns the live
+      // (or freshly-recreated) notifier so the photo persists and the hub
+      // refreshes.
+      await ref
+          .read(matomeDetailControllerProvider(matomeId).notifier)
+          .addPhoto(file: File(path), name: result!.files.single.name);
+    } catch (e) {
+      // Surface the failure instead of swallowing it in an onPressed callback —
+      // the picker/durable-copy/insert can throw on desktop and a silent no-op
+      // is indistinguishable from "nothing happened".
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Add photo failed: $e')),
+      );
+    }
   }
 
   @override
