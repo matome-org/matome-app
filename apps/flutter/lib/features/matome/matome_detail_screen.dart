@@ -121,12 +121,11 @@ class _MatomeDetailBody extends ConsumerWidget {
             _FilingSection(
               matome: matome,
               spaces: state.spaces,
-              controller: controller,
             ),
             SizedBox(height: spacing.lg),
             _RecordingsSection(
               recordings: matome.recordings,
-              controller: controller,
+              matomeId: id,
             ),
             SizedBox(height: spacing.lg),
             _SectionLabel(text: t.matome.summary),
@@ -492,28 +491,30 @@ class _OnDeviceHint extends StatelessWidget {
 /// "File into a space" CTA; a filed Matome shows its Space + a "Refile" action.
 /// Both open the [_FileIntoSpaceSheet]; selecting a Space calls
 /// [MatomeDetailController.fileIntoSpace], which sets `matome.spaceId`.
-class _FilingSection extends StatelessWidget {
+class _FilingSection extends ConsumerWidget {
   const _FilingSection({
     required this.matome,
     required this.spaces,
-    required this.controller,
   });
 
   final MatomeItem matome;
   final List<WorkspaceRow> spaces;
-  final MatomeDetailController controller;
 
-  Future<void> _openSheet(BuildContext context) async {
+  Future<void> _openSheet(BuildContext context, WidgetRef ref) async {
     final target = await showAppBottomSheet<WorkspaceRow>(
       context: context,
       builder: (_) => _FileIntoSpaceSheet(spaces: spaces),
     );
     if (target == null) return;
-    await controller.fileIntoSpace(target.id);
+    // Read the controller AFTER the sheet (it can be autoDisposed while the
+    // sheet is open) so filing persists and the hub refreshes.
+    await ref
+        .read(matomeDetailControllerProvider(matome.id).notifier)
+        .fileIntoSpace(target.id);
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final spacing = context.spacing;
 
@@ -522,7 +523,7 @@ class _FilingSection extends StatelessWidget {
         width: double.infinity,
         child: PrimaryButton.icon(
           key: const ValueKey('matome-file-cta'),
-          onPressed: () => _openSheet(context),
+          onPressed: () => _openSheet(context, ref),
           icon: Icon(Icons.create_new_folder_outlined, size: spacing.md),
           label: Text(t.matome.fileIntoSpace),
           style: FilledButton.styleFrom(
@@ -541,7 +542,7 @@ class _FilingSection extends StatelessWidget {
 
     return _FiledChip(
       spaceName: spaceName ?? matome.spaceId ?? '',
-      onRefile: () => _openSheet(context),
+      onRefile: () => _openSheet(context, ref),
     );
   }
 }
@@ -663,27 +664,30 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _RecordingsSection extends StatelessWidget {
+class _RecordingsSection extends ConsumerWidget {
   const _RecordingsSection({
     required this.recordings,
-    required this.controller,
+    required this.matomeId,
   });
 
   final List<RecordingItem> recordings;
-  final MatomeDetailController controller;
+  final String matomeId;
 
-  Future<void> _addPhoto(BuildContext context) async {
+  Future<void> _addPhoto(BuildContext context, WidgetRef ref) async {
     final result = await FilePicker.platform.pickFiles(type: FileType.image);
     final path = result?.files.single.path;
     if (path == null) return;
-    await controller.addPhoto(
-      file: File(path),
-      name: result!.files.single.name,
-    );
+    // Read the controller AFTER the picker: a captured instance can be
+    // autoDisposed while the native dialog is open; ref.read returns the live
+    // (or freshly-recreated) notifier so the photo persists and the hub
+    // refreshes.
+    await ref
+        .read(matomeDetailControllerProvider(matomeId).notifier)
+        .addPhoto(file: File(path), name: result!.files.single.name);
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
 
     return Column(
@@ -694,7 +698,7 @@ class _RecordingsSection extends StatelessWidget {
             Expanded(child: _SectionLabel(text: t.matome.recordings)),
             AppTextButton.icon(
               key: const ValueKey('matome-add-photo'),
-              onPressed: () => _addPhoto(context),
+              onPressed: () => _addPhoto(context, ref),
               icon: Icon(Icons.add_photo_alternate_outlined, size: spacing.md),
               label: Text(t.matome.addPhoto),
             ),

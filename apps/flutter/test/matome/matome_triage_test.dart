@@ -150,6 +150,15 @@ void main() {
     expect(item.mediaType, 'image');
     expect(item.title, 'whiteboard');
 
+    // The controller STATE (what the hub watches) must reflect the new photo —
+    // addPhoto reloads after persisting, so the user actually sees it. Guards
+    // the "added a photo but don't see it" regression.
+    expect(
+      controller.state.matome?.recordings,
+      hasLength(1),
+      reason: 'hub state refreshes to show the imported photo',
+    );
+
     // The photo Item is an Item of THIS matome.
     final row = await db.recordingsDao.getRecordingById(item.id);
     expect(row!.matomeId, 'm4');

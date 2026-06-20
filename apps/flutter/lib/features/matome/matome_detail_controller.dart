@@ -209,6 +209,9 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// Matome's id via [RecordingsDao.upsertRecordingWithMatome]. The Matome's
   /// triage state (spaceId) is untouched.
   Future<void> addPhoto({required File file, required String name}) async {
+    // Capture the matome id up front: the durable-copy / DAO awaits can outlive
+    // an autoDispose of this notifier, and reading `state` afterwards throws.
+    final matomeId = state.id;
     final picked = PickedUpload(
       file: file,
       title: _titleFromName(name),
@@ -220,7 +223,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     await _recordingsDao.upsertRecordingWithMatome(
       RecordingsCompanion(
         id: Value(mintLocalRecordingId()),
-        matomeId: Value(state.id),
+        matomeId: Value(matomeId),
         coreId: const Value(null),
         title: Value(stored.title),
         timestamp: Value(_clock(now)),
@@ -233,6 +236,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
         processingStatus: const Value(kProcessingStatusPendingUpload),
       ),
     );
+    if (!mounted) return;
     await load();
   }
 }
