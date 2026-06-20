@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +26,38 @@ class _FakePathProvider extends PathProviderPlatform
   final String docsPath;
   @override
   Future<String?> getApplicationDocumentsPath() async => docsPath;
+}
+
+/// Fake file picker so the REAL Add-photo button can be tapped without a native
+/// dialog: [pickFiles] returns a single file at [_path] (or null to simulate a
+/// cancel).
+class _FakeFilePicker extends FilePicker with MockPlatformInterfaceMixin {
+  _FakeFilePicker(this._path);
+  final String? _path;
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = false,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) async {
+    if (_path == null) return null;
+    return FilePickerResult([
+      PlatformFile(
+        name: _path.split('/').last,
+        path: _path,
+        size: File(_path).lengthSync(),
+      ),
+    ]);
+  }
 }
 
 /// End-to-end proof of the photo import path WITHOUT the GUI: the picker result
@@ -194,5 +227,88 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(Image), findsWidgets);
+  });
+
+  testWidgets('TAPPING the Add photo button imports the picked image and renders '
+      'its tile — full GUI flow through _addPhoto + a fake picker', (
+    tester,
+  ) async {
+    await db.matomesDao.create(
+      MatomesCompanion(
+        id: const Value('m_btn'),
+        title: const Value('Standup'),
+        happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+      ),
+    );
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion(
+        id: const Value('rec_btn_audio'),
+        matomeId: const Value('m_btn'),
+        title: const Value('Audio note'),
+        timestamp: const Value('9:00 AM'),
+        duration: const Value('0:30'),
+        badge: const Value('Inbox'),
+        isProcessing: const Value(0),
+        audioFilePath: const Value(''),
+        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+        mediaType: const Value('audio'),
+        processingStatus: const Value('done'),
+      ),
+    );
+
+    final source = File(
+      '${Directory.systemTemp.path}/e2e_btn_${DateTime.now().microsecondsSinceEpoch}.png',
+    )..writeAsBytesSync(
+        base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+          '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+        ),
+      );
+    addTearDown(() {
+      if (source.existsSync()) source.deleteSync();
+    });
+    // The REAL button calls FilePicker.platform.pickFiles — swap in a fake that
+    // returns our source file, so no native dialog is needed.
+    FilePicker.platform = _FakeFilePicker(source.path);
+    addTearDown(() => FilePicker.platform = _FakeFilePicker(null));
+
+    final c = ProviderContainer(
+      overrides: [appDatabaseProvider.overrideWithValue(db)],
+    );
+    addTearDown(c.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: TranslationProvider(
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const MatomeDetailScreen(id: 'm_btn'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsNothing);
+
+    // Tap the actual Add-photo button — drives _addPhoto end to end (real
+    // durable copy needs runAsync for the file I/O).
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const ValueKey('matome-add-photo')));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final imageItem =
+        (await db.matomesDao.getMatomeWithRecordings('m_btn'))!
+            .recordings
+            .firstWhere((r) => r.mediaType == 'image');
+    expect(
+      find.byKey(ValueKey('matome-image-${imageItem.id}')),
+      findsOneWidget,
+      reason: 'tapping Add photo must import the image and render its tile',
+    );
   });
 }
