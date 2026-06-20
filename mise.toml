@@ -277,6 +277,11 @@ if ! fuser -s 4000/tcp 2>/dev/null; then
   exit 1
 fi
 cd apps/flutter
+# Kill any still-running instance FIRST — otherwise the old window keeps the
+# build/ binary locked, `flutter clean` fails, `set -e` aborts, and you stay
+# looking at the stale app (the "I rebuilt but nothing changed" trap).
+echo '→ stopping any running matome_flutter...'
+pkill -f 'x64/(debug|release)/bundle/matome_flutter' 2>/dev/null || true
 # Force a from-scratch build every launch so Dart/native changes are never
 # served from a stale incremental cache (flutter run keeps the native runner
 # binary even when Dart changes, which made rebuilds look like no-ops).
