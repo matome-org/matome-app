@@ -168,4 +168,38 @@ void main() {
     expect(matome.isInbox, isTrue);
     expect(await db.matomesDao.listInboxMatomes(), hasLength(1));
   });
+
+  test('removing an item deletes its row, its on-device file, marks the '
+      'summary stale and refreshes the hub state', () async {
+    await seedInboxMatome('m5');
+    final c = container(stubDurableCopy: true);
+    // Pin the autoDispose provider so reading `controller.state` after the
+    // remove's async gaps (DB delete + file delete + reload) is safe — without
+    // a listener it would be disposed out from under us.
+    final sub = c.listen(matomeDetailControllerProvider('m5'), (_, _) {});
+    addTearDown(sub.close);
+    final controller = controllerFor(c, 'm5');
+    await controller.load();
+
+    // Import a real throwaway file so we can assert it is deleted on remove.
+    final tmp = File(
+      '${Directory.systemTemp.path}/matome_rm_${DateTime.now().microsecondsSinceEpoch}.png',
+    )..writeAsBytesSync(<int>[0x89, 0x50, 0x4e, 0x47]);
+    addTearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync();
+    });
+    await controller.addPhoto(file: tmp, name: 'whiteboard.png');
+
+    final item =
+        (await db.matomesDao.getMatomeWithRecordings('m5'))!.recordings.single;
+    expect(tmp.existsSync(), isTrue);
+
+    await controller.removeItem(item.id, filePath: tmp.path);
+
+    // Row gone, on-device file deleted, summary marked stale, hub refreshed.
+    expect(await db.recordingsDao.getRecordingById(item.id), isNull);
+    expect(tmp.existsSync(), isFalse);
+    expect((await db.matomesDao.getById('m5'))!.summaryStale, isTrue);
+    expect(controller.state.matome?.recordings, isEmpty);
+  });
 }

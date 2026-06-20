@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -205,5 +208,57 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(t.matome.notFound), findsOneWidget);
+  });
+
+  testWidgets('image Items render a thumbnail tile with a remove action while '
+      'audio Items keep the recording card', (tester) async {
+    // One audio Item (rec_0) from the seed, plus one image Item.
+    await _seedMatome(db, id: 'm_img', recordingCount: 1);
+
+    // A real 1x1 PNG so Image.file actually decodes and pumpAndSettle settles
+    // (a non-existent path would route through errorBuilder, which we also
+    // tolerate, but a valid file keeps the test deterministic).
+    final tmp = File(
+      '${Directory.systemTemp.path}/matome_tile_${DateTime.now().microsecondsSinceEpoch}.png',
+    )..writeAsBytesSync(
+        base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+          '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+        ),
+      );
+    addTearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync();
+    });
+
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion(
+        id: const Value('rec_img'),
+        matomeId: const Value('m_img'),
+        title: const Value('whiteboard'),
+        timestamp: const Value('9:05 AM'),
+        duration: const Value(''),
+        badge: const Value('Inbox'),
+        isProcessing: const Value(0),
+        audioFilePath: Value(tmp.path),
+        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + 99),
+        mediaType: const Value('image'),
+        processingStatus: const Value('pending_upload'),
+      ),
+    );
+
+    await tester.pumpWidget(_app(container(), id: 'm_img'));
+    await tester.pumpAndSettle();
+
+    // Image Item → thumbnail tile + a remove action, and a rendered Image.
+    expect(find.byKey(const ValueKey('matome-image-rec_img')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('matome-image-remove-rec_img')),
+      findsOneWidget,
+    );
+    expect(find.byType(Image), findsWidgets);
+
+    // The audio Item still renders, and NOT as an image tile.
+    expect(find.byKey(const ValueKey('matome-item-rec_0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('matome-image-rec_0')), findsNothing);
   });
 }
