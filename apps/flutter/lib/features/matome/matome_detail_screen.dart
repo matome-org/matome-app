@@ -780,16 +780,21 @@ class _RecordingTile extends ConsumerWidget {
     final container = ProviderScope.containerOf(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AppDialog(
+      // Pop via the dialog's OWN context, not the captured tile context: a
+      // background rebuild (e.g. the upload waiter publishing a status while the
+      // dialog is open) can deactivate the tile element, and `Navigator.of` on a
+      // defunct context throws inside the button callback — the pop never runs,
+      // the dialog is stuck open, and the app looks frozen.
+      builder: (dialogContext) => AppDialog(
         title: Text(t.matome.removeItemTitle),
         content: Text(t.matome.removeItemBody(title: item.title)),
         actions: [
           AppTextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(t.matome.cancel),
           ),
           AppTextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(t.matome.remove),
           ),
         ],

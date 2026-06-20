@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
@@ -92,6 +93,60 @@ void main() {
     expect(
       find.byKey(const ValueKey('matome-image-rec_img')),
       findsNothing,
+    );
+  });
+
+  testWidgets('Remove still works when a background reload deactivates the tile '
+      'while the dialog is open (was: dialog stuck / app frozen)',
+      (tester) async {
+    await seedMatomeWithImage();
+
+    final c = ProviderContainer(
+      overrides: [appDatabaseProvider.overrideWithValue(db)],
+    );
+    addTearDown(c.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: TranslationProvider(
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const MatomeDetailScreen(id: 'm_rm'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('matome-image-remove-rec_img')));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove item'), findsOneWidget);
+
+    // Genuinely UNMOUNT the tile behind the open dialog: drop the row and reload
+    // so the items section goes empty. The tile element (whose context the OLD
+    // dialog buttons popped through) is now permanently defunct — the same state
+    // the upload waiter induces when it republishes the list mid-dialog. The old
+    // code called Navigator.of on that dead context inside the button callback,
+    // which throws → the pop never runs → the dialog is stuck open → frozen.
+    await db.recordingsDao.deleteRecording('rec_img');
+    // ignore: unawaited_futures
+    c.read(matomeDetailControllerProvider('m_rm').notifier).load();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('matome-image-rec_img')),
+      findsNothing,
+      reason: 'precondition: the tile must be unmounted behind the dialog',
+    );
+
+    // Tapping Remove must still pop the dialog — via the dialog's OWN context.
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Remove item'),
+      findsNothing,
+      reason: 'the dialog must close (pop) even after the tile was unmounted',
     );
   });
 
