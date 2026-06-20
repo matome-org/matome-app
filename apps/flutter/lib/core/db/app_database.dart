@@ -240,6 +240,11 @@ class AppDatabase extends _$AppDatabase {
   /// and guarded — a fresh install, web, or a test in-memory DB (no documents
   /// dir plugin) simply skips it.
   Future<void> _relocateLegacyMedia() async {
+    // Under `flutter test` the path_provider channel has no handler and
+    // `getApplicationDocumentsDirectory()` HANGS (never throws), so the
+    // try/catch below cannot rescue it — every DB-opening test would stall.
+    // Production runs always pass this guard.
+    if (isRunningFlutterTest) return;
     try {
       final dir = await matomeStorageDir();
       final moved = await moveLegacyMediaInto(dir);
