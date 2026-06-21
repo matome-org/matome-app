@@ -145,7 +145,26 @@
     "remove": "Remove",
     "removeItemTitle": "Remove item",
     "removeItemBody": "Remove \"$title\" from this matome?",
-    "imageUnavailable": "Image unavailable"
+    "imageUnavailable": "Image unavailable",
+    "actions": {
+      "menuTooltip": "More",
+      "rename": "Rename",
+      "editDateTime": "Edit date & time",
+      "regenerateSummary": "Regenerate summary",
+      "moveToSpace": "Move to space",
+      "share": "Share",
+      "soon": "soon",
+      "copySummary": "Copy summary",
+      "archive": "Archive",
+      "summaryCopied": "Summary copied",
+      "noSummaryToCopy": "No summary to copy yet",
+      "archiveTitle": "Archive this matome?",
+      "archiveBody": "It will leave your lists. You can restore it from the archive.",
+      "archiveConfirm": "Archive",
+      "archived": "Matome archived",
+      "undo": "Undo",
+      "archiveFailed": "Couldn't archive — please try again"
+    }
   },
   "spaces": {
     "title": "Spaces",

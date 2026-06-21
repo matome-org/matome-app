@@ -265,6 +265,7 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get removeItemTitle => 'アイテムを削除';
 	@override String removeItemBody({required Object title}) => '「${title}」をこのまとめから削除しますか？';
 	@override String get imageUnavailable => '画像を表示できません';
+	@override late final _Translations$matome$actions$ja actions = _Translations$matome$actions$ja._(_root);
 }
 
 // Path: spaces
@@ -401,6 +402,32 @@ class _Translations$auth$ja extends Translations$auth$en {
 	@override String get errorPasswordMismatch => 'パスワードが一致しません。';
 	@override String get errorEmailTaken => 'そのメールアドレスは既に登録されています。';
 	@override String get errorGeneric => '問題が発生しました。もう一度お試しください。';
+}
+
+// Path: matome.actions
+class _Translations$matome$actions$ja extends Translations$matome$actions$en {
+	_Translations$matome$actions$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get menuTooltip => 'その他';
+	@override String get rename => '名前を変更';
+	@override String get editDateTime => '日時を編集';
+	@override String get regenerateSummary => '要約を再生成';
+	@override String get moveToSpace => 'スペースへ移動';
+	@override String get share => '共有';
+	@override String get soon => '近日';
+	@override String get copySummary => '要約をコピー';
+	@override String get archive => 'アーカイブ';
+	@override String get summaryCopied => '要約をコピーしました';
+	@override String get noSummaryToCopy => 'コピーできる要約がまだありません';
+	@override String get archiveTitle => 'このまとめをアーカイブしますか？';
+	@override String get archiveBody => 'リストから外れます。アーカイブから復元できます。';
+	@override String get archiveConfirm => 'アーカイブ';
+	@override String get archived => 'まとめをアーカイブしました';
+	@override String get undo => '元に戻す';
+	@override String get archiveFailed => 'アーカイブできませんでした — もう一度お試しください';
 }
 
 /// The flat map containing all translations for locale <ja>.
@@ -541,6 +568,23 @@ extension on TranslationsJa {
 			'matome.removeItemTitle' => 'アイテムを削除',
 			'matome.removeItemBody' => ({required Object title}) => '「${title}」をこのまとめから削除しますか？',
 			'matome.imageUnavailable' => '画像を表示できません',
+			'matome.actions.menuTooltip' => 'その他',
+			'matome.actions.rename' => '名前を変更',
+			'matome.actions.editDateTime' => '日時を編集',
+			'matome.actions.regenerateSummary' => '要約を再生成',
+			'matome.actions.moveToSpace' => 'スペースへ移動',
+			'matome.actions.share' => '共有',
+			'matome.actions.soon' => '近日',
+			'matome.actions.copySummary' => '要約をコピー',
+			'matome.actions.archive' => 'アーカイブ',
+			'matome.actions.summaryCopied' => '要約をコピーしました',
+			'matome.actions.noSummaryToCopy' => 'コピーできる要約がまだありません',
+			'matome.actions.archiveTitle' => 'このまとめをアーカイブしますか？',
+			'matome.actions.archiveBody' => 'リストから外れます。アーカイブから復元できます。',
+			'matome.actions.archiveConfirm' => 'アーカイブ',
+			'matome.actions.archived' => 'まとめをアーカイブしました',
+			'matome.actions.undo' => '元に戻す',
+			'matome.actions.archiveFailed' => 'アーカイブできませんでした — もう一度お試しください',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

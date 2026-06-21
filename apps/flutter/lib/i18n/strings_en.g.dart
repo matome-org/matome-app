@@ -526,6 +526,8 @@ class Translations$matome$en {
 
 	/// en: 'Image unavailable'
 	String get imageUnavailable => 'Image unavailable';
+
+	late final Translations$matome$actions$en actions = Translations$matome$actions$en.internal(_root);
 }
 
 // Path: spaces
@@ -828,6 +830,66 @@ class Translations$auth$en {
 	String get errorGeneric => 'Something went wrong. Please try again.';
 }
 
+// Path: matome.actions
+class Translations$matome$actions$en {
+	Translations$matome$actions$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'More'
+	String get menuTooltip => 'More';
+
+	/// en: 'Rename'
+	String get rename => 'Rename';
+
+	/// en: 'Edit date & time'
+	String get editDateTime => 'Edit date & time';
+
+	/// en: 'Regenerate summary'
+	String get regenerateSummary => 'Regenerate summary';
+
+	/// en: 'Move to space'
+	String get moveToSpace => 'Move to space';
+
+	/// en: 'Share'
+	String get share => 'Share';
+
+	/// en: 'soon'
+	String get soon => 'soon';
+
+	/// en: 'Copy summary'
+	String get copySummary => 'Copy summary';
+
+	/// en: 'Archive'
+	String get archive => 'Archive';
+
+	/// en: 'Summary copied'
+	String get summaryCopied => 'Summary copied';
+
+	/// en: 'No summary to copy yet'
+	String get noSummaryToCopy => 'No summary to copy yet';
+
+	/// en: 'Archive this matome?'
+	String get archiveTitle => 'Archive this matome?';
+
+	/// en: 'It will leave your lists. You can restore it from the archive.'
+	String get archiveBody => 'It will leave your lists. You can restore it from the archive.';
+
+	/// en: 'Archive'
+	String get archiveConfirm => 'Archive';
+
+	/// en: 'Matome archived'
+	String get archived => 'Matome archived';
+
+	/// en: 'Undo'
+	String get undo => 'Undo';
+
+	/// en: 'Couldn't archive — please try again'
+	String get archiveFailed => 'Couldn\'t archive — please try again';
+}
+
 /// The flat map containing all translations for locale <en>.
 /// Only for edge cases! For simple maps, use the map function of this library.
 ///
@@ -966,6 +1028,23 @@ extension on Translations {
 			'matome.removeItemTitle' => 'Remove item',
 			'matome.removeItemBody' => ({required Object title}) => 'Remove "${title}" from this matome?',
 			'matome.imageUnavailable' => 'Image unavailable',
+			'matome.actions.menuTooltip' => 'More',
+			'matome.actions.rename' => 'Rename',
+			'matome.actions.editDateTime' => 'Edit date & time',
+			'matome.actions.regenerateSummary' => 'Regenerate summary',
+			'matome.actions.moveToSpace' => 'Move to space',
+			'matome.actions.share' => 'Share',
+			'matome.actions.soon' => 'soon',
+			'matome.actions.copySummary' => 'Copy summary',
+			'matome.actions.archive' => 'Archive',
+			'matome.actions.summaryCopied' => 'Summary copied',
+			'matome.actions.noSummaryToCopy' => 'No summary to copy yet',
+			'matome.actions.archiveTitle' => 'Archive this matome?',
+			'matome.actions.archiveBody' => 'It will leave your lists. You can restore it from the archive.',
+			'matome.actions.archiveConfirm' => 'Archive',
+			'matome.actions.archived' => 'Matome archived',
+			'matome.actions.undo' => 'Undo',
+			'matome.actions.archiveFailed' => 'Couldn\'t archive — please try again',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',
