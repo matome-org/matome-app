@@ -25,6 +25,7 @@ class AppTextField extends StatelessWidget {
     this.contentPadding,
     this.maxLines = 1,
     this.minLines,
+    this.maxLength,
     this.textAlignVertical,
     this.style,
     this.hintStyle,
@@ -49,6 +50,10 @@ class AppTextField extends StatelessWidget {
   final EdgeInsetsGeometry? contentPadding;
   final int? maxLines;
   final int? minLines;
+
+  /// Hard character cap (mirrors a server-side length rule). The built-in
+  /// counter is hidden so the field stays compact in dialogs.
+  final int? maxLength;
   final TextAlignVertical? textAlignVertical;
   final TextStyle? style;
   final TextStyle? hintStyle;
@@ -67,6 +72,7 @@ class AppTextField extends StatelessWidget {
       textInputAction: textInputAction,
       maxLines: maxLines,
       minLines: minLines,
+      maxLength: maxLength,
       textAlignVertical: textAlignVertical,
       autocorrect: autocorrect,
       enableSuggestions: enableSuggestions ?? !obscure,
@@ -77,6 +83,8 @@ class AppTextField extends StatelessWidget {
       style: style ?? typography.bodySmall.copyWith(color: colors.textPrimary),
       decoration: InputDecoration(
         isDense: isDense,
+        // Hide the built-in character counter — the cap is enforced silently.
+        counterText: maxLength == null ? null : '',
         hintText: hint,
         hintStyle:
             hintStyle ?? typography.bodySmall.copyWith(color: colors.textMuted),

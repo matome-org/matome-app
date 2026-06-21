@@ -252,6 +252,36 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     await load();
   }
 
+  /// Rename this Matome — the local-first edit (task #1408 / W5). Writes the
+  /// trimmed [title] to Drift FIRST (so the header updates immediately,
+  /// offline-safe), then PATCHes Core when the Matome is reconciled. Reload so
+  /// the hub reflects the new title. The matome id is captured up front: the
+  /// sync awaits can outlive an autoDispose of this notifier.
+  Future<void> rename(String title) async {
+    final matomeId = state.id;
+    AppLog.event(LogCat.action, 'rename $matomeId');
+    await _ref
+        .read(matomeSyncServiceProvider)
+        .editMatome(matomeId, title: title);
+    if (!mounted) return;
+    await load();
+  }
+
+  /// Edit this Matome's date & time (`happened_at`) — the local-first re-date
+  /// (task #1408 / W5). Writes [happenedAt] to Drift FIRST (so the header + every
+  /// list re-sort immediately, offline-safe), then PATCHes Core when reconciled.
+  /// Reload so the hub reflects the new timestamp. The matome id is captured up
+  /// front: the sync awaits can outlive an autoDispose of this notifier.
+  Future<void> editDateTime(DateTime happenedAt) async {
+    final matomeId = state.id;
+    AppLog.event(LogCat.action, 'editDateTime $matomeId');
+    await _ref
+        .read(matomeSyncServiceProvider)
+        .editMatome(matomeId, happenedAt: happenedAt);
+    if (!mounted) return;
+    await load();
+  }
+
   /// Archive (soft-delete) this Matome — the local-first triage action
   /// (task #1410, W3 backend). Stamps `archived_at` in Drift FIRST so it leaves
   /// every local list immediately, then POSTs Core when reconciled. Recoverable

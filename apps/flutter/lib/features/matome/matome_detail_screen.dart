@@ -165,10 +165,12 @@ class _MatomeHeader extends ConsumerWidget {
   ) async {
     switch (action) {
       case MatomeAction.rename:
+        await _rename(context, ref);
       case MatomeAction.editDateTime:
+        await _editDateTime(context, ref);
       case MatomeAction.share:
-        // Rename / edit date & time are W5; share is deferred (disabled in the
-        // menu). No-op hooks so the menu is complete now.
+        // Share is deferred (disabled in the menu). No-op hook so the menu is
+        // complete now.
         break;
       case MatomeAction.regenerateSummary:
         await ref
@@ -208,6 +210,86 @@ class _MatomeHeader extends ConsumerWidget {
     await Clipboard.setData(ClipboardData(text: summary));
     messenger.showSnackBar(
       SnackBar(content: Text(t.matome.actions.summaryCopied)),
+    );
+  }
+
+  /// Rename flow (#1411 / W5): open a pre-filled text dialog (trim + non-empty
+  /// guard MIRRORING the server changeset), then persist via the local-first
+  /// `rename()`. The root container + messenger are captured BEFORE the dialog:
+  /// this header (and its `ref`) can be autoDisposed while the dialog is open,
+  /// and we still need to drive the controller / show the result afterwards.
+  Future<void> _rename(BuildContext context, WidgetRef ref) async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+    final controller =
+        container.read(matomeDetailControllerProvider(matome.id).notifier);
+
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (_) => _RenameDialog(initial: matome.title),
+    );
+    if (newTitle == null) return; // cancelled or empty (guarded in the dialog)
+
+    try {
+      await controller.rename(newTitle);
+    } catch (e, st) {
+      AppLog.error(LogCat.action, 'rename failed ${matome.id}', e, st);
+      messenger.showSnackBar(
+        SnackBar(content: Text(t.matome.actions.editFailed)),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text(t.matome.actions.renamed)),
+    );
+  }
+
+  /// Edit date & time flow (#1411 / W5): a date picker then a time picker
+  /// (pre-filled with the current `happened_at`), then persist via the
+  /// local-first `editDateTime()`. The container + messenger are captured BEFORE
+  /// the pickers (autoDispose can fire while a picker is open).
+  Future<void> _editDateTime(BuildContext context, WidgetRef ref) async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+    final controller =
+        container.read(matomeDetailControllerProvider(matome.id).notifier);
+
+    final current = DateTime.fromMillisecondsSinceEpoch(matome.happenedAt);
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: current,
+      // Mirror the server changeset window: [2000-01-01 .. now + 366d].
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 366)),
+    );
+    if (pickedDate == null) return;
+    if (!context.mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(current),
+    );
+    if (pickedTime == null) return;
+
+    final happenedAt = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    try {
+      await controller.editDateTime(happenedAt);
+    } catch (e, st) {
+      AppLog.error(LogCat.action, 'editDateTime failed ${matome.id}', e, st);
+      messenger.showSnackBar(
+        SnackBar(content: Text(t.matome.actions.editFailed)),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text(t.matome.actions.editDateTimeUpdated)),
     );
   }
 
@@ -325,6 +407,71 @@ class _MatomeHeader extends ConsumerWidget {
         MatomeSyncChip(
           key: const ValueKey('matome-on-device'),
           rollup: matome.syncRollup,
+        ),
+      ],
+    );
+  }
+}
+
+/// The rename dialog (#1411 / W5): a pre-filled text field with a non-empty
+/// guard MIRRORING the server changeset (title trimmed, non-empty, ≤255). Save
+/// is disabled while the trimmed input is empty; it pops the trimmed title.
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  /// Mirrors the server changeset's `validate_length(:title, max: 255)`.
+  static const int _maxTitleLength = 255;
+
+  late final TextEditingController _field =
+      TextEditingController(text: widget.initial);
+
+  bool get _isValid => _field.text.trim().isNotEmpty;
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final trimmed = _field.text.trim();
+    if (trimmed.isEmpty) return; // non-empty guard (mirrors the changeset)
+    Navigator.of(context).pop(trimmed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialog(
+      title: Text(t.matome.actions.renameTitle),
+      content: AppTextField(
+        key: const ValueKey('matome-rename-field'),
+        controller: _field,
+        autofocus: true,
+        label: t.matome.actions.renameLabel,
+        hint: t.matome.actions.renameHint,
+        // Mirror the server changeset's max length so the input can never
+        // exceed it (the trim + non-empty guard is enforced on submit).
+        maxLength: _maxTitleLength,
+        textInputAction: TextInputAction.done,
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        AppTextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t.matome.cancel),
+        ),
+        AppTextButton(
+          key: const ValueKey('matome-rename-save'),
+          onPressed: _isValid ? _submit : null,
+          child: Text(t.matome.actions.renameSave),
         ),
       ],
     );
