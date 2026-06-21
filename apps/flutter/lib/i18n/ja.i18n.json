@@ -49,8 +49,9 @@
     "processing": "文字起こし中…",
     "failed": "アップロードに失敗しました",
     "retry": "再試行",
-    "onDevice": "端末のみ",
-    "cloud": "クラウド",
+    "onDevice": "端末内",
+    "cloud": "同期済み",
+    "syncing": "同期中",
     "syncState": "同期状態"
   },
   "recording": {
@@ -110,9 +111,6 @@
   "matome": {
     "title": "まとめ",
     "notFound": "まとめが見つかりません",
-    "onDevice": "端末に保存 · 未整理",
-    "syncedNotFiled": "同期済み · 未整理",
-    "syncingNotFiled": "同期中 · 未整理",
     "recordings": "アイテム",
     "noRecordings": "アイテムはまだありません",
     "summary": "要約",
@@ -144,7 +142,6 @@
     "roleOrganizer": "主催者",
     "roleSpeaker": "発表者",
     "itemCount": "$n 件のアイテム",
-    "onDeviceShort": "端末内",
     "remove": "削除",
     "removeItemTitle": "アイテムを削除",
     "removeItemBody": "「$title」をこのまとめから削除しますか？",

@@ -230,8 +230,11 @@ class Translations$cardStatus$en {
 	/// en: 'On device'
 	String get onDevice => 'On device';
 
-	/// en: 'Cloud'
-	String get cloud => 'Cloud';
+	/// en: 'Synced'
+	String get cloud => 'Synced';
+
+	/// en: 'Syncing'
+	String get syncing => 'Syncing';
 
 	/// en: 'Sync state'
 	String get syncState => 'Sync state';
@@ -419,15 +422,6 @@ class Translations$matome$en {
 	/// en: 'Matome not found'
 	String get notFound => 'Matome not found';
 
-	/// en: 'On device · not filed'
-	String get onDevice => 'On device · not filed';
-
-	/// en: 'Synced · not filed'
-	String get syncedNotFiled => 'Synced · not filed';
-
-	/// en: 'Syncing · not filed'
-	String get syncingNotFiled => 'Syncing · not filed';
-
 	/// en: 'Items'
 	String get recordings => 'Items';
 
@@ -520,9 +514,6 @@ class Translations$matome$en {
 
 	/// en: '$n items'
 	String itemCount({required Object n}) => '${n} items';
-
-	/// en: 'On device'
-	String get onDeviceShort => 'On device';
 
 	/// en: 'Remove'
 	String get remove => 'Remove';
@@ -885,7 +876,8 @@ extension on Translations {
 			'cardStatus.failed' => 'Upload failed',
 			'cardStatus.retry' => 'Retry',
 			'cardStatus.onDevice' => 'On device',
-			'cardStatus.cloud' => 'Cloud',
+			'cardStatus.cloud' => 'Synced',
+			'cardStatus.syncing' => 'Syncing',
 			'cardStatus.syncState' => 'Sync state',
 			'recording.title' => 'Recording',
 			'recording.ready' => 'Ready to Record',
@@ -939,9 +931,6 @@ extension on Translations {
 			'details.audioUnavailable' => 'Audio unavailable',
 			'matome.title' => 'Matome',
 			'matome.notFound' => 'Matome not found',
-			'matome.onDevice' => 'On device · not filed',
-			'matome.syncedNotFiled' => 'Synced · not filed',
-			'matome.syncingNotFiled' => 'Syncing · not filed',
 			'matome.recordings' => 'Items',
 			'matome.noRecordings' => 'No items yet',
 			'matome.summary' => 'Summary',
@@ -973,7 +962,6 @@ extension on Translations {
 			'matome.roleOrganizer' => 'Organizer',
 			'matome.roleSpeaker' => 'Speaker',
 			'matome.itemCount' => ({required Object n}) => '${n} items',
-			'matome.onDeviceShort' => 'On device',
 			'matome.remove' => 'Remove',
 			'matome.removeItemTitle' => 'Remove item',
 			'matome.removeItemBody' => ({required Object title}) => 'Remove "${title}" from this matome?',

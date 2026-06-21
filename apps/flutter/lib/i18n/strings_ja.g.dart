@@ -147,8 +147,9 @@ class _Translations$cardStatus$ja extends Translations$cardStatus$en {
 	@override String get processing => '文字起こし中…';
 	@override String get failed => 'アップロードに失敗しました';
 	@override String get retry => '再試行';
-	@override String get onDevice => '端末のみ';
-	@override String get cloud => 'クラウド';
+	@override String get onDevice => '端末内';
+	@override String get cloud => '同期済み';
+	@override String get syncing => '同期中';
 	@override String get syncState => '同期状態';
 }
 
@@ -229,9 +230,6 @@ class _Translations$matome$ja extends Translations$matome$en {
 	// Translations
 	@override String get title => 'まとめ';
 	@override String get notFound => 'まとめが見つかりません';
-	@override String get onDevice => '端末に保存 · 未整理';
-	@override String get syncedNotFiled => '同期済み · 未整理';
-	@override String get syncingNotFiled => '同期中 · 未整理';
 	@override String get recordings => 'アイテム';
 	@override String get noRecordings => 'アイテムはまだありません';
 	@override String get summary => '要約';
@@ -263,7 +261,6 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get roleOrganizer => '主催者';
 	@override String get roleSpeaker => '発表者';
 	@override String itemCount({required Object n}) => '${n} 件のアイテム';
-	@override String get onDeviceShort => '端末内';
 	@override String get remove => '削除';
 	@override String get removeItemTitle => 'アイテムを削除';
 	@override String removeItemBody({required Object title}) => '「${title}」をこのまとめから削除しますか？';
@@ -453,8 +450,9 @@ extension on TranslationsJa {
 			'cardStatus.processing' => '文字起こし中…',
 			'cardStatus.failed' => 'アップロードに失敗しました',
 			'cardStatus.retry' => '再試行',
-			'cardStatus.onDevice' => '端末のみ',
-			'cardStatus.cloud' => 'クラウド',
+			'cardStatus.onDevice' => '端末内',
+			'cardStatus.cloud' => '同期済み',
+			'cardStatus.syncing' => '同期中',
 			'cardStatus.syncState' => '同期状態',
 			'recording.title' => '録音中',
 			'recording.ready' => '録音準備完了',
@@ -508,9 +506,6 @@ extension on TranslationsJa {
 			'details.audioUnavailable' => '音声を利用できません',
 			'matome.title' => 'まとめ',
 			'matome.notFound' => 'まとめが見つかりません',
-			'matome.onDevice' => '端末に保存 · 未整理',
-			'matome.syncedNotFiled' => '同期済み · 未整理',
-			'matome.syncingNotFiled' => '同期中 · 未整理',
 			'matome.recordings' => 'アイテム',
 			'matome.noRecordings' => 'アイテムはまだありません',
 			'matome.summary' => '要約',
@@ -542,7 +537,6 @@ extension on TranslationsJa {
 			'matome.roleOrganizer' => '主催者',
 			'matome.roleSpeaker' => '発表者',
 			'matome.itemCount' => ({required Object n}) => '${n} 件のアイテム',
-			'matome.onDeviceShort' => '端末内',
 			'matome.remove' => '削除',
 			'matome.removeItemTitle' => 'アイテムを削除',
 			'matome.removeItemBody' => ({required Object title}) => '「${title}」をこのまとめから削除しますか？',

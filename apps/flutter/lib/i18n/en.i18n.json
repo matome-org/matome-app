@@ -50,7 +50,8 @@
     "failed": "Upload failed",
     "retry": "Retry",
     "onDevice": "On device",
-    "cloud": "Cloud",
+    "cloud": "Synced",
+    "syncing": "Syncing",
     "syncState": "Sync state"
   },
   "recording": {
@@ -110,9 +111,6 @@
   "matome": {
     "title": "Matome",
     "notFound": "Matome not found",
-    "onDevice": "On device · not filed",
-    "syncedNotFiled": "Synced · not filed",
-    "syncingNotFiled": "Syncing · not filed",
     "recordings": "Items",
     "noRecordings": "No items yet",
     "summary": "Summary",
@@ -144,7 +142,6 @@
     "roleOrganizer": "Organizer",
     "roleSpeaker": "Speaker",
     "itemCount": "$n items",
-    "onDeviceShort": "On device",
     "remove": "Remove",
     "removeItemTitle": "Remove item",
     "removeItemBody": "Remove \"$title\" from this matome?",
