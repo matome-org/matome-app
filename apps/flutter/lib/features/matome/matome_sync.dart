@@ -69,6 +69,11 @@ MatomesCompanion matomeToCompanion(Matome matome, {MatomeRow? existing}) {
     createdAt: Value(createdAt),
     description: descriptionValue,
     aggregatedSummary: summaryValue,
+    // Mirror Core's archive state (#1409). Core's default list excludes
+    // archived, so a pulled row is normally active (NULL) — but adopting the
+    // field keeps the local mirror correct if an archived row is ever pulled
+    // directly, and a restore (archived_at → null) propagates on the next pull.
+    archivedAt: Value(matome.archivedAt?.millisecondsSinceEpoch),
   );
 }
 

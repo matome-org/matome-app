@@ -110,6 +110,51 @@ class MatomesRepository {
     }
   }
 
+  /// `POST /api/matomes/:id/archive` (Bearer). Soft-deletes the remote Matome
+  /// (stamps `archived_at`) and returns it. Recoverable via [restoreMatome] —
+  /// data and local files are retained.
+  Future<Matome> archiveMatome(int id) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/matomes/$id/archive',
+      );
+      final status = response.statusCode ?? 0;
+      if (status == 401) throw _unauthorized;
+      if (status != 200) {
+        throw ApiException(
+          'Failed to archive matome.',
+          statusCode: status,
+          code: errorCodeFromBody(response.data),
+        );
+      }
+      return _matomeFromBody(response.data, status);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  /// `POST /api/matomes/:id/restore` (Bearer). Un-archives the remote Matome
+  /// (clears `archived_at`) and returns it.
+  Future<Matome> restoreMatome(int id) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/matomes/$id/restore',
+      );
+      final status = response.statusCode ?? 0;
+      if (status == 401) throw _unauthorized;
+      if (status != 200) {
+        throw ApiException(
+          'Failed to restore matome.',
+          statusCode: status,
+          code: errorCodeFromBody(response.data),
+        );
+      }
+      return _matomeFromBody(response.data, status);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   /// `DELETE /api/matomes/:id` (Bearer). 204/200/404 are all success.
   Future<void> deleteMatome(int id) async {
     try {

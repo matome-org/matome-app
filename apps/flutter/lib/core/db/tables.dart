@@ -132,6 +132,12 @@ class Matomes extends Table {
   // and the first sync succeeds (mirrors recordings.coreId / m005).
   IntColumn get coreId => integer().named('core_id').nullable()();
 
+  // Soft-delete (archive) marker (W3, #1409). Epoch ms when archived, NULL ⟺
+  // active. Every list/watch query filters `archived_at IS NULL`; the row and
+  // its child recordings are retained (recoverable via restore). Mirrors Core's
+  // nullable `matomes.archived_at`.
+  IntColumn get archivedAt => integer().named('archived_at').nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

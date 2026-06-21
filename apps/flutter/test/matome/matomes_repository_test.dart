@@ -137,6 +137,54 @@ void main() {
     // No throw == success.
   });
 
+  test('archiveMatome POSTs /archive and parses the archived result', () async {
+    adapter.onPost(
+      '/api/matomes/7/archive',
+      (server) => server.reply(200, {
+        'matome': {
+          'id': 7,
+          'owner_id': 1,
+          'title': 'Standup',
+          'archived_at': '2026-06-20T10:00:00Z',
+        },
+      }),
+    );
+
+    final archived = await matomesRepo.archiveMatome(7);
+    expect(archived.id, 7);
+    expect(archived.archivedAt, DateTime.utc(2026, 6, 20, 10));
+  });
+
+  test('restoreMatome POSTs /restore and parses the restored result', () async {
+    adapter.onPost(
+      '/api/matomes/7/restore',
+      (server) => server.reply(200, {
+        'matome': {
+          'id': 7,
+          'owner_id': 1,
+          'title': 'Standup',
+          'archived_at': null,
+        },
+      }),
+    );
+
+    final restored = await matomesRepo.restoreMatome(7);
+    expect(restored.id, 7);
+    expect(restored.archivedAt, isNull);
+  });
+
+  test('archiveMatome surfaces a non-200 as an ApiException', () async {
+    adapter.onPost(
+      '/api/matomes/7/archive',
+      (server) => server.reply(404, {'error': 'not_found'}),
+    );
+    expect(
+      matomesRepo.archiveMatome(7),
+      throwsA(isA<ApiException>()
+          .having((e) => e.statusCode, 'statusCode', 404)),
+    );
+  });
+
   test('matomes 401 maps to unauthorized ApiException', () async {
     adapter.onGet(
       '/api/matomes',

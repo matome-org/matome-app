@@ -35,9 +35,23 @@ class FakeMatomesRepository extends MatomesRepository {
   final List<Map<String, Object?>> updated = [];
   final List<Map<String, Object?>> attached = [];
   final List<Map<String, Object?>> detached = [];
+  final List<int> archived = [];
+  final List<int> restored = [];
 
   @override
   Future<List<Matome>> fetchMatomes() async => remoteMatomes;
+
+  @override
+  Future<Matome> archiveMatome(int id) async {
+    archived.add(id);
+    return Matome(id: id, ownerId: '1', title: 'r', archivedAt: DateTime.now());
+  }
+
+  @override
+  Future<Matome> restoreMatome(int id) async {
+    restored.add(id);
+    return Matome(id: id, ownerId: '1', title: 'r');
+  }
 
   @override
   Future<Matome> updateMatome(
@@ -403,6 +417,61 @@ void main() {
     final row = await db.matomesDao.getById('mat_local_only');
     expect(row!.title, 'Renamed local'); // local write still happened
     expect(matomesRepo.updated, isEmpty); // no coreId → nothing pushed
+  });
+
+  test('archiveMatome: local-first archive lands in Drift, then POSTs Core when '
+      'the matome is reconciled', () async {
+    final space = await _seedCoreSpace(db, 42);
+    await _seedMatome(db, id: 'mat_local_arch', spaceId: space, coreId: 88);
+
+    final matomesRepo = FakeMatomesRepository();
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container.read(matomeSyncServiceProvider).archiveMatome('mat_local_arch');
+
+    // Drift archived FIRST (local-first) — the matome leaves the lists locally.
+    final row = await db.matomesDao.getById('mat_local_arch');
+    expect(row!.archivedAt, isNotNull);
+    expect(await db.matomesDao.listMatomesInSpace(space), isEmpty);
+
+    // Then synced to Core by coreId.
+    expect(matomesRepo.archived, [88]);
+  });
+
+  test('archiveMatome: an un-reconciled (coreId null) matome archives Drift but '
+      'does NOT call Core', () async {
+    await _seedMatome(db, id: 'mat_local_inbox_arch', spaceId: null);
+
+    final matomesRepo = FakeMatomesRepository();
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container
+        .read(matomeSyncServiceProvider)
+        .archiveMatome('mat_local_inbox_arch');
+
+    final row = await db.matomesDao.getById('mat_local_inbox_arch');
+    expect(row!.archivedAt, isNotNull); // local archive still happened
+    expect(matomesRepo.archived, isEmpty); // no coreId → nothing pushed
+  });
+
+  test('restoreMatome: local-first restore clears Drift, then POSTs Core when '
+      'reconciled', () async {
+    final space = await _seedCoreSpace(db, 42);
+    await _seedMatome(db, id: 'mat_local_rest', spaceId: space, coreId: 99);
+    await db.matomesDao.archive('mat_local_rest');
+
+    final matomesRepo = FakeMatomesRepository();
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container.read(matomeSyncServiceProvider).restoreMatome('mat_local_rest');
+
+    final row = await db.matomesDao.getById('mat_local_rest');
+    expect(row!.archivedAt, isNull); // restored locally
+    expect(await db.matomesDao.listMatomesInSpace(space), hasLength(1)); // back
+    expect(matomesRepo.restored, [99]);
   });
 
   test('contacts upsert by coreId on pull — no duplicate row on re-sync',

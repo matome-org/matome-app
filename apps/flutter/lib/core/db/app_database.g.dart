@@ -2243,6 +2243,17 @@ class $MatomesTable extends Matomes with TableInfo<$MatomesTable, MatomeRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _archivedAtMeta = const VerificationMeta(
+    'archivedAt',
+  );
+  @override
+  late final GeneratedColumn<int> archivedAt = GeneratedColumn<int>(
+    'archived_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2254,6 +2265,7 @@ class $MatomesTable extends Matomes with TableInfo<$MatomesTable, MatomeRow> {
     summaryStale,
     createdAt,
     coreId,
+    archivedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2335,6 +2347,12 @@ class $MatomesTable extends Matomes with TableInfo<$MatomesTable, MatomeRow> {
         coreId.isAcceptableOrUnknown(data['core_id']!, _coreIdMeta),
       );
     }
+    if (data.containsKey('archived_at')) {
+      context.handle(
+        _archivedAtMeta,
+        archivedAt.isAcceptableOrUnknown(data['archived_at']!, _archivedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -2380,6 +2398,10 @@ class $MatomesTable extends Matomes with TableInfo<$MatomesTable, MatomeRow> {
         DriftSqlType.int,
         data['${effectivePrefix}core_id'],
       ),
+      archivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}archived_at'],
+      ),
     );
   }
 
@@ -2399,6 +2421,7 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
   final bool summaryStale;
   final int createdAt;
   final int? coreId;
+  final int? archivedAt;
   const MatomeRow({
     required this.id,
     this.spaceId,
@@ -2409,6 +2432,7 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
     required this.summaryStale,
     required this.createdAt,
     this.coreId,
+    this.archivedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2429,6 +2453,9 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
     map['created_at'] = Variable<int>(createdAt);
     if (!nullToAbsent || coreId != null) {
       map['core_id'] = Variable<int>(coreId);
+    }
+    if (!nullToAbsent || archivedAt != null) {
+      map['archived_at'] = Variable<int>(archivedAt);
     }
     return map;
   }
@@ -2452,6 +2479,9 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
       coreId: coreId == null && nullToAbsent
           ? const Value.absent()
           : Value(coreId),
+      archivedAt: archivedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(archivedAt),
     );
   }
 
@@ -2472,6 +2502,7 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
       summaryStale: serializer.fromJson<bool>(json['summaryStale']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       coreId: serializer.fromJson<int?>(json['coreId']),
+      archivedAt: serializer.fromJson<int?>(json['archivedAt']),
     );
   }
   @override
@@ -2487,6 +2518,7 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
       'summaryStale': serializer.toJson<bool>(summaryStale),
       'createdAt': serializer.toJson<int>(createdAt),
       'coreId': serializer.toJson<int?>(coreId),
+      'archivedAt': serializer.toJson<int?>(archivedAt),
     };
   }
 
@@ -2500,6 +2532,7 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
     bool? summaryStale,
     int? createdAt,
     Value<int?> coreId = const Value.absent(),
+    Value<int?> archivedAt = const Value.absent(),
   }) => MatomeRow(
     id: id ?? this.id,
     spaceId: spaceId.present ? spaceId.value : this.spaceId,
@@ -2512,6 +2545,7 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
     summaryStale: summaryStale ?? this.summaryStale,
     createdAt: createdAt ?? this.createdAt,
     coreId: coreId.present ? coreId.value : this.coreId,
+    archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
   );
   MatomeRow copyWithCompanion(MatomesCompanion data) {
     return MatomeRow(
@@ -2532,6 +2566,9 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
           : this.summaryStale,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       coreId: data.coreId.present ? data.coreId.value : this.coreId,
+      archivedAt: data.archivedAt.present
+          ? data.archivedAt.value
+          : this.archivedAt,
     );
   }
 
@@ -2546,7 +2583,8 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
           ..write('aggregatedSummary: $aggregatedSummary, ')
           ..write('summaryStale: $summaryStale, ')
           ..write('createdAt: $createdAt, ')
-          ..write('coreId: $coreId')
+          ..write('coreId: $coreId, ')
+          ..write('archivedAt: $archivedAt')
           ..write(')'))
         .toString();
   }
@@ -2562,6 +2600,7 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
     summaryStale,
     createdAt,
     coreId,
+    archivedAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -2575,7 +2614,8 @@ class MatomeRow extends DataClass implements Insertable<MatomeRow> {
           other.aggregatedSummary == this.aggregatedSummary &&
           other.summaryStale == this.summaryStale &&
           other.createdAt == this.createdAt &&
-          other.coreId == this.coreId);
+          other.coreId == this.coreId &&
+          other.archivedAt == this.archivedAt);
 }
 
 class MatomesCompanion extends UpdateCompanion<MatomeRow> {
@@ -2588,6 +2628,7 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
   final Value<bool> summaryStale;
   final Value<int> createdAt;
   final Value<int?> coreId;
+  final Value<int?> archivedAt;
   final Value<int> rowid;
   const MatomesCompanion({
     this.id = const Value.absent(),
@@ -2599,6 +2640,7 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
     this.summaryStale = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.coreId = const Value.absent(),
+    this.archivedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   MatomesCompanion.insert({
@@ -2611,6 +2653,7 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
     this.summaryStale = const Value.absent(),
     required int createdAt,
     this.coreId = const Value.absent(),
+    this.archivedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title),
@@ -2626,6 +2669,7 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
     Expression<bool>? summaryStale,
     Expression<int>? createdAt,
     Expression<int>? coreId,
+    Expression<int>? archivedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2638,6 +2682,7 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
       if (summaryStale != null) 'summary_stale': summaryStale,
       if (createdAt != null) 'created_at': createdAt,
       if (coreId != null) 'core_id': coreId,
+      if (archivedAt != null) 'archived_at': archivedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2652,6 +2697,7 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
     Value<bool>? summaryStale,
     Value<int>? createdAt,
     Value<int?>? coreId,
+    Value<int?>? archivedAt,
     Value<int>? rowid,
   }) {
     return MatomesCompanion(
@@ -2664,6 +2710,7 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
       summaryStale: summaryStale ?? this.summaryStale,
       createdAt: createdAt ?? this.createdAt,
       coreId: coreId ?? this.coreId,
+      archivedAt: archivedAt ?? this.archivedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2698,6 +2745,9 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
     if (coreId.present) {
       map['core_id'] = Variable<int>(coreId.value);
     }
+    if (archivedAt.present) {
+      map['archived_at'] = Variable<int>(archivedAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2716,6 +2766,7 @@ class MatomesCompanion extends UpdateCompanion<MatomeRow> {
           ..write('summaryStale: $summaryStale, ')
           ..write('createdAt: $createdAt, ')
           ..write('coreId: $coreId, ')
+          ..write('archivedAt: $archivedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5287,6 +5338,7 @@ typedef $$MatomesTableCreateCompanionBuilder =
       Value<bool> summaryStale,
       required int createdAt,
       Value<int?> coreId,
+      Value<int?> archivedAt,
       Value<int> rowid,
     });
 typedef $$MatomesTableUpdateCompanionBuilder =
@@ -5300,6 +5352,7 @@ typedef $$MatomesTableUpdateCompanionBuilder =
       Value<bool> summaryStale,
       Value<int> createdAt,
       Value<int?> coreId,
+      Value<int?> archivedAt,
       Value<int> rowid,
     });
 
@@ -5354,6 +5407,11 @@ class $$MatomesTableFilterComposer
 
   ColumnFilters<int> get coreId => $composableBuilder(
     column: $table.coreId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5411,6 +5469,11 @@ class $$MatomesTableOrderingComposer
     column: $table.coreId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$MatomesTableAnnotationComposer
@@ -5456,6 +5519,11 @@ class $$MatomesTableAnnotationComposer
 
   GeneratedColumn<int> get coreId =>
       $composableBuilder(column: $table.coreId, builder: (column) => column);
+
+  GeneratedColumn<int> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => column,
+  );
 }
 
 class $$MatomesTableTableManager
@@ -5495,6 +5563,7 @@ class $$MatomesTableTableManager
                 Value<bool> summaryStale = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int?> coreId = const Value.absent(),
+                Value<int?> archivedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MatomesCompanion(
                 id: id,
@@ -5506,6 +5575,7 @@ class $$MatomesTableTableManager
                 summaryStale: summaryStale,
                 createdAt: createdAt,
                 coreId: coreId,
+                archivedAt: archivedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5519,6 +5589,7 @@ class $$MatomesTableTableManager
                 Value<bool> summaryStale = const Value.absent(),
                 required int createdAt,
                 Value<int?> coreId = const Value.absent(),
+                Value<int?> archivedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MatomesCompanion.insert(
                 id: id,
@@ -5530,6 +5601,7 @@ class $$MatomesTableTableManager
                 summaryStale: summaryStale,
                 createdAt: createdAt,
                 coreId: coreId,
+                archivedAt: archivedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

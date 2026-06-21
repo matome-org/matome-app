@@ -135,6 +135,69 @@ void main() {
     });
   });
 
+  group('archive / restore (soft-delete #1409)', () {
+    test('archive stamps archivedAt; restore clears it', () async {
+      final id = mintLocalMatomeId();
+      await dao.create(_matome(id: id, title: 'Soft'));
+      expect((await dao.getById(id))!.archivedAt, isNull);
+
+      expect(await dao.archive(id), 1);
+      final archived = await dao.getById(id);
+      expect(archived!.archivedAt, isNotNull);
+
+      expect(await dao.restore(id), 1);
+      expect((await dao.getById(id))!.archivedAt, isNull);
+    });
+
+    test('an archived matome drops out of EVERY list query', () async {
+      final inbox = mintLocalMatomeId();
+      final filed = mintLocalMatomeId();
+      await dao.create(_matome(id: inbox, spaceId: null, happenedAt: 100));
+      await dao.create(_matome(id: filed, spaceId: _kSpace, happenedAt: 200));
+
+      await dao.archive(inbox);
+      await dao.archive(filed);
+
+      expect(await dao.listMatomes(), isEmpty);
+      expect(await dao.listInboxMatomes(), isEmpty);
+      expect(await dao.listFiledMatomes(), isEmpty);
+      expect(await dao.listMatomesInSpace(_kSpace), isEmpty);
+      expect(await dao.listMatomesByDate(), isEmpty);
+      expect(await dao.matomesByDateRange(0, 1000), isEmpty);
+      expect(await dao.listInboxMatomeItems(), isEmpty);
+      expect(await dao.listMatomeItemsInSpace(_kSpace), isEmpty);
+      expect(await dao.matomeItemsByDateRange(0, 1000), isEmpty);
+    });
+
+    test('restore brings the matome back into the lists', () async {
+      final id = mintLocalMatomeId();
+      await dao.create(_matome(id: id, spaceId: _kSpace, happenedAt: 100));
+      await dao.archive(id);
+      expect(await dao.listMatomesInSpace(_kSpace), isEmpty);
+
+      await dao.restore(id);
+      final back = await dao.listMatomesInSpace(_kSpace);
+      expect(back.map((m) => m.id), [id]);
+    });
+
+    test('archive retains the row and its child recordings (soft, not hard)',
+        () async {
+      final id = mintLocalMatomeId();
+      await dao.create(_matome(id: id, spaceId: _kSpace));
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'child', createdAt: 1, matomeId: id),
+      );
+
+      await dao.archive(id);
+
+      // The row is still there (getById ignores the archive filter) and so are
+      // its children — archiving never deletes data.
+      expect(await dao.getById(id), isNotNull);
+      final hub = await dao.getMatomeWithRecordings(id);
+      expect(hub!.recordings.map((r) => r.id), ['child']);
+    });
+  });
+
   group('getMatomeWithRecordings', () {
     test('returns the Matome + exactly its recordings (not others)', () async {
       final mA = mintLocalMatomeId();

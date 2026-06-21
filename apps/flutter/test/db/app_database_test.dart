@@ -71,9 +71,9 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 8 (…m006 Space + m007 Matome + m008 Contacts)',
+      'schemaVersion is 9 (…m007 Matome + m008 Contacts + m009 archive)',
       () {
-        expect(db.schemaVersion, 8);
+        expect(db.schemaVersion, 9);
       },
     );
 
@@ -542,9 +542,9 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      // A v4-seeded DB now migrates through m005..m008, so the live
-      // schemaVersion getter reports the current constant (7).
-      expect(upgraded.schemaVersion, 8);
+      // A v4-seeded DB now migrates through m005..m009, so the live
+      // schemaVersion getter reports the current constant.
+      expect(upgraded.schemaVersion, 9);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -664,7 +664,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 8);
+      expect(upgraded.schemaVersion, 9);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -814,7 +814,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 8);
+      expect(upgraded.schemaVersion, 9);
 
       final tables = await upgraded
           .customSelect(
@@ -1136,7 +1136,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 8);
+      expect(upgraded.schemaVersion, 9);
 
       final tables = await upgraded
           .customSelect(
@@ -1187,7 +1187,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 8);
+      expect(second.schemaVersion, 9);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1196,6 +1196,194 @@ void main() {
           .map((r) => r.read<String>('name'))
           .get();
       expect(tables, contains('contacts'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (j2) m009 — Matome archive / soft-delete (#1409). Real-file v8→v9 migration.
+  //
+  // Build a v8-shaped DB by hand (matomes WITHOUT archived_at + the four
+  // Contacts tables, user_version=8), then open AppDatabase over the same file
+  // so onUpgrade(8→9) runs. Assert `matomes.archived_at` is added, pre-existing
+  // rows survive (backfilled to NULL ⟺ active), and archive/restore toggle it.
+  // -------------------------------------------------------------------------
+  group('m009 v8→v9 migration (Matome archive)', () {
+    late Directory dir;
+    late File file;
+
+    /// v8-shaped tables: matomes WITHOUT `archived_at`, plus the v8 Contacts
+    /// tables, user_version=8. A pre-existing Matome proves existing rows
+    /// survive the column add.
+    void seedV8Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      // matomes as of m008 — NO archived_at yet.
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_members (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member'
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE organizations (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          role TEXT NOT NULL DEFAULT 'attendee',
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(space_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_shares (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      // A pre-existing Matome so we can prove existing rows survive m009.
+      sdb.execute(
+        "INSERT INTO matomes (id, title, happened_at, created_at) "
+        "VALUES ('mat_local_pre9', 'Pre-existing v8', 100, 100);",
+      );
+      sdb.execute('PRAGMA user_version = 8;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m009');
+      file = File('${dir.path}/matome.sqlite');
+      seedV8Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v8 db migrates to v9: matomes.archived_at is added',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 9);
+
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(matomes)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('archived_at'));
+
+      // Pre-existing row survived and is active (archived_at backfilled to NULL).
+      final pre = await upgraded.matomesDao.getById('mat_local_pre9');
+      expect(pre, isNotNull);
+      expect(pre!.title, 'Pre-existing v8');
+      expect(pre.archivedAt, isNull);
+      // An active pre-existing Matome is still visible in the lists.
+      final listed = await upgraded.matomesDao.listMatomes();
+      expect(listed.map((m) => m.id), contains('mat_local_pre9'));
+    });
+
+    test('after migration, archive hides the row and restore brings it back',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      await upgraded.matomesDao.archive('mat_local_pre9');
+      expect(await upgraded.matomesDao.listMatomes(), isEmpty);
+
+      await upgraded.matomesDao.restore('mat_local_pre9');
+      final back = await upgraded.matomesDao.listMatomes();
+      expect(back.map((m) => m.id), contains('mat_local_pre9'));
+    });
+
+    test('m009 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.matomesDao.listMatomes();
+      await first.close();
+
+      // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 9);
+      final cols = await second
+          .customSelect('PRAGMA table_info(matomes)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('archived_at'));
     });
   });
 

@@ -112,6 +112,43 @@ class MatomeSyncService {
   }
 
   // ---------------------------------------------------------------------------
+  // ARCHIVE / RESTORE — local-first soft-delete (task #1409).
+  // ---------------------------------------------------------------------------
+
+  /// Archive (soft-delete) a Matome LOCAL-FIRST: stamp `archived_at` in Drift
+  /// first (so it leaves every local list immediately, offline-safe), then POST
+  /// Core when the Matome is already reconciled (`core_id != null`). An
+  /// un-reconciled (Inbox/local-only) Matome only gets the Drift write — it was
+  /// never on Core to archive. The row and its child recordings are RETAINED
+  /// (recoverable via [restoreMatome]); reconcile is by `core_id`, never a PK
+  /// remap.
+  Future<void> archiveMatome(String id) async {
+    // LOCAL-FIRST: write Drift before any network call.
+    await _matomesDao.archive(id);
+
+    // SYNC: only a reconciled Matome (has a Core id) can be archived on Core.
+    final row = await _matomesDao.getById(id);
+    final coreId = row?.coreId;
+    if (coreId == null) return;
+
+    await _matomesRepo.archiveMatome(coreId);
+  }
+
+  /// Restore (un-archive) a Matome LOCAL-FIRST: clear `archived_at` in Drift
+  /// first (so it returns to the lists immediately), then POST Core when the
+  /// Matome is reconciled (`core_id != null`). Reconcile is by `core_id`.
+  Future<void> restoreMatome(String id) async {
+    // LOCAL-FIRST: write Drift before any network call.
+    await _matomesDao.restore(id);
+
+    final row = await _matomesDao.getById(id);
+    final coreId = row?.coreId;
+    if (coreId == null) return;
+
+    await _matomesRepo.restoreMatome(coreId);
+  }
+
+  // ---------------------------------------------------------------------------
   // PUSH — only filed Matomes (space-scoped rule).
   // ---------------------------------------------------------------------------
 

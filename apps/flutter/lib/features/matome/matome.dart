@@ -32,6 +32,7 @@ class Matome {
     this.happenedAt,
     this.description,
     this.aggregatedSummary,
+    this.archivedAt,
     this.contacts = const [],
     this.insertedAt,
     this.updatedAt,
@@ -47,6 +48,10 @@ class Matome {
   final DateTime? happenedAt;
   final String? description;
   final String? aggregatedSummary;
+
+  /// Soft-delete (archive) marker (#1409). Non-null ⟺ archived; an archived
+  /// Matome is hidden from the default Core lists and every local list/watch.
+  final DateTime? archivedAt;
 
   /// The role-bearing `matome_contacts` edge set Core returned (remote ids).
   final List<MatomeContactEdge> contacts;
@@ -70,6 +75,7 @@ class Matome {
       happenedAt: asDateTimeOrNull(json['happened_at']),
       description: asStringOrNull(json['description']),
       aggregatedSummary: asStringOrNull(json['aggregated_summary']),
+      archivedAt: asDateTimeOrNull(json['archived_at']),
       contacts: contacts,
       insertedAt: asDateTimeOrNull(json['inserted_at']),
       updatedAt: asDateTimeOrNull(json['updated_at']),

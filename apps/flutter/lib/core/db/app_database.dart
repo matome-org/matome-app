@@ -41,7 +41,14 @@ part 'app_database.g.dart';
 /// and no UI; behaviour is deferred to the `matome-collaboration` plan. (The
 /// task prose drafts this as "m007"; m007 was taken by the Matome slice, so the
 /// Contacts slice lands as m008 — the version constant is authoritative.)
-const int kSchemaVersion = 8;
+///
+/// v9 (m009, Matome archive / soft-delete — #1409, W3) adds the nullable
+/// `matomes.archived_at` column (epoch ms when archived, NULL ⟺ active). Every
+/// matome list/watch query filters `archived_at IS NULL`; the row and its child
+/// recordings are RETAINED (recoverable via restore — no hard-delete, no
+/// orphan-file cleanup). Additive + nullable, so existing rows backfill to NULL
+/// (active) and the step needs no data migration.
+const int kSchemaVersion = 9;
 
 /// The offline-first local store.
 ///
@@ -229,6 +236,29 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(matomeContacts);
             await m.createTable(spaceContacts);
             await m.createTable(matomeShares);
+          }
+          // m009 — Matome archive / soft-delete (#1409, W3). Adds the nullable
+          // `matomes.archived_at` column (epoch ms when archived, NULL ⟺
+          // active). Drift's ALTER ADD COLUMN backfills existing rows to NULL,
+          // so every pre-existing Matome stays active — no data migration. The
+          // row + its child recordings are RETAINED on archive (recoverable via
+          // restore); only the list/watch queries hide it.
+          //
+          // GUARD `from >= 7`: the `matomes` table is created by m007 via
+          // `m.createTable(matomes)`, which always emits the CURRENT table
+          // definition — already including `archived_at`. So a DB upgrading from
+          // before v7 reaches v7 with the column already present; re-adding it
+          // here would throw "duplicate column". Only a DB that already had the
+          // m007/m008-era `matomes` (no archived_at) needs the ALTER.
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, nullable, no prod users):
+          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v8 shape,
+          //   -- rebuild `matomes` without `archived_at` via a copy table.
+          //   -- Leaving the column in place is otherwise harmless.
+          //   PRAGMA user_version = 8;
+          if (from >= 7 && from < 9) {
+            await m.addColumn(matomes, matomes.archivedAt);
           }
         },
         beforeOpen: (details) async {

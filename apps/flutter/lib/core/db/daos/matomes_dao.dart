@@ -66,47 +66,73 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
     });
   }
 
+  /// Archive (soft-delete) a Matome by id — stamps `archived_at` with now (epoch
+  /// ms). The row and its child recordings are RETAINED (recoverable via
+  /// [restore]); only the list/watch queries hide it (#1409). Returns rows
+  /// updated (0 if [id] does not exist). Idempotent in effect — re-archiving an
+  /// already-archived Matome just refreshes the stamp.
+  Future<int> archive(String id) {
+    return (update(matomes)..where((m) => m.id.equals(id))).write(
+      MatomesCompanion(
+        archivedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
+  }
+
+  /// Restore (un-archive) a Matome by id — clears `archived_at`, bringing it
+  /// back into every list/watch query (#1409). Returns rows updated.
+  Future<int> restore(String id) {
+    return (update(matomes)..where((m) => m.id.equals(id))).write(
+      const MatomesCompanion(archivedAt: Value(null)),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Reads — listing
   // ---------------------------------------------------------------------------
 
-  /// All Matomes, newest happening first.
+  /// All Matomes, newest happening first. Excludes archived (#1409).
   Future<List<MatomeRow>> listMatomes() {
     return (select(matomes)
+          ..where((m) => m.archivedAt.isNull())
           ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
         .get();
   }
 
   /// Inbox Matomes — `space_id IS NULL` (untriaged/local-only), newest first.
+  /// Excludes archived (#1409).
   Future<List<MatomeRow>> listInboxMatomes() {
     return (select(matomes)
-          ..where((m) => m.spaceId.isNull())
+          ..where((m) => m.spaceId.isNull() & m.archivedAt.isNull())
           ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
         .get();
   }
 
   /// Filed Matomes — `space_id IS NOT NULL` (triaged), newest first. These are
   /// exactly the Matomes eligible for Core push (ADR-0004 space-scoped sync,
-  /// task #1377); Inbox Matomes (`space_id IS NULL`) stay local-only.
+  /// task #1377); Inbox Matomes (`space_id IS NULL`) stay local-only. Excludes
+  /// archived (#1409) — an archived Matome is not re-pushed.
   Future<List<MatomeRow>> listFiledMatomes() {
     return (select(matomes)
-          ..where((m) => m.spaceId.isNotNull())
+          ..where((m) => m.spaceId.isNotNull() & m.archivedAt.isNull())
           ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
         .get();
   }
 
-  /// Matomes filed into a given Space, newest first.
+  /// Matomes filed into a given Space, newest first. Excludes archived (#1409).
   Future<List<MatomeRow>> listMatomesInSpace(String spaceId) {
     return (select(matomes)
-          ..where((m) => m.spaceId.equals(spaceId))
+          ..where((m) => m.spaceId.equals(spaceId) & m.archivedAt.isNull())
           ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
         .get();
   }
 
   /// Matomes ordered by `happened_at` descending — explicit by-date variant
-  /// (same ordering as [listMatomes], named for intent at call sites).
+  /// (same ordering as [listMatomes], named for intent at call sites). Excludes
+  /// archived (#1409).
   Future<List<MatomeRow>> listMatomesByDate() {
     return (select(matomes)
+          ..where((m) => m.archivedAt.isNull())
           ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
         .get();
   }
@@ -114,10 +140,12 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// Matomes whose `happened_at` falls in [startEpoch, endEpoch] inclusive,
   /// newest first — the Calendar's by-day / by-month window (#1378). Groups by
   /// `happened_at` so the day list and month dots are Matome-, not
-  /// recording-, scoped.
+  /// recording-, scoped. Excludes archived (#1409).
   Future<List<MatomeRow>> matomesByDateRange(int startEpoch, int endEpoch) {
     return (select(matomes)
-          ..where((m) => m.happenedAt.isBetweenValues(startEpoch, endEpoch))
+          ..where((m) =>
+              m.happenedAt.isBetweenValues(startEpoch, endEpoch) &
+              m.archivedAt.isNull())
           ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
         .get();
   }
