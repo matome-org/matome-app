@@ -106,3 +106,11 @@ W7 rewrite leaves a deliberate seam rather than an accident.
 - The letter format is shared in spirit with the reworked matome **list** row
   (W6): both are tiny envelopes — title + a summary preview + a dense meta strip
   with the one normalized sync vocabulary.
+- An **archived** matome stays openable on this same `/matome/:id` letter (the
+  detail DAO deliberately does not filter archived rows). The letter now leads
+  with an **archived banner + inline Restore** (`_ArchivedBanner`) above the
+  header, so the archived state is explicit rather than silent. Archive/restore
+  are **local-first and offline-first** (#1431): the Drift write is
+  authoritative and the Core leg is best-effort, reconciling on the next pull —
+  archiving a synced matome no longer requires connectivity (see
+  `.docs/matome-lifecycle.md` §9).
