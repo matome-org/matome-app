@@ -73,3 +73,11 @@ final matomeInboxControllerProvider = StateNotifierProvider<
     MatomeInboxController, AsyncValue<List<MatomeItem>>>(
   (ref) => MatomeInboxController(ref),
 );
+
+/// Filing-target Spaces for the list row's "Move to space" action (#1412).
+/// Loaded once and shared across rows so the dense menu has its targets without
+/// a per-row Space query. Returns an empty list while loading / on error so the
+/// row's handler degrades to an empty sheet rather than throwing.
+final matomeFilingSpacesProvider = FutureProvider<List<WorkspaceRow>>(
+  (ref) => ref.read(matomeInboxControllerProvider.notifier).spaces(),
+);

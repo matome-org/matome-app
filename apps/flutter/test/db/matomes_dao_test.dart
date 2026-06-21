@@ -46,6 +46,7 @@ RecordingsCompanion _recording({
   String? matomeId,
   String? workspaceId,
   String? summary,
+  String mediaType = 'audio',
 }) {
   return RecordingsCompanion.insert(
     id: id,
@@ -57,6 +58,7 @@ RecordingsCompanion _recording({
     matomeId: Value(matomeId),
     workspaceId: Value(workspaceId),
     summary: Value(summary),
+    mediaType: Value(mediaType),
   );
 }
 
@@ -462,6 +464,77 @@ void main() {
 
       expect(await dao.matomeIdForRecording('child'), 'parent');
       expect(await dao.matomeIdForRecording('nope'), isNull);
+    });
+  });
+
+  // The list-row rework (#1412) derives the dense meta strip's counts inside
+  // `_hydrateCounts`: audio/image split by mediaType, people from
+  // `matome_contacts`, and the filed Space name from `workspaces`.
+  group('list-card derived fields (#1412)', () {
+    Future<void> addContact(String contactId, String matomeId) async {
+      await db.contactsDao.create(
+        ContactsCompanion.insert(
+          id: contactId,
+          ownerId: 'owner',
+          displayName: contactId,
+          createdAt: 1,
+        ),
+      );
+      await db.contactsDao.addContactToMatome(
+        matomeId: matomeId,
+        contactId: contactId,
+      );
+    }
+
+    test('splits the item mix into audio / image counts by mediaType',
+        () async {
+      await dao.create(_matome(id: 'm', spaceId: null, happenedAt: 100));
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'a1', createdAt: 1, matomeId: 'm', mediaType: 'audio'),
+      );
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'a2', createdAt: 2, matomeId: 'm', mediaType: 'audio'),
+      );
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'i1', createdAt: 3, matomeId: 'm', mediaType: 'image'),
+      );
+
+      final item = (await dao.listInboxMatomeItems()).single;
+      expect(item.recordingCount, 3);
+      expect(item.audioCount, 2);
+      expect(item.imageCount, 1);
+    });
+
+    test('counts tagged people from matome_contacts', () async {
+      await dao.create(_matome(id: 'm', spaceId: null, happenedAt: 100));
+      await addContact('c1', 'm');
+      await addContact('c2', 'm');
+
+      final item = (await dao.listInboxMatomeItems()).single;
+      expect(item.peopleCount, 2);
+    });
+
+    test('Inbox cards carry no spaceName; filed cards resolve the Space name',
+        () async {
+      await dao.create(_matome(id: 'inbox', spaceId: null, happenedAt: 200));
+      await dao.create(_matome(id: 'filed', spaceId: _kSpace, happenedAt: 100));
+
+      final inbox = (await dao.listInboxMatomeItems()).single;
+      expect(inbox.spaceName, isNull);
+
+      final filed = (await dao.listMatomeItemsInSpace(_kSpace)).single;
+      expect(filed.spaceName, isNotNull);
+      expect(filed.spaceName, isNotEmpty);
+    });
+
+    test('a matome with no items / people reports zero counts', () async {
+      await dao.create(_matome(id: 'empty', spaceId: null, happenedAt: 100));
+
+      final item = (await dao.listInboxMatomeItems()).single;
+      expect(item.recordingCount, 0);
+      expect(item.audioCount, 0);
+      expect(item.imageCount, 0);
+      expect(item.peopleCount, 0);
     });
   });
 }

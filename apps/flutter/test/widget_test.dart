@@ -83,8 +83,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Header title is the large "Inbox" heading.
-    expect(find.text('Inbox'), findsOneWidget);
+    // Header title is the large "Inbox" heading. (Each inbox matome row now
+    // also carries an "Inbox" place chip — #1412 — so scope to the heading.)
+    expect(
+      find.descendant(
+        of: find.byType(HomeScreen),
+        matching: find.text('Inbox'),
+      ),
+      findsWidgets,
+    );
     expect(find.text('Standup notes'), findsOneWidget);
     expect(find.text('Idea dump'), findsOneWidget);
     // Grouped by date: today's item lands under the "TODAY" header.

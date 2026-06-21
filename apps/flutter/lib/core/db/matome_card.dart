@@ -35,6 +35,10 @@ class MatomeItem {
     this.description,
     this.aggregatedSummary,
     this.coreId,
+    this.spaceName,
+    this.audioCount = 0,
+    this.imageCount = 0,
+    this.peopleCount = 0,
   });
 
   final String id;
@@ -71,6 +75,22 @@ class MatomeItem {
   /// Matome was loaded count-only.
   final List<RecordingItem> recordings;
 
+  /// Display name of the filed Space (`workspaces.name`), or NULL when the
+  /// Matome is in the Inbox (`spaceId == null`). Populated by the list query's
+  /// join so the row's place chip shows the folder name without a per-row read.
+  final String? spaceName;
+
+  /// Item-mix counts for the list row's dense meta strip (#1412), derived from
+  /// the child recordings' `mediaType` by the list query. [audioCount] +
+  /// [imageCount] need not sum to [recordingCount] (other media types exist),
+  /// so each token is shown independently and only when its count > 0.
+  final int audioCount;
+  final int imageCount;
+
+  /// Number of Contacts tagged on this Matome (`matome_contacts` edges),
+  /// populated by the list query for the people token. 0 when none / not loaded.
+  final int peopleCount;
+
   /// Derived untriaged state — `spaceId == null` (glossary: Inbox).
   bool get isInbox => spaceId == null;
 
@@ -96,6 +116,10 @@ class MatomeItem {
     MatomeRow row, {
     List<RecordingItem> recordings = const [],
     int? recordingCount,
+    String? spaceName,
+    int audioCount = 0,
+    int imageCount = 0,
+    int peopleCount = 0,
   }) {
     return MatomeItem(
       id: row.id,
@@ -109,6 +133,10 @@ class MatomeItem {
       coreId: row.coreId,
       recordingCount: recordingCount ?? recordings.length,
       recordings: recordings,
+      spaceName: spaceName,
+      audioCount: audioCount,
+      imageCount: imageCount,
+      peopleCount: peopleCount,
     );
   }
 }

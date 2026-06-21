@@ -183,11 +183,42 @@ void main() {
     // Mic FAB present.
     expect(find.byIcon(Icons.mic), findsOneWidget);
     // All five bottom-bar destinations are present (Contacts is the 5th, #1374).
-    expect(find.byIcon(Icons.inbox_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.calendar_today_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.auto_awesome_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.contacts_outlined), findsOneWidget);
+    // Scope to the BottomAppBar: the reworked matome rows (#1412) now carry
+    // their own place-chip icons (inbox / folder), which would otherwise
+    // collide with the destination glyphs.
+    final bottomBar = find.byType(BottomAppBar);
+    expect(
+      find.descendant(of: bottomBar, matching: find.byIcon(Icons.inbox_outlined)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: bottomBar,
+        matching: find.byIcon(Icons.calendar_today_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: bottomBar,
+        matching: find.byIcon(Icons.folder_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: bottomBar,
+        matching: find.byIcon(Icons.auto_awesome_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: bottomBar,
+        matching: find.byIcon(Icons.contacts_outlined),
+      ),
+      findsOneWidget,
+    );
 
     // Drive tab switches through the router: with five bottom-bar items packed
     // around the FAB notch, an icon's centre can fall under the docked FAB in the

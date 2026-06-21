@@ -9,6 +9,8 @@ import '../../ui/app_card.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
 import '../home/home_filters.dart' show formatTimestamp;
+import '../home/matome_inbox_controller.dart' show matomeFilingSpacesProvider;
+import '../matome/matome_row_actions.dart';
 import 'space_detail_controller.dart';
 
 /// Wide-viewport reading clamp so the matome rows don't sprawl across a desktop
@@ -71,7 +73,7 @@ class SpaceDetailScreen extends ConsumerWidget {
   }
 }
 
-class _List extends StatelessWidget {
+class _List extends ConsumerWidget {
   const _List({
     required this.items,
     required this.isWide,
@@ -85,10 +87,12 @@ class _List extends StatelessWidget {
   final ValueChanged<MatomeItem> onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final spacing = context.spacing;
     final typography = context.typography;
+    final spaces =
+        ref.watch(matomeFilingSpacesProvider).valueOrNull ?? const [];
 
     if (items.isEmpty) {
       return RefreshIndicator(
@@ -130,6 +134,11 @@ class _List extends StatelessWidget {
               DateTime.fromMillisecondsSinceEpoch(item.happenedAt),
             ),
             onTap: () => onTap(item),
+            onAction: (action) => MatomeRowActions(
+              matome: item,
+              spaces: spaces,
+              onOpen: () => GoRouter.of(context).go('/matome/${item.id}'),
+            ).handle(context, ref, action),
           ),
         );
       },

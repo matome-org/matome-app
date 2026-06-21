@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/db/matome_card.dart';
 import '../core/db/recording_card.dart';
 import '../core/theme/app_theme.dart';
+import '../features/matome/matome_actions_menu.dart';
 import '../i18n/strings.g.dart';
 import 'app_button.dart';
 import 'avatar.dart';
@@ -29,6 +30,7 @@ class AppCard extends StatelessWidget {
        badge = null,
        statusLabel = null,
        durationLabel = null,
+       onAction = null,
        _variant = _AppCardVariant.recording;
 
   const AppCard.calendar({
@@ -44,16 +46,23 @@ class AppCard extends StatelessWidget {
        relativeTime = null,
        onLongPress = null,
        onRetry = null,
+       onAction = null,
        _variant = _AppCardVariant.calendar;
 
-  /// A **Matome** row (#1378): the top-level managed unit. Shows the matome
-  /// title, its item count, an inbox / on-device hint, and a relative time.
+  /// A **Matome** row (#1378, reworked #1412): the top-level managed unit. A
+  /// compact envelope — title (full width), a one-line summary peek, a dense
+  /// meta strip (time · item mix · people · place · sync chip) and a dense
+  /// actions menu at the right edge. No left avatar, no right chevron.
+  ///
+  /// [onAction] wires the row's always-present dense [MatomeActionsMenu]; when
+  /// null the menu degrades to a no-op (read-only / mockup hosts).
   const AppCard.matome({
     super.key,
     required this.matome,
     required this.relativeTime,
     this.onTap,
     this.onLongPress,
+    this.onAction,
   }) : card = null,
        id = null,
        title = null,
@@ -70,6 +79,9 @@ class AppCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onRetry;
+
+  /// Row-level handler for the matome variant's dense actions menu (#1412).
+  final ValueChanged<MatomeAction>? onAction;
   final String? id;
   final String? title;
   final String? badge;
@@ -118,7 +130,8 @@ class AppCard extends StatelessWidget {
     final colors = context.colors;
     final spacing = context.spacing;
     final radius = context.radius;
-    final accent = colors.accent;
+    final summary = m.aggregatedSummary?.trim();
+    final hasSummary = summary != null && summary.isNotEmpty;
 
     return Semantics(
       button: true,
@@ -133,59 +146,92 @@ class AppCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(radius.lg),
           child: Container(
             constraints: const BoxConstraints(minHeight: 64),
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(radius.lg),
               border: Border.all(color: colors.border),
             ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Avatar(
-                  backgroundColor: accent.withValues(alpha: 0.13),
-                  size: 36,
-                  child: Icon(
-                    Icons.layers_outlined,
-                    size: 18,
-                    color: accent,
-                  ),
-                ),
-                SizedBox(width: spacing.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _RecordingTitleRow(
-                        title: m.title,
-                        timestamp: relativeTime ?? '',
+                      // Title (full width — time moved into the meta strip).
+                      Text(
+                        m.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: colors.textPrimary,
+                        ),
                       ),
                       SizedBox(height: spacing.xxs),
+                      // Summary peek (the "letter" content) — or a muted,
+                      // italic "No summary yet" fallback when none is stored.
+                      Text(
+                        hasSummary ? summary : t.matome.noSummary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.3,
+                          color: hasSummary
+                              ? colors.textSecondary
+                              : colors.textMuted,
+                          fontStyle:
+                              hasSummary ? FontStyle.normal : FontStyle.italic,
+                        ),
+                      ),
+                      SizedBox(height: spacing.xs),
+                      // Dense meta strip: time first, then item mix, people,
+                      // place chip, and the always-on sync chip.
                       Wrap(
-                        spacing: spacing.xs,
-                        runSpacing: 6,
+                        spacing: spacing.sm,
+                        runSpacing: spacing.xs,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Text(
-                            t.matome.itemCount(n: m.recordingCount),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: colors.textSecondary,
-                            ),
+                          _MatomeMetaToken(
+                            icon: Icons.schedule,
+                            text: relativeTime ?? '',
                           ),
-                          if (m.isInbox)
-                            MatomeSyncChip(
-                              key: const ValueKey('matome-card-on-device'),
-                              rollup: m.syncRollup,
+                          if (m.audioCount > 0)
+                            _MatomeMetaToken(
+                              icon: Icons.mic_none_rounded,
+                              text: '${m.audioCount}',
                             ),
+                          if (m.imageCount > 0)
+                            _MatomeMetaToken(
+                              icon: Icons.image_outlined,
+                              text: '${m.imageCount}',
+                            ),
+                          if (m.peopleCount > 0)
+                            _MatomeMetaToken(
+                              icon: Icons.people_outline,
+                              text: '${m.peopleCount}',
+                            ),
+                          _MatomePlaceChip(
+                            spaceName: m.isInbox ? null : m.spaceName,
+                          ),
+                          MatomeSyncChip(
+                            key: const ValueKey('matome-card-sync'),
+                            rollup: m.syncRollup,
+                          ),
                         ],
                       ),
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: colors.textMuted,
+                SizedBox(width: spacing.xs),
+                // Actions at the right edge, centered to the whole row so
+                // mobile users can act without opening the matome. Always
+                // present; a null handler degrades to a no-op (read-only host).
+                MatomeActionsMenu(
+                  dense: true,
+                  onAction: onAction ?? (_) {},
                 ),
               ],
             ),
@@ -575,6 +621,79 @@ class MatomeSyncChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: spacing.md, color: color),
+          SizedBox(width: spacing.xxs),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One token in the matome row's dense meta strip (#1412): a small muted icon
+/// + a secondary-coloured count/label. Used for time, mic, image and people.
+class _MatomeMetaToken extends StatelessWidget {
+  const _MatomeMetaToken({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: colors.textMuted),
+        SizedBox(width: context.spacing.xxs),
+        Text(
+          text,
+          style: TextStyle(fontSize: 11, color: colors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
+/// Filing chip for the matome row (#1412): a folder pill carrying the filed
+/// Space name, or a neutral "Inbox" pill when the matome is untriaged.
+class _MatomePlaceChip extends StatelessWidget {
+  const _MatomePlaceChip({required this.spaceName});
+
+  /// The filed Space name, or null when the matome is in the Inbox.
+  final String? spaceName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+
+    final filed = spaceName != null;
+    final icon = filed ? Icons.folder_outlined : Icons.inbox_outlined;
+    final label = filed ? spaceName! : t.matome.placeInbox;
+    final color = filed ? colors.textSecondary : colors.textMuted;
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.xs,
+        vertical: spacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: colors.subtleFill,
+        borderRadius: BorderRadius.circular(radius.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
           SizedBox(width: spacing.xxs),
           Text(
             label,

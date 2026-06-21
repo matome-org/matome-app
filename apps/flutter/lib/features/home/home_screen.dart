@@ -15,6 +15,7 @@ import '../../ui/app_text_field.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
 import '../matome/matome_detail_screen.dart';
+import '../matome/matome_row_actions.dart';
 import 'home_filters.dart' show formatTimestamp;
 import 'inbox_upload.dart';
 import 'matome_inbox_controller.dart';
@@ -414,7 +415,7 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _Body extends StatelessWidget {
+class _Body extends ConsumerWidget {
   const _Body({
     required this.items,
     required this.search,
@@ -428,10 +429,13 @@ class _Body extends StatelessWidget {
   final ValueChanged<MatomeItem> onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final spacing = context.spacing;
     final typography = context.typography;
+    // Filing targets for each row's "Move to space" action — loaded once,
+    // shared across rows (empty while loading, so the menu still opens).
+    final spaces = ref.watch(matomeFilingSpacesProvider).valueOrNull ?? const [];
     final filtered = searchMatomes(items, search);
     final sections = groupMatomesByDate(
       filtered,
@@ -505,6 +509,13 @@ class _Body extends StatelessWidget {
                       DateTime.fromMillisecondsSinceEpoch(item.happenedAt),
                     ),
                     onTap: () => onTap(item),
+                    onAction: (action) => MatomeRowActions(
+                      matome: item,
+                      spaces: spaces,
+                      // Rename / Edit date & time open the matome hub.
+                      onOpen: () =>
+                          GoRouter.of(context).go('/matome/${item.id}'),
+                    ).handle(context, ref, action),
                   ),
                 ),
               ),

@@ -15,7 +15,7 @@ part 'matomes_dao.g.dart';
 /// Pure-Dart surface: no HTTP. The sync layer decides when to pull from Core
 /// and writes through these methods. `spaceId == null` ⟺ Inbox ⟺
 /// local-only/untriaged (ADR-0004).
-@DriftAccessor(tables: [Matomes, Recordings])
+@DriftAccessor(tables: [Matomes, Recordings, MatomeContacts, Workspaces])
 class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   MatomesDao(super.db);
 
@@ -161,18 +161,72 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   Future<List<MatomeItem>> _hydrateCounts(List<MatomeRow> rows) async {
     if (rows.isEmpty) return const [];
     final ids = rows.map((r) => r.id).toList(growable: false);
-    final countExpr = recordings.id.count();
-    final query = selectOnly(recordings)
-      ..addColumns([recordings.matomeId, countExpr])
+
+    // (1) Item mix per Matome — grouped COUNT over `recordings`, split by
+    // `mediaType` so the list row can show mic vs image tokens (#1412). One
+    // grouped scan yields total + audio + image without loading child rows.
+    final totalExpr = recordings.id.count();
+    final audioExpr = recordings.id.count(
+      filter: recordings.mediaType.like('audio%'),
+    );
+    final imageExpr = recordings.id.count(
+      filter: recordings.mediaType.like('image%'),
+    );
+    final mixQuery = selectOnly(recordings)
+      ..addColumns([recordings.matomeId, totalExpr, audioExpr, imageExpr])
       ..where(recordings.matomeId.isIn(ids))
       ..groupBy([recordings.matomeId]);
-    final counts = <String, int>{};
-    for (final row in await query.get()) {
+    final total = <String, int>{};
+    final audio = <String, int>{};
+    final image = <String, int>{};
+    for (final row in await mixQuery.get()) {
       final mid = row.read(recordings.matomeId);
-      if (mid != null) counts[mid] = row.read(countExpr) ?? 0;
+      if (mid == null) continue;
+      total[mid] = row.read(totalExpr) ?? 0;
+      audio[mid] = row.read(audioExpr) ?? 0;
+      image[mid] = row.read(imageExpr) ?? 0;
     }
+
+    // (2) People per Matome — grouped COUNT over `matome_contacts` edges.
+    final peopleExpr = matomeContacts.id.count();
+    final peopleQuery = selectOnly(matomeContacts)
+      ..addColumns([matomeContacts.matomeId, peopleExpr])
+      ..where(matomeContacts.matomeId.isIn(ids))
+      ..groupBy([matomeContacts.matomeId]);
+    final people = <String, int>{};
+    for (final row in await peopleQuery.get()) {
+      people[row.read(matomeContacts.matomeId)!] = row.read(peopleExpr) ?? 0;
+    }
+
+    // (3) Filed Space name per Matome — a single lookup over `workspaces` for
+    // the spaceIds present in this page (Inbox rows have a null spaceId and are
+    // skipped). Keeps the row's place chip a folder name, not just an id.
+    final spaceIds = rows
+        .map((r) => r.spaceId)
+        .whereType<String>()
+        .toSet()
+        .toList(growable: false);
+    final spaceNames = <String, String>{};
+    if (spaceIds.isNotEmpty) {
+      final nameQuery = selectOnly(workspaces)
+        ..addColumns([workspaces.id, workspaces.name])
+        ..where(workspaces.id.isIn(spaceIds));
+      for (final row in await nameQuery.get()) {
+        spaceNames[row.read(workspaces.id)!] = row.read(workspaces.name)!;
+      }
+    }
+
     return rows
-        .map((r) => MatomeItem.fromRow(r, recordingCount: counts[r.id] ?? 0))
+        .map(
+          (r) => MatomeItem.fromRow(
+            r,
+            recordingCount: total[r.id] ?? 0,
+            audioCount: audio[r.id] ?? 0,
+            imageCount: image[r.id] ?? 0,
+            peopleCount: people[r.id] ?? 0,
+            spaceName: r.spaceId == null ? null : spaceNames[r.spaceId],
+          ),
+        )
         .toList(growable: false);
   }
 

@@ -6,6 +6,8 @@ part of 'matomes_dao.dart';
 mixin _$MatomesDaoMixin on DatabaseAccessor<AppDatabase> {
   $MatomesTable get matomes => attachedDatabase.matomes;
   $RecordingsTable get recordings => attachedDatabase.recordings;
+  $MatomeContactsTable get matomeContacts => attachedDatabase.matomeContacts;
+  $WorkspacesTable get workspaces => attachedDatabase.workspaces;
   MatomesDaoManager get managers => MatomesDaoManager(this);
 }
 
@@ -16,4 +18,11 @@ class MatomesDaoManager {
       $$MatomesTableTableManager(_db.attachedDatabase, _db.matomes);
   $$RecordingsTableTableManager get recordings =>
       $$RecordingsTableTableManager(_db.attachedDatabase, _db.recordings);
+  $$MatomeContactsTableTableManager get matomeContacts =>
+      $$MatomeContactsTableTableManager(
+        _db.attachedDatabase,
+        _db.matomeContacts,
+      );
+  $$WorkspacesTableTableManager get workspaces =>
+      $$WorkspacesTableTableManager(_db.attachedDatabase, _db.workspaces);
 }
