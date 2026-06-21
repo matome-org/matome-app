@@ -54,6 +54,11 @@ class MatomeWidgetbook extends StatelessWidget {
             WidgetbookTheme(name: 'Dark', data: buildDarkTheme()),
           ],
         ),
+        LocalizationAddon(
+          locales: const [Locale('en'), Locale('ja')],
+          localizationsDelegates: _localizationsDelegates,
+          initialLocale: const Locale('en'),
+        ),
       ],
     );
   }
