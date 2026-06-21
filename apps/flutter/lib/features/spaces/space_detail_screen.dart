@@ -38,9 +38,13 @@ class SpaceDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: colors.background,
         title: Text(title),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => GoRouter.of(context).go('/spaces'),
+        leading: BackButton(
+          key: const ValueKey('space-detail-back'),
+          // Pop to the REAL origin (the screen pushed this route — e.g. the
+          // spaces list, or a calendar deep-link), and only fall back to the
+          // spaces root when there is genuinely nothing to pop.
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/spaces'),
         ),
       ),
       body: SafeArea(
@@ -65,7 +69,7 @@ class SpaceDetailScreen extends ConsumerWidget {
             onRefresh: () => ref
                 .read(spaceDetailControllerProvider(spaceId).notifier)
                 .load(),
-            onTap: (item) => GoRouter.of(context).go('/matome/${item.id}'),
+            onTap: (item) => GoRouter.of(context).push('/matome/${item.id}'),
           ),
         ),
       ),
@@ -137,7 +141,7 @@ class _List extends ConsumerWidget {
             onAction: (action) => MatomeRowActions(
               matome: item,
               spaces: spaces,
-              onOpen: () => GoRouter.of(context).go('/matome/${item.id}'),
+              onOpen: () => GoRouter.of(context).push('/matome/${item.id}'),
             ).handle(context, ref, action),
           ),
         );

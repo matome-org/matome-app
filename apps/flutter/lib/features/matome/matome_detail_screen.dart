@@ -41,7 +41,7 @@ import 'matome_detail_controller.dart';
 /// screen can later drop into the desktop two-pane (#1378).
 ///
 /// Reachable as `/matome/:id`.
-class MatomeDetailScreen extends ConsumerWidget {
+class MatomeDetailScreen extends ConsumerStatefulWidget {
   const MatomeDetailScreen({super.key, required this.id, this.embedded = false});
 
   final String id;
@@ -52,28 +52,113 @@ class MatomeDetailScreen extends ConsumerWidget {
   final bool embedded;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MatomeDetailScreen> createState() => _MatomeDetailScreenState();
+}
+
+class _MatomeDetailScreenState extends ConsumerState<MatomeDetailScreen> {
+  /// True while the notes editor holds UNSAVED edits. Lifted to the Scaffold so
+  /// the leave-guard (mirroring [DetailsScreen]'s `PopScope`) can intercept a
+  /// back-out and the [_NotesSection] leaf can flag/clear it on edit/save.
+  final ValueNotifier<bool> _notesDirty = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _notesDirty.dispose();
+    super.dispose();
+  }
+
+  /// Confirm-leave dialog (mirrors [DetailsScreen]): only prompts when the notes
+  /// editor is dirty; returns true when the user chooses to discard.
+  Future<bool> _confirmLeave() async {
+    if (!_notesDirty.value) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final colors = context.colors;
+        return AppDialog(
+          title: Text(t.details.unsavedTitle),
+          content: Text(t.details.unsavedBody),
+          actions: [
+            AppTextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.details.keepEditing),
+            ),
+            AppTextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: colors.failed),
+              child: Text(t.details.discard),
+            ),
+          ],
+        );
+      },
+    );
+    if (discard == true) _notesDirty.value = false;
+    return discard ?? false;
+  }
+
+  /// The guarded exit used by both the AppBar back button and the system pop:
+  /// confirm any unsaved note edits, then pop (or fall back to /inbox on a
+  /// deep-link entry with an empty stack).
+  Future<void> _onBack() async {
+    if (!await _confirmLeave()) return;
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/inbox');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final id = widget.id;
     final state = ref.watch(matomeDetailControllerProvider(id));
     final colors = context.colors;
 
     final title = state.matome?.title ?? '';
-    final body = _MatomeDetailBody(id: id);
+    final body = _MatomeDetailBody(id: id, notesDirty: _notesDirty);
 
-    if (embedded) {
+    if (widget.embedded) {
       return Material(color: colors.background, child: body);
     }
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      appBar: AppBar(
-        backgroundColor: colors.background,
-        surfaceTintColor: colors.background,
-        title: Text(
-          title.isEmpty ? t.matome.title : title,
-          overflow: TextOverflow.ellipsis,
+    return ValueListenableBuilder<bool>(
+      valueListenable: _notesDirty,
+      builder: (context, dirty, _) => PopScope(
+        canPop: !dirty,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return;
+          final shouldLeave = await _confirmLeave();
+          if (!shouldLeave || !context.mounted) return;
+          // The guard cleared the dirty flag; re-issue the pop.
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/inbox');
+          }
+        },
+        child: Scaffold(
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            backgroundColor: colors.background,
+            surfaceTintColor: colors.background,
+            // An ALWAYS-visible back affordance: the hub is now pushed OVER the
+            // shell (every list opens it with `context.push`), so it has a
+            // stack to pop. On a deep-link / redirect entry with an empty stack
+            // `canPop()` is false, so we fall back to the inbox rather than
+            // stranding the user. An unsaved-notes leave-guard runs first.
+            leading: BackButton(
+              key: const ValueKey('matome-detail-back'),
+              onPressed: _onBack,
+            ),
+            title: Text(
+              title.isEmpty ? t.matome.title : title,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          body: body,
         ),
       ),
-      body: body,
     );
   }
 }
@@ -113,9 +198,13 @@ const double _matomePanelWidth = 360;
 /// via [_WideDetailLayout]; the same `/matome/:id` route, a breakpoint-driven
 /// layout swap (ADR-0005), no nested navigator.
 class _MatomeDetailBody extends ConsumerWidget {
-  const _MatomeDetailBody({required this.id});
+  const _MatomeDetailBody({required this.id, required this.notesDirty});
 
   final String id;
+
+  /// Lifted unsaved-notes signal (see [_MatomeDetailScreenState]). Threaded down
+  /// to the [_NotesSection] so its edit/save toggles the Scaffold leave-guard.
+  final ValueNotifier<bool> notesDirty;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -150,6 +239,7 @@ class _MatomeDetailBody extends ConsumerWidget {
             id: id,
             matome: matome,
             spaces: state.spaces,
+            notesDirty: notesDirty,
           );
         }
         return Center(
@@ -163,7 +253,12 @@ class _MatomeDetailBody extends ConsumerWidget {
                 spacing.xxl + spacing.xxl,
               ),
               children: [
-                _MatomeLetterCard(id: id, matome: matome, spaces: state.spaces),
+                _MatomeLetterCard(
+                  id: id,
+                  matome: matome,
+                  spaces: state.spaces,
+                  notesDirty: notesDirty,
+                ),
               ],
             ),
           ),
@@ -183,11 +278,13 @@ class _WideDetailLayout extends ConsumerWidget {
     required this.id,
     required this.matome,
     required this.spaces,
+    required this.notesDirty,
   });
 
   final String id;
   final MatomeItem matome;
   final List<WorkspaceRow> spaces;
+  final ValueNotifier<bool> notesDirty;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -218,6 +315,7 @@ class _WideDetailLayout extends ConsumerWidget {
                     id: id,
                     matome: matome,
                     spaces: spaces,
+                    notesDirty: notesDirty,
                     // No "Show more" on wide: the detail lives in the panel.
                     showDetailToggle: false,
                   ),
@@ -229,7 +327,12 @@ class _WideDetailLayout extends ConsumerWidget {
         // The persistent side panel.
         SizedBox(
           width: _matomePanelWidth,
-          child: _DetailSidePanel(id: id, matome: matome, controller: controller),
+          child: _DetailSidePanel(
+            id: id,
+            matome: matome,
+            controller: controller,
+            notesDirty: notesDirty,
+          ),
         ),
       ],
     );
@@ -246,11 +349,13 @@ class _DetailSidePanel extends StatelessWidget {
     required this.id,
     required this.matome,
     required this.controller,
+    required this.notesDirty,
   });
 
   final String id;
   final MatomeItem matome;
   final MatomeDetailController controller;
+  final ValueNotifier<bool> notesDirty;
 
   @override
   Widget build(BuildContext context) {
@@ -284,7 +389,12 @@ class _DetailSidePanel extends StatelessWidget {
             style: typography.title.copyWith(color: colors.textPrimary),
           ),
           SizedBox(height: spacing.md),
-          _MatomeDetails(id: id, matome: matome, controller: controller),
+          _MatomeDetails(
+            id: id,
+            matome: matome,
+            controller: controller,
+            notesDirty: notesDirty,
+          ),
         ],
       ),
     );
@@ -298,12 +408,14 @@ class _MatomeLetterCard extends ConsumerStatefulWidget {
     required this.id,
     required this.matome,
     required this.spaces,
+    required this.notesDirty,
     this.showDetailToggle = true,
   });
 
   final String id;
   final MatomeItem matome;
   final List<WorkspaceRow> spaces;
+  final ValueNotifier<bool> notesDirty;
 
   /// Whether the letter hosts its own "Show more" reveal of [_MatomeDetails].
   /// True on narrow (the sheet presentation); false on wide, where the detail
@@ -386,6 +498,7 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
                 id: widget.id,
                 matome: matome,
                 controller: controller,
+                notesDirty: widget.notesDirty,
               ),
             ],
           ],
@@ -404,11 +517,13 @@ class _MatomeDetails extends StatelessWidget {
     required this.id,
     required this.matome,
     required this.controller,
+    required this.notesDirty,
   });
 
   final String id;
   final MatomeItem matome;
   final MatomeDetailController controller;
+  final ValueNotifier<bool> notesDirty;
 
   @override
   Widget build(BuildContext context) {
@@ -425,6 +540,7 @@ class _MatomeDetails extends StatelessWidget {
         _NotesSection(
           description: matome.description,
           controller: controller,
+          notesDirty: notesDirty,
         ),
         SizedBox(height: spacing.lg),
         const _DeferredActions(),
@@ -1735,10 +1851,19 @@ class _AggregatedSummary extends StatelessWidget {
 /// [AppTextField]; "Save" persists via [MatomeDetailController.saveNotes] (which
 /// marks the summary stale when the notes actually changed).
 class _NotesSection extends StatefulWidget {
-  const _NotesSection({required this.description, required this.controller});
+  const _NotesSection({
+    required this.description,
+    required this.controller,
+    required this.notesDirty,
+  });
 
   final String? description;
   final MatomeDetailController controller;
+
+  /// Lifted unsaved-notes signal driving the Scaffold leave-guard
+  /// ([_MatomeDetailScreenState]). Set true while the editor holds edits that
+  /// differ from the persisted description; cleared on save/cancel.
+  final ValueNotifier<bool> notesDirty;
 
   @override
   State<_NotesSection> createState() => _NotesSectionState();
@@ -1750,20 +1875,43 @@ class _NotesSectionState extends State<_NotesSection> {
       TextEditingController(text: widget.description ?? '');
 
   @override
+  void initState() {
+    super.initState();
+    _field.addListener(_recomputeDirty);
+  }
+
+  @override
   void dispose() {
+    _field.removeListener(_recomputeDirty);
+    // Clear the lifted flag so a disposed editor never leaves the guard armed.
+    widget.notesDirty.value = false;
     _field.dispose();
     super.dispose();
+  }
+
+  /// Dirty == actively editing AND the field text differs from the persisted
+  /// description. Drives the Scaffold leave-guard.
+  void _recomputeDirty() {
+    final baseline = widget.description ?? '';
+    widget.notesDirty.value = _editing && _field.text != baseline;
   }
 
   void _startEdit() {
     _field.text = widget.description ?? '';
     setState(() => _editing = true);
+    _recomputeDirty();
+  }
+
+  void _cancel() {
+    setState(() => _editing = false);
+    widget.notesDirty.value = false;
   }
 
   Future<void> _save() async {
     await widget.controller.saveNotes(_field.text);
     if (!mounted) return;
     setState(() => _editing = false);
+    widget.notesDirty.value = false;
   }
 
   @override
@@ -1804,7 +1952,7 @@ class _NotesSectionState extends State<_NotesSection> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               AppTextButton(
-                onPressed: () => setState(() => _editing = false),
+                onPressed: _cancel,
                 child: Text(t.matome.cancel),
               ),
               SizedBox(width: spacing.xs),
