@@ -61,6 +61,15 @@ class _MatomeDetailScreenState extends ConsumerState<MatomeDetailScreen> {
   /// back-out and the [_NotesSection] leaf can flag/clear it on edit/save.
   final ValueNotifier<bool> _notesDirty = ValueNotifier<bool>(false);
 
+  /// Re-entrancy latch for the [PopScope] guard. The guard runs with
+  /// `canPop: false` so EVERY back attempt (button `maybePop` or system
+  /// gesture) is delivered to [_handlePop] — one path, no bypass. But the
+  /// programmatic pop we issue from inside the guard ([_popOrFallback]'s
+  /// `context.pop()`) re-enters the same callback before the route is gone;
+  /// this latch makes that re-entry a no-op so the dialog never double-fires
+  /// (the exact race the old button-owned back path was prone to).
+  bool _leaving = false;
+
   @override
   void dispose() {
     _notesDirty.dispose();
@@ -96,13 +105,29 @@ class _MatomeDetailScreenState extends ConsumerState<MatomeDetailScreen> {
     return discard ?? false;
   }
 
-  /// The guarded exit used by both the AppBar back button and the system pop:
-  /// confirm any unsaved note edits, then pop (or fall back to /inbox on a
-  /// deep-link entry with an empty stack).
-  Future<void> _onBack() async {
-    if (!await _confirmLeave()) return;
+  /// The SINGLE owned back path. Driven by the [PopScope] for BOTH the AppBar
+  /// back button (which routes through `maybePop`) and the system back gesture:
+  /// confirm any unsaved note edits, then leave via [_popOrFallback].
+  ///
+  /// [didPop] is true only when the framework already popped the route (never,
+  /// here, since the guard runs `canPop: false`); we early-return on it and on
+  /// the [_leaving] re-entry latch so the confirm dialog can't double-fire.
+  Future<void> _handlePop(bool didPop) async {
+    if (didPop || _leaving) return;
+    final shouldLeave = await _confirmLeave();
+    if (!shouldLeave || !mounted) return;
+    _popOrFallback();
+  }
+
+  /// The SINGLE source of truth for leaving the hub once the leave-guard has
+  /// cleared: pop to the real origin, or fall back to the inbox on a deep-link
+  /// entry whose stack is empty (so the user is never stranded). Guarded by
+  /// [_leaving] so the `context.pop()` re-entry through the `canPop: false`
+  /// [PopScope] is a no-op rather than re-running the leave-guard.
+  void _popOrFallback() {
     if (!mounted) return;
     if (context.canPop()) {
+      _leaving = true;
       context.pop();
     } else {
       context.go('/inbox');
@@ -122,42 +147,37 @@ class _MatomeDetailScreenState extends ConsumerState<MatomeDetailScreen> {
       return Material(color: colors.background, child: body);
     }
 
-    return ValueListenableBuilder<bool>(
-      valueListenable: _notesDirty,
-      builder: (context, dirty, _) => PopScope(
-        canPop: !dirty,
-        onPopInvokedWithResult: (didPop, _) async {
-          if (didPop) return;
-          final shouldLeave = await _confirmLeave();
-          if (!shouldLeave || !context.mounted) return;
-          // The guard cleared the dirty flag; re-issue the pop.
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/inbox');
-          }
-        },
-        child: Scaffold(
+    // The guard runs with `canPop: false` UNCONDITIONALLY so every back attempt
+    // — AppBar button, system gesture, deep-link root — funnels through the one
+    // [_handlePop] callback (no native-pop bypass that would skip the inbox
+    // fallback). The dirty flag is consulted inside [_confirmLeave], so the
+    // `PopScope` itself no longer needs to rebuild on every keystroke.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) => _handlePop(didPop),
+      child: Scaffold(
+        backgroundColor: colors.background,
+        appBar: AppBar(
           backgroundColor: colors.background,
-          appBar: AppBar(
-            backgroundColor: colors.background,
-            surfaceTintColor: colors.background,
-            // An ALWAYS-visible back affordance: the hub is now pushed OVER the
-            // shell (every list opens it with `context.push`), so it has a
-            // stack to pop. On a deep-link / redirect entry with an empty stack
-            // `canPop()` is false, so we fall back to the inbox rather than
-            // stranding the user. An unsaved-notes leave-guard runs first.
-            leading: BackButton(
-              key: const ValueKey('matome-detail-back'),
-              onPressed: _onBack,
-            ),
-            title: Text(
-              title.isEmpty ? t.matome.title : title,
-              overflow: TextOverflow.ellipsis,
-            ),
+          surfaceTintColor: colors.background,
+          // An ALWAYS-visible back affordance that routes through `maybePop`
+          // so the `PopScope` above is the ONE guard path: the unsaved-notes
+          // prompt AND the canPop / inbox-fallback both live solely in
+          // `onPopInvokedWithResult` — never re-implemented here, so there is
+          // no re-entrant self-correct race. With `canPop: false` the
+          // `maybePop` always reaches the guard (even at the root, where the
+          // callback fires with `didPop: false` and `_popOrFallback` routes to
+          // the inbox rather than stranding a deep-link entry).
+          leading: BackButton(
+            key: const ValueKey('matome-detail-back'),
+            onPressed: () => Navigator.of(context).maybePop(),
           ),
-          body: body,
+          title: Text(
+            title.isEmpty ? t.matome.title : title,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
+        body: body,
       ),
     );
   }
