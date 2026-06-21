@@ -474,6 +474,91 @@ void main() {
     expect(matomesRepo.restored, [99]);
   });
 
+  test('PULL-SURVIVAL (#1431/#70912): a locally-archived reconciled matome '
+      'whose archive has NOT round-tripped to Core stays archived across a pull '
+      'that returns it as ACTIVE', () async {
+    final space = await _seedCoreSpace(db, 42);
+    // The failed-archive state: reconciled (coreId 13), filed, archived
+    // locally — but the Core POST never landed, so Core still has it active.
+    await _seedMatome(db, id: 'mat_local_pull', spaceId: space, coreId: 13);
+    await db.matomesDao.archive('mat_local_pull');
+    expect((await db.matomesDao.getById('mat_local_pull'))!.archivedAt,
+        isNotNull);
+
+    // Core's default list returns the row as ACTIVE (archived_at = null),
+    // because Core never received the archive.
+    final remote = [
+      Matome(id: 13, ownerId: '1', title: 'Meeting', workspaceId: 42),
+    ];
+    final matomesRepo = FakeMatomesRepository(remoteMatomes: remote);
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container.read(matomeSyncServiceProvider).pullMatomes();
+
+    // ADOPT-GUARD: the pull must NOT clobber the local archive back to null —
+    // the locally-archived-but-not-yet-pushed row stays archived.
+    final row = await db.matomesDao.getById('mat_local_pull');
+    expect(row!.archivedAt, isNotNull);
+  });
+
+  test('ARCHIVE RE-PUSH (#1431/#70912): the next sync push converges Core to '
+      'archived for a locally-archived reconciled matome', () async {
+    final space = await _seedCoreSpace(db, 42);
+    // Reconciled (coreId 14), filed, archived locally — the archive intent is
+    // still pending on Core.
+    await _seedMatome(db, id: 'mat_local_repush', spaceId: space, coreId: 14);
+    await db.matomesDao.archive('mat_local_repush');
+
+    final matomesRepo = FakeMatomesRepository();
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container.read(matomeSyncServiceProvider).pushFiled();
+
+    // The deferred archive POST is retried on the next push → Core converges.
+    expect(matomesRepo.archived, contains(14));
+    // It is NOT re-created as an active matome (it already has a coreId).
+    expect(matomesRepo.created, isEmpty);
+  });
+
+  test('ARCHIVE RE-PUSH: an un-reconciled (coreId null) archived matome is NOT '
+      'pushed — it was never on Core', () async {
+    await _seedMatome(db, id: 'mat_local_arch_inbox', spaceId: null);
+    await db.matomesDao.archive('mat_local_arch_inbox');
+
+    final matomesRepo = FakeMatomesRepository();
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container.read(matomeSyncServiceProvider).pushFiled();
+
+    expect(matomesRepo.archived, isEmpty);
+  });
+
+  test('ADOPT-GUARD does NOT regress restore: an ACTIVE local row adopts Core '
+      'active on pull (a locally-restored row stays restored)', () async {
+    final space = await _seedCoreSpace(db, 42);
+    // Reconciled (coreId 15), filed, ACTIVE locally (e.g. just restored).
+    await _seedMatome(db, id: 'mat_local_active', spaceId: space, coreId: 15);
+    expect((await db.matomesDao.getById('mat_local_active'))!.archivedAt,
+        isNull);
+
+    // Core returns it active. The guard only fires when the LOCAL row is
+    // archived — an active local row adopts Core's active state verbatim.
+    final remote = [
+      Matome(id: 15, ownerId: '1', title: 'Meeting', workspaceId: 42),
+    ];
+    final matomesRepo = FakeMatomesRepository(remoteMatomes: remote);
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container.read(matomeSyncServiceProvider).pullMatomes();
+
+    expect((await db.matomesDao.getById('mat_local_active'))!.archivedAt,
+        isNull);
+  });
+
   test('contacts upsert by coreId on pull — no duplicate row on re-sync',
       () async {
     final remote = [

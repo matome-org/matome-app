@@ -188,9 +188,8 @@ void main() {
     final row = await db.matomesDao.getById('m_fail');
     expect(row!.archivedAt, isNotNull);
 
-    // The Core failure is NON-FATAL: no error SnackBar, and the normal archived
-    // + Undo affordance is still surfaced (identical to the online happy path).
-    expect(find.text(t.matome.actions.archiveFailed), findsNothing);
+    // The Core failure is NON-FATAL: the normal archived + Undo affordance is
+    // still surfaced (identical to the online happy path — no error path).
     expect(find.text(t.matome.actions.archived), findsOneWidget);
     expect(find.text(t.matome.actions.undo), findsOneWidget);
   });
