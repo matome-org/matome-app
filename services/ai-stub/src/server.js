@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 
-const SUPPORTED_MEDIA_TYPES = new Set(["audio", "meeting", "image"]);
+const SUPPORTED_MEDIA_TYPES = new Set(["audio", "meeting", "image", "document"]);
 
 export function createAiStubServer(options = {}) {
   const config = {
@@ -76,10 +76,19 @@ function successPayload(job) {
     status: "done",
     title: `AI stub result ${job.recording_id}`,
     transcript: `Canned local transcript for recording ${job.recording_id}.`,
-    summary: `Canned local summary for ${job.media_type} recording ${job.recording_id}.`,
+    summary: summaryFor(job),
     duration: 42,
     badge: "Inbox"
   };
+}
+
+function summaryFor(job) {
+  if (job.media_type === "document") {
+    // Stub only: the document is NOT parsed. Keep this clearly a placeholder.
+    return `[PLACEHOLDER] AI stub summary for document recording ${job.recording_id}. No document content was processed.`;
+  }
+
+  return `Canned local summary for ${job.media_type} recording ${job.recording_id}.`;
 }
 
 function failurePayload(job, mediaProbe) {

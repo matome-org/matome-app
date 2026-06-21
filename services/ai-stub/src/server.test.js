@@ -96,6 +96,41 @@ test("returns a failed callback for unsupported media types", async () => {
   }
 });
 
+test("processes document media types with a clearly placeholder summary", async () => {
+  const callbacks = [];
+  const callbackServer = createServer(async (req, res) => {
+    callbacks.push(await readJson(req));
+    res.writeHead(204);
+    res.end();
+  });
+
+  const callbackBaseUrl = await listen(callbackServer);
+  const stubServer = createAiStubServer({ callbackDelayMs: 0 });
+  const stubBaseUrl = await listen(stubServer);
+
+  try {
+    const response = await fetch(`${stubBaseUrl}/v1/jobs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...job(`${callbackBaseUrl}/internal/jobs/job-1/result`),
+        media_type: "document"
+      })
+    });
+
+    assert.equal(response.status, 202);
+    await waitFor(() => callbacks.length === 1);
+    assert.equal(callbacks[0].status, "done");
+    assert.notEqual(callbacks[0].error?.code, "unsupported_media_type");
+    // Summary must be clearly a placeholder and never imply the document was read.
+    assert.match(callbacks[0].summary, /placeholder|stub/i);
+    assert.doesNotMatch(callbacks[0].summary, /read|analy[sz]ed|extracted/i);
+  } finally {
+    await close(stubServer);
+    await close(callbackServer);
+  }
+});
+
 function job(callbackUrl) {
   return {
     job_id: "job-1",
