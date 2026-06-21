@@ -281,7 +281,17 @@ defmodule MatomeApiWeb.ApiSpec do
         title: %OpenApiSpex.Schema{type: :string},
         summary: %OpenApiSpex.Schema{type: :string},
         transcript: %OpenApiSpex.Schema{type: :string},
-        media_type: %OpenApiSpex.Schema{type: :string},
+        media_type: %OpenApiSpex.Schema{
+          type: :string,
+          enum: MatomeApi.Content.Recording.media_types()
+        },
+        content_length: %OpenApiSpex.Schema{
+          type: :integer,
+          description:
+            "Declared upload size in bytes; validated server-side against a 25 MB ceiling and signed into the presigned PUT URL.",
+          maximum: 25 * 1024 * 1024,
+          minimum: 1
+        },
         status: %OpenApiSpex.Schema{
           type: :string,
           enum: ["pending", "processing", "done", "failed"]

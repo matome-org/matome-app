@@ -57,7 +57,7 @@ defmodule MatomeApiWeb.InternalJobControllerTest do
     %{user: user} = register_user()
 
     {:ok, recording} =
-      Content.create_recording(user, %{title: "Pending memo", media_type: "video"})
+      Content.create_recording(user, %{title: "Pending memo", media_type: "audio"})
 
     {:ok, _processing} = Content.mark_recording_processing(recording)
 

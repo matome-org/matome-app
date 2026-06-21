@@ -36,6 +36,49 @@ defmodule MatomeApi.ContentTest do
     assert recording.id == owned.id
   end
 
+  test "recordings accept each allowlisted media_type" do
+    owner = user_fixture()
+
+    for type <- ~w(audio meeting image document) do
+      assert {:ok, recording} =
+               Content.create_recording(owner, %{title: "Typed #{type}", media_type: type})
+
+      assert recording.media_type == type
+    end
+  end
+
+  test "recordings allow a nil media_type (optional)" do
+    owner = user_fixture()
+    assert {:ok, recording} = Content.create_recording(owner, %{title: "Untyped"})
+    assert recording.media_type == nil
+  end
+
+  test "recordings reject a media_type outside the allowlist" do
+    owner = user_fixture()
+
+    assert {:error, changeset} =
+             Content.create_recording(owner, %{title: "Bad", media_type: "video"})
+
+    assert %{media_type: ["is invalid"]} = errors_on(changeset)
+
+    assert {:error, changeset} =
+             Content.create_recording(owner, %{title: "Bad", media_type: "../../etc"})
+
+    assert %{media_type: ["is invalid"]} = errors_on(changeset)
+  end
+
+  test "recordings server-derive storage_key inside the owner prefix and ignore client values" do
+    owner = user_fixture()
+
+    assert {:ok, recording} =
+             Content.create_recording(owner, %{
+               title: "Scoped",
+               storage_key: "owners/9999/recordings/1/media"
+             })
+
+    assert recording.storage_key == "owners/#{owner.id}/recordings/#{recording.id}/media"
+  end
+
   test "recordings reject workspaces owned by another user" do
     owner = user_fixture()
     other_owner = user_fixture()
@@ -147,7 +190,9 @@ defmodule MatomeApi.ContentTest do
     assert cid == contact.id
 
     # idempotent upsert updates role
-    assert {:ok, _} = Content.attach_contact(owner, matome.id, contact.id, %{"role" => "attendee"})
+    assert {:ok, _} =
+             Content.attach_contact(owner, matome.id, contact.id, %{"role" => "attendee"})
+
     reloaded = Content.get_matome(owner, matome.id)
     assert length(reloaded.matome_contacts) == 1
 

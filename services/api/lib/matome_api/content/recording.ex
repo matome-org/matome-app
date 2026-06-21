@@ -7,6 +7,14 @@ defmodule MatomeApi.Content.Recording do
 
   @statuses [:pending, :processing, :done, :failed]
 
+  # Upload trust boundary: the only media kinds Core will accept. A mislabeled
+  # media_type is rejected at the changeset so it never reaches storage or the
+  # AI engine. `nil` is allowed — media_type is optional and defaults downstream.
+  @media_types ~w(audio meeting image document)
+
+  @doc "Allowlisted media types accepted on a recording."
+  def media_types, do: @media_types
+
   schema "recordings" do
     field :title, :string
     field :summary, :string
@@ -42,6 +50,7 @@ defmodule MatomeApi.Content.Recording do
       :matome_id
     ])
     |> validate_required([:title])
+    |> validate_inclusion(:media_type, @media_types)
     |> validate_number(:duration, greater_than_or_equal_to: 0)
     |> foreign_key_constraint(:workspace_id)
     |> foreign_key_constraint(:matome_id)

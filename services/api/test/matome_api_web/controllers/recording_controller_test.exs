@@ -124,6 +124,41 @@ defmodule MatomeApiWeb.RecordingControllerTest do
     refute response["upload"]["url"] =~ "owners/elsewhere"
   end
 
+  test "create rejects a mislabeled media_type", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    body =
+      post(owner_conn, ~p"/api/recordings", %{title: "Bad type", media_type: "video"})
+      |> json_response(422)
+
+    assert %{"media_type" => ["is invalid"]} = body["errors"]
+  end
+
+  test "create rejects an oversized declared upload (server-side 25 MB cap)", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+    oversized = 25 * 1024 * 1024 + 1
+
+    body =
+      post(owner_conn, ~p"/api/recordings", %{title: "Too big", content_length: oversized})
+      |> json_response(413)
+
+    assert body["error"] == "upload_too_large"
+    assert body["max_bytes"] == 25 * 1024 * 1024
+  end
+
+  test "create signs the declared content length into the presigned PUT URL", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    response =
+      post(owner_conn, ~p"/api/recordings", %{title: "Sized", content_length: 2_048})
+      |> json_response(201)
+
+    upload = response["upload"]
+    assert upload["max_bytes"] == 25 * 1024 * 1024
+    assert upload["content_length"] == 2_048
+    assert upload["url"] =~ "X-Amz-SignedHeaders=content-length%3Bhost"
+  end
+
   test "upload completion queues AI processing without exposing the AI engine", %{conn: conn} do
     %{conn: owner_conn} = register_conn(conn)
 

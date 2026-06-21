@@ -34,7 +34,7 @@ defmodule MatomeApi.AIEngine do
   end
 
   defp payload(recording, attempt, job_id) do
-    download = Presigner.presign_download(recording.storage_key)
+    {:ok, download} = Presigner.presign_download(recording.storage_key)
     expires_at = DateTime.utc_now() |> DateTime.add(download.expires_in, :second)
 
     %{
