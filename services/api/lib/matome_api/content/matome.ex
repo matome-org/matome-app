@@ -19,6 +19,11 @@ defmodule MatomeApi.Content.Matome do
     timestamps(type: :utc_datetime)
   end
 
+  # Reject happened_at values outside a sane window: roughly the digital era
+  # through a year out. Anything beyond is garbage (parser default years, typos).
+  @happened_at_min ~U[2000-01-01 00:00:00Z]
+  @happened_at_max_offset_seconds 366 * 24 * 60 * 60
+
   def changeset(matome, attrs) do
     matome
     |> cast(attrs, [
@@ -28,8 +33,34 @@ defmodule MatomeApi.Content.Matome do
       :aggregated_summary,
       :workspace_id
     ])
+    |> update_change(:title, &trim/1)
     |> validate_required([:title])
-    |> validate_length(:title, max: 255)
+    |> validate_length(:title, min: 1, max: 255)
+    |> validate_happened_at()
     |> foreign_key_constraint(:workspace_id)
+  end
+
+  defp trim(value) when is_binary(value), do: String.trim(value)
+  defp trim(value), do: value
+
+  defp validate_happened_at(changeset) do
+    case get_change(changeset, :happened_at) do
+      nil ->
+        changeset
+
+      %DateTime{} = happened_at ->
+        max = DateTime.add(DateTime.utc_now(), @happened_at_max_offset_seconds, :second)
+
+        cond do
+          DateTime.compare(happened_at, @happened_at_min) == :lt ->
+            add_error(changeset, :happened_at, "is too far in the past")
+
+          DateTime.compare(happened_at, max) == :gt ->
+            add_error(changeset, :happened_at, "is too far in the future")
+
+          true ->
+            changeset
+        end
+    end
   end
 end

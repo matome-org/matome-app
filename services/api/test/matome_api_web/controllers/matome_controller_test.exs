@@ -32,6 +32,86 @@ defmodule MatomeApiWeb.MatomeControllerTest do
     assert delete(owner_conn, ~p"/api/matomes/#{created["id"]}") |> response(204) == ""
   end
 
+  test "owner renames a matome and updates happened_at", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    created =
+      post(owner_conn, ~p"/api/matomes", %{title: "Draft"})
+      |> json_response(201)
+      |> get_in(["matome"])
+
+    updated =
+      patch(owner_conn, ~p"/api/matomes/#{created["id"]}", %{
+        title: "  Renamed  ",
+        happened_at: "2026-01-15T10:30:00Z"
+      })
+      |> json_response(200)
+      |> get_in(["matome"])
+
+    assert updated["title"] == "Renamed"
+    assert updated["happened_at"] == "2026-01-15T10:30:00Z"
+
+    refetched =
+      get(owner_conn, ~p"/api/matomes/#{created["id"]}")
+      |> json_response(200)
+      |> get_in(["matome"])
+
+    assert refetched["title"] == "Renamed"
+    assert refetched["happened_at"] == "2026-01-15T10:30:00Z"
+  end
+
+  test "update rejects an empty title and garbage happened_at", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    created =
+      post(owner_conn, ~p"/api/matomes", %{title: "Keep me"})
+      |> json_response(201)
+      |> get_in(["matome"])
+
+    blank = patch(owner_conn, ~p"/api/matomes/#{created["id"]}", %{title: "   "})
+    assert %{"errors" => %{"title" => [_ | _]}} = json_response(blank, 422)
+
+    far_future =
+      patch(owner_conn, ~p"/api/matomes/#{created["id"]}", %{happened_at: "9999-01-01T00:00:00Z"})
+
+    assert %{"errors" => %{"happened_at" => [_ | _]}} = json_response(far_future, 422)
+
+    far_past =
+      patch(owner_conn, ~p"/api/matomes/#{created["id"]}", %{happened_at: "1800-01-01T00:00:00Z"})
+
+    assert %{"errors" => %{"happened_at" => [_ | _]}} = json_response(far_past, 422)
+
+    # title is preserved after rejected updates
+    refetched =
+      get(owner_conn, ~p"/api/matomes/#{created["id"]}")
+      |> json_response(200)
+      |> get_in(["matome"])
+
+    assert refetched["title"] == "Keep me"
+  end
+
+  test "an out-of-scope actor cannot update another owner's matome", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+    %{conn: other_conn} = register_conn(build_conn())
+
+    created =
+      post(owner_conn, ~p"/api/matomes", %{title: "Private"})
+      |> json_response(201)
+      |> get_in(["matome"])
+
+    # cross-owner PATCH must be blocked, not silently applied
+    assert patch(other_conn, ~p"/api/matomes/#{created["id"]}", %{title: "Hijacked"})
+           |> json_response(404)
+
+    # the owner's title is untouched
+    refetched =
+      get(owner_conn, ~p"/api/matomes/#{created["id"]}")
+      |> json_response(200)
+      |> get_in(["matome"])
+
+    assert refetched["title"] == "Private"
+  end
+
   test "matome workspace assignment is owner scoped", %{conn: conn} do
     %{conn: owner_conn} = register_conn(conn)
     %{conn: other_conn} = register_conn(build_conn())
