@@ -11,6 +11,15 @@ import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+/// W7 letter format gathers the detailed sections (Items, contacts, notes,
+/// Share) behind a "Show more" toggle. Reveal them before reaching item keys.
+Future<void> revealDetails(WidgetTester tester) async {
+  final toggle = find.byKey(const ValueKey('matome-show-more'));
+  await tester.ensureVisible(toggle);
+  await tester.tap(toggle);
+  await tester.pumpAndSettle();
+}
+
 /// GUI coverage for removing an image Item through the confirm dialog — the path
 /// that froze in the field with no log line, because _confirmRemove was both
 /// uninstrumented AND read the controller off the widget `ref` after the dialog
@@ -71,6 +80,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await revealDetails(tester);
 
     // The image tile is present before removal.
     expect(
@@ -118,6 +128,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await revealDetails(tester);
 
     await tester.tap(find.byKey(const ValueKey('matome-image-remove-rec_img')));
     await tester.pumpAndSettle();
@@ -170,6 +181,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await revealDetails(tester);
 
     await tester.tap(find.byKey(const ValueKey('matome-image-remove-rec_img')));
     await tester.pumpAndSettle();

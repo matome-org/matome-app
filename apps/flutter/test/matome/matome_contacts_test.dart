@@ -13,6 +13,15 @@ import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+/// W7 letter format gathers the detailed sections (contacts, Items, notes,
+/// Share) behind a "Show more" toggle. Reveal them before reaching those keys.
+Future<void> revealDetails(WidgetTester tester) async {
+  final toggle = find.byKey(const ValueKey('matome-show-more'));
+  await tester.ensureVisible(toggle);
+  await tester.tap(toggle);
+  await tester.pumpAndSettle();
+}
+
 /// #1375 — attaching contacts to a Matome. Exercises the controller's
 /// attach/detach actions (the `matome_contacts` edge), the header chip render,
 /// and the directory picker. The owner-id falls back to the placeholder (no
@@ -139,12 +148,19 @@ void main() {
 
     await tester.pumpWidget(app(c, id: 'm4'));
     await tester.pumpAndSettle();
+    await revealDetails(tester);
 
-    // The add-contact affordance is in the reserved header slot.
-    expect(find.byKey(const ValueKey('matome-add-contact')), findsOneWidget);
+    // The add-contact affordance lives in the "Show more" detail. Scroll it into
+    // view, then ensure it clears the viewport's bottom edge (the meta-strip +
+    // detail layout can leave it sitting right on the fold) before tapping.
+    final addContact = find.byKey(const ValueKey('matome-add-contact'));
+    await tester.scrollUntilVisible(addContact, 200);
+    await tester.drag(find.byType(ListView), const Offset(0, -120));
+    await tester.pumpAndSettle();
+    expect(addContact, findsOneWidget);
 
     // Open the picker — it lists the owner's directory contact.
-    await tester.tap(find.byKey(const ValueKey('matome-add-contact')));
+    await tester.tap(addContact);
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('matome-pick-contact-c1')),
@@ -173,6 +189,7 @@ void main() {
 
     await tester.pumpWidget(app(c, id: 'm5'));
     await tester.pumpAndSettle();
+    await revealDetails(tester);
 
     // #1372 deferred tag-contacts row is gone.
     expect(find.byKey(const ValueKey('matome-tag-contacts')), findsNothing);

@@ -72,6 +72,15 @@ Widget _app(ProviderContainer container, {required String id}) {
   );
 }
 
+/// W7 letter format gathers the detailed sections (child Items, contacts, notes,
+/// Share) behind a "Show more" toggle. Reveal them before reaching those keys.
+Future<void> _revealDetails(WidgetTester tester) async {
+  final toggle = find.byKey(const ValueKey('matome-show-more'));
+  await tester.ensureVisible(toggle);
+  await tester.tap(toggle);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   late AppDatabase db;
 
@@ -105,21 +114,23 @@ void main() {
     // Header title (also the AppBar title — appears at least once).
     expect(find.text('Standup notes'), findsWidgets);
 
-    // One tile per child Item.
-    expect(find.byKey(const ValueKey('matome-item-rec_0')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matome-item-rec_1')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matome-item-rec_2')), findsOneWidget);
-
-    // Aggregated-summary slot shows the stored summary. Triage actions (#1372)
-    // grew the page, so scroll the summary into view before asserting.
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('matome-summary')),
-      200,
-    );
+    // The aggregated summary is the read-first hero (W7) — visible up front, no
+    // reveal, no scroll.
+    expect(find.byKey(const ValueKey('matome-summary')), findsOneWidget);
     expect(
       find.text('Discussed the roadmap and blockers.'),
       findsOneWidget,
     );
+
+    // The child-Item tiles live in the "Show more" detail in the letter format.
+    await _revealDetails(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('matome-item-rec_0')),
+      200,
+    );
+    expect(find.byKey(const ValueKey('matome-item-rec_0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('matome-item-rec_1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('matome-item-rec_2')), findsOneWidget);
   });
 
   testWidgets('aggregated-summary slot shows the empty state when null', (
@@ -192,9 +203,10 @@ void main() {
     await tester.pumpWidget(_app(container(), id: 'm_stale'));
     await tester.pumpAndSettle();
 
+    // The summary (and its Regenerate affordance) is the hero — visible up
+    // front, no reveal needed.
     final regenButton =
         find.byKey(const ValueKey('matome-regenerate-summary'));
-    await tester.scrollUntilVisible(regenButton, 200);
     expect(regenButton, findsOneWidget);
     expect(find.text(t.matome.summaryStale), findsOneWidget);
 
@@ -278,6 +290,7 @@ void main() {
 
     await tester.pumpWidget(_app(container(), id: 'm_img'));
     await tester.pumpAndSettle();
+    await _revealDetails(tester);
 
     // Image Item → thumbnail tile + a remove action, and a rendered Image.
     expect(find.byKey(const ValueKey('matome-image-rec_img')), findsOneWidget);

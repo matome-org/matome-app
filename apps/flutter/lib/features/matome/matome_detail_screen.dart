@@ -82,6 +82,19 @@ class MatomeDetailScreen extends ConsumerWidget {
 /// Details screen).
 const double _matomeReadingMaxWidth = 720;
 
+/// The matome detail body, reshaped into the approved LETTER format (W7, #1413 /
+/// Widgetbook `MatomeLetterCard`). The card reads top-to-bottom like a letter:
+///
+///   title · date · the aggregated SUMMARY as the read-first hero · a divider ·
+///   summarized one-line lists (files count+preview, people count+preview,
+///   filing space-or-CTA, the always-visible sync chip) · a "Show more"
+///   affordance.
+///
+/// "Show more" reveals the detailed management sections (child Items, contacts,
+/// notes, deferred Share) INLINE, expanded in place. That inline reveal is the
+/// deliberate W8 SEAM: on wide viewports W8 swaps this in-place expansion for a
+/// responsive side panel (Widgetbook `MatomeDetailPanel`) — see the seam comment
+/// on [_MatomeLetterCard].
 class _MatomeDetailBody extends ConsumerWidget {
   const _MatomeDetailBody({required this.id});
 
@@ -107,8 +120,6 @@ class _MatomeDetailBody extends ConsumerWidget {
     }
 
     final matome = state.matome!;
-    final controller =
-        ref.read(matomeDetailControllerProvider(id).notifier);
 
     return Center(
       child: ConstrainedBox(
@@ -116,36 +127,281 @@ class _MatomeDetailBody extends ConsumerWidget {
         child: ListView(
           padding: EdgeInsets.fromLTRB(
             spacing.md,
-            spacing.xs,
+            spacing.md,
             spacing.md,
             spacing.xxl + spacing.xxl,
           ),
           children: [
-            _MatomeHeader(matome: matome, spaces: state.spaces),
-            SizedBox(height: spacing.md),
-            _FilingSection(
-              matome: matome,
-              spaces: state.spaces,
-            ),
-            SizedBox(height: spacing.lg),
-            _RecordingsSection(
-              recordings: matome.recordings,
-              matomeId: id,
-            ),
-            SizedBox(height: spacing.lg),
-            _SectionLabel(text: t.matome.summary),
-            SizedBox(height: spacing.xs),
-            _AggregatedSummary(matome: matome, controller: controller),
-            SizedBox(height: spacing.lg),
-            _NotesSection(
-              description: matome.description,
-              controller: controller,
-            ),
-            SizedBox(height: spacing.lg),
-            const _DeferredActions(),
+            _MatomeLetterCard(id: id, matome: matome, spaces: state.spaces),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The letter card itself: the hero summary plus the summarized meta strip, with
+/// a "Show more" toggle that expands the detailed sections in place.
+class _MatomeLetterCard extends ConsumerStatefulWidget {
+  const _MatomeLetterCard({
+    required this.id,
+    required this.matome,
+    required this.spaces,
+  });
+
+  final String id;
+  final MatomeItem matome;
+  final List<WorkspaceRow> spaces;
+
+  @override
+  ConsumerState<_MatomeLetterCard> createState() => _MatomeLetterCardState();
+}
+
+class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
+  /// Whether the detailed management sections are revealed. Mobile-first: closed
+  /// by default so the card reads as a calm letter; "Show more" expands the
+  /// detail in place.
+  ///
+  /// W8 SEAM: on a wide viewport W8 will replace this boolean-gated inline
+  /// reveal with a persistent responsive side panel (the Widgetbook
+  /// `MatomeDetailPanel`) — the breakpoint/StatefulShell decision is recorded in
+  /// ADR-0005. Until then the same sections render inline so nothing is lost on
+  /// mobile.
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final matome = widget.matome;
+    final controller =
+        ref.read(matomeDetailControllerProvider(widget.id).notifier);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(radius.lg),
+        border: Border.all(color: colors.border),
+      ),
+      padding: EdgeInsets.all(spacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MatomeHeader(matome: matome, spaces: widget.spaces),
+          SizedBox(height: spacing.lg),
+          // Hero: the aggregated summary, read first.
+          _AggregatedSummary(matome: matome, controller: controller),
+          SizedBox(height: spacing.lg),
+          Divider(height: 1, color: colors.border),
+          SizedBox(height: spacing.md),
+          // Summarized one-line lists (always visible).
+          _FilesMetaRow(recordings: matome.recordings),
+          SizedBox(height: spacing.sm),
+          _PeopleMetaRow(matomeId: widget.id),
+          SizedBox(height: spacing.sm),
+          _FilingSection(matome: matome, spaces: widget.spaces),
+          SizedBox(height: spacing.sm),
+          _StatusMetaRow(rollup: matome.syncRollup),
+          // "Show more" affordance.
+          SizedBox(height: spacing.md),
+          Align(
+            alignment: Alignment.centerRight,
+            child: AppTextButton.icon(
+              key: const ValueKey('matome-show-more'),
+              onPressed: () => setState(() => _expanded = !_expanded),
+              icon: Icon(
+                _expanded ? Icons.expand_less : Icons.chevron_right,
+                size: spacing.md,
+              ),
+              label: Text(_expanded ? t.matome.showLess : t.matome.showMore),
+            ),
+          ),
+          // Detailed management sections, revealed inline (W8 swaps this for the
+          // responsive side panel — see the seam note above).
+          if (_expanded) ...[
+            SizedBox(height: spacing.sm),
+            _MatomeDetails(
+              id: widget.id,
+              matome: matome,
+              controller: controller,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The detailed management sections gathered behind "Show more": the child
+/// Items list, the contacts slot, editable notes, and the deferred Share row.
+/// Extracted so the W8 side panel can reuse the same composition (its
+/// `MatomeDetailPanel` mirrors this section order).
+class _MatomeDetails extends StatelessWidget {
+  const _MatomeDetails({
+    required this.id,
+    required this.matome,
+    required this.controller,
+  });
+
+  final String id;
+  final MatomeItem matome;
+  final MatomeDetailController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+
+    return Column(
+      key: const ValueKey('matome-details'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RecordingsSection(recordings: matome.recordings, matomeId: id),
+        SizedBox(height: spacing.lg),
+        _ContactChipsSlot(matomeId: id),
+        SizedBox(height: spacing.lg),
+        _NotesSection(
+          description: matome.description,
+          controller: controller,
+        ),
+        SizedBox(height: spacing.lg),
+        const _DeferredActions(),
+      ],
+    );
+  }
+}
+
+/// 📎 Files — one-line summarized list: icon · "Files · N" · a short preview of
+/// the item titles. Always visible in the letter; the full list lives behind
+/// "Show more".
+class _FilesMetaRow extends StatelessWidget {
+  const _FilesMetaRow({required this.recordings});
+
+  final List<RecordingItem> recordings;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = recordings.length;
+    final preview = count == 0
+        ? t.matome.noFiles
+        : recordings.take(2).map((r) => r.title).join(' · ') +
+            (count > 2 ? ' · ${t.matome.filesPreviewMore(n: count - 2)}' : '');
+    return _MetaRow(
+      key: const ValueKey('matome-meta-files'),
+      icon: Icons.attach_file,
+      label: '${t.matome.filesLabel} · $count',
+      preview: preview,
+    );
+  }
+}
+
+/// 👤 People — one-line summarized list: icon · "People · N" · a preview of the
+/// attached contact names. Reads the live contacts off the controller so the
+/// count stays in step with attach/detach.
+class _PeopleMetaRow extends ConsumerWidget {
+  const _PeopleMetaRow({required this.matomeId});
+
+  final String matomeId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final contacts =
+        ref.watch(matomeDetailControllerProvider(matomeId)).contacts;
+    final count = contacts.length;
+    final preview = count == 0
+        ? t.matome.noPeople
+        : contacts.take(3).map((e) => e.contact.displayName).join(' · ');
+    return _MetaRow(
+      key: const ValueKey('matome-meta-people'),
+      icon: Icons.people_outline,
+      label: '${t.matome.peopleLabel} · $count',
+      preview: preview,
+    );
+  }
+}
+
+/// 📌 Status — one-line row pairing the "Status" label with the always-visible
+/// [MatomeSyncChip]. The chip keeps the `matome-on-device` key (its W1 meaning:
+/// rollup-driven, shown for filed AND inbox matomes).
+class _StatusMetaRow extends StatelessWidget {
+  const _StatusMetaRow({required this.rollup});
+
+  final MatomeSyncRollup rollup;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+    return Row(
+      children: [
+        SizedBox(
+          width: _kMetaLabelWidth,
+          child: Text(
+            t.matome.statusLabel,
+            style: typography.label.copyWith(color: colors.textMuted),
+          ),
+        ),
+        MatomeSyncChip(
+          key: const ValueKey('matome-on-device'),
+          rollup: rollup,
+        ),
+      ],
+    );
+  }
+}
+
+/// Fixed width of the leading label column in the letter's meta rows, so the
+/// previews line up like a letterhead (mirrors the Widgetbook proposal).
+const double _kMetaLabelWidth = 96;
+
+/// One summarized meta row: a fixed-width leading label (icon · label) and a
+/// single-line preview that ellipsizes.
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.preview,
+  });
+
+  final IconData icon;
+  final String label;
+  final String preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return Row(
+      children: [
+        SizedBox(
+          width: _kMetaLabelWidth,
+          child: Row(
+            children: [
+              Icon(icon, size: spacing.md, color: colors.textMuted),
+              SizedBox(width: spacing.xs),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: typography.label
+                      .copyWith(color: colors.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Text(
+            preview,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: typography.bodySmall.copyWith(color: colors.textPrimary),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -395,19 +651,10 @@ class _MatomeHeader extends ConsumerWidget {
             ),
           ],
         ),
-        // Contact-chips slot (#1375): the attached contacts as role-bearing
-        // chips, plus an "Add contact" action that picks from the owner's
-        // directory.
-        SizedBox(height: spacing.sm),
-        _ContactChipsSlot(matomeId: matome.id),
-        // Sync chip renders for filed AND inbox matomes (#1407): it shows pure
-        // sync state (Synced / Syncing / On device) with no triage suffix —
-        // filing is the separate _FilingSection below.
-        SizedBox(height: spacing.sm),
-        MatomeSyncChip(
-          key: const ValueKey('matome-on-device'),
-          rollup: matome.syncRollup,
-        ),
+        // The contact-chips slot (#1375) and the always-visible sync chip
+        // (#1407) moved OUT of the header in the letter format (W7): contacts
+        // live in the summarized "People" meta row + the "Show more" detail; the
+        // sync chip lives in the "Status" meta row (still `matome-on-device`).
       ],
     );
   }
@@ -727,10 +974,12 @@ String _roleLabel(String role) {
 
 // ─── Filing (the core triage action) ─────────────────────────────────────────
 
-/// Surfaces the triage state: an Inbox Matome gets a prominent
-/// "File into a space" CTA; a filed Matome shows its Space + a "Refile" action.
-/// Both open the [_FileIntoSpaceSheet]; selecting a Space calls
-/// [MatomeDetailController.fileIntoSpace], which sets `matome.spaceId`.
+/// 📁 Filing — the triage state as a one-line letter row (W7): a fixed-width
+/// "Space" label, then either the filed Space name + a "Refile" action, or — for
+/// an Inbox Matome — a "File into a space" CTA pill in place of the value. Both
+/// open the [_FileIntoSpaceSheet]; selecting a Space calls
+/// [MatomeDetailController.fileIntoSpace], which sets `matome.spaceId`. Keys
+/// preserved: `matome-file-cta` / `matome-filed` / `matome-refile`.
 class _FilingSection extends ConsumerWidget {
   const _FilingSection({
     required this.matome,
@@ -757,20 +1006,50 @@ class _FilingSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+
+    final label = SizedBox(
+      width: _kMetaLabelWidth,
+      child: Row(
+        children: [
+          Icon(Icons.folder_outlined, size: spacing.md, color: colors.textMuted),
+          SizedBox(width: spacing.xs),
+          Flexible(
+            child: Text(
+              t.matome.spaceLabel,
+              overflow: TextOverflow.ellipsis,
+              style: typography.label.copyWith(color: colors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
 
     if (matome.isInbox) {
-      return SizedBox(
-        width: double.infinity,
-        child: PrimaryButton.icon(
-          key: const ValueKey('matome-file-cta'),
-          onPressed: () => _openSheet(context, ref),
-          icon: Icon(Icons.create_new_folder_outlined, size: spacing.md),
-          label: Text(t.matome.fileIntoSpace),
-          style: FilledButton.styleFrom(
-            backgroundColor: colors.primary,
-            foregroundColor: colors.onAccent,
+      return Row(
+        children: [
+          label,
+          Material(
+            color: colors.primary,
+            borderRadius: BorderRadius.circular(radius.pill),
+            child: InkWell(
+              key: const ValueKey('matome-file-cta'),
+              onTap: () => _openSheet(context, ref),
+              borderRadius: BorderRadius.circular(radius.pill),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: spacing.sm,
+                  vertical: spacing.xxs,
+                ),
+                child: Text(
+                  t.matome.fileIntoSpace,
+                  style: typography.label.copyWith(color: colors.onAccent),
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       );
     }
 
@@ -780,60 +1059,24 @@ class _FilingSection extends ConsumerWidget {
         .cast<String?>()
         .firstWhere((_) => true, orElse: () => null);
 
-    return _FiledChip(
-      spaceName: spaceName ?? matome.spaceId ?? '',
-      onRefile: () => _openSheet(context, ref),
-    );
-  }
-}
-
-class _FiledChip extends StatelessWidget {
-  const _FiledChip({required this.spaceName, required this.onRefile});
-
-  final String spaceName;
-  final VoidCallback onRefile;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final radius = context.radius;
-    final typography = context.typography;
-
-    return Container(
+    return Row(
       key: const ValueKey('matome-filed'),
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.sm,
-        vertical: spacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(radius.md),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.folder_outlined,
-            size: spacing.md,
-            color: colors.accent,
+      children: [
+        label,
+        Expanded(
+          child: Text(
+            spaceName ?? matome.spaceId ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: typography.bodySmall.copyWith(color: colors.textPrimary),
           ),
-          SizedBox(width: spacing.xs),
-          Expanded(
-            child: Text(
-              t.matome.filedIn(space: spaceName),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: typography.bodySmall.copyWith(color: colors.textPrimary),
-            ),
-          ),
-          AppTextButton(
-            key: const ValueKey('matome-refile'),
-            onPressed: onRefile,
-            child: Text(t.matome.refile),
-          ),
-        ],
-      ),
+        ),
+        AppTextButton(
+          key: const ValueKey('matome-refile'),
+          onPressed: () => _openSheet(context, ref),
+          child: Text(t.matome.refile),
+        ),
+      ],
     );
   }
 }

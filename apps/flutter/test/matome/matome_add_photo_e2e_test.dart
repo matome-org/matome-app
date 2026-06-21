@@ -20,6 +20,16 @@ import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+/// W7 letter format gathers the detailed sections (Items + the Add-photo action,
+/// contacts, notes, Share) behind a "Show more" toggle. Reveal them before
+/// reaching the add-photo / image-tile keys.
+Future<void> revealDetails(WidgetTester tester) async {
+  final toggle = find.byKey(const ValueKey('matome-show-more'));
+  await tester.ensureVisible(toggle);
+  await tester.tap(toggle);
+  await tester.pumpAndSettle();
+}
+
 /// Fake path_provider that points the app "documents" dir at a real temp dir,
 /// so the REAL [durableImportCopy] (matomeStorageDir → getApplicationDocuments
 /// Directory) runs against disk instead of hanging on the absent plugin channel.
@@ -206,6 +216,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // Reveal the detail BEFORE the import (no images yet → pumpAndSettle is
+    // safe), so the new tile mounts into the already-open Items section.
+    await revealDetails(tester);
 
     // No image tile before the import.
     expect(find.byType(Image), findsNothing);
@@ -317,6 +330,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // The Add-photo action lives in the "Show more" detail (Items section).
+    await revealDetails(tester);
     expect(find.byType(Image), findsNothing);
 
     // Tap the actual Add-photo button — drives _addPhoto end to end (real
@@ -395,6 +410,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // The Add-photo action lives in the "Show more" detail (Items section).
+    await revealDetails(tester);
 
     // Open the picker — _addPhoto parks on the pending pickFiles future.
     await tester.tap(find.byKey(const ValueKey('matome-add-photo')));
