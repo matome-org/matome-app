@@ -282,20 +282,23 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     await load();
   }
 
-  /// Archive (soft-delete) this Matome — the local-first triage action
-  /// (task #1410, W3 backend). Stamps `archived_at` in Drift FIRST so it leaves
-  /// every local list immediately, then POSTs Core when reconciled. Recoverable
-  /// via [restore] (the Undo affordance). The matome id is captured up front:
-  /// the sync awaits can outlive an autoDispose of this notifier, after which
-  /// reading `state` would throw.
+  /// Archive (soft-delete) this Matome — the local-first, offline-first triage
+  /// action (task #1410 / #1431-W1). Stamps `archived_at` in Drift FIRST so it
+  /// leaves every local list immediately; the Core POST is best-effort and may
+  /// throw (offline / server error) WITHOUT reverting the local archive — the
+  /// next pull reconciles. Recoverable via [restore] (the Undo affordance). The
+  /// matome id is captured up front: the sync awaits can outlive an autoDispose
+  /// of this notifier, after which reading `state` would throw.
   Future<void> archive() async {
     final matomeId = state.id;
     AppLog.event(LogCat.action, 'archive $matomeId');
     await _ref.read(matomeSyncServiceProvider).archiveMatome(matomeId);
   }
 
-  /// Restore (un-archive) this Matome — the rollback for an optimistic archive
-  /// (either the Undo affordance, or recovery when the archive sync failed).
+  /// Restore (un-archive) this Matome — the Undo affordance for an archive, and
+  /// the action wired to the archived-detail banner (#1431-I1). Local-first /
+  /// offline-first: clears `archived_at` in Drift immediately, then best-effort
+  /// POSTs Core; a failed Core leg reconciles on the next pull.
   Future<void> restore() async {
     final matomeId = state.id;
     AppLog.event(LogCat.action, 'restore $matomeId');

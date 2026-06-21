@@ -12,9 +12,10 @@ import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/features/matome/matome_sync_service.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
-/// A sync service whose archive write succeeds locally (so the optimistic
-/// removal happens) but then THROWS, exercising the rollback path. Restore is
-/// real so the rollback can be observed in Drift.
+/// A sync service whose local archive write lands authoritatively, but whose
+/// best-effort Core POST then THROWS. Offline-first contract (#1431, W-1): the
+/// local archive MUST be retained — no rollback — and the next pull reconciles.
+/// Mirrors the real `archiveMatome` (Drift-first, Core best-effort).
 class _FailingArchiveSyncService extends MatomeSyncService {
   _FailingArchiveSyncService(super.ref, this._db);
 
@@ -22,8 +23,9 @@ class _FailingArchiveSyncService extends MatomeSyncService {
 
   @override
   Future<void> archiveMatome(String id) async {
-    // Local-first write lands first (optimistic removal), then sync fails.
+    // LOCAL-FIRST: the authoritative Drift write lands first...
     await _db.matomesDao.archive(id);
+    // ...then the best-effort Core leg fails. The local archive is NOT reverted.
     throw Exception('archive sync failed');
   }
 
@@ -150,9 +152,9 @@ void main() {
     expect((await db.matomesDao.getById('m_undo'))!.archivedAt, isNull);
   });
 
-  testWidgets('archive failure rolls the optimistic removal back', (
-    tester,
-  ) async {
+  testWidgets(
+      'archive stays local when the Core sync fails (offline-first, no rollback)',
+      (tester) async {
     await _seed(db, id: 'm_fail');
 
     final c = container(
@@ -172,12 +174,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('matome-archive-confirm')));
     await tester.pumpAndSettle();
 
-    // The optimistic removal was rolled back: the row is NOT archived.
+    // Offline-first (#1431, W-1): the local archive is AUTHORITATIVE and is NOT
+    // rolled back when the best-effort Core POST throws. The row stays archived;
+    // the next pull reconciles.
     final row = await db.matomesDao.getById('m_fail');
-    expect(row!.archivedAt, isNull);
+    expect(row!.archivedAt, isNotNull);
 
-    // The error is surfaced, and no Undo SnackBar is shown.
-    expect(find.text(t.matome.actions.archiveFailed), findsOneWidget);
-    expect(find.text(t.matome.actions.archived), findsNothing);
+    // The Core failure is NON-FATAL: no error SnackBar, and the normal archived
+    // + Undo affordance is still surfaced (identical to the online happy path).
+    expect(find.text(t.matome.actions.archiveFailed), findsNothing);
+    expect(find.text(t.matome.actions.archived), findsOneWidget);
+    expect(find.text(t.matome.actions.undo), findsOneWidget);
   });
 }

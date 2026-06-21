@@ -705,10 +705,13 @@ class _MatomeHeader extends ConsumerWidget {
     );
   }
 
-  /// Archive flow (#1410): confirm → OPTIMISTIC removal (the local-first
-  /// `archive()` write drops it from every list immediately) → Undo SnackBar
-  /// that calls `restore()`. If the archive sync FAILS, roll the optimistic
-  /// removal back by restoring the row and surface the error.
+  /// Archive flow (#1410, offline-first #1431/W-1): confirm → the local-first
+  /// `archive()` write stamps `archived_at` in Drift FIRST, so the row leaves
+  /// every list immediately (the local archive is AUTHORITATIVE) → Undo SnackBar
+  /// that calls `restore()`. The Core POST is best-effort: if it FAILS the local
+  /// archive is NOT rolled back — the matome stays archived and the next pull
+  /// reconciles. The failure is logged non-fatally; the user still sees the
+  /// normal archived + Undo affordance.
   Future<void> _archive(BuildContext context, WidgetRef ref) async {
     // Capture the root container + messenger BEFORE any await: this header (and
     // its `ref`) can be autoDisposed once the matome leaves the lists, and we
@@ -738,21 +741,19 @@ class _MatomeHeader extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
+    // Offline-first (#1431/W-1): the local archive is authoritative. The best-
+    // effort Core POST may throw (offline / server error) — we do NOT roll the
+    // local archive back; the row stays archived and the next pull reconciles.
+    // The failure is non-fatal, so the user still gets the archived + Undo UX.
     try {
       await controller.archive();
     } catch (e, st) {
-      AppLog.error(LogCat.action, 'archive failed ${matome.id}', e, st);
-      // Roll the optimistic removal back: the local-first write already stamped
-      // archived_at before the sync threw, so restore the row.
-      try {
-        await controller.restore();
-      } catch (_) {
-        // Best-effort rollback; the error SnackBar still surfaces.
-      }
-      messenger.showSnackBar(
-        SnackBar(content: Text(t.matome.actions.archiveFailed)),
+      AppLog.error(
+        LogCat.action,
+        'archive Core sync deferred ${matome.id} (kept local, reconciles on pull)',
+        e,
+        st,
       );
-      return;
     }
 
     messenger.showSnackBar(

@@ -115,13 +115,18 @@ class MatomeSyncService {
   // ARCHIVE / RESTORE — local-first soft-delete (task #1409).
   // ---------------------------------------------------------------------------
 
-  /// Archive (soft-delete) a Matome LOCAL-FIRST: stamp `archived_at` in Drift
-  /// first (so it leaves every local list immediately, offline-safe), then POST
-  /// Core when the Matome is already reconciled (`core_id != null`). An
-  /// un-reconciled (Inbox/local-only) Matome only gets the Drift write — it was
-  /// never on Core to archive. The row and its child recordings are RETAINED
-  /// (recoverable via [restoreMatome]); reconcile is by `core_id`, never a PK
-  /// remap.
+  /// Archive (soft-delete) a Matome LOCAL-FIRST and OFFLINE-FIRST (#1431/W-1):
+  /// stamp `archived_at` in Drift first (so it leaves every local list
+  /// immediately, offline-safe), then POST Core when the Matome is already
+  /// reconciled (`core_id != null`). The local archive is AUTHORITATIVE — the
+  /// Core POST is best-effort and may throw (offline / server error); callers do
+  /// NOT roll the local archive back. A Core leg that does not land is recovered
+  /// on the next reconcile pass: [pull] upserts Core's archived state by
+  /// `core_id` (merge-guarded), and a still-filed local Matome is re-pushed,
+  /// so the two ends converge. An un-reconciled (Inbox/local-only) Matome only
+  /// gets the Drift write — it was never on Core to archive. The row and its
+  /// child recordings are RETAINED (recoverable via [restoreMatome]); reconcile
+  /// is by `core_id`, never a PK remap.
   Future<void> archiveMatome(String id) async {
     // LOCAL-FIRST: write Drift before any network call.
     await _matomesDao.archive(id);
@@ -131,12 +136,23 @@ class MatomeSyncService {
     final coreId = row?.coreId;
     if (coreId == null) return;
 
+    // BEST-EFFORT: a throw here is intentionally left to the caller — the local
+    // archive stays put and the next [pull] reconciles by `core_id`.
     await _matomesRepo.archiveMatome(coreId);
   }
 
-  /// Restore (un-archive) a Matome LOCAL-FIRST: clear `archived_at` in Drift
-  /// first (so it returns to the lists immediately), then POST Core when the
-  /// Matome is reconciled (`core_id != null`). Reconcile is by `core_id`.
+  /// Restore (un-archive) a Matome LOCAL-FIRST and OFFLINE-FIRST (#1431/W-2):
+  /// clear `archived_at` in Drift first (so it returns to the lists immediately,
+  /// offline-safe), then POST Core when the Matome is reconciled
+  /// (`core_id != null`). The local restore is AUTHORITATIVE — the Core POST is
+  /// best-effort and may throw; callers do NOT roll the local restore back.
+  ///
+  /// RECONCILE-ON-PULL RECOVERY: if the Core leg does not land (offline / server
+  /// error), the local and remote ends diverge only until the next reconcile
+  /// pass. [pull] upserts Core's archived/active state by `core_id` (merge-
+  /// guarded via `matomeToCompanion`), so a restore that failed to reach Core is
+  /// re-applied — symmetric with [archiveMatome]. Reconcile is by `core_id`,
+  /// never a PK remap.
   Future<void> restoreMatome(String id) async {
     // LOCAL-FIRST: write Drift before any network call.
     await _matomesDao.restore(id);
@@ -145,6 +161,8 @@ class MatomeSyncService {
     final coreId = row?.coreId;
     if (coreId == null) return;
 
+    // BEST-EFFORT: a throw here is left to the caller — the local restore stays
+    // put and the next [pull] reconciles by `core_id` (see docstring above).
     await _matomesRepo.restoreMatome(coreId);
   }
 

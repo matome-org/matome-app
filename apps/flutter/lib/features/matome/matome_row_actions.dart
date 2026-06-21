@@ -97,9 +97,11 @@ class MatomeRowActions {
         .fileIntoSpace(target.id);
   }
 
-  /// Archive (#1410, reused from the detail header): confirm → OPTIMISTIC
-  /// removal (the local-first `archive()` drops it from every list) → Undo
-  /// SnackBar that `restore()`s. On sync failure, roll the removal back.
+  /// Archive (#1410, reused from the detail header; offline-first #1431/W-1):
+  /// confirm → the local-first `archive()` write drops it from every list (the
+  /// local archive is AUTHORITATIVE) → Undo SnackBar that `restore()`s. The Core
+  /// POST is best-effort: on failure the local archive is NOT rolled back — the
+  /// row stays archived and the next pull reconciles (logged non-fatally).
   Future<void> _archive(BuildContext context, WidgetRef ref) async {
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
@@ -126,19 +128,18 @@ class MatomeRowActions {
     );
     if (confirmed != true) return;
 
+    // Offline-first (#1431/W-1): the local archive is authoritative. A thrown
+    // best-effort Core POST does NOT roll the local archive back — the row stays
+    // archived and the next pull reconciles. Non-fatal: the Undo UX still shows.
     try {
       await controller.archive();
     } catch (e, st) {
-      AppLog.error(LogCat.action, 'archive failed ${matome.id}', e, st);
-      try {
-        await controller.restore();
-      } catch (_) {
-        // Best-effort rollback; the error SnackBar still surfaces.
-      }
-      messenger.showSnackBar(
-        SnackBar(content: Text(t.matome.actions.archiveFailed)),
+      AppLog.error(
+        LogCat.action,
+        'archive Core sync deferred ${matome.id} (kept local, reconciles on pull)',
+        e,
+        st,
       );
-      return;
     }
 
     messenger.showSnackBar(
