@@ -75,6 +75,51 @@ void main() {
     expect(created.workspaceId, 42);
   });
 
+  test('updateMatome PATCHes title + happenedAt and parses the result',
+      () async {
+    final happenedAt = DateTime.utc(2026, 1, 15, 10, 30);
+    adapter.onPatch(
+      '/api/matomes/7',
+      (server) => server.reply(200, {
+        'matome': {
+          'id': 7,
+          'owner_id': 1,
+          'title': 'Renamed',
+          'workspace_id': 42,
+          'happened_at': '2026-01-15T10:30:00Z',
+        },
+      }),
+      data: Matchers.any,
+    );
+
+    final updated = await matomesRepo.updateMatome(
+      7,
+      title: 'Renamed',
+      happenedAt: happenedAt,
+    );
+    expect(updated.id, 7);
+    expect(updated.title, 'Renamed');
+    expect(updated.happenedAt, happenedAt);
+  });
+
+  test('updateMatome surfaces a 422 validation error as an ApiException',
+      () async {
+    adapter.onPatch(
+      '/api/matomes/7',
+      (server) => server.reply(422, {
+        'errors': {
+          'happened_at': ['is too far in the future'],
+        },
+      }),
+      data: Matchers.any,
+    );
+    expect(
+      matomesRepo.updateMatome(7, title: ''),
+      throwsA(isA<ApiException>()
+          .having((e) => e.statusCode, 'statusCode', 422)),
+    );
+  });
+
   test('attachContact accepts 201; detachContact accepts 204', () async {
     adapter
       ..onPost(

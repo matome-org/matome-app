@@ -32,11 +32,33 @@ class FakeMatomesRepository extends MatomesRepository {
 
   int _nextId = 1000;
   final List<Map<String, Object?>> created = [];
+  final List<Map<String, Object?>> updated = [];
   final List<Map<String, Object?>> attached = [];
   final List<Map<String, Object?>> detached = [];
 
   @override
   Future<List<Matome>> fetchMatomes() async => remoteMatomes;
+
+  @override
+  Future<Matome> updateMatome(
+    int id, {
+    String? title,
+    int? workspaceId,
+    DateTime? happenedAt,
+    String? description,
+    String? aggregatedSummary,
+  }) async {
+    updated.add({'id': id, 'title': title, 'happened_at': happenedAt});
+    return Matome(
+      id: id,
+      ownerId: '1',
+      title: title ?? 'r',
+      workspaceId: workspaceId,
+      happenedAt: happenedAt,
+      description: description,
+      aggregatedSummary: aggregatedSummary,
+    );
+  }
 
   @override
   Future<Matome> createMatome({
@@ -327,6 +349,60 @@ void main() {
     expect(matomesRepo.attached, hasLength(1));
     expect(matomesRepo.attached.single['contact'], contactRow.coreId);
     expect(matomesRepo.attached.single['role'], 'organizer');
+  });
+
+  test('editMatome: local-first write lands in Drift, then PATCHes Core when '
+      'the matome is reconciled', () async {
+    final space = await _seedCoreSpace(db, 42);
+    // A reconciled, filed matome (coreId 77).
+    await _seedMatome(
+      db,
+      id: 'mat_local_edit',
+      spaceId: space,
+      coreId: 77,
+      title: 'Old name',
+    );
+
+    final happenedAt = DateTime.utc(2026, 3, 1, 9);
+    final matomesRepo = FakeMatomesRepository();
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container.read(matomeSyncServiceProvider).editMatome(
+          'mat_local_edit',
+          title: '  New name  ',
+          happenedAt: happenedAt,
+        );
+
+    // Drift write happened FIRST (local-first): the local row carries the edit,
+    // title trimmed, happenedAt stored as epoch ms.
+    final row = await db.matomesDao.getById('mat_local_edit');
+    expect(row!.title, 'New name');
+    expect(row.happenedAt, happenedAt.millisecondsSinceEpoch);
+    expect(row.id, 'mat_local_edit'); // PK stable
+
+    // Then synced to Core by coreId (round-trip).
+    expect(matomesRepo.updated, hasLength(1));
+    expect(matomesRepo.updated.single['id'], 77);
+    expect(matomesRepo.updated.single['title'], 'New name');
+    expect(matomesRepo.updated.single['happened_at'], happenedAt);
+  });
+
+  test('editMatome: an un-reconciled (coreId null) matome writes Drift but does '
+      'NOT call Core', () async {
+    await _seedMatome(db, id: 'mat_local_only', spaceId: null, title: 'Local');
+
+    final matomesRepo = FakeMatomesRepository();
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+
+    await container
+        .read(matomeSyncServiceProvider)
+        .editMatome('mat_local_only', title: 'Renamed local');
+
+    final row = await db.matomesDao.getById('mat_local_only');
+    expect(row!.title, 'Renamed local'); // local write still happened
+    expect(matomesRepo.updated, isEmpty); // no coreId → nothing pushed
   });
 
   test('contacts upsert by coreId on pull — no duplicate row on re-sync',

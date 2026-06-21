@@ -74,7 +74,7 @@ class MatomesRepository {
     }
   }
 
-  /// `PUT /api/matomes/:id` (Bearer). Persists edits; only provided fields are
+  /// `PATCH /api/matomes/:id` (Bearer). Persists edits; only provided fields are
   /// sent. [workspaceId] re-files the Matome into a different Space.
   Future<Matome> updateMatome(
     int id, {
@@ -85,7 +85,7 @@ class MatomesRepository {
     String? aggregatedSummary,
   }) async {
     try {
-      final response = await _apiClient.dio.put<Map<String, dynamic>>(
+      final response = await _apiClient.dio.patch<Map<String, dynamic>>(
         '/api/matomes/$id',
         data: <String, dynamic>{
           'title': ?title,

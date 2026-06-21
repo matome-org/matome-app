@@ -70,6 +70,48 @@ class MatomeSyncService {
   }
 
   // ---------------------------------------------------------------------------
+  // EDIT — local-first rename / re-date (task #1408).
+  // ---------------------------------------------------------------------------
+
+  /// Edit a Matome's [title] and/or [happenedAt] LOCAL-FIRST: write the patch to
+  /// Drift first (so the UI reflects it immediately, offline-safe), then PATCH
+  /// Core when the Matome is already reconciled (`core_id != null`). Reconcile is
+  /// by `core_id` — the local PK is never remapped.
+  ///
+  /// An un-reconciled Matome (`core_id == null`, e.g. an Inbox/local-only one)
+  /// only gets the Drift write; its edits ride to Core later via the normal push
+  /// path once it is filed and created. Only non-null fields are written/sent.
+  Future<void> editMatome(
+    String id, {
+    String? title,
+    DateTime? happenedAt,
+  }) async {
+    final trimmedTitle = title?.trim();
+
+    // LOCAL-FIRST: write Drift before any network call.
+    final patch = MatomesCompanion(
+      title: (trimmedTitle == null || trimmedTitle.isEmpty)
+          ? const Value.absent()
+          : Value(trimmedTitle),
+      happenedAt: happenedAt == null
+          ? const Value.absent()
+          : Value(happenedAt.millisecondsSinceEpoch),
+    );
+    await _matomesDao.updateMatome(id, patch);
+
+    // SYNC: only a reconciled Matome (has a Core id) can be PATCHed.
+    final row = await _matomesDao.getById(id);
+    final coreId = row?.coreId;
+    if (coreId == null) return;
+
+    await _matomesRepo.updateMatome(
+      coreId,
+      title: (trimmedTitle == null || trimmedTitle.isEmpty) ? null : trimmedTitle,
+      happenedAt: happenedAt,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // PUSH — only filed Matomes (space-scoped rule).
   // ---------------------------------------------------------------------------
 
