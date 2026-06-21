@@ -191,10 +191,14 @@ class _MatomeHeader extends StatelessWidget {
         // directory.
         SizedBox(height: spacing.sm),
         _ContactChipsSlot(matomeId: matome.id),
-        if (matome.isInbox) ...[
-          SizedBox(height: spacing.sm),
-          _OnDeviceHint(rollup: matome.syncRollup),
-        ],
+        // Sync chip renders for filed AND inbox matomes (#1407): it shows pure
+        // sync state (Synced / Syncing / On device) with no triage suffix —
+        // filing is the separate _FilingSection below.
+        SizedBox(height: spacing.sm),
+        MatomeSyncChip(
+          key: const ValueKey('matome-on-device'),
+          rollup: matome.syncRollup,
+        ),
       ],
     );
   }
@@ -444,66 +448,6 @@ String _roleLabel(String role) {
     case 'attendee':
     default:
       return t.matome.roleAttendee;
-  }
-}
-
-/// The Inbox triage pill. Its sync word is rolled up from the Matome's child
-/// Items ([MatomeItem.syncRollup]) so it agrees with the per-tile "Cloud" /
-/// "On device" badges instead of contradicting them — the triage suffix
-/// ("· not filed") is constant here because the pill only renders for an Inbox
-/// (unfiled) Matome.
-class _OnDeviceHint extends StatelessWidget {
-  const _OnDeviceHint({required this.rollup});
-
-  final MatomeSyncRollup rollup;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final radius = context.radius;
-    final typography = context.typography;
-
-    final (IconData icon, String label, Color color) = switch (rollup) {
-      MatomeSyncRollup.cloud => (
-        Icons.cloud_done_outlined,
-        t.matome.syncedNotFiled,
-        colors.badgePersonal,
-      ),
-      MatomeSyncRollup.partial => (
-        Icons.cloud_sync_outlined,
-        t.matome.syncingNotFiled,
-        colors.textSecondary,
-      ),
-      MatomeSyncRollup.onDevice => (
-        Icons.cloud_off_outlined,
-        t.matome.onDevice,
-        colors.textMuted,
-      ),
-    };
-
-    return Container(
-      key: const ValueKey('matome-on-device'),
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.sm,
-        vertical: spacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: colors.subtleFill,
-        borderRadius: BorderRadius.circular(radius.pill),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: spacing.md, color: color),
-          SizedBox(width: spacing.xs),
-          Text(
-            label,
-            style: typography.label.copyWith(color: color),
-          ),
-        ],
-      ),
-    );
   }
 }
 

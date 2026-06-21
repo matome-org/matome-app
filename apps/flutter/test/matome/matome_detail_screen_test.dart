@@ -134,7 +134,7 @@ void main() {
     expect(find.text(t.matome.noSummary), findsOneWidget);
   });
 
-  testWidgets('shows the on-device hint for an Inbox (untriaged) Matome', (
+  testWidgets('shows the sync chip for an Inbox (untriaged) Matome', (
     tester,
   ) async {
     await _seedMatome(db, id: 'm3', spaceId: null, coreId: null);
@@ -142,9 +142,39 @@ void main() {
     await tester.pumpWidget(_app(container(), id: 'm3'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('matome-on-device')), findsOneWidget);
-    expect(find.text(t.matome.onDevice), findsOneWidget);
+    final chip = find.byKey(const ValueKey('matome-on-device'));
+    expect(chip, findsOneWidget);
+    // Normalized vocab (#1407): pure sync state, no "· not filed" suffix. The
+    // same word now also appears on the per-tile badges (one shared vocab), so
+    // scope the assertion to the chip.
+    expect(
+      find.descendant(of: chip, matching: find.text(t.cardStatus.onDevice)),
+      findsOneWidget,
+    );
+    expect(find.textContaining('not filed'), findsNothing);
   });
+
+  testWidgets(
+    'shows the sync chip for a FILED Matome too (#1407 dropped isInbox guard)',
+    (tester) async {
+      // A filed matome (spaceId set) reconciled to Core reads "Synced" — the
+      // chip is no longer gated behind the inbox state. Seeded count-only so
+      // the rollup falls back to the matome's own coreId.
+      await _seedMatome(
+        db,
+        id: 'm_filed',
+        spaceId: 'space_1',
+        coreId: 7,
+        recordingCount: 0,
+      );
+
+      await tester.pumpWidget(_app(container(), id: 'm_filed'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('matome-on-device')), findsOneWidget);
+      expect(find.text(t.cardStatus.cloud), findsOneWidget);
+    },
+  );
 
   testWidgets('stale summary shows a Regenerate affordance that recomputes '
       'from items and clears stale', (tester) async {
