@@ -167,10 +167,10 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
     // grouped scan yields total + audio + image without loading child rows.
     final totalExpr = recordings.id.count();
     final audioExpr = recordings.id.count(
-      filter: recordings.mediaType.like('audio%'),
+      filter: recordings.mediaType.equals('audio'),
     );
     final imageExpr = recordings.id.count(
-      filter: recordings.mediaType.like('image%'),
+      filter: recordings.mediaType.equals('image'),
     );
     final mixQuery = selectOnly(recordings)
       ..addColumns([recordings.matomeId, totalExpr, audioExpr, imageExpr])

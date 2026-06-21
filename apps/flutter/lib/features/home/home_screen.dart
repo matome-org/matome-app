@@ -16,6 +16,7 @@ import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
 import '../matome/matome_detail_screen.dart';
 import '../matome/matome_row_actions.dart';
+import '../spaces/filing_spaces_provider.dart';
 import 'home_filters.dart' show formatTimestamp;
 import 'inbox_upload.dart';
 import 'matome_inbox_controller.dart';
@@ -435,7 +436,7 @@ class _Body extends ConsumerWidget {
     final typography = context.typography;
     // Filing targets for each row's "Move to space" action — loaded once,
     // shared across rows (empty while loading, so the menu still opens).
-    final spaces = ref.watch(matomeFilingSpacesProvider).valueOrNull ?? const [];
+    final spaces = ref.watch(filingSpacesProvider).valueOrNull ?? const [];
     final filtered = searchMatomes(items, search);
     final sections = groupMatomesByDate(
       filtered,

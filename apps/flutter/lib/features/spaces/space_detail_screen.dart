@@ -9,8 +9,8 @@ import '../../ui/app_card.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
 import '../home/home_filters.dart' show formatTimestamp;
-import '../home/matome_inbox_controller.dart' show matomeFilingSpacesProvider;
 import '../matome/matome_row_actions.dart';
+import 'filing_spaces_provider.dart';
 import 'space_detail_controller.dart';
 
 /// Wide-viewport reading clamp so the matome rows don't sprawl across a desktop
@@ -92,7 +92,7 @@ class _List extends ConsumerWidget {
     final spacing = context.spacing;
     final typography = context.typography;
     final spaces =
-        ref.watch(matomeFilingSpacesProvider).valueOrNull ?? const [];
+        ref.watch(filingSpacesProvider).valueOrNull ?? const [];
 
     if (items.isEmpty) {
       return RefreshIndicator(

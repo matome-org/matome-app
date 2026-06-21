@@ -1,8 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/db/app_database.dart';
 import '../../core/db/daos/matomes_dao.dart';
-import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/db/matome_card.dart';
 import '../../core/providers.dart';
 import 'inbox_controller.dart';
@@ -34,7 +32,6 @@ class MatomeInboxController
   final Ref _ref;
 
   MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
-  WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
 
   Future<List<MatomeItem>> _loadItems() => _matomesDao.listInboxMatomeItems();
 
@@ -64,20 +61,9 @@ class MatomeInboxController
     await _matomesDao.fileIntoSpace(matomeId, spaceId);
     await reloadFromLocal();
   }
-
-  /// All workspaces available as file-into-space targets.
-  Future<List<WorkspaceRow>> spaces() => _workspacesDao.getWorkspaces();
 }
 
 final matomeInboxControllerProvider = StateNotifierProvider<
     MatomeInboxController, AsyncValue<List<MatomeItem>>>(
   (ref) => MatomeInboxController(ref),
-);
-
-/// Filing-target Spaces for the list row's "Move to space" action (#1412).
-/// Loaded once and shared across rows so the dense menu has its targets without
-/// a per-row Space query. Returns an empty list while loading / on error so the
-/// row's handler degrades to an empty sheet rather than throwing.
-final matomeFilingSpacesProvider = FutureProvider<List<WorkspaceRow>>(
-  (ref) => ref.read(matomeInboxControllerProvider.notifier).spaces(),
 );
