@@ -125,4 +125,69 @@ void main() {
     expect(find.byType(MatomeDetailScreen), findsNothing);
     expect(find.byKey(const ValueKey('open-matome')), findsOneWidget);
   });
+
+  testWidgets(
+      'SYSTEM back gesture (not the button) arms the guard and discards out',
+      (tester) async {
+    // This covers the race path the button-tap test does not: a system pop
+    // (OS back gesture / predictive back) flows straight into the
+    // `PopScope.onPopInvokedWithResult` callback rather than the AppBar
+    // `BackButton.onPressed`. With the unsaved-notes guard ARMED, the same
+    // single guard must intercept it, prompt, and only leave on discard —
+    // proving the guard owns BOTH entry points, not just the button.
+    await _seedMatome(db, id: 'm1');
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container(),
+        child: TranslationProvider(
+          child: MaterialApp.router(
+            theme: buildLightTheme(),
+            routerConfig: buildRouter(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-matome')));
+    await tester.pumpAndSettle();
+    await revealDetails(tester);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('matome-edit-notes')),
+      200,
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('matome-edit-notes')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('matome-edit-notes')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('matome-notes-field')));
+    await tester.enterText(
+      find.byKey(const ValueKey('matome-notes-field')),
+      'a draft note I have not saved',
+    );
+    await tester.pumpAndSettle();
+
+    // Simulate the OS back navigation (NOT a button tap). This routes through
+    // the framework's pop-route channel, which the `PopScope` intercepts.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    // The guard intercepted the system pop and prompted — still on the hub.
+    expect(find.text(t.details.unsavedTitle), findsOneWidget);
+    await tester.tap(find.text(t.details.keepEditing));
+    await tester.pumpAndSettle();
+    expect(find.byType(MatomeDetailScreen), findsOneWidget);
+
+    // Another system pop, this time discard — the single guard pops out to the
+    // list (no double-prompt from the re-entrant self-correct).
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text(t.details.unsavedTitle), findsOneWidget);
+    await tester.tap(find.text(t.details.discard));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MatomeDetailScreen), findsNothing);
+    expect(find.byKey(const ValueKey('open-matome')), findsOneWidget);
+  });
 }
