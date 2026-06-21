@@ -202,6 +202,96 @@ defmodule MatomeApiWeb.MatomeControllerTest do
     assert %{"errors" => %{"matome_id" => ["is invalid"]}} = json_response(invalid, 422)
   end
 
+  test "archive sets archived_at and the matome drops out of the list", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    created =
+      post(owner_conn, ~p"/api/matomes", %{title: "To archive"})
+      |> json_response(201)
+      |> get_in(["matome"])
+
+    # before archiving, it is in the list
+    listed = get(owner_conn, ~p"/api/matomes") |> json_response(200)
+    assert Enum.any?(listed["matomes"], &(&1["id"] == created["id"]))
+
+    archived =
+      post(owner_conn, ~p"/api/matomes/#{created["id"]}/archive")
+      |> json_response(200)
+      |> get_in(["matome"])
+
+    assert archived["archived_at"] != nil
+
+    # after archiving, it leaves the default list and the show endpoint
+    after_list = get(owner_conn, ~p"/api/matomes") |> json_response(200)
+    refute Enum.any?(after_list["matomes"], &(&1["id"] == created["id"]))
+    assert get(owner_conn, ~p"/api/matomes/#{created["id"]}") |> json_response(404)
+  end
+
+  test "restore clears archived_at and the matome returns to the list", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    created =
+      post(owner_conn, ~p"/api/matomes", %{title: "Round trip"})
+      |> json_response(201)
+      |> get_in(["matome"])
+
+    post(owner_conn, ~p"/api/matomes/#{created["id"]}/archive") |> json_response(200)
+
+    restored =
+      post(owner_conn, ~p"/api/matomes/#{created["id"]}/restore")
+      |> json_response(200)
+      |> get_in(["matome"])
+
+    assert restored["archived_at"] == nil
+
+    after_list = get(owner_conn, ~p"/api/matomes") |> json_response(200)
+    assert Enum.any?(after_list["matomes"], &(&1["id"] == created["id"]))
+    assert get(owner_conn, ~p"/api/matomes/#{created["id"]}") |> json_response(200)
+  end
+
+  test "an out-of-scope actor cannot archive or restore another owner's matome",
+       %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+    %{conn: other_conn} = register_conn(build_conn())
+
+    created =
+      post(owner_conn, ~p"/api/matomes", %{title: "Private"})
+      |> json_response(201)
+      |> get_in(["matome"])
+
+    # cross-owner archive must be blocked, not silently applied
+    assert post(other_conn, ~p"/api/matomes/#{created["id"]}/archive")
+           |> json_response(404)
+
+    # the owner's matome is untouched (still visible, not archived)
+    refetched =
+      get(owner_conn, ~p"/api/matomes/#{created["id"]}")
+      |> json_response(200)
+      |> get_in(["matome"])
+
+    assert refetched["archived_at"] == nil
+
+    # archive it as the owner, then a cross-owner restore is also blocked
+    post(owner_conn, ~p"/api/matomes/#{created["id"]}/archive") |> json_response(200)
+
+    assert post(other_conn, ~p"/api/matomes/#{created["id"]}/restore")
+           |> json_response(404)
+  end
+
+  test "archived matomes are excluded from search", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    created =
+      post(owner_conn, ~p"/api/matomes", %{title: "needle archived"})
+      |> json_response(201)
+      |> get_in(["matome"])
+
+    post(owner_conn, ~p"/api/matomes/#{created["id"]}/archive") |> json_response(200)
+
+    search = get(owner_conn, ~p"/api/matomes/search?q=needle") |> json_response(200)
+    assert search["matomes"] == []
+  end
+
   defp register_conn(conn) do
     email = "user-#{System.unique_integer([:positive])}@example.com"
     register_conn = post(conn, ~p"/api/auth/register", %{email: email, password: @password})

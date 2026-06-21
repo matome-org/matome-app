@@ -212,6 +212,25 @@ defmodule MatomeApiWeb.ApiSpec do
           parameters: [id_parameter()],
           responses: resource_responses("Recording processing queued", 202)
         }
+      },
+      "/api/matomes/{id}/archive" => %PathItem{
+        post: %Operation{
+          operationId: "MatomeController.archive",
+          tags: ["matomes"],
+          summary:
+            "Archive (soft-delete) one authenticated-user-owned matome; it leaves the default lists but its data is retained and recoverable",
+          parameters: [id_parameter()],
+          responses: resource_responses("Matome")
+        }
+      },
+      "/api/matomes/{id}/restore" => %PathItem{
+        post: %Operation{
+          operationId: "MatomeController.restore",
+          tags: ["matomes"],
+          summary: "Restore (un-archive) one authenticated-user-owned matome",
+          parameters: [id_parameter()],
+          responses: resource_responses("Matome")
+        }
       }
     }
   end

@@ -54,6 +54,32 @@ defmodule MatomeApiWeb.MatomeController do
     end
   end
 
+  def archive(conn, %{"id" => id}) do
+    case Content.archive_matome(conn.assigns.current_user, id) do
+      nil ->
+        not_found(conn)
+
+      {:ok, matome} ->
+        json(conn, %{matome: matome_json(matome)})
+
+      {:error, changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: errors_on(changeset)})
+    end
+  end
+
+  def restore(conn, %{"id" => id}) do
+    case Content.restore_matome(conn.assigns.current_user, id) do
+      nil ->
+        not_found(conn)
+
+      {:ok, matome} ->
+        json(conn, %{matome: matome_json(matome)})
+
+      {:error, changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: errors_on(changeset)})
+    end
+  end
+
   def attach_contact(conn, %{"matome_id" => matome_id, "contact_id" => contact_id} = params) do
     case Content.attach_contact(conn.assigns.current_user, matome_id, contact_id, params) do
       nil ->
@@ -92,6 +118,7 @@ defmodule MatomeApiWeb.MatomeController do
       happened_at: matome.happened_at,
       description: matome.description,
       aggregated_summary: matome.aggregated_summary,
+      archived_at: matome.archived_at,
       contacts: Enum.map(matome.matome_contacts, &contact_link_json/1),
       inserted_at: matome.inserted_at,
       updated_at: matome.updated_at

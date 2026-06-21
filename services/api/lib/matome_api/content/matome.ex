@@ -10,6 +10,9 @@ defmodule MatomeApi.Content.Matome do
     field :happened_at, :utc_datetime
     field :description, :string
     field :aggregated_summary, :string
+    # Soft-delete (archive) marker (W3, task #1409). NULL ⟺ active; a timestamp
+    # ⟺ archived. Set only via the archive/restore changesets, never user attrs.
+    field :archived_at, :utc_datetime
 
     belongs_to :owner, User
     belongs_to :workspace, Workspace
@@ -38,6 +41,15 @@ defmodule MatomeApi.Content.Matome do
     |> validate_length(:title, min: 1, max: 255)
     |> validate_happened_at()
     |> foreign_key_constraint(:workspace_id)
+  end
+
+  @doc """
+  Changeset that toggles the soft-delete marker. `archived?` true stamps
+  `archived_at` with the supplied time (defaulting to now); false clears it.
+  """
+  def archive_changeset(matome, archived?, now \\ DateTime.utc_now()) do
+    archived_at = if archived?, do: DateTime.truncate(now, :second), else: nil
+    change(matome, archived_at: archived_at)
   end
 
   defp trim(value) when is_binary(value), do: String.trim(value)

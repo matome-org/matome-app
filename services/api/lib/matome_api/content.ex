@@ -153,6 +153,7 @@ defmodule MatomeApi.Content do
   def list_matomes(%User{id: owner_id}, params \\ %{}) do
     Matome
     |> where([matome], matome.owner_id == ^owner_id)
+    |> where([matome], is_nil(matome.archived_at))
     |> maybe_filter_workspace(params["workspace_id"] || params[:workspace_id])
     |> search_by(:title, params["q"] || params[:q])
     |> order_by([matome], desc: matome.inserted_at)
@@ -161,9 +162,54 @@ defmodule MatomeApi.Content do
   end
 
   def get_matome(%User{id: owner_id}, id) do
+    Matome
+    |> where([matome], matome.id == ^id and matome.owner_id == ^owner_id)
+    |> where([matome], is_nil(matome.archived_at))
+    |> Repo.one()
+    |> case do
+      nil -> nil
+      matome -> Repo.preload(matome, :matome_contacts)
+    end
+  end
+
+  @doc """
+  Loads an owner-scoped matome regardless of its archived state. Used by
+  `restore_matome` (an archived matome is invisible to `get_matome`, so restore
+  must look it up here). Still owner-scoped at the query level — a cross-owner
+  actor gets `nil` (the controller maps that to 404).
+  """
+  def get_matome_including_archived(%User{id: owner_id}, id) do
     case Repo.get_by(Matome, id: id, owner_id: owner_id) do
       nil -> nil
       matome -> Repo.preload(matome, :matome_contacts)
+    end
+  end
+
+  @doc """
+  Soft-delete (archive) an owner-scoped matome: stamps `archived_at`. Returns
+  `nil` for a missing/out-of-scope matome (404). Data and local files are
+  retained — this is recoverable via `restore_matome`.
+  """
+  def archive_matome(%User{} = owner, id) do
+    with %Matome{} = matome <- get_matome(owner, id) do
+      matome
+      |> Matome.archive_changeset(true)
+      |> Repo.update()
+      |> preload_matome_contacts()
+    end
+  end
+
+  @doc """
+  Restore (un-archive) an owner-scoped matome: clears `archived_at`. Looks the
+  matome up including archived rows (an archived one is hidden from
+  `get_matome`). Returns `nil` for a missing/out-of-scope matome (404).
+  """
+  def restore_matome(%User{} = owner, id) do
+    with %Matome{} = matome <- get_matome_including_archived(owner, id) do
+      matome
+      |> Matome.archive_changeset(false)
+      |> Repo.update()
+      |> preload_matome_contacts()
     end
   end
 
