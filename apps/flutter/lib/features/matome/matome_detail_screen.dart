@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +23,7 @@ import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/loading_indicator.dart';
 import '../home/home_filters.dart' show formatTimestamp;
+import 'matome_actions_menu.dart';
 import 'matome_detail_controller.dart';
 
 /// Matome detail hub (S?, #1371) + triage actions (#1372): the "page" for a
@@ -119,7 +121,7 @@ class _MatomeDetailBody extends ConsumerWidget {
             spacing.xxl + spacing.xxl,
           ),
           children: [
-            _MatomeHeader(matome: matome),
+            _MatomeHeader(matome: matome, spaces: state.spaces),
             SizedBox(height: spacing.md),
             _FilingSection(
               matome: matome,
@@ -150,13 +152,128 @@ class _MatomeDetailBody extends ConsumerWidget {
 
 // ─── Header ──────────────────────────────────────────────────────────────────
 
-class _MatomeHeader extends StatelessWidget {
-  const _MatomeHeader({required this.matome});
+class _MatomeHeader extends ConsumerWidget {
+  const _MatomeHeader({required this.matome, required this.spaces});
 
   final MatomeItem matome;
+  final List<WorkspaceRow> spaces;
+
+  Future<void> _onAction(
+    BuildContext context,
+    WidgetRef ref,
+    MatomeAction action,
+  ) async {
+    switch (action) {
+      case MatomeAction.rename:
+      case MatomeAction.editDateTime:
+      case MatomeAction.share:
+        // Rename / edit date & time are W5; share is deferred (disabled in the
+        // menu). No-op hooks so the menu is complete now.
+        break;
+      case MatomeAction.regenerateSummary:
+        await ref
+            .read(matomeDetailControllerProvider(matome.id).notifier)
+            .regenerateSummary();
+      case MatomeAction.moveToSpace:
+        await _openFilingSheet(context, ref);
+      case MatomeAction.copySummary:
+        await _copySummary(context);
+      case MatomeAction.archive:
+        await _archive(context, ref);
+    }
+  }
+
+  Future<void> _openFilingSheet(BuildContext context, WidgetRef ref) async {
+    final target = await showAppBottomSheet<WorkspaceRow>(
+      context: context,
+      builder: (_) => _FileIntoSpaceSheet(spaces: spaces),
+    );
+    if (target == null) return;
+    // Read the controller AFTER the sheet (it can be autoDisposed while the
+    // sheet is open) so filing persists and the hub refreshes.
+    await ref
+        .read(matomeDetailControllerProvider(matome.id).notifier)
+        .fileIntoSpace(target.id);
+  }
+
+  Future<void> _copySummary(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final summary = matome.aggregatedSummary?.trim();
+    if (summary == null || summary.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(t.matome.actions.noSummaryToCopy)),
+      );
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: summary));
+    messenger.showSnackBar(
+      SnackBar(content: Text(t.matome.actions.summaryCopied)),
+    );
+  }
+
+  /// Archive flow (#1410): confirm → OPTIMISTIC removal (the local-first
+  /// `archive()` write drops it from every list immediately) → Undo SnackBar
+  /// that calls `restore()`. If the archive sync FAILS, roll the optimistic
+  /// removal back by restoring the row and surface the error.
+  Future<void> _archive(BuildContext context, WidgetRef ref) async {
+    // Capture the root container + messenger BEFORE any await: this header (and
+    // its `ref`) can be autoDisposed once the matome leaves the lists, and we
+    // still need to drive restore / show the Undo SnackBar afterwards.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+    final controller =
+        container.read(matomeDetailControllerProvider(matome.id).notifier);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AppDialog(
+        title: Text(t.matome.actions.archiveTitle),
+        content: Text(t.matome.actions.archiveBody),
+        actions: [
+          AppTextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(t.matome.cancel),
+          ),
+          AppTextButton(
+            key: const ValueKey('matome-archive-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(t.matome.actions.archiveConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await controller.archive();
+    } catch (e, st) {
+      AppLog.error(LogCat.action, 'archive failed ${matome.id}', e, st);
+      // Roll the optimistic removal back: the local-first write already stamped
+      // archived_at before the sync threw, so restore the row.
+      try {
+        await controller.restore();
+      } catch (_) {
+        // Best-effort rollback; the error SnackBar still surfaces.
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text(t.matome.actions.archiveFailed)),
+      );
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(t.matome.actions.archived),
+        action: SnackBarAction(
+          label: t.matome.actions.undo,
+          onPressed: () => controller.restore(),
+        ),
+      ),
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final spacing = context.spacing;
     final typography = context.typography;
@@ -167,9 +284,19 @@ class _MatomeHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          matome.title,
-          style: typography.title.copyWith(color: colors.textPrimary),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                matome.title,
+                style: typography.title.copyWith(color: colors.textPrimary),
+              ),
+            ),
+            MatomeActionsMenu(
+              onAction: (action) => _onAction(context, ref, action),
+            ),
+          ],
         ),
         SizedBox(height: spacing.xs),
         Row(

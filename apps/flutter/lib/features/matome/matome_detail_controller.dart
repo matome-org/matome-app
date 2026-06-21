@@ -17,6 +17,7 @@ import '../contacts/contacts_controller.dart' show kPlaceholderContactOwnerId;
 import '../home/inbox_upload.dart'
     show DurableImportCopy, PickedUpload, durableImportCopy, mediaTypeForPath;
 import '../recordings/recording_ids.dart';
+import 'matome_sync_service.dart';
 
 /// Immutable view-state for the Matome detail hub (#1371, triage #1372).
 ///
@@ -249,6 +250,26 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     );
     if (!mounted) return;
     await load();
+  }
+
+  /// Archive (soft-delete) this Matome — the local-first triage action
+  /// (task #1410, W3 backend). Stamps `archived_at` in Drift FIRST so it leaves
+  /// every local list immediately, then POSTs Core when reconciled. Recoverable
+  /// via [restore] (the Undo affordance). The matome id is captured up front:
+  /// the sync awaits can outlive an autoDispose of this notifier, after which
+  /// reading `state` would throw.
+  Future<void> archive() async {
+    final matomeId = state.id;
+    AppLog.event(LogCat.action, 'archive $matomeId');
+    await _ref.read(matomeSyncServiceProvider).archiveMatome(matomeId);
+  }
+
+  /// Restore (un-archive) this Matome — the rollback for an optimistic archive
+  /// (either the Undo affordance, or recovery when the archive sync failed).
+  Future<void> restore() async {
+    final matomeId = state.id;
+    AppLog.event(LogCat.action, 'restore $matomeId');
+    await _ref.read(matomeSyncServiceProvider).restoreMatome(matomeId);
   }
 
   /// Remove an Item (recording) from this Matome: delete the row, its on-device
