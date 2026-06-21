@@ -115,6 +115,7 @@
     "noRecordings": "アイテムはまだありません",
     "summary": "要約",
     "noSummary": "要約はまだありません",
+    "placeInbox": "受信箱",
     "regenerateSummary": "要約を再生成",
     "summaryStale": "アイテムが変更されました — 要約が古い可能性があります",
     "notes": "メモ",

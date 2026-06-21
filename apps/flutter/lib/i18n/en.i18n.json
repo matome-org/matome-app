@@ -115,6 +115,7 @@
     "noRecordings": "No items yet",
     "summary": "Summary",
     "noSummary": "No summary yet",
+    "placeInbox": "Inbox",
     "regenerateSummary": "Regenerate summary",
     "summaryStale": "Items changed — summary may be out of date",
     "notes": "Notes",

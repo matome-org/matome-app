@@ -434,6 +434,9 @@ class Translations$matome$en {
 	/// en: 'No summary yet'
 	String get noSummary => 'No summary yet';
 
+	/// en: 'Inbox'
+	String get placeInbox => 'Inbox';
+
 	/// en: 'Regenerate summary'
 	String get regenerateSummary => 'Regenerate summary';
 
@@ -1027,6 +1030,7 @@ extension on Translations {
 			'matome.noRecordings' => 'No items yet',
 			'matome.summary' => 'Summary',
 			'matome.noSummary' => 'No summary yet',
+			'matome.placeInbox' => 'Inbox',
 			'matome.regenerateSummary' => 'Regenerate summary',
 			'matome.summaryStale' => 'Items changed — summary may be out of date',
 			'matome.notes' => 'Notes',

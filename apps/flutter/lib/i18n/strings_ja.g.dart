@@ -234,6 +234,7 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get noRecordings => 'アイテムはまだありません';
 	@override String get summary => '要約';
 	@override String get noSummary => '要約はまだありません';
+	@override String get placeInbox => '受信箱';
 	@override String get regenerateSummary => '要約を再生成';
 	@override String get summaryStale => 'アイテムが変更されました — 要約が古い可能性があります';
 	@override String get notes => 'メモ';
@@ -547,6 +548,7 @@ extension on TranslationsJa {
 			'matome.noRecordings' => 'アイテムはまだありません',
 			'matome.summary' => '要約',
 			'matome.noSummary' => '要約はまだありません',
+			'matome.placeInbox' => '受信箱',
 			'matome.regenerateSummary' => '要約を再生成',
 			'matome.summaryStale' => 'アイテムが変更されました — 要約が古い可能性があります',
 			'matome.notes' => 'メモ',
