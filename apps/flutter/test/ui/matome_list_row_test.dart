@@ -18,6 +18,7 @@ MatomeItem _matome({
   String? spaceName,
   int audioCount = 0,
   int imageCount = 0,
+  int documentCount = 0,
   int peopleCount = 0,
   int? coreId,
 }) {
@@ -29,12 +30,13 @@ MatomeItem _matome({
     happenedAt: epoch,
     createdAt: epoch,
     summaryStale: false,
-    recordingCount: audioCount + imageCount,
+    recordingCount: audioCount + imageCount + documentCount,
     recordings: const [],
     aggregatedSummary: summary,
     spaceName: spaceName,
     audioCount: audioCount,
     imageCount: imageCount,
+    documentCount: documentCount,
     peopleCount: peopleCount,
     coreId: coreId,
   );
@@ -98,6 +100,19 @@ void main() {
     expect(find.text('2'), findsOneWidget);
     // No image item → no image token.
     expect(find.byIcon(Icons.image_outlined), findsNothing);
+  });
+
+  testWidgets('shows the document token with its count when documentCount > 0', (
+    tester,
+  ) async {
+    // No document Items → no doc token (the strip stays dense).
+    await _pump(tester, _matome(documentCount: 0));
+    expect(find.byIcon(Icons.description_outlined), findsNothing);
+
+    // A matome with N document Items → doc icon + the count (#1449/#1453).
+    await _pump(tester, _matome(documentCount: 4));
+    expect(find.byIcon(Icons.description_outlined), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
   });
 
   testWidgets('shows the people token only when peopleCount > 0', (
