@@ -9,8 +9,10 @@
 > (recordings: `audio | meeting | image`). See
 > [ADR-0003](decisions/ADR-0003-matome-central-entity.md) for the entity model,
 > [ADR-0004](decisions/ADR-0004-identity-permissions-triage.md) for
-> identity/permissions/triage, and [architecture.md](architecture.md) for the
-> system around it.
+> identity/permissions/triage,
+> [ADR-0005](decisions/ADR-0005-matome-detail-letter-and-panel.md) for the
+> letter-format detail screen and its forthcoming responsive side panel, and
+> [architecture.md](architecture.md) for the system around it.
 
 ---
 
