@@ -1,6 +1,6 @@
 # Matome — Lifecycle
 
-> Status: agreed · Last updated: 2026-06-20
+> Status: agreed · Last updated: 2026-06-21
 > The cradle-to-grave life of a **Matome** and its items, anchored to the code
 > that implements each stage. Every claim cites the file (and symbol) behind it;
 > where code and this doc disagree, the code wins.
@@ -140,12 +140,32 @@ Code anchors:
 
 As items reconcile to Core ids, `MatomeItem.syncRollup` (§ "two axes" above) recomputes the Matome's pill: `onDevice` → `partial` → `cloud`. This is pure derivation — no stored Matome sync column.
 
+**Rollup → label (the normalized sync vocabulary, W1 / #1407).** The shared, rollup-driven chip `MatomeSyncChip(rollup:)` (`lib/ui/app_card.dart`) renders one of exactly **three** labels — there is no fourth "failed" state on the chip:
+
+| Rollup | Chip label (en / ja) | i18n key |
+|--------|----------------------|----------|
+| `cloud` | **Synced** / 同期済み | `cardStatus.cloud` |
+| `partial` | **Syncing** / 同期中 | `cardStatus.syncing` |
+| `onDevice` | **On device** / 端末内 | `cardStatus.onDevice` |
+
+- The chip is **always visible** — the earlier inbox-only guard was dropped in W1, so it shows for filed *and* inbox Matomes (ADR-0005). It keeps the `matome-on-device` ValueKey, whose meaning changed from an inbox-only hint to the always-on rollup chip.
+- **Accepted trade-off (DECIDED, 3 states):** a *permanently-failed* item does **not** spawn a separate failure label. Because `RecordingItem.isOnCloud` excludes `processingStatus == 'failed'`, a failed child keeps `synced < total`, so the Matome stays in `partial` → labelled **"Syncing"**. "Syncing" therefore reads as "in-flight *or* stuck retrying"; the per-item badges (`StatusBadge`) carry the explicit "Upload failed" detail. The note lives on the `MatomeSyncChip` doc-comment (`lib/ui/app_card.dart`).
+
 ## 6. Summary
 
 The Matome-level summary is a **local, deterministic composition** of its items' AI summaries — not a separate AI call.
 
 - Regenerate: `MatomeDetailController.regenerateSummary()` → `MatomesDao.regenerateSummary()` (`lib/core/db/daos/matomes_dao.dart`), which calls `composeAggregatedSummary()` (`lib/features/matome/matome_summary.dart`) — collects items with a non-empty `summary`, renders a markdown header + bullets, stores the result in `aggregatedSummary`, and clears `summaryStale`.
 - Staleness: `MatomesDao.markSummaryStale()` flips `summaryStale` whenever an item is added, removed, or its summary changes (e.g. `addPhoto`, `removeItem`). The UI then offers "Regenerate summary".
+
+## 6b. Editing — rename & date/time (W5)
+
+Two local-first edit actions, surfaced from the detail header **"…" overflow menu** (`MatomeActionsMenu` → `MatomeAction.rename` / `MatomeAction.editDateTime`, `lib/features/matome/matome_actions_menu.dart`):
+
+- **Rename** — `MatomeDetailController.rename(title)` (`lib/features/matome/matome_detail_controller.dart`) → `MatomeSyncService.editMatome(id, title:)` (`lib/features/matome/matome_sync_service.dart`): writes the trimmed title to Drift **first** (header updates immediately, offline-safe), then PATCHes Core (`PATCH /api/matomes/:id`, owner-scoped + validated, W2) once the Matome is reconciled. UI: `_MatomeHeader._rename` dialog (`matome-rename-field` / `matome-rename-save` keys) with a non-empty-title guard.
+- **Edit date & time** — `MatomeDetailController.editDateTime(happenedAt)` → `MatomeSyncService.editMatome(id, happenedAt:)`: writes `happened_at` to Drift first (every list re-sorts immediately), then PATCHes Core when reconciled. UI: `_MatomeHeader._editDateTime`.
+
+Both paths capture the matome id up front because the sync awaits can outlive an autoDispose of the notifier.
 
 ## 7. Triage — Inbox → Space
 
@@ -182,6 +202,8 @@ A Matome carries tagged contacts via the `matome_contacts` edge.
 | Matome sync rollup | `onDevice, partial, cloud` | `MatomeItem.syncRollup` — `lib/core/db/matome_card.dart` |
 | Matome triage | `Inbox (spaceId == null)` / `Filed` | `MatomeItem.isInbox` — `lib/core/db/matome_card.dart` |
 | Matome reconciled | `coreId == null` until filed + synced | `Matomes.coreId` — `lib/core/db/tables.dart` |
+| Matome archived (soft-delete) | `archivedAt == null` (active) / set (archived, excluded from lists) | `Matomes.archivedAt` — `lib/core/db/tables.dart` |
+| Sync chip label | `Synced` / `Syncing` / `On device` (3-state, failed item → "Syncing") | `MatomeSyncChip` — `lib/ui/app_card.dart` (§5) |
 
 ## Not (yet) implemented
 

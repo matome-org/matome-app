@@ -126,6 +126,7 @@ A single Flutter codebase (`apps/flutter`) targets mobile, Linux desktop, and we
 | `i18n/` | slang translations (en/ja) |
 
 - **State**: Riverpod. Controllers are `StateNotifier`s behind providers.
+- **Routing**: a single flat go_router tree (`app/`). The matome detail (`/matome/:id`) is **one route, breakpoint-driven layout** — the same route renders the stacked "letter" on narrow viewports and the letter + persistent side panel at ≥ 900 px, via a `LayoutBuilder` inside the screen rather than a nested navigator. See [ADR-0005](decisions/ADR-0005-matome-detail-letter-and-panel.md).
 - **Persistence**: Drift (SQLite), offline-first — the UI watches the DB; an upload queue syncs local → Core in the background.
 - **Capture**: native mic recording on mobile/desktop; loopback meeting capture on Linux desktop (ffmpeg); file import (audio/image) on every platform.
 - **Design system**: Flutter `ThemeExtension`s governed by Widgetbook — see [ADR-0002](decisions/ADR-0002-flutter-design-system-foundation.md).
