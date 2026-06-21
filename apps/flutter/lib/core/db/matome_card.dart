@@ -39,6 +39,7 @@ class MatomeItem {
     this.audioCount = 0,
     this.imageCount = 0,
     this.peopleCount = 0,
+    this.archivedAt,
   });
 
   final String id;
@@ -91,8 +92,17 @@ class MatomeItem {
   /// populated by the list query for the people token. 0 when none / not loaded.
   final int peopleCount;
 
+  /// Epoch ms the Matome was archived (soft-deleted), or NULL when active.
+  /// List queries exclude archived rows, but the detail hub stays openable via
+  /// `/matome/:id`, so the header surfaces an archived banner when this is set
+  /// (#1431/I-1).
+  final int? archivedAt;
+
   /// Derived untriaged state — `spaceId == null` (glossary: Inbox).
   bool get isInbox => spaceId == null;
+
+  /// Whether this Matome is archived (soft-deleted) — `archivedAt != null`.
+  bool get isArchived => archivedAt != null;
 
   /// Local-only / not-yet-synced — no reconciled Core id yet (ADR-0004).
   bool get isLocalOnly => coreId == null;
@@ -137,6 +147,7 @@ class MatomeItem {
       audioCount: audioCount,
       imageCount: imageCount,
       peopleCount: peopleCount,
+      archivedAt: row.archivedAt,
     );
   }
 }

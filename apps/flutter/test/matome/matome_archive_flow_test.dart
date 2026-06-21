@@ -33,7 +33,12 @@ class _FailingArchiveSyncService extends MatomeSyncService {
   Future<void> restoreMatome(String id) => _db.matomesDao.restore(id);
 }
 
-Future<void> _seed(AppDatabase db, {required String id, String? summary}) async {
+Future<void> _seed(
+  AppDatabase db, {
+  required String id,
+  String? summary,
+  bool archived = false,
+}) async {
   await db.matomesDao.create(
     MatomesCompanion(
       id: Value(id),
@@ -41,6 +46,9 @@ Future<void> _seed(AppDatabase db, {required String id, String? summary}) async 
       happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
       createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
       aggregatedSummary: Value(summary),
+      archivedAt: archived
+          ? Value(DateTime(2026, 6, 8).millisecondsSinceEpoch)
+          : const Value.absent(),
     ),
   );
 }
@@ -185,5 +193,26 @@ void main() {
     expect(find.text(t.matome.actions.archiveFailed), findsNothing);
     expect(find.text(t.matome.actions.archived), findsOneWidget);
     expect(find.text(t.matome.actions.undo), findsOneWidget);
+  });
+
+  testWidgets(
+      'archived matome detail shows the archived banner with a Restore action',
+      (tester) async {
+    await _seed(db, id: 'm_banner', archived: true);
+
+    await tester.pumpWidget(_app(container(), id: 'm_banner'));
+    await tester.pumpAndSettle();
+
+    // I-1 (#1431): an archived matome is still openable via /matome/:id, so the
+    // detail header surfaces an "archived" banner with a Restore affordance.
+    expect(find.byKey(const ValueKey('matome-archived-banner')), findsOneWidget);
+    expect(find.text(t.matome.actions.archivedBanner), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('matome-archived-restore')));
+    await tester.pumpAndSettle();
+
+    // Restore clears archived_at and the banner is gone.
+    expect((await db.matomesDao.getById('m_banner'))!.archivedAt, isNull);
+    expect(find.byKey(const ValueKey('matome-archived-banner')), findsNothing);
   });
 }

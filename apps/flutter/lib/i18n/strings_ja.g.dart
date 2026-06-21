@@ -439,6 +439,8 @@ class _Translations$matome$actions$ja extends Translations$matome$actions$en {
 	@override String get archived => 'まとめをアーカイブしました';
 	@override String get undo => '元に戻す';
 	@override String get archiveFailed => 'アーカイブできませんでした — もう一度お試しください';
+	@override String get archivedBanner => 'このまとめはアーカイブされています';
+	@override String get restore => '復元';
 	@override String get renameTitle => 'まとめの名前を変更';
 	@override String get renameLabel => 'タイトル';
 	@override String get renameHint => 'まとめのタイトル';
@@ -617,6 +619,8 @@ extension on TranslationsJa {
 			'matome.actions.archived' => 'まとめをアーカイブしました',
 			'matome.actions.undo' => '元に戻す',
 			'matome.actions.archiveFailed' => 'アーカイブできませんでした — もう一度お試しください',
+			'matome.actions.archivedBanner' => 'このまとめはアーカイブされています',
+			'matome.actions.restore' => '復元',
 			'matome.actions.renameTitle' => 'まとめの名前を変更',
 			'matome.actions.renameLabel' => 'タイトル',
 			'matome.actions.renameHint' => 'まとめのタイトル',

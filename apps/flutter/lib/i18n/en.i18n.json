@@ -175,6 +175,8 @@
       "archived": "Matome archived",
       "undo": "Undo",
       "archiveFailed": "Couldn't archive — please try again",
+      "archivedBanner": "This matome is archived",
+      "restore": "Restore",
       "renameTitle": "Rename matome",
       "renameLabel": "Title",
       "renameHint": "Matome title",

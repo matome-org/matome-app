@@ -341,6 +341,12 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // I-1 (#1431): an archived matome stays openable via /matome/:id, so
+          // the header surfaces an archived banner with a Restore affordance.
+          if (matome.isArchived) ...[
+            _ArchivedBanner(controller: controller),
+            SizedBox(height: spacing.lg),
+          ],
           _MatomeHeader(matome: matome, spaces: widget.spaces),
           SizedBox(height: spacing.lg),
           // Hero: the aggregated summary, read first.
@@ -558,6 +564,65 @@ class _MetaRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Archived banner ─────────────────────────────────────────────────────────
+
+/// I-1 (#1431): a banner shown atop the detail letter when the Matome is
+/// archived (soft-deleted). The matome stays openable via `/matome/:id` (the
+/// detail DAO deliberately does not filter archived rows), so this affordance
+/// makes the archived state explicit and offers an inline Restore wired to the
+/// existing local-first / offline-first restore path. After restore the detail
+/// state is reloaded so the banner clears.
+class _ArchivedBanner extends StatelessWidget {
+  const _ArchivedBanner({required this.controller});
+
+  final MatomeDetailController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+
+    return Container(
+      key: const ValueKey('matome-archived-banner'),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.md,
+        vertical: spacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: colors.subtleFill,
+        borderRadius: BorderRadius.circular(radius.md),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.archive_outlined,
+            size: spacing.md,
+            color: colors.textSecondary,
+          ),
+          SizedBox(width: spacing.sm),
+          Expanded(
+            child: Text(
+              t.matome.actions.archivedBanner,
+              style: typography.bodySmall.copyWith(color: colors.textSecondary),
+            ),
+          ),
+          AppTextButton(
+            key: const ValueKey('matome-archived-restore'),
+            onPressed: () async {
+              await controller.restore();
+              await controller.load();
+            },
+            child: Text(t.matome.actions.restore),
+          ),
+        ],
+      ),
     );
   }
 }

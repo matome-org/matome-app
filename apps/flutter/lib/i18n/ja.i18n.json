@@ -175,6 +175,8 @@
       "archived": "まとめをアーカイブしました",
       "undo": "元に戻す",
       "archiveFailed": "アーカイブできませんでした — もう一度お試しください",
+      "archivedBanner": "このまとめはアーカイブされています",
+      "restore": "復元",
       "renameTitle": "まとめの名前を変更",
       "renameLabel": "タイトル",
       "renameHint": "まとめのタイトル",
