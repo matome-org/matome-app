@@ -18,7 +18,25 @@ import 'package:matome_flutter/features/home/inbox_upload.dart'
     show PickedUpload;
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
+import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+
+/// A no-op [UploadQueue] override (#1457): `addFile`/`addPhoto` now KICK the
+/// upload queue after the local-first insert, so these persistence-focused e2e
+/// tests must stub the queue — otherwise the real queue reaches for Core /
+/// secure storage (no plugin under `flutter test`) on every import. The kick is
+/// best-effort, but stubbing keeps the test about persistence + render only.
+/// The dedicated kick coverage lives in matome_add_file_kicks_upload_test.dart.
+class _NoopUploadQueue extends UploadQueue {
+  _NoopUploadQueue() : super(_NoopRef());
+  @override
+  Future<void> drainRow(String localId) async {}
+}
+
+class _NoopRef implements Ref {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
+}
 
 /// W7 letter format gathers the detailed sections (Items + the Add-photo action,
 /// contacts, notes, Share) behind a "Show more" toggle. Reveal them before
@@ -129,7 +147,10 @@ void main() {
     );
 
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
+      ],
     );
     addTearDown(c.dispose);
     final sub = c.listen(matomeDetailControllerProvider('m_e2e'), (_, _) {});
@@ -200,7 +221,10 @@ void main() {
     );
 
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
+      ],
     );
     addTearDown(c.dispose);
 
@@ -316,7 +340,10 @@ void main() {
     addTearDown(() => FilePicker.platform = _FakeFilePicker(null));
 
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
+      ],
     );
     addTearDown(c.dispose);
 
@@ -389,6 +416,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
         matomeDetailControllerProvider.overrideWith(
           (ref, id) => MatomeDetailController(
             ref,

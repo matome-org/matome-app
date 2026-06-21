@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
@@ -17,6 +18,7 @@ import '../contacts/contacts_controller.dart' show kPlaceholderContactOwnerId;
 import '../home/inbox_upload.dart'
     show DurableImportCopy, PickedUpload, durableImportCopy, mediaTypeForPath;
 import '../recordings/recording_ids.dart';
+import '../recordings/upload_queue.dart' show uploadQueueProvider;
 import 'matome_sync_service.dart';
 
 /// Immutable view-state for the Matome detail hub (#1371, triage #1372).
@@ -265,10 +267,13 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     );
     final stored = kIsWeb ? picked : await _durableCopy(picked);
 
+    // Mint the local id up front so we can hand THIS row to the upload queue
+    // after the insert (the drain below targets it directly).
+    final recordingId = mintLocalRecordingId();
     final now = DateTime.now();
     await _recordingsDao.upsertRecordingWithMatome(
       RecordingsCompanion(
-        id: Value(mintLocalRecordingId()),
+        id: Value(recordingId),
         matomeId: Value(matomeId),
         coreId: const Value(null),
         title: Value(stored.title),
@@ -289,6 +294,32 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     );
     if (!mounted) return;
     await load();
+
+    // KICK THE UPLOAD QUEUE for the just-inserted row (#1457). The insert above
+    // only lands a `pending_upload` row — without this drain the doc/photo would
+    // sit "Saved on device · waiting to upload" until an unrelated trigger
+    // (app-start / connectivity rising-edge) fires, because `addFile` matches
+    // none of the `UploadRetryService` triggers (unlike the recorder path, which
+    // drains inline via `InboxUploader.upload`). Mirrors `inbox_controller.dart`'s
+    // manual retry: drain THIS row through the same single-flight queue.
+    //
+    // Best-effort / non-blocking: the drain runs in the background and any
+    // failure (offline, Core 401) is swallowed here. The local-first insert is
+    // already committed and MUST NOT be reverted — the row stays `pending_upload`
+    // so a later trigger retries it. We do NOT await it (an in-flight upload must
+    // not block the import returning) and catch so a throwing drain never escapes.
+    unawaited(
+      Future(() => _ref.read(uploadQueueProvider).drainRow(recordingId))
+          .catchError((Object e, StackTrace st) {
+        AppLog.error(
+          LogCat.upload,
+          'addFile: best-effort drain failed (row stays pending_upload) '
+          '$recordingId',
+          e,
+          st,
+        );
+      }),
+    );
   }
 
   /// Rename this Matome — the local-first edit (task #1408 / W5). Writes the
