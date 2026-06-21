@@ -37,4 +37,16 @@ class FeatureFlags {
     'ff.screens.contacts',
     defaultValue: true,
   );
+
+  /// Document import (#1449). Gates the generic "Add file" picker (pdf/docx/md/
+  /// txt/…) on the Matome detail hub. Default OFF — v1 only STORES +
+  /// stub-summarizes documents (no parsing/opening) and the Core size cap
+  /// (#1448) must be deployed first, so the affordance ships dark. When OFF, the
+  /// new picker config is the ONLY code that is gated out — every other path
+  /// (Add photo, dynamic mediaType, the persisted extension column) is
+  /// unconditional.
+  static const bool documents = bool.fromEnvironment(
+    'ff.documents',
+    defaultValue: false,
+  );
 }

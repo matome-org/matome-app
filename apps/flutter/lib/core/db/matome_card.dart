@@ -38,6 +38,7 @@ class MatomeItem {
     this.spaceName,
     this.audioCount = 0,
     this.imageCount = 0,
+    this.documentCount = 0,
     this.peopleCount = 0,
     this.archivedAt,
   });
@@ -81,12 +82,18 @@ class MatomeItem {
   /// join so the row's place chip shows the folder name without a per-row read.
   final String? spaceName;
 
-  /// Item-mix counts for the list row's dense meta strip (#1412), derived from
-  /// the child recordings' `mediaType` by the list query. [audioCount] +
-  /// [imageCount] need not sum to [recordingCount] (other media types exist),
-  /// so each token is shown independently and only when its count > 0.
+  /// Item-mix counts for the list row's dense meta strip (#1412, #1449), derived
+  /// from the child recordings' `mediaType` by the list query. [audioCount] +
+  /// [imageCount] + [documentCount] need not sum to [recordingCount] (further
+  /// media types may exist), so each token is shown independently and only when
+  /// its count > 0.
   final int audioCount;
   final int imageCount;
+
+  /// Number of imported document Items (`mediaType == 'document'` — pdf/docx/md/
+  /// txt/…) on this Matome (#1449). Surfaced as its own meta token so an
+  /// imported file is visible in the list row, not absorbed into the total.
+  final int documentCount;
 
   /// Number of Contacts tagged on this Matome (`matome_contacts` edges),
   /// populated by the list query for the people token. 0 when none / not loaded.
@@ -129,6 +136,7 @@ class MatomeItem {
     String? spaceName,
     int audioCount = 0,
     int imageCount = 0,
+    int documentCount = 0,
     int peopleCount = 0,
   }) {
     return MatomeItem(
@@ -146,6 +154,7 @@ class MatomeItem {
       spaceName: spaceName,
       audioCount: audioCount,
       imageCount: imageCount,
+      documentCount: documentCount,
       peopleCount: peopleCount,
       archivedAt: row.archivedAt,
     );

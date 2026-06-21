@@ -7,6 +7,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/feature_flags.dart';
 import '../../core/observability/app_log.dart';
 
 import '../../core/db/app_database.dart';
@@ -1515,35 +1516,81 @@ class _RecordingsSection extends ConsumerWidget {
   final List<RecordingItem> recordings;
   final String matomeId;
 
-  Future<void> _addPhoto(BuildContext context) async {
+  /// The document extension allowlist for the "Add file" picker (#1449). Broad
+  /// by design — v1 only STORES + stub-summarizes (no parsing/opening), so a
+  /// wide allowlist is cheap. `mediaTypeForPath` maps every one of these to
+  /// `document`. Lower-case, no leading dot (file_picker's contract).
+  static const List<String> _docExtensions = [
+    'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
+    'html', 'htm', 'md', 'markdown', 'txt', 'rtf', 'csv', 'tsv', 'json',
+  ];
+
+  Future<void> _addPhoto(BuildContext context) =>
+      _import(context, type: FileType.image, label: 'addPhoto');
+
+  Future<void> _addFile(BuildContext context) => _import(
+        context,
+        type: FileType.custom,
+        allowedExtensions: _docExtensions,
+        label: 'addFile',
+      );
+
+  /// Shared picker → import handler for both the "Add photo" (image-only) and
+  /// "Add file" (document allowlist) affordances. The ONLY difference is the
+  /// picker config (`type` / `allowedExtensions`); persistence is identical and
+  /// the mediaType is derived from the picked file's extension by the controller
+  /// (#1449), so a photo picked here is still stored as `image` and a pdf as
+  /// `document`.
+  Future<void> _import(
+    BuildContext context, {
+    required FileType type,
+    required String label,
+    List<String>? allowedExtensions,
+  }) async {
     // Capture the app-lifetime container BEFORE opening the picker. This
     // widget's element (and the `ref` bound to it) can be disposed while the
     // native dialog is open — `ref.read` then throws "Cannot use ref after the
-    // widget was disposed" and the photo is silently lost. The root container
+    // widget was disposed" and the file is silently lost. The root container
     // outlives the widget; the autoDispose provider is revived on read and
-    // `addPhoto` persists to Drift regardless, so the live screen (watching the
+    // `addFile` persists to Drift regardless, so the live screen (watching the
     // same family key) refreshes even across a mid-picker dispose.
     final container = ProviderScope.containerOf(context, listen: false);
     try {
-      AppLog.event(LogCat.action, 'addPhoto: picker opening');
-      final result = await FilePicker.platform.pickFiles(type: FileType.image);
-      final path = result?.files.single.path;
+      AppLog.event(LogCat.action, '$label: picker opening');
+      final result = await FilePicker.platform.pickFiles(
+        type: type,
+        allowedExtensions: allowedExtensions,
+      );
+      final picked = result?.files.single;
+      final path = picked?.path;
       if (path == null) {
-        AppLog.event(LogCat.action, 'addPhoto: cancelled (no path)');
+        AppLog.event(LogCat.action, '$label: cancelled (no path)');
         return; // user cancelled the picker
       }
       await container
           .read(matomeDetailControllerProvider(matomeId).notifier)
-          .addPhoto(file: File(path), name: result!.files.single.name);
-      AppLog.event(LogCat.action, 'addPhoto: imported ${path.split('/').last}');
+          .addFile(file: File(path), name: picked!.name);
+      AppLog.event(LogCat.action, '$label: imported ${path.split('/').last}');
+    } on FileTooLargeException catch (e) {
+      // Client-side size guard (#1449): nothing was persisted. Tell the user the
+      // file was rejected and why (max MB), not a raw exception string.
+      AppLog.event(LogCat.action, '$label: rejected oversize ${e.name}');
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t.matome.fileTooLarge(name: e.name, max: e.maxMegabytes),
+          ),
+        ),
+      );
     } catch (e, st) {
-      AppLog.error(LogCat.action, 'addPhoto failed', e, st);
+      AppLog.error(LogCat.action, '$label failed', e, st);
       // Surface the failure instead of swallowing it in an onPressed callback —
       // the picker/durable-copy/insert can throw on desktop and a silent no-op
       // is indistinguishable from "nothing happened".
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Add photo failed: $e')),
+        SnackBar(content: Text(t.matome.addFileFailed(error: '$e'))),
       );
     }
   }
@@ -1564,6 +1611,19 @@ class _RecordingsSection extends ConsumerWidget {
               icon: Icon(Icons.add_photo_alternate_outlined, size: spacing.md),
               label: Text(t.matome.addPhoto),
             ),
+            // "Add file" (document import, #1449) — gated by the documents flag
+            // (default OFF). When the flag is off this button is the ONLY thing
+            // gated out; Add photo and the dynamic-mediaType persistence stay
+            // unconditional.
+            if (FeatureFlags.documents) ...[
+              SizedBox(width: spacing.xs),
+              AppTextButton.icon(
+                key: const ValueKey('matome-add-file'),
+                onPressed: () => _addFile(context),
+                icon: Icon(Icons.upload_file_outlined, size: spacing.md),
+                label: Text(t.matome.addFile),
+              ),
+            ],
           ],
         ),
         SizedBox(height: spacing.xs),

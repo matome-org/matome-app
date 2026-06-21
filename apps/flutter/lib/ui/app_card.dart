@@ -217,6 +217,11 @@ class AppCard extends StatelessWidget {
                               icon: Icons.image_outlined,
                               text: '${m.imageCount}',
                             ),
+                          if (m.documentCount > 0)
+                            _MatomeMetaToken(
+                              icon: Icons.description_outlined,
+                              text: '${m.documentCount}',
+                            ),
                           if (m.peopleCount > 0)
                             _MatomeMetaToken(
                               icon: Icons.people_outline,

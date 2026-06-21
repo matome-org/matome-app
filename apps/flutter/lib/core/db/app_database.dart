@@ -83,7 +83,20 @@ part 'app_database.g.dart';
 /// (a) tasks 1433-1435 (transcript column + inbox_sync/save write-authority)
 /// merged AND deploy-baked — backfilling before those leaks are sealed would
 /// re-poison the data — and (b) explicit human authorization.
-const int kSchemaVersion = 11;
+///
+/// v12 (m012, document-import original extension — #1449) adds the nullable
+/// `recordings.original_extension` TEXT column: the lower-case source extension
+/// (no dot) of an imported document Item, captured ONCE at insert so the
+/// generic `mediaType = 'document'` path can drive the file-type icon, the
+/// open/extract routing and the deferred parse — none recoverable from the
+/// renamed durable on-disk path. Additive + nullable: Drift's ALTER ADD COLUMN
+/// backfills every existing row to NULL (legacy + audio/image Items carry NULL,
+/// their `mediaType` already disambiguates), so there is NO data migration and
+/// `notes`/`transcript`/all other columns are byte-conserved. Reversible-by
+/// -design (the column is never read by older code paths). (m011/v11 was the
+/// notes backfill, so the extension column lands as m012 — the version constant
+/// is authoritative, not the prose.)
+const int kSchemaVersion = 12;
 
 /// The offline-first local store.
 ///
@@ -351,6 +364,27 @@ class AppDatabase extends _$AppDatabase {
           if (from < 11) {
             await m.addColumn(recordings, recordings.notesLegacyRaw);
             await _snapshotAndCopyForwardNotes();
+          }
+          // m012 — document-import original extension (#1449). Adds the nullable
+          // `recordings.original_extension` TEXT column (lower-case source
+          // extension, no dot — e.g. 'pdf'). Drift's ALTER ADD COLUMN backfills
+          // existing rows to NULL (no extension recorded until the generic
+          // document-import path writes one at insert), so no data migration.
+          // The `recordings` table predates every migration in this strategy, so
+          // — like m010/m011 and unlike m009's `matomes` guard — no `from >=`
+          // floor is needed: any DB reaching here from < 12 already has
+          // `recordings` WITHOUT `original_extension`, and the column is added
+          // exactly once. NON-LOSSY: this step ONLY adds a column; no existing
+          // column is read or written.
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, nullable, no prod users):
+          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v11 shape,
+          //   -- rebuild `recordings` without `original_extension` via a copy
+          //   -- table. Leaving the column in place is otherwise harmless.
+          //   PRAGMA user_version = 11;
+          if (from < 12) {
+            await m.addColumn(recordings, recordings.originalExtension);
           }
         },
         beforeOpen: (details) async {

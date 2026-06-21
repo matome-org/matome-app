@@ -175,8 +175,11 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
     final ids = rows.map((r) => r.id).toList(growable: false);
 
     // (1) Item mix per Matome — grouped COUNT over `recordings`, split by
-    // `mediaType` so the list row can show mic vs image tokens (#1412). One
-    // grouped scan yields total + audio + image without loading child rows.
+    // `mediaType` so the list row can show mic / image / document tokens
+    // (#1412, #1449). One grouped scan yields total + audio + image + document
+    // without loading child rows. The `document` bucket mirrors
+    // `mediaTypeForPath`'s third bucket (anything not audio/image) so an
+    // imported pdf/docx/md is counted, not silently absent from the mix.
     final totalExpr = recordings.id.count();
     final audioExpr = recordings.id.count(
       filter: recordings.mediaType.equals('audio'),
@@ -184,19 +187,26 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
     final imageExpr = recordings.id.count(
       filter: recordings.mediaType.equals('image'),
     );
+    final documentExpr = recordings.id.count(
+      filter: recordings.mediaType.equals('document'),
+    );
     final mixQuery = selectOnly(recordings)
-      ..addColumns([recordings.matomeId, totalExpr, audioExpr, imageExpr])
+      ..addColumns(
+        [recordings.matomeId, totalExpr, audioExpr, imageExpr, documentExpr],
+      )
       ..where(recordings.matomeId.isIn(ids))
       ..groupBy([recordings.matomeId]);
     final total = <String, int>{};
     final audio = <String, int>{};
     final image = <String, int>{};
+    final document = <String, int>{};
     for (final row in await mixQuery.get()) {
       final mid = row.read(recordings.matomeId);
       if (mid == null) continue;
       total[mid] = row.read(totalExpr) ?? 0;
       audio[mid] = row.read(audioExpr) ?? 0;
       image[mid] = row.read(imageExpr) ?? 0;
+      document[mid] = row.read(documentExpr) ?? 0;
     }
 
     // (2) People per Matome — grouped COUNT over `matome_contacts` edges.
@@ -235,6 +245,7 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
             recordingCount: total[r.id] ?? 0,
             audioCount: audio[r.id] ?? 0,
             imageCount: image[r.id] ?? 0,
+            documentCount: document[r.id] ?? 0,
             peopleCount: people[r.id] ?? 0,
             spaceName: r.spaceId == null ? null : spaceNames[r.spaceId],
           ),

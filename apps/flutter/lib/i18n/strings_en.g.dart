@@ -495,6 +495,15 @@ class Translations$matome$en {
 	/// en: 'Add photo'
 	String get addPhoto => 'Add photo';
 
+	/// en: 'Add file'
+	String get addFile => 'Add file';
+
+	/// en: 'Add file failed: $error'
+	String addFileFailed({required Object error}) => 'Add file failed: ${error}';
+
+	/// en: '"$name" is too large (max $max MB)'
+	String fileTooLarge({required Object name, required Object max}) => '"${name}" is too large (max ${max} MB)';
+
 	/// en: 'Edit notes'
 	String get editNotes => 'Edit notes';
 
@@ -1203,6 +1212,9 @@ extension on Translations {
 			'matome.refile' => 'Refile',
 			'matome.personalSpaceHint' => 'Default',
 			'matome.addPhoto' => 'Add photo',
+			'matome.addFile' => 'Add file',
+			'matome.addFileFailed' => ({required Object error}) => 'Add file failed: ${error}',
+			'matome.fileTooLarge' => ({required Object name, required Object max}) => '"${name}" is too large (max ${max} MB)',
 			'matome.editNotes' => 'Edit notes',
 			'matome.notesHint' => 'Add notes about this matome…',
 			'matome.save' => 'Save',

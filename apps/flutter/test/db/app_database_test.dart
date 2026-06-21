@@ -71,10 +71,10 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 11 '
-      '(…m009 archive + m010 transcript + m011 notes→transcript backfill)',
+      'schemaVersion is 12 '
+      '(…m010 transcript + m011 notes→transcript backfill + m012 original_ext)',
       () {
-        expect(db.schemaVersion, 11);
+        expect(db.schemaVersion, 12);
       },
     );
 
@@ -149,6 +149,7 @@ void main() {
           'matome_id', // m007
           'transcript', // m010
           'notes_legacy_raw', // m011
+          'original_extension', // m012
         ]),
       );
     });
@@ -547,7 +548,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 11);
+      expect(upgraded.schemaVersion, 12);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -667,7 +668,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 11);
+      expect(upgraded.schemaVersion, 12);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -817,7 +818,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 11);
+      expect(upgraded.schemaVersion, 12);
 
       final tables = await upgraded
           .customSelect(
@@ -1139,7 +1140,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 11);
+      expect(upgraded.schemaVersion, 12);
 
       final tables = await upgraded
           .customSelect(
@@ -1190,7 +1191,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 11);
+      expect(second.schemaVersion, 12);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1342,7 +1343,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 11);
+      expect(upgraded.schemaVersion, 12);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(matomes)')
@@ -1381,7 +1382,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 11);
+      expect(second.schemaVersion, 12);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1541,7 +1542,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 11);
+      expect(upgraded.schemaVersion, 12);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1584,7 +1585,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 11);
+      expect(second.schemaVersion, 12);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1807,7 +1808,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 11);
+      expect(upgraded.schemaVersion, 12);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1910,7 +1911,7 @@ void main() {
       // must not re-snapshot or re-copy (values already settled stay settled).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 11);
+      expect(second.schemaVersion, 12);
 
       final r =
           await second.recordingsDao.getRecordingById('rec_audio_has_tx');
@@ -1948,6 +1949,228 @@ void main() {
     // Replay-equivalence: a fresh-install (onCreate) recordings schema at head
     // (v11) has the EXACT same column set as a legacy DB replayed m001→m011.
     test('fresh-install recordings schema == replayed legacy schema (v11 head)',
+        () async {
+      final replayed = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(replayed.close);
+      final fresh = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(fresh.close);
+
+      Future<Set<String>> recCols(AppDatabase d) async => (await d
+              .customSelect('PRAGMA table_info(recordings)')
+              .map((r) => r.read<String>('name'))
+              .get())
+          .toSet();
+
+      expect(await recCols(replayed), await recCols(fresh));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (j5) m012 — document-import original extension (#1449). Real-file v11→v12
+  // migration. Build a v11-shaped DB by hand (recordings WITH transcript +
+  // notes_legacy_raw but WITHOUT original_extension, user_version=11), then open
+  // AppDatabase so onUpgrade(11→12) runs. Assert `recordings.original_extension`
+  // is added, pre-existing rows survive (backfilled to NULL — no extension was
+  // recorded for legacy/audio rows), the column round-trips a write, every
+  // OTHER column is byte-conserved, and re-opening is idempotent.
+  // -------------------------------------------------------------------------
+  group('m012 v11→v12 migration (document original extension)', () {
+    late Directory dir;
+    late File file;
+
+    /// v11-shaped tables: recordings WITH transcript + notes_legacy_raw but
+    /// WITHOUT original_extension, user_version=11. A pre-existing audio row
+    /// (with notes/transcript/snapshot set) proves existing rows + their data
+    /// survive the additive column.
+    void seedV11Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER,
+          archived_at INTEGER
+        );
+      ''');
+      // recordings as of m011 — WITH transcript + notes_legacy_raw, WITHOUT
+      // original_extension.
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id),
+          transcript TEXT,
+          notes_legacy_raw TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_members (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member'
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE organizations (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          role TEXT NOT NULL DEFAULT 'attendee',
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(space_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_shares (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      // A pre-existing audio recording with notes/transcript/snapshot set — its
+      // data must survive the additive column AND its original_extension must
+      // backfill to NULL (no extension recorded for a legacy row).
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, notes, "
+        "mediaType, processingStatus, transcript, notes_legacy_raw) "
+        "VALUES ('rec_pre12', 'Pre-existing v11', '9:00 AM', '0:30', "
+        "'/tmp/a.m4a', 100, 'kept note', 'audio', 'done', 'kept tx', "
+        "'kept note');",
+      );
+      sdb.execute('PRAGMA user_version = 11;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m012');
+      file = File('${dir.path}/matome.sqlite');
+      seedV11Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v11 db migrates to v12: recordings.original_extension added',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 12);
+
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('original_extension'));
+    });
+
+    test('pre-existing row survives; original_extension backfills to NULL; '
+        'all other columns byte-conserved', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      final pre = await upgraded.recordingsDao.getRecordingById('rec_pre12');
+      expect(pre, isNotNull);
+      expect(pre!.title, 'Pre-existing v11');
+      expect(pre.originalExtension, isNull); // additive → NULL backfill
+      // Every other column conserved (the migration ONLY adds a column).
+      expect(pre.notes, 'kept note');
+      expect(pre.transcript, 'kept tx');
+      expect(pre.notesLegacyRaw, 'kept note');
+      expect(pre.mediaType, 'audio');
+    });
+
+    test('original_extension round-trips a write after migration', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      await upgraded.recordingsDao.updateRecording(
+        'rec_pre12',
+        const RecordingsCompanion(originalExtension: Value('pdf')),
+      );
+      final after = await upgraded.recordingsDao.getRecordingById('rec_pre12');
+      expect(after!.originalExtension, 'pdf');
+      expect(after.notes, 'kept note'); // distinct column, untouched
+    });
+
+    test('m012 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.recordingsDao.getAllRecordings();
+      await first.close();
+
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 12);
+      final cols = await second
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('original_extension'));
+    });
+
+    test('fresh-install recordings schema == replayed legacy schema (v12 head)',
         () async {
       final replayed = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(replayed.close);

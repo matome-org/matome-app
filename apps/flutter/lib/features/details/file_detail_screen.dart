@@ -17,6 +17,19 @@ import 'file_actions_menu.dart';
 import 'file_view.dart';
 import 'markdown_helpers.dart';
 
+/// Maps a stored `mediaType` string (audio | image | document — the buckets
+/// `mediaTypeForPath` writes) to the [FileMediaKind] that drives [FileView]'s
+/// media header and default Contents tag. Anything not image/document is treated
+/// as audio (the original default). Centralised here so the item-driven
+/// ([FileDetailScreen.mediaKindOf]) and row-driven ([_FileDetailById]) paths
+/// agree on a single mapping — an imported document (#1449) routes to
+/// [FileMediaKind.doc], never image or audio.
+FileMediaKind mediaKindForType(String mediaType) {
+  if (mediaType.startsWith('image')) return FileMediaKind.image;
+  if (mediaType.startsWith('document')) return FileMediaKind.doc;
+  return FileMediaKind.audio;
+}
+
 /// Shared delete flow for a file (audio or image): confirm dialog → delete the
 /// recording via [detailsControllerProvider] → pop the detail. Captures the
 /// navigator up front so it survives the async gap. [onBeforeDelete] lets the
@@ -113,12 +126,12 @@ class FileDetailScreen extends StatelessWidget {
   /// image host, bypassing the audio-centric details load.
   final bool _imageOnly;
 
-  /// Maps the kind string carried by a [RecordingItem] to the [FileMediaKind]
-  /// that selects [FileView]'s media header and default Contents tag.
-  static FileMediaKind mediaKindOf(RecordingItem item) {
-    if (item.mediaType.startsWith('image')) return FileMediaKind.image;
-    return FileMediaKind.audio;
-  }
+  /// Maps the `mediaType` carried by a [RecordingItem] to the [FileMediaKind]
+  /// that selects [FileView]'s media header and default Contents tag. Mirrors
+  /// the audio/image/document buckets `mediaTypeForPath` writes — an imported
+  /// document (#1449) maps to [FileMediaKind.doc], NOT image/audio.
+  static FileMediaKind mediaKindOf(RecordingItem item) =>
+      mediaKindForType(item.mediaType);
 
   @override
   Widget build(BuildContext context) {
@@ -197,10 +210,23 @@ class _FileDetailById extends ConsumerWidget {
     if (state.isLoading || row == null) {
       return _AudioDetailHost(id: id);
     }
-    if (row.mediaType.startsWith('image')) {
-      return _ImageDetailHost.fromRow(row: row, place: state.badge);
+    // Route by the row's media kind (NOT a bare `startsWith('image')`):
+    //   * image  → the framed image host,
+    //   * doc    → the generic file host (no inline preview; v1 only STORES
+    //              documents — open/extract/parse is deferred, #1449),
+    //   * audio  → the audio host (the default).
+    switch (mediaKindForType(row.mediaType)) {
+      case FileMediaKind.image:
+        return _ImageDetailHost.fromRow(row: row, place: state.badge);
+      case FileMediaKind.doc:
+        return _ImageDetailHost.fromRow(
+          row: row,
+          place: state.badge,
+          mediaKind: FileMediaKind.doc,
+        );
+      case FileMediaKind.audio:
+        return _AudioDetailHost(id: id);
     }
-    return _AudioDetailHost(id: id);
   }
 }
 
@@ -219,15 +245,19 @@ class _ImageDetailHost extends StatelessWidget {
         processingStatus = item.processingStatus,
         path = item.filePath,
         notes = item.notes,
+        mediaKind = mediaKindForType(item.mediaType),
         trailing = null;
 
   /// Built from a loaded [RecordingRow] — the id-driven `/recording/detail/:id`
   /// route, which now dispatches images here (#97 unification) so the image and
-  /// audio tiles drill down through the SAME go_router route.
+  /// audio tiles drill down through the SAME go_router route. [mediaKind]
+  /// defaults to image but is [FileMediaKind.doc] for an imported document
+  /// (#1449) so the view shows the "Document" tag (and NO inline image preview).
   _ImageDetailHost.fromRow({
     required RecordingRow row,
     required this.place,
     this.trailing,
+    this.mediaKind = FileMediaKind.image,
   })  : title = row.title,
         coreId = row.coreId,
         processingStatus = row.processingStatus,
@@ -243,21 +273,30 @@ class _ImageDetailHost extends StatelessWidget {
   final String? path;
   final String? notes;
 
+  /// The media kind driving the FileView header + Contents tag. image by
+  /// default; doc for an imported document (no inline preview in v1).
+  final FileMediaKind mediaKind;
+
   /// The "…" overflow menu rendered in the AppBar (Move + Delete). Null on the
   /// item-driven [fromItem] path.
   final Widget? trailing;
 
   FileViewData _viewData(BuildContext context) {
+    final isImage = mediaKind == FileMediaKind.image;
     return FileViewData(
       title: title,
-      mediaKind: FileMediaKind.image,
+      mediaKind: mediaKind,
       place: place,
       syncCoreId: coreId,
       processingStatus: processingStatus,
-      mediaHeader: _ImageMediaHeader(
-        path: path,
-        onOpenFullscreen: () => _openFullscreen(context),
-      ),
+      // No inline preview for a document in v1 (open/parse deferred, #1449);
+      // only the image kind renders the framed media header.
+      mediaHeader: isImage
+          ? _ImageMediaHeader(
+              path: path,
+              onOpenFullscreen: () => _openFullscreen(context),
+            )
+          : null,
       // Contents (image → "Description"). The image description producer is
       // deferred (#1445), so there is no honest "processing" to claim: the
       // Contents state machine (#1440) converges on the EMPTY terminal state

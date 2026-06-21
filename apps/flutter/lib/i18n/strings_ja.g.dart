@@ -262,6 +262,9 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get refile => '再整理';
 	@override String get personalSpaceHint => 'デフォルト';
 	@override String get addPhoto => '写真を追加';
+	@override String get addFile => 'ファイルを追加';
+	@override String addFileFailed({required Object error}) => 'ファイルの追加に失敗しました: ${error}';
+	@override String fileTooLarge({required Object name, required Object max}) => '「${name}」は大きすぎます（最大 ${max} MB）';
 	@override String get editNotes => 'メモを編集';
 	@override String get notesHint => 'このまとめについてのメモ…';
 	@override String get save => '保存';
@@ -664,6 +667,9 @@ extension on TranslationsJa {
 			'matome.refile' => '再整理',
 			'matome.personalSpaceHint' => 'デフォルト',
 			'matome.addPhoto' => '写真を追加',
+			'matome.addFile' => 'ファイルを追加',
+			'matome.addFileFailed' => ({required Object error}) => 'ファイルの追加に失敗しました: ${error}',
+			'matome.fileTooLarge' => ({required Object name, required Object max}) => '「${name}」は大きすぎます（最大 ${max} MB）',
 			'matome.editNotes' => 'メモを編集',
 			'matome.notesHint' => 'このまとめについてのメモ…',
 			'matome.save' => '保存',

@@ -103,6 +103,19 @@ class Recordings extends Table {
   // (user-owned, mutable) and `transcript` (machine-owned).
   TextColumn get notesLegacyRaw => text().named('notes_legacy_raw').nullable()();
 
+  // m012 (#1449) — the ORIGINAL file extension of an imported document Item
+  // (lower-case, no leading dot — e.g. `pdf`, `docx`, `md`). This is a SCHEMA
+  // DECISION made up front, NOT retrofitted: the generic document-import path
+  // (`mediaType = 'document'`) needs the source extension preserved on the row
+  // to drive the file-type icon, the open/extract routing, and the deferred
+  // parse/preview — none of which can be recovered from the durable on-disk
+  // path (which is renamed to an opaque `import_<uuid>` filename). NULLABLE:
+  // legacy rows and audio/image Items (whose `mediaType` already disambiguates)
+  // carry NULL. Written once at insert from the picked file's name; never
+  // mutated afterwards.
+  TextColumn get originalExtension =>
+      text().named('original_extension').nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

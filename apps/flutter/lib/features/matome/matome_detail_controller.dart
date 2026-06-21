@@ -215,15 +215,49 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     await load();
   }
 
-  /// Import an image [file] as an Item (recording, `mediaType: 'image'`) of this
-  /// Matome. Reuses the local-first upload insert path: the bytes are copied to
-  /// durable app storage, then a `rec_local_<uuid>` row is upserted with this
-  /// Matome's id via [RecordingsDao.upsertRecordingWithMatome]. The Matome's
-  /// triage state (spaceId) is untouched.
-  Future<void> addPhoto({required File file, required String name}) async {
+  /// Import an image [file] as an Item of this Matome — the "Add photo"
+  /// affordance. Thin wrapper over the generic [addFile]: the media type is
+  /// resolved from the extension exactly as for any other import (an image
+  /// extension yields `mediaType: 'image'`), so this stays a labelled entry
+  /// point without a hardcoded type.
+  Future<void> addPhoto({required File file, required String name}) =>
+      addFile(file: file, name: name);
+
+  /// Import an arbitrary [file] as an Item of this Matome — the generic
+  /// document/photo import (#1449). Reuses the local-first upload insert path:
+  /// the bytes are copied to durable app storage, then a `rec_local_<uuid>` row
+  /// is upserted with this Matome's id via
+  /// [RecordingsDao.upsertRecordingWithMatome]. The Matome's triage state
+  /// (spaceId) is untouched.
+  ///
+  /// The `mediaType` is DERIVED from the file extension via [mediaTypeForPath]
+  /// (audio/image/document) — NEVER hardcoded — and the original lower-case
+  /// extension is PERSISTED on the row (`originalExtension`) so the file-type
+  /// icon / open-extract routing survive the durable copy's opaque rename.
+  ///
+  /// A client-side size guard rejects files over [kMaxImportFileBytes]
+  /// (mirroring the Core upload cap, task #1448) BEFORE any durable copy or DB
+  /// write, throwing [FileTooLargeException] so the caller can surface a
+  /// message.
+  Future<void> addFile({required File file, required String name}) async {
     // Capture the matome id up front: the durable-copy / DAO awaits can outlive
     // an autoDispose of this notifier, and reading `state` afterwards throws.
     final matomeId = state.id;
+
+    // Size guard FIRST — before the durable copy / insert. A file over the cap
+    // would only be rejected by Core after the upload starts (or OOM on copy),
+    // so fail fast with a typed error the UI turns into a message. Native only:
+    // on web the import is cloud-direct with no on-disk `File` to stat (the cap
+    // is enforced server-side, #1448). `lengthSync` (not the async `length`)
+    // keeps this a single synchronous step so it does not introduce a real-I/O
+    // await into the local-first insert path.
+    if (!kIsWeb) {
+      final sizeBytes = file.lengthSync();
+      if (sizeBytes > kMaxImportFileBytes) {
+        throw FileTooLargeException(sizeBytes: sizeBytes, name: name);
+      }
+    }
+
     final picked = PickedUpload(
       file: file,
       title: _titleFromName(name),
@@ -244,7 +278,12 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
         isProcessing: const Value(0),
         audioFilePath: Value(stored.file.path),
         createdAt: Value(now.millisecondsSinceEpoch),
-        mediaType: const Value('image'),
+        // Derived from the extension — `image` for a photo, `document` for a
+        // pdf/docx/md/txt, etc. NEVER hardcoded (was `Value('image')`).
+        mediaType: Value(picked.mediaType),
+        // Persist the ORIGINAL extension so the type survives the durable
+        // rename (icon / open-extract routing).
+        originalExtension: Value(_extensionFromName(name)),
         processingStatus: const Value(kProcessingStatusPendingUpload),
       ),
     );
@@ -326,11 +365,44 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   }
 }
 
+/// Client-side import size ceiling, mirroring the Core upload cap (#1448): a
+/// file larger than this is rejected before any durable copy / DB write, so an
+/// oversize pick never reaches the upload queue (where Core would 413) nor OOMs
+/// the durable copy. 25 MB.
+const int kMaxImportFileBytes = 25 * 1024 * 1024;
+
+/// Thrown by [MatomeDetailController.addFile] when the picked file exceeds
+/// [kMaxImportFileBytes]. Carries the offending size + name so the UI can build
+/// a user-facing message; nothing is persisted when this throws.
+class FileTooLargeException implements Exception {
+  const FileTooLargeException({required this.sizeBytes, required this.name});
+
+  final int sizeBytes;
+  final String name;
+
+  /// The cap in whole megabytes — for the user message ("max 25 MB").
+  int get maxMegabytes => kMaxImportFileBytes ~/ (1024 * 1024);
+
+  @override
+  String toString() =>
+      'FileTooLargeException($name is $sizeBytes bytes, '
+      'max $kMaxImportFileBytes)';
+}
+
 String _titleFromName(String name) {
   final dot = name.lastIndexOf('.');
   final base = dot > 0 ? name.substring(0, dot) : name;
   final trimmed = base.trim();
   return trimmed.isEmpty ? 'Untitled' : trimmed;
+}
+
+/// The lower-case extension of [name] (no leading dot), or NULL when the file
+/// has no extension. Mirrors [mediaTypeForPath]'s extension extraction so the
+/// persisted `originalExtension` agrees with the derived `mediaType`.
+String? _extensionFromName(String name) {
+  final dot = name.lastIndexOf('.');
+  if (dot <= 0 || dot == name.length - 1) return null;
+  return name.substring(dot + 1).toLowerCase();
 }
 
 String _clock(DateTime when) {

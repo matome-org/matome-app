@@ -190,6 +190,18 @@ class $RecordingsTable extends Recordings
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _originalExtensionMeta = const VerificationMeta(
+    'originalExtension',
+  );
+  @override
+  late final GeneratedColumn<String> originalExtension =
+      GeneratedColumn<String>(
+        'original_extension',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -209,6 +221,7 @@ class $RecordingsTable extends Recordings
     matomeId,
     transcript,
     notesLegacyRaw,
+    originalExtension,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -348,6 +361,15 @@ class $RecordingsTable extends Recordings
         ),
       );
     }
+    if (data.containsKey('original_extension')) {
+      context.handle(
+        _originalExtensionMeta,
+        originalExtension.isAcceptableOrUnknown(
+          data['original_extension']!,
+          _originalExtensionMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -425,6 +447,10 @@ class $RecordingsTable extends Recordings
         DriftSqlType.string,
         data['${effectivePrefix}notes_legacy_raw'],
       ),
+      originalExtension: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}original_extension'],
+      ),
     );
   }
 
@@ -452,6 +478,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
   final String? matomeId;
   final String? transcript;
   final String? notesLegacyRaw;
+  final String? originalExtension;
   const RecordingRow({
     required this.id,
     required this.title,
@@ -470,6 +497,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     this.matomeId,
     this.transcript,
     this.notesLegacyRaw,
+    this.originalExtension,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -504,6 +532,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     }
     if (!nullToAbsent || notesLegacyRaw != null) {
       map['notes_legacy_raw'] = Variable<String>(notesLegacyRaw);
+    }
+    if (!nullToAbsent || originalExtension != null) {
+      map['original_extension'] = Variable<String>(originalExtension);
     }
     return map;
   }
@@ -541,6 +572,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       notesLegacyRaw: notesLegacyRaw == null && nullToAbsent
           ? const Value.absent()
           : Value(notesLegacyRaw),
+      originalExtension: originalExtension == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalExtension),
     );
   }
 
@@ -567,6 +601,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       matomeId: serializer.fromJson<String?>(json['matomeId']),
       transcript: serializer.fromJson<String?>(json['transcript']),
       notesLegacyRaw: serializer.fromJson<String?>(json['notesLegacyRaw']),
+      originalExtension: serializer.fromJson<String?>(
+        json['originalExtension'],
+      ),
     );
   }
   @override
@@ -590,6 +627,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       'matomeId': serializer.toJson<String?>(matomeId),
       'transcript': serializer.toJson<String?>(transcript),
       'notesLegacyRaw': serializer.toJson<String?>(notesLegacyRaw),
+      'originalExtension': serializer.toJson<String?>(originalExtension),
     };
   }
 
@@ -611,6 +649,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     Value<String?> matomeId = const Value.absent(),
     Value<String?> transcript = const Value.absent(),
     Value<String?> notesLegacyRaw = const Value.absent(),
+    Value<String?> originalExtension = const Value.absent(),
   }) => RecordingRow(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -631,6 +670,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     notesLegacyRaw: notesLegacyRaw.present
         ? notesLegacyRaw.value
         : this.notesLegacyRaw,
+    originalExtension: originalExtension.present
+        ? originalExtension.value
+        : this.originalExtension,
   );
   RecordingRow copyWithCompanion(RecordingsCompanion data) {
     return RecordingRow(
@@ -663,6 +705,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       notesLegacyRaw: data.notesLegacyRaw.present
           ? data.notesLegacyRaw.value
           : this.notesLegacyRaw,
+      originalExtension: data.originalExtension.present
+          ? data.originalExtension.value
+          : this.originalExtension,
     );
   }
 
@@ -685,7 +730,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           ..write('coreId: $coreId, ')
           ..write('matomeId: $matomeId, ')
           ..write('transcript: $transcript, ')
-          ..write('notesLegacyRaw: $notesLegacyRaw')
+          ..write('notesLegacyRaw: $notesLegacyRaw, ')
+          ..write('originalExtension: $originalExtension')
           ..write(')'))
         .toString();
   }
@@ -709,6 +755,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     matomeId,
     transcript,
     notesLegacyRaw,
+    originalExtension,
   );
   @override
   bool operator ==(Object other) =>
@@ -730,7 +777,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           other.coreId == this.coreId &&
           other.matomeId == this.matomeId &&
           other.transcript == this.transcript &&
-          other.notesLegacyRaw == this.notesLegacyRaw);
+          other.notesLegacyRaw == this.notesLegacyRaw &&
+          other.originalExtension == this.originalExtension);
 }
 
 class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
@@ -751,6 +799,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
   final Value<String?> matomeId;
   final Value<String?> transcript;
   final Value<String?> notesLegacyRaw;
+  final Value<String?> originalExtension;
   final Value<int> rowid;
   const RecordingsCompanion({
     this.id = const Value.absent(),
@@ -770,6 +819,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.matomeId = const Value.absent(),
     this.transcript = const Value.absent(),
     this.notesLegacyRaw = const Value.absent(),
+    this.originalExtension = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RecordingsCompanion.insert({
@@ -790,6 +840,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.matomeId = const Value.absent(),
     this.transcript = const Value.absent(),
     this.notesLegacyRaw = const Value.absent(),
+    this.originalExtension = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title),
@@ -815,6 +866,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Expression<String>? matomeId,
     Expression<String>? transcript,
     Expression<String>? notesLegacyRaw,
+    Expression<String>? originalExtension,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -835,6 +887,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       if (matomeId != null) 'matome_id': matomeId,
       if (transcript != null) 'transcript': transcript,
       if (notesLegacyRaw != null) 'notes_legacy_raw': notesLegacyRaw,
+      if (originalExtension != null) 'original_extension': originalExtension,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -857,6 +910,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Value<String?>? matomeId,
     Value<String?>? transcript,
     Value<String?>? notesLegacyRaw,
+    Value<String?>? originalExtension,
     Value<int>? rowid,
   }) {
     return RecordingsCompanion(
@@ -877,6 +931,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       matomeId: matomeId ?? this.matomeId,
       transcript: transcript ?? this.transcript,
       notesLegacyRaw: notesLegacyRaw ?? this.notesLegacyRaw,
+      originalExtension: originalExtension ?? this.originalExtension,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -935,6 +990,9 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     if (notesLegacyRaw.present) {
       map['notes_legacy_raw'] = Variable<String>(notesLegacyRaw.value);
     }
+    if (originalExtension.present) {
+      map['original_extension'] = Variable<String>(originalExtension.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -961,6 +1019,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
           ..write('matomeId: $matomeId, ')
           ..write('transcript: $transcript, ')
           ..write('notesLegacyRaw: $notesLegacyRaw, ')
+          ..write('originalExtension: $originalExtension, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4308,6 +4367,7 @@ typedef $$RecordingsTableCreateCompanionBuilder =
       Value<String?> matomeId,
       Value<String?> transcript,
       Value<String?> notesLegacyRaw,
+      Value<String?> originalExtension,
       Value<int> rowid,
     });
 typedef $$RecordingsTableUpdateCompanionBuilder =
@@ -4329,6 +4389,7 @@ typedef $$RecordingsTableUpdateCompanionBuilder =
       Value<String?> matomeId,
       Value<String?> transcript,
       Value<String?> notesLegacyRaw,
+      Value<String?> originalExtension,
       Value<int> rowid,
     });
 
@@ -4423,6 +4484,11 @@ class $$RecordingsTableFilterComposer
 
   ColumnFilters<String> get notesLegacyRaw => $composableBuilder(
     column: $table.notesLegacyRaw,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originalExtension => $composableBuilder(
+    column: $table.originalExtension,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -4520,6 +4586,11 @@ class $$RecordingsTableOrderingComposer
     column: $table.notesLegacyRaw,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get originalExtension => $composableBuilder(
+    column: $table.originalExtension,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RecordingsTableAnnotationComposer
@@ -4593,6 +4664,11 @@ class $$RecordingsTableAnnotationComposer
     column: $table.notesLegacyRaw,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get originalExtension => $composableBuilder(
+    column: $table.originalExtension,
+    builder: (column) => column,
+  );
 }
 
 class $$RecordingsTableTableManager
@@ -4643,6 +4719,7 @@ class $$RecordingsTableTableManager
                 Value<String?> matomeId = const Value.absent(),
                 Value<String?> transcript = const Value.absent(),
                 Value<String?> notesLegacyRaw = const Value.absent(),
+                Value<String?> originalExtension = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion(
                 id: id,
@@ -4662,6 +4739,7 @@ class $$RecordingsTableTableManager
                 matomeId: matomeId,
                 transcript: transcript,
                 notesLegacyRaw: notesLegacyRaw,
+                originalExtension: originalExtension,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -4683,6 +4761,7 @@ class $$RecordingsTableTableManager
                 Value<String?> matomeId = const Value.absent(),
                 Value<String?> transcript = const Value.absent(),
                 Value<String?> notesLegacyRaw = const Value.absent(),
+                Value<String?> originalExtension = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion.insert(
                 id: id,
@@ -4702,6 +4781,7 @@ class $$RecordingsTableTableManager
                 matomeId: matomeId,
                 transcript: transcript,
                 notesLegacyRaw: notesLegacyRaw,
+                originalExtension: originalExtension,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
