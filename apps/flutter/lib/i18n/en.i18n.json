@@ -163,7 +163,17 @@
       "archiveConfirm": "Archive",
       "archived": "Matome archived",
       "undo": "Undo",
-      "archiveFailed": "Couldn't archive — please try again"
+      "archiveFailed": "Couldn't archive — please try again",
+      "renameTitle": "Rename matome",
+      "renameLabel": "Title",
+      "renameHint": "Matome title",
+      "renameSave": "Save",
+      "renameEmptyError": "Title can't be empty",
+      "renamed": "Renamed",
+      "editDateTimeTitle": "Edit date & time",
+      "editDateTimeSave": "Save",
+      "editDateTimeUpdated": "Date & time updated",
+      "editFailed": "Couldn't save — please try again"
     }
   },
   "spaces": {

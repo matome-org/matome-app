@@ -163,7 +163,17 @@
       "archiveConfirm": "アーカイブ",
       "archived": "まとめをアーカイブしました",
       "undo": "元に戻す",
-      "archiveFailed": "アーカイブできませんでした — もう一度お試しください"
+      "archiveFailed": "アーカイブできませんでした — もう一度お試しください",
+      "renameTitle": "まとめの名前を変更",
+      "renameLabel": "タイトル",
+      "renameHint": "まとめのタイトル",
+      "renameSave": "保存",
+      "renameEmptyError": "タイトルを入力してください",
+      "renamed": "名前を変更しました",
+      "editDateTimeTitle": "日時を編集",
+      "editDateTimeSave": "保存",
+      "editDateTimeUpdated": "日時を更新しました",
+      "editFailed": "保存できませんでした — もう一度お試しください"
     }
   },
   "spaces": {

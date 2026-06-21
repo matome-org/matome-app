@@ -888,6 +888,36 @@ class Translations$matome$actions$en {
 
 	/// en: 'Couldn't archive — please try again'
 	String get archiveFailed => 'Couldn\'t archive — please try again';
+
+	/// en: 'Rename matome'
+	String get renameTitle => 'Rename matome';
+
+	/// en: 'Title'
+	String get renameLabel => 'Title';
+
+	/// en: 'Matome title'
+	String get renameHint => 'Matome title';
+
+	/// en: 'Save'
+	String get renameSave => 'Save';
+
+	/// en: 'Title can't be empty'
+	String get renameEmptyError => 'Title can\'t be empty';
+
+	/// en: 'Renamed'
+	String get renamed => 'Renamed';
+
+	/// en: 'Edit date & time'
+	String get editDateTimeTitle => 'Edit date & time';
+
+	/// en: 'Save'
+	String get editDateTimeSave => 'Save';
+
+	/// en: 'Date & time updated'
+	String get editDateTimeUpdated => 'Date & time updated';
+
+	/// en: 'Couldn't save — please try again'
+	String get editFailed => 'Couldn\'t save — please try again';
 }
 
 /// The flat map containing all translations for locale <en>.
@@ -1045,6 +1075,16 @@ extension on Translations {
 			'matome.actions.archived' => 'Matome archived',
 			'matome.actions.undo' => 'Undo',
 			'matome.actions.archiveFailed' => 'Couldn\'t archive — please try again',
+			'matome.actions.renameTitle' => 'Rename matome',
+			'matome.actions.renameLabel' => 'Title',
+			'matome.actions.renameHint' => 'Matome title',
+			'matome.actions.renameSave' => 'Save',
+			'matome.actions.renameEmptyError' => 'Title can\'t be empty',
+			'matome.actions.renamed' => 'Renamed',
+			'matome.actions.editDateTimeTitle' => 'Edit date & time',
+			'matome.actions.editDateTimeSave' => 'Save',
+			'matome.actions.editDateTimeUpdated' => 'Date & time updated',
+			'matome.actions.editFailed' => 'Couldn\'t save — please try again',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

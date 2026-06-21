@@ -428,6 +428,16 @@ class _Translations$matome$actions$ja extends Translations$matome$actions$en {
 	@override String get archived => 'まとめをアーカイブしました';
 	@override String get undo => '元に戻す';
 	@override String get archiveFailed => 'アーカイブできませんでした — もう一度お試しください';
+	@override String get renameTitle => 'まとめの名前を変更';
+	@override String get renameLabel => 'タイトル';
+	@override String get renameHint => 'まとめのタイトル';
+	@override String get renameSave => '保存';
+	@override String get renameEmptyError => 'タイトルを入力してください';
+	@override String get renamed => '名前を変更しました';
+	@override String get editDateTimeTitle => '日時を編集';
+	@override String get editDateTimeSave => '保存';
+	@override String get editDateTimeUpdated => '日時を更新しました';
+	@override String get editFailed => '保存できませんでした — もう一度お試しください';
 }
 
 /// The flat map containing all translations for locale <ja>.
@@ -585,6 +595,16 @@ extension on TranslationsJa {
 			'matome.actions.archived' => 'まとめをアーカイブしました',
 			'matome.actions.undo' => '元に戻す',
 			'matome.actions.archiveFailed' => 'アーカイブできませんでした — もう一度お試しください',
+			'matome.actions.renameTitle' => 'まとめの名前を変更',
+			'matome.actions.renameLabel' => 'タイトル',
+			'matome.actions.renameHint' => 'まとめのタイトル',
+			'matome.actions.renameSave' => '保存',
+			'matome.actions.renameEmptyError' => 'タイトルを入力してください',
+			'matome.actions.renamed' => '名前を変更しました',
+			'matome.actions.editDateTimeTitle' => '日時を編集',
+			'matome.actions.editDateTimeSave' => '保存',
+			'matome.actions.editDateTimeUpdated' => '日時を更新しました',
+			'matome.actions.editFailed' => '保存できませんでした — もう一度お試しください',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',
