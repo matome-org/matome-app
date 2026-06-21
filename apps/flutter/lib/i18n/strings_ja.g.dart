@@ -266,6 +266,15 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get removeItemTitle => 'アイテムを削除';
 	@override String removeItemBody({required Object title}) => '「${title}」をこのまとめから削除しますか？';
 	@override String get imageUnavailable => '画像を表示できません';
+	@override String get showMore => 'もっと見る';
+	@override String get showLess => '閉じる';
+	@override String get filesLabel => '添付';
+	@override String get peopleLabel => '関係者';
+	@override String get spaceLabel => '保存先';
+	@override String get statusLabel => '状態';
+	@override String filesPreviewMore({required Object n}) => '他${n}件';
+	@override String get noFiles => '項目はまだありません';
+	@override String get noPeople => '関係者はまだいません';
 	@override late final _Translations$matome$actions$ja actions = _Translations$matome$actions$ja._(_root);
 }
 
@@ -580,6 +589,15 @@ extension on TranslationsJa {
 			'matome.removeItemTitle' => 'アイテムを削除',
 			'matome.removeItemBody' => ({required Object title}) => '「${title}」をこのまとめから削除しますか？',
 			'matome.imageUnavailable' => '画像を表示できません',
+			'matome.showMore' => 'もっと見る',
+			'matome.showLess' => '閉じる',
+			'matome.filesLabel' => '添付',
+			'matome.peopleLabel' => '関係者',
+			'matome.spaceLabel' => '保存先',
+			'matome.statusLabel' => '状態',
+			'matome.filesPreviewMore' => ({required Object n}) => '他${n}件',
+			'matome.noFiles' => '項目はまだありません',
+			'matome.noPeople' => '関係者はまだいません',
 			'matome.actions.menuTooltip' => 'その他',
 			'matome.actions.rename' => '名前を変更',
 			'matome.actions.editDateTime' => '日時を編集',

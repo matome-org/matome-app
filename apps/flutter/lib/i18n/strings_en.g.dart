@@ -530,6 +530,33 @@ class Translations$matome$en {
 	/// en: 'Image unavailable'
 	String get imageUnavailable => 'Image unavailable';
 
+	/// en: 'Show more'
+	String get showMore => 'Show more';
+
+	/// en: 'Show less'
+	String get showLess => 'Show less';
+
+	/// en: 'Files'
+	String get filesLabel => 'Files';
+
+	/// en: 'People'
+	String get peopleLabel => 'People';
+
+	/// en: 'Space'
+	String get spaceLabel => 'Space';
+
+	/// en: 'Status'
+	String get statusLabel => 'Status';
+
+	/// en: '+$n'
+	String filesPreviewMore({required Object n}) => '+${n}';
+
+	/// en: 'No items yet'
+	String get noFiles => 'No items yet';
+
+	/// en: 'No people yet'
+	String get noPeople => 'No people yet';
+
 	late final Translations$matome$actions$en actions = Translations$matome$actions$en.internal(_root);
 }
 
@@ -1062,6 +1089,15 @@ extension on Translations {
 			'matome.removeItemTitle' => 'Remove item',
 			'matome.removeItemBody' => ({required Object title}) => 'Remove "${title}" from this matome?',
 			'matome.imageUnavailable' => 'Image unavailable',
+			'matome.showMore' => 'Show more',
+			'matome.showLess' => 'Show less',
+			'matome.filesLabel' => 'Files',
+			'matome.peopleLabel' => 'People',
+			'matome.spaceLabel' => 'Space',
+			'matome.statusLabel' => 'Status',
+			'matome.filesPreviewMore' => ({required Object n}) => '+${n}',
+			'matome.noFiles' => 'No items yet',
+			'matome.noPeople' => 'No people yet',
 			'matome.actions.menuTooltip' => 'More',
 			'matome.actions.rename' => 'Rename',
 			'matome.actions.editDateTime' => 'Edit date & time',
