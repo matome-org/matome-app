@@ -91,8 +91,11 @@ String formatClock(DateTime when) {
 ///     reports the Inbox (null), keep the local space. This is the data-loss
 ///     guard for move-to-space (B2): without it the next `refresh()` snaps the
 ///     recording back to the Inbox.
-///   * `notes` — if Core returns no transcript yet but the local row already
-///     has notes, keep the local notes rather than wiping them to null.
+///   * `transcript` (Core-owned, #1434) — adopt Core's transcript when present;
+///     keep a locally cached transcript only when Core carries none yet.
+///   * `notes` (user-owned, #1434) — a pull must NEVER clobber a local note, so
+///     the pull only seeds `notes` on a first-time insert; any existing local
+///     note is preserved (only the save-path / push may overwrite it).
 ///   * `audioFilePath` — if the local row holds a real on-device path but Core's
 ///     `storageKey` is null/empty (fresh recording), keep the local path so the
 ///     audio stays playable (#45 W1) and retained (#46 W2) across refresh.
@@ -134,11 +137,29 @@ RecordingsCompanion recordingToCompanion(
       ? Value<String?>(existing!.matomeId)
       : const Value<String?>.absent();
 
-  final coreNotes = recording.transcript;
-  // Keep local notes if Core has none yet but we already cached some.
-  final mergedNotes = (coreNotes == null && existing?.notes != null)
-      ? existing!.notes
-      : coreNotes;
+  // WRITE-AUTHORITY CONTRACT (#1434): `transcript` is Core-produced and `notes`
+  // is user-produced. They are DISTINCT columns — previously Core `transcript`
+  // was aliased into the `notes` column, clobbering user-edited notes on every
+  // pull. They are now routed independently.
+  //
+  // PAYLOAD SEMANTICS: the `/api/recordings` list pull is a FULL-STATE snapshot
+  // (every field is carried, possibly null), NOT a sparse patch. So a null here
+  // means "Core has no value", not "field omitted". The merge therefore keys on
+  // the contract authority, not on null-vs-empty:
+  //
+  //   * transcript (Core-owned): a pull populates/updates it. We adopt Core's
+  //     transcript whenever it is present; if Core carries none yet we keep any
+  //     locally cached transcript rather than wiping it (the absence guard).
+  //   * notes (user-owned): a pull must NEVER clobber a locally-edited note. The
+  //     pull only seeds `notes` when there is no existing local row (first sync);
+  //     for any existing row the local note is preserved verbatim and only the
+  //     save-path (push, task #1435) may overwrite it.
+  final coreTranscript = recording.transcript;
+  final mergedTranscript = (coreTranscript == null && existing?.transcript != null)
+      ? existing!.transcript
+      : coreTranscript;
+
+  final mergedNotes = (existing != null) ? existing.notes : recording.notes;
 
   // Keep the locally-probed duration if Core reports none yet (plan #46 W3): an
   // imported file's real length is probed on-device at insert; a Core list-row
@@ -179,6 +200,7 @@ RecordingsCompanion recordingToCompanion(
     audioFilePath: Value(mergedAudioFilePath),
     createdAt: Value(createdAt),
     notes: Value(mergedNotes),
+    transcript: Value(mergedTranscript),
     workspaceId: Value(mergedWorkspaceId),
     mediaType: Value(recording.mediaType ?? 'audio'),
     processingStatus: Value(local.processingStatus),

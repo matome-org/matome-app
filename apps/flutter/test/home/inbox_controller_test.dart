@@ -53,6 +53,8 @@ Map<String, dynamic> _remote({
   String? summary,
   int? workspaceId,
   String? insertedAt,
+  String? transcript,
+  String? notes,
 }) {
   return {
     'id': id,
@@ -60,6 +62,8 @@ Map<String, dynamic> _remote({
     'title': title,
     'status': status,
     'summary': summary,
+    'transcript': transcript,
+    'notes': notes,
     'workspace_id': workspaceId,
     'inserted_at': insertedAt ?? '2026-06-08T12:00:00Z',
   };
@@ -430,7 +434,7 @@ void main() {
 
     // applyUploadResult flips it to done with a summary.
     await controller.applyUploadResult('77',
-        failed: false, summary: 'transcribed', notes: 'full text');
+        failed: false, summary: 'transcribed', transcript: 'full text');
     final done = await _awaitItems(container);
     expect(done.single.card.isProcessing, isFalse);
     expect(done.single.card.processingStatus, 'done');
@@ -470,7 +474,9 @@ void main() {
     expect(row.isProcessing, 0);
   });
 
-  test('B3: a real non-null terminal update DOES apply (overwrites)', () async {
+  test(
+      'B3 / 1435: a real non-null terminal update applies summary + transcript '
+      'and NEVER overwrites the user note', () async {
     await db.recordingsDao.insertRecording(
       RecordingsCompanion.insert(
         id: '89',
@@ -480,7 +486,8 @@ void main() {
         audioFilePath: '/tmp/a.m4a',
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
         summary: const Value('old summary'),
-        notes: const Value('old notes'),
+        notes: const Value('user note'),
+        transcript: const Value('old transcript'),
       ),
     );
     final container = _container(db, recordings: const []);
@@ -489,11 +496,14 @@ void main() {
     await controller.reloadFromLocal();
 
     await controller.applyUploadResult('89',
-        failed: false, summary: 'new summary', notes: 'new notes');
+        failed: false, summary: 'new summary', transcript: 'new transcript');
 
     final row = await db.recordingsDao.getRecordingById('89');
     expect(row!.summary, 'new summary'); // real update applied
-    expect(row.notes, 'new notes');
+    // WRITE-AUTHORITY (#1435): machine transcript → transcript column; the
+    // user note is left untouched (no more transcript→notes clobber).
+    expect(row.transcript, 'new transcript');
+    expect(row.notes, 'user note');
   });
 
   test(
@@ -617,5 +627,74 @@ void main() {
     final row = await db.recordingsDao.getRecordingById(localId);
     expect(row!.workspaceId, '9'); // the local move still holds (durable)
     expect(row.coreId, isNull); // still local-only — nothing round-tripped
+  });
+
+  test(
+      '#1434 regression: a Core pull carrying a transcript lands it in the '
+      'transcript column and does NOT clobber a locally-edited note', () async {
+    // Write-authority contract: `transcript` is Core-produced (a pull
+    // populates it); `notes` is user-produced (a pull must NEVER overwrite a
+    // local edit). Pre-fix, Core `transcript` was aliased into the `notes`
+    // column, so this pull WIPED the user's note with the transcript text.
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: '12',
+        title: 'User edited',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: '/tmp/a.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        notes: const Value('my hand-written note'),
+      ),
+    );
+
+    // Full-state Core pull: transcript present (Core-produced), notes null
+    // (Core never owns notes for this row).
+    final container = _container(db, recordings: [
+      _remote(id: 12, title: 'User edited', transcript: 'the full transcript'),
+    ]);
+    addTearDown(container.dispose);
+
+    await container.read(inboxControllerProvider.notifier).refresh();
+    final row = await db.recordingsDao.getRecordingById('12');
+
+    // Transcript landed in its OWN column…
+    expect(row!.transcript, 'the full transcript');
+    // …and the user's note survived the pull (not clobbered, not aliased).
+    expect(row.notes, 'my hand-written note');
+  });
+
+  test(
+      '#1434 interleaved pull + local edit: a local note written between pulls '
+      'survives the next Core pull that carries only a transcript', () async {
+    // Steady state: a row already pulled once with a transcript.
+    final container = _container(db, recordings: [
+      _remote(id: 13, title: 'Interleaved', transcript: 'transcript v1'),
+    ]);
+    addTearDown(container.dispose);
+    final controller = container.read(inboxControllerProvider.notifier);
+
+    await controller.refresh();
+    var row = await db.recordingsDao.getRecordingById('13');
+    expect(row!.transcript, 'transcript v1');
+    expect(row.notes, isNull);
+
+    // User edits the note locally (simulating the save-path write to `notes`).
+    await db.recordingsDao.updateRecording(
+      '13',
+      const RecordingsCompanion(notes: Value('edited between pulls')),
+    );
+
+    // Another Core pull arrives carrying an updated transcript but, as always,
+    // no authority over notes. The note must survive.
+    final container2 = _container(db, recordings: [
+      _remote(id: 13, title: 'Interleaved', transcript: 'transcript v2'),
+    ]);
+    addTearDown(container2.dispose);
+    await container2.read(inboxControllerProvider.notifier).refresh();
+
+    row = await db.recordingsDao.getRecordingById('13');
+    expect(row!.transcript, 'transcript v2'); // Core-owned: pull updates it
+    expect(row.notes, 'edited between pulls'); // user-owned: survives the pull
   });
 }

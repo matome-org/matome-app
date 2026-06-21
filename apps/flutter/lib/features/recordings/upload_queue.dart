@@ -259,7 +259,10 @@ class UploadQueue {
         localId,
         failed: result.failed,
         summary: done?.summary,
-        notes: done?.transcript,
+        // WRITE-AUTHORITY (#1435): route the machine transcript to the
+        // `transcript` column — the previous `notes: done?.transcript` alias
+        // overwrote any user note on every `done`.
+        transcript: done?.transcript,
       );
       // RETENTION (plan #46, W2 / #871): reaching a confirmed `done` MUST NOT
       // delete any local file. This intentionally REVERSES the #43 W4 decision
@@ -294,10 +297,10 @@ class UploadQueue {
       // SANITIZED reason and KEEP the audio for inspection / a manual retry.
       //
       // `errorReason` lands in the `notes` column (no dedicated error column),
-      // which is rendered in Details AND PATCHable up to Core as transcript —
-      // so raw `error.toString()` / an arbitrary transport message must NEVER
-      // reach it. We persist a curated string and keep the full detail in the
-      // developer log only.
+      // which is rendered in Details AND (post-#1435) PATCHable up to Core as
+      // `notes` — so raw `error.toString()` / an arbitrary transport message
+      // must NEVER reach it. We persist a curated string and keep the full
+      // detail in the developer log only.
       AppLog.error(
         LogCat.upload,
         '_drainRow: terminal processing failure $localId',

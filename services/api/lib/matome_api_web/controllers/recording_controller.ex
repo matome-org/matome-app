@@ -89,6 +89,7 @@ defmodule MatomeApiWeb.RecordingController do
       title: recording.title,
       summary: recording.summary,
       transcript: recording.transcript,
+      notes: recording.notes,
       media_type: recording.media_type,
       storage_key: recording.storage_key,
       status: Atom.to_string(recording.status),

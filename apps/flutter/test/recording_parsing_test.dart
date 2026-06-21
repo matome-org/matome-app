@@ -21,6 +21,8 @@ void main() {
         'updated_at': '2026-06-08T12:00:00Z',
       };
 
+      json['notes'] = 'User-edited notes';
+
       final r = Recording.fromJson(json);
 
       expect(r.id, 1);
@@ -28,6 +30,9 @@ void main() {
       expect(r.title, 'Standup notes');
       expect(r.status, RecordingStatus.done);
       expect(r.summary, 'Short AI summary');
+      expect(r.transcript, 'Full transcript');
+      // #1434: `notes` is parsed independently of `transcript`.
+      expect(r.notes, 'User-edited notes');
       expect(r.mediaType, 'audio/m4a');
       expect(r.duration, 132);
       expect(r.badge, 'work');

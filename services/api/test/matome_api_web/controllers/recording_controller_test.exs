@@ -41,6 +41,46 @@ defmodule MatomeApiWeb.RecordingControllerTest do
     assert delete(owner_conn, ~p"/api/recordings/#{recording["id"]}") |> response(204) == ""
   end
 
+  test "notes and transcript are independent: PATCH one leaves the other untouched", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    recording =
+      post(owner_conn, ~p"/api/recordings", %{
+        title: "Notes vs transcript",
+        transcript: "original transcript",
+        notes: "original notes"
+      })
+      |> json_response(201)
+      |> get_in(["recording"])
+
+    # GET returns notes
+    fetched =
+      get(owner_conn, ~p"/api/recordings/#{recording["id"]}")
+      |> json_response(200)
+      |> get_in(["recording"])
+
+    assert fetched["notes"] == "original notes"
+    assert fetched["transcript"] == "original transcript"
+
+    # PATCH notes only -> transcript untouched
+    patched_notes =
+      put(owner_conn, ~p"/api/recordings/#{recording["id"]}", %{notes: "edited notes"})
+      |> json_response(200)
+      |> get_in(["recording"])
+
+    assert patched_notes["notes"] == "edited notes"
+    assert patched_notes["transcript"] == "original transcript"
+
+    # PATCH transcript only -> notes untouched
+    patched_transcript =
+      put(owner_conn, ~p"/api/recordings/#{recording["id"]}", %{transcript: "edited transcript"})
+      |> json_response(200)
+      |> get_in(["recording"])
+
+    assert patched_transcript["transcript"] == "edited transcript"
+    assert patched_transcript["notes"] == "edited notes"
+  end
+
   test "presigned download URLs are owner scoped and short lived", %{conn: conn} do
     %{conn: owner_conn} = register_conn(conn)
     %{conn: other_conn} = register_conn(build_conn())

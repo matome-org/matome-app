@@ -48,7 +48,42 @@ part 'app_database.g.dart';
 /// recordings are RETAINED (recoverable via restore — no hard-delete, no
 /// orphan-file cleanup). Additive + nullable, so existing rows backfill to NULL
 /// (active) and the step needs no data migration.
-const int kSchemaVersion = 9;
+///
+/// v10 (m010, Recording transcript — #1433) adds the nullable
+/// `recordings.transcript` TEXT column: machine-generated, type-specific text,
+/// DISTINCT from the user-owned `notes` column (which this slice does NOT
+/// touch — sync semantics for the two are task #1434's concern). Drift's ALTER
+/// ADD COLUMN backfills existing rows to NULL (transcript absent until the
+/// pipeline produces one), so no data migration. Additive + nullable +
+/// reversible-by-design. (The task prose calls this "m009"; m009/v9 was already
+/// taken by the archive slice above, so — per the convention used for
+/// m006/m007/m008 — the transcript slice lands as m010. The version constant is
+/// authoritative, not the prose.)
+///
+/// v11 (m011, backfill transcript from legacy notes — #1436) is THE
+/// IRREVERSIBLE data slice, made reversible-by-construction. Historical `notes`
+/// commingles {old machine transcript copied by the legacy sync} + {user edits}
+/// with NO discriminator, so the only safe rule is COPY-FORWARD, never split.
+/// Two moves, in order:
+///   1. SNAPSHOT FIRST — add the immutable `recordings.notes_legacy_raw` TEXT
+///      column and copy the current `notes` into it for EVERY existing row
+///      BEFORE any other write. This is the reversibility anchor:
+///      restore = `UPDATE recordings SET notes = notes_legacy_raw`.
+///   2. COPY-FORWARD — for AUDIO rows where `transcript` IS NULL/empty and
+///      `notes` is non-empty, copy `notes` → `transcript`. NEVER blank, delete
+///      or modify `notes`; only fill an empty transcript.
+/// Both moves are IDEMPOTENT (snapshot guards `notes_legacy_raw IS NULL`;
+/// copy-forward guards `transcript IS NULL OR ''`), so a re-run / re-open is a
+/// no-op. The column add is additive + nullable; `notes` is byte-conserved.
+/// (m010/v10 was the transcript column, so the backfill lands as m011 — the
+/// version constant is authoritative, not the prose.)
+///
+/// PRODUCTION-RUN GATING: landing this migration code does NOT authorize
+/// running it against any real/dev/prod DB. The production run remains gated on
+/// (a) tasks 1433-1435 (transcript column + inbox_sync/save write-authority)
+/// merged AND deploy-baked — backfilling before those leaks are sealed would
+/// re-poison the data — and (b) explicit human authorization.
+const int kSchemaVersion = 11;
 
 /// The offline-first local store.
 ///
@@ -260,6 +295,63 @@ class AppDatabase extends _$AppDatabase {
           if (from >= 7 && from < 9) {
             await m.addColumn(matomes, matomes.archivedAt);
           }
+          // m010 — Recording transcript (#1433). Adds the nullable
+          // `recordings.transcript` TEXT column (machine-generated,
+          // type-specific text — DISTINCT from the user-owned `notes` column,
+          // which is untouched here; sync semantics for the pair are task
+          // #1434). Drift's ALTER ADD COLUMN backfills existing rows to NULL
+          // (no transcript until the pipeline produces one), so no data
+          // migration. The `recordings` table predates every migration in this
+          // strategy, so — unlike m009's `matomes` guard — no `from >=` floor
+          // is needed: any DB reaching here from < 10 already has `recordings`
+          // WITHOUT `transcript`, and the column is added exactly once.
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, nullable, no prod users):
+          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v9 shape,
+          //   -- rebuild `recordings` without `transcript` via a copy table.
+          //   -- Leaving the column in place is otherwise harmless.
+          //   PRAGMA user_version = 9;
+          if (from < 10) {
+            await m.addColumn(recordings, recordings.transcript);
+          }
+          // m011 — backfill transcript from legacy notes (#1436). THE
+          // IRREVERSIBLE data slice, made reversible-by-construction. Historical
+          // `notes` commingles {old machine transcript copied by the legacy
+          // sync} + {user edits} with NO discriminator, so the only safe rule is
+          // COPY-FORWARD, never split. Done in [_snapshotAndCopyForwardNotes].
+          //
+          // ORDERING IS LOAD-BEARING: the snapshot (notes → notes_legacy_raw) is
+          // written for every row BEFORE the copy-forward, so even a crash
+          // between the two leaves the restore anchor intact.
+          //
+          // IDEMPOTENT: the ALTER ADD COLUMN runs once (from < 11); the snapshot
+          // UPDATE guards `notes_legacy_raw IS NULL`; the copy-forward UPDATE
+          // guards `transcript IS NULL OR transcript = ''` AND `mediaType =
+          // 'audio'`. A re-run / re-open finds nothing to do.
+          //
+          // NON-LOSSY BY CONSTRUCTION: `notes` is NEVER written — only read.
+          // `notes_legacy_raw` is the immutable pre-migration copy of `notes`.
+          // `transcript` is only ever FILLED when empty, never overwritten.
+          //
+          // RESTORE PROCEDURE (no automatic Drift downgrade; documented for
+          // discipline). The backfill is reversed WITHOUT data loss because the
+          // pre-migration `notes` was snapshotted first:
+          //   -- 1. Restore notes to their exact pre-migration bytes:
+          //   UPDATE recordings SET notes = notes_legacy_raw;
+          //   -- 2. (optional) undo the copy-forward — clear transcripts that
+          //   --    this backfill filled from notes. Only safe if the fixed sync
+          //   --    has not since written a real transcript; prefer (1) alone.
+          //   --    UPDATE recordings SET transcript = NULL
+          //   --      WHERE mediaType = 'audio' AND transcript = notes_legacy_raw;
+          //   -- 3. SQLite < 3.35 cannot DROP COLUMN; leaving notes_legacy_raw in
+          //   --    place is harmless. To reach a true v10 shape, rebuild
+          //   --    `recordings` without it via a copy table.
+          //   PRAGMA user_version = 10;
+          if (from < 11) {
+            await m.addColumn(recordings, recordings.notesLegacyRaw);
+            await _snapshotAndCopyForwardNotes();
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
@@ -385,5 +477,45 @@ class AppDatabase extends _$AppDatabase {
         [matomeId, recordingId],
       );
     }
+  }
+
+  /// m011 backfill (#1436): snapshot legacy `notes` then copy-forward into an
+  /// empty `transcript` for audio rows — THE IRREVERSIBLE step, made
+  /// reversible-by-construction. Runs inside the surrounding migration so a
+  /// failure rolls the whole step back.
+  ///
+  /// NON-LOSSY BY CONSTRUCTION — the two statements below NEVER write `notes`:
+  ///
+  ///   1. SNAPSHOT FIRST: copy the current `notes` into the immutable
+  ///      `notes_legacy_raw` column for every row whose snapshot is still empty.
+  ///      This is the restore anchor (`UPDATE recordings SET notes =
+  ///      notes_legacy_raw`). It MUST precede the copy-forward so the
+  ///      pre-migration bytes are captured before anything else touches the row.
+  ///      Guard `notes_legacy_raw IS NULL` makes it idempotent and prevents a
+  ///      re-run from re-snapshotting a (possibly later-edited) `notes`.
+  ///
+  ///   2. COPY-FORWARD: for AUDIO rows (`mediaType = 'audio'`) whose
+  ///      `transcript` is NULL/empty and whose `notes` is non-empty, set
+  ///      `transcript = notes`. `notes` is only READ here — never blanked,
+  ///      deleted or modified. The `transcript IS NULL OR transcript = ''` guard
+  ///      makes it idempotent and ensures a real transcript (e.g. one the fixed
+  ///      sync already wrote) is NEVER overwritten.
+  ///
+  /// Idempotent end-to-end: re-running both UPDATEs after the first pass matches
+  /// no rows (snapshots already set, target transcripts already filled).
+  Future<void> _snapshotAndCopyForwardNotes() async {
+    // 1. SNAPSHOT FIRST — immutable copy of pre-migration `notes`.
+    await customStatement(
+      'UPDATE recordings SET notes_legacy_raw = notes '
+      'WHERE notes_legacy_raw IS NULL',
+    );
+    // 2. COPY-FORWARD — fill empty transcripts of audio rows from notes.
+    //    `notes` is read-only here; only `transcript` is written.
+    await customStatement(
+      "UPDATE recordings SET transcript = notes "
+      "WHERE mediaType = 'audio' "
+      "AND (transcript IS NULL OR transcript = '') "
+      "AND notes IS NOT NULL AND notes != ''",
+    );
   }
 }

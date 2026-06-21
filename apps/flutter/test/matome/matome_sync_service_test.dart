@@ -145,6 +145,7 @@ class FakeRecordingsRepository extends RecordingsRepository {
   Future<Recording> updateRecording(
     int id, {
     String? transcript,
+    String? notes,
     String? summary,
     String? title,
     String? badge,

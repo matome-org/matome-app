@@ -8,6 +8,14 @@ import 'package:drift/drift.dart';
 // Flutter clients (and so the migration history below reproduces the exact
 // `user_version` 1..4 sequence the mobile app shipped).
 //
+// NOTE (#1433): the legacy RN/expo-sqlite (apps/mobile) client has been DELETED
+// — every reference below to "mobile parity", RN portability, or the expo
+// migration runner is now a HISTORICAL GHOST. The byte-for-byte column names
+// (camelCase `.named()`, `user_version` lineage) are RETAINED on purpose: they
+// are the on-disk contract that existing installs replay (m001..m008), so they
+// must not be rewritten. New schema slices (m009 archive, m010 transcript) are
+// Flutter-only additions with no RN counterpart.
+//
 // Mobile reference (apps/mobile):
 //   utils/database.ts            — base `recordings` table + `recording_drafts`
 //   utils/migrations/001..004    — notes / workspaces / drafts / media columns
@@ -75,6 +83,25 @@ class Recordings extends Table {
   // ALTER without a table rebuild — the contract is "non-null after backfill".
   TextColumn get matomeId =>
       text().named('matome_id').nullable().references(Matomes, #id)();
+
+  // m010 (#1433) — machine-generated, type-specific transcript text. NULLABLE
+  // (absent until the transcription pipeline fills it). This is DISTINCT from
+  // the user-owned [notes] column above: `notes` is hand-authored and
+  // user-mutable; `transcript` is derived/machine-produced and replaced
+  // wholesale on regeneration. Sync semantics for the two columns are NOT
+  // decided here (task #1434 owns that) — m010 is purely the additive column.
+  TextColumn get transcript => text().nullable()();
+
+  // m011 (#1436) — IMMUTABLE snapshot of the legacy `notes` value, captured by
+  // the m011 backfill BEFORE any other write so the irreversible
+  // notes→transcript copy-forward is reversible-by-construction. This is the
+  // RESTORE ANCHOR: to undo the backfill, `UPDATE recordings SET notes =
+  // notes_legacy_raw`. It is written exactly once (the m011 step guards on
+  // `notes_legacy_raw IS NULL`) and is NEVER read/written by app code — it
+  // exists purely as the pre-migration copy of `notes`. NULLABLE: rows whose
+  // pre-migration `notes` was NULL snapshot to NULL. Distinct from `notes`
+  // (user-owned, mutable) and `transcript` (machine-owned).
+  TextColumn get notesLegacyRaw => text().named('notes_legacy_raw').nullable()();
 
   @override
   Set<Column> get primaryKey => {id};

@@ -168,6 +168,28 @@ class $RecordingsTable extends Recordings
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _transcriptMeta = const VerificationMeta(
+    'transcript',
+  );
+  @override
+  late final GeneratedColumn<String> transcript = GeneratedColumn<String>(
+    'transcript',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notesLegacyRawMeta = const VerificationMeta(
+    'notesLegacyRaw',
+  );
+  @override
+  late final GeneratedColumn<String> notesLegacyRaw = GeneratedColumn<String>(
+    'notes_legacy_raw',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -185,6 +207,8 @@ class $RecordingsTable extends Recordings
     processingStatus,
     coreId,
     matomeId,
+    transcript,
+    notesLegacyRaw,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -309,6 +333,21 @@ class $RecordingsTable extends Recordings
         matomeId.isAcceptableOrUnknown(data['matome_id']!, _matomeIdMeta),
       );
     }
+    if (data.containsKey('transcript')) {
+      context.handle(
+        _transcriptMeta,
+        transcript.isAcceptableOrUnknown(data['transcript']!, _transcriptMeta),
+      );
+    }
+    if (data.containsKey('notes_legacy_raw')) {
+      context.handle(
+        _notesLegacyRawMeta,
+        notesLegacyRaw.isAcceptableOrUnknown(
+          data['notes_legacy_raw']!,
+          _notesLegacyRawMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -378,6 +417,14 @@ class $RecordingsTable extends Recordings
         DriftSqlType.string,
         data['${effectivePrefix}matome_id'],
       ),
+      transcript: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}transcript'],
+      ),
+      notesLegacyRaw: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes_legacy_raw'],
+      ),
     );
   }
 
@@ -403,6 +450,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
   final String processingStatus;
   final int? coreId;
   final String? matomeId;
+  final String? transcript;
+  final String? notesLegacyRaw;
   const RecordingRow({
     required this.id,
     required this.title,
@@ -419,6 +468,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     required this.processingStatus,
     this.coreId,
     this.matomeId,
+    this.transcript,
+    this.notesLegacyRaw,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -447,6 +498,12 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     }
     if (!nullToAbsent || matomeId != null) {
       map['matome_id'] = Variable<String>(matomeId);
+    }
+    if (!nullToAbsent || transcript != null) {
+      map['transcript'] = Variable<String>(transcript);
+    }
+    if (!nullToAbsent || notesLegacyRaw != null) {
+      map['notes_legacy_raw'] = Variable<String>(notesLegacyRaw);
     }
     return map;
   }
@@ -478,6 +535,12 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       matomeId: matomeId == null && nullToAbsent
           ? const Value.absent()
           : Value(matomeId),
+      transcript: transcript == null && nullToAbsent
+          ? const Value.absent()
+          : Value(transcript),
+      notesLegacyRaw: notesLegacyRaw == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notesLegacyRaw),
     );
   }
 
@@ -502,6 +565,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       processingStatus: serializer.fromJson<String>(json['processingStatus']),
       coreId: serializer.fromJson<int?>(json['coreId']),
       matomeId: serializer.fromJson<String?>(json['matomeId']),
+      transcript: serializer.fromJson<String?>(json['transcript']),
+      notesLegacyRaw: serializer.fromJson<String?>(json['notesLegacyRaw']),
     );
   }
   @override
@@ -523,6 +588,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       'processingStatus': serializer.toJson<String>(processingStatus),
       'coreId': serializer.toJson<int?>(coreId),
       'matomeId': serializer.toJson<String?>(matomeId),
+      'transcript': serializer.toJson<String?>(transcript),
+      'notesLegacyRaw': serializer.toJson<String?>(notesLegacyRaw),
     };
   }
 
@@ -542,6 +609,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     String? processingStatus,
     Value<int?> coreId = const Value.absent(),
     Value<String?> matomeId = const Value.absent(),
+    Value<String?> transcript = const Value.absent(),
+    Value<String?> notesLegacyRaw = const Value.absent(),
   }) => RecordingRow(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -558,6 +627,10 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     processingStatus: processingStatus ?? this.processingStatus,
     coreId: coreId.present ? coreId.value : this.coreId,
     matomeId: matomeId.present ? matomeId.value : this.matomeId,
+    transcript: transcript.present ? transcript.value : this.transcript,
+    notesLegacyRaw: notesLegacyRaw.present
+        ? notesLegacyRaw.value
+        : this.notesLegacyRaw,
   );
   RecordingRow copyWithCompanion(RecordingsCompanion data) {
     return RecordingRow(
@@ -584,6 +657,12 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           : this.processingStatus,
       coreId: data.coreId.present ? data.coreId.value : this.coreId,
       matomeId: data.matomeId.present ? data.matomeId.value : this.matomeId,
+      transcript: data.transcript.present
+          ? data.transcript.value
+          : this.transcript,
+      notesLegacyRaw: data.notesLegacyRaw.present
+          ? data.notesLegacyRaw.value
+          : this.notesLegacyRaw,
     );
   }
 
@@ -604,7 +683,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           ..write('mediaType: $mediaType, ')
           ..write('processingStatus: $processingStatus, ')
           ..write('coreId: $coreId, ')
-          ..write('matomeId: $matomeId')
+          ..write('matomeId: $matomeId, ')
+          ..write('transcript: $transcript, ')
+          ..write('notesLegacyRaw: $notesLegacyRaw')
           ..write(')'))
         .toString();
   }
@@ -626,6 +707,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     processingStatus,
     coreId,
     matomeId,
+    transcript,
+    notesLegacyRaw,
   );
   @override
   bool operator ==(Object other) =>
@@ -645,7 +728,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           other.mediaType == this.mediaType &&
           other.processingStatus == this.processingStatus &&
           other.coreId == this.coreId &&
-          other.matomeId == this.matomeId);
+          other.matomeId == this.matomeId &&
+          other.transcript == this.transcript &&
+          other.notesLegacyRaw == this.notesLegacyRaw);
 }
 
 class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
@@ -664,6 +749,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
   final Value<String> processingStatus;
   final Value<int?> coreId;
   final Value<String?> matomeId;
+  final Value<String?> transcript;
+  final Value<String?> notesLegacyRaw;
   final Value<int> rowid;
   const RecordingsCompanion({
     this.id = const Value.absent(),
@@ -681,6 +768,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.processingStatus = const Value.absent(),
     this.coreId = const Value.absent(),
     this.matomeId = const Value.absent(),
+    this.transcript = const Value.absent(),
+    this.notesLegacyRaw = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RecordingsCompanion.insert({
@@ -699,6 +788,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.processingStatus = const Value.absent(),
     this.coreId = const Value.absent(),
     this.matomeId = const Value.absent(),
+    this.transcript = const Value.absent(),
+    this.notesLegacyRaw = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title),
@@ -722,6 +813,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Expression<String>? processingStatus,
     Expression<int>? coreId,
     Expression<String>? matomeId,
+    Expression<String>? transcript,
+    Expression<String>? notesLegacyRaw,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -740,6 +833,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       if (processingStatus != null) 'processingStatus': processingStatus,
       if (coreId != null) 'coreId': coreId,
       if (matomeId != null) 'matome_id': matomeId,
+      if (transcript != null) 'transcript': transcript,
+      if (notesLegacyRaw != null) 'notes_legacy_raw': notesLegacyRaw,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -760,6 +855,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Value<String>? processingStatus,
     Value<int?>? coreId,
     Value<String?>? matomeId,
+    Value<String?>? transcript,
+    Value<String?>? notesLegacyRaw,
     Value<int>? rowid,
   }) {
     return RecordingsCompanion(
@@ -778,6 +875,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       processingStatus: processingStatus ?? this.processingStatus,
       coreId: coreId ?? this.coreId,
       matomeId: matomeId ?? this.matomeId,
+      transcript: transcript ?? this.transcript,
+      notesLegacyRaw: notesLegacyRaw ?? this.notesLegacyRaw,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -830,6 +929,12 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     if (matomeId.present) {
       map['matome_id'] = Variable<String>(matomeId.value);
     }
+    if (transcript.present) {
+      map['transcript'] = Variable<String>(transcript.value);
+    }
+    if (notesLegacyRaw.present) {
+      map['notes_legacy_raw'] = Variable<String>(notesLegacyRaw.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -854,6 +959,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
           ..write('processingStatus: $processingStatus, ')
           ..write('coreId: $coreId, ')
           ..write('matomeId: $matomeId, ')
+          ..write('transcript: $transcript, ')
+          ..write('notesLegacyRaw: $notesLegacyRaw, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4199,6 +4306,8 @@ typedef $$RecordingsTableCreateCompanionBuilder =
       Value<String> processingStatus,
       Value<int?> coreId,
       Value<String?> matomeId,
+      Value<String?> transcript,
+      Value<String?> notesLegacyRaw,
       Value<int> rowid,
     });
 typedef $$RecordingsTableUpdateCompanionBuilder =
@@ -4218,6 +4327,8 @@ typedef $$RecordingsTableUpdateCompanionBuilder =
       Value<String> processingStatus,
       Value<int?> coreId,
       Value<String?> matomeId,
+      Value<String?> transcript,
+      Value<String?> notesLegacyRaw,
       Value<int> rowid,
     });
 
@@ -4302,6 +4413,16 @@ class $$RecordingsTableFilterComposer
 
   ColumnFilters<String> get matomeId => $composableBuilder(
     column: $table.matomeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get transcript => $composableBuilder(
+    column: $table.transcript,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notesLegacyRaw => $composableBuilder(
+    column: $table.notesLegacyRaw,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -4389,6 +4510,16 @@ class $$RecordingsTableOrderingComposer
     column: $table.matomeId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get transcript => $composableBuilder(
+    column: $table.transcript,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notesLegacyRaw => $composableBuilder(
+    column: $table.notesLegacyRaw,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RecordingsTableAnnotationComposer
@@ -4452,6 +4583,16 @@ class $$RecordingsTableAnnotationComposer
 
   GeneratedColumn<String> get matomeId =>
       $composableBuilder(column: $table.matomeId, builder: (column) => column);
+
+  GeneratedColumn<String> get transcript => $composableBuilder(
+    column: $table.transcript,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get notesLegacyRaw => $composableBuilder(
+    column: $table.notesLegacyRaw,
+    builder: (column) => column,
+  );
 }
 
 class $$RecordingsTableTableManager
@@ -4500,6 +4641,8 @@ class $$RecordingsTableTableManager
                 Value<String> processingStatus = const Value.absent(),
                 Value<int?> coreId = const Value.absent(),
                 Value<String?> matomeId = const Value.absent(),
+                Value<String?> transcript = const Value.absent(),
+                Value<String?> notesLegacyRaw = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion(
                 id: id,
@@ -4517,6 +4660,8 @@ class $$RecordingsTableTableManager
                 processingStatus: processingStatus,
                 coreId: coreId,
                 matomeId: matomeId,
+                transcript: transcript,
+                notesLegacyRaw: notesLegacyRaw,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -4536,6 +4681,8 @@ class $$RecordingsTableTableManager
                 Value<String> processingStatus = const Value.absent(),
                 Value<int?> coreId = const Value.absent(),
                 Value<String?> matomeId = const Value.absent(),
+                Value<String?> transcript = const Value.absent(),
+                Value<String?> notesLegacyRaw = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion.insert(
                 id: id,
@@ -4553,6 +4700,8 @@ class $$RecordingsTableTableManager
                 processingStatus: processingStatus,
                 coreId: coreId,
                 matomeId: matomeId,
+                transcript: transcript,
+                notesLegacyRaw: notesLegacyRaw,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

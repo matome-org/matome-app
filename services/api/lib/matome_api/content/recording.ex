@@ -11,6 +11,7 @@ defmodule MatomeApi.Content.Recording do
     field :title, :string
     field :summary, :string
     field :transcript, :string
+    field :notes, :string
     field :media_type, :string
     field :storage_key, :string
     field :status, Ecto.Enum, values: @statuses, default: :pending
@@ -31,6 +32,7 @@ defmodule MatomeApi.Content.Recording do
       :title,
       :summary,
       :transcript,
+      :notes,
       :media_type,
       :status,
       :error_reason,

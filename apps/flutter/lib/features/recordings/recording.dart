@@ -37,6 +37,7 @@ class Recording {
     required this.status,
     this.summary,
     this.transcript,
+    this.notes,
     this.mediaType,
     this.storageKey,
     this.errorReason,
@@ -53,7 +54,16 @@ class Recording {
   final String title;
   final RecordingStatus status;
   final String? summary;
+
+  /// Machine-produced transcript text (Core-owned). A pull populates/updates it.
   final String? transcript;
+
+  /// User-produced notes (user-owned, task #1434). Parsed independently of
+  /// [transcript] so the Inbox sync write-path can route Core `notes` → Drift
+  /// `notes` without aliasing the transcript over it. A Core pull must NEVER
+  /// clobber a locally-edited note (the save-path / task #1435 owns writes here).
+  final String? notes;
+
   final String? mediaType;
   final String? storageKey;
   final String? errorReason;
@@ -76,6 +86,7 @@ class Recording {
       status: RecordingStatus.fromName(asStringOrNull(json['status'])),
       summary: asStringOrNull(json['summary']),
       transcript: asStringOrNull(json['transcript']),
+      notes: asStringOrNull(json['notes']),
       mediaType: asStringOrNull(json['media_type']),
       storageKey: asStringOrNull(json['storage_key']),
       errorReason: asStringOrNull(json['error_reason']),

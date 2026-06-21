@@ -71,9 +71,10 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 9 (…m007 Matome + m008 Contacts + m009 archive)',
+      'schemaVersion is 11 '
+      '(…m009 archive + m010 transcript + m011 notes→transcript backfill)',
       () {
-        expect(db.schemaVersion, 9);
+        expect(db.schemaVersion, 11);
       },
     );
 
@@ -146,6 +147,8 @@ void main() {
           'processingStatus', // m004
           'coreId', // m005
           'matome_id', // m007
+          'transcript', // m010
+          'notes_legacy_raw', // m011
         ]),
       );
     });
@@ -544,7 +547,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 9);
+      expect(upgraded.schemaVersion, 11);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -664,7 +667,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 9);
+      expect(upgraded.schemaVersion, 11);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -814,7 +817,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 9);
+      expect(upgraded.schemaVersion, 11);
 
       final tables = await upgraded
           .customSelect(
@@ -1136,7 +1139,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 9);
+      expect(upgraded.schemaVersion, 11);
 
       final tables = await upgraded
           .customSelect(
@@ -1187,7 +1190,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 9);
+      expect(second.schemaVersion, 11);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1339,7 +1342,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 9);
+      expect(upgraded.schemaVersion, 11);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(matomes)')
@@ -1378,12 +1381,586 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 9);
+      expect(second.schemaVersion, 11);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
           .get();
       expect(cols, contains('archived_at'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (j3) m010 — Recording transcript (#1433). Real-file v9→v10 migration.
+  //
+  // Build a v9-shaped DB by hand (recordings WITHOUT `transcript`, matomes WITH
+  // `archived_at` + the four Contacts tables, user_version=9), then open
+  // AppDatabase over the same file so onUpgrade(9→10) runs. Assert
+  // `recordings.transcript` is added, pre-existing rows survive (backfilled to
+  // NULL — the machine-generated transcript is absent until regenerated), the
+  // column round-trips a write, and that `transcript` is DISTINCT from the
+  // user-owned `notes` column (this slice does NOT touch notes).
+  // -------------------------------------------------------------------------
+  group('m010 v9→v10 migration (Recording transcript)', () {
+    late Directory dir;
+    late File file;
+
+    /// v9-shaped tables: recordings WITHOUT `transcript` (but WITH coreId +
+    /// matome_id + notes), matomes WITH `archived_at`, plus the v8 Contacts
+    /// tables, user_version=9. A pre-existing recording (with `notes` set)
+    /// proves existing rows survive the column add AND that notes is untouched.
+    void seedV9Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      // matomes as of m009 — WITH archived_at.
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER,
+          archived_at INTEGER
+        );
+      ''');
+      // recordings as of m009 — NO `transcript` yet.
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_members (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member'
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE organizations (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          role TEXT NOT NULL DEFAULT 'attendee',
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(space_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_shares (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      // A pre-existing recording WITH a user-owned `notes` value so we can prove
+      // existing rows survive m010 AND that the new `transcript` column is
+      // DISTINCT from `notes` (notes stays put, transcript backfills to NULL).
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, notes, "
+        "processingStatus) "
+        "VALUES ('rec_pre10', 'Pre-existing v9', '9:00 AM', '0:30', "
+        "'/tmp/a.m4a', 100, 'my hand-typed note', 'done');",
+      );
+      sdb.execute('PRAGMA user_version = 9;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m010');
+      file = File('${dir.path}/matome.sqlite');
+      seedV9Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v9 db migrates to v10: recordings.transcript is added',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 11);
+
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('transcript'));
+
+      // Pre-existing row survived the column add. NB: this seeds at v9 and
+      // replays through HEAD (v11), so m010 adds `transcript` (NULL) and then
+      // m011 (#1436) copy-forwards `notes` → the empty transcript of this audio
+      // row. The m010-specific invariant under test — `transcript` exists and
+      // `notes` is UNTOUCHED — holds; the transcript is no longer NULL because
+      // m011 filled it (notes is preserved, copied not moved).
+      final pre = await upgraded.recordingsDao.getRecordingById('rec_pre10');
+      expect(pre, isNotNull);
+      expect(pre!.title, 'Pre-existing v9');
+      expect(pre.transcript, 'my hand-typed note'); // m011 copy-forward
+      expect(pre.notes, 'my hand-typed note'); // notes preserved (copy, not move)
+    });
+
+    test('transcript round-trips a write after migration', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      await upgraded.recordingsDao.updateRecording(
+        'rec_pre10',
+        const RecordingsCompanion(transcript: Value('machine transcript text')),
+      );
+      final after = await upgraded.recordingsDao.getRecordingById('rec_pre10');
+      expect(after!.transcript, 'machine transcript text');
+      // Writing transcript leaves notes untouched (distinct columns).
+      expect(after.notes, 'my hand-typed note');
+    });
+
+    test('m010 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.recordingsDao.getAllRecordings();
+      await first.close();
+
+      // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 11);
+      final cols = await second
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('transcript'));
+    });
+
+    // Replay-equivalence: a fresh-install (onCreate) recordings schema at head
+    // has the EXACT same column set as a legacy DB replayed m001→m010. We
+    // already seeded + upgraded the legacy DB above; compare its recordings
+    // columns to a fresh in-memory AppDatabase's.
+    test('fresh-install recordings schema == replayed legacy schema (head)',
+        () async {
+      final replayed = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(replayed.close);
+      final fresh = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(fresh.close);
+
+      Future<Set<String>> recCols(AppDatabase d) async => (await d
+              .customSelect('PRAGMA table_info(recordings)')
+              .map((r) => r.read<String>('name'))
+              .get())
+          .toSet();
+
+      expect(await recCols(replayed), await recCols(fresh));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (j4) m011 — backfill transcript from legacy notes (#1436). Real-file
+  // v10→v11 migration. THE IRREVERSIBLE STEP, made reversible-by-construction:
+  //   1. SNAPSHOT FIRST: add immutable `notes_legacy_raw`; copy current `notes`
+  //      into it for every row BEFORE any other write (restore anchor).
+  //   2. COPY-FORWARD: for AUDIO rows where `transcript` is NULL/empty and
+  //      `notes` is non-empty, copy notes → transcript. NEVER blank/modify notes.
+  //   3. IDEMPOTENT: re-running is a no-op.
+  //
+  // Build a v10-shaped DB by hand (recordings WITH `transcript`, WITHOUT
+  // `notes_legacy_raw`, user_version=10), seed rows covering each case, then
+  // open AppDatabase so onUpgrade(10→11) runs. Hard acceptance criteria are
+  // proven as byte-conservation + copy-forward-correctness + idempotency tests.
+  // -------------------------------------------------------------------------
+  group('m011 v10→v11 migration (backfill transcript from legacy notes)', () {
+    late Directory dir;
+    late File file;
+
+    // Fixed inputs so byte-conservation can be asserted exactly.
+    const notesAudio = 'old machine transcript copied by the legacy sync';
+    const notesAlready = 'hand-typed note that must survive verbatim';
+    const existingTranscript = 'transcript the fixed sync already wrote';
+    const notesImage = 'a note on an image row — image rows are NOT copied';
+    const notesUnicode = 'café — 日本語 — emoji 🎤 — bytes must be conserved';
+
+    /// v10-shaped tables: recordings WITH `transcript` but WITHOUT
+    /// `notes_legacy_raw`, user_version=10. Seeds five rows:
+    ///   rec_audio_empty   — audio, notes set, transcript NULL  → copy-forward
+    ///   rec_audio_has_tx  — audio, notes set, transcript SET   → untouched
+    ///   rec_audio_unicode — audio, multibyte notes, tx empty   → copy-forward
+    ///   rec_image         — image, notes set, transcript NULL  → NOT copied
+    ///   rec_no_notes      — audio, notes NULL, transcript NULL → nothing to do
+    void seedV10Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER,
+          archived_at INTEGER
+        );
+      ''');
+      // recordings as of m010 — WITH `transcript`, WITHOUT `notes_legacy_raw`.
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id),
+          transcript TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_members (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member'
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE organizations (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          role TEXT NOT NULL DEFAULT 'attendee',
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(space_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_shares (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+
+      void insertRec({
+        required String id,
+        required String mediaType,
+        String? notes,
+        String? transcript,
+      }) {
+        sdb.execute(
+          'INSERT INTO recordings '
+          '(id, title, timestamp, duration, audioFilePath, createdAt, notes, '
+          'mediaType, processingStatus, transcript) '
+          'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
+          [
+            id,
+            'T $id',
+            '9:00 AM',
+            '0:30',
+            '/tmp/$id.m4a',
+            100,
+            notes,
+            mediaType,
+            'done',
+            transcript,
+          ],
+        );
+      }
+
+      insertRec(
+          id: 'rec_audio_empty', mediaType: 'audio', notes: notesAudio);
+      insertRec(
+        id: 'rec_audio_has_tx',
+        mediaType: 'audio',
+        notes: notesAlready,
+        transcript: existingTranscript,
+      );
+      insertRec(
+          id: 'rec_audio_unicode', mediaType: 'audio', notes: notesUnicode);
+      insertRec(id: 'rec_image', mediaType: 'image', notes: notesImage);
+      insertRec(id: 'rec_no_notes', mediaType: 'audio');
+
+      sdb.execute('PRAGMA user_version = 10;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m011');
+      file = File('${dir.path}/matome.sqlite');
+      seedV10Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v10 db migrates to v11: notes_legacy_raw column is added',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 11);
+
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('notes_legacy_raw'));
+      expect(cols, contains('transcript'));
+    });
+
+    test('SNAPSHOT: notes_legacy_raw == pre-migration notes for every row',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      Future<String?> snap(String id) async => (await upgraded
+              .customSelect(
+            'SELECT notes_legacy_raw AS v FROM recordings WHERE id = ?',
+            variables: [Variable<String>(id)],
+          ).getSingle())
+          .read<String?>('v');
+
+      expect(await snap('rec_audio_empty'), notesAudio);
+      expect(await snap('rec_audio_has_tx'), notesAlready);
+      expect(await snap('rec_audio_unicode'), notesUnicode);
+      expect(await snap('rec_image'), notesImage);
+      expect(await snap('rec_no_notes'), isNull); // NULL notes → NULL snapshot
+    });
+
+    test(
+        'BYTE-CONSERVATION: notes is byte-identical before and after migration',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      Future<String?> notesOf(String id) async =>
+          (await upgraded.recordingsDao.getRecordingById(id))!.notes;
+
+      // notes unchanged for every seeded row (never blanked, never modified).
+      expect(await notesOf('rec_audio_empty'), notesAudio);
+      expect(await notesOf('rec_audio_has_tx'), notesAlready);
+      expect(await notesOf('rec_audio_unicode'), notesUnicode);
+      expect(await notesOf('rec_image'), notesImage);
+      expect(await notesOf('rec_no_notes'), isNull);
+    });
+
+    test(
+        'COPY-FORWARD: audio row with empty transcript + notes gets '
+        'transcript == notes', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      final r = await upgraded.recordingsDao.getRecordingById('rec_audio_empty');
+      expect(r!.transcript, notesAudio);
+      expect(r.notes, notesAudio); // notes preserved (copy, not move)
+
+      // Multibyte payload conserved byte-for-byte through the copy.
+      final u =
+          await upgraded.recordingsDao.getRecordingById('rec_audio_unicode');
+      expect(u!.transcript, notesUnicode);
+      expect(u.notes, notesUnicode);
+    });
+
+    test('COPY-FORWARD does not clobber a row that already has a transcript',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      final r =
+          await upgraded.recordingsDao.getRecordingById('rec_audio_has_tx');
+      expect(r!.transcript, existingTranscript); // NOT overwritten by notes
+      expect(r.notes, notesAlready);
+    });
+
+    test('COPY-FORWARD skips non-audio (image) rows', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      final r = await upgraded.recordingsDao.getRecordingById('rec_image');
+      expect(r!.transcript, isNull); // image notes NOT copied to transcript
+      expect(r.notes, notesImage);
+    });
+
+    test('COPY-FORWARD leaves a notes-less audio row with NULL transcript',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      final r = await upgraded.recordingsDao.getRecordingById('rec_no_notes');
+      expect(r!.transcript, isNull);
+      expect(r.notes, isNull);
+    });
+
+    test('IDEMPOTENT: re-opening at v11 is a no-op (snapshot + copy stable)',
+        () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.recordingsDao.getAllRecordings();
+      await first.close();
+
+      // Re-open at v11 must not re-run m011 (no duplicate-column crash) and
+      // must not re-snapshot or re-copy (values already settled stay settled).
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 11);
+
+      final r =
+          await second.recordingsDao.getRecordingById('rec_audio_has_tx');
+      // Snapshot still the ORIGINAL notes; transcript still the pre-existing
+      // one (a second pass must not copy notes over it).
+      expect(r!.transcript, existingTranscript);
+      expect(r.notes, notesAlready);
+
+      final snap = (await second
+              .customSelect(
+        'SELECT notes_legacy_raw AS v FROM recordings WHERE id = ?',
+        variables: [Variable<String>('rec_audio_empty')],
+      ).getSingle())
+          .read<String?>('v');
+      expect(snap, notesAudio);
+    });
+
+    test('RESTORE procedure recovers notes from the snapshot column', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      // Simulate a downstream corruption of notes, then run the documented
+      // restore: UPDATE recordings SET notes = notes_legacy_raw.
+      await upgraded.customStatement(
+        "UPDATE recordings SET notes = 'CORRUPTED' WHERE id = 'rec_audio_empty'",
+      );
+      await upgraded.customStatement(
+        'UPDATE recordings SET notes = notes_legacy_raw',
+      );
+      final r =
+          await upgraded.recordingsDao.getRecordingById('rec_audio_empty');
+      expect(r!.notes, notesAudio); // recovered verbatim from snapshot
+    });
+
+    // Replay-equivalence: a fresh-install (onCreate) recordings schema at head
+    // (v11) has the EXACT same column set as a legacy DB replayed m001→m011.
+    test('fresh-install recordings schema == replayed legacy schema (v11 head)',
+        () async {
+      final replayed = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(replayed.close);
+      final fresh = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(fresh.close);
+
+      Future<Set<String>> recCols(AppDatabase d) async => (await d
+              .customSelect('PRAGMA table_info(recordings)')
+              .map((r) => r.read<String>('name'))
+              .get())
+          .toSet();
+
+      expect(await recCols(replayed), await recCols(fresh));
     });
   });
 

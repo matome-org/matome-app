@@ -470,7 +470,10 @@ void main() {
         reason: 'socket event must drive processing→done');
     expect(row.isProcessing, 0);
     expect(row.summary, 'From socket');
-    expect(row.notes, 'realtime');
+    // WRITE-AUTHORITY (#1435): the machine transcript from the socket `done`
+    // lands in the `transcript` column, not the user-owned `notes` column.
+    expect(row.transcript, 'realtime');
+    expect(row.notes, isNull);
   });
 }
 

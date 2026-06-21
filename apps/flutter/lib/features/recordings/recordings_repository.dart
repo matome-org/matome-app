@@ -225,6 +225,7 @@ class RecordingsRepository {
   Future<Recording> updateRecording(
     int id, {
     String? transcript,
+    String? notes,
     String? summary,
     String? title,
     String? badge,
@@ -237,7 +238,11 @@ class RecordingsRepository {
       final response = await _apiClient.dio.patch<Map<String, dynamic>>(
         '/api/recordings/$id',
         data: <String, dynamic>{
+          // `notes` (user-owned, task #1432) is sent independently of
+          // `transcript` (machine-owned) so a notes edit never clobbers the
+          // machine transcript. Both null-omit (`?`) like the other fields.
           'transcript': ?transcript,
+          'notes': ?notes,
           'summary': ?summary,
           'title': ?title,
           'badge': ?badge,

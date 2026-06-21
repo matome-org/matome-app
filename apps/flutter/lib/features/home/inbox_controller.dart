@@ -206,14 +206,20 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// `notes` is reused as the failure detail surface (it is unused for a
   /// recording that never transcribed).
   ///
-  /// On success, [summary]/[notes] are merge-written (B3): a sparse socket
+  /// On success, [summary]/[transcript] are merge-written (B3): a sparse socket
   /// `done` event can carry nulls even after good data exists, so [mergeText]
   /// keeps the column untouched rather than null-wiping a previously-good value.
+  ///
+  /// WRITE-AUTHORITY (task #1435): the machine [transcript] lands in the
+  /// `transcript` column, NOT the user-owned `notes` column — a `done` apply
+  /// must never overwrite a user note. The `notes` column is only written on
+  /// FAILURE, where it carries the [errorReason] failure-detail surface (the
+  /// schema has no dedicated error column).
   Future<void> applyUploadResult(
     String recordingId, {
     required bool failed,
     String? summary,
-    String? notes,
+    String? transcript,
     String? errorReason,
   }) async {
     await _dao.updateRecording(
@@ -222,7 +228,8 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         isProcessing: const Value(0),
         processingStatus: Value(failed ? 'failed' : 'done'),
         summary: failed ? const Value.absent() : mergeText(summary),
-        notes: failed ? Value(errorReason) : mergeText(notes),
+        transcript: failed ? const Value.absent() : mergeText(transcript),
+        notes: failed ? Value(errorReason) : const Value.absent(),
       ),
     );
     await reloadFromLocal();

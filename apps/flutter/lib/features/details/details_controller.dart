@@ -64,8 +64,12 @@ class DetailsState {
   String get title => row?.title ?? '';
   String? get summary => row?.summary;
 
-  /// The editable body. Mobile stores transcript in `notes` (see F2 notes), so
-  /// notes is the canonical editable field, falling back to summary.
+  /// The editable body — the user-owned `notes` field, falling back to summary.
+  ///
+  /// TODO(#1437-1440 UI wave): the details_screen "Transcript" tab still reads
+  /// this notes buffer; the new machine-owned `row.transcript` column (1433/1435)
+  /// must be surfaced as the read source for that tab. This WRITE-side task only
+  /// fixed persistence; the read/UI rewire is owned by the UI wave.
   String get initialText => row?.notes ?? row?.summary ?? '';
 
   /// Whether the audio player has something to play.
@@ -219,9 +223,14 @@ class DetailsController extends StateNotifier<DetailsState> {
     return path.startsWith('/') || path.startsWith('file:');
   }
 
-  /// Persists edited text to Drift (`notes`) AND Core (`transcript`), keeping
-  /// the two stores consistent. Mirrors apps/mobile handleSave (patch Core when
-  /// the id is numeric, then update the local row).
+  /// Persists the edited buffer to Drift (`notes`) AND Core (`notes`), keeping
+  /// the two stores consistent.
+  ///
+  /// WRITE-AUTHORITY (task #1435): the editor buffer is the USER's note, so it
+  /// is written to the user-owned `notes` field on BOTH stores. It must NEVER
+  /// be PATCHed onto Core `transcript` (the machine-owned column) — that was the
+  /// direct data-loss path that overwrote the transcript with whatever the user
+  /// typed. The Drift `transcript` column is left untouched here.
   Future<void> save(String text) async {
     AppLog.event(LogCat.action, 'save recording=${state.id}');
     // Drift is the source of truth for display — write it first so the UI
@@ -232,7 +241,7 @@ class DetailsController extends StateNotifier<DetailsState> {
     );
     final coreId = state.coreId;
     if (coreId != null) {
-      await _repo.updateRecording(coreId, transcript: text);
+      await _repo.updateRecording(coreId, notes: text);
     }
     final row = await _dao.getRecordingById(state.id);
     if (row != null) state = state.copyWith(row: row);
@@ -278,10 +287,14 @@ class DetailsController extends StateNotifier<DetailsState> {
         await _applyTerminal(failed: true);
       } else {
         final done = result.recording;
+        // WRITE-AUTHORITY (#1435): the machine transcript routes to the
+        // `transcript` column, NOT `notes`. The previous alias
+        // (`notes: done?.transcript`) clobbered any user note on every
+        // terminal apply.
         await _applyTerminal(
           failed: false,
           summary: done?.summary,
-          notes: done?.transcript,
+          transcript: done?.transcript,
         );
       }
     } catch (e, st) {
@@ -313,18 +326,21 @@ class DetailsController extends StateNotifier<DetailsState> {
   Future<void> _applyTerminal({
     required bool failed,
     String? summary,
-    String? notes,
+    String? transcript,
   }) async {
     // Merge, not null-overwrite (B3): a sparse socket `done` event can carry a
     // null summary/transcript even after good data exists, so [mergeText] leaves
     // the column untouched rather than wiping a previously-good value.
+    //
+    // WRITE-AUTHORITY (#1435): the machine transcript lands in the `transcript`
+    // column; the user `notes` column is never touched on a terminal apply.
     await _dao.updateRecording(
       state.id,
       RecordingsCompanion(
         isProcessing: const Value(0),
         processingStatus: Value(failed ? 'failed' : 'done'),
         summary: failed ? const Value.absent() : mergeText(summary),
-        notes: failed ? const Value.absent() : mergeText(notes),
+        transcript: failed ? const Value.absent() : mergeText(transcript),
       ),
     );
     final row = await _dao.getRecordingById(state.id);

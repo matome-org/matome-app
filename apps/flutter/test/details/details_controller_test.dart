@@ -139,8 +139,88 @@ void main() {
 
     final row = await db.recordingsDao.getRecordingById('5');
     expect(row!.summary, 'fresh summary'); // real update applied
-    expect(row.notes, 'fresh transcript'); // transcript -> notes
+    // 1435 write-authority: the machine transcript lands in the `transcript`
+    // column, NOT the user `notes` column. The seeded user note survives.
+    expect(row.transcript, 'fresh transcript');
+    expect(row.notes, 'good notes'); // user note untouched by the terminal apply
     expect(row.processingStatus, 'done');
+  });
+
+  test(
+      '1435: save(text) writes the buffer to Drift `notes`, leaves Drift '
+      '`transcript` UNCHANGED, and the Core PATCH carries `notes` but NOT '
+      '`transcript`', () async {
+    // Seed a row carrying BOTH a user note and a machine transcript so we can
+    // prove the write path touches notes only.
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: '5',
+        title: 'Rec',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: '/tmp/a.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        summary: const Value('good summary'),
+        notes: const Value('old note'),
+        transcript: const Value('machine transcript'),
+      ),
+    );
+
+    // Capture the outgoing PATCH body via an interceptor (the mock-adapter
+    // handler callback does not expose the request body directly).
+    final dio = Dio(BaseOptions(
+      baseUrl: 'http://localhost:4000',
+      validateStatus: (s) => s != null && s < 500,
+    ));
+    Map<String, dynamic>? patchBody;
+    dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        if (options.method == 'PATCH' && options.path == '/api/recordings/5') {
+          patchBody = options.data as Map<String, dynamic>;
+        }
+        handler.next(options);
+      },
+    ));
+    final adapter = DioAdapter(dio: dio);
+    adapter.onPatch(
+      '/api/recordings/5',
+      (s) => s.reply(200, {
+        'recording': {
+          'id': 5,
+          'owner_id': 1,
+          'title': 'Rec',
+          'status': 'done',
+        },
+      }),
+      data: Matchers.any,
+    );
+    final repo = RecordingsRepository(
+      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+    );
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(repo),
+    ]);
+    addTearDown(container.dispose);
+
+    final controller = container.read(
+      _controllerProvider(_awaiterReturning(const RecordingResult.done(null))),
+    );
+    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+
+    await controller.save('new note');
+
+    final row = await db.recordingsDao.getRecordingById('5');
+    expect(row!.notes, 'new note'); // buffer written to notes
+    expect(row.transcript, 'machine transcript'); // transcript UNCHANGED
+
+    // The Core PATCH carries the note under `notes` and NEVER `transcript`.
+    expect(patchBody, isNotNull, reason: 'a Core PATCH was issued');
+    expect(patchBody!['notes'], 'new note');
+    expect(patchBody!.containsKey('transcript'), isFalse,
+        reason: 'save() must not PATCH Core transcript (data-loss path)');
   });
 
   test(
