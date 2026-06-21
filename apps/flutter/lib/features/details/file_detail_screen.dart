@@ -12,6 +12,7 @@ import '../../ui/app_button.dart';
 import '../../ui/app_dialog.dart';
 import '../../ui/file_type_chip.dart';
 import '../../ui/loading_indicator.dart';
+import '../recordings/recording_ids.dart';
 import 'audio_player_bar.dart';
 import 'details_controller.dart';
 import 'file_actions_menu.dart';
@@ -301,6 +302,10 @@ class _ImageDetailHost extends StatelessWidget {
         notes = item.notes,
         mediaKind = mediaKindForType(item.mediaType),
         originalExtension = null,
+        // The item-driven path carries no machine text/processing flag, so the
+        // doc Contents falls back to its honest derivation (empty).
+        contentsText = null,
+        isProcessing = false,
         trailing = null;
 
   /// Built from a loaded [RecordingRow] — the id-driven `/recording/detail/:id`
@@ -320,6 +325,12 @@ class _ImageDetailHost extends StatelessWidget {
         // generic media-path column shared across kinds).
         path = row.audioFilePath,
         notes = row.notes,
+        // The machine-produced text (Core-owned `transcript` column — the SAME
+        // column audio uses) carries the document's stub summary once the
+        // pipeline resolves (#1454). The doc Contents renders it as the "ready"
+        // body; image keeps it null (its description producer is deferred).
+        contentsText = row.transcript,
+        isProcessing = row.isProcessing == 1,
         // The persisted source extension (#1449) drives the doc chip's type
         // icon; null on non-document rows (and on the item-driven path).
         originalExtension = row.originalExtension;
@@ -330,6 +341,15 @@ class _ImageDetailHost extends StatelessWidget {
   final String? processingStatus;
   final String? path;
   final String? notes;
+
+  /// The machine-produced Contents text (Core-owned `transcript` column). On the
+  /// doc path this carries the AI-stub summary once the upload pipeline resolves;
+  /// null on the image path (its description producer is deferred, #1445).
+  final String? contentsText;
+
+  /// Whether the row is mid-pipeline (`isProcessing == 1`). Drives the doc
+  /// Contents "Processing…" state; ignored on the image path.
+  final bool isProcessing;
 
   /// The persisted lower-case source extension (`original_extension`, #1449)
   /// used by the doc media header to pick its type icon. Null on image/audio.
@@ -367,14 +387,42 @@ class _ImageDetailHost extends StatelessWidget {
           ),
         FileMediaKind.audio => null,
       },
-      // Contents (image → "Description"). The image description producer is
-      // deferred (#1445), so there is no honest "processing" to claim: the
-      // Contents state machine (#1440) converges on the EMPTY terminal state
-      // ("No description yet") rather than a fake "Describing…".
-      contentsText: null,
-      contentsState: ContentsState.empty,
+      // Contents body, per kind:
+      //   * image → "Description". The image description producer is deferred
+      //     (#1445), so there is no honest "processing": the Contents state
+      //     machine (#1440) converges on the EMPTY terminal state ("No
+      //     description yet") rather than a fake "Describing…".
+      //   * doc   → "Document". The document IS processed end-to-end (#1454): the
+      //     AI-stub summary lands in the machine `transcript` column, so the doc
+      //     Contents renders the LIVE state machine driven by the row's own
+      //     fields — processing while in flight, failed on a failed pipeline,
+      //     ready once the summary arrives, empty otherwise. This wires the
+      //     `contentsStatus.doc.*` strings (en + ja) to real states rather than
+      //     leaving them as the placeholder empty body.
+      contentsText: mediaKind == FileMediaKind.doc ? contentsText : null,
+      contentsState: mediaKind == FileMediaKind.doc
+          ? _docContentsState()
+          : ContentsState.empty,
       notesText: notes,
     );
+  }
+
+  /// Honest, producer-independent Contents state for a document, derived from
+  /// the row's OWN fields — mirrors the audio host's `_contentsState`:
+  ///   * `processingStatus == 'failed'` → failed ("Processing failed"),
+  ///   * mid-pipeline (`isProcessing`, but not a locally-held pending upload) →
+  ///     processing ("Processing…"),
+  ///   * machine summary present → ready (render it),
+  ///   * otherwise → empty ("No contents yet").
+  /// A `pending_upload` row is held locally (not in the pipeline), so it reads
+  /// as empty rather than a misleading "Processing…".
+  ContentsState _docContentsState() {
+    if (processingStatus == 'failed') return ContentsState.failed;
+    final pending = processingStatus == kProcessingStatusPendingUpload;
+    if (isProcessing && !pending) return ContentsState.processing;
+    final text = contentsText;
+    if (text != null && text.trim().isNotEmpty) return ContentsState.ready;
+    return ContentsState.empty;
   }
 
   void _openFullscreen(BuildContext context) {

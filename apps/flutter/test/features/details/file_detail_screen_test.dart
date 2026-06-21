@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -299,5 +300,140 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(AudioPlayerBar), findsNothing);
     });
+  });
+
+  // ── Document Contents: the LIVE state machine (#1454) ───────────────────────
+  // The doc host must derive Contents from the row's OWN fields — NOT a hardcoded
+  // empty. Before #1454 it forced `ContentsState.empty`, so the stub summary
+  // never rendered and the doc processing/failed strings were dead. These tests
+  // pin all four live states AND that each surfaces the locale's doc string
+  // (en + ja), proving the `contentsStatus.doc.*` i18n is wired to real states.
+  group('FileDetailScreen.documentById — live Contents state (en + ja)', () {
+    late AppDatabase db;
+    late ProviderContainer container;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      container = ProviderContainer(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+      );
+      LocaleSettings.setLocaleSync(AppLocale.en);
+    });
+
+    tearDown(() async {
+      LocaleSettings.setLocaleSync(AppLocale.en);
+      container.dispose();
+      await db.close();
+    });
+
+    // Seeds a document row in a given pipeline state. `transcript` is the
+    // machine-owned column the AI-stub summary lands in (the doc Contents reads
+    // it as the READY body).
+    Future<void> seedDocState(
+      String id, {
+      String? transcript,
+      bool isProcessing = false,
+      String processingStatus = 'done',
+    }) =>
+        db.recordingsDao.insertRecording(
+          RecordingsCompanion(
+            id: Value(id),
+            title: const Value('Quarterly report'),
+            timestamp: const Value('9:00 AM'),
+            duration: const Value(''),
+            badge: const Value('Inbox'),
+            isProcessing: Value(isProcessing ? 1 : 0),
+            audioFilePath: const Value('/tmp/report.pdf'),
+            createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+            mediaType: const Value('document'),
+            originalExtension: const Value('pdf'),
+            transcript: Value(transcript),
+            processingStatus: Value(processingStatus),
+          ),
+        );
+
+    Widget app(String id) => UncontrolledProviderScope(
+          container: container,
+          child: TranslationProvider(
+            child: MaterialApp(
+              locale: LocaleSettings.currentLocale.flutterLocale,
+              supportedLocales: AppLocaleUtils.supportedLocales,
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              theme: buildLightTheme(),
+              home: FileDetailScreen.documentById(id: id),
+            ),
+          ),
+        );
+
+    for (final locale in [AppLocale.en, AppLocale.ja]) {
+      final lc = locale.languageCode;
+      final docStrings = locale.translations.fileView.contentsStatus.doc;
+
+      testWidgets('READY: the stub summary renders as the contents — $lc',
+          (tester) async {
+        LocaleSettings.setLocaleSync(locale);
+        await seedDocState(
+          'rec_doc',
+          transcript: 'AI stub summary for the document.',
+        );
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('file-view-contents-ready')),
+            findsOneWidget,
+            reason: 'a document with a machine summary is in the READY state');
+        expect(find.text('AI stub summary for the document.'), findsOneWidget,
+            reason: 'the doc Contents renders the machine summary text');
+        expect(find.byKey(const ValueKey('file-view-contents-empty')),
+            findsNothing);
+      });
+
+      testWidgets('PROCESSING: doc.processing string shows — $lc',
+          (tester) async {
+        LocaleSettings.setLocaleSync(locale);
+        await seedDocState(
+          'rec_doc',
+          isProcessing: true,
+          processingStatus: 'processing',
+        );
+        await tester.pumpWidget(app('rec_doc'));
+        // The row future resolves on the first microtask; pump fixed frames
+        // (NOT pumpAndSettle — the processing body's LoadingIndicator animates
+        // forever, so the tree never "settles").
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(find.byKey(const ValueKey('file-view-contents-processing')),
+            findsOneWidget);
+        expect(find.text(docStrings.processing), findsOneWidget,
+            reason: 'the $lc doc processing string is wired to the live state');
+      });
+
+      testWidgets('FAILED: doc.failed string shows — $lc', (tester) async {
+        LocaleSettings.setLocaleSync(locale);
+        await seedDocState('rec_doc', processingStatus: 'failed');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('file-view-contents-failed')),
+            findsOneWidget);
+        expect(find.text(docStrings.failed), findsOneWidget,
+            reason: 'the $lc doc failed string is wired to the live state');
+      });
+
+      testWidgets('EMPTY: doc.empty string shows when no summary yet — $lc',
+          (tester) async {
+        LocaleSettings.setLocaleSync(locale);
+        // done, no transcript → honest empty terminal.
+        await seedDocState('rec_doc');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('file-view-contents-empty')),
+            findsOneWidget);
+        expect(find.text(docStrings.empty), findsOneWidget,
+            reason: 'the $lc doc empty string is wired to the live state');
+      });
+    }
   });
 }
