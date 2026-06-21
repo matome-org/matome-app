@@ -78,7 +78,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Two-pane: select in place, keep the list visible.
       ref.read(inboxSelectionProvider.notifier).state = item.id;
     } else {
-      GoRouter.of(context).go('/matome/${item.id}');
+      // PUSH (not go/replace) so the detail opens OVER the shell with a back
+      // stack — the matome hub's AppBar back can pop straight to this list.
+      GoRouter.of(context).push('/matome/${item.id}');
     }
   }
 
@@ -515,7 +517,7 @@ class _Body extends ConsumerWidget {
                       spaces: spaces,
                       // Rename / Edit date & time open the matome hub.
                       onOpen: () =>
-                          GoRouter.of(context).go('/matome/${item.id}'),
+                          GoRouter.of(context).push('/matome/${item.id}'),
                     ).handle(context, ref, action),
                   ),
                 ),

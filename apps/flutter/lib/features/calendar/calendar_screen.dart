@@ -59,7 +59,9 @@ class CalendarScreen extends ConsumerWidget {
 
     final today = DateTime.now();
 
-    void openMatome(String id) => GoRouter.of(context).go('/matome/$id');
+    // PUSH (not go/replace) so the matome hub opens OVER the shell with a back
+    // stack — its AppBar back pops straight back to the calendar.
+    void openMatome(String id) => GoRouter.of(context).push('/matome/$id');
 
     // Full-width single column at every size: the month grid spans the whole
     // width (its day cells are fixed-height, so a wide window just widens the

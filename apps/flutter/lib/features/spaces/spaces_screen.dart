@@ -86,7 +86,7 @@ class SpacesScreen extends ConsumerWidget {
                   isWide: isWide,
                   onRefresh: () =>
                       ref.read(spacesControllerProvider.notifier).load(),
-                  onTap: (s) => GoRouter.of(context).go('/spaces/${s.id}'),
+                  onTap: (s) => GoRouter.of(context).push('/spaces/${s.id}'),
                   onLongPress: (s) => _confirmDelete(context, ref, s),
                 ),
               ),
