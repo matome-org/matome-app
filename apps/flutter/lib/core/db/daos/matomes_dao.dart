@@ -119,6 +119,18 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
         .get();
   }
 
+  /// Archived Matomes that are reconciled with Core (`archived_at IS NOT NULL`
+  /// AND `core_id IS NOT NULL`) — the archive-intent push set (#1431, audit
+  /// #70912). These were archived locally but their Core archive POST may not
+  /// have landed (offline window); the sync PUSH re-archives them on Core so the
+  /// two ends converge to archived. Inbox/local-only archived rows (no `core_id`)
+  /// were never on Core and are excluded.
+  Future<List<MatomeRow>> listArchivedReconciledMatomes() {
+    return (select(matomes)
+          ..where((m) => m.archivedAt.isNotNull() & m.coreId.isNotNull()))
+        .get();
+  }
+
   /// Matomes filed into a given Space, newest first. Excludes archived (#1409).
   Future<List<MatomeRow>> listMatomesInSpace(String spaceId) {
     return (select(matomes)

@@ -49,6 +49,8 @@ MatomesCompanion matomeToCompanion(Matome matome, {MatomeRow? existing}) {
   // survives a sparse pull.
   final summaryValue = mergeAggregatedSummary(matome.aggregatedSummary);
   final descriptionValue = _mergeNullableText(matome.description);
+  final archivedAtValue =
+      _mergeArchivedAt(matome.archivedAt, existing?.archivedAt);
 
   // `upsert` runs `insertOnConflictUpdate`, which validates the companion as an
   // INSERT — so the NOT-NULL happenedAt/createdAt must always be present. Keep
@@ -69,11 +71,13 @@ MatomesCompanion matomeToCompanion(Matome matome, {MatomeRow? existing}) {
     createdAt: Value(createdAt),
     description: descriptionValue,
     aggregatedSummary: summaryValue,
-    // Mirror Core's archive state (#1409). Core's default list excludes
-    // archived, so a pulled row is normally active (NULL) — but adopting the
-    // field keeps the local mirror correct if an archived row is ever pulled
-    // directly, and a restore (archived_at → null) propagates on the next pull.
-    archivedAt: Value(matome.archivedAt?.millisecondsSinceEpoch),
+    // Archive-adopt guard (#1431/#70912) — see [_mergeArchivedAt]. A Core-
+    // reported active (NULL) row must NOT clobber a local archive that has not
+    // round-tripped to Core yet (the failed-archive offline window); the sync
+    // PUSH re-archives it on Core so the two ends converge to archived. A genuine
+    // archive (Core reports a stamp) and a restore of a NOT-locally-archived row
+    // both flow through normally.
+    archivedAt: archivedAtValue,
   );
 }
 
@@ -116,4 +120,32 @@ Value<String?> _mergeNullableText(String? incoming) {
   final trimmed = incoming?.trim();
   if (trimmed == null || trimmed.isEmpty) return const Value.absent();
   return Value(trimmed);
+}
+
+/// Archive-adopt guard for the pull→Drift merge (#1431, audit #70912).
+///
+/// Core's default Matome list EXCLUDES archived rows, so a row that comes back
+/// in the pull as active ([incoming] == null) is normally genuinely active.
+/// The one exception is the OFFLINE-ARCHIVE WINDOW: a reconciled Matome that was
+/// archived locally while its Core POST failed is still active on Core, so it
+/// re-appears in the pull as active. Adopting that NULL unconditionally would
+/// silently UN-archive the local row — the bug this guards.
+///
+/// So: when Core reports active (NULL) but the local row is ALREADY archived,
+/// keep the local archive (`Value.absent` — leave the column untouched). The
+/// sync PUSH re-archives the row on Core (see `MatomeSyncService.pushArchives`),
+/// which makes Core converge to archived; once it does, Core stops listing the
+/// row and the guard is no longer exercised for it.
+///
+/// Every other case adopts Core's value verbatim:
+///   * Core reports a stamp ([incoming] != null) → adopt the archive.
+///   * Core reports active and the local row is NOT archived → adopt active
+///     (this is the genuine restore-on-pull path, kept working).
+Value<int?> _mergeArchivedAt(DateTime? incoming, int? existingArchivedAt) {
+  if (incoming == null && existingArchivedAt != null) {
+    // Locally archived, Core unaware (offline-archive window) — keep the local
+    // archive; the push re-archives Core so the two ends converge.
+    return const Value.absent();
+  }
+  return Value(incoming?.millisecondsSinceEpoch);
 }

@@ -120,13 +120,22 @@ class MatomeSyncService {
   /// immediately, offline-safe), then POST Core when the Matome is already
   /// reconciled (`core_id != null`). The local archive is AUTHORITATIVE — the
   /// Core POST is best-effort and may throw (offline / server error); callers do
-  /// NOT roll the local archive back. A Core leg that does not land is recovered
-  /// on the next reconcile pass: [pull] upserts Core's archived state by
-  /// `core_id` (merge-guarded), and a still-filed local Matome is re-pushed,
-  /// so the two ends converge. An un-reconciled (Inbox/local-only) Matome only
-  /// gets the Drift write — it was never on Core to archive. The row and its
-  /// child recordings are RETAINED (recoverable via [restoreMatome]); reconcile
-  /// is by `core_id`, never a PK remap.
+  /// NOT roll the local archive back.
+  ///
+  /// CONVERGENCE (#1431, audit #70912): a Core leg that does not land does NOT
+  /// silently revert. Two cooperating mechanisms make the two ends converge to
+  /// ARCHIVED on the next sync:
+  ///   * the archive-adopt guard in `matomeToCompanion` (`_mergeArchivedAt`)
+  ///     prevents a pull — where Core, whose default list excludes archived,
+  ///     returns the row as active (`archived_at = null`) — from clobbering the
+  ///     local archive; and
+  ///   * [pushArchives] (run from [pushFiled]) re-POSTs the archive for every
+  ///     locally-archived reconciled row, so Core actually converges to archived
+  ///     (it is NOT merely "reconciled on pull").
+  /// An un-reconciled (Inbox/local-only) Matome only gets the Drift write — it
+  /// was never on Core to archive. The row and its child recordings are RETAINED
+  /// (recoverable via [restoreMatome]); reconcile is by `core_id`, never a PK
+  /// remap.
   Future<void> archiveMatome(String id) async {
     // LOCAL-FIRST: write Drift before any network call.
     await _matomesDao.archive(id);
@@ -147,12 +156,13 @@ class MatomeSyncService {
   /// (`core_id != null`). The local restore is AUTHORITATIVE — the Core POST is
   /// best-effort and may throw; callers do NOT roll the local restore back.
   ///
-  /// RECONCILE-ON-PULL RECOVERY: if the Core leg does not land (offline / server
-  /// error), the local and remote ends diverge only until the next reconcile
-  /// pass. [pull] upserts Core's archived/active state by `core_id` (merge-
-  /// guarded via `matomeToCompanion`), so a restore that failed to reach Core is
-  /// re-applied — symmetric with [archiveMatome]. Reconcile is by `core_id`,
-  /// never a PK remap.
+  /// A locally-restored row is ACTIVE (`archived_at = null`), so the archive-
+  /// adopt guard in `matomeToCompanion` does NOT engage for it: the next [pull]
+  /// adopts Core's archived/active state by `core_id` (merge-guarded) normally.
+  /// If the restore POST failed to reach Core, the local row is still active and
+  /// — because it is no longer in the archived-reconciled push set — is not
+  /// re-archived; a subsequent edit/push or a Core-side change reconciles it.
+  /// Reconcile is by `core_id`, never a PK remap.
   Future<void> restoreMatome(String id) async {
     // LOCAL-FIRST: write Drift before any network call.
     await _matomesDao.restore(id);
@@ -209,6 +219,39 @@ class MatomeSyncService {
       pushed++;
     }
     AppLog.event(LogCat.sync, 'pushFiled: pushed $pushed');
+
+    // ARCHIVE-INTENT RE-PUSH (#1431, audit #70912): a separate pass so an
+    // archive POST that fails (offline) cannot abort the active-matome push.
+    await pushArchives();
+  }
+
+  /// Converge Core to ARCHIVED for every locally-archived, reconciled Matome
+  /// (#1431, audit #70912). A Matome archived locally while its Core POST failed
+  /// (the offline-archive window) is still active on Core; [pull] keeps the
+  /// local archive (the archive-adopt guard in `matomeToCompanion`), and THIS
+  /// pass re-POSTs the archive so the two ends genuinely converge to archived.
+  ///
+  /// Best-effort and idempotent: re-archiving on Core just refreshes the stamp,
+  /// and a throw on one row (offline / server error) is caught so it neither
+  /// aborts the pass nor the surrounding push — the row is simply retried on the
+  /// next sync. Once Core confirms the archive it stops listing the row, so the
+  /// guard and this re-push stop firing for it.
+  Future<void> pushArchives() async {
+    final archived = await _matomesDao.listArchivedReconciledMatomes();
+    var converged = 0;
+    for (final matome in archived) {
+      final coreId = matome.coreId;
+      if (coreId == null) continue; // defensive — the query already filters.
+      try {
+        await _matomesRepo.archiveMatome(coreId);
+        converged++;
+      } on ApiException catch (error, stack) {
+        // Offline / server error — leave it for the next sync to retry.
+        AppLog.error(
+            LogCat.sync, 'pushArchives: archive re-push failed', error, stack);
+      }
+    }
+    AppLog.event(LogCat.sync, 'pushArchives: converged $converged');
   }
 
   /// Push the Matome's local contact edges: ensure each tagged Contact has a
