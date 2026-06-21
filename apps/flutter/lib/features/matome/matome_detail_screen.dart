@@ -1652,6 +1652,7 @@ class _RecordingTile extends ConsumerWidget {
   final String matomeId;
 
   bool get _isImage => item.mediaType.startsWith('image');
+  bool get _isDocument => item.mediaType.startsWith('document');
 
   void _openRecording(BuildContext context) {
     // The single-recording DetailsScreen, reached from INSIDE the matome hub for
@@ -1660,6 +1661,15 @@ class _RecordingTile extends ConsumerWidget {
     // `/spaces/recording/:id`) now redirect back UP to the parent matome, so the
     // hub must use the dedicated `/recording/detail/:id` route to drill DOWN.
     context.push('/recording/detail/${item.id}');
+  }
+
+  /// Document Items drill into the DEDICATED document host (#1450). A document
+  /// must NEVER hit `/recording/detail/:id` (the AUDIO host, which awaits a
+  /// presigned audio-source `downloadUrl` and renders a player bar / hangs on
+  /// audio loading). The id rides in the PATH (not `extra`, which go_router
+  /// drops on rebuild → `state.extra!` crash); the host loads only the row.
+  void _openDocument(BuildContext context) {
+    context.push('/recording/document/${item.id}');
   }
 
   /// Image Items now drill into the unified file-detail HOST (#1438): an inline
@@ -1739,11 +1749,13 @@ class _RecordingTile extends ConsumerWidget {
     // The overflow rides INSIDE the card via AppCard.recording's `trailing`
     // slot — so the card border encloses the '…' (the image tile does the
     // same in-row). The shared card is unchanged wherever no trailing is
-    // passed.
+    // passed. Documents drill into the DOCUMENT host; everything else (audio)
+    // drills into the audio host — never cross the streams.
     return AppCard.recording(
       card: item,
       relativeTime: formatTimestamp(DateTime.tryParse(item.timestamp)),
-      onTap: () => _openRecording(context),
+      onTap: () =>
+          _isDocument ? _openDocument(context) : _openRecording(context),
       trailing: overflow,
     );
   }

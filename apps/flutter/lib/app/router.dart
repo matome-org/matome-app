@@ -160,6 +160,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           FileDetailScreen.imageById(id: state.pathParameters['id']!),
         ),
       ),
+      // Document drill-down by id (#1450). A document must NEVER hit
+      // `/recording/detail/:id` (the AUDIO host, which awaits a presigned
+      // audio-source `downloadUrl`). Mirrors the image route exactly: the id is
+      // in the PATH (not `extra`, which go_router drops on rebuild → a
+      // `state.extra!` null-check crash); the host loads only the row, with NO
+      // audio load. Path stays under `/recording/` so the auth guard's
+      // allowed-prefix list lets it through. Wrapped in `fileDetailPage` so
+      // desktop gets the bounded dialog and mobile gets full-screen.
+      GoRoute(
+        path: '/recording/document/:id',
+        parentNavigatorKey: _rootKey,
+        pageBuilder: (context, state) => fileDetailPage(
+          context,
+          FileDetailScreen.documentById(id: state.pathParameters['id']!),
+        ),
+      ),
       // Desktop meeting recorder (loopback + mic, MVP Linux). Same fullscreen
       // modal as /recording, bound to the meeting (ffmpeg loopback) recorder.
       GoRoute(

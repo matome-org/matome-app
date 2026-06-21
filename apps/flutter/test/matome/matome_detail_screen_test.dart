@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
@@ -100,6 +101,12 @@ Widget _routerApp(ProviderContainer container, {required String id}) {
         path: '/recording/image/:id',
         builder: (context, state) =>
             FileDetailScreen.imageById(id: state.pathParameters['id']!),
+      ),
+      // Documents drill down by id (row-only load, no audio source) — #1450.
+      GoRoute(
+        path: '/recording/document/:id',
+        builder: (context, state) =>
+            FileDetailScreen.documentById(id: state.pathParameters['id']!),
       ),
     ],
   );
@@ -405,6 +412,50 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(Dialog), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'tapping a document Item opens the DOCUMENT host (FileMediaKind.doc), '
+    'NOT the audio host (#1450 dispatch)',
+    (tester) async {
+      await _seedMatome(db, id: 'm_doc', recordingCount: 0);
+
+      await db.recordingsDao.insertRecording(
+        RecordingsCompanion(
+          id: const Value('rec_doc'),
+          matomeId: const Value('m_doc'),
+          title: const Value('Quarterly report'),
+          timestamp: const Value('9:05 AM'),
+          duration: const Value(''),
+          badge: const Value('Inbox'),
+          isProcessing: const Value(0),
+          audioFilePath: const Value('/tmp/report.pdf'),
+          createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + 5),
+          // The picker (#1449) stores documents as mediaType='document'.
+          mediaType: const Value('document'),
+          originalExtension: const Value('pdf'),
+          processingStatus: const Value('done'),
+        ),
+      );
+
+      await tester.pumpWidget(_routerApp(container(), id: 'm_doc'));
+      await tester.pumpAndSettle();
+      await _revealDetails(tester);
+
+      final tile = find.byKey(const ValueKey('matome-item-rec_doc'));
+      await tester.scrollUntilVisible(tile, 200);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+
+      // The document host is on screen via the dedicated document route — it is
+      // the unified FileView host, and it is NOT the audio host: no player bar.
+      expect(find.byType(FileDetailScreen), findsOneWidget);
+      expect(find.byType(FileView), findsOneWidget);
+      expect(find.byType(AudioPlayerBar), findsNothing);
+      // Contents tag is "Document" (the doc kind), never "Transcript" (audio).
+      expect(find.text('Document', skipOffstage: false), findsOneWidget);
+      expect(find.text('Transcript', skipOffstage: false), findsNothing);
     },
   );
 }

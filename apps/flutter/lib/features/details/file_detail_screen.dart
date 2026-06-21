@@ -101,12 +101,12 @@ class FileDetailScreen extends StatelessWidget {
   /// Image entry point — the [RecordingItem] is supplied directly.
   const FileDetailScreen({super.key, required this.item})
       : id = null,
-        _imageOnly = false;
+        _rowOnlyKind = null;
 
   /// Audio entry point — the file is loaded by id via [detailsControllerProvider].
   const FileDetailScreen.byId({super.key, required this.id})
       : item = null,
-        _imageOnly = false;
+        _rowOnlyKind = null;
 
   /// Image drill-down by id (`/recording/image/:id`). Loads ONLY the row (no
   /// audio-source resolution / `downloadUrl`) and renders the image host. The id
@@ -114,17 +114,29 @@ class FileDetailScreen extends StatelessWidget {
   /// which go_router drops on rebuild, making `state.extra!` throw a null-check.
   const FileDetailScreen.imageById({super.key, required this.id})
       : item = null,
-        _imageOnly = true;
+        _rowOnlyKind = FileMediaKind.image;
+
+  /// Document drill-down by id (`/recording/document/:id`, #1450). Mirrors
+  /// [imageById] exactly — loads ONLY the row via `getRecordingById` (NO
+  /// audio-source `downloadUrl`; a document never hits the audio host) and
+  /// renders the generic file host with [FileMediaKind.doc] (the "Document"
+  /// Contents tag, no inline preview in v1). The id rides in the route PATH so
+  /// it SURVIVES go_router rebuilds — `extra` is dropped on rebuild, which would
+  /// make `state.extra!` throw a null-check.
+  const FileDetailScreen.documentById({super.key, required this.id})
+      : item = null,
+        _rowOnlyKind = FileMediaKind.doc;
 
   /// The Item being shown (item-driven image path). Null on the id paths.
   final RecordingItem? item;
 
-  /// The recording id to load (audio or image-by-id path).
+  /// The recording id to load (audio or image/document-by-id path).
   final String? id;
 
-  /// When true (the [imageById] path) the id loads ONLY the row and renders the
-  /// image host, bypassing the audio-centric details load.
-  final bool _imageOnly;
+  /// Non-null on the row-only id paths ([imageById] / [documentById]): the kind
+  /// to render after loading ONLY the row, bypassing the audio-centric details
+  /// load. Null on the audio ([byId]) and item-driven paths.
+  final FileMediaKind? _rowOnlyKind;
 
   /// Maps the `mediaType` carried by a [RecordingItem] to the [FileMediaKind]
   /// that selects [FileView]'s media header and default Contents tag. Mirrors
@@ -136,30 +148,40 @@ class FileDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final id = this.id;
-    if (_imageOnly && id != null) return _ImageDetailById(id: id);
+    final rowOnlyKind = _rowOnlyKind;
+    if (rowOnlyKind != null && id != null) {
+      return _RowOnlyDetailById(id: id, mediaKind: rowOnlyKind);
+    }
     if (id != null) return _FileDetailById(id: id);
     return _ImageDetailHost.fromItem(item: item!);
   }
 }
 
 /// Loads ONLY the row by id (no audio-source resolution / `downloadUrl`) and
-/// renders the image host. Robust to go_router rebuilds — the id comes from the
-/// route path, not `extra`.
+/// renders the kind-specific host. Robust to go_router rebuilds — the id comes
+/// from the route path, not `extra`.
 final _imageRowProvider =
     FutureProvider.autoDispose.family<RecordingRow?, String>(
   (ref, id) => ref.watch(recordingsDaoProvider).getRecordingById(id),
 );
 
-class _ImageDetailById extends ConsumerStatefulWidget {
-  const _ImageDetailById({required this.id});
+/// The row-only id host shared by the image (`/recording/image/:id`) and
+/// document (`/recording/document/:id`, #1450) routes. Both load ONLY the row —
+/// no audio-source `downloadUrl` — and render the generic [_ImageDetailHost]
+/// with the supplied [mediaKind] (image → framed preview; doc → "Document" tag,
+/// no inline preview). Keeping a single host for both keeps the no-audio-load
+/// invariant in ONE place.
+class _RowOnlyDetailById extends ConsumerStatefulWidget {
+  const _RowOnlyDetailById({required this.id, required this.mediaKind});
 
   final String id;
+  final FileMediaKind mediaKind;
 
   @override
-  ConsumerState<_ImageDetailById> createState() => _ImageDetailByIdState();
+  ConsumerState<_RowOnlyDetailById> createState() => _RowOnlyDetailByIdState();
 }
 
-class _ImageDetailByIdState extends ConsumerState<_ImageDetailById> {
+class _RowOnlyDetailByIdState extends ConsumerState<_RowOnlyDetailById> {
   void _onDelete() => _fileDeleteFlow(context, ref, widget.id);
 
   @override
@@ -180,6 +202,7 @@ class _ImageDetailByIdState extends ConsumerState<_ImageDetailById> {
               : _ImageDetailHost.fromRow(
                   row: row,
                   place: null,
+                  mediaKind: widget.mediaKind,
                   // Same "…" popup as audio (Delete), so every file detail has
                   // a consistent overflow.
                   trailing: FileActionsMenu(onDelete: _onDelete),

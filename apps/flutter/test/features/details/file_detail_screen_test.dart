@@ -1,8 +1,14 @@
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -158,5 +164,103 @@ void main() {
       processingStatus: 'done',
     );
     expect(FileDetailScreen.mediaKindOf(audio), FileMediaKind.audio);
+  });
+
+  // ── Document host (#1450): row-only load, NEVER the audio host ──────────────
+  group('FileDetailScreen.documentById (document host)', () {
+    late AppDatabase db;
+    late ProviderContainer container;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      container = ProviderContainer(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+      );
+    });
+
+    tearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+
+    Future<void> seedDoc(String id) => db.recordingsDao.insertRecording(
+          RecordingsCompanion(
+            id: Value(id),
+            title: const Value('Quarterly report'),
+            timestamp: const Value('9:00 AM'),
+            duration: const Value(''),
+            badge: const Value('Inbox'),
+            isProcessing: const Value(0),
+            audioFilePath: const Value('/tmp/report.pdf'),
+            createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+            // The picker (#1449) stores documents as mediaType='document'.
+            mediaType: const Value('document'),
+            originalExtension: const Value('pdf'),
+            processingStatus: const Value('done'),
+          ),
+        );
+
+    Widget app(String id) => UncontrolledProviderScope(
+          container: container,
+          child: TranslationProvider(
+            child: MaterialApp(
+              theme: buildLightTheme(),
+              home: FileDetailScreen.documentById(id: id),
+            ),
+          ),
+        );
+
+    testWidgets(
+      'loads the row and renders the FileView document host (NOT the audio '
+      'host: no AudioPlayerBar, no audio downloadUrl awaited)',
+      (tester) async {
+        await seedDoc('rec_doc');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        // The presentational FileView is the body of the host.
+        expect(find.byType(FileView), findsOneWidget);
+        // It is the DOCUMENT host: the Contents tag is "Document" (the doc
+        // kind's default tag), NOT "Transcript" (audio) or "Description" (image).
+        expect(find.text('Document', skipOffstage: false), findsOneWidget);
+        expect(find.text('Transcript', skipOffstage: false), findsNothing);
+        // The audio host's player bar must NEVER appear for a document.
+        expect(find.byType(AudioPlayerBar), findsNothing);
+        // Title from the loaded row.
+        expect(find.text('Quarterly report'), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'survives a go_router-style rebuild (id is in the constructor, no '
+      '`state.extra!` null-check crash)',
+      (tester) async {
+        await seedDoc('rec_doc');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+        expect(find.byType(FileView), findsOneWidget);
+
+        // Force a full rebuild of the route subtree — the failure mode the image
+        // route already fixed was `state.extra!` throwing after a rebuild drops
+        // `extra`. The id lives in the constructor (from the path param), so the
+        // host re-resolves the row cleanly.
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(FileView), findsOneWidget);
+        expect(find.text('Document', skipOffstage: false), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('missing row renders an honest fallback, not a crash', (
+      tester,
+    ) async {
+      await tester.pumpWidget(app('does_not_exist'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AudioPlayerBar), findsNothing);
+    });
   });
 }
