@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
@@ -188,6 +189,15 @@ Widget appCardCalendarUseCase(BuildContext context) {
 )
 Widget statusBadgesUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 320, child: _StatusBadgesSample());
+}
+
+@widgetbook.UseCase(
+  name: 'Sync chip',
+  type: MatomeSyncChip,
+  path: '[Catalog]/Status',
+)
+Widget matomeSyncChipUseCase(BuildContext context) {
+  return const _UseCaseSurface(width: 320, child: _MatomeSyncChipSample());
 }
 
 @widgetbook.UseCase(
@@ -524,6 +534,23 @@ class _StatusBadgesSample extends StatelessWidget {
           processingStatus: kProcessingStatusPendingUpload,
         ),
         StatusBadge.sync(coreId: 42, processingStatus: 'done'),
+      ],
+    );
+  }
+}
+
+class _MatomeSyncChipSample extends StatelessWidget {
+  const _MatomeSyncChipSample();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        MatomeSyncChip(rollup: MatomeSyncRollup.cloud),
+        MatomeSyncChip(rollup: MatomeSyncRollup.partial),
+        MatomeSyncChip(rollup: MatomeSyncRollup.onDevice),
       ],
     );
   }

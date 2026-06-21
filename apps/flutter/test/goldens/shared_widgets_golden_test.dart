@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
@@ -81,6 +82,10 @@ void main() {
                 GoldenTestScenario(
                   name: 'status badges',
                   child: _StatusBadgesSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'matome sync chip',
+                  child: _MatomeSyncChipSample(),
                 ),
                 GoldenTestScenario(
                   name: 'bottom sheet shell',
@@ -457,6 +462,23 @@ class _StatusBadgesSample extends StatelessWidget {
           processingStatus: kProcessingStatusPendingUpload,
         ),
         StatusBadge.sync(coreId: 42, processingStatus: 'done'),
+      ],
+    );
+  }
+}
+
+class _MatomeSyncChipSample extends StatelessWidget {
+  const _MatomeSyncChipSample();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        MatomeSyncChip(rollup: MatomeSyncRollup.cloud),
+        MatomeSyncChip(rollup: MatomeSyncRollup.partial),
+        MatomeSyncChip(rollup: MatomeSyncRollup.onDevice),
       ],
     );
   }

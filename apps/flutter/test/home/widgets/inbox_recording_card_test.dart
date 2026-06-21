@@ -152,7 +152,8 @@ void main() {
 
       expect(find.byKey(const ValueKey('sync-badge-cloud')), findsOneWidget);
       expect(find.byKey(const ValueKey('sync-badge-onDevice')), findsNothing);
-      expect(find.text('Cloud'), findsOneWidget);
+      // Normalized vocab (#1407): "Cloud" → "Synced".
+      expect(find.text('Synced'), findsOneWidget);
       expect(find.text('Inbox'), findsOneWidget);
     },
   );
@@ -182,7 +183,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: badge, matching: find.text('Cloud')),
+      find.descendant(of: badge, matching: find.text('Synced')),
       findsOneWidget,
     );
   });
@@ -193,10 +194,10 @@ void main() {
     final handle = tester.ensureSemantics();
     await pump(tester, card(id: '42', processingStatus: 'done', coreId: 42));
 
-    // The pill contributes a single "Sync state: Cloud" announcement (the inner
-    // icon+text are excluded so it isn't read twice). The card row merges it
-    // into the row's button label, so match the combined node by substring.
-    expect(find.bySemanticsLabel(RegExp('Sync state: Cloud')), findsOneWidget);
+    // The pill contributes a single "Sync state: Synced" announcement (the
+    // inner icon+text are excluded so it isn't read twice). The card row merges
+    // it into the row's button label, so match the combined node by substring.
+    expect(find.bySemanticsLabel(RegExp('Sync state: Synced')), findsOneWidget);
     handle.dispose();
   });
 

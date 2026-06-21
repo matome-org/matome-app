@@ -152,6 +152,15 @@ final directories = <_widgetbook.WidgetbookNode>[
         name: 'Status',
         children: [
           _widgetbook.WidgetbookComponent(
+            name: 'MatomeSyncChip',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Sync chip',
+                builder: _matome_widgetbook_widgetbook.matomeSyncChipUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
             name: 'StatusBadge',
             useCases: [
               _widgetbook.WidgetbookUseCase(

@@ -2,11 +2,15 @@ import 'app_database.dart';
 import 'recording_card.dart';
 
 /// Sync state of a Matome rolled up from its child Items, so the Matome pill
-/// speaks the same "Cloud"/"On device" language as the per-tile badges instead
-/// of contradicting them:
-///   * [cloud]    — every hydrated child is reconciled to Core,
-///   * [partial]  — some children are still uploading (mixed),
-///   * [onDevice] — no child has reached Core yet.
+/// speaks the same Synced / Syncing / On device vocabulary (#1407) as the
+/// per-tile badges instead of contradicting them:
+///   * [cloud]    — every hydrated child is reconciled to Core → "Synced",
+///   * [partial]  — some children are still uploading (mixed) → "Syncing",
+///   * [onDevice] — no child has reached Core yet → "On device".
+///
+/// DECIDED (#1407): only three states. A permanently-failed child stays inside
+/// [partial] and is therefore surfaced as "Syncing" — an accepted trade-off to
+/// avoid a fourth chip state.
 enum MatomeSyncRollup { onDevice, partial, cloud }
 
 /// UI-facing **Matome** item — the display-ready view of a [MatomeRow] plus its

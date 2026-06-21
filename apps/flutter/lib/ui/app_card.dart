@@ -173,7 +173,10 @@ class AppCard extends StatelessWidget {
                             ),
                           ),
                           if (m.isInbox)
-                            _MatomeHintChip(localOnly: m.isLocalOnly),
+                            MatomeSyncChip(
+                              key: const ValueKey('matome-card-on-device'),
+                              rollup: m.syncRollup,
+                            ),
                         ],
                       ),
                     ],
@@ -521,21 +524,48 @@ class _RecordingBody extends StatelessWidget {
   }
 }
 
-/// Small inbox / on-device hint pill for a matome list row (#1378). A filed
-/// matome shows nothing; an inbox matome shows "On device" (cloud-off when it
-/// has not reconciled to Core yet).
-class _MatomeHintChip extends StatelessWidget {
-  const _MatomeHintChip({required this.localOnly});
+/// The single shared sync-status chip (#1407). Driven purely by
+/// [MatomeItem.syncRollup] so the matome list row and the detail pill always
+/// agree for the same matome (the original /critique P0 where one read
+/// "On device" while the other read "Cloud"). It shows pure sync state —
+/// Synced / Syncing / On device — with NO triage suffix; filing is a separate
+/// section.
+///
+/// Rollup→label (DECIDED — 3 states, no 4th): a permanently-failed item stays
+/// inside [MatomeSyncRollup.partial] and is therefore labelled "Syncing". That
+/// is an accepted trade-off: "Syncing" can mean "stuck retrying" for a failed
+/// child rather than spawning a separate failure state on the chip.
+class MatomeSyncChip extends StatelessWidget {
+  const MatomeSyncChip({super.key, required this.rollup});
 
-  final bool localOnly;
+  final MatomeSyncRollup rollup;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
     final radius = context.radius;
+
+    final (IconData icon, String label, Color color) = switch (rollup) {
+      MatomeSyncRollup.cloud => (
+        Icons.cloud_done_outlined,
+        t.cardStatus.cloud,
+        colors.badgePersonal,
+      ),
+      MatomeSyncRollup.partial => (
+        Icons.cloud_sync_outlined,
+        t.cardStatus.syncing,
+        colors.textSecondary,
+      ),
+      // One on-device glyph app-wide: cloud_off (matches StatusBadge.sync).
+      MatomeSyncRollup.onDevice => (
+        Icons.cloud_off_outlined,
+        t.cardStatus.onDevice,
+        colors.textMuted,
+      ),
+    };
+
     return Container(
-      key: const ValueKey('matome-card-on-device'),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: colors.subtleFill,
@@ -544,18 +574,14 @@ class _MatomeHintChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            localOnly ? Icons.cloud_off_outlined : Icons.inbox_outlined,
-            size: spacing.md,
-            color: colors.textMuted,
-          ),
+          Icon(icon, size: spacing.md, color: color),
           SizedBox(width: spacing.xxs),
           Text(
-            t.matome.onDeviceShort,
+            label,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: colors.textSecondary,
+              color: color,
             ),
           ),
         ],

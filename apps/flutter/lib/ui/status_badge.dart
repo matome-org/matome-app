@@ -129,8 +129,9 @@ class StatusBadge extends StatelessWidget {
         t.cardStatus.cloud,
         colors.badgePersonal,
       ),
+      // One on-device glyph app-wide: cloud_off everywhere (no smartphone icon).
       SyncState.onDevice => (
-        Icons.smartphone_outlined,
+        Icons.cloud_off_outlined,
         t.cardStatus.onDevice,
         colors.textSecondary,
       ),
