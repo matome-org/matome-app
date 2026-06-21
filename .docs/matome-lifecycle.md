@@ -165,7 +165,8 @@ A Matome carries tagged contacts via the `matome_contacts` edge.
 ## 9. Death
 
 - **Remove an item** — `MatomeDetailController.removeItem()` (`lib/features/matome/matome_detail_controller.dart`) deletes the recording row, best-effort deletes the on-device file, marks the Matome's summary stale, and reloads.
-- **Delete a Matome** — the data layer exists (`MatomesDao.deleteMatome()` cascades contact/share edges then deletes the row; `MatomesRepository.deleteMatome()` → `DELETE /api/matomes/:id`) but is **not surfaced as a direct UI flow** yet.
+- **Archive a Matome (soft-delete, recoverable)** — the decided death path is a soft-delete, surfaced from the detail header **"…" overflow menu** (`MatomeActionsMenu` → `MatomeAction.archive`, `lib/features/matome/matome_actions_menu.dart`). The flow (`_MatomeHeader._archive` in `lib/features/matome/matome_detail_screen.dart`) is: confirm dialog → **optimistic removal** (the local-first `MatomeDetailController.archive()` → `MatomeSyncService.archiveMatome()` stamps `archived_at` in Drift first, so the row leaves every list immediately — all list queries exclude archived) → an **Undo** SnackBar that calls `MatomeDetailController.restore()` → `MatomeSyncService.restoreMatome()`. If the archive **sync fails**, the optimistic removal is **rolled back** (restore the row) and the error is surfaced. The row and its child recordings are retained; reconcile is by `core_id`.
+- **Hard delete** — the data layer exists (`MatomesDao.deleteMatome()` cascades contact/share edges then deletes the row; `MatomesRepository.deleteMatome()` → `DELETE /api/matomes/:id`) but is **not surfaced as a direct UI flow** — archive (soft-delete) is the user-facing path.
 
 ---
 
@@ -183,5 +184,5 @@ A Matome carries tagged contacts via the `matome_contacts` edge.
 ## Not (yet) implemented
 
 - No blank-Matome creation — birth is always item-driven (§1).
-- No direct Matome-delete UI — only the data layer exists (§9).
+- No direct **hard-delete** UI — only the data layer exists; the user-facing death path is **archive** (soft-delete + Undo restore), which now ships in the detail header overflow menu (§9).
 - No primary re-file-across-Spaces affordance (§7).
