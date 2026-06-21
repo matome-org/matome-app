@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_button.dart';
 import '../../ui/app_dialog.dart';
+import '../../ui/file_type_chip.dart';
 import '../../ui/loading_indicator.dart';
 import 'audio_player_bar.dart';
 import 'details_controller.dart';
@@ -28,6 +29,36 @@ FileMediaKind mediaKindForType(String mediaType) {
   if (mediaType.startsWith('image')) return FileMediaKind.image;
   if (mediaType.startsWith('document')) return FileMediaKind.doc;
   return FileMediaKind.audio;
+}
+
+/// Best-effort human size for the on-disk document, read synchronously from the
+/// file at [path]. Returns null (→ the chip renders its unknown-size
+/// placeholder) when the path is absent or the file cannot be stat-ed — a
+/// missing size must never block the chip from rendering.
+String? _fileSizeLabel(String? path) {
+  if (path == null || path.isEmpty) return null;
+  try {
+    final bytes = File(path).lengthSync();
+    return _formatBytes(bytes);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Formats a byte count into a compact unit string (e.g. `2.4 MB`). Uses 1024
+/// steps and trims a trailing `.0` so whole numbers read cleanly.
+String _formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  var value = bytes / 1024;
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  final text = value.toStringAsFixed(1);
+  final trimmed = text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
+  return '$trimmed ${units[unit]}';
 }
 
 /// Shared delete flow for a file (audio or image): confirm dialog → delete the
@@ -269,6 +300,7 @@ class _ImageDetailHost extends StatelessWidget {
         path = item.filePath,
         notes = item.notes,
         mediaKind = mediaKindForType(item.mediaType),
+        originalExtension = null,
         trailing = null;
 
   /// Built from a loaded [RecordingRow] — the id-driven `/recording/detail/:id`
@@ -287,7 +319,10 @@ class _ImageDetailHost extends StatelessWidget {
         // The image's on-disk path lives in the `audioFilePath` column (the
         // generic media-path column shared across kinds).
         path = row.audioFilePath,
-        notes = row.notes;
+        notes = row.notes,
+        // The persisted source extension (#1449) drives the doc chip's type
+        // icon; null on non-document rows (and on the item-driven path).
+        originalExtension = row.originalExtension;
 
   final String title;
   final String? place;
@@ -295,6 +330,10 @@ class _ImageDetailHost extends StatelessWidget {
   final String? processingStatus;
   final String? path;
   final String? notes;
+
+  /// The persisted lower-case source extension (`original_extension`, #1449)
+  /// used by the doc media header to pick its type icon. Null on image/audio.
+  final String? originalExtension;
 
   /// The media kind driving the FileView header + Contents tag. image by
   /// default; doc for an imported document (no inline preview in v1).
@@ -305,21 +344,29 @@ class _ImageDetailHost extends StatelessWidget {
   final Widget? trailing;
 
   FileViewData _viewData(BuildContext context) {
-    final isImage = mediaKind == FileMediaKind.image;
     return FileViewData(
       title: title,
       mediaKind: mediaKind,
       place: place,
       syncCoreId: coreId,
       processingStatus: processingStatus,
-      // No inline preview for a document in v1 (open/parse deferred, #1449);
-      // only the image kind renders the framed media header.
-      mediaHeader: isImage
-          ? _ImageMediaHeader(
-              path: path,
-              onOpenFullscreen: () => _openFullscreen(context),
-            )
-          : null,
+      // Each kind swaps its own media header:
+      //   * image → the framed inline preview that opens the fullscreen viewer,
+      //   * doc   → the FileTypeChip (type icon + name + size + DISABLED "Open"
+      //             labelled "soon"; open/preview is deferred, #1455),
+      //   * audio → handled by the audio host, not here.
+      mediaHeader: switch (mediaKind) {
+        FileMediaKind.image => _ImageMediaHeader(
+            path: path,
+            onOpenFullscreen: () => _openFullscreen(context),
+          ),
+        FileMediaKind.doc => FileTypeChip(
+            fileName: title,
+            extension: originalExtension,
+            sizeLabel: _fileSizeLabel(path),
+          ),
+        FileMediaKind.audio => null,
+      },
       // Contents (image → "Description"). The image description producer is
       // deferred (#1445), so there is no honest "processing" to claim: the
       // Contents state machine (#1440) converges on the EMPTY terminal state

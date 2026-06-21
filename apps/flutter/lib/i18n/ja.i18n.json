@@ -114,6 +114,11 @@
     "notes": "メモ",
     "notesHint": "自分用のメモを書く…",
     "viewFullscreen": "全画面で表示",
+    "fileChip": {
+      "open": "開く",
+      "soon": "近日対応",
+      "unknownSize": "—"
+    },
     "contentsTag": {
       "transcript": "トランスクリプト",
       "description": "説明",

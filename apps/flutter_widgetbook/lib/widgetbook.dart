@@ -16,6 +16,7 @@ import 'package:matome_flutter/ui/app_dialog.dart';
 import 'package:matome_flutter/ui/app_text_field.dart';
 import 'package:matome_flutter/ui/avatar.dart';
 import 'package:matome_flutter/ui/empty_state.dart';
+import 'package:matome_flutter/ui/file_type_chip.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
 import 'package:widgetbook/widgetbook.dart';
@@ -235,6 +236,37 @@ Widget loadingIndicatorUseCase(BuildContext context) {
 )
 Widget emptyStateUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _EmptyStateSample());
+}
+
+@widgetbook.UseCase(
+  name: 'Document media header',
+  type: FileTypeChip,
+  path: '[Catalog]/File view',
+)
+Widget fileTypeChipUseCase(BuildContext context) {
+  // The doc media header across its icon families plus a missing-size row, each
+  // with the DISABLED "Open" / "soon" affordance (preview is deferred, #1455).
+  return const _UseCaseSurface(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FileTypeChip(
+          fileName: 'Q3 roadmap.pdf',
+          extension: 'pdf',
+          sizeLabel: '2.4 MB',
+        ),
+        SizedBox(height: 12),
+        FileTypeChip(
+          fileName: 'meeting-notes.md',
+          extension: 'md',
+          sizeLabel: '4 KB',
+        ),
+        SizedBox(height: 12),
+        FileTypeChip(fileName: 'archive.xyz', extension: 'xyz'),
+      ],
+    ),
+  );
 }
 
 @widgetbook.UseCase(

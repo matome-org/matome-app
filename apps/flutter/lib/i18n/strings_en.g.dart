@@ -432,6 +432,7 @@ class Translations$fileView$en {
 	/// en: 'View fullscreen'
 	String get viewFullscreen => 'View fullscreen';
 
+	late final Translations$fileView$fileChip$en fileChip = Translations$fileView$fileChip$en.internal(_root);
 	late final Translations$fileView$contentsTag$en contentsTag = Translations$fileView$contentsTag$en.internal(_root);
 	late final Translations$fileView$contentsStatus$en contentsStatus = Translations$fileView$contentsStatus$en.internal(_root);
 }
@@ -900,6 +901,24 @@ class Translations$auth$en {
 	String get errorGeneric => 'Something went wrong. Please try again.';
 }
 
+// Path: fileView.fileChip
+class Translations$fileView$fileChip$en {
+	Translations$fileView$fileChip$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Open'
+	String get open => 'Open';
+
+	/// en: 'soon'
+	String get soon => 'soon';
+
+	/// en: '—'
+	String get unknownSize => '—';
+}
+
 // Path: fileView.contentsTag
 class Translations$fileView$contentsTag$en {
 	Translations$fileView$contentsTag$en.internal(this._root);
@@ -1183,6 +1202,9 @@ extension on Translations {
 			'fileView.notes' => 'Notes',
 			'fileView.notesHint' => 'Write your own notes…',
 			'fileView.viewFullscreen' => 'View fullscreen',
+			'fileView.fileChip.open' => 'Open',
+			'fileView.fileChip.soon' => 'soon',
+			'fileView.fileChip.unknownSize' => '—',
 			'fileView.contentsTag.transcript' => 'Transcript',
 			'fileView.contentsTag.description' => 'Description',
 			'fileView.contentsTag.document' => 'Document',

@@ -115,6 +115,15 @@ final directories = <_widgetbook.WidgetbookNode>[
         name: 'File view',
         children: [
           _widgetbook.WidgetbookComponent(
+            name: 'FileTypeChip',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Document media header',
+                builder: _matome_widgetbook_widgetbook.fileTypeChipUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
             name: 'FileView',
             useCases: [
               _widgetbook.WidgetbookUseCase(

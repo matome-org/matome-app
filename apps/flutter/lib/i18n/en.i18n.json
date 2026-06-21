@@ -114,6 +114,11 @@
     "notes": "Notes",
     "notesHint": "Write your own notes…",
     "viewFullscreen": "View fullscreen",
+    "fileChip": {
+      "open": "Open",
+      "soon": "soon",
+      "unknownSize": "—"
+    },
     "contentsTag": {
       "transcript": "Transcript",
       "description": "Description",

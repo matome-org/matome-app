@@ -17,6 +17,7 @@ import 'package:matome_flutter/ui/app_dialog.dart';
 import 'package:matome_flutter/ui/app_text_field.dart';
 import 'package:matome_flutter/ui/avatar.dart';
 import 'package:matome_flutter/ui/empty_state.dart';
+import 'package:matome_flutter/ui/file_type_chip.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
 
@@ -103,6 +104,10 @@ void main() {
                 GoldenTestScenario(
                   name: 'empty state',
                   child: _EmptyStateSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'file type chip',
+                  child: _FileTypeChipSample(),
                 ),
               ],
             ),
@@ -615,6 +620,36 @@ class _EmptyStateSample extends StatelessWidget {
   }
 }
 
+class _FileTypeChipSample extends StatelessWidget {
+  const _FileTypeChipSample();
+
+  @override
+  Widget build(BuildContext context) {
+    // The doc media header across its three icon families: a known doc type
+    // (.pdf), a markdown note (.md), and an unknown extension that falls back to
+    // the generic file glyph — each with the DISABLED "Open" / "soon" affordance.
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FileTypeChip(
+          fileName: 'Q3 roadmap.pdf',
+          extension: 'pdf',
+          sizeLabel: '2.4 MB',
+        ),
+        SizedBox(height: 12),
+        FileTypeChip(
+          fileName: 'meeting-notes.md',
+          extension: 'md',
+          sizeLabel: '4 KB',
+        ),
+        SizedBox(height: 12),
+        FileTypeChip(fileName: 'archive.xyz', extension: 'xyz'),
+      ],
+    );
+  }
+}
+
 class _CalendarAppCardSample extends StatelessWidget {
   const _CalendarAppCardSample();
 
@@ -694,6 +729,7 @@ enum _FileViewSample {
   audioEmpty('audio - empty'),
   imageReady('image - ready (description)'),
   imageEmpty('image - empty'),
+  docChip('doc - file chip'),
   notesFilled('notes - filled'),
   notesEmpty('notes - empty');
 
@@ -757,6 +793,22 @@ FileViewData _fileViewSampleData(_FileViewSample sample) {
       syncCoreId: 105,
       processingStatus: 'done',
       contentsState: ContentsState.empty,
+    ),
+    _FileViewSample.docChip => const FileViewData(
+      title: 'Q3 roadmap.pdf',
+      mediaKind: FileMediaKind.doc,
+      place: 'Work',
+      syncCoreId: 51,
+      processingStatus: 'done',
+      // The doc media header is supplied by the host as a FileTypeChip; preview
+      // is deferred (#1455) and the stub summary converges on the empty state.
+      mediaHeader: FileTypeChip(
+        fileName: 'Q3 roadmap.pdf',
+        extension: 'pdf',
+        sizeLabel: '2.4 MB',
+      ),
+      contentsState: ContentsState.empty,
+      notesText: 'Skim the funding section before Thursday.',
     ),
     _FileViewSample.notesFilled => const FileViewData(
       title: 'Roadmap review',

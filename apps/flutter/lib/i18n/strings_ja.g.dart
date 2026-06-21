@@ -234,6 +234,7 @@ class _Translations$fileView$ja extends Translations$fileView$en {
 	@override String get notes => 'メモ';
 	@override String get notesHint => '自分用のメモを書く…';
 	@override String get viewFullscreen => '全画面で表示';
+	@override late final _Translations$fileView$fileChip$ja fileChip = _Translations$fileView$fileChip$ja._(_root);
 	@override late final _Translations$fileView$contentsTag$ja contentsTag = _Translations$fileView$contentsTag$ja._(_root);
 	@override late final _Translations$fileView$contentsStatus$ja contentsStatus = _Translations$fileView$contentsStatus$ja._(_root);
 }
@@ -433,6 +434,18 @@ class _Translations$auth$ja extends Translations$auth$en {
 	@override String get errorPasswordMismatch => 'パスワードが一致しません。';
 	@override String get errorEmailTaken => 'そのメールアドレスは既に登録されています。';
 	@override String get errorGeneric => '問題が発生しました。もう一度お試しください。';
+}
+
+// Path: fileView.fileChip
+class _Translations$fileView$fileChip$ja extends Translations$fileView$fileChip$en {
+	_Translations$fileView$fileChip$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get open => '開く';
+	@override String get soon => '近日対応';
+	@override String get unknownSize => '—';
 }
 
 // Path: fileView.contentsTag
@@ -638,6 +651,9 @@ extension on TranslationsJa {
 			'fileView.notes' => 'メモ',
 			'fileView.notesHint' => '自分用のメモを書く…',
 			'fileView.viewFullscreen' => '全画面で表示',
+			'fileView.fileChip.open' => '開く',
+			'fileView.fileChip.soon' => '近日対応',
+			'fileView.fileChip.unknownSize' => '—',
 			'fileView.contentsTag.transcript' => 'トランスクリプト',
 			'fileView.contentsTag.description' => '説明',
 			'fileView.contentsTag.document' => 'ドキュメント',

@@ -12,6 +12,7 @@ import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+import 'package:matome_flutter/ui/file_type_chip.dart';
 
 /// Builds an image [RecordingItem]. The path points at a non-existent file on
 /// purpose: `Image.file` falls back to its `errorBuilder` in the test
@@ -228,6 +229,42 @@ void main() {
         expect(find.byType(AudioPlayerBar), findsNothing);
         // Title from the loaded row.
         expect(find.text('Quarterly report'), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'renders the FileTypeChip media header: type icon from the persisted '
+      'original_extension (.pdf) + file name + DISABLED "Open" labelled "soon"',
+      (tester) async {
+        await seedDoc('rec_doc');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        // The doc media header is the FileTypeChip (not an image/audio header).
+        expect(
+          find.byKey(const ValueKey('file-type-chip'), skipOffstage: false),
+          findsOneWidget,
+        );
+        // Type icon resolves from the persisted `original_extension` ('pdf').
+        expect(
+          find.byIcon(FileTypeChip.iconForExtension('pdf')),
+          findsOneWidget,
+        );
+        // The chip shows the file name.
+        expect(
+          find.byKey(
+            const ValueKey('file-type-chip-name'),
+            skipOffstage: false,
+          ),
+          findsOneWidget,
+        );
+        // The Open affordance is present, labelled, and DISABLED ("soon").
+        expect(find.text(t.fileView.fileChip.open), findsOneWidget);
+        expect(find.text(t.fileView.fileChip.soon), findsOneWidget);
+        final open = tester.widget<TextButton>(
+          find.byKey(const ValueKey('file-type-chip-open')),
+        );
+        expect(open.onPressed, isNull);
       },
     );
 
