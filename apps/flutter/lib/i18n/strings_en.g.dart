@@ -919,9 +919,6 @@ class Translations$matome$actions$en {
 	/// en: 'Undo'
 	String get undo => 'Undo';
 
-	/// en: 'Couldn't archive — please try again'
-	String get archiveFailed => 'Couldn\'t archive — please try again';
-
 	/// en: 'This matome is archived'
 	String get archivedBanner => 'This matome is archived';
 
@@ -1124,7 +1121,6 @@ extension on Translations {
 			'matome.actions.archiveConfirm' => 'Archive',
 			'matome.actions.archived' => 'Matome archived',
 			'matome.actions.undo' => 'Undo',
-			'matome.actions.archiveFailed' => 'Couldn\'t archive — please try again',
 			'matome.actions.archivedBanner' => 'This matome is archived',
 			'matome.actions.restore' => 'Restore',
 			'matome.actions.renameTitle' => 'Rename matome',

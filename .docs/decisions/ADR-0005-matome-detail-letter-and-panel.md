@@ -110,7 +110,11 @@ W7 rewrite leaves a deliberate seam rather than an accident.
   detail DAO deliberately does not filter archived rows). The letter now leads
   with an **archived banner + inline Restore** (`_ArchivedBanner`) above the
   header, so the archived state is explicit rather than silent. Archive/restore
-  are **local-first and offline-first** (#1431): the Drift write is
-  authoritative and the Core leg is best-effort, reconciling on the next pull —
-  archiving a synced matome no longer requires connectivity (see
+  are **local-first and offline-first** (#1431, audit #70912): the Drift write
+  is authoritative and the Core leg is best-effort. A failed archive POST does
+  not silently revert — the two ends **converge to archived** on the next sync
+  via an **archive-adopt guard on pull** (a Core-active row never clobbers a
+  not-yet-pushed local archive) plus an **archive re-push** (`pushArchives`
+  retries the deferred POST so Core actually becomes archived), so archiving a
+  synced matome no longer requires connectivity (see
   `.docs/matome-lifecycle.md` §9).
