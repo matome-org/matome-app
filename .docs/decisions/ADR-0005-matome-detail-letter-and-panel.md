@@ -1,7 +1,8 @@
-# ADR-0005 - Matome detail as a "letter", and the forthcoming responsive side panel
+# ADR-0005 - Matome detail as a "letter", and the responsive side panel
 
-> Status: **Accepted** | Date: 2026-06-20 | Plan: `matome-centric-pivot`
-> (W7 lands the letter detail; the responsive side panel is **deferred to W8**)
+> Status: **Accepted** | Date: 2026-06-20 (amended 2026-06-21, W8) | Plan: `matome-centric-pivot`
+> (W7 landed the letter detail; W8 lands the responsive side panel and fixes the
+> breakpoint — see "The responsive side panel (W8)" below)
 
 ## Context
 
@@ -45,21 +46,43 @@ W7 rewrite leaves a deliberate seam rather than an accident.
   overflow (`MatomeActionsMenu`, W4). Primary inline actions (file, add item,
   add contact, edit notes) live in the card / detail, not the menu.
 
-### The responsive side panel (W8, deferred)
-- On a **wide viewport**, "Show more" is replaced by a **persistent side panel**
-  (`MatomeDetailPanel`): the letter stays on the left as the reading column, the
-  panel holds the management surface on the right (the same section order the
-  inline reveal uses — Items, People, Space, Notes, Share).
+### The responsive side panel (W8, shipped #1414)
+- On a **wide viewport**, "Show more" is replaced by a **persistent side panel**:
+  the letter stays on the left as the reading column (narrowed, clamped to its
+  720px reading width), the panel holds the management surface on the right (the
+  same `_MatomeDetails` composition the inline reveal uses — Items, People,
+  Space, Notes, Share). The panel is always visible; nothing is behind a tap.
 - The breakpoint is a **layout choice, not a route change**: the same
   `/matome/:id` route renders either the stacked letter (narrow) or the
   letter+panel (wide). The detail does **not** get its own nested navigator;
   the existing go_router top-level route is reused. The mobile-first inline
   reveal and the wide side panel are two presentations of one screen.
-- W8 owns the concrete breakpoint value and whether the panel is hosted via a
-  `LayoutBuilder`/`MediaQuery` split inside the screen or a `StatefulShell`
-  branch; this ADR fixes only that it is a **breakpoint-driven layout swap on
-  the same route**, so no deep-link or back-stack semantics change between
-  widths.
+
+#### Chosen breakpoint: **900 px** (`_matomeWidePanelBreakpoint`)
+- **Value**: available width `>= 900` → persistent drawer; `< 900` → the mobile
+  "Show more" sheet. The split is hosted by a **`LayoutBuilder`** inside
+  `_MatomeDetailBody` (it reads `constraints.maxWidth`), not a `StatefulShell`
+  branch — the shell already adapts its chrome, and a `LayoutBuilder` keeps the
+  decision local to the screen and reacts to *available* width (so the panel
+  respects the navigation rail on desktop) rather than raw device width.
+- **Rationale**:
+  - The reading letter is clamped to **720 px** and the panel is a fixed
+    **360 px**. 720 + 360 + the inter-column gutter only fits comfortably above
+    ~900 px; below it the panel would crush the letter, so the single-column
+    sheet stays. 900 is the smallest width that gives both columns room.
+  - It sits **above the 800 px default widget-test viewport**, so the existing
+    detail/contacts/triage/archive/edit/remove suites — which tap
+    `matome-show-more` and scroll to the inline keys — keep exercising the
+    proven sheet presentation untouched. The new breakpoint suite pumps the
+    screen at 420 px (sheet) and 1200 px (drawer) to verify both sides.
+  - 900 maps to desktop and large tablet **landscape**; phones and tablet
+    **portrait** stay on the one-column mobile sheet, matching where the
+    summary-first letter reads best.
+- **Seam resolution**: the W7 boolean (`_expanded` + `matome-show-more`) is now
+  gated behind a `showDetailToggle` flag on `_MatomeLetterCard`. On wide the
+  flag is `false`, so neither the toggle nor the inline `_MatomeDetails` is
+  built — the panel is the *only* host (no duplicate keys). On narrow the flag
+  is `true` and the W7 behaviour is unchanged.
 
 ### The seam (how W7 hands off to W8)
 - The "Show more" reveal is gated by a single boolean in `_MatomeLetterCard`
@@ -77,9 +100,9 @@ W7 rewrite leaves a deliberate seam rather than an accident.
   through the rewrite; the detail keys move behind "Show more", so callers
   (and tests) must reveal details before reaching them. A characterization test
   pins this contract.
-- W8 inherits a fixed navigation model: **one route, breakpoint-driven layout**.
-  It does not need to introduce a nested navigator or change deep-link
-  semantics; it only chooses the breakpoint and the panel host.
+- W8 honoured the fixed navigation model: **one route, breakpoint-driven
+  layout**. No nested navigator and no deep-link change — the only new knobs are
+  the 900 px breakpoint and the `LayoutBuilder` panel host inside the screen.
 - The letter format is shared in spirit with the reworked matome **list** row
   (W6): both are tiny envelopes — title + a summary preview + a dense meta strip
   with the one normalized sync vocabulary.
