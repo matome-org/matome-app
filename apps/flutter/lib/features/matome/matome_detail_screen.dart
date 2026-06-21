@@ -22,6 +22,7 @@ import '../../ui/app_dialog.dart';
 import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/loading_indicator.dart';
+import '../details/file_actions_menu.dart';
 import '../home/home_filters.dart' show formatTimestamp;
 import 'matome_actions_menu.dart';
 import 'matome_detail_controller.dart';
@@ -1601,13 +1602,17 @@ class _RecordingTile extends ConsumerWidget {
     context.push('/recording/detail/${item.id}');
   }
 
-  void _previewImage(BuildContext context) {
-    final path = item.filePath;
-    if (path == null) return;
-    showDialog<void>(
-      context: context,
-      builder: (_) => _ImagePreviewDialog(path: path, title: item.title),
-    );
+  /// Image Items now drill into the unified file-detail HOST (#1438): an inline
+  /// framed media header (whose tap opens a fullscreen viewer) plus the Contents
+  /// and Notes sections — NOT a bare lightbox dead-end. This collapses the
+  /// audio-vs-image mental-model split (critique P0): both kinds open a real
+  /// file-detail screen rather than a one-way dialog.
+  void _openImage(BuildContext context) {
+    // Image drill-down by id (`/recording/image/:id`). The id rides in the PATH
+    // (not `extra`, which go_router drops on rebuild → `state.extra!` crash).
+    // The host loads only the row — no audio-source `downloadUrl` an image
+    // doesn't need.
+    context.push('/recording/image/${item.id}');
   }
 
   Future<void> _confirmRemove(BuildContext context) async {
@@ -1655,54 +1660,31 @@ class _RecordingTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Destructive affordance standardized across BOTH item kinds AND with the
+    // file-detail screens (#1444): the SAME anchored "…" popup ([FileActionsMenu])
+    // holding Delete — never a bottom sheet on one surface and a popup on another.
+    final overflow = FileActionsMenu(
+      dense: true,
+      onDelete: () => _confirmRemove(context),
+      triggerKey: ValueKey('matome-item-overflow-${item.id}'),
+      deleteKey: ValueKey('matome-item-delete-${item.id}'),
+    );
     if (_isImage) {
       return _ImageItemTile(
         item: item,
-        onTap: () => _previewImage(context),
-        onRemove: () => _confirmRemove(context),
+        onTap: () => _openImage(context),
+        overflow: overflow,
       );
     }
+    // The overflow rides INSIDE the card via AppCard.recording's `trailing`
+    // slot — so the card border encloses the '…' (the image tile does the
+    // same in-row). The shared card is unchanged wherever no trailing is
+    // passed.
     return AppCard.recording(
       card: item,
-      relativeTime: formatTimestamp(
-        DateTime.tryParse(item.timestamp),
-      ),
+      relativeTime: formatTimestamp(DateTime.tryParse(item.timestamp)),
       onTap: () => _openRecording(context),
-    );
-  }
-}
-
-/// Full-image lightbox for a photo Item.
-class _ImagePreviewDialog extends StatelessWidget {
-  const _ImagePreviewDialog({required this.path, required this.title});
-
-  final String path;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final radius = context.radius;
-    return Dialog(
-      backgroundColor: colors.surface,
-      insetPadding: EdgeInsets.all(context.spacing.lg),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius.lg),
-        child: InteractiveViewer(
-          child: Image.file(
-            File(path),
-            fit: BoxFit.contain,
-            errorBuilder: (_, _, _) => Padding(
-              padding: EdgeInsets.all(context.spacing.xl),
-              child: Text(
-                t.matome.imageUnavailable,
-                style: context.typography.bodySmall
-                    .copyWith(color: colors.textMuted),
-              ),
-            ),
-          ),
-        ),
-      ),
+      trailing: overflow,
     );
   }
 }
@@ -1711,12 +1693,15 @@ class _ImageItemTile extends StatelessWidget {
   const _ImageItemTile({
     required this.item,
     required this.onTap,
-    required this.onRemove,
+    required this.overflow,
   });
 
   final RecordingItem item;
   final VoidCallback onTap;
-  final VoidCallback onRemove;
+
+  /// The standardized '…' overflow menu (delete lives inside it) — the SAME
+  /// widget the audio tile mounts, replacing the old bare trash icon (#1444).
+  final Widget overflow;
 
   @override
   Widget build(BuildContext context) {
@@ -1776,12 +1761,7 @@ class _ImageItemTile extends StatelessWidget {
                   ),
                 ),
               ),
-              IconButton(
-                key: ValueKey('matome-image-remove-${item.id}'),
-                tooltip: t.matome.remove,
-                onPressed: onRemove,
-                icon: Icon(Icons.delete_outline, color: colors.textMuted),
-              ),
+              overflow,
             ],
           ),
         ),

@@ -24,6 +24,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onRetry,
+    this.trailing,
   }) : id = null,
        matome = null,
        title = null,
@@ -47,6 +48,7 @@ class AppCard extends StatelessWidget {
        onLongPress = null,
        onRetry = null,
        onAction = null,
+       trailing = null,
        _variant = _AppCardVariant.calendar;
 
   /// A **Matome** row (#1378, reworked #1412): the top-level managed unit. A
@@ -70,6 +72,7 @@ class AppCard extends StatelessWidget {
        statusLabel = null,
        durationLabel = null,
        onRetry = null,
+       trailing = null,
        _variant = _AppCardVariant.matome;
 
   final _AppCardVariant _variant;
@@ -79,6 +82,12 @@ class AppCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onRetry;
+
+  /// Optional trailing widget rendered INSIDE the recording card's border,
+  /// vertically centered at the right edge (e.g. a '…' overflow menu). Null on
+  /// every other usage, so the shared card is unchanged where no action is
+  /// passed.
+  final Widget? trailing;
 
   /// Row-level handler for the matome variant's dense actions menu (#1412).
   final ValueChanged<MatomeAction>? onAction;
@@ -292,6 +301,11 @@ class AppCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Optional action (e.g. '…' overflow) — INSIDE the border,
+                // at the trailing edge, so the card outline never stops short
+                // of it (the image tile renders its overflow in-row the same
+                // way).
+                ?trailing,
               ],
             ),
           ),

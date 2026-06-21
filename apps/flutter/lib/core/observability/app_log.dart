@@ -60,6 +60,11 @@ class AppLog {
   @visibleForTesting
   static void Function(String line)? testSink;
 
+  /// Serializes the fire-and-forget file writes. Each [_emit] chains its write
+  /// behind the previous one so concurrent appends never interleave (the append
+  /// race that corrupted lines when several logs fired in the same frame).
+  static Future<void> _writeChain = Future<void>.value();
+
   /// Record a caught failure. ALWAYS written (ignores [verbose]).
   ///
   /// Fire-and-forget by design: never awaited, so logging can never introduce
@@ -91,7 +96,12 @@ class AppLog {
       sink(formatLine(level, cat, message));
       return;
     }
-    unawaited(_writeToFile(level, cat, message));
+    // Format NOW (call-time timestamp + ordering), then enqueue the write
+    // behind any in-flight one. Serializing avoids the concurrent-append race
+    // that interleaved and corrupted lines. A failed write must not break the
+    // chain, so swallow per-write errors here.
+    final line = formatLine(level, cat, message);
+    _writeChain = _writeChain.then((_) => _writeRaw(line)).catchError((_) {});
   }
 
   /// The exact on-disk line shape (sans trailing newline). Pure: same inputs →
@@ -100,15 +110,11 @@ class AppLog {
   static String formatLine(String level, LogCat cat, String message) =>
       '${DateTime.now().toIso8601String()} [$level] ${cat.name}: $message';
 
-  static Future<void> _writeToFile(
-    String level,
-    LogCat cat,
-    String message,
-  ) async {
+  static Future<void> _writeRaw(String line) async {
     if (isRunningFlutterTest || kIsWeb) return;
     try {
       final docs = await getApplicationDocumentsDirectory();
-      await writeLineTo(docs, formatLine(level, cat, message));
+      await writeLineTo(docs, line);
     } catch (_) {
       // Observability must never throw into a caller.
     }

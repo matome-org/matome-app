@@ -64,13 +64,12 @@ class DetailsState {
   String get title => row?.title ?? '';
   String? get summary => row?.summary;
 
-  /// The editable body — the user-owned `notes` field, falling back to summary.
+  /// The editable Notes body — the user-owned `notes` field.
   ///
-  /// TODO(#1437-1440 UI wave): the details_screen "Transcript" tab still reads
-  /// this notes buffer; the new machine-owned `row.transcript` column (1433/1435)
-  /// must be surfaced as the read source for that tab. This WRITE-side task only
-  /// fixed persistence; the read/UI rewire is owned by the UI wave.
-  String get initialText => row?.notes ?? row?.summary ?? '';
+  /// The audio detail host ([FileDetailScreen.byId], #1439) seeds the Notes
+  /// editor from this and reads the machine-owned `row.transcript` column into
+  /// the read-only Contents section — the carry-forward read/UI rewire is done.
+  String get initialText => row?.notes ?? '';
 
   /// Whether the audio player has something to play.
   bool get hasAudio => audioSource.kind != AudioSourceKind.none;

@@ -96,6 +96,7 @@
     "notesPlaceholder": "マークダウンでメモを書く…",
     "delete": "削除",
     "moveToSpace": "スペースへ移動",
+    "moreActions": "その他の操作",
     "deleteConfirmTitle": "録音を削除",
     "deleteConfirmBody": "この録音は完全に削除されます。続行しますか？",
     "unsavedTitle": "未保存の変更",
@@ -107,6 +108,34 @@
     "saveFailed": "メモを保存できませんでした",
     "audioFailed": "音声を再生できませんでした",
     "audioUnavailable": "音声を利用できません"
+  },
+  "fileView": {
+    "contents": "コンテンツ",
+    "notes": "メモ",
+    "notesHint": "自分用のメモを書く…",
+    "viewFullscreen": "全画面で表示",
+    "contentsTag": {
+      "transcript": "トランスクリプト",
+      "description": "説明",
+      "document": "ドキュメント"
+    },
+    "contentsStatus": {
+      "audio": {
+        "processing": "文字起こし中…",
+        "failed": "文字起こしに失敗しました",
+        "empty": "トランスクリプトはまだありません"
+      },
+      "image": {
+        "processing": "説明を生成中…",
+        "failed": "説明の生成に失敗しました",
+        "empty": "説明はまだありません"
+      },
+      "doc": {
+        "processing": "処理中…",
+        "failed": "処理に失敗しました",
+        "empty": "コンテンツはまだありません"
+      }
+    }
   },
   "matome": {
     "title": "まとめ",

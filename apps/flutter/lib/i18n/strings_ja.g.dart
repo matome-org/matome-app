@@ -47,6 +47,7 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$cardStatus$ja cardStatus = _Translations$cardStatus$ja._(_root);
 	@override late final _Translations$recording$ja recording = _Translations$recording$ja._(_root);
 	@override late final _Translations$details$ja details = _Translations$details$ja._(_root);
+	@override late final _Translations$fileView$ja fileView = _Translations$fileView$ja._(_root);
 	@override late final _Translations$matome$ja matome = _Translations$matome$ja._(_root);
 	@override late final _Translations$spaces$ja spaces = _Translations$spaces$ja._(_root);
 	@override late final _Translations$calendar$ja calendar = _Translations$calendar$ja._(_root);
@@ -208,6 +209,7 @@ class _Translations$details$ja extends Translations$details$en {
 	@override String get notesPlaceholder => 'マークダウンでメモを書く…';
 	@override String get delete => '削除';
 	@override String get moveToSpace => 'スペースへ移動';
+	@override String get moreActions => 'その他の操作';
 	@override String get deleteConfirmTitle => '録音を削除';
 	@override String get deleteConfirmBody => 'この録音は完全に削除されます。続行しますか？';
 	@override String get unsavedTitle => '未保存の変更';
@@ -219,6 +221,21 @@ class _Translations$details$ja extends Translations$details$en {
 	@override String get saveFailed => 'メモを保存できませんでした';
 	@override String get audioFailed => '音声を再生できませんでした';
 	@override String get audioUnavailable => '音声を利用できません';
+}
+
+// Path: fileView
+class _Translations$fileView$ja extends Translations$fileView$en {
+	_Translations$fileView$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get contents => 'コンテンツ';
+	@override String get notes => 'メモ';
+	@override String get notesHint => '自分用のメモを書く…';
+	@override String get viewFullscreen => '全画面で表示';
+	@override late final _Translations$fileView$contentsTag$ja contentsTag = _Translations$fileView$contentsTag$ja._(_root);
+	@override late final _Translations$fileView$contentsStatus$ja contentsStatus = _Translations$fileView$contentsStatus$ja._(_root);
 }
 
 // Path: matome
@@ -415,6 +432,30 @@ class _Translations$auth$ja extends Translations$auth$en {
 	@override String get errorGeneric => '問題が発生しました。もう一度お試しください。';
 }
 
+// Path: fileView.contentsTag
+class _Translations$fileView$contentsTag$ja extends Translations$fileView$contentsTag$en {
+	_Translations$fileView$contentsTag$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get transcript => 'トランスクリプト';
+	@override String get description => '説明';
+	@override String get document => 'ドキュメント';
+}
+
+// Path: fileView.contentsStatus
+class _Translations$fileView$contentsStatus$ja extends Translations$fileView$contentsStatus$en {
+	_Translations$fileView$contentsStatus$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override late final _Translations$fileView$contentsStatus$audio$ja audio = _Translations$fileView$contentsStatus$audio$ja._(_root);
+	@override late final _Translations$fileView$contentsStatus$image$ja image = _Translations$fileView$contentsStatus$image$ja._(_root);
+	@override late final _Translations$fileView$contentsStatus$doc$ja doc = _Translations$fileView$contentsStatus$doc$ja._(_root);
+}
+
 // Path: matome.actions
 class _Translations$matome$actions$ja extends Translations$matome$actions$en {
 	_Translations$matome$actions$ja._(TranslationsJa root) : this._root = root, super.internal(root);
@@ -450,6 +491,42 @@ class _Translations$matome$actions$ja extends Translations$matome$actions$en {
 	@override String get editDateTimeSave => '保存';
 	@override String get editDateTimeUpdated => '日時を更新しました';
 	@override String get editFailed => '保存できませんでした — もう一度お試しください';
+}
+
+// Path: fileView.contentsStatus.audio
+class _Translations$fileView$contentsStatus$audio$ja extends Translations$fileView$contentsStatus$audio$en {
+	_Translations$fileView$contentsStatus$audio$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get processing => '文字起こし中…';
+	@override String get failed => '文字起こしに失敗しました';
+	@override String get empty => 'トランスクリプトはまだありません';
+}
+
+// Path: fileView.contentsStatus.image
+class _Translations$fileView$contentsStatus$image$ja extends Translations$fileView$contentsStatus$image$en {
+	_Translations$fileView$contentsStatus$image$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get processing => '説明を生成中…';
+	@override String get failed => '説明の生成に失敗しました';
+	@override String get empty => '説明はまだありません';
+}
+
+// Path: fileView.contentsStatus.doc
+class _Translations$fileView$contentsStatus$doc$ja extends Translations$fileView$contentsStatus$doc$en {
+	_Translations$fileView$contentsStatus$doc$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get processing => '処理中…';
+	@override String get failed => '処理に失敗しました';
+	@override String get empty => 'コンテンツはまだありません';
 }
 
 /// The flat map containing all translations for locale <ja>.
@@ -542,6 +619,7 @@ extension on TranslationsJa {
 			'details.notesPlaceholder' => 'マークダウンでメモを書く…',
 			'details.delete' => '削除',
 			'details.moveToSpace' => 'スペースへ移動',
+			'details.moreActions' => 'その他の操作',
 			'details.deleteConfirmTitle' => '録音を削除',
 			'details.deleteConfirmBody' => 'この録音は完全に削除されます。続行しますか？',
 			'details.unsavedTitle' => '未保存の変更',
@@ -553,6 +631,22 @@ extension on TranslationsJa {
 			'details.saveFailed' => 'メモを保存できませんでした',
 			'details.audioFailed' => '音声を再生できませんでした',
 			'details.audioUnavailable' => '音声を利用できません',
+			'fileView.contents' => 'コンテンツ',
+			'fileView.notes' => 'メモ',
+			'fileView.notesHint' => '自分用のメモを書く…',
+			'fileView.viewFullscreen' => '全画面で表示',
+			'fileView.contentsTag.transcript' => 'トランスクリプト',
+			'fileView.contentsTag.description' => '説明',
+			'fileView.contentsTag.document' => 'ドキュメント',
+			'fileView.contentsStatus.audio.processing' => '文字起こし中…',
+			'fileView.contentsStatus.audio.failed' => '文字起こしに失敗しました',
+			'fileView.contentsStatus.audio.empty' => 'トランスクリプトはまだありません',
+			'fileView.contentsStatus.image.processing' => '説明を生成中…',
+			'fileView.contentsStatus.image.failed' => '説明の生成に失敗しました',
+			'fileView.contentsStatus.image.empty' => '説明はまだありません',
+			'fileView.contentsStatus.doc.processing' => '処理中…',
+			'fileView.contentsStatus.doc.failed' => '処理に失敗しました',
+			'fileView.contentsStatus.doc.empty' => 'コンテンツはまだありません',
 			'matome.title' => 'まとめ',
 			'matome.notFound' => 'まとめが見つかりません',
 			'matome.recordings' => 'アイテム',

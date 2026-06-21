@@ -112,6 +112,56 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'File view',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'FileView',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Audio — empty',
+                builder:
+                    _matome_widgetbook_widgetbook.fileViewAudioEmptyUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Audio — failed',
+                builder:
+                    _matome_widgetbook_widgetbook.fileViewAudioFailedUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Audio — processing',
+                builder: _matome_widgetbook_widgetbook
+                    .fileViewAudioProcessingUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Audio — ready (transcript)',
+                builder:
+                    _matome_widgetbook_widgetbook.fileViewAudioReadyUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Image — empty',
+                builder:
+                    _matome_widgetbook_widgetbook.fileViewImageEmptyUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Image — ready (description)',
+                builder:
+                    _matome_widgetbook_widgetbook.fileViewImageReadyUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Notes — empty',
+                builder:
+                    _matome_widgetbook_widgetbook.fileViewNotesEmptyUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Notes — filled',
+                builder:
+                    _matome_widgetbook_widgetbook.fileViewNotesFilledUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Inputs',
         children: [
           _widgetbook.WidgetbookComponent(

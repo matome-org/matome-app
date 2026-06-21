@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../features/contacts/contacts_screen.dart' as contacts;
-import '../../features/details/details_screen.dart';
+import '../../features/details/file_detail_screen.dart';
 import '../../features/spaces/space_detail_screen.dart' as spaces;
 import '../../features/spaces/spaces_screen.dart' as spaces;
 import 'satori_screen.dart' as satori;
@@ -33,12 +33,15 @@ class ContactsScreen extends StatelessWidget {
 }
 
 /// Recording details (S2, #781), reachable as `/inbox/:id` and `/calendar/:id`.
+/// These legacy deep-links always redirect UP to the parent matome (#1378), so
+/// this builder is effectively unreached; it points at the unified host
+/// ([FileDetailScreen]) so no reference to the retired details screen remains.
 class RecordingDetailScreen extends StatelessWidget {
   const RecordingDetailScreen({super.key, required this.id});
   final String id;
 
   @override
-  Widget build(BuildContext context) => DetailsScreen(id: id);
+  Widget build(BuildContext context) => FileDetailScreen.byId(id: id);
 }
 
 /// Space details (S5, #784), reachable as `/spaces/:spaceId`. Lists the
@@ -59,5 +62,5 @@ class SpaceRecordingScreen extends StatelessWidget {
   final String id;
 
   @override
-  Widget build(BuildContext context) => DetailsScreen(id: id);
+  Widget build(BuildContext context) => FileDetailScreen.byId(id: id);
 }

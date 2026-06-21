@@ -7,6 +7,7 @@ import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
+import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_bottom_sheet.dart';
@@ -103,6 +104,37 @@ void main() {
                   name: 'empty state',
                   child: _EmptyStateSample(),
                 ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  });
+
+  group('file view goldens', () {
+    for (final variant in _variants) {
+      goldenTest(
+        'renders ${variant.label}',
+        fileName: 'file_view_${variant.fileSuffix}',
+        constraints: const BoxConstraints.tightFor(width: 940, height: 1480),
+        pumpBeforeTest: pumpOnce,
+        builder: () {
+          LocaleSettings.setLocaleSync(variant.locale);
+          return _GoldenApp(
+            variant: variant,
+            child: GoldenTestGroup(
+              columns: 2,
+              scenarioConstraints: const BoxConstraints.tightFor(
+                width: 420,
+                height: 680,
+              ),
+              children: [
+                for (final sample in _FileViewSample.values)
+                  GoldenTestScenario(
+                    name: sample.scenarioName,
+                    child: _FileViewSampleWidget(sample: sample),
+                  ),
               ],
             ),
           );
@@ -650,4 +682,121 @@ RecordingItem _recordingCard(_CardSampleState state) {
       coreId: null,
     ),
   };
+}
+
+/// The FileView state matrix pinned by the goldens. Mirrors the catalog use
+/// cases in apps/flutter_widgetbook/lib/widgetbook.dart so the documented states
+/// and the visual-regression baseline stay in lockstep.
+enum _FileViewSample {
+  audioReady('audio - ready (transcript)'),
+  audioProcessing('audio - processing'),
+  audioFailed('audio - failed'),
+  audioEmpty('audio - empty'),
+  imageReady('image - ready (description)'),
+  imageEmpty('image - empty'),
+  notesFilled('notes - filled'),
+  notesEmpty('notes - empty');
+
+  const _FileViewSample(this.scenarioName);
+
+  final String scenarioName;
+}
+
+FileViewData _fileViewSampleData(_FileViewSample sample) {
+  return switch (sample) {
+    _FileViewSample.audioReady => FileViewData(
+      title: 'Design sync',
+      mediaKind: FileMediaKind.audio,
+      place: 'Design Lab',
+      syncCoreId: 42,
+      processingStatus: 'done',
+      contentsState: ContentsState.ready,
+      contentsText:
+          'We locked the file-detail layout: header, meta row, media '
+          'header, read-only Contents, then editable Notes. Per-file '
+          'Summary is intentionally dropped.',
+      notesText: 'Ship the goldens before wiring the host screen.',
+    ),
+    _FileViewSample.audioProcessing => const FileViewData(
+      title: 'Interview notes',
+      mediaKind: FileMediaKind.audio,
+      place: 'Ideas',
+      syncCoreId: 77,
+      processingStatus: 'processing',
+      contentsState: ContentsState.processing,
+    ),
+    _FileViewSample.audioFailed => FileViewData(
+      title: 'Retry upload',
+      mediaKind: FileMediaKind.audio,
+      place: 'Personal',
+      processingStatus: 'failed',
+      contentsState: ContentsState.failed,
+      onContentsRetry: () {},
+    ),
+    _FileViewSample.audioEmpty => const FileViewData(
+      title: 'Quiet take',
+      mediaKind: FileMediaKind.audio,
+      syncCoreId: 12,
+      processingStatus: 'done',
+      contentsState: ContentsState.empty,
+    ),
+    _FileViewSample.imageReady => const FileViewData(
+      title: 'Whiteboard photo',
+      mediaKind: FileMediaKind.image,
+      place: 'Design Lab',
+      syncCoreId: 91,
+      processingStatus: 'done',
+      contentsState: ContentsState.ready,
+      contentsText:
+          'A whiteboard sketch of the recording sync rollup: on-device → '
+          'partial → cloud, with the retry path called out in red.',
+    ),
+    _FileViewSample.imageEmpty => const FileViewData(
+      title: 'Reference shot',
+      mediaKind: FileMediaKind.image,
+      syncCoreId: 105,
+      processingStatus: 'done',
+      contentsState: ContentsState.empty,
+    ),
+    _FileViewSample.notesFilled => const FileViewData(
+      title: 'Roadmap review',
+      mediaKind: FileMediaKind.audio,
+      place: 'Work',
+      syncCoreId: 7,
+      processingStatus: 'done',
+      contentsState: ContentsState.ready,
+      contentsText: 'Decisions, owners, and next steps from the product review.',
+      notesText:
+          'My own follow-ups: ping infra about the staging quota, draft the '
+          'rollout note, and book the retro for Friday.',
+    ),
+    _FileViewSample.notesEmpty => const FileViewData(
+      title: 'Fresh capture',
+      mediaKind: FileMediaKind.audio,
+      syncCoreId: 8,
+      processingStatus: 'done',
+      contentsState: ContentsState.ready,
+      contentsText: 'A short voice memo with the machine transcript attached.',
+    ),
+  };
+}
+
+class _FileViewSampleWidget extends StatelessWidget {
+  const _FileViewSampleWidget({required this.sample});
+
+  final _FileViewSample sample;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+      ),
+      child: FileView(data: _fileViewSampleData(sample)),
+    );
+  }
 }

@@ -6,10 +6,13 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/details/file_detail_screen.dart';
+import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
@@ -67,6 +70,45 @@ Widget _app(ProviderContainer container, {required String id}) {
       child: MaterialApp(
         theme: buildLightTheme(),
         home: MatomeDetailScreen(id: id),
+      ),
+    ),
+  );
+}
+
+/// A go_router-backed app mirroring the production routes the file-detail
+/// drill-down uses: `/matome/:id` and the UNIFIED `/recording/detail/:id` that
+/// loads the row and dispatches images → the image host (#97). Needed because
+/// the matome image/audio tiles now navigate via `context.push` — a plain
+/// MaterialApp has no Router, so the old imperative-push test gap is closed by
+/// exercising the real declarative route here.
+Widget _routerApp(ProviderContainer container, {required String id}) {
+  final router = GoRouter(
+    initialLocation: '/matome/$id',
+    routes: [
+      GoRoute(
+        path: '/matome/:id',
+        builder: (context, state) =>
+            MatomeDetailScreen(id: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/recording/detail/:id',
+        builder: (context, state) =>
+            FileDetailScreen.byId(id: state.pathParameters['id']!),
+      ),
+      // Images drill down by id (row-only load, no audio source).
+      GoRoute(
+        path: '/recording/image/:id',
+        builder: (context, state) =>
+            FileDetailScreen.imageById(id: state.pathParameters['id']!),
+      ),
+    ],
+  );
+  return UncontrolledProviderScope(
+    container: container,
+    child: TranslationProvider(
+      child: MaterialApp.router(
+        theme: buildLightTheme(),
+        routerConfig: router,
       ),
     ),
   );
@@ -292,10 +334,11 @@ void main() {
     await tester.pumpAndSettle();
     await _revealDetails(tester);
 
-    // Image Item → thumbnail tile + a remove action, and a rendered Image.
+    // Image Item → thumbnail tile + the standardized '…' overflow (delete lives
+    // inside it, #1444), and a rendered Image.
     expect(find.byKey(const ValueKey('matome-image-rec_img')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('matome-image-remove-rec_img')),
+      find.byKey(const ValueKey('matome-item-overflow-rec_img')),
       findsOneWidget,
     );
     expect(find.byType(Image), findsWidgets);
@@ -304,4 +347,64 @@ void main() {
     expect(find.byKey(const ValueKey('matome-item-rec_0')), findsOneWidget);
     expect(find.byKey(const ValueKey('matome-image-rec_0')), findsNothing);
   });
+
+  testWidgets(
+    'tapping an image Item opens the FileDetailScreen host, not a lightbox '
+    'dialog (#1438 dispatch)',
+    (tester) async {
+      await _seedMatome(db, id: 'm_dispatch', recordingCount: 0);
+
+      final tmp = File(
+        '${Directory.systemTemp.path}/matome_dispatch_${DateTime.now().microsecondsSinceEpoch}.png',
+      )..writeAsBytesSync(
+          base64Decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+            '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+          ),
+        );
+      addTearDown(() {
+        if (tmp.existsSync()) tmp.deleteSync();
+      });
+
+      await db.recordingsDao.insertRecording(
+        RecordingsCompanion(
+          id: const Value('rec_img'),
+          matomeId: const Value('m_dispatch'),
+          title: const Value('whiteboard'),
+          timestamp: const Value('9:05 AM'),
+          duration: const Value(''),
+          badge: const Value('Inbox'),
+          isProcessing: const Value(0),
+          audioFilePath: Value(tmp.path),
+          createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + 5),
+          mediaType: const Value('image'),
+          processingStatus: const Value('done'),
+        ),
+      );
+
+      // Drive the REAL go_router routes (not a plain MaterialApp): the image
+      // tile now `context.push`es `/recording/detail/:id`, which loads the row
+      // and dispatches to the image host by media type (#97).
+      await tester.pumpWidget(_routerApp(container(), id: 'm_dispatch'));
+      await tester.pumpAndSettle();
+      await _revealDetails(tester);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('matome-image-rec_img')),
+        200,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('matome-image-rec_img')));
+      await tester.pumpAndSettle();
+
+      // The unified host is now on screen, NOT a bare lightbox dialog, and it
+      // is the IMAGE host (dispatched by media type after the id-load).
+      expect(find.byType(FileDetailScreen), findsOneWidget);
+      expect(find.byType(FileView), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('file-detail-image-header')),
+        findsOneWidget,
+      );
+      expect(find.byType(Dialog), findsNothing);
+    },
+  );
 }

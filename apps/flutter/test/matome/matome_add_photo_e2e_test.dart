@@ -163,7 +163,7 @@ void main() {
     expect(storedPath, startsWith('${docsRoot.path}/Matome/'));
     expect(storedPath, isNot(source.path));
     expect(
-      File(storedPath!).existsSync(),
+      File(storedPath).existsSync(),
       isTrue,
       reason: 'the durable copy must exist on disk',
     );
@@ -263,7 +263,9 @@ void main() {
       reason: 'the new photo tile must render without reopening the screen',
     );
     expect(
-      find.byKey(ValueKey('matome-image-remove-${imageItem.id}')),
+      // Standardized destructive affordance (#1444): the '…' overflow menu, not
+      // a bare trash icon.
+      find.byKey(ValueKey('matome-item-overflow-${imageItem.id}')),
       findsOneWidget,
     );
     expect(find.byType(Image), findsWidgets);

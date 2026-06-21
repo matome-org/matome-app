@@ -232,6 +232,7 @@ echo '→ flutter clean (forcing a fresh build)...'
 flutter clean
 flutter pub get
 exec flutter run -d linux \
+  --print-dtd \
   --dart-define=API_BASE_URL=http://localhost:4000 \
   --dart-define-from-file=feature_flags.json
 """

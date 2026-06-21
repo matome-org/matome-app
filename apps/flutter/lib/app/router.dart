@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/providers.dart';
+import '../ui/file_detail_page.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
 import '../features/auth/welcome_screen.dart';
 import '../features/calendar/calendar_screen.dart';
-import '../features/details/details_screen.dart';
+import '../features/details/file_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/matome/matome_detail_screen.dart';
 import 'auth_state.dart';
@@ -60,7 +61,7 @@ Future<String?> _redirectRecordingToMatome(Ref ref, String? recordingId) async {
 }
 
 /// The app router (matome-centric, #1378). The primary detail route is the
-/// **Matome hub** `/matome/:id`; the individual-recording [DetailsScreen] is
+/// **Matome hub** `/matome/:id`; the individual-recording [FileDetailScreen] is
 /// reached from inside the hub via `/recording/detail/:id`. Tree:
 ///   /                       welcome (unauthenticated landing)
 ///   /recording              fullscreen capture modal (root navigator)
@@ -129,12 +130,34 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Single-recording details (#1378): the drill-DOWN route used from inside
       // the Matome hub to open ONE Item. Distinct from the legacy recording
       // deep-links, which now redirect UP to the parent matome — so this route
-      // is the only non-redirecting path to the [DetailsScreen].
+      // is the only non-redirecting path to the [FileDetailScreen].
       GoRoute(
         path: '/recording/detail/:id',
         parentNavigatorKey: _rootKey,
-        builder: (context, state) => DetailsScreen(
-          id: state.pathParameters['id']!,
+        pageBuilder: (context, state) => fileDetailPage(
+          context,
+          FileDetailScreen.byId(id: state.pathParameters['id']!),
+        ),
+      ),
+      // Image drill-down (#97). Images carry their full [RecordingItem] from the
+      // hub, so they open the item-driven image host DIRECTLY via `extra` — they
+      // must NOT go through the audio-centric id-load, which awaits
+      // `downloadUrl` (a presigned audio-source call an image does not need) and
+      // strands the viewer on the audio loading host when Core is slow.
+      // Declarative (go_router-owned) so the route survives auth-refresh
+      // rebuilds, unlike the old imperative push.
+      // Image drill-down by id. The id is in the PATH (not `extra`) so it
+      // survives go_router rebuilds — `extra` is dropped on rebuild, which made
+      // `state.extra!` throw a null-check and blow up the image detail. The
+      // host loads only the row (no audio-source `downloadUrl`). Path stays
+      // under `/recording/` so the auth guard's allowed-prefix list lets it
+      // through without a special case.
+      GoRoute(
+        path: '/recording/image/:id',
+        parentNavigatorKey: _rootKey,
+        pageBuilder: (context, state) => fileDetailPage(
+          context,
+          FileDetailScreen.imageById(id: state.pathParameters['id']!),
         ),
       ),
       // Desktop meeting recorder (loopback + mic, MVP Linux). Same fullscreen

@@ -1,0 +1,746 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/db/app_database.dart';
+import '../../core/db/recording_card.dart';
+import '../../core/providers.dart';
+import '../../core/theme/app_theme.dart';
+import '../../i18n/strings.g.dart';
+import '../../ui/app_button.dart';
+import '../../ui/app_dialog.dart';
+import '../../ui/loading_indicator.dart';
+import 'audio_player_bar.dart';
+import 'details_controller.dart';
+import 'file_actions_menu.dart';
+import 'file_view.dart';
+import 'markdown_helpers.dart';
+
+/// Shared delete flow for a file (audio or image): confirm dialog → delete the
+/// recording via [detailsControllerProvider] → pop the detail. Captures the
+/// navigator up front so it survives the async gap. [onBeforeDelete] lets the
+/// audio host clear its dirty baseline so the leave-guard doesn't block the pop.
+Future<void> _fileDeleteFlow(
+  BuildContext context,
+  WidgetRef ref,
+  String id, {
+  VoidCallback? onBeforeDelete,
+}) async {
+  final navigator = Navigator.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      final colors = context.colors;
+      return AppDialog(
+        title: Text(t.details.deleteConfirmTitle),
+        content: Text(t.details.deleteConfirmBody),
+        actions: [
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(t.common.cancel),
+          ),
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: colors.failed),
+            child: Text(t.details.delete),
+          ),
+        ],
+      );
+    },
+  );
+  if (confirmed != true) return;
+  onBeforeDelete?.call();
+  await ref.read(detailsControllerProvider(id).notifier).delete();
+  if (navigator.canPop()) navigator.pop();
+}
+
+/// FileDetailScreen — the unified file-detail HOST that wires a single file's
+/// data/navigation around the presentational [FileView].
+///
+/// [FileView] is intentionally free of DB rows, providers and navigation; this
+/// host is where those concerns live. There are two entry points onto the same
+/// scaffold:
+///
+///   * [FileDetailScreen.new] (`item:`) — IMAGE path (#1438). The matome hub
+///     already holds the full [RecordingItem] for the tapped tile, so the host
+///     takes it directly. It is read-only (no notes persistence yet) and builds
+///     the inline framed image media header whose tap opens a fullscreen viewer.
+///
+///   * [FileDetailScreen.byId] (`id:`) — AUDIO path (#1439). Routed from
+///     `/recording/detail/:id`, it loads via [detailsControllerProvider] and
+///     owns the full edit lifecycle: Notes save (to the user-owned `notes`
+///     column), the unsaved-changes leave guard, retry / delete / move-to-space,
+///     and an [AudioPlayerBar] media header. Audio Contents (read-only) reads the
+///     machine-owned `transcript` column; per-file Summary is gone (it belongs to
+///     the matome). The screen opens focused on Contents — the Notes field is not
+///     auto-opened.
+///
+/// The [FileView] composition and the [RecordingItem]→[FileViewData] mapping are
+/// shared across both paths; only the media header and the persistence wiring
+/// differ.
+///
+/// Reuse seam for the next wave:
+///   * #1440 (Contents state machine): both paths render [FileView]'s honest
+///     empty/contents body; swap [FileViewData.contentsText] for the
+///     state-driven body there.
+class FileDetailScreen extends StatelessWidget {
+  /// Image entry point — the [RecordingItem] is supplied directly.
+  const FileDetailScreen({super.key, required this.item})
+      : id = null,
+        _imageOnly = false;
+
+  /// Audio entry point — the file is loaded by id via [detailsControllerProvider].
+  const FileDetailScreen.byId({super.key, required this.id})
+      : item = null,
+        _imageOnly = false;
+
+  /// Image drill-down by id (`/recording/image/:id`). Loads ONLY the row (no
+  /// audio-source resolution / `downloadUrl`) and renders the image host. The id
+  /// lives in the route PATH so it SURVIVES go_router rebuilds — unlike `extra`,
+  /// which go_router drops on rebuild, making `state.extra!` throw a null-check.
+  const FileDetailScreen.imageById({super.key, required this.id})
+      : item = null,
+        _imageOnly = true;
+
+  /// The Item being shown (item-driven image path). Null on the id paths.
+  final RecordingItem? item;
+
+  /// The recording id to load (audio or image-by-id path).
+  final String? id;
+
+  /// When true (the [imageById] path) the id loads ONLY the row and renders the
+  /// image host, bypassing the audio-centric details load.
+  final bool _imageOnly;
+
+  /// Maps the kind string carried by a [RecordingItem] to the [FileMediaKind]
+  /// that selects [FileView]'s media header and default Contents tag.
+  static FileMediaKind mediaKindOf(RecordingItem item) {
+    if (item.mediaType.startsWith('image')) return FileMediaKind.image;
+    return FileMediaKind.audio;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final id = this.id;
+    if (_imageOnly && id != null) return _ImageDetailById(id: id);
+    if (id != null) return _FileDetailById(id: id);
+    return _ImageDetailHost.fromItem(item: item!);
+  }
+}
+
+/// Loads ONLY the row by id (no audio-source resolution / `downloadUrl`) and
+/// renders the image host. Robust to go_router rebuilds — the id comes from the
+/// route path, not `extra`.
+final _imageRowProvider =
+    FutureProvider.autoDispose.family<RecordingRow?, String>(
+  (ref, id) => ref.watch(recordingsDaoProvider).getRecordingById(id),
+);
+
+class _ImageDetailById extends ConsumerStatefulWidget {
+  const _ImageDetailById({required this.id});
+
+  final String id;
+
+  @override
+  ConsumerState<_ImageDetailById> createState() => _ImageDetailByIdState();
+}
+
+class _ImageDetailByIdState extends ConsumerState<_ImageDetailById> {
+  void _onDelete() => _fileDeleteFlow(context, ref, widget.id);
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    Widget shell(Widget body) => Scaffold(
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            backgroundColor: colors.background,
+            surfaceTintColor: colors.background,
+          ),
+          body: body,
+        );
+
+    return ref.watch(_imageRowProvider(widget.id)).when(
+          data: (row) => row == null
+              ? shell(Center(child: Text(t.recording.title)))
+              : _ImageDetailHost.fromRow(
+                  row: row,
+                  place: null,
+                  // Same "…" popup as audio (Delete), so every file detail has
+                  // a consistent overflow.
+                  trailing: FileActionsMenu(onDelete: _onDelete),
+                ),
+          loading: () => shell(const Center(child: LoadingIndicator())),
+          error: (_, _) => shell(Center(child: Text(t.recording.title))),
+        );
+  }
+}
+
+/// Loads the row by id and dispatches to the kind-specific host. Keeps the two
+/// hosts free of the load/dispatch concern: image → [_ImageDetailHost], audio →
+/// [_AudioDetailHost], both fed off the SAME [detailsControllerProvider] load so
+/// the route renders the right screen for any file type.
+class _FileDetailById extends ConsumerWidget {
+  const _FileDetailById({required this.id});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(detailsControllerProvider(id));
+
+    // While the row is loading (or if it is genuinely missing) defer to the
+    // audio host, which already renders the honest loading / not-found bodies —
+    // a single place for those states rather than duplicating them here.
+    final row = state.row;
+    if (state.isLoading || row == null) {
+      return _AudioDetailHost(id: id);
+    }
+    if (row.mediaType.startsWith('image')) {
+      return _ImageDetailHost.fromRow(row: row, place: state.badge);
+    }
+    return _AudioDetailHost(id: id);
+  }
+}
+
+// ─── Image host (read-only) ─────────────────────────────────────────────────
+
+/// The image detail host: maps a [RecordingItem] into a [FileViewData], builds
+/// the inline framed image media header, and owns the fullscreen-viewer
+/// navigation. Read-only Notes for now (image notes persistence is out of scope).
+class _ImageDetailHost extends StatelessWidget {
+  /// Built from the [RecordingItem] the matome hub already holds (the direct
+  /// `FileDetailScreen(item:)` entry — embedded / two-pane hosts).
+  _ImageDetailHost.fromItem({required RecordingItem item})
+      : title = item.title,
+        place = item.workspaceName,
+        coreId = item.coreId,
+        processingStatus = item.processingStatus,
+        path = item.filePath,
+        notes = item.notes,
+        trailing = null;
+
+  /// Built from a loaded [RecordingRow] — the id-driven `/recording/detail/:id`
+  /// route, which now dispatches images here (#97 unification) so the image and
+  /// audio tiles drill down through the SAME go_router route.
+  _ImageDetailHost.fromRow({
+    required RecordingRow row,
+    required this.place,
+    this.trailing,
+  })  : title = row.title,
+        coreId = row.coreId,
+        processingStatus = row.processingStatus,
+        // The image's on-disk path lives in the `audioFilePath` column (the
+        // generic media-path column shared across kinds).
+        path = row.audioFilePath,
+        notes = row.notes;
+
+  final String title;
+  final String? place;
+  final int? coreId;
+  final String? processingStatus;
+  final String? path;
+  final String? notes;
+
+  /// The "…" overflow menu rendered in the AppBar (Move + Delete). Null on the
+  /// item-driven [fromItem] path.
+  final Widget? trailing;
+
+  FileViewData _viewData(BuildContext context) {
+    return FileViewData(
+      title: title,
+      mediaKind: FileMediaKind.image,
+      place: place,
+      syncCoreId: coreId,
+      processingStatus: processingStatus,
+      mediaHeader: _ImageMediaHeader(
+        path: path,
+        onOpenFullscreen: () => _openFullscreen(context),
+      ),
+      // Contents (image → "Description"). The image description producer is
+      // deferred (#1445), so there is no honest "processing" to claim: the
+      // Contents state machine (#1440) converges on the EMPTY terminal state
+      // ("No description yet") rather than a fake "Describing…".
+      contentsText: null,
+      contentsState: ContentsState.empty,
+      notesText: notes,
+    );
+  }
+
+  void _openFullscreen(BuildContext context) {
+    final path = this.path;
+    if (path == null || path.isEmpty) return;
+    // Push the fullscreen viewer on the LOCAL navigator (the one that owns this
+    // detail screen), NOT the root navigator: this detail screen is itself a
+    // go_router page, so its enclosing Navigator is the right host for a
+    // child modal — and it keeps the viewer scoped to the detail route.
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => _FullscreenImageViewer(path: path, title: title),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Scaffold(
+      backgroundColor: colors.background,
+      appBar: AppBar(
+        backgroundColor: colors.background,
+        surfaceTintColor: colors.background,
+        title: Text(
+          title.isEmpty ? t.recording.title : title,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [?trailing],
+      ),
+      body: FileView(
+        key: const ValueKey('file-detail-view'),
+        data: _viewData(context),
+      ),
+    );
+  }
+}
+
+// ─── Audio host (editable, id-driven) ───────────────────────────────────────
+
+/// The audio detail host: loads the recording via [detailsControllerProvider]
+/// and renders it through the unified [FileView] — audio Contents reads the
+/// machine `transcript` column (read-only), Notes reads/writes the user-owned
+/// `notes` column. Owns the Notes save, the unsaved-changes leave guard, and the
+/// retry / delete / move-to-space actions ported from the retired details
+/// screen. Default focus is Contents; the Notes field is not auto-opened.
+class _AudioDetailHost extends ConsumerStatefulWidget {
+  const _AudioDetailHost({required this.id});
+
+  final String id;
+
+  @override
+  ConsumerState<_AudioDetailHost> createState() => _AudioDetailHostState();
+}
+
+class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
+  final TextEditingController _notesController = TextEditingController();
+  // The text last persisted — the isDirty baseline. Wrapped in a DirtyTracker so
+  // the unsaved-changes leave guard matches the retired details-screen semantics.
+  late DirtyTracker _dirty;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _dirty = DirtyTracker('');
+    _notesController.addListener(() {
+      _dirty.setTranscript(_notesController.text);
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  bool get _isDirty => _dirty.isDirty;
+
+  void _syncFromState(DetailsState state) {
+    if (_initialized || state.isLoading || state.row == null) return;
+    _initialized = true;
+    final notes = state.row?.notes ?? '';
+    _dirty = DirtyTracker(notes);
+    _notesController.text = notes;
+  }
+
+  Future<void> _save() async {
+    final controller =
+        ref.read(detailsControllerProvider(widget.id).notifier);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await controller.save(_notesController.text);
+      _dirty.save();
+      if (!mounted) return;
+      setState(() {});
+      messenger.showSnackBar(SnackBar(content: Text(t.details.saved)));
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(t.details.saveFailed)));
+    }
+  }
+
+  Future<bool> _confirmLeave() async {
+    if (!_isDirty) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final colors = context.colors;
+
+        return AppDialog(
+          title: Text(t.details.unsavedTitle),
+          content: Text(t.details.unsavedBody),
+          actions: [
+            AppTextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.details.keepEditing),
+            ),
+            AppTextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: colors.failed),
+              child: Text(t.details.discard),
+            ),
+          ],
+        );
+      },
+    );
+    if (discard == true) {
+      // Reset the baseline so a re-render on the way out doesn't re-trigger the
+      // guard (W-02 avoidance, ported from the retired details screen).
+      _dirty.discard(_notesController.text);
+    }
+    return discard ?? false;
+  }
+
+  Future<void> _onRetry() async {
+    await ref.read(detailsControllerProvider(widget.id).notifier).retry();
+  }
+
+  void _onDelete() => _fileDeleteFlow(
+        context,
+        ref,
+        widget.id,
+        // Clear dirty so the leave-guard doesn't block the post-delete pop.
+        onBeforeDelete: () => _dirty.discard(_notesController.text),
+      );
+
+  FileViewData _viewData(DetailsState state) {
+    final row = state.row;
+    return FileViewData(
+      title: state.title,
+      mediaKind: FileMediaKind.audio,
+      place: row?.badge,
+      syncCoreId: state.coreId,
+      processingStatus: row?.processingStatus,
+      mediaHeader: AudioPlayerBar(source: state.audioSource),
+      // Contents (audio → "Transcript") reads the machine-owned transcript
+      // column (#1439) and renders the #1440 state machine driven by the
+      // recording's OWN fields — not a backend producer.
+      contentsText: row?.transcript,
+      contentsState: _contentsState(state),
+      onContentsRetry: _onRetry,
+      // Notes seed is unused here — the host owns [_notesController] so dirty
+      // tracking and save work — but kept for parity with the image path.
+      notesText: row?.notes,
+    );
+  }
+
+  /// Derives the honest Contents state from the recording's existing fields:
+  /// a failed transcription → failed (+retry); in-flight → processing; present
+  /// transcript text → ready; otherwise → empty ("No transcript yet"). This is
+  /// producer-independent — it reads only the loaded row's own status.
+  ContentsState _contentsState(DetailsState state) {
+    if (state.processingFailed) return ContentsState.failed;
+    if (state.isProcessing) return ContentsState.processing;
+    final transcript = state.row?.transcript;
+    if (transcript != null && transcript.trim().isNotEmpty) {
+      return ContentsState.ready;
+    }
+    return ContentsState.empty;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(detailsControllerProvider(widget.id));
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final dirtyDotOffset = -spacing.xs / spacing.xxs;
+    final dirtyDotSize = spacing.xs + spacing.xs / spacing.xxs;
+    _syncFromState(state);
+
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final navigator = Navigator.of(context);
+        final shouldLeave = await _confirmLeave();
+        if (shouldLeave && mounted) {
+          navigator.maybePop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        appBar: AppBar(
+          backgroundColor: colors.background,
+          surfaceTintColor: colors.background,
+          title: Text(
+            state.title.isEmpty ? t.recording.title : state.title,
+            overflow: TextOverflow.ellipsis,
+          ),
+          actions: [
+            if (!state.isLoading && !state.notFound)
+              FileActionsMenu(onDelete: _onDelete),
+          ],
+        ),
+        floatingActionButton: (state.isLoading || state.notFound)
+            ? null
+            : FloatingActionButton(
+                heroTag: 'file-detail-save',
+                onPressed: _save,
+                backgroundColor: colors.accent,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(Icons.check, color: colors.onAccent),
+                    if (_isDirty)
+                      Positioned(
+                        right: dirtyDotOffset,
+                        top: dirtyDotOffset,
+                        child: Container(
+                          width: dirtyDotSize,
+                          height: dirtyDotSize,
+                          decoration: BoxDecoration(
+                            color: colors.failed,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: colors.accent, width: 2),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+        body: _buildBody(state),
+      ),
+    );
+  }
+
+  Widget _buildBody(DetailsState state) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    if (state.isLoading) {
+      return Center(child: LoadingIndicator(color: colors.accent));
+    }
+    if (state.notFound) {
+      return Center(
+        child: Text(
+          t.details.notFound,
+          style: typography.bodySmall.copyWith(color: colors.textSecondary),
+        ),
+      );
+    }
+
+    // Failed / pending-upload rows surface the retry CTA inline above the
+    // unified composition rather than the old per-tab Notes affordance.
+    return Column(
+      children: [
+        if (state.processingFailed || state.pendingUpload)
+          _RetryBanner(
+            label: state.pendingUpload
+                ? t.cardStatus.pendingUpload
+                : t.recording.transcriptionFailed,
+            onRetry: _onRetry,
+          ),
+        Expanded(
+          child: FileView(
+            key: const ValueKey('file-detail-view'),
+            data: _viewData(state),
+            notesController: _notesController,
+            onNotesChanged: (_) {},
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Inline retry affordance for a failed / pending-upload audio recording, shown
+/// above the unified [FileView] composition.
+class _RetryBanner extends StatelessWidget {
+  const _RetryBanner({required this.label, required this.onRetry});
+
+  final String label;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return Container(
+      width: double.infinity,
+      color: colors.subtleFill,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.md,
+        vertical: spacing.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: typography.bodySmall.copyWith(color: colors.textSecondary),
+            ),
+          ),
+          AppTextButton.icon(
+            key: const ValueKey('file-detail-retry'),
+            onPressed: onRetry,
+            icon: Icon(Icons.refresh, size: spacing.md),
+            label: Text(t.common.retry),
+            style: TextButton.styleFrom(
+              foregroundColor: colors.onAccent,
+              backgroundColor: colors.accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Image media header + fullscreen viewer ─────────────────────────────────
+
+/// The inline, framed image preview shown as [FileView]'s media header. Tapping
+/// it opens the fullscreen viewer — the lightbox is now a header *action*, not
+/// the whole screen.
+class _ImageMediaHeader extends StatelessWidget {
+  const _ImageMediaHeader({required this.path, required this.onOpenFullscreen});
+
+  final String? path;
+  final VoidCallback onOpenFullscreen;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final path = this.path;
+
+    final Widget frame = path == null
+        ? const _UnavailableFrame()
+        : Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => const _UnavailableFrame(),
+          );
+
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(radius.lg),
+      child: InkWell(
+        key: const ValueKey('file-detail-image-header'),
+        onTap: path == null ? null : onOpenFullscreen,
+        borderRadius: BorderRadius.circular(radius.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(radius.lg),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: frame,
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.sm,
+                vertical: spacing.xs,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.fullscreen,
+                    size: typography.label.fontSize,
+                    color: colors.textSecondary,
+                  ),
+                  SizedBox(width: spacing.xxs),
+                  Text(
+                    t.fileView.viewFullscreen,
+                    style: typography.label.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Placeholder frame for a missing / unreadable image. Carries an accessible
+/// label without leaking a visual literal past the design-system source guard.
+class _UnavailableFrame extends StatelessWidget {
+  const _UnavailableFrame();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Semantics(
+      label: t.matome.imageUnavailable,
+      child: ColoredBox(
+        color: colors.subtleFill,
+        child: Center(
+          child: Icon(Icons.broken_image_outlined, color: colors.textMuted),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fullscreen pinch-zoom viewer — the relocated lightbox, now a media-header
+/// action rather than the entire image experience.
+class _FullscreenImageViewer extends StatelessWidget {
+  const _FullscreenImageViewer({required this.path, required this.title});
+
+  final String path;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Scaffold(
+      backgroundColor: colors.background,
+      appBar: AppBar(
+        backgroundColor: colors.background,
+        surfaceTintColor: colors.background,
+        title: Text(title, overflow: TextOverflow.ellipsis),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          key: const ValueKey('file-detail-fullscreen-viewer'),
+          child: Image.file(
+            File(path),
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const _ViewerUnavailable(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewerUnavailable extends StatelessWidget {
+  const _ViewerUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    return Padding(
+      padding: EdgeInsets.all(spacing.xl),
+      child: Text(
+        t.matome.imageUnavailable,
+        style: typography.bodySmall.copyWith(color: colors.textMuted),
+      ),
+    );
+  }
+}

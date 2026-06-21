@@ -96,6 +96,7 @@
     "notesPlaceholder": "Write notes in markdown…",
     "delete": "Delete",
     "moveToSpace": "Move to space",
+    "moreActions": "More actions",
     "deleteConfirmTitle": "Delete recording",
     "deleteConfirmBody": "This recording will be permanently removed. Continue?",
     "unsavedTitle": "Unsaved changes",
@@ -107,6 +108,34 @@
     "saveFailed": "Couldn't save notes",
     "audioFailed": "Couldn't play audio",
     "audioUnavailable": "Audio unavailable"
+  },
+  "fileView": {
+    "contents": "Contents",
+    "notes": "Notes",
+    "notesHint": "Write your own notes…",
+    "viewFullscreen": "View fullscreen",
+    "contentsTag": {
+      "transcript": "Transcript",
+      "description": "Description",
+      "document": "Document"
+    },
+    "contentsStatus": {
+      "audio": {
+        "processing": "Transcribing…",
+        "failed": "Transcription failed",
+        "empty": "No transcript yet"
+      },
+      "image": {
+        "processing": "Describing…",
+        "failed": "Description failed",
+        "empty": "No description yet"
+      },
+      "doc": {
+        "processing": "Processing…",
+        "failed": "Processing failed",
+        "empty": "No contents yet"
+      }
+    }
   },
   "matome": {
     "title": "Matome",

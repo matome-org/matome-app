@@ -186,6 +186,15 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   alchemist: ^0.14.0
 
+  # Test-only platform-interface seams. The add-photo e2e test
+  # (test/matome/matome_add_photo_e2e_test.dart) fakes the path_provider and
+  # file_picker plugin channels via MockPlatformInterfaceMixin, so it imports
+  # these interface packages directly. They resolve transitively at runtime, but
+  # a direct test-only import must be a declared dependency
+  # (depend_on_referenced_packages); pinned to the resolved lock versions.
+  path_provider_platform_interface: ^2.1.2
+  plugin_platform_interface: ^2.1.8
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

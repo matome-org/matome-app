@@ -48,6 +48,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$cardStatus$en cardStatus = Translations$cardStatus$en.internal(_root);
 	late final Translations$recording$en recording = Translations$recording$en.internal(_root);
 	late final Translations$details$en details = Translations$details$en.internal(_root);
+	late final Translations$fileView$en fileView = Translations$fileView$en.internal(_root);
 	late final Translations$matome$en matome = Translations$matome$en.internal(_root);
 	late final Translations$spaces$en spaces = Translations$spaces$en.internal(_root);
 	late final Translations$calendar$en calendar = Translations$calendar$en.internal(_root);
@@ -374,6 +375,9 @@ class Translations$details$en {
 	/// en: 'Move to space'
 	String get moveToSpace => 'Move to space';
 
+	/// en: 'More actions'
+	String get moreActions => 'More actions';
+
 	/// en: 'Delete recording'
 	String get deleteConfirmTitle => 'Delete recording';
 
@@ -406,6 +410,30 @@ class Translations$details$en {
 
 	/// en: 'Audio unavailable'
 	String get audioUnavailable => 'Audio unavailable';
+}
+
+// Path: fileView
+class Translations$fileView$en {
+	Translations$fileView$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Contents'
+	String get contents => 'Contents';
+
+	/// en: 'Notes'
+	String get notes => 'Notes';
+
+	/// en: 'Write your own notes…'
+	String get notesHint => 'Write your own notes…';
+
+	/// en: 'View fullscreen'
+	String get viewFullscreen => 'View fullscreen';
+
+	late final Translations$fileView$contentsTag$en contentsTag = Translations$fileView$contentsTag$en.internal(_root);
+	late final Translations$fileView$contentsStatus$en contentsStatus = Translations$fileView$contentsStatus$en.internal(_root);
 }
 
 // Path: matome
@@ -863,6 +891,36 @@ class Translations$auth$en {
 	String get errorGeneric => 'Something went wrong. Please try again.';
 }
 
+// Path: fileView.contentsTag
+class Translations$fileView$contentsTag$en {
+	Translations$fileView$contentsTag$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Transcript'
+	String get transcript => 'Transcript';
+
+	/// en: 'Description'
+	String get description => 'Description';
+
+	/// en: 'Document'
+	String get document => 'Document';
+}
+
+// Path: fileView.contentsStatus
+class Translations$fileView$contentsStatus$en {
+	Translations$fileView$contentsStatus$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+	late final Translations$fileView$contentsStatus$audio$en audio = Translations$fileView$contentsStatus$audio$en.internal(_root);
+	late final Translations$fileView$contentsStatus$image$en image = Translations$fileView$contentsStatus$image$en.internal(_root);
+	late final Translations$fileView$contentsStatus$doc$en doc = Translations$fileView$contentsStatus$doc$en.internal(_root);
+}
+
 // Path: matome.actions
 class Translations$matome$actions$en {
 	Translations$matome$actions$en.internal(this._root);
@@ -956,6 +1014,60 @@ class Translations$matome$actions$en {
 	String get editFailed => 'Couldn\'t save — please try again';
 }
 
+// Path: fileView.contentsStatus.audio
+class Translations$fileView$contentsStatus$audio$en {
+	Translations$fileView$contentsStatus$audio$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Transcribing…'
+	String get processing => 'Transcribing…';
+
+	/// en: 'Transcription failed'
+	String get failed => 'Transcription failed';
+
+	/// en: 'No transcript yet'
+	String get empty => 'No transcript yet';
+}
+
+// Path: fileView.contentsStatus.image
+class Translations$fileView$contentsStatus$image$en {
+	Translations$fileView$contentsStatus$image$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Describing…'
+	String get processing => 'Describing…';
+
+	/// en: 'Description failed'
+	String get failed => 'Description failed';
+
+	/// en: 'No description yet'
+	String get empty => 'No description yet';
+}
+
+// Path: fileView.contentsStatus.doc
+class Translations$fileView$contentsStatus$doc$en {
+	Translations$fileView$contentsStatus$doc$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Processing…'
+	String get processing => 'Processing…';
+
+	/// en: 'Processing failed'
+	String get failed => 'Processing failed';
+
+	/// en: 'No contents yet'
+	String get empty => 'No contents yet';
+}
+
 /// The flat map containing all translations for locale <en>.
 /// Only for edge cases! For simple maps, use the map function of this library.
 ///
@@ -1046,6 +1158,7 @@ extension on Translations {
 			'details.notesPlaceholder' => 'Write notes in markdown…',
 			'details.delete' => 'Delete',
 			'details.moveToSpace' => 'Move to space',
+			'details.moreActions' => 'More actions',
 			'details.deleteConfirmTitle' => 'Delete recording',
 			'details.deleteConfirmBody' => 'This recording will be permanently removed. Continue?',
 			'details.unsavedTitle' => 'Unsaved changes',
@@ -1057,6 +1170,22 @@ extension on Translations {
 			'details.saveFailed' => 'Couldn\'t save notes',
 			'details.audioFailed' => 'Couldn\'t play audio',
 			'details.audioUnavailable' => 'Audio unavailable',
+			'fileView.contents' => 'Contents',
+			'fileView.notes' => 'Notes',
+			'fileView.notesHint' => 'Write your own notes…',
+			'fileView.viewFullscreen' => 'View fullscreen',
+			'fileView.contentsTag.transcript' => 'Transcript',
+			'fileView.contentsTag.description' => 'Description',
+			'fileView.contentsTag.document' => 'Document',
+			'fileView.contentsStatus.audio.processing' => 'Transcribing…',
+			'fileView.contentsStatus.audio.failed' => 'Transcription failed',
+			'fileView.contentsStatus.audio.empty' => 'No transcript yet',
+			'fileView.contentsStatus.image.processing' => 'Describing…',
+			'fileView.contentsStatus.image.failed' => 'Description failed',
+			'fileView.contentsStatus.image.empty' => 'No description yet',
+			'fileView.contentsStatus.doc.processing' => 'Processing…',
+			'fileView.contentsStatus.doc.failed' => 'Processing failed',
+			'fileView.contentsStatus.doc.empty' => 'No contents yet',
 			'matome.title' => 'Matome',
 			'matome.notFound' => 'Matome not found',
 			'matome.recordings' => 'Items',

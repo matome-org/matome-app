@@ -20,6 +20,16 @@ Future<void> revealDetails(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Standardized destructive affordance (#1444): the item's '…' overflow opens a
+/// sheet whose only entry is Delete, which then raises the confirm dialog. This
+/// helper drives both sheet steps so the existing confirm-dialog assertions hold.
+Future<void> openItemDelete(WidgetTester tester, String itemId) async {
+  await tester.tap(find.byKey(ValueKey('matome-item-overflow-$itemId')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey('matome-item-delete-$itemId')));
+  await tester.pumpAndSettle();
+}
+
 /// GUI coverage for removing an image Item through the confirm dialog — the path
 /// that froze in the field with no log line, because _confirmRemove was both
 /// uninstrumented AND read the controller off the widget `ref` after the dialog
@@ -88,9 +98,8 @@ void main() {
       findsOneWidget,
     );
 
-    // Open the confirm dialog via the real trash button.
-    await tester.tap(find.byKey(const ValueKey('matome-image-remove-rec_img')));
-    await tester.pumpAndSettle();
+    // Open the confirm dialog via the standardized '…' overflow → Delete.
+    await openItemDelete(tester, 'rec_img');
     expect(find.text('Remove item'), findsOneWidget);
 
     // Confirm — drives _confirmRemove → container.read → removeItem.
@@ -130,8 +139,7 @@ void main() {
     await tester.pumpAndSettle();
     await revealDetails(tester);
 
-    await tester.tap(find.byKey(const ValueKey('matome-image-remove-rec_img')));
-    await tester.pumpAndSettle();
+    await openItemDelete(tester, 'rec_img');
     expect(find.text('Remove item'), findsOneWidget);
 
     // Genuinely UNMOUNT the tile behind the open dialog: drop the row and reload
@@ -183,8 +191,7 @@ void main() {
     await tester.pumpAndSettle();
     await revealDetails(tester);
 
-    await tester.tap(find.byKey(const ValueKey('matome-image-remove-rec_img')));
-    await tester.pumpAndSettle();
+    await openItemDelete(tester, 'rec_img');
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
 

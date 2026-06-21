@@ -6,6 +6,7 @@ import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
+import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_bottom_sheet.dart';
@@ -236,6 +237,78 @@ Widget emptyStateUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _EmptyStateSample());
 }
 
+@widgetbook.UseCase(
+  name: 'Audio — ready (transcript)',
+  type: FileView,
+  path: '[Catalog]/File view',
+)
+Widget fileViewAudioReadyUseCase(BuildContext context) {
+  return const _FileViewSurface(sample: _FileViewSample.audioReady);
+}
+
+@widgetbook.UseCase(
+  name: 'Audio — processing',
+  type: FileView,
+  path: '[Catalog]/File view',
+)
+Widget fileViewAudioProcessingUseCase(BuildContext context) {
+  return const _FileViewSurface(sample: _FileViewSample.audioProcessing);
+}
+
+@widgetbook.UseCase(
+  name: 'Audio — failed',
+  type: FileView,
+  path: '[Catalog]/File view',
+)
+Widget fileViewAudioFailedUseCase(BuildContext context) {
+  return const _FileViewSurface(sample: _FileViewSample.audioFailed);
+}
+
+@widgetbook.UseCase(
+  name: 'Audio — empty',
+  type: FileView,
+  path: '[Catalog]/File view',
+)
+Widget fileViewAudioEmptyUseCase(BuildContext context) {
+  return const _FileViewSurface(sample: _FileViewSample.audioEmpty);
+}
+
+@widgetbook.UseCase(
+  name: 'Image — ready (description)',
+  type: FileView,
+  path: '[Catalog]/File view',
+)
+Widget fileViewImageReadyUseCase(BuildContext context) {
+  return const _FileViewSurface(sample: _FileViewSample.imageReady);
+}
+
+@widgetbook.UseCase(
+  name: 'Image — empty',
+  type: FileView,
+  path: '[Catalog]/File view',
+)
+Widget fileViewImageEmptyUseCase(BuildContext context) {
+  return const _FileViewSurface(sample: _FileViewSample.imageEmpty);
+}
+
+@widgetbook.UseCase(
+  name: 'Notes — filled',
+  type: FileView,
+  path: '[Catalog]/File view',
+)
+Widget fileViewNotesFilledUseCase(BuildContext context) {
+  return const _FileViewSurface(sample: _FileViewSample.notesFilled);
+}
+
+@widgetbook.UseCase(
+  name: 'Notes — empty',
+  type: FileView,
+  path: '[Catalog]/File view',
+)
+Widget fileViewNotesEmptyUseCase(BuildContext context) {
+  return const _FileViewSurface(sample: _FileViewSample.notesEmpty);
+}
+
 class _UseCaseSurface extends StatelessWidget {
   const _UseCaseSurface({required this.child, this.width = 420});
 
@@ -251,6 +324,158 @@ class _UseCaseSurface extends StatelessWidget {
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: width),
           child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// The FileView state matrix rendered in the catalog + shared goldens.
+enum _FileViewSample {
+  audioReady,
+  audioProcessing,
+  audioFailed,
+  audioEmpty,
+  imageReady,
+  imageEmpty,
+  notesFilled,
+  notesEmpty,
+}
+
+/// Builds the presentational [FileViewData] for a given catalog sample. Shared
+/// verbatim with the alchemist golden suite so the documented states and the
+/// regression baseline never drift apart.
+FileViewData fileViewSampleData(_FileViewSample sample) {
+  return switch (sample) {
+    _FileViewSample.audioReady => const FileViewData(
+      title: 'Design sync',
+      mediaKind: FileMediaKind.audio,
+      place: 'Design Lab',
+      syncCoreId: 42,
+      processingStatus: 'done',
+      contentsState: ContentsState.ready,
+      contentsText:
+          'We locked the file-detail layout: header, meta row, media '
+          'header, read-only Contents, then editable Notes. Per-file '
+          'Summary is intentionally dropped.',
+      notesText: 'Ship the goldens before wiring the host screen.',
+    ),
+    _FileViewSample.audioProcessing => const FileViewData(
+      title: 'Interview notes',
+      mediaKind: FileMediaKind.audio,
+      place: 'Ideas',
+      syncCoreId: 77,
+      processingStatus: 'processing',
+      contentsState: ContentsState.processing,
+    ),
+    _FileViewSample.audioFailed => const FileViewData(
+      title: 'Retry upload',
+      mediaKind: FileMediaKind.audio,
+      place: 'Personal',
+      processingStatus: 'failed',
+      contentsState: ContentsState.failed,
+    ),
+    _FileViewSample.audioEmpty => const FileViewData(
+      title: 'Quiet take',
+      mediaKind: FileMediaKind.audio,
+      syncCoreId: 12,
+      processingStatus: 'done',
+      contentsState: ContentsState.empty,
+    ),
+    _FileViewSample.imageReady => const FileViewData(
+      title: 'Whiteboard photo',
+      mediaKind: FileMediaKind.image,
+      place: 'Design Lab',
+      syncCoreId: 91,
+      processingStatus: 'done',
+      contentsState: ContentsState.ready,
+      contentsText:
+          'A whiteboard sketch of the recording sync rollup: on-device → '
+          'partial → cloud, with the retry path called out in red.',
+    ),
+    _FileViewSample.imageEmpty => const FileViewData(
+      title: 'Reference shot',
+      mediaKind: FileMediaKind.image,
+      syncCoreId: 105,
+      processingStatus: 'done',
+      // Image producer is deferred (#1445): no description converges on empty.
+      contentsState: ContentsState.empty,
+    ),
+    _FileViewSample.notesFilled => const FileViewData(
+      title: 'Roadmap review',
+      mediaKind: FileMediaKind.audio,
+      place: 'Work',
+      syncCoreId: 7,
+      processingStatus: 'done',
+      contentsState: ContentsState.ready,
+      contentsText: 'Decisions, owners, and next steps from the product review.',
+      notesText:
+          'My own follow-ups: ping infra about the staging quota, draft the '
+          'rollout note, and book the retro for Friday.',
+    ),
+    _FileViewSample.notesEmpty => const FileViewData(
+      title: 'Fresh capture',
+      mediaKind: FileMediaKind.audio,
+      syncCoreId: 8,
+      processingStatus: 'done',
+      contentsState: ContentsState.ready,
+      contentsText: 'A short voice memo with the machine transcript attached.',
+      // notesText omitted → the editable Notes field renders its hint only.
+    ),
+  };
+}
+
+/// Renders a [FileView] sample inside a bounded, scrollable surface. FileView is
+/// a `ListView`, so it needs a tight height; the catalog gives it a phone-ish
+/// frame and a real retry handler for the failed state.
+class _FileViewSampleWidget extends StatelessWidget {
+  const _FileViewSampleWidget({required this.sample});
+
+  final _FileViewSample sample;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = fileViewSampleData(sample);
+    final withRetry = sample == _FileViewSample.audioFailed
+        ? FileViewData(
+            title: data.title,
+            mediaKind: data.mediaKind,
+            place: data.place,
+            syncCoreId: data.syncCoreId,
+            processingStatus: data.processingStatus,
+            contentsState: data.contentsState,
+            contentsText: data.contentsText,
+            notesText: data.notesText,
+            onContentsRetry: () {},
+          )
+        : data;
+    return FileView(data: withRetry);
+  }
+}
+
+class _FileViewSurface extends StatelessWidget {
+  const _FileViewSurface({required this.sample});
+
+  final _FileViewSample sample;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colors.border),
+          ),
+          child: SizedBox(
+            height: 640,
+            child: _FileViewSampleWidget(sample: sample),
+          ),
         ),
       ),
     );
