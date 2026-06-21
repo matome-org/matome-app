@@ -536,6 +536,9 @@ class Translations$matome$en {
 	/// en: 'Show less'
 	String get showLess => 'Show less';
 
+	/// en: 'Details'
+	String get detailPanelTitle => 'Details';
+
 	/// en: 'Files'
 	String get filesLabel => 'Files';
 
@@ -1091,6 +1094,7 @@ extension on Translations {
 			'matome.imageUnavailable' => 'Image unavailable',
 			'matome.showMore' => 'Show more',
 			'matome.showLess' => 'Show less',
+			'matome.detailPanelTitle' => 'Details',
 			'matome.filesLabel' => 'Files',
 			'matome.peopleLabel' => 'People',
 			'matome.spaceLabel' => 'Space',

@@ -268,6 +268,7 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get imageUnavailable => '画像を表示できません';
 	@override String get showMore => 'もっと見る';
 	@override String get showLess => '閉じる';
+	@override String get detailPanelTitle => '詳細';
 	@override String get filesLabel => '添付';
 	@override String get peopleLabel => '関係者';
 	@override String get spaceLabel => '保存先';
@@ -591,6 +592,7 @@ extension on TranslationsJa {
 			'matome.imageUnavailable' => '画像を表示できません',
 			'matome.showMore' => 'もっと見る',
 			'matome.showLess' => '閉じる',
+			'matome.detailPanelTitle' => '詳細',
 			'matome.filesLabel' => '添付',
 			'matome.peopleLabel' => '関係者',
 			'matome.spaceLabel' => '保存先',
