@@ -10,6 +10,8 @@
 // **************************************************************************
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
+import 'package:matome_widgetbook/proposals/matome_letter_proposal.dart'
+    as _matome_widgetbook_proposals_matome_letter_proposal;
 import 'package:matome_widgetbook/widgetbook.dart'
     as _matome_widgetbook_widgetbook;
 import 'package:widgetbook/widgetbook.dart' as _widgetbook;
@@ -416,6 +418,86 @@ final directories = <_widgetbook.WidgetbookNode>[
               _widgetbook.WidgetbookUseCase(
                 name: 'Sync states',
                 builder: _matome_widgetbook_widgetbook.statusBadgesUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  ),
+  _widgetbook.WidgetbookCategory(
+    name: 'Proposals',
+    children: [
+      _widgetbook.WidgetbookFolder(
+        name: 'Matome detail',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeActionsMenu',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Actions menu (…)',
+                builder: _matome_widgetbook_proposals_matome_letter_proposal
+                    .actionsMenuUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeDetailPanel',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail panel',
+                builder: _matome_widgetbook_proposals_matome_letter_proposal
+                    .detailPanelUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeLetterCard',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Letter + panel (wide)',
+                builder: _matome_widgetbook_proposals_matome_letter_proposal
+                    .letterWithPanelWideUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Letter — filed & synced',
+                builder: _matome_widgetbook_proposals_matome_letter_proposal
+                    .letterFiledSyncedUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Letter — inbox & syncing',
+                builder: _matome_widgetbook_proposals_matome_letter_proposal
+                    .letterInboxSyncingUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Letter — on device',
+                builder: _matome_widgetbook_proposals_matome_letter_proposal
+                    .letterOnDeviceUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Matome list',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeListRow',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Row — states',
+                builder: _matome_widgetbook_proposals_matome_letter_proposal
+                    .matomeRowStatesUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeListView',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'List — grouped',
+                builder: _matome_widgetbook_proposals_matome_letter_proposal
+                    .matomeListUseCase,
               ),
             ],
           ),

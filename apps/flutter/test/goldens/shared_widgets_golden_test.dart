@@ -699,7 +699,9 @@ class _MatomeDetailPanelSample extends StatelessWidget {
                 trailing: MatomeSyncChip(rollup: MatomeSyncRollup.onDevice),
               ),
               SizedBox(height: 8),
-              MatomePanelAddRow(label: 'Add photo'),
+              // #1475: a SINGLE accent "Add item" affordance (the approved
+              // proposal), not the old split "Add photo / Add file" header.
+              MatomePanelAddRow(label: 'Add item'),
             ],
           ),
         ),
