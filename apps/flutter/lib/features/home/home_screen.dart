@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/db/matome_card.dart';
 import '../../core/providers.dart';
+import '../../core/settings/settings_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_button.dart';
@@ -39,12 +40,47 @@ final inboxSelectionProvider = StateProvider<String?>((ref) => null);
 
 /// How the inbox/home list is presented — the **card** "letter" list (ADR-0005)
 /// or the columnar [MatomeTable] (DR-001). A user-selectable view: the toggle
-/// lives in the header. This is a LOCAL (session) preference; persisting the
-/// choice across launches is owned by #1468 (the inbox config page). The host
-/// only accepts a current view + an onToggle, per that task split.
+/// lives in the header, and a matching radio control lives in Settings (#1468).
+/// Both surfaces drive the SAME persisted preference via [inboxViewProvider], so
+/// the choice survives a restart and stays in sync across the two controls.
 enum InboxView { cards, table }
 
-final inboxViewProvider = StateProvider<InboxView>((ref) => InboxView.cards);
+const _inboxViewKey = 'matome.inbox_view';
+
+/// Persisted controller for [InboxView], hydrated from / written to the secure
+/// [SettingsStore] (#1468). Mirrors [ThemeController] / [LocaleController]:
+/// default is [InboxView.cards] until the stored value loads. The in-view header
+/// toggle and the Settings radio both read this provider and call [setView],
+/// keeping them a single source of truth.
+class InboxViewController extends StateNotifier<InboxView> {
+  InboxViewController(this._store) : super(InboxView.cards) {
+    _hydrate();
+  }
+
+  final SettingsStore _store;
+
+  Future<void> _hydrate() async {
+    final view = _parse(await _store.read(_inboxViewKey));
+    if (view != null && mounted) state = view;
+  }
+
+  Future<void> setView(InboxView view) async {
+    state = view;
+    await _store.write(_inboxViewKey, view.name);
+  }
+
+  static InboxView? _parse(String? raw) {
+    for (final v in InboxView.values) {
+      if (v.name == raw) return v;
+    }
+    return null;
+  }
+}
+
+final inboxViewProvider =
+    StateNotifierProvider<InboxViewController, InboxView>(
+  (ref) => InboxViewController(ref.watch(settingsStoreProvider)),
+);
 
 /// Inbox / Home screen (S1) under the matome-centric model (#1378): the
 /// top-level managed unit is the **Matome**, so the list shows **inbox
@@ -224,7 +260,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onUpload: isWide ? _pickAndUpload : null,
           view: view,
           onToggleView: (v) =>
-              ref.read(inboxViewProvider.notifier).state = v,
+              ref.read(inboxViewProvider.notifier).setView(v),
         ),
         Expanded(
           child: state.when(

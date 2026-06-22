@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
+import '../../core/settings/settings_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/loading_indicator.dart';
@@ -24,9 +25,46 @@ import 'widgets/files_grid.dart';
 import 'widgets/files_table.dart';
 import 'widgets/files_view_shared.dart';
 
-/// Which Files layout is showing. The persisted preference lands in #1468; here
-/// it is ephemeral local view state.
+/// Which Files layout is showing (grid ↔ table). A user-selectable view: the
+/// AppBar toggle and the Settings radio (#1468) both drive the SAME persisted
+/// preference via [filesViewProvider], so the choice survives a restart and the
+/// two controls stay in sync.
 enum FilesView { grid, table }
+
+const _filesViewKey = 'matome.files_view';
+
+/// Persisted controller for [FilesView], hydrated from / written to the secure
+/// [SettingsStore] (#1468). Mirrors [InboxViewController]: default is
+/// [FilesView.grid] until the stored value loads.
+class FilesViewController extends StateNotifier<FilesView> {
+  FilesViewController(this._store) : super(FilesView.grid) {
+    _hydrate();
+  }
+
+  final SettingsStore _store;
+
+  Future<void> _hydrate() async {
+    final view = _parse(await _store.read(_filesViewKey));
+    if (view != null && mounted) state = view;
+  }
+
+  Future<void> setView(FilesView view) async {
+    state = view;
+    await _store.write(_filesViewKey, view.name);
+  }
+
+  static FilesView? _parse(String? raw) {
+    for (final v in FilesView.values) {
+      if (v.name == raw) return v;
+    }
+    return null;
+  }
+}
+
+final filesViewProvider =
+    StateNotifierProvider<FilesViewController, FilesView>(
+  (ref) => FilesViewController(ref.watch(settingsStoreProvider)),
+);
 
 /// The reading-width cap for the centred content on wide windows.
 const double _kFilesMaxWidth = 1080;
@@ -39,8 +77,6 @@ class FilesScreen extends ConsumerStatefulWidget {
 }
 
 class _FilesScreenState extends ConsumerState<FilesScreen> {
-  FilesView _view = FilesView.grid;
-
   Future<void> _openFile(String fileId) async {
     // A file is a recording; route by its media type so a document/image never
     // hits the audio-only detail host (mirrors the contacts host, #1464).
@@ -95,6 +131,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final async = ref.watch(filesForCurrentOwnerProvider);
+    final view = ref.watch(filesViewProvider);
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -109,8 +146,8 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
           Padding(
             padding: EdgeInsets.only(right: context.spacing.md),
             child: _FilesViewToggle(
-              view: _view,
-              onToggle: (v) => setState(() => _view = v),
+              view: view,
+              onToggle: (v) => ref.read(filesViewProvider.notifier).setView(v),
             ),
           ),
         ],
@@ -125,7 +162,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: _kFilesMaxWidth),
-                child: _view == FilesView.grid
+                child: view == FilesView.grid
                     ? FilesGrid(
                         files: files,
                         onOpen: _openFile,
