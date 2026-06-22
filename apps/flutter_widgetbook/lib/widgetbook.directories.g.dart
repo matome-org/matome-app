@@ -249,6 +249,47 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'Relations',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeChip',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Matome chip (filled · Unfiled)',
+                builder: _matome_widgetbook_widgetbook.matomeChipUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'PeopleCluster',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'People cluster (overlap · +N overflow)',
+                builder: _matome_widgetbook_widgetbook.peopleClusterUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'RoleChip',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Role chip (organizer · speaker · attendee)',
+                builder: _matome_widgetbook_widgetbook.roleChipUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'SpaceChip',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Space chip (outlined · Inbox)',
+                builder: _matome_widgetbook_widgetbook.spaceChipUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Status',
         children: [
           _widgetbook.WidgetbookComponent(

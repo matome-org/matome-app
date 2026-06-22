@@ -18,7 +18,11 @@ import 'package:matome_flutter/ui/avatar.dart';
 import 'package:matome_flutter/ui/empty_state.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
+import 'package:matome_flutter/ui/matome_chip.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
+import 'package:matome_flutter/ui/people_cluster.dart';
+import 'package:matome_flutter/ui/role_chip.dart';
+import 'package:matome_flutter/ui/space_chip.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
 import 'package:widgetbook/widgetbook.dart';
 import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
@@ -304,6 +308,90 @@ Widget fileTypeChipUseCase(BuildContext context) {
         ),
         SizedBox(height: 12),
         FileTypeChip(fileName: 'archive.xyz', extension: 'xyz'),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Matome chip (filled · Unfiled)',
+  type: MatomeChip,
+  path: '[Catalog]/Relations',
+)
+Widget matomeChipUseCase(BuildContext context) {
+  // Filled pill carrying a matome title, plus the italic muted "Unfiled" state
+  // (no matome relation). The filled treatment is the deliberate opposite of
+  // SpaceChip's outlined pill.
+  return const _UseCaseSurface(
+    width: 320,
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        MatomeChip(matome: 'Client X — weekly sync'),
+        MatomeChip(),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Space chip (outlined · Inbox)',
+  type: SpaceChip,
+  path: '[Catalog]/Relations',
+)
+Widget spaceChipUseCase(BuildContext context) {
+  // Outlined pill carrying a space (folder) name, plus the italic muted "Inbox"
+  // state (no space relation) — INDEPENDENT of the matome relation above.
+  return const _UseCaseSurface(
+    width: 320,
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        SpaceChip(space: 'Marketing'),
+        SpaceChip(),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Role chip (organizer · speaker · attendee)',
+  type: RoleChip,
+  path: '[Catalog]/Relations',
+)
+Widget roleChipUseCase(BuildContext context) {
+  // A contact's matome_contacts role, tinted by role.
+  return const _UseCaseSurface(
+    width: 320,
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        RoleChip(role: MatomeContactRole.organizer),
+        RoleChip(role: MatomeContactRole.speaker),
+        RoleChip(role: MatomeContactRole.attendee),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'People cluster (overlap · +N overflow)',
+  type: PeopleCluster,
+  path: '[Catalog]/Relations',
+)
+Widget peopleClusterUseCase(BuildContext context) {
+  // Overlapping initials with a "+N" overflow chip + a names tooltip. An empty
+  // list renders nothing (callers add their own placeholder).
+  return const _UseCaseSurface(
+    width: 320,
+    child: Row(
+      children: [
+        PeopleCluster(names: ['Ana', 'Ken']),
+        SizedBox(width: 16),
+        PeopleCluster(names: ['Leo', 'Ana', 'Ken', 'Mika', 'Yui']),
       ],
     ),
   );
