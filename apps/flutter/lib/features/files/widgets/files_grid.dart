@@ -26,6 +26,7 @@ import '../../../i18n/strings.g.dart';
 import '../../../ui/matome_chip.dart';
 import '../../../ui/people_cluster.dart';
 import '../../../ui/space_chip.dart';
+import '../../../ui/space_sync_chip.dart';
 import 'files_view_shared.dart';
 
 /// Target tile width; the column count self-adjusts to fit (2 on phones, more on
@@ -339,7 +340,7 @@ class _FileTileState extends State<_FileTile> {
                       children: [
                         Flexible(child: MatomeChip(matome: f.matome)),
                         SizedBox(width: spacing.xs),
-                        _SyncDot(rollup: f.rollup),
+                        _SyncDot(rollup: f.rollup, localOnly: f.localOnly),
                       ],
                     ),
                     SizedBox(height: spacing.xxs),
@@ -398,12 +399,19 @@ class _TileCheckbox extends StatelessWidget {
 /// counterpart to [MatomeSyncChip], using the SAME rollup→glyph/colour mapping
 /// so a tile's sync state can never read differently from the table's pill.
 class _SyncDot extends StatelessWidget {
-  const _SyncDot({required this.rollup});
+  const _SyncDot({required this.rollup, this.localOnly = false});
   final MatomeSyncRollup rollup;
+
+  /// Local-first spaces (#102): a local-only file never syncs — show the `local`
+  /// state instead of the cloud rollup.
+  final bool localOnly;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    if (localOnly) {
+      return const SpaceSyncChip(state: SpaceSyncState.local, compact: true);
+    }
     final (IconData icon, Color color) = switch (rollup) {
       MatomeSyncRollup.cloud => (Icons.cloud_done_outlined, colors.badgePersonal),
       MatomeSyncRollup.partial => (

@@ -28,6 +28,7 @@ import '../../../ui/app_card.dart' show MatomeSyncChip;
 import '../../../ui/matome_chip.dart';
 import '../../../ui/people_cluster.dart';
 import '../../../ui/space_chip.dart';
+import '../../../ui/space_sync_chip.dart';
 import 'files_view_shared.dart';
 
 // ─── Column geometry (shared by header + cells so columns stay aligned) ───────
@@ -605,7 +606,9 @@ class _DataRowState extends State<_DataRow> {
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
-                      child: MatomeSyncChip(rollup: f.rollup),
+                      child: f.localOnly
+                          ? const SpaceSyncChip(state: SpaceSyncState.local)
+                          : MatomeSyncChip(rollup: f.rollup),
                     ),
                   ),
                 ),
@@ -911,7 +914,10 @@ class _CompactRowState extends State<_CompactRow> {
                         if (f.contacts.isNotEmpty)
                           PeopleCluster(
                               names: f.contacts, size: context.spacing.lg),
-                        MatomeSyncChip(rollup: f.rollup),
+                        if (f.localOnly)
+                          const SpaceSyncChip(state: SpaceSyncState.local)
+                        else
+                          MatomeSyncChip(rollup: f.rollup),
                       ],
                     ),
                   ],

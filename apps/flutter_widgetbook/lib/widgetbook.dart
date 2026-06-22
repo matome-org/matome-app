@@ -1204,9 +1204,10 @@ const _filesSample = <FileRow>[
     ext: 'jpg',
     when: '5h',
     whenSort: 80,
-    matome: null, // Unfiled + Inbox
+    matome: null, // loose → inbox, local-only
     space: null,
     rollup: MatomeSyncRollup.onDevice,
+    localOnly: true,
   ),
   FileRow(
     id: 'f5',
@@ -1227,9 +1228,10 @@ const _filesSample = <FileRow>[
     ext: 'xlsx',
     when: '3d',
     whenSort: 20,
-    matome: null, // Unfiled + Inbox
+    matome: null, // loose → inbox, local-only
     space: null,
     rollup: MatomeSyncRollup.cloud,
+    localOnly: true,
   ),
 ];
 
@@ -1907,84 +1909,16 @@ class _FilesScene extends StatelessWidget {
             onChanged: (_) {},
           ),
         ),
+        // The REAL FilesGrid (same widget the Files screen ships), composed
+        // under the new scope filter — loose rows render the `local` sync state.
         Padding(
           padding: EdgeInsets.fromLTRB(spacing.md, 0, spacing.md, spacing.lg),
-          child: Column(
-            children: const [
-              _FileRowMock(
-                icon: Icons.picture_as_pdf_outlined,
-                name: 'Q3 roadmap.pdf',
-                scope: 'Loose',
-                state: SpaceSyncState.local,
-              ),
-              _FileRowMock(
-                icon: Icons.mic_none_rounded,
-                name: 'Standup audio',
-                scope: 'Loose',
-                state: SpaceSyncState.local,
-              ),
-              _FileRowMock(
-                icon: Icons.image_outlined,
-                name: 'launch.png',
-                scope: 'Marketing',
-                state: SpaceSyncState.cloud,
-              ),
-              _FileRowMock(
-                icon: Icons.description_outlined,
-                name: 'spec.md',
-                scope: 'Ideas',
-                state: SpaceSyncState.promoting,
-              ),
-            ],
+          child: SizedBox(
+            height: 460,
+            child: FilesGrid(files: _filesSample),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _FileRowMock extends StatelessWidget {
-  const _FileRowMock({
-    required this.icon,
-    required this.name,
-    required this.scope,
-    required this.state,
-  });
-
-  final IconData icon;
-  final String name;
-  final String scope;
-  final SpaceSyncState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: spacing.sm),
-      child: Row(
-        children: [
-          Icon(icon, size: spacing.md, color: colors.textSecondary),
-          SizedBox(width: spacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: typography.bodySmall
-                        .copyWith(color: colors.textPrimary)),
-                Text(scope,
-                    style: typography.label.copyWith(color: colors.textMuted)),
-              ],
-            ),
-          ),
-          SizedBox(width: spacing.sm),
-          SpaceSyncChip(state: state, compact: true),
-        ],
-      ),
     );
   }
 }

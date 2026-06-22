@@ -61,6 +61,7 @@ class FileRow {
     this.space,
     this.contacts = const [],
     this.duration,
+    this.localOnly = false,
   });
 
   /// The recording id (PK) — stable identity for selection / per-row actions.
@@ -108,6 +109,12 @@ class FileRow {
 
   /// Display duration (`m:ss`) — audio only; null for image/document.
   final String? duration;
+
+  /// Local-first spaces (plan #102): the file's effective space is local (or it
+  /// is loose/inbox) → it never syncs by design. When true the sync indicator
+  /// shows the `local` state instead of the [rollup]. Default false (legacy /
+  /// cloud-space rows keep their rollup).
+  final bool localOnly;
 
   /// no matome relation (DR-003 "Unfiled").
   bool get unfiled => matome == null;
