@@ -39,19 +39,19 @@ const double _wideBreakpoint = 1000;
 final inboxSelectionProvider = StateProvider<String?>((ref) => null);
 
 /// How the inbox/home list is presented — the **card** "letter" list (ADR-0005)
-/// or the columnar [MatomeTable] (DR-001). A user-selectable view: the toggle
-/// lives in the header, and a matching radio control lives in Settings (#1468).
-/// Both surfaces drive the SAME persisted preference via [inboxViewProvider], so
-/// the choice survives a restart and stays in sync across the two controls.
+/// or the columnar [MatomeTable] (DR-001). A user-selectable view controlled
+/// from Settings → "Default views" (#1468); the on-screen header toggle was
+/// removed (#1474) so Settings is the single control. The screen still renders
+/// whichever view [inboxViewProvider] holds, and the choice survives a restart.
 enum InboxView { cards, table }
 
 const _inboxViewKey = 'matome.inbox_view';
 
 /// Persisted controller for [InboxView], hydrated from / written to the secure
 /// [SettingsStore] (#1468). Mirrors [ThemeController] / [LocaleController]:
-/// default is [InboxView.cards] until the stored value loads. The in-view header
-/// toggle and the Settings radio both read this provider and call [setView],
-/// keeping them a single source of truth.
+/// default is [InboxView.cards] until the stored value loads. The Settings radio
+/// reads this provider and calls [setView] (#1474 removed the in-view header
+/// toggle), so Settings is the single control.
 class InboxViewController extends StateNotifier<InboxView> {
   InboxViewController(this._store) : super(InboxView.cards) {
     _hydrate();
@@ -258,9 +258,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onSettings: () => GoRouter.of(context).go('/inbox/settings'),
           // On wide there is no FAB; surface upload in the header instead.
           onUpload: isWide ? _pickAndUpload : null,
-          view: view,
-          onToggleView: (v) =>
-              ref.read(inboxViewProvider.notifier).setView(v),
         ),
         Expanded(
           child: state.when(
@@ -366,8 +363,6 @@ class _Header extends StatelessWidget {
     required this.onSearchChanged,
     required this.onSearchCleared,
     required this.onSettings,
-    required this.view,
-    required this.onToggleView,
     this.onUpload,
   });
 
@@ -377,10 +372,6 @@ class _Header extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onSearchCleared;
   final VoidCallback onSettings;
-
-  /// Current list presentation (cards ↔ table) and the toggle to switch it.
-  final InboxView view;
-  final ValueChanged<InboxView> onToggleView;
 
   /// Desktop-only upload entry (the FAB is dropped in the two-pane layout).
   final VoidCallback? onUpload;
@@ -435,8 +426,6 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              _ViewToggle(view: view, onToggle: onToggleView),
-              SizedBox(width: spacing.xs),
               if (onUpload != null) ...[
                 _IconButton(
                   icon: Icons.upload_file,
@@ -510,68 +499,6 @@ class _IconButton extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// A compact two-segment toggle (cards ↔ table) for the inbox list view. The
-/// chosen view is a local session preference; #1468 persists it.
-class _ViewToggle extends StatelessWidget {
-  const _ViewToggle({required this.view, required this.onToggle});
-
-  final InboxView view;
-  final ValueChanged<InboxView> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final radius = context.radius;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    Widget segment(InboxView value, IconData icon, String label) {
-      final active = view == value;
-      return Semantics(
-        button: true,
-        selected: active,
-        label: label,
-        child: Tooltip(
-          message: label,
-          child: InkWell(
-            key: ValueKey('inbox-view-${value.name}'),
-            borderRadius: BorderRadius.circular(radius.sm),
-            onTap: () => onToggle(value),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: spacing.sm,
-                vertical: spacing.xs,
-              ),
-              child: Icon(
-                icon,
-                size: typography.body.fontSize,
-                color: active ? colors.textPrimary : colors.textMuted,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(radius.md),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          segment(InboxView.cards, Icons.view_agenda_outlined,
-              t.matome.table.viewCards),
-          segment(InboxView.table, Icons.table_rows_outlined,
-              t.matome.table.viewTable),
-        ],
       ),
     );
   }

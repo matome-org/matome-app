@@ -6,9 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/files/files_screen.dart';
+import 'package:matome_flutter/features/files/widgets/files_grid.dart';
+import 'package:matome_flutter/features/files/widgets/files_table.dart';
 import 'package:matome_flutter/features/files/widgets/files_view_shared.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
@@ -22,11 +25,17 @@ import 'package:matome_flutter/i18n/strings.g.dart';
 const String _owner = '1';
 const String _otherOwner = '2';
 
-Widget _app(AppDatabase db, {String? owner = _owner}) {
+/// The on-screen grid↔table toggle was removed (#1474) — Settings is the single
+/// control. Tests that need a specific layout seed the persisted preference via
+/// the [SettingsStore] so the screen comes up already showing that view. The
+/// move/selection tests default to the table (deterministic checkbox-per-row).
+Widget _app(AppDatabase db, {String? owner = _owner, String view = 'table'}) {
   return ProviderScope(
     overrides: [
       appDatabaseProvider.overrideWithValue(db),
       currentOwnerIdProvider.overrideWithValue(owner),
+      settingsStoreProvider
+          .overrideWithValue(InMemorySettingsStore({'matome.files_view': view})),
     ],
     child: TranslationProvider(
       child: MaterialApp(
@@ -105,10 +114,6 @@ void main() {
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
 
-    // Switch to the table view (deterministic checkbox-per-row selection).
-    await tester.tap(find.byKey(const ValueKey('files-view-table')));
-    await tester.pumpAndSettle();
-
     await _selectRow(tester, 'Alpha');
     await _selectRow(tester, 'Beta');
 
@@ -149,8 +154,6 @@ void main() {
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('files-view-table')));
-    await tester.pumpAndSettle();
 
     // Open the Alpha row overflow menu, then Move to matome.
     final alphaRow = find
@@ -176,8 +179,6 @@ void main() {
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('files-view-table')));
-    await tester.pumpAndSettle();
 
     await _selectRow(tester, 'Alpha');
     await tester.tap(find.text(t.files.moveToMatome).first);
@@ -201,8 +202,6 @@ void main() {
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('files-view-table')));
-    await tester.pumpAndSettle();
 
     await _selectRow(tester, 'Alpha');
     await tester.tap(find.text(t.files.moveToMatome).first);
@@ -221,8 +220,6 @@ void main() {
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('files-view-table')));
-    await tester.pumpAndSettle();
 
     await _selectRow(tester, 'Alpha');
     await tester.tap(find.text(t.files.download).first);
@@ -238,5 +235,38 @@ void main() {
       (tester) async {
     // Belt-and-suspenders: the download affordance is still wired (not removed).
     expect(FileAction.values, contains(FileAction.download));
+  });
+
+  // The on-screen grid↔table toggle was removed (#1474): Settings is the single
+  // control. The AppBar no longer carries the grid/table segments.
+  testWidgets('no on-screen files view toggle in the AppBar', (tester) async {
+    await db.matomesDao.create(_matome(id: 'm1', title: 'M1'));
+    await db.recordingsDao
+        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm1'));
+
+    await tester.pumpWidget(_app(db));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('files-view-grid')), findsNothing);
+    expect(find.byKey(const ValueKey('files-view-table')), findsNothing);
+  });
+
+  // The screen still renders whatever view the provider holds: a stored "table"
+  // preference shows the table, a stored "grid" preference shows the grid.
+  testWidgets('renders the view the provider holds (no toggle to change it)',
+      (tester) async {
+    await db.matomesDao.create(_matome(id: 'm1', title: 'M1'));
+    await db.recordingsDao
+        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm1'));
+
+    await tester.pumpWidget(_app(db, view: 'table'));
+    await tester.pumpAndSettle();
+    expect(find.byType(FilesTable), findsOneWidget);
+    expect(find.byType(FilesGrid), findsNothing);
+
+    await tester.pumpWidget(_app(db, view: 'grid'));
+    await tester.pumpAndSettle();
+    expect(find.byType(FilesGrid), findsOneWidget);
+    expect(find.byType(FilesTable), findsNothing);
   });
 }

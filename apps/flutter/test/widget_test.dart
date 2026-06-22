@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matome_flutter/core/db/matome_card.dart';
+import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/matome_inbox_controller.dart';
+import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recordings/upload_retry_service.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
@@ -33,9 +36,10 @@ MatomeItem _matome({
   );
 }
 
-Widget _pumpHome(AsyncValue<List<MatomeItem>> state) {
+Widget _pumpHome(AsyncValue<List<MatomeItem>> state, {SettingsStore? store}) {
   return ProviderScope(
     overrides: [
+      if (store != null) settingsStoreProvider.overrideWithValue(store),
       matomeInboxControllerProvider.overrideWith(
         (ref) => FakeMatomeInboxController(ref, state),
       ),
@@ -137,5 +141,58 @@ void main() {
     await tester.pump();
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
+  // The on-screen inbox view toggle was removed (#1474): Settings is now the
+  // single control. The header no longer carries the cards↔table segments.
+  testWidgets('no on-screen inbox view toggle in the header', (tester) async {
+    await tester.pumpWidget(
+      _pumpHome(
+        AsyncValue.data([_matome(id: '1', title: 'Standup notes')]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('inbox-view-cards')), findsNothing);
+    expect(find.byKey(const ValueKey('inbox-view-table')), findsNothing);
+  });
+
+  // The screen still renders whatever view the provider holds, just without an
+  // on-screen toggle to change it: a stored "table" preference shows the table.
+  testWidgets('renders the table when the provider holds InboxView.table', (
+    tester,
+  ) async {
+    // A wide surface so the columnar MatomeTable lays out without overflowing.
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      _pumpHome(
+        AsyncValue.data([_matome(id: '1', title: 'Standup notes')]),
+        store: InMemorySettingsStore({'matome.inbox_view': 'table'}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MatomeTable), findsOneWidget);
+    // No on-screen toggle even in table view.
+    expect(find.byKey(const ValueKey('inbox-view-table')), findsNothing);
+  });
+
+  // The default (cards) view keeps rendering the grouped card list.
+  testWidgets('renders the card list when the provider holds InboxView.cards', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _pumpHome(
+        AsyncValue.data([_matome(id: '1', title: 'Standup notes')]),
+        store: InMemorySettingsStore({'matome.inbox_view': 'cards'}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MatomeTable), findsNothing);
+    expect(find.text('Standup notes'), findsOneWidget);
   });
 }

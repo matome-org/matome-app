@@ -5,8 +5,9 @@
 // This is the wiring layer the presentational widgets deliberately lack: it
 // reads the owner-scoped provider, maps each widget callback to real behaviour
 // (open → go_router by media type; delete → DAO hard-delete + re-read; move →
-// flagged stub; download → flagged stub), and owns the grid↔table view toggle as
-// LOCAL view state (the PERSISTED preference is #1468 — not built here).
+// flagged stub; download → flagged stub), and renders the grid↔table layout the
+// persisted [filesViewProvider] holds (the on-screen toggle was removed in
+// #1474; Settings → "Default views" is the single control, #1468).
 //
 // NOTE (#1467): `/files` is reachable by deep-link / temporary entry; it is not
 // yet a shipped nav destination. The nav cutover wires the destination later.
@@ -27,10 +28,11 @@ import 'widgets/files_grid.dart';
 import 'widgets/files_table.dart';
 import 'widgets/files_view_shared.dart';
 
-/// Which Files layout is showing (grid ↔ table). A user-selectable view: the
-/// AppBar toggle and the Settings radio (#1468) both drive the SAME persisted
-/// preference via [filesViewProvider], so the choice survives a restart and the
-/// two controls stay in sync.
+/// Which Files layout is showing (grid ↔ table). A user-selectable view
+/// controlled from Settings → "Default views" (#1468); the on-screen AppBar
+/// toggle was removed (#1474) so Settings is the single control. The screen
+/// still renders whichever view [filesViewProvider] holds, and the choice
+/// survives a restart.
 enum FilesView { grid, table }
 
 const _filesViewKey = 'matome.files_view';
@@ -191,15 +193,6 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
           t.files.title,
           style: context.typography.title.copyWith(color: colors.textPrimary),
         ),
-        actions: [
-          Padding(
-            padding: EdgeInsets.only(right: context.spacing.md),
-            child: _FilesViewToggle(
-              view: view,
-              onToggle: (v) => ref.read(filesViewProvider.notifier).setView(v),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
         child: async.when(
@@ -226,66 +219,6 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Grid↔table view toggle, mirroring the inbox cards↔table toggle.
-class _FilesViewToggle extends StatelessWidget {
-  const _FilesViewToggle({required this.view, required this.onToggle});
-
-  final FilesView view;
-  final ValueChanged<FilesView> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final radius = context.radius;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    Widget segment(FilesView value, IconData icon, String label) {
-      final active = view == value;
-      return Semantics(
-        button: true,
-        selected: active,
-        label: label,
-        child: Tooltip(
-          message: label,
-          child: InkWell(
-            key: ValueKey('files-view-${value.name}'),
-            borderRadius: BorderRadius.circular(radius.sm),
-            onTap: () => onToggle(value),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: spacing.sm,
-                vertical: spacing.xs,
-              ),
-              child: Icon(
-                icon,
-                size: typography.body.fontSize,
-                color: active ? colors.textPrimary : colors.textMuted,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(radius.md),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          segment(FilesView.grid, Icons.grid_view_outlined, t.files.viewGrid),
-          segment(
-              FilesView.table, Icons.table_rows_outlined, t.files.viewTable),
-        ],
       ),
     );
   }
