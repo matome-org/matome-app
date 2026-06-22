@@ -13,6 +13,7 @@ import 'package:matome_flutter/features/files/widgets/files_grid.dart';
 import 'package:matome_flutter/features/files/widgets/files_table.dart';
 import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
+import 'package:matome_flutter/features/shell/widgets/matome_nav.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_bottom_sheet.dart';
 import 'package:matome_flutter/ui/app_button.dart';
@@ -1500,4 +1501,307 @@ RecordingItem _recordingCard(_CardSampleState state) {
       coreId: null,
     ),
   };
+}
+
+// ─── Navigation (dock + sidebar, #1466) ───────────────────────────────────────
+//
+// CONVERGENCE (DR-000 / DR-002): these stories render the REAL, graduated
+// `MatomeBottomDock` / `MatomeAddFab` / `MatomeSidebar` shipped in
+// `package:matome_flutter/features/shell/widgets/matome_nav.dart`. They are
+// presentational — driven by a NavDestinationSpec list + selected/expanded
+// props and callbacks. The proposal mock is deleted; there is no second
+// implementation to drift from. Labels read the per-tab `t.*.title` + `t.nav.*`,
+// so the Localization addon swaps them between en / ja. Satori is excluded by
+// the caller (this story), matching the live shell.
+
+/// The visible destinations the shell drives (inbox · calendar · files ·
+/// contacts · spaces). Built per-locale so the labels follow the addon.
+List<NavDestinationSpec> _navDestinations(BuildContext context) {
+  final t = Translations.of(context);
+  return [
+    NavDestinationSpec(
+      id: 'inbox',
+      icon: Icons.inbox_outlined,
+      selectedIcon: Icons.inbox,
+      label: t.inbox.title,
+    ),
+    NavDestinationSpec(
+      id: 'calendar',
+      icon: Icons.calendar_today_outlined,
+      selectedIcon: Icons.calendar_today,
+      label: t.calendar.title,
+    ),
+    NavDestinationSpec(
+      id: 'files',
+      icon: Icons.description_outlined,
+      selectedIcon: Icons.description,
+      label: t.files.title,
+    ),
+    NavDestinationSpec(
+      id: 'contacts',
+      icon: Icons.contacts_outlined,
+      selectedIcon: Icons.contacts,
+      label: t.contacts.title,
+    ),
+    NavDestinationSpec(
+      id: 'spaces',
+      icon: Icons.folder_outlined,
+      selectedIcon: Icons.folder,
+      label: t.spaces.title,
+    ),
+  ];
+}
+
+@widgetbook.UseCase(
+  name: 'Mobile dock — in context',
+  type: MatomeBottomDock,
+  path: '[Catalog]/Navigation',
+)
+Widget mobileDockInContextUseCase(BuildContext context) {
+  return const _PhoneFrame(child: _MobileNavDemo());
+}
+
+@widgetbook.UseCase(
+  name: 'Mobile dock — bare',
+  type: MatomeBottomDock,
+  path: '[Catalog]/Navigation',
+)
+Widget mobileDockBareUseCase(BuildContext context) {
+  return const _UseCaseSurface(width: 400, child: _BareDock());
+}
+
+@widgetbook.UseCase(
+  name: 'Desktop sidebar — expanded',
+  type: MatomeSidebar,
+  path: '[Catalog]/Navigation',
+)
+Widget desktopSidebarExpandedUseCase(BuildContext context) {
+  return const _WindowFrame(expanded: true);
+}
+
+@widgetbook.UseCase(
+  name: 'Desktop sidebar — collapsed (rail)',
+  type: MatomeSidebar,
+  path: '[Catalog]/Navigation',
+)
+Widget desktopSidebarCollapsedUseCase(BuildContext context) {
+  return const _WindowFrame(expanded: false);
+}
+
+/// Interactive mobile preview: faux content + the real dock + the real FAB.
+class _MobileNavDemo extends StatefulWidget {
+  const _MobileNavDemo();
+
+  @override
+  State<_MobileNavDemo> createState() => _MobileNavDemoState();
+}
+
+class _MobileNavDemoState extends State<_MobileNavDemo> {
+  String _selected = 'inbox';
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final dests = _navDestinations(context);
+    final title = dests.firstWhere((d) => d.id == _selected).label;
+
+    return Stack(
+      children: [
+        Positioned.fill(child: _NavFauxContent(title: title)),
+        Positioned(
+          right: spacing.lg,
+          bottom: 84 + spacing.sm,
+          child: const MatomeAddFab(),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: spacing.md,
+          child: SafeArea(
+            top: false,
+            child: MatomeBottomDock(
+              destinations: dests,
+              selectedId: _selected,
+              onSelect: (id) => setState(() => _selected = id),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 96,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    colors.background.withValues(alpha: 0),
+                    colors.background.withValues(alpha: 0.9),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The dock on its own surface (no phone frame) for tweaking spacing / states.
+class _BareDock extends StatefulWidget {
+  const _BareDock();
+
+  @override
+  State<_BareDock> createState() => _BareDockState();
+}
+
+class _BareDockState extends State<_BareDock> {
+  String _selected = 'inbox';
+
+  @override
+  Widget build(BuildContext context) {
+    return MatomeBottomDock(
+      destinations: _navDestinations(context),
+      selectedId: _selected,
+      onSelect: (id) => setState(() => _selected = id),
+    );
+  }
+}
+
+/// Desktop preview: the real sidebar beside a faux content pane, with a working
+/// collapse toggle and destination selection.
+class _WindowFrame extends StatefulWidget {
+  const _WindowFrame({required this.expanded});
+
+  final bool expanded;
+
+  @override
+  State<_WindowFrame> createState() => _WindowFrameState();
+}
+
+class _WindowFrameState extends State<_WindowFrame> {
+  late bool _expanded = widget.expanded;
+  String _selected = 'inbox';
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    final dests = _navDestinations(context);
+    final title = dests.firstWhere((d) => d.id == _selected).label;
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 960),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius.lg),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(radius.lg),
+                border: Border.all(color: colors.border),
+              ),
+              child: SizedBox(
+                height: 560,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MatomeSidebar(
+                      destinations: dests,
+                      selectedId: _selected,
+                      expanded: _expanded,
+                      onSelect: (id) => setState(() => _selected = id),
+                      onToggle: () => setState(() => _expanded = !_expanded),
+                      onSettings: () {},
+                      accountName: 'Mika Tanaka',
+                    ),
+                    Expanded(child: _NavFauxContent(title: title)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Neutral faux screen body so the nav can be validated in context.
+class _NavFauxContent extends StatelessWidget {
+  const _NavFauxContent({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return Container(
+      color: colors.background,
+      padding: EdgeInsets.all(spacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(height: spacing.sm),
+          Text(title, style: typography.title.copyWith(color: colors.textPrimary)),
+          SizedBox(height: spacing.lg),
+          for (var i = 0; i < 4; i++)
+            Padding(
+              padding: EdgeInsets.only(bottom: spacing.sm),
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  color: colors.surface,
+                  borderRadius: BorderRadius.circular(context.radius.md),
+                  border: Border.all(color: colors.border),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A phone-ish frame for the mobile dock preview.
+class _PhoneFrame extends StatelessWidget {
+  const _PhoneFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(36),
+          child: Container(
+            width: 360,
+            height: 720,
+            decoration: BoxDecoration(
+              color: colors.background,
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(color: colors.border, width: 1.5),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -305,6 +305,40 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'Navigation',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeBottomDock',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile dock — bare',
+                builder: _matome_widgetbook_widgetbook.mobileDockBareUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile dock — in context',
+                builder:
+                    _matome_widgetbook_widgetbook.mobileDockInContextUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeSidebar',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Desktop sidebar — collapsed (rail)',
+                builder: _matome_widgetbook_widgetbook
+                    .desktopSidebarCollapsedUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Desktop sidebar — expanded',
+                builder:
+                    _matome_widgetbook_widgetbook.desktopSidebarExpandedUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Overlays',
         children: [
           _widgetbook.WidgetbookComponent(
