@@ -10,8 +10,6 @@
 // **************************************************************************
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'package:matome_widgetbook/proposals/matome_contact_proposal.dart'
-    as _matome_widgetbook_proposals_matome_contact_proposal;
 import 'package:matome_widgetbook/proposals/matome_files_proposal.dart'
     as _matome_widgetbook_proposals_matome_files_proposal;
 import 'package:matome_widgetbook/proposals/matome_letter_proposal.dart'
@@ -369,31 +367,6 @@ final directories = <_widgetbook.WidgetbookNode>[
   _widgetbook.WidgetbookCategory(
     name: 'Proposals',
     children: [
-      _widgetbook.WidgetbookFolder(
-        name: 'Contact detail',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'ContactDetail',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Detail — desktop',
-                builder: _matome_widgetbook_proposals_matome_contact_proposal
-                    .detailDesktopUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Detail — mobile',
-                builder: _matome_widgetbook_proposals_matome_contact_proposal
-                    .detailMobileUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Detail — sparse (minimal info)',
-                builder: _matome_widgetbook_proposals_matome_contact_proposal
-                    .detailSparseUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
       _widgetbook.WidgetbookFolder(
         name: 'Files',
         children: [
