@@ -277,6 +277,24 @@ void main() {
       expect(await dao.getAllRecordings(), hasLength(1));
     });
 
+    test('recordingByCoreId tolerates duplicate coreId rows (returns newest)',
+        () async {
+      final dao = db.recordingsDao;
+      await dao.insertRecording(_recording(id: 'dup-old', createdAt: 10));
+      await dao.insertRecording(_recording(id: 'dup-new', createdAt: 20));
+      // Reproduce the legacy corruption: two local rows sharing one coreId.
+      await (db.update(db.recordings)..where((r) => r.id.equals('dup-old')))
+          .write(const RecordingsCompanion(coreId: Value(42)));
+      await (db.update(db.recordings)..where((r) => r.id.equals('dup-new')))
+          .write(const RecordingsCompanion(coreId: Value(42)));
+
+      // Must NOT throw 'Too many elements' (which aborted every inbox refresh);
+      // returns the most-recent match as the canonical row.
+      final row = await dao.recordingByCoreId(42);
+      expect(row, isNotNull);
+      expect(row!.id, 'dup-new');
+    });
+
     test('recordingsByDateRange is inclusive of both bounds, DESC', () async {
       final dao = db.recordingsDao;
       await dao.insertRecording(_recording(id: 'before', createdAt: 99));

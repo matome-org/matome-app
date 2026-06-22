@@ -219,9 +219,16 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// (rows minted with `rec_local_<uuid>` keep `coreId` NULL until upload
   /// succeeds, so those are intentionally not matched here).
   Future<RecordingRow?> recordingByCoreId(int coreId) {
-    return (select(
-      recordings,
-    )..where((r) => r.coreId.equals(coreId))).getSingleOrNull();
+    // Tolerate duplicate rows that share a coreId (legacy data corruption):
+    // return the most-recent match instead of throwing 'Too many elements',
+    // which previously aborted EVERY inbox refresh (InboxController.refresh).
+    // `limit(1)` guarantees getSingleOrNull never sees >1 row; the upsert then
+    // reconciles onto this canonical (newest) row.
+    return (select(recordings)
+          ..where((r) => r.coreId.equals(coreId))
+          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)])
+          ..limit(1))
+        .getSingleOrNull();
   }
 
   /// Rows still awaiting a confirmed Core upload — `processingStatus` is the
