@@ -24,6 +24,7 @@ import 'package:matome_flutter/ui/loading_indicator.dart';
 import 'package:matome_flutter/ui/matome_chip.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
 import 'package:matome_flutter/ui/people_cluster.dart';
+import 'package:matome_flutter/ui/relationship_picker.dart';
 import 'package:matome_flutter/ui/role_chip.dart';
 import 'package:matome_flutter/ui/space_chip.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
@@ -127,6 +128,18 @@ void main() {
                 GoldenTestScenario(
                   name: 'relation atoms',
                   child: _RelationAtomsSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'relationship picker (link · multi)',
+                  child: _RelationshipPickerSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'relationship picker (sources)',
+                  child: _RelationshipPickerSourcesSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'relationship picker (mixed · filter)',
+                  child: _RelationshipPickerMixedSample(),
                 ),
               ],
             ),
@@ -944,6 +957,179 @@ class _RelationAtomsSample extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// The standard [RelationshipPicker] in its LINK variant — searchable,
+/// multi-select, one already-linked candidate, a "Create new" action — framed
+/// like the overlay it ships as. Same widget the catalog renders.
+class _RelationshipPickerSample extends StatelessWidget {
+  const _RelationshipPickerSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    // A fixed height so the GoldenTestGroup Table never queries the intrinsic
+    // height of the picker's inner ListView (scrollables have none).
+    return SizedBox(
+      height: 470,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(radius.lg),
+          border: Border.all(color: colors.border),
+        ),
+        child: const RelationshipPicker(
+          maxListHeight: 200,
+        data: RelationshipPickerData(
+          title: 'Add people',
+          mode: RelationshipSelectMode.multi,
+          searchHint: 'Search contacts',
+          actions: [
+            RelationshipAction(
+              id: 'create',
+              label: 'Create new contact',
+              icon: Icons.person_add_alt_1_outlined,
+            ),
+          ],
+          candidates: [
+            RelationshipCandidate(
+              id: 'ana',
+              title: 'Ana Ribeiro',
+              subtitle: 'Organizer',
+              icon: Icons.person_outline,
+              linked: true,
+            ),
+            RelationshipCandidate(
+              id: 'ken',
+              title: 'Ken Watanabe',
+              subtitle: 'ken@studio.jp',
+              icon: Icons.person_outline,
+            ),
+            RelationshipCandidate(
+              id: 'mara',
+              title: 'Mara Lopes',
+              subtitle: 'Design',
+              icon: Icons.person_outline,
+            ),
+          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The [RelationshipPicker] in its CREATE/SOURCE variant — the "Add item"
+/// surface: no candidate list, just Record · Photo · File.
+class _RelationshipPickerSourcesSample extends StatelessWidget {
+  const _RelationshipPickerSourcesSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(radius.lg),
+        border: Border.all(color: colors.border),
+      ),
+      child: const RelationshipPicker(
+        data: RelationshipPickerData(
+          title: 'Add item',
+          actions: [
+            RelationshipAction(
+              id: 'record',
+              label: 'Record audio',
+              icon: Icons.mic_none_rounded,
+            ),
+            RelationshipAction(
+              id: 'photo',
+              label: 'Add photo',
+              icon: Icons.add_photo_alternate_outlined,
+            ),
+            RelationshipAction(
+              id: 'file',
+              label: 'Add file',
+              icon: Icons.upload_file_outlined,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The UNIFIED [RelationshipPicker] — cross-entity search (Contacts · Files ·
+/// Spaces) with the type-filter chip row. The host's own type is omitted.
+class _RelationshipPickerMixedSample extends StatelessWidget {
+  const _RelationshipPickerMixedSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    return SizedBox(
+      height: 520,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(radius.lg),
+          border: Border.all(color: colors.border),
+        ),
+        child: const RelationshipPicker(
+          maxListHeight: 220,
+          data: RelationshipPickerData(
+            title: 'Add to this matome',
+            mode: RelationshipSelectMode.multi,
+            searchHint: 'Search contacts, files, spaces',
+            types: [
+              RelationshipType(
+                id: 'contact',
+                label: 'Contacts',
+                icon: Icons.person_outline,
+              ),
+              RelationshipType(
+                id: 'file',
+                label: 'Files',
+                icon: Icons.insert_drive_file_outlined,
+              ),
+              RelationshipType(
+                id: 'space',
+                label: 'Spaces',
+                icon: Icons.folder_outlined,
+              ),
+            ],
+            candidates: [
+              RelationshipCandidate(
+                id: 'ana',
+                typeId: 'contact',
+                title: 'Ana Ribeiro',
+                subtitle: 'Contact · Organizer',
+                icon: Icons.person_outline,
+                linked: true,
+              ),
+              RelationshipCandidate(
+                id: 'f1',
+                typeId: 'file',
+                title: 'Q3 roadmap.pdf',
+                subtitle: 'File · PDF · 2.4 MB',
+                icon: Icons.picture_as_pdf_outlined,
+              ),
+              RelationshipCandidate(
+                id: 'marketing',
+                typeId: 'space',
+                title: 'Marketing',
+                subtitle: 'Space',
+                icon: Icons.folder_outlined,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

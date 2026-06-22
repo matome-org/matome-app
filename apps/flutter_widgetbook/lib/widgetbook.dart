@@ -35,6 +35,7 @@ import 'package:matome_flutter/ui/loading_indicator.dart';
 import 'package:matome_flutter/ui/matome_chip.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
 import 'package:matome_flutter/ui/people_cluster.dart';
+import 'package:matome_flutter/ui/relationship_picker.dart';
 import 'package:matome_flutter/ui/role_chip.dart';
 import 'package:matome_flutter/ui/space_chip.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
@@ -355,6 +356,392 @@ class _DetailPanelSurface extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(radius.lg),
+              border: Border.all(color: colors.border),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Relationship picker — the STANDARD "add a relationship" surface ──────────
+//
+// One generic, presentational component (from
+// `package:matome_flutter/ui/relationship_picker.dart`) backing every "pick
+// existing thing(s) and link them here" flow — People, Spaces, Matomes, Files —
+// plus the create/source variant ("Add item" → Record · Photo · File). The same
+// widget will back the Matome panel AND the future Files / Contacts pages, so
+// these use cases double as the design review surface before any wiring.
+
+@widgetbook.UseCase(
+  name: 'Add people (multi · search)',
+  type: RelationshipPicker,
+  path: '[Widgets]/Relationship picker',
+)
+Widget relationshipPickerPeopleUseCase(BuildContext context) {
+  return _RelationshipPickerSurface(
+    child: RelationshipPicker(
+      onClose: () {},
+      data: RelationshipPickerData(
+        title: 'Add people',
+        mode: RelationshipSelectMode.multi,
+        searchHint: 'Search contacts',
+        confirmLabel: 'Add',
+        emptyLabel: 'No matching contacts.\nUse “Create new contact” above.',
+        actions: const [
+          RelationshipAction(
+            id: 'create',
+            label: 'Create new contact',
+            icon: Icons.person_add_alt_1_outlined,
+          ),
+        ],
+        candidates: const [
+          RelationshipCandidate(
+            id: 'ana',
+            title: 'Ana Ribeiro',
+            subtitle: 'Organizer',
+            icon: Icons.person_outline,
+            linked: true,
+          ),
+          RelationshipCandidate(
+            id: 'ken',
+            title: 'Ken Watanabe',
+            subtitle: 'ken@studio.jp',
+            icon: Icons.person_outline,
+          ),
+          RelationshipCandidate(
+            id: 'mara',
+            title: 'Mara Lopes',
+            subtitle: 'Design',
+            icon: Icons.person_outline,
+          ),
+          RelationshipCandidate(
+            id: 'sergio',
+            title: 'Sérgio Pinto',
+            subtitle: 'sergio@acme.co',
+            icon: Icons.person_outline,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'File into a space (single)',
+  type: RelationshipPicker,
+  path: '[Widgets]/Relationship picker',
+)
+Widget relationshipPickerSpaceUseCase(BuildContext context) {
+  return _RelationshipPickerSurface(
+    child: RelationshipPicker(
+      onClose: () {},
+      data: const RelationshipPickerData(
+        title: 'File into a space',
+        actions: [
+          RelationshipAction(
+            id: 'create',
+            label: 'New space',
+            icon: Icons.create_new_folder_outlined,
+          ),
+        ],
+        candidates: [
+          RelationshipCandidate(
+            id: 'personal',
+            title: 'Personal',
+            subtitle: 'Default',
+            icon: Icons.person_outline,
+          ),
+          RelationshipCandidate(
+            id: 'marketing',
+            title: 'Marketing',
+            icon: Icons.folder_outlined,
+            linked: true,
+          ),
+          RelationshipCandidate(
+            id: 'clients',
+            title: 'Clients',
+            icon: Icons.folder_outlined,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Add item (sources)',
+  type: RelationshipPicker,
+  path: '[Widgets]/Relationship picker',
+)
+Widget relationshipPickerSourcesUseCase(BuildContext context) {
+  // The create/source variant — what "Add item" will open: no candidate list,
+  // just the content sources. The owner-requested Record · Photo · File set.
+  return _RelationshipPickerSurface(
+    child: RelationshipPicker(
+      onClose: () {},
+      data: const RelationshipPickerData(
+        title: 'Add item',
+        actions: [
+          RelationshipAction(
+            id: 'record',
+            label: 'Record audio',
+            icon: Icons.mic_none_rounded,
+          ),
+          RelationshipAction(
+            id: 'photo',
+            label: 'Add photo',
+            icon: Icons.add_photo_alternate_outlined,
+          ),
+          RelationshipAction(
+            id: 'file',
+            label: 'Add file',
+            icon: Icons.upload_file_outlined,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Add to a matome (Files page · reuse)',
+  type: RelationshipPicker,
+  path: '[Widgets]/Relationship picker',
+)
+Widget relationshipPickerMatomeUseCase(BuildContext context) {
+  // The SAME widget on the future Files page: link a file to matome(s). Proves
+  // the component is entity-agnostic — only the data changes.
+  return _RelationshipPickerSurface(
+    child: RelationshipPicker(
+      onClose: () {},
+      data: const RelationshipPickerData(
+        title: 'Add to a matome',
+        mode: RelationshipSelectMode.multi,
+        searchHint: 'Search matomes',
+        actions: [
+          RelationshipAction(
+            id: 'create',
+            label: 'New matome',
+            icon: Icons.add_circle_outline,
+          ),
+        ],
+        candidates: [
+          RelationshipCandidate(
+            id: 'm1',
+            title: 'Client X — weekly sync',
+            subtitle: 'Marketing · 6 items',
+            icon: Icons.workspaces_outline,
+            linked: true,
+          ),
+          RelationshipCandidate(
+            id: 'm2',
+            title: 'Q3 planning',
+            subtitle: 'Clients · 3 items',
+            icon: Icons.workspaces_outline,
+          ),
+          RelationshipCandidate(
+            id: 'm3',
+            title: 'Brand refresh',
+            subtitle: 'Inbox · 1 item',
+            icon: Icons.workspaces_outline,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Add files (multi · search)',
+  type: RelationshipPicker,
+  path: '[Widgets]/Relationship picker',
+)
+Widget relationshipPickerFilesUseCase(BuildContext context) {
+  // Link existing files to a matome / contact — the file analogue of "Add
+  // people". Per-type leading glyph; subtitle carries kind · size. Same widget,
+  // file data.
+  return _RelationshipPickerSurface(
+    child: RelationshipPicker(
+      onClose: () {},
+      data: const RelationshipPickerData(
+        title: 'Add files',
+        mode: RelationshipSelectMode.multi,
+        searchHint: 'Search files',
+        actions: [
+          RelationshipAction(
+            id: 'upload',
+            label: 'Upload file',
+            icon: Icons.upload_file_outlined,
+          ),
+        ],
+        candidates: [
+          RelationshipCandidate(
+            id: 'f1',
+            title: 'Q3 roadmap.pdf',
+            subtitle: 'PDF · 2.4 MB',
+            icon: Icons.picture_as_pdf_outlined,
+            linked: true,
+          ),
+          RelationshipCandidate(
+            id: 'f2',
+            title: 'whiteboard.png',
+            subtitle: 'Image · 1.1 MB',
+            icon: Icons.image_outlined,
+          ),
+          RelationshipCandidate(
+            id: 'f3',
+            title: 'standup audio',
+            subtitle: 'Audio · 12:04',
+            icon: Icons.mic_none_rounded,
+          ),
+          RelationshipCandidate(
+            id: 'f4',
+            title: 'meeting-notes.md',
+            subtitle: 'Document · 4 KB',
+            icon: Icons.description_outlined,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Add anything (mixed · type filter)',
+  type: RelationshipPicker,
+  path: '[Widgets]/Relationship picker',
+)
+Widget relationshipPickerMixedUseCase(BuildContext context) {
+  // The UNIFIED picker, opened from a matome: search across Contacts + Files +
+  // Spaces in one list, with type-filter chips. The host's OWN type (Matomes)
+  // is omitted by the caller, so you never re-link the matome to itself.
+  return _RelationshipPickerSurface(
+    child: RelationshipPicker(
+      onClose: () {},
+      data: const RelationshipPickerData(
+        title: 'Add to this matome',
+        mode: RelationshipSelectMode.multi,
+        searchHint: 'Search contacts, files, spaces',
+        types: [
+          RelationshipType(
+            id: 'contact',
+            label: 'Contacts',
+            icon: Icons.person_outline,
+          ),
+          RelationshipType(
+            id: 'file',
+            label: 'Files',
+            icon: Icons.insert_drive_file_outlined,
+          ),
+          RelationshipType(
+            id: 'space',
+            label: 'Spaces',
+            icon: Icons.folder_outlined,
+          ),
+        ],
+        candidates: [
+          RelationshipCandidate(
+            id: 'ana',
+            typeId: 'contact',
+            title: 'Ana Ribeiro',
+            subtitle: 'Contact · Organizer',
+            icon: Icons.person_outline,
+            linked: true,
+          ),
+          RelationshipCandidate(
+            id: 'ken',
+            typeId: 'contact',
+            title: 'Ken Watanabe',
+            subtitle: 'Contact · ken@studio.jp',
+            icon: Icons.person_outline,
+          ),
+          RelationshipCandidate(
+            id: 'f1',
+            typeId: 'file',
+            title: 'Q3 roadmap.pdf',
+            subtitle: 'File · PDF · 2.4 MB',
+            icon: Icons.picture_as_pdf_outlined,
+          ),
+          RelationshipCandidate(
+            id: 'f2',
+            typeId: 'file',
+            title: 'whiteboard.png',
+            subtitle: 'File · Image · 1.1 MB',
+            icon: Icons.image_outlined,
+          ),
+          RelationshipCandidate(
+            id: 'marketing',
+            typeId: 'space',
+            title: 'Marketing',
+            subtitle: 'Space',
+            icon: Icons.folder_outlined,
+          ),
+          RelationshipCandidate(
+            id: 'clients',
+            typeId: 'space',
+            title: 'Clients',
+            subtitle: 'Space',
+            icon: Icons.folder_outlined,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Empty (no candidates yet)',
+  type: RelationshipPicker,
+  path: '[Widgets]/Relationship picker',
+)
+Widget relationshipPickerEmptyUseCase(BuildContext context) {
+  return _RelationshipPickerSurface(
+    child: RelationshipPicker(
+      onClose: () {},
+      data: const RelationshipPickerData(
+        title: 'Add people',
+        mode: RelationshipSelectMode.multi,
+        searchHint: 'Search contacts',
+        emptyLabel: 'No contacts yet.\nCreate one to link it here.',
+        actions: [
+          RelationshipAction(
+            id: 'create',
+            label: 'Create new contact',
+            icon: Icons.person_add_alt_1_outlined,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Sheet/popover-style framed surface for the [RelationshipPicker] catalog: a
+/// bordered surface card at a phone-sheet width so the use cases read like the
+/// real overlay.
+class _RelationshipPickerSurface extends StatelessWidget {
+  const _RelationshipPickerSurface({required this.child, this.width = 400});
+
+  final Widget child;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: width),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: colors.surface,

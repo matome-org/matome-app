@@ -655,6 +655,51 @@ final directories = <_widgetbook.WidgetbookNode>[
           ),
         ],
       ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Relationship picker',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'RelationshipPicker',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Add anything (mixed · type filter)',
+                builder: _matome_widgetbook_widgetbook
+                    .relationshipPickerMixedUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Add files (multi · search)',
+                builder: _matome_widgetbook_widgetbook
+                    .relationshipPickerFilesUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Add item (sources)',
+                builder: _matome_widgetbook_widgetbook
+                    .relationshipPickerSourcesUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Add people (multi · search)',
+                builder: _matome_widgetbook_widgetbook
+                    .relationshipPickerPeopleUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Add to a matome (Files page · reuse)',
+                builder: _matome_widgetbook_widgetbook
+                    .relationshipPickerMatomeUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Empty (no candidates yet)',
+                builder: _matome_widgetbook_widgetbook
+                    .relationshipPickerEmptyUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'File into a space (single)',
+                builder: _matome_widgetbook_widgetbook
+                    .relationshipPickerSpaceUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
     ],
   ),
 ];
