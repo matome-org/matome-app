@@ -341,13 +341,28 @@ void main() {
     await tester.pumpAndSettle();
     await _revealDetails(tester);
 
-    // Image Item → thumbnail tile + the standardized '…' overflow (delete lives
-    // inside it, #1444), and a rendered Image.
+    // Image Item → thumbnail tile + a rendered Image. The inline '…' is gone for
+    // the clean approved row (#1475): the overflow sheet is reached by
+    // long-pressing the row, so its key is NOT mounted up front.
     expect(find.byKey(const ValueKey('matome-image-rec_img')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('matome-item-overflow-rec_img')),
+      findsNothing,
+    );
+    // Long-press surfaces the standardized actions sheet (delete lives inside).
+    await tester.longPress(find.byKey(const ValueKey('matome-item-rec_img')));
+    await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('matome-item-overflow-rec_img')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('matome-item-delete-rec_img')),
+      findsOneWidget,
+    );
+    // Dismiss the sheet so it doesn't occlude the rest of the assertions.
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
     expect(find.byType(Image), findsWidgets);
 
     // The audio Item still renders, and NOT as an image tile.

@@ -201,8 +201,8 @@ void main() {
     expect(find.byKey(const ValueKey('file-detail-view')), findsOneWidget);
   });
 
-  testWidgets('BUG #2: the overflow menu opens and Delete is reachable',
-      (tester) async {
+  testWidgets('BUG #2: the row long-press opens the actions sheet and Delete is '
+      'reachable (no inline "…" — #1475)', (tester) async {
     await _seedMatome(db, id: 'm1');
     await _seedItem(
       db,
@@ -215,28 +215,32 @@ void main() {
     await tester.pumpWidget(buildApp(container(), buildRouter()));
     await tester.pumpAndSettle();
 
-    await revealItems(tester, const ValueKey('matome-item-overflow-img1'));
+    await revealItems(tester, const ValueKey('matome-item-img1'));
 
+    // The clean approved row carries NO inline overflow trigger (#1475).
+    expect(
+      find.byKey(const ValueKey('matome-item-overflow-img1')),
+      findsNothing,
+    );
+
+    // Long-press the row → the actions sheet opens with the Delete entry.
+    await tester.longPress(find.byKey(const ValueKey('matome-item-img1')));
+    await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('matome-item-overflow-img1')),
       findsOneWidget,
     );
-
-    await tester.tap(find.byKey(const ValueKey('matome-item-overflow-img1')));
-    await tester.pumpAndSettle();
-
-    // The bottom sheet must open and the Delete entry must be reachable.
     expect(
       find.byKey(const ValueKey('matome-item-delete-img1')),
       findsOneWidget,
-      reason: 'the overflow bottom sheet must open with a Delete entry',
+      reason: 'the long-press actions sheet must open with a Delete entry',
     );
-    // And tapping the overflow must NOT also open the image detail (the gesture
-    // must not leak to the enclosing image-tile InkWell).
+    // And long-pressing must NOT also open the image detail (the gesture must
+    // not leak through to the row's tap handler).
     expect(
       find.byKey(const ValueKey('file-detail-view')),
       findsNothing,
-      reason: 'tapping the overflow must not also open the file detail',
+      reason: 'long-pressing must not also open the file detail',
     );
   });
 }

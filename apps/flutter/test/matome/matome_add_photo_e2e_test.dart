@@ -48,6 +48,16 @@ Future<void> revealDetails(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// #1475: "Add photo" lives inside the single "Add item" menu now (not a split
+/// header row). Open the menu so the "Add photo" entry is reachable.
+Future<void> tapAddPhoto(WidgetTester tester) async {
+  final addItem = find.byKey(const ValueKey('matome-add-item'));
+  await tester.ensureVisible(addItem);
+  await tester.tap(addItem);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('matome-add-photo')));
+}
+
 /// Fake path_provider that points the app "documents" dir at a real temp dir,
 /// so the REAL [durableImportCopy] (matomeStorageDir → getApplicationDocuments
 /// Directory) runs against disk instead of hanging on the absent plugin channel.
@@ -287,10 +297,10 @@ void main() {
       reason: 'the new photo tile must render without reopening the screen',
     );
     expect(
-      // Standardized destructive affordance (#1444): the '…' overflow menu, not
-      // a bare trash icon.
+      // The clean approved row carries NO inline '…' (#1475); the destructive
+      // affordance is the row long-press sheet, not mounted up front.
       find.byKey(ValueKey('matome-item-overflow-${imageItem.id}')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.byType(Image), findsWidgets);
   });
@@ -363,10 +373,23 @@ void main() {
     await revealDetails(tester);
     expect(find.byType(Image), findsNothing);
 
-    // Tap the actual Add-photo button — drives _addPhoto end to end (real
-    // durable copy needs runAsync for the file I/O).
+    // Open the single "Add item" menu so the "Add photo" entry is reachable
+    // (#1475), then tap it — drives _addPhoto end to end (real durable copy
+    // needs runAsync for the file I/O).
+    final addItem = find.byKey(const ValueKey('matome-add-item'));
+    await tester.ensureVisible(addItem);
+    await tester.tap(addItem);
+    await tester.pumpAndSettle();
+    final addPhoto = find.byKey(const ValueKey('matome-add-photo'));
+    expect(addPhoto, findsOneWidget,
+        reason: 'the Add-item menu must surface the Add photo entry');
+    // Tap the Add-photo menu entry and drive _addPhoto end to end inside
+    // runAsync (the real durable copy does file I/O). The menu item is in an
+    // overlay route, so pump a frame inside runAsync to dispatch its onPressed
+    // before awaiting the import I/O.
     await tester.runAsync(() async {
-      await tester.tap(find.byKey(const ValueKey('matome-add-photo')));
+      await tester.tap(addPhoto);
+      await tester.pump();
       await Future<void>.delayed(const Duration(milliseconds: 400));
     });
     await tester.pump();
@@ -443,8 +466,9 @@ void main() {
     // The Add-photo action lives in the "Show more" detail (Items section).
     await revealDetails(tester);
 
-    // Open the picker — _addPhoto parks on the pending pickFiles future.
-    await tester.tap(find.byKey(const ValueKey('matome-add-photo')));
+    // Open the picker via the "Add item" menu (#1475) — _addPhoto then parks on
+    // the pending pickFiles future.
+    await tapAddPhoto(tester);
     await tester.pump();
 
     // DISPOSE the whole detail screen (and _RecordingsSection with it) while the

@@ -155,7 +155,8 @@ void main() {
   );
 
   testWidgets(
-    'BOTH Add affordances render as accent rows when the documents flag is ON',
+    'a SINGLE "Add item" accent row fronts the photo/file menu (not a split '
+    'header) — #1475',
     (tester) async {
       await sizeWide(tester);
       await _seedMatome(db, id: 'm_add', aggregatedSummary: 'x');
@@ -163,23 +164,23 @@ void main() {
       await tester.pumpWidget(_wideRouterApp(container(), id: 'm_add'));
       await tester.pumpAndSettle();
 
-      // Add photo is unconditional and is styled as the approved accent
-      // MatomePanelAddRow (the key rides on the AddRow itself), not the old
-      // text button in a split header. (Add file is flag-gated — pinned by the
-      // dedicated add-file suite.)
-      final addPhoto = find.byKey(const ValueKey('matome-add-photo'));
-      expect(addPhoto, findsOneWidget);
-      expect(
-        find.descendant(
-          of: addPhoto,
-          matching: find.byIcon(Icons.add_photo_alternate_outlined),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        tester.widget(addPhoto),
-        isA<MatomePanelAddRow>(),
-      );
+      // Exactly ONE "Add item" affordance, styled as the approved accent
+      // MatomePanelAddRow — matching the proposal, not the old split
+      // "Add photo / Add file" header.
+      final addItem = find.byKey(const ValueKey('matome-add-item'));
+      expect(addItem, findsOneWidget);
+      expect(tester.widget(addItem), isA<MatomePanelAddRow>());
+      expect(find.text(t.matome.addItem), findsOneWidget);
+
+      // The split photo/file rows are NOT rendered up front — they live inside
+      // the menu, which is closed until "Add item" is tapped.
+      expect(find.byKey(const ValueKey('matome-add-photo')), findsNothing);
+
+      // Tapping "Add item" opens the menu → "Add photo" entry surfaces. ("Add
+      // file" is flag-gated — pinned by the dedicated add-file suite.)
+      await tester.tap(addItem);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('matome-add-photo')), findsOneWidget);
     },
   );
 
@@ -285,7 +286,8 @@ void main() {
   );
 
   testWidgets(
-    'Notes renders with an inline Edit trailing; Share stays discoverable',
+    'Notes renders with the slang "Edit" trailing; People uses "Add person"; '
+    'Share matches the proposal Share row — #1475',
     (tester) async {
       await sizeWide(tester);
       await _seedMatome(db, id: 'm_notes');
@@ -293,8 +295,31 @@ void main() {
       await tester.pumpWidget(_wideRouterApp(container(), id: 'm_notes'));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('matome-edit-notes')), findsOneWidget);
-      expect(find.byKey(const ValueKey('matome-share')), findsOneWidget);
+      // Notes trailing is the slang "Edit" (not "Edit notes"). The key rides on
+      // the Text itself, so assert the keyed widget's data is "Edit".
+      final editNotes = find.byKey(const ValueKey('matome-edit-notes'));
+      expect(editNotes, findsOneWidget);
+      expect((tester.widget<Text>(editNotes)).data, t.matome.edit);
+      expect(t.matome.edit, 'Edit');
+
+      // People "Add person" affordance (slang label).
+      final addPerson = find.byKey(const ValueKey('matome-add-contact'));
+      expect(addPerson, findsOneWidget);
+      expect(find.text(t.matome.addContact), findsOneWidget);
+
+      // Share row matches the proposal: a plain ios_share glyph + "Share", no
+      // dimmed inline "Coming soon" text (the deferred state rides on a tooltip
+      // / a11y hint instead).
+      final share = find.byKey(const ValueKey('matome-share'));
+      expect(share, findsOneWidget);
+      expect(
+        find.descendant(of: share, matching: find.byIcon(Icons.ios_share)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: share, matching: find.text(t.matome.share)),
+        findsOneWidget,
+      );
     },
   );
 }

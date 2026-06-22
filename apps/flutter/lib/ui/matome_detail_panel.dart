@@ -108,6 +108,7 @@ class MatomePanelRow extends StatelessWidget {
     this.meta,
     this.trailing,
     this.onTap,
+    this.onLongPress,
     this.leading,
   });
 
@@ -129,6 +130,10 @@ class MatomePanelRow extends StatelessWidget {
 
   /// Optional tap handler for the whole row.
   final VoidCallback? onTap;
+
+  /// Optional long-press handler for the whole row. Used to surface per-item
+  /// actions (e.g. Delete) without a row-cluttering inline overflow (#1475).
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -170,8 +175,8 @@ class MatomePanelRow extends StatelessWidget {
       ],
     );
 
-    if (onTap == null) return row;
-    return InkWell(onTap: onTap, child: row);
+    if (onTap == null && onLongPress == null) return row;
+    return InkWell(onTap: onTap, onLongPress: onLongPress, child: row);
   }
 }
 

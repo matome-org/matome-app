@@ -24,7 +24,6 @@ import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/loading_indicator.dart';
 import '../../ui/matome_detail_panel.dart';
-import '../details/file_actions_menu.dart';
 import '../home/home_filters.dart' show formatTimestamp;
 import 'matome_actions_menu.dart';
 import 'matome_detail_controller.dart';
@@ -1558,27 +1557,88 @@ class _RecordingsSection extends ConsumerWidget {
               ),
             ),
           SizedBox(height: spacing.xs),
-          // BOTH add affordances, styled as the approved accent "Add" rows.
-          // "Add photo" is unconditional; "Add file" (document import, #1449) is
-          // gated by the documents flag (default OFF) — when off it is the ONLY
-          // thing dropped, Add photo and the dynamic-mediaType persistence stay.
-          MatomePanelAddRow(
-            key: const ValueKey('matome-add-photo'),
-            icon: Icons.add_photo_alternate_outlined,
-            label: t.matome.addPhoto,
-            onTap: () => _addPhoto(context),
+          // The owner-APPROVED proposal carries a SINGLE "Add item" accent row
+          // (#1475), not the old split "Add photo / Add file" header. The two
+          // real flows are preserved BEHIND it: tapping "Add item" opens an
+          // anchored menu → "Add photo" (image, unconditional) + "Add file"
+          // (document import, #1449, flag-gated). When the documents flag is OFF
+          // the menu drops only the "Add file" entry; "Add photo" — and the
+          // dynamic-mediaType persistence — stay. The `matome-add-item` /
+          // `matome-add-photo` / `matome-add-file` keys ride on the row + menu
+          // entries so the picker flows stay reachable from tests.
+          _AddItemMenu(
+            onAddPhoto: () => _addPhoto(context),
+            onAddFile: () => _addFile(context),
           ),
-          if (FeatureFlags.documents) ...[
-            SizedBox(height: spacing.sm),
-            MatomePanelAddRow(
-              key: const ValueKey('matome-add-file'),
-              icon: Icons.upload_file_outlined,
-              label: t.matome.addFile,
-              onTap: () => _addFile(context),
-            ),
-          ],
         ],
       ),
+    );
+  }
+}
+
+/// The single "Add item" accent affordance (#1475): an anchored menu that fronts
+/// BOTH real import flows. The "Add item" row matches the approved proposal; the
+/// per-flow choice (photo / file) lives in the menu rather than as two competing
+/// header rows. "Add file" is gated by the documents flag (#1449) — when off the
+/// menu shows only "Add photo".
+class _AddItemMenu extends StatelessWidget {
+  const _AddItemMenu({required this.onAddPhoto, required this.onAddFile});
+
+  final VoidCallback onAddPhoto;
+  final VoidCallback onAddFile;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    Widget entry(Key key, IconData icon, String label, VoidCallback onTap) =>
+        MenuItemButton(
+          key: key,
+          leadingIcon: Icon(icon, size: spacing.md, color: colors.textSecondary),
+          onPressed: onTap,
+          child: Text(
+            label,
+            style: typography.bodySmall.copyWith(color: colors.textPrimary),
+          ),
+        );
+
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(colors.surface),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(context.radius.md),
+            side: BorderSide(color: colors.border),
+          ),
+        ),
+        padding: WidgetStatePropertyAll(
+          EdgeInsets.symmetric(vertical: spacing.xs),
+        ),
+      ),
+      builder: (context, controller, child) => MatomePanelAddRow(
+        key: const ValueKey('matome-add-item'),
+        icon: Icons.add,
+        label: t.matome.addItem,
+        onTap: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+      ),
+      menuChildren: [
+        entry(
+          const ValueKey('matome-add-photo'),
+          Icons.add_photo_alternate_outlined,
+          t.matome.addPhoto,
+          onAddPhoto,
+        ),
+        if (FeatureFlags.documents)
+          entry(
+            const ValueKey('matome-add-file'),
+            Icons.upload_file_outlined,
+            t.matome.addFile,
+            onAddFile,
+          ),
+      ],
     );
   }
 }
@@ -1677,32 +1737,61 @@ class _RecordingTile extends ConsumerWidget {
     return duration.isEmpty ? when : '$when · $duration';
   }
 
+  /// Per-item actions, relocated OFF the row (#1475). The approved proposal item
+  /// row is clean — leading icon + title + meta + trailing sync chip, nothing
+  /// else — so the inline "…" overflow that used to clutter every row is gone.
+  /// Per-item actions stay reachable WITHOUT it:
+  ///   • TAP the row → open the Item (image / document / audio host).
+  ///   • LONG-PRESS the row → this bottom sheet, holding Delete.
+  /// Long-press is the cross-surface affordance: it fires on mobile touch AND on
+  /// desktop secondary-click / press-hold, so the same one path serves both the
+  /// mobile sheet and the desktop side panel (no hover-only desktop reveal that a
+  /// touch laptop or a test driver can't reach). The `matome-item-overflow-<id>`
+  /// (the sheet) and `matome-item-delete-<id>` (its Delete entry) keys are
+  /// preserved so the destructive path stays test-reachable.
+  Future<void> _openActionsSheet(BuildContext context) async {
+    await showAppBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        final colors = sheetContext.colors;
+        return AppBottomSheet(
+          key: ValueKey('matome-item-overflow-${item.id}'),
+          title: Text(
+            item.title,
+            style: sheetContext.typography.body.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colors.textPrimary,
+            ),
+          ),
+          children: [
+            ListTile(
+              key: ValueKey('matome-item-delete-${item.id}'),
+              leading: Icon(Icons.delete_outline, color: colors.failed),
+              title: Text(
+                t.details.delete,
+                style: sheetContext.typography.bodySmall
+                    .copyWith(color: colors.failed),
+              ),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _confirmRemove(context);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final spacing = context.spacing;
-
-    // Destructive affordance standardized across BOTH item kinds AND with the
-    // file-detail screens (#1444): the SAME anchored "…" popup ([FileActionsMenu])
-    // holding Delete — never a bottom sheet on one surface and a popup on another.
-    final overflow = FileActionsMenu(
-      dense: true,
-      onDelete: () => _confirmRemove(context),
-      triggerKey: ValueKey('matome-item-overflow-${item.id}'),
-      deleteKey: ValueKey('matome-item-delete-${item.id}'),
-    );
-
-    // Trailing slot of the compact row: the REAL per-item sync chip (cloud /
-    // on-device — never the proposal's mock) followed by the overflow menu.
-    final trailing = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        matomeItemSyncChip(
-          item,
-          key: ValueKey('matome-item-sync-${item.id}'),
-        ),
-        SizedBox(width: spacing.xs),
-        overflow,
-      ],
+    // Trailing slot of the compact row: ONLY the REAL per-item sync chip (cloud /
+    // on-device — never the proposal's mock). The inline overflow "…" was removed
+    // (#1475) so the row matches the clean approved proposal; per-item Delete is
+    // relocated to the row's long-press sheet ([_openActionsSheet]).
+    final trailing = matomeItemSyncChip(
+      item,
+      key: ValueKey('matome-item-sync-${item.id}'),
     );
 
     if (_isImage) {
@@ -1716,6 +1805,7 @@ class _RecordingTile extends ConsumerWidget {
         meta: _meta(),
         trailing: trailing,
         onTap: () => _openImage(context),
+        onLongPress: () => _openActionsSheet(context),
       );
     }
 
@@ -1729,6 +1819,7 @@ class _RecordingTile extends ConsumerWidget {
       trailing: trailing,
       onTap: () =>
           _isDocument ? _openDocument(context) : _openRecording(context),
+      onLongPress: () => _openActionsSheet(context),
     );
   }
 }
@@ -1940,7 +2031,9 @@ class _NotesSectionState extends State<_NotesSection> {
       trailing: _editing
           ? null
           : Text(
-              t.matome.editNotes,
+              // The approved proposal's Notes trailing is the slang "Edit", not
+              // "Edit notes" (#1475). The `matome-edit-notes` key is kept.
+              t.matome.edit,
               key: const ValueKey('matome-edit-notes'),
               style: typography.label.copyWith(color: colors.accent),
             ),
@@ -1998,36 +2091,18 @@ class _NotesSectionState extends State<_NotesSection> {
 // ─── Deferred actions (W3) ───────────────────────────────────────────────────
 
 /// Share is the only remaining DEFERRED affordance (ADR-0004 / the
-/// matome-collaboration plan): surfaced as a disabled "coming soon" row so it
-/// stays discoverable without inventing a sharing model. (Tag-contacts shipped
-/// in #1375 — it is now the real header contact slot.)
+/// matome-collaboration plan). It now matches the approved proposal's Share row
+/// layout (#1475): a plain leading `ios_share` glyph + the "Share" label in the
+/// primary text colour, NOT the old dimmed "· Coming soon" row — so it reads as
+/// a first-class action like the proposal showed.
+///
+/// The deferred state stays HONEST without an inventing a sharing model: the row
+/// has NO tap handler (it does nothing yet) and carries a "Coming soon" tooltip
+/// + a11y hint, so a user who taps/hovers learns it is not ready instead of
+/// hitting a silent dead end. (Tag-contacts shipped in #1375 — it is the real
+/// People section now.)
 class _DeferredActions extends StatelessWidget {
   const _DeferredActions();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _DeferredActionRow(
-          key: const ValueKey('matome-share'),
-          icon: Icons.ios_share_outlined,
-          label: t.matome.share,
-        ),
-      ],
-    );
-  }
-}
-
-class _DeferredActionRow extends StatelessWidget {
-  const _DeferredActionRow({
-    super.key,
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -2035,22 +2110,25 @@ class _DeferredActionRow extends StatelessWidget {
     final spacing = context.spacing;
     final typography = context.typography;
 
-    return Opacity(
-      opacity: 0.5,
-      child: Row(
-        children: [
-          Icon(icon, size: spacing.md, color: colors.textMuted),
-          SizedBox(width: spacing.xs),
-          Text(
-            label,
-            style: typography.bodySmall.copyWith(color: colors.textSecondary),
+    return Align(
+      key: const ValueKey('matome-share'),
+      alignment: Alignment.centerLeft,
+      child: Tooltip(
+        message: t.matome.comingSoon,
+        child: Semantics(
+          label: '${t.matome.share} · ${t.matome.comingSoon}',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.ios_share, size: spacing.md, color: colors.textPrimary),
+              SizedBox(width: spacing.xs),
+              Text(
+                t.matome.share,
+                style: typography.label.copyWith(color: colors.textPrimary),
+              ),
+            ],
           ),
-          SizedBox(width: spacing.xs),
-          Text(
-            '· ${t.matome.comingSoon}',
-            style: typography.label.copyWith(color: colors.textMuted),
-          ),
-        ],
+        ),
       ),
     );
   }

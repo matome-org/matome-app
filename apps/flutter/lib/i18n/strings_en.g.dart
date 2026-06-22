@@ -530,6 +530,9 @@ class Translations$matome$en {
 	/// en: 'Default'
 	String get personalSpaceHint => 'Default';
 
+	/// en: 'Add item'
+	String get addItem => 'Add item';
+
 	/// en: 'Add photo'
 	String get addPhoto => 'Add photo';
 
@@ -541,6 +544,9 @@ class Translations$matome$en {
 
 	/// en: '"$name" is too large (max $max MB)'
 	String fileTooLarge({required Object name, required Object max}) => '"${name}" is too large (max ${max} MB)';
+
+	/// en: 'Edit'
+	String get edit => 'Edit';
 
 	/// en: 'Edit notes'
 	String get editNotes => 'Edit notes';
@@ -566,8 +572,8 @@ class Translations$matome$en {
 	/// en: 'Contacts'
 	String get contacts => 'Contacts';
 
-	/// en: 'Add contact'
-	String get addContact => 'Add contact';
+	/// en: 'Add person'
+	String get addContact => 'Add person';
 
 	/// en: 'No contacts attached'
 	String get noContacts => 'No contacts attached';
@@ -1561,10 +1567,12 @@ extension on Translations {
 			'matome.filedIn' => ({required Object space}) => 'Filed in ${space}',
 			'matome.refile' => 'Refile',
 			'matome.personalSpaceHint' => 'Default',
+			'matome.addItem' => 'Add item',
 			'matome.addPhoto' => 'Add photo',
 			'matome.addFile' => 'Add file',
 			'matome.addFileFailed' => ({required Object error}) => 'Add file failed: ${error}',
 			'matome.fileTooLarge' => ({required Object name, required Object max}) => '"${name}" is too large (max ${max} MB)',
+			'matome.edit' => 'Edit',
 			'matome.editNotes' => 'Edit notes',
 			'matome.notesHint' => 'Add notes about this matome…',
 			'matome.save' => 'Save',
@@ -1573,7 +1581,7 @@ extension on Translations {
 			'matome.share' => 'Share',
 			'matome.comingSoon' => 'Coming soon',
 			'matome.contacts' => 'Contacts',
-			'matome.addContact' => 'Add contact',
+			'matome.addContact' => 'Add person',
 			'matome.noContacts' => 'No contacts attached',
 			'matome.addContactSheetTitle' => 'Add a contact',
 			'matome.noDirectoryContacts' => 'No contacts in your directory yet',

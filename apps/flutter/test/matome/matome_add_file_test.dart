@@ -184,8 +184,8 @@ void main() {
   // Flag-off path: the documents feature flag defaults OFF (no dart-define in
   // tests). The "Add file" affordance is the ONLY thing gated — Add photo stays.
   // ---------------------------------------------------------------------------
-  testWidgets('with the documents flag OFF (test default) the Add-file button '
-      'is absent while Add-photo is present', (tester) async {
+  testWidgets('with the documents flag OFF (test default) the Add-file entry '
+      'is absent from the Add-item menu while Add-photo is present', (tester) async {
     // Guard the premise: if someone builds the test suite with the flag ON this
     // assertion would be inverted, so pin the expectation to the actual const.
     expect(FeatureFlags.documents, isFalse,
@@ -217,6 +217,14 @@ void main() {
     await tester.tap(toggle);
     await tester.pumpAndSettle();
 
+    // The single "Add item" affordance fronts the photo/file menu (#1475).
+    final addItem = find.byKey(const ValueKey('matome-add-item'));
+    await tester.ensureVisible(addItem);
+    await tester.tap(addItem);
+    await tester.pumpAndSettle();
+
+    // Add photo is unconditional; Add file is dropped from the menu when the
+    // documents flag is OFF.
     expect(find.byKey(const ValueKey('matome-add-photo')), findsOneWidget);
     expect(find.byKey(const ValueKey('matome-add-file')), findsNothing);
   });

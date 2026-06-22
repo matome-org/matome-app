@@ -10,11 +10,17 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
-/// #1444 — the destructive affordance is STANDARDIZED across both Item kinds:
-/// audio AND image tiles expose Delete through the SAME '…' overflow menu
-/// (`matome-item-overflow-<id>` → `matome-item-delete-<id>`), never a bare trash
-/// icon on one and a menu on the other. These tests pin that consistency and the
-/// delete path each affordance drives.
+/// #1444 + #1475 — the destructive affordance is STANDARDIZED across both Item
+/// kinds: audio AND image tiles expose Delete through the SAME affordance, never
+/// a bare trash icon on one and a menu on the other.
+///
+/// #1475 relocated that affordance OFF the row: the approved proposal item row
+/// is clean (icon + title + meta + trailing sync chip, NO inline "…"), so the
+/// inline overflow menu was removed and per-item Delete now lives behind a
+/// LONG-PRESS on the row → a bottom sheet (`matome-item-overflow-<id>`) holding
+/// the Delete entry (`matome-item-delete-<id>`). These tests pin that the inline
+/// "…" is gone, the row long-press surfaces the sheet on BOTH kinds, and each
+/// drives the delete path.
 Future<void> _revealDetails(WidgetTester tester) async {
   final toggle = find.byKey(const ValueKey('matome-show-more'));
   await tester.ensureVisible(toggle);
@@ -85,7 +91,8 @@ void main() {
       );
 
   testWidgets(
-    'both audio and image tiles expose the SAME overflow menu (no bare trash)',
+    'no inline "…" on the row; long-press surfaces the SAME actions sheet on '
+    'BOTH kinds (no bare trash)',
     (tester) async {
       await seed();
       final c = ProviderContainer(
@@ -97,27 +104,53 @@ void main() {
       await tester.pumpAndSettle();
       await _revealDetails(tester);
 
-      // The standardized overflow is present on BOTH kinds.
+      // The clean approved row has NO inline overflow trigger up front (#1475):
+      // the `matome-item-overflow-<id>` key now belongs to the long-press sheet,
+      // which is not mounted until the row is long-pressed.
       expect(
         find.byKey(const ValueKey('matome-item-overflow-rec_audio')),
-        findsOneWidget,
-        reason: 'audio tile must carry the standardized overflow',
+        findsNothing,
+        reason: 'the inline "…" must be gone from the clean proposal row',
       );
       expect(
         find.byKey(const ValueKey('matome-item-overflow-rec_image')),
-        findsOneWidget,
-        reason: 'image tile must carry the standardized overflow',
+        findsNothing,
       );
-
-      // The retired bare trash icon key must be gone (no inconsistent affordance).
+      // The retired bare trash icon key must also be gone.
       expect(
         find.byKey(const ValueKey('matome-image-remove-rec_image')),
         findsNothing,
       );
+
+      // Long-press the audio row → the standardized actions sheet appears.
+      await tester.longPress(find.byKey(const ValueKey('matome-item-rec_audio')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('matome-item-overflow-rec_audio')),
+        findsOneWidget,
+        reason: 'long-press surfaces the standardized actions sheet',
+      );
+      expect(
+        find.byKey(const ValueKey('matome-item-delete-rec_audio')),
+        findsOneWidget,
+      );
+      // Dismiss and repeat for the image row → same affordance.
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.byKey(const ValueKey('matome-item-rec_image')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('matome-item-overflow-rec_image')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('matome-item-delete-rec_image')),
+        findsOneWidget,
+      );
     },
   );
 
-  testWidgets('image tile: overflow → Delete → confirm removes the Item',
+  testWidgets('image tile: long-press → Delete → confirm removes the Item',
       (tester) async {
     await seed();
     final c = ProviderContainer(
@@ -129,12 +162,9 @@ void main() {
     await tester.pumpAndSettle();
     await _revealDetails(tester);
 
-    final overflow = find.byKey(const ValueKey('matome-item-overflow-rec_image'));
-    await tester.ensureVisible(overflow);
+    await tester.longPress(find.byKey(const ValueKey('matome-item-rec_image')));
     await tester.pumpAndSettle();
-    await tester.tap(overflow);
-    await tester.pumpAndSettle();
-    // The destructive entry lives inside the overflow sheet.
+    // The destructive entry lives inside the long-press actions sheet.
     await tester.tap(find.byKey(const ValueKey('matome-item-delete-rec_image')));
     await tester.pumpAndSettle();
     // It raises the confirm dialog; confirm to delete.
@@ -148,7 +178,7 @@ void main() {
     expect(ids, contains('rec_audio'));
   });
 
-  testWidgets('audio tile: overflow → Delete → confirm removes the Item',
+  testWidgets('audio tile: long-press → Delete → confirm removes the Item',
       (tester) async {
     await seed();
     final c = ProviderContainer(
@@ -160,10 +190,7 @@ void main() {
     await tester.pumpAndSettle();
     await _revealDetails(tester);
 
-    final overflow = find.byKey(const ValueKey('matome-item-overflow-rec_audio'));
-    await tester.ensureVisible(overflow);
-    await tester.pumpAndSettle();
-    await tester.tap(overflow);
+    await tester.longPress(find.byKey(const ValueKey('matome-item-rec_audio')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('matome-item-delete-rec_audio')));
     await tester.pumpAndSettle();

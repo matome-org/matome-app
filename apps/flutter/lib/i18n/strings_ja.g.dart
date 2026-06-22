@@ -275,10 +275,12 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String filedIn({required Object space}) => '${space} に整理済み';
 	@override String get refile => '再整理';
 	@override String get personalSpaceHint => 'デフォルト';
+	@override String get addItem => '項目を追加';
 	@override String get addPhoto => '写真を追加';
 	@override String get addFile => 'ファイルを追加';
 	@override String addFileFailed({required Object error}) => 'ファイルの追加に失敗しました: ${error}';
 	@override String fileTooLarge({required Object name, required Object max}) => '「${name}」は大きすぎます（最大 ${max} MB）';
+	@override String get edit => '編集';
 	@override String get editNotes => 'メモを編集';
 	@override String get notesHint => 'このまとめについてのメモ…';
 	@override String get save => '保存';
@@ -287,7 +289,7 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get share => '共有';
 	@override String get comingSoon => '近日公開';
 	@override String get contacts => '連絡先';
-	@override String get addContact => '連絡先を追加';
+	@override String get addContact => '人を追加';
 	@override String get noContacts => '連絡先は追加されていません';
 	@override String get addContactSheetTitle => '連絡先を追加';
 	@override String get noDirectoryContacts => 'ディレクトリに連絡先がありません';
@@ -819,10 +821,12 @@ extension on TranslationsJa {
 			'matome.filedIn' => ({required Object space}) => '${space} に整理済み',
 			'matome.refile' => '再整理',
 			'matome.personalSpaceHint' => 'デフォルト',
+			'matome.addItem' => '項目を追加',
 			'matome.addPhoto' => '写真を追加',
 			'matome.addFile' => 'ファイルを追加',
 			'matome.addFileFailed' => ({required Object error}) => 'ファイルの追加に失敗しました: ${error}',
 			'matome.fileTooLarge' => ({required Object name, required Object max}) => '「${name}」は大きすぎます（最大 ${max} MB）',
+			'matome.edit' => '編集',
 			'matome.editNotes' => 'メモを編集',
 			'matome.notesHint' => 'このまとめについてのメモ…',
 			'matome.save' => '保存',
@@ -831,7 +835,7 @@ extension on TranslationsJa {
 			'matome.share' => '共有',
 			'matome.comingSoon' => '近日公開',
 			'matome.contacts' => '連絡先',
-			'matome.addContact' => '連絡先を追加',
+			'matome.addContact' => '人を追加',
 			'matome.noContacts' => '連絡先は追加されていません',
 			'matome.addContactSheetTitle' => '連絡先を追加',
 			'matome.noDirectoryContacts' => 'ディレクトリに連絡先がありません',

@@ -20,11 +20,14 @@ Future<void> revealDetails(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// Standardized destructive affordance (#1444): the item's '…' overflow opens a
-/// sheet whose only entry is Delete, which then raises the confirm dialog. This
-/// helper drives both sheet steps so the existing confirm-dialog assertions hold.
+/// Standardized destructive affordance (#1444 + #1475): the inline '…' was
+/// removed for the clean approved row; per-item Delete is now reached by
+/// LONG-PRESSING the row, which opens the actions sheet
+/// (`matome-item-overflow-<id>`) whose only entry is Delete
+/// (`matome-item-delete-<id>`), which then raises the confirm dialog. This helper
+/// drives the long-press + sheet so the existing confirm-dialog assertions hold.
 Future<void> openItemDelete(WidgetTester tester, String itemId) async {
-  await tester.tap(find.byKey(ValueKey('matome-item-overflow-$itemId')));
+  await tester.longPress(find.byKey(ValueKey('matome-item-$itemId')));
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(ValueKey('matome-item-delete-$itemId')));
   await tester.pumpAndSettle();
