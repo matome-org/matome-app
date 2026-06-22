@@ -141,6 +141,27 @@ class Translations$settings$en {
 
 	/// en: '日本語'
 	String get langJa => '日本語';
+
+	/// en: 'Default views'
+	String get views => 'Default views';
+
+	/// en: 'Matome list'
+	String get viewsMatome => 'Matome list';
+
+	/// en: 'Files'
+	String get viewsFiles => 'Files';
+
+	/// en: 'Cards'
+	String get viewCards => 'Cards';
+
+	/// en: 'Table'
+	String get viewTableMatome => 'Table';
+
+	/// en: 'Grid'
+	String get viewGrid => 'Grid';
+
+	/// en: 'Table'
+	String get viewTableFiles => 'Table';
 }
 
 // Path: nav
@@ -1403,6 +1424,13 @@ extension on Translations {
 			'settings.themeSystem' => 'System',
 			'settings.langEn' => 'English',
 			'settings.langJa' => '日本語',
+			'settings.views' => 'Default views',
+			'settings.viewsMatome' => 'Matome list',
+			'settings.viewsFiles' => 'Files',
+			'settings.viewCards' => 'Cards',
+			'settings.viewTableMatome' => 'Table',
+			'settings.viewGrid' => 'Grid',
+			'settings.viewTableFiles' => 'Table',
 			'nav.createNew' => 'New',
 			'nav.add' => 'Add',
 			'nav.recordAudio' => 'Record audio',

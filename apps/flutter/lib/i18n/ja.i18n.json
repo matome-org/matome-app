@@ -22,7 +22,14 @@
     "themeDark": "ダーク",
     "themeSystem": "システム",
     "langEn": "English",
-    "langJa": "日本語"
+    "langJa": "日本語",
+    "views": "デフォルト表示",
+    "viewsMatome": "マトメ一覧",
+    "viewsFiles": "ファイル",
+    "viewCards": "カード",
+    "viewTableMatome": "テーブル",
+    "viewGrid": "グリッド",
+    "viewTableFiles": "テーブル"
   },
   "nav": {
     "createNew": "新規",

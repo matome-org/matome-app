@@ -22,7 +22,14 @@
     "themeDark": "Dark",
     "themeSystem": "System",
     "langEn": "English",
-    "langJa": "日本語"
+    "langJa": "日本語",
+    "views": "Default views",
+    "viewsMatome": "Matome list",
+    "viewsFiles": "Files",
+    "viewCards": "Cards",
+    "viewTableMatome": "Table",
+    "viewGrid": "Grid",
+    "viewTableFiles": "Table"
   },
   "nav": {
     "createNew": "New",

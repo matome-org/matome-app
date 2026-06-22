@@ -102,6 +102,13 @@ class _Translations$settings$ja extends Translations$settings$en {
 	@override String get themeSystem => 'システム';
 	@override String get langEn => 'English';
 	@override String get langJa => '日本語';
+	@override String get views => 'デフォルト表示';
+	@override String get viewsMatome => 'マトメ一覧';
+	@override String get viewsFiles => 'ファイル';
+	@override String get viewCards => 'カード';
+	@override String get viewTableMatome => 'テーブル';
+	@override String get viewGrid => 'グリッド';
+	@override String get viewTableFiles => 'テーブル';
 }
 
 // Path: nav
@@ -685,6 +692,13 @@ extension on TranslationsJa {
 			'settings.themeSystem' => 'システム',
 			'settings.langEn' => 'English',
 			'settings.langJa' => '日本語',
+			'settings.views' => 'デフォルト表示',
+			'settings.viewsMatome' => 'マトメ一覧',
+			'settings.viewsFiles' => 'ファイル',
+			'settings.viewCards' => 'カード',
+			'settings.viewTableMatome' => 'テーブル',
+			'settings.viewGrid' => 'グリッド',
+			'settings.viewTableFiles' => 'テーブル',
 			'nav.createNew' => '新規',
 			'nav.add' => '追加',
 			'nav.recordAudio' => '音声を録音',

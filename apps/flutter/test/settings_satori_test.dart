@@ -227,13 +227,14 @@ void main() {
     GoRouter.of(ctx).go('/inbox/settings');
     await tester.pumpAndSettle();
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text(_session.user.email), findsOneWidget);
 
-    // The Sign out tile is the last row of a lazy ListView, so it may not be
-    // materialized yet — scroll it into view before tapping.
+    // The account section (user email + Sign out) is the tail of a lazy
+    // ListView — with the #1468 "Default views" section added above it, neither
+    // is materialized on first paint, so scroll the Sign out tile into view.
     final signOut = find.byIcon(Icons.logout);
     await tester.scrollUntilVisible(signOut, 200);
     await tester.pumpAndSettle();
+    expect(find.text(_session.user.email), findsOneWidget);
     await tester.tap(signOut);
     await tester.pumpAndSettle();
 

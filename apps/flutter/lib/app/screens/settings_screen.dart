@@ -5,6 +5,8 @@ import '../../core/i18n/locale_controller.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_controller.dart';
 import '../../features/auth/auth_controller.dart';
+import '../../features/files/files_screen.dart';
+import '../../features/home/home_screen.dart';
 import '../../i18n/strings.g.dart';
 import '../auth_state.dart';
 
@@ -18,6 +20,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeControllerProvider);
     final locale = ref.watch(localeControllerProvider);
+    final inboxView = ref.watch(inboxViewProvider);
+    final filesView = ref.watch(filesViewProvider);
     final user = ref.watch(authStateProvider).user;
 
     return Scaffold(
@@ -72,6 +76,50 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const Divider(),
+          _SectionHeader(t.settings.views),
+          _SubHeader(t.settings.viewsMatome),
+          RadioGroup<InboxView>(
+            groupValue: inboxView,
+            onChanged: (v) {
+              if (v != null) {
+                ref.read(inboxViewProvider.notifier).setView(v);
+              }
+            },
+            child: Column(
+              children: [
+                RadioListTile<InboxView>(
+                  value: InboxView.cards,
+                  title: Text(t.settings.viewCards),
+                ),
+                RadioListTile<InboxView>(
+                  value: InboxView.table,
+                  title: Text(t.settings.viewTableMatome),
+                ),
+              ],
+            ),
+          ),
+          _SubHeader(t.settings.viewsFiles),
+          RadioGroup<FilesView>(
+            groupValue: filesView,
+            onChanged: (v) {
+              if (v != null) {
+                ref.read(filesViewProvider.notifier).setView(v);
+              }
+            },
+            child: Column(
+              children: [
+                RadioListTile<FilesView>(
+                  value: FilesView.grid,
+                  title: Text(t.settings.viewGrid),
+                ),
+                RadioListTile<FilesView>(
+                  value: FilesView.table,
+                  title: Text(t.settings.viewTableFiles),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
           _SectionHeader(t.settings.account),
           if (user != null)
             ListTile(
@@ -105,6 +153,35 @@ class _SectionHeader extends StatelessWidget {
         spacing.xs,
       ),
       child: Text(label, style: Theme.of(context).textTheme.titleSmall),
+    );
+  }
+}
+
+/// Sub-label inside a section — used to group the two view radio sets (Matome /
+/// Files) under the single "Default views" header.
+class _SubHeader extends StatelessWidget {
+  const _SubHeader(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        spacing.md,
+        spacing.sm,
+        spacing.md,
+        spacing.xxs,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context)
+            .textTheme
+            .labelMedium
+            ?.copyWith(color: colors.textSecondary),
+      ),
     );
   }
 }
