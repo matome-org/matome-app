@@ -101,12 +101,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('contact-tile-c1')));
     await tester.pumpAndSettle();
 
-    // The detail screen hosts the contact name + the Edit affordance.
+    // The detail screen hosts the contact name + the ⋯ actions affordance
+    // (Edit lives inside that menu now — no separate Edit button).
     expect(
       find.byKey(const ValueKey('contact-detail-name')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('contact-detail-edit')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('contact-detail-actions')),
+      findsOneWidget,
+    );
     expect(find.text('Old Name'), findsWidgets);
   });
 
@@ -119,6 +123,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('contact-tile-c1')));
     await tester.pumpAndSettle();
 
+    // Edit is in the ⋯ menu now — open it first.
+    await tester.tap(find.byKey(const ValueKey('contact-detail-actions')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('contact-detail-edit')));
     await tester.pumpAndSettle();
 

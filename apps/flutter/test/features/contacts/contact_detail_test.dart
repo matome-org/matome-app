@@ -94,14 +94,15 @@ void main() {
   setUp(() => LocaleSettings.setLocaleSync(AppLocale.en));
 
   group('ContactDetail structure', () {
-    testWidgets('renders the header: name, subtitle, edit + actions',
+    testWidgets('renders the header: name, subtitle, ⋯ actions',
         (tester) async {
       await _pump(tester);
       expect(find.byKey(const ValueKey('contact-detail-name')), findsOneWidget);
       expect(find.text('Ana Ribeiro'), findsOneWidget);
       // company · title subtitle.
       expect(find.text('Product Lead · Acme Inc.'), findsOneWidget);
-      expect(find.byKey(const ValueKey('contact-detail-edit')), findsOneWidget);
+      // Edit is inside the ⋯ menu now — no standalone Edit button up front.
+      expect(find.byKey(const ValueKey('contact-detail-edit')), findsNothing);
       expect(
         find.byKey(const ValueKey('contact-detail-actions')),
         findsOneWidget,
@@ -156,9 +157,11 @@ void main() {
   });
 
   group('ContactDetail callbacks', () {
-    testWidgets('Edit button fires onEdit', (tester) async {
+    testWidgets('Edit (in the ⋯ menu) fires onEdit', (tester) async {
       var edited = 0;
       await _pump(tester, onEdit: () => edited++);
+      await tester.tap(find.byKey(const ValueKey('contact-detail-actions')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('contact-detail-edit')));
       await tester.pump();
       expect(edited, 1);

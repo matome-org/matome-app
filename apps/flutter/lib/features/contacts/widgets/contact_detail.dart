@@ -15,8 +15,8 @@ import '../../../ui/space_chip.dart';
 /// screen ([ContactDetailScreen]) builds the data from real providers and wires
 /// the callbacks. Copy is slang `t.contacts.detail.*`.
 ///
-/// Layout: a header (avatar, name, company·title, sync chip, Edit + overflow
-/// menu) over a body that is one column on phones and two on desktop
+/// Layout: a header (avatar, name, company·title, sync chip, ⋯ overflow menu
+/// that hosts Edit) over a body that is one column on phones and two on desktop
 /// (identity + notes | relationships), splitting at [kContactDetailWideBreakpoint].
 ///
 /// Security: every user-controlled string (name, company, title, email, phone,
@@ -133,7 +133,7 @@ class ContactDetail extends StatelessWidget {
 
   final ContactDetailData contact;
 
-  /// Primary Edit button + overflow Edit item.
+  /// Fires from the ⋯ overflow menu's Edit item.
   final VoidCallback? onEdit;
 
   /// Overflow menu actions (merge / delete).
@@ -263,13 +263,9 @@ class _Header extends StatelessWidget {
       ],
     );
 
-    final actions = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _EditButton(label: t.contacts.detail.edit, onTap: onEdit),
-        _ActionsMenu(onEdit: onEdit, onAction: onAction),
-      ],
-    );
+    // Single overflow (⋯) affordance — it already hosts Edit, so no separate
+    // Edit button (that was a duplicate of the menu's Edit item).
+    final actions = _ActionsMenu(onEdit: onEdit, onAction: onAction);
 
     final avatar = Avatar(
       initials: contact.initials,
@@ -281,7 +277,7 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.all(spacing.lg),
       // Below the wide breakpoint the action cluster wraps under the identity so
-      // a narrow phone never clips the sync chip / Edit button (the proposal's
+      // a narrow phone never clips the sync chip / ⋯ menu (the proposal's
       // single-row header overflowed at phone widths).
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -319,55 +315,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _EditButton extends StatelessWidget {
-  const _EditButton({required this.label, this.onTap});
-
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final radius = context.radius;
-    final typography = context.typography;
-
-    return Material(
-      color: colors.subtleFill,
-      borderRadius: BorderRadius.circular(radius.md),
-      child: InkWell(
-        key: const ValueKey('contact-detail-edit'),
-        borderRadius: BorderRadius.circular(radius.md),
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: spacing.md,
-            vertical: spacing.sm,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.edit_outlined,
-                size: typography.bodySmall.fontSize,
-                color: colors.textPrimary,
-              ),
-              SizedBox(width: spacing.xs),
-              Text(
-                label,
-                style: typography.label.copyWith(
-                  color: colors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ActionsMenu extends StatelessWidget {
   const _ActionsMenu({this.onEdit, this.onAction});
 
@@ -385,8 +332,10 @@ class _ActionsMenu extends StatelessWidget {
       String label,
       VoidCallback? onPressed, {
       Color? color,
+      Key? key,
     }) =>
         MenuItemButton(
+          key: key,
           leadingIcon: Icon(
             icon,
             size: typography.body.fontSize,
@@ -420,7 +369,12 @@ class _ActionsMenu extends StatelessWidget {
             controller.isOpen ? controller.close() : controller.open(),
       ),
       menuChildren: [
-        item(Icons.edit_outlined, t.contacts.detail.edit, onEdit),
+        item(
+          Icons.edit_outlined,
+          t.contacts.detail.edit,
+          onEdit,
+          key: const ValueKey('contact-detail-edit'),
+        ),
         item(
           Icons.merge_outlined,
           t.contacts.detail.merge,
