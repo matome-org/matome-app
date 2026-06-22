@@ -159,16 +159,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(addContact, findsOneWidget);
 
-    // Open the picker — it lists the owner's directory contact.
+    // Open the unified "Add anything" picker (pre-filtered to contacts) — it
+    // lists the owner's directory contact as a candidate.
     await tester.tap(addContact);
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('matome-pick-contact-c1')),
-      findsOneWidget,
-    );
+    final candidate = find.byKey(const ValueKey('relationship-candidate-c1'));
+    expect(candidate, findsOneWidget);
 
-    // Pick it → attaches + renders a chip.
-    await tester.tap(find.byKey(const ValueKey('matome-pick-contact-c1')));
+    // Select it + confirm → attaches + renders a chip.
+    await tester.tap(candidate);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('relationship-picker-confirm')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('matome-contact-c1')), findsOneWidget);
     expect(find.text('Ada'), findsWidgets);

@@ -172,24 +172,28 @@ void main() {
       expect(tester.widget(addItem), isA<MatomePanelAddRow>());
       expect(find.text(t.matome.addItem), findsOneWidget);
 
-      // The create actions are NOT rendered up front — they live inside the
-      // unified "Add anything" picker, which opens only when "Add item" is
-      // tapped.
+      // The create actions are NOT rendered up front — they live behind the
+      // unified picker's header "+", which only exists once the picker is open.
       expect(
           find.byKey(const ValueKey('relationship-action-photo')), findsNothing);
 
-      // Tapping "Add item" opens the unified "Add anything" picker → the "Add
-      // photo" create action surfaces. ("Add file" is flag-gated — pinned by the
-      // add-file suite.)
+      // Tapping "Add item" opens the unified "Add anything" picker → the
+      // cross-entity type filter (Contacts/Files/Spaces) + the "+" create
+      // affordance show up front; the body stays a clean link-existing list.
       await tester.tap(addItem);
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('relationship-action-photo')),
-          findsOneWidget);
-      // The unified surface carries the cross-entity type filter (All +
-      // Contacts/Files/Spaces) and the create-contact / new-space actions.
       expect(find.text(t.matome.relationPicker.typeContacts), findsOneWidget);
       expect(find.text(t.matome.relationPicker.typeFiles), findsOneWidget);
       expect(find.text(t.matome.relationPicker.typeSpaces), findsOneWidget);
+      expect(find.byKey(const ValueKey('relationship-create-menu')),
+          findsOneWidget);
+
+      // Opening the "+" surfaces the create actions (Add photo, create-contact,
+      // new-space). "Add file" is flag-gated — pinned by the add-file suite.
+      await tester.tap(find.byKey(const ValueKey('relationship-create-menu')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('relationship-action-photo')),
+          findsOneWidget);
       expect(find.byKey(const ValueKey('relationship-action-create-contact')),
           findsOneWidget);
       expect(find.byKey(const ValueKey('relationship-action-new-space')),

@@ -218,10 +218,12 @@ void main() {
     await tester.pumpAndSettle();
 
     // "Add item" opens the unified "Add anything" picker; its create actions
-    // include Add photo, and Add file only when the documents flag is ON.
+    // live behind the header "+". Open it.
     final addItem = find.byKey(const ValueKey('matome-add-item'));
     await tester.ensureVisible(addItem);
     await tester.tap(addItem);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('relationship-create-menu')));
     await tester.pumpAndSettle();
 
     // Add photo is unconditional; Add file is dropped when the documents flag

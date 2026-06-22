@@ -49,13 +49,14 @@ Future<void> revealDetails(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// "Add photo" now lives as a create action inside the unified "Add anything"
-/// relationship picker (opened by "Add item"). Open it, then tap the photo
-/// action.
+/// "Add photo" now lives as a create action behind the unified picker's header
+/// "+" (opened by "Add item"). Open the picker, open the "+" menu, tap photo.
 Future<void> tapAddPhoto(WidgetTester tester) async {
   final addItem = find.byKey(const ValueKey('matome-add-item'));
   await tester.ensureVisible(addItem);
   await tester.tap(addItem);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('relationship-create-menu')));
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('relationship-action-photo')));
 }
@@ -379,17 +380,19 @@ void main() {
     await revealDetails(tester);
     expect(find.byType(Image), findsNothing);
 
-    // Open the unified "Add anything" picker (via "Add item") so the "Add
-    // photo" create action is reachable, then tap it — drives _addPhoto end to
-    // end (real durable copy needs runAsync for the file I/O).
+    // Open the unified "Add anything" picker (via "Add item"), open its header
+    // "+" so the "Add photo" create action is reachable, then tap it — drives
+    // _addPhoto end to end (real durable copy needs runAsync for the file I/O).
     final addItem = find.byKey(const ValueKey('matome-add-item'));
     await tester.ensureVisible(addItem);
     await tester.tap(addItem);
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('relationship-create-menu')));
+    await tester.pumpAndSettle();
     final addPhoto =
         find.byKey(const ValueKey('relationship-action-photo'));
     expect(addPhoto, findsOneWidget,
-        reason: 'the Add-anything picker must surface the Add photo action');
+        reason: 'the picker "+" menu must surface the Add photo action');
     // Tap the Add-photo menu entry and drive _addPhoto end to end inside
     // runAsync (the real durable copy does file I/O). The menu item is in an
     // overlay route, so pump a frame inside runAsync to dispatch its onPressed

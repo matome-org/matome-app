@@ -476,33 +476,71 @@ Widget relationshipPickerSpaceUseCase(BuildContext context) {
 }
 
 @widgetbook.UseCase(
-  name: 'Add item (sources)',
+  name: 'Pre-filtered (opened from Add person)',
   type: RelationshipPicker,
   path: '[Widgets]/Relationship picker',
 )
-Widget relationshipPickerSourcesUseCase(BuildContext context) {
-  // The create/source variant — what "Add item" will open: no candidate list,
-  // just the content sources. The owner-requested Record · Photo · File set.
+Widget relationshipPickerPrefilteredUseCase(BuildContext context) {
+  // What "Add person" opens: the SAME unified picker, but pre-filtered to
+  // Contacts via initialTypeId. Create actions live behind the header "+".
   return _RelationshipPickerSurface(
     child: RelationshipPicker(
       onClose: () {},
       data: const RelationshipPickerData(
-        title: 'Add item',
+        title: 'Add to this matome',
+        mode: RelationshipSelectMode.multi,
+        searchHint: 'Search contacts, files, spaces',
+        initialTypeId: 'contact',
+        types: [
+          RelationshipType(
+            id: 'contact',
+            label: 'Contacts',
+            icon: Icons.person_outline,
+          ),
+          RelationshipType(
+            id: 'file',
+            label: 'Files',
+            icon: Icons.insert_drive_file_outlined,
+          ),
+          RelationshipType(
+            id: 'space',
+            label: 'Spaces',
+            icon: Icons.folder_outlined,
+          ),
+        ],
         actions: [
           RelationshipAction(
-            id: 'record',
-            label: 'Record audio',
-            icon: Icons.mic_none_rounded,
+            id: 'create-contact',
+            label: 'Create contact',
+            icon: Icons.person_add_alt_1_outlined,
           ),
           RelationshipAction(
-            id: 'photo',
-            label: 'Add photo',
-            icon: Icons.add_photo_alternate_outlined,
+            id: 'new-space',
+            label: 'New space',
+            icon: Icons.create_new_folder_outlined,
           ),
-          RelationshipAction(
-            id: 'file',
-            label: 'Add file',
-            icon: Icons.upload_file_outlined,
+        ],
+        candidates: [
+          RelationshipCandidate(
+            id: 'ken',
+            typeId: 'contact',
+            title: 'Ken Watanabe',
+            subtitle: 'Contact · ken@studio.jp',
+            icon: Icons.person_outline,
+          ),
+          RelationshipCandidate(
+            id: 'mara',
+            typeId: 'contact',
+            title: 'Mara Lopes',
+            subtitle: 'Contact · Design',
+            icon: Icons.person_outline,
+          ),
+          RelationshipCandidate(
+            id: 'f1',
+            typeId: 'file',
+            title: 'Q3 roadmap.pdf',
+            subtitle: 'File · PDF · 2.4 MB',
+            icon: Icons.picture_as_pdf_outlined,
           ),
         ],
       ),
@@ -629,6 +667,25 @@ Widget relationshipPickerMixedUseCase(BuildContext context) {
         title: 'Add to this matome',
         mode: RelationshipSelectMode.multi,
         searchHint: 'Search contacts, files, spaces',
+        actions: [
+          RelationshipAction(
+            id: 'photo',
+            label: 'Add photo',
+            icon: Icons.add_photo_alternate_outlined,
+          ),
+          RelationshipAction(
+            id: 'record',
+            label: 'Record audio',
+            icon: Icons.mic_none_rounded,
+            enabled: false,
+            tooltip: 'Coming soon',
+          ),
+          RelationshipAction(
+            id: 'create-contact',
+            label: 'Create contact',
+            icon: Icons.person_add_alt_1_outlined,
+          ),
+        ],
         types: [
           RelationshipType(
             id: 'contact',
@@ -726,10 +783,9 @@ Widget relationshipPickerEmptyUseCase(BuildContext context) {
 /// bordered surface card at a phone-sheet width so the use cases read like the
 /// real overlay.
 class _RelationshipPickerSurface extends StatelessWidget {
-  const _RelationshipPickerSurface({required this.child, this.width = 400});
+  const _RelationshipPickerSurface({required this.child});
 
   final Widget child;
-  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -741,7 +797,7 @@ class _RelationshipPickerSurface extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: width),
+          constraints: const BoxConstraints(maxWidth: 400),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: colors.surface,

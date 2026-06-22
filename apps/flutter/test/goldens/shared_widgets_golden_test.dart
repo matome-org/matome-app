@@ -134,10 +134,6 @@ void main() {
                   child: _RelationshipPickerSample(),
                 ),
                 GoldenTestScenario(
-                  name: 'relationship picker (sources)',
-                  child: _RelationshipPickerSourcesSample(),
-                ),
-                GoldenTestScenario(
                   name: 'relationship picker (mixed · filter)',
                   child: _RelationshipPickerMixedSample(),
                 ),
@@ -1016,47 +1012,6 @@ class _RelationshipPickerSample extends StatelessWidget {
             ),
           ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The [RelationshipPicker] in its CREATE/SOURCE variant — the "Add item"
-/// surface: no candidate list, just Record · Photo · File.
-class _RelationshipPickerSourcesSample extends StatelessWidget {
-  const _RelationshipPickerSourcesSample();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final radius = context.radius;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(radius.lg),
-        border: Border.all(color: colors.border),
-      ),
-      child: const RelationshipPicker(
-        data: RelationshipPickerData(
-          title: 'Add item',
-          actions: [
-            RelationshipAction(
-              id: 'record',
-              label: 'Record audio',
-              icon: Icons.mic_none_rounded,
-            ),
-            RelationshipAction(
-              id: 'photo',
-              label: 'Add photo',
-              icon: Icons.add_photo_alternate_outlined,
-            ),
-            RelationshipAction(
-              id: 'file',
-              label: 'Add file',
-              icon: Icons.upload_file_outlined,
-            ),
-          ],
         ),
       ),
     );

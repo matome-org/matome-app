@@ -672,11 +672,6 @@ final directories = <_widgetbook.WidgetbookNode>[
                     .relationshipPickerFilesUseCase,
               ),
               _widgetbook.WidgetbookUseCase(
-                name: 'Add item (sources)',
-                builder: _matome_widgetbook_widgetbook
-                    .relationshipPickerSourcesUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
                 name: 'Add people (multi · search)',
                 builder: _matome_widgetbook_widgetbook
                     .relationshipPickerPeopleUseCase,
@@ -695,6 +690,11 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'File into a space (single)',
                 builder: _matome_widgetbook_widgetbook
                     .relationshipPickerSpaceUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Pre-filtered (opened from Add person)',
+                builder: _matome_widgetbook_widgetbook
+                    .relationshipPickerPrefilteredUseCase,
               ),
             ],
           ),

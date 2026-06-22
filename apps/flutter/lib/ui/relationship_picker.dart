@@ -125,6 +125,7 @@ class RelationshipPickerData {
     this.emptyLabel = 'Nothing here yet',
     this.confirmLabel = 'Add',
     this.allLabel = 'All',
+    this.initialTypeId,
   });
 
   /// The surface heading (e.g. "Add people", "File into a space", "Add item").
@@ -156,6 +157,11 @@ class RelationshipPickerData {
 
   /// Label for the leading "show every type" filter chip.
   final String allLabel;
+
+  /// Pre-selects a type filter when the picker opens (e.g. open from "Add
+  /// person" → contacts already filtered). Null → the "All" chip. Ignored when
+  /// there is no type filter.
+  final String? initialTypeId;
 
   bool get hasSearch => searchHint != null;
   bool get isMulti => mode == RelationshipSelectMode.multi;
@@ -205,6 +211,17 @@ class _RelationshipPickerState extends State<RelationshipPicker> {
 
   /// Active type filter id; null = the "All" chip (every type).
   String? _activeType;
+
+  @override
+  void initState() {
+    super.initState();
+    // Open pre-filtered when the caller asks (e.g. "Add person" → contacts) and
+    // the type exists in the filter set.
+    final initial = widget.data.initialTypeId;
+    if (initial != null && widget.data.types.any((t) => t.id == initial)) {
+      _activeType = initial;
+    }
+  }
 
   @override
   void dispose() {
@@ -259,6 +276,15 @@ class _RelationshipPickerState extends State<RelationshipPicker> {
                   style: typography.title.copyWith(color: colors.textPrimary),
                 ),
               ),
+              // Create-new affordance: a "+" that reveals the create/source
+              // actions in a menu, so the body stays a clean link-existing list.
+              if (data.actions.isNotEmpty) ...[
+                _CreateActionsButton(
+                  actions: data.actions,
+                  onAction: widget.onAction,
+                ),
+                SizedBox(width: spacing.sm),
+              ],
               if (widget.onClose != null)
                 InkWell(
                   key: const ValueKey('relationship-picker-close'),
@@ -299,59 +325,40 @@ class _RelationshipPickerState extends State<RelationshipPicker> {
             onSelect: (id) => setState(() => _activeType = id),
           ),
 
-        // Create / source actions.
-        if (data.actions.isNotEmpty) ...[
-          for (final action in data.actions)
-            _ActionRow(
-              action: action,
-              onTap: action.enabled
-                  ? () => widget.onAction?.call(action.id)
-                  : null,
+        // Candidate list (link existing), or the teaching empty state. Create
+        // actions live behind the header "+", so the body is always the list.
+        if (filtered.isEmpty)
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.lg,
+              vertical: spacing.lg,
             ),
-          if (data.candidates.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: spacing.lg,
-                vertical: spacing.xs,
-              ),
-              child: Divider(height: 1, color: colors.border),
+            child: Text(
+              data.emptyLabel,
+              textAlign: TextAlign.center,
+              style: typography.bodySmall.copyWith(color: colors.textMuted),
             ),
-        ],
-
-        // Candidate list, or the teaching empty state.
-        if (data.candidates.isNotEmpty || data.actions.isEmpty)
-          if (filtered.isEmpty)
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: spacing.lg,
-                vertical: spacing.lg,
-              ),
-              child: Text(
-                data.emptyLabel,
-                textAlign: TextAlign.center,
-                style: typography.bodySmall.copyWith(color: colors.textMuted),
-              ),
-            )
-          else
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: widget.maxListHeight),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: EdgeInsets.symmetric(vertical: spacing.xxs),
-                itemCount: filtered.length,
-                itemBuilder: (context, i) {
-                  final c = filtered[i];
-                  return _CandidateRow(
-                    candidate: c,
-                    multi: data.isMulti,
-                    selected: _selected.contains(c.id),
-                    onTap: () => data.isMulti
-                        ? _toggle(c)
-                        : (c.linked ? null : widget.onPick?.call(c.id)),
-                  );
-                },
-              ),
+          )
+        else
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: widget.maxListHeight),
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.symmetric(vertical: spacing.xxs),
+              itemCount: filtered.length,
+              itemBuilder: (context, i) {
+                final c = filtered[i];
+                return _CandidateRow(
+                  candidate: c,
+                  multi: data.isMulti,
+                  selected: _selected.contains(c.id),
+                  onTap: () => data.isMulti
+                      ? _toggle(c)
+                      : (c.linked ? null : widget.onPick?.call(c.id)),
+                );
+              },
             ),
+          ),
 
         // Multi-select confirm.
         if (data.isMulti)
@@ -544,59 +551,70 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-/// A create/source row: accent leading glyph + accent label, full-width
-/// tappable with an explicit click cursor + hover highlight (matches
-/// `MatomePanelAddRow`'s affordance treatment).
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({required this.action, required this.onTap});
+/// The header "+" create-actions affordance: an accent "+" that opens a menu of
+/// the create/source [RelationshipAction]s, so the picker body stays a clean
+/// link-existing list. Each menu entry keeps the `relationship-action-<id>` key;
+/// the trigger carries `relationship-create-menu`. Deferred actions
+/// ([RelationshipAction.enabled] == false) render disabled with a tooltip.
+class _CreateActionsButton extends StatelessWidget {
+  const _CreateActionsButton({required this.actions, required this.onAction});
 
-  final RelationshipAction action;
-
-  /// Null → the action is deferred (rendered muted, non-tapping).
-  final VoidCallback? onTap;
+  final List<RelationshipAction> actions;
+  final ValueChanged<String>? onAction;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
+    final radius = context.radius;
     final typography = context.typography;
-    final enabled = action.enabled && onTap != null;
-    final fg = enabled ? colors.accent : colors.textMuted;
 
-    Widget row = Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.lg,
-        vertical: spacing.sm,
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(colors.surface),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radius.md),
+            side: BorderSide(color: colors.border),
+          ),
+        ),
+        padding: WidgetStatePropertyAll(
+          EdgeInsets.symmetric(vertical: spacing.xs),
+        ),
       ),
-      child: Row(
-        children: [
-          Icon(action.icon, size: spacing.md, color: fg),
-          SizedBox(width: spacing.sm),
-          Text(action.label, style: typography.bodySmall.copyWith(color: fg)),
-        ],
+      builder: (context, controller, child) => InkWell(
+        key: const ValueKey('relationship-create-menu'),
+        onTap: () => controller.isOpen ? controller.close() : controller.open(),
+        mouseCursor: SystemMouseCursors.click,
+        borderRadius: BorderRadius.circular(radius.pill),
+        child: Semantics(
+          button: true,
+          label: 'Create new',
+          child: Icon(Icons.add, size: spacing.md, color: colors.accent),
+        ),
       ),
-    );
-
-    if (!enabled) {
-      row = Semantics(
-        button: true,
-        enabled: false,
-        label: action.tooltip == null
-            ? action.label
-            : '${action.label} · ${action.tooltip}',
-        child: row,
-      );
-      return action.tooltip == null
-          ? row
-          : Tooltip(message: action.tooltip!, child: row);
-    }
-
-    return InkWell(
-      key: ValueKey('relationship-action-${action.id}'),
-      onTap: onTap,
-      mouseCursor: SystemMouseCursors.click,
-      hoverColor: colors.accent.withValues(alpha: 0.08),
-      child: row,
+      menuChildren: [
+        for (final action in actions)
+          MenuItemButton(
+            key: ValueKey('relationship-action-${action.id}'),
+            leadingIcon: Icon(
+              action.icon,
+              size: spacing.md,
+              color: action.enabled ? colors.textSecondary : colors.textMuted,
+            ),
+            onPressed:
+                action.enabled ? () => onAction?.call(action.id) : null,
+            child: Tooltip(
+              message: action.enabled ? '' : (action.tooltip ?? ''),
+              child: Text(
+                action.label,
+                style: typography.bodySmall.copyWith(
+                  color: action.enabled ? colors.textPrimary : colors.textMuted,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
