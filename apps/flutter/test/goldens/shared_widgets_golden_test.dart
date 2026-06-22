@@ -19,6 +19,7 @@ import 'package:matome_flutter/ui/avatar.dart';
 import 'package:matome_flutter/ui/empty_state.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
+import 'package:matome_flutter/ui/matome_detail_panel.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
 
 void main() {
@@ -88,6 +89,10 @@ void main() {
                 GoldenTestScenario(
                   name: 'matome sync chip',
                   child: _MatomeSyncChipSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'matome detail panel sections',
+                  child: _MatomeDetailPanelSample(),
                 ),
                 GoldenTestScenario(
                   name: 'bottom sheet shell',
@@ -517,6 +522,56 @@ class _MatomeSyncChipSample extends StatelessWidget {
         MatomeSyncChip(rollup: MatomeSyncRollup.partial),
         MatomeSyncChip(rollup: MatomeSyncRollup.onDevice),
       ],
+    );
+  }
+}
+
+/// Golden for the owner-APPROVED Matome Details-panel scaffolding (#1458): the
+/// public `lib/ui/matome_detail_panel.dart` section widgets the live screen AND
+/// the Widgetbook "Detail panel" use case both render — one labeled, framed
+/// section with a compact item row (leading icon · title · meta · trailing sync
+/// chip) and the accent Add row.
+class _MatomeDetailPanelSample extends StatelessWidget {
+  const _MatomeDetailPanelSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: MatomePanelSection(
+          label: 'Items · 2',
+          showDivider: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              MatomePanelRow(
+                icon: Icons.mic_none_rounded,
+                title: 'Meeting audio',
+                meta: '14:30 · 12:04',
+                trailing: MatomeSyncChip(rollup: MatomeSyncRollup.cloud),
+              ),
+              SizedBox(height: 8),
+              MatomePanelRow(
+                icon: Icons.description_outlined,
+                title: 'Quarterly report',
+                meta: '14:55',
+                trailing: MatomeSyncChip(rollup: MatomeSyncRollup.onDevice),
+              ),
+              SizedBox(height: 8),
+              MatomePanelAddRow(label: 'Add photo'),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

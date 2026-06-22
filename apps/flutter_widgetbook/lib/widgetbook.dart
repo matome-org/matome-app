@@ -18,6 +18,7 @@ import 'package:matome_flutter/ui/avatar.dart';
 import 'package:matome_flutter/ui/empty_state.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
+import 'package:matome_flutter/ui/matome_detail_panel.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
 import 'package:widgetbook/widgetbook.dart';
 import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
@@ -200,6 +201,45 @@ Widget statusBadgesUseCase(BuildContext context) {
 )
 Widget matomeSyncChipUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 320, child: _MatomeSyncChipSample());
+}
+
+// ─── Matome Details panel scaffolding (#1458) ─────────────────────────────────
+//
+// CONVERGENCE: the catalog renders the REAL, PUBLIC panel widgets shipped in
+// `package:matome_flutter/ui/matome_detail_panel.dart` — the SAME widgets the
+// live `_MatomeDetails` composes. There is no private mock to drift from.
+
+@widgetbook.UseCase(
+  name: 'Section (label + divider)',
+  type: MatomePanelSection,
+  path: '[Catalog]/Matome panel',
+)
+Widget matomePanelSectionUseCase(BuildContext context) {
+  return const _UseCaseSurface(width: 360, child: _MatomePanelSectionSample());
+}
+
+@widgetbook.UseCase(
+  name: 'Item row (icon + meta + sync chip)',
+  type: MatomePanelRow,
+  path: '[Catalog]/Matome panel',
+)
+Widget matomePanelRowUseCase(BuildContext context) {
+  return const _UseCaseSurface(width: 360, child: _MatomePanelRowSample());
+}
+
+@widgetbook.UseCase(
+  name: 'Add row (accent affordance)',
+  type: MatomePanelAddRow,
+  path: '[Catalog]/Matome panel',
+)
+Widget matomePanelAddRowUseCase(BuildContext context) {
+  return const _UseCaseSurface(
+    width: 360,
+    child: MatomePanelAddRow(
+      icon: Icons.add_photo_alternate_outlined,
+      label: 'Add photo',
+    ),
+  );
 }
 
 @widgetbook.UseCase(
@@ -809,6 +849,56 @@ class _MatomeSyncChipSample extends StatelessWidget {
         MatomeSyncChip(rollup: MatomeSyncRollup.partial),
         MatomeSyncChip(rollup: MatomeSyncRollup.onDevice),
       ],
+    );
+  }
+}
+
+/// A framed Matome panel section with a compact item row and the accent Add row
+/// — the approved Details-panel scaffolding (#1458), rendered from the real
+/// public `lib/ui` widgets.
+class _MatomePanelSectionSample extends StatelessWidget {
+  const _MatomePanelSectionSample();
+
+  @override
+  Widget build(BuildContext context) {
+    return MatomePanelSection(
+      label: 'Items · 2',
+      showDivider: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          MatomePanelRow(
+            icon: Icons.mic_none_rounded,
+            title: 'Meeting audio',
+            meta: '14:30 · 12:04',
+            trailing: MatomeSyncChip(rollup: MatomeSyncRollup.cloud),
+          ),
+          SizedBox(height: 8),
+          MatomePanelRow(
+            icon: Icons.description_outlined,
+            title: 'Quarterly report',
+            meta: '14:55',
+            trailing: MatomeSyncChip(rollup: MatomeSyncRollup.onDevice),
+          ),
+          SizedBox(height: 8),
+          MatomePanelAddRow(label: 'Add photo'),
+        ],
+      ),
+    );
+  }
+}
+
+/// A single compact item row in isolation.
+class _MatomePanelRowSample extends StatelessWidget {
+  const _MatomePanelRowSample();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MatomePanelRow(
+      icon: Icons.mic_none_rounded,
+      title: 'Meeting audio',
+      meta: '14:30 · 12:04',
+      trailing: MatomeSyncChip(rollup: MatomeSyncRollup.cloud),
     );
   }
 }

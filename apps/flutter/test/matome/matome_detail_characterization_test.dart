@@ -160,6 +160,14 @@ void main() {
     await tester.pumpWidget(_app(container(), id: 'm_inbox'));
     await tester.pumpAndSettle();
 
+    // Filing (the Space section) now lives in the Details panel (#1458, the
+    // approved layout owns filing), so on the narrow/sheet presentation it is
+    // revealed behind "Show more" rather than sitting in the letter meta strip.
+    await _revealDetails(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('matome-file-cta')),
+      200,
+    );
     expect(find.byKey(const ValueKey('matome-file-cta')), findsOneWidget);
   });
 

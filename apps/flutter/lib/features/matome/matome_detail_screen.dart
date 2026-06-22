@@ -23,6 +23,7 @@ import '../../ui/app_dialog.dart';
 import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/loading_indicator.dart';
+import '../../ui/matome_detail_panel.dart';
 import '../details/file_actions_menu.dart';
 import '../home/home_filters.dart' show formatTimestamp;
 import 'matome_actions_menu.dart';
@@ -488,12 +489,13 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
           SizedBox(height: spacing.lg),
           Divider(height: 1, color: colors.border),
           SizedBox(height: spacing.md),
-          // Summarized one-line lists (always visible).
+          // Summarized one-line lists (always visible). Filing (Space) moved
+          // OUT of the letter meta strip and into the Details panel's "Space"
+          // section (#1458, the approved layout owns filing), so it is no
+          // longer duplicated across the letter and the revealed panel.
           _FilesMetaRow(recordings: matome.recordings),
           SizedBox(height: spacing.sm),
           _PeopleMetaRow(matomeId: widget.id),
-          SizedBox(height: spacing.sm),
-          _FilingSection(matome: matome, spaces: widget.spaces),
           SizedBox(height: spacing.sm),
           _StatusMetaRow(rollup: matome.syncRollup),
           // "Show more" affordance — the narrow/sheet presentation. On wide
@@ -530,10 +532,18 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
   }
 }
 
-/// The detailed management sections gathered behind "Show more": the child
-/// Items list, the contacts slot, editable notes, and the deferred Share row.
-/// Extracted so the W8 side panel can reuse the same composition (its
-/// `MatomeDetailPanel` mirrors this section order).
+/// The detailed management sections — the owner-APPROVED Details-panel layout
+/// (#1458): labeled, divider-framed [MatomePanelSection]s in the approved order
+/// — Items · N → People · N → Space (Refile) → Notes (+ Edit) → Share — with
+/// compact item rows carrying a per-item sync chip, both Add affordances styled
+/// as accent rows, and the inline Notes "Edit" trailing.
+///
+/// This is the SINGLE composition point reused by BOTH the wide desktop side
+/// panel ([_DetailSidePanel]) AND the narrow "Show more" sheet — fixing it
+/// fixes both. The presentational scaffolding (section framing, compact rows,
+/// add rows, the per-item sync chip) lives in the PUBLIC
+/// `lib/ui/matome_detail_panel.dart` so the Widgetbook "Detail panel" use case
+/// renders the very same widgets (convergence — no mock to drift).
 class _MatomeDetails extends StatelessWidget {
   const _MatomeDetails({
     required this.id,
@@ -549,24 +559,48 @@ class _MatomeDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
-
     return Column(
       key: const ValueKey('matome-details'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Items · N — compact rows (leading media icon · title · time/duration ·
+        // trailing per-item sync chip + overflow) and BOTH Add affordances.
         _RecordingsSection(recordings: matome.recordings, matomeId: id),
-        SizedBox(height: spacing.lg),
+        // People · N — real contacts as compact rows + Add person.
         _ContactChipsSlot(matomeId: id),
-        SizedBox(height: spacing.lg),
+        // Space — filed space + Refile, or the File-into-space CTA for an Inbox.
+        _SpacePanelSection(id: id),
+        // Notes — body + inline "Edit" trailing.
         _NotesSection(
           description: matome.description,
           controller: controller,
           notesDirty: notesDirty,
         ),
-        SizedBox(height: spacing.lg),
+        // Share — deferred ("Coming soon"). The final section drops its divider.
         const _DeferredActions(),
       ],
+    );
+  }
+}
+
+/// The Space section of the Details panel (#1458): the matome's filed Space
+/// (folder + name) with an inline accent "Refile" action, or — for an Inbox
+/// matome — the "File into a space" CTA. Reuses [_FilingSection]'s sheet/flow so
+/// filing keeps working; framed by a [MatomePanelSection] to match the approved
+/// layout. Reads spaces live off the controller so the panel needs only the id.
+class _SpacePanelSection extends ConsumerWidget {
+  const _SpacePanelSection({required this.id});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(matomeDetailControllerProvider(id));
+    final matome = state.matome;
+    if (matome == null) return const SizedBox.shrink();
+    return MatomePanelSection(
+      label: t.matome.spaceLabel,
+      child: _FilingSection(matome: matome, spaces: state.spaces),
     );
   }
 }
@@ -1124,32 +1158,38 @@ class _ContactChipsSlot extends ConsumerWidget {
     final controller =
         ref.read(matomeDetailControllerProvider(matomeId).notifier);
 
-    return Column(
+    // People · N — attached contacts as compact rows + an "Add person" accent
+    // row, framed by the approved [MatomePanelSection]. The `matome-contacts`
+    // anchor key + the per-contact / detach / add keys are preserved.
+    return MatomePanelSection(
       key: const ValueKey('matome-contacts'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: spacing.xs,
-          runSpacing: spacing.xs,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            for (final entry in contacts)
-              _ContactChip(
-                entry: entry,
-                onDelete: () => controller.detachContact(entry.contact.id),
-              ),
-            _AddContactButton(onPressed: () => _openPicker(context, ref)),
-          ],
-        ),
-      ],
+      label: '${t.matome.peopleLabel} · ${contacts.length}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final entry in contacts)
+            _ContactRow(
+              entry: entry,
+              onDelete: () => controller.detachContact(entry.contact.id),
+            ),
+          SizedBox(height: spacing.xs),
+          MatomePanelAddRow(
+            key: const ValueKey('matome-add-contact'),
+            icon: Icons.person_add_alt_outlined,
+            label: t.matome.addContact,
+            onTap: () => _openPicker(context, ref),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// One attached contact rendered as a role-bearing chip with a detach
-/// affordance.
-class _ContactChip extends StatelessWidget {
-  const _ContactChip({required this.entry, required this.onDelete});
+/// One attached contact rendered as a compact panel row (avatar · name · role ·
+/// detach), mirroring the approved `_PanelContactRow`. Keys preserved:
+/// `matome-contact-<id>` (the row) / `matome-contact-remove-<id>` (detach).
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({required this.entry, required this.onDelete});
 
   final MatomeContactEntry entry;
   final VoidCallback onDelete;
@@ -1160,108 +1200,35 @@ class _ContactChip extends StatelessWidget {
     final spacing = context.spacing;
     final radius = context.radius;
     final typography = context.typography;
+    final name = entry.contact.displayName;
 
-    return Container(
+    return Padding(
       key: ValueKey('matome-contact-${entry.contact.id}'),
-      padding: EdgeInsets.fromLTRB(
-        spacing.sm,
-        spacing.xxs,
-        spacing.xs,
-        spacing.xxs,
-      ),
-      decoration: BoxDecoration(
-        color: colors.subtleFill,
-        borderRadius: BorderRadius.circular(radius.pill),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.person_outline,
-            size: spacing.md,
-            color: colors.textSecondary,
+      padding: EdgeInsets.only(bottom: spacing.sm),
+      child: MatomePanelRow(
+        icon: Icons.person_outline,
+        leading: CircleAvatar(
+          radius: spacing.md,
+          backgroundColor: colors.subtleFill,
+          child: Text(
+            name.isEmpty ? '?' : name.characters.first,
+            style: typography.label.copyWith(color: colors.textSecondary),
           ),
-          SizedBox(width: spacing.xs),
-          Text(
-            entry.contact.displayName,
-            style: typography.label.copyWith(
-              fontWeight: FontWeight.w600,
-              color: colors.textPrimary,
+        ),
+        title: name,
+        meta: _roleLabel(entry.role),
+        trailing: InkWell(
+          key: ValueKey('matome-contact-remove-${entry.contact.id}'),
+          onTap: onDelete,
+          borderRadius: BorderRadius.circular(radius.pill),
+          child: Semantics(
+            button: true,
+            label: t.matome.removeContact,
+            child: Icon(
+              Icons.close,
+              size: spacing.md,
+              color: colors.textMuted,
             ),
-          ),
-          SizedBox(width: spacing.xs),
-          Text(
-            _roleLabel(entry.role),
-            style: typography.label.copyWith(color: colors.textMuted),
-          ),
-          SizedBox(width: spacing.xxs),
-          InkWell(
-            key: ValueKey('matome-contact-remove-${entry.contact.id}'),
-            onTap: onDelete,
-            borderRadius: BorderRadius.circular(radius.pill),
-            child: Semantics(
-              button: true,
-              label: t.matome.removeContact,
-              child: Icon(
-                Icons.close,
-                size: spacing.md,
-                color: colors.textMuted,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The pill that opens the directory picker.
-class _AddContactButton extends StatelessWidget {
-  const _AddContactButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final radius = context.radius;
-    final typography = context.typography;
-
-    return Material(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(radius.pill),
-      child: InkWell(
-        key: const ValueKey('matome-add-contact'),
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(radius.pill),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: spacing.sm,
-            vertical: spacing.xxs,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius.pill),
-            border: Border.all(color: colors.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.person_add_alt_outlined,
-                size: spacing.md,
-                color: colors.accent,
-              ),
-              SizedBox(width: spacing.xs),
-              Text(
-                t.matome.addContact,
-                style: typography.label.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: colors.accent,
-                ),
-              ),
-            ],
           ),
         ),
       ),
@@ -1369,27 +1336,20 @@ class _FilingSection extends ConsumerWidget {
     final radius = context.radius;
     final typography = context.typography;
 
-    final label = SizedBox(
-      width: _kMetaLabelWidth,
-      child: Row(
-        children: [
-          Icon(Icons.folder_outlined, size: spacing.md, color: colors.textMuted),
-          SizedBox(width: spacing.xs),
-          Flexible(
-            child: Text(
-              t.matome.spaceLabel,
-              overflow: TextOverflow.ellipsis,
-              style: typography.label.copyWith(color: colors.textSecondary),
-            ),
-          ),
-        ],
-      ),
+    // Hosted inside the panel's "Space" [MatomePanelSection] (#1458), which
+    // already renders the "Space" heading — so the row itself drops the old
+    // fixed-width label and leads with the folder glyph.
+    final folder = Icon(
+      Icons.folder_outlined,
+      size: spacing.md,
+      color: colors.textSecondary,
     );
 
     if (matome.isInbox) {
       return Row(
         children: [
-          label,
+          folder,
+          SizedBox(width: spacing.xs),
           Material(
             color: colors.primary,
             borderRadius: BorderRadius.circular(radius.pill),
@@ -1422,7 +1382,8 @@ class _FilingSection extends ConsumerWidget {
     return Row(
       key: const ValueKey('matome-filed'),
       children: [
-        label,
+        folder,
+        SizedBox(width: spacing.xs),
         Expanded(
           child: Text(
             spaceName ?? matome.spaceId ?? '',
@@ -1487,25 +1448,6 @@ class _FileIntoSpaceSheet extends StatelessWidget {
 }
 
 // ─── Recordings (child Items) + add photo ────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final typography = context.typography;
-    return Text(
-      text,
-      style: typography.label.copyWith(
-        fontWeight: FontWeight.w600,
-        color: colors.textSecondary,
-      ),
-    );
-  }
-}
 
 class _RecordingsSection extends ConsumerWidget {
   const _RecordingsSection({
@@ -1599,45 +1541,44 @@ class _RecordingsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(child: _SectionLabel(text: t.matome.recordings)),
-            AppTextButton.icon(
-              key: const ValueKey('matome-add-photo'),
-              onPressed: () => _addPhoto(context),
-              icon: Icon(Icons.add_photo_alternate_outlined, size: spacing.md),
-              label: Text(t.matome.addPhoto),
-            ),
-            // "Add file" (document import, #1449) — gated by the documents flag
-            // (default OFF). When the flag is off this button is the ONLY thing
-            // gated out; Add photo and the dynamic-mediaType persistence stay
-            // unconditional.
-            if (FeatureFlags.documents) ...[
-              SizedBox(width: spacing.xs),
-              AppTextButton.icon(
-                key: const ValueKey('matome-add-file'),
-                onPressed: () => _addFile(context),
-                icon: Icon(Icons.upload_file_outlined, size: spacing.md),
-                label: Text(t.matome.addFile),
+    // Items · N — the approved section heading carries the live item count.
+    return MatomePanelSection(
+      label: '${t.matome.recordings} · ${recordings.length}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (recordings.isEmpty)
+            _EmptyHint(text: t.matome.noRecordings)
+          else
+            ...recordings.map(
+              (item) => Padding(
+                key: ValueKey('matome-item-${item.id}'),
+                padding: EdgeInsets.only(bottom: spacing.sm),
+                child: _RecordingTile(item: item, matomeId: matomeId),
               ),
-            ],
-          ],
-        ),
-        SizedBox(height: spacing.xs),
-        if (recordings.isEmpty)
-          _EmptyHint(text: t.matome.noRecordings)
-        else
-          ...recordings.map(
-            (item) => Padding(
-              key: ValueKey('matome-item-${item.id}'),
-              padding: EdgeInsets.only(bottom: spacing.sm),
-              child: _RecordingTile(item: item, matomeId: matomeId),
             ),
+          SizedBox(height: spacing.xs),
+          // BOTH add affordances, styled as the approved accent "Add" rows.
+          // "Add photo" is unconditional; "Add file" (document import, #1449) is
+          // gated by the documents flag (default OFF) — when off it is the ONLY
+          // thing dropped, Add photo and the dynamic-mediaType persistence stay.
+          MatomePanelAddRow(
+            key: const ValueKey('matome-add-photo'),
+            icon: Icons.add_photo_alternate_outlined,
+            label: t.matome.addPhoto,
+            onTap: () => _addPhoto(context),
           ),
-      ],
+          if (FeatureFlags.documents) ...[
+            SizedBox(height: spacing.sm),
+            MatomePanelAddRow(
+              key: const ValueKey('matome-add-file'),
+              icon: Icons.upload_file_outlined,
+              label: t.matome.addFile,
+              onTap: () => _addFile(context),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1728,8 +1669,18 @@ class _RecordingTile extends ConsumerWidget {
     }
   }
 
+  /// The compact row's muted sub-line: the relative time, plus the duration when
+  /// the Item has one (audio). Mirrors the approved `_PanelItemRow` meta.
+  String _meta() {
+    final when = formatTimestamp(DateTime.tryParse(item.timestamp));
+    final duration = item.duration.trim();
+    return duration.isEmpty ? when : '$when · $duration';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final spacing = context.spacing;
+
     // Destructive affordance standardized across BOTH item kinds AND with the
     // file-detail screens (#1444): the SAME anchored "…" popup ([FileActionsMenu])
     // holding Delete — never a bottom sheet on one surface and a popup on another.
@@ -1739,104 +1690,90 @@ class _RecordingTile extends ConsumerWidget {
       triggerKey: ValueKey('matome-item-overflow-${item.id}'),
       deleteKey: ValueKey('matome-item-delete-${item.id}'),
     );
+
+    // Trailing slot of the compact row: the REAL per-item sync chip (cloud /
+    // on-device — never the proposal's mock) followed by the overflow menu.
+    final trailing = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        matomeItemSyncChip(
+          item,
+          key: ValueKey('matome-item-sync-${item.id}'),
+        ),
+        SizedBox(width: spacing.xs),
+        overflow,
+      ],
+    );
+
     if (_isImage) {
-      return _ImageItemTile(
-        item: item,
+      // The image row keeps the `matome-image-<id>` tap key (the image-host
+      // open path is pinned by tests) and a small thumbnail as its leading slot.
+      return MatomePanelRow(
+        key: ValueKey('matome-image-${item.id}'),
+        icon: Icons.image_outlined,
+        leading: _ImageThumb(item: item),
+        title: item.title,
+        meta: _meta(),
+        trailing: trailing,
         onTap: () => _openImage(context),
-        overflow: overflow,
       );
     }
-    // The overflow rides INSIDE the card via AppCard.recording's `trailing`
-    // slot — so the card border encloses the '…' (the image tile does the
-    // same in-row). The shared card is unchanged wherever no trailing is
-    // passed. Documents drill into the DOCUMENT host; everything else (audio)
-    // drills into the audio host — never cross the streams.
-    return AppCard.recording(
-      card: item,
-      relativeTime: formatTimestamp(DateTime.tryParse(item.timestamp)),
+
+    // Documents drill into the DOCUMENT host; everything else (audio) drills
+    // into the audio host — never cross the streams. The leading glyph reflects
+    // the media type (document → description glyph, audio → mic).
+    return MatomePanelRow(
+      icon: matomeItemIcon(item.mediaType),
+      title: item.title,
+      meta: _meta(),
+      trailing: trailing,
       onTap: () =>
           _isDocument ? _openDocument(context) : _openRecording(context),
-      trailing: overflow,
     );
   }
 }
 
-class _ImageItemTile extends StatelessWidget {
-  const _ImageItemTile({
-    required this.item,
-    required this.onTap,
-    required this.overflow,
-  });
+/// The small image thumbnail used as a compact item row's leading slot: the
+/// on-device photo, or a tinted placeholder when the path is missing/broken.
+class _ImageThumb extends StatelessWidget {
+  const _ImageThumb({required this.item});
 
   final RecordingItem item;
-  final VoidCallback onTap;
-
-  /// The standardized '…' overflow menu (delete lives inside it) — the SAME
-  /// widget the audio tile mounts, replacing the old bare trash icon (#1444).
-  final Widget overflow;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
     final radius = context.radius;
-    final typography = context.typography;
     final accent = colors.badgeColor(item.badge);
     final path = item.filePath;
 
-    final Widget thumb = ClipRRect(
-      borderRadius: BorderRadius.circular(radius.md),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius.sm),
       child: SizedBox(
-        width: spacing.xxl,
-        height: spacing.xxl,
-        child: path == null
+        width: spacing.lg,
+        height: spacing.lg,
+        child: path == null || path.isEmpty
             ? ColoredBox(
                 color: accent.withValues(alpha: 0.13),
-                child: Icon(Icons.image_outlined, color: accent),
+                child: Icon(
+                  Icons.image_outlined,
+                  size: spacing.md,
+                  color: accent,
+                ),
               )
             : Image.file(
                 File(path),
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => ColoredBox(
                   color: accent.withValues(alpha: 0.13),
-                  child: Icon(Icons.broken_image_outlined, color: accent),
-                ),
-              ),
-      ),
-    );
-
-    return Material(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(radius.lg),
-      child: InkWell(
-        key: ValueKey('matome-image-${item.id}'),
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(radius.lg),
-        child: Container(
-          padding: EdgeInsets.all(spacing.sm),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius.lg),
-            border: Border.all(color: colors.border),
-          ),
-          child: Row(
-            children: [
-              thumb,
-              SizedBox(width: spacing.sm),
-              Expanded(
-                child: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: typography.body.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: colors.textPrimary,
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    size: spacing.md,
+                    color: accent,
                   ),
                 ),
               ),
-              overflow,
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1994,65 +1931,66 @@ class _NotesSectionState extends State<_NotesSection> {
     final hasNotes =
         widget.description != null && widget.description!.trim().isNotEmpty;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(child: _SectionLabel(text: t.matome.notes)),
-            if (!_editing)
-              AppTextButton.icon(
-                key: const ValueKey('matome-edit-notes'),
-                onPressed: _startEdit,
-                icon: Icon(Icons.edit_outlined, size: spacing.md),
-                label: Text(t.matome.editNotes),
-              ),
-          ],
-        ),
-        SizedBox(height: spacing.xs),
-        if (_editing) ...[
-          AppTextField(
-            key: const ValueKey('matome-notes-field'),
-            controller: _field,
-            hint: t.matome.notesHint,
-            maxLines: 5,
-            minLines: 3,
-            textAlignVertical: TextAlignVertical.top,
-          ),
-          SizedBox(height: spacing.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              AppTextButton(
-                onPressed: _cancel,
-                child: Text(t.matome.cancel),
-              ),
-              SizedBox(width: spacing.xs),
-              PrimaryButton(
-                key: const ValueKey('matome-notes-save'),
-                onPressed: _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.primary,
-                  foregroundColor: colors.onAccent,
+    // Notes — body + an inline accent "Edit" trailing on the section heading
+    // (the approved layout). The trailing is omitted while editing so the
+    // Cancel/Save controls own the affordance. Final section → no divider.
+    return MatomePanelSection(
+      label: t.matome.notes,
+      showDivider: false,
+      trailing: _editing
+          ? null
+          : Text(
+              t.matome.editNotes,
+              key: const ValueKey('matome-edit-notes'),
+              style: typography.label.copyWith(color: colors.accent),
+            ),
+      onTrailingTap: _editing ? null : _startEdit,
+      child: _editing
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppTextField(
+                  key: const ValueKey('matome-notes-field'),
+                  controller: _field,
+                  hint: t.matome.notesHint,
+                  maxLines: 5,
+                  minLines: 3,
+                  textAlignVertical: TextAlignVertical.top,
                 ),
-                child: Text(t.matome.save),
-              ),
-            ],
-          ),
-        ] else
-          Container(
-            key: const ValueKey('matome-notes'),
-            width: double.infinity,
-            padding: EdgeInsets.all(spacing.xxs),
-            child: hasNotes
-                ? MarkdownBody(data: widget.description!)
-                : Text(
-                    t.matome.noNotes,
-                    style:
-                        typography.bodySmall.copyWith(color: colors.textMuted),
-                  ),
-          ),
-      ],
+                SizedBox(height: spacing.sm),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    AppTextButton(
+                      onPressed: _cancel,
+                      child: Text(t.matome.cancel),
+                    ),
+                    SizedBox(width: spacing.xs),
+                    PrimaryButton(
+                      key: const ValueKey('matome-notes-save'),
+                      onPressed: _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.primary,
+                        foregroundColor: colors.onAccent,
+                      ),
+                      child: Text(t.matome.save),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Container(
+              key: const ValueKey('matome-notes'),
+              width: double.infinity,
+              padding: EdgeInsets.all(spacing.xxs),
+              child: hasNotes
+                  ? MarkdownBody(data: widget.description!)
+                  : Text(
+                      t.matome.noNotes,
+                      style: typography.bodySmall
+                          .copyWith(color: colors.textMuted),
+                    ),
+            ),
     );
   }
 }

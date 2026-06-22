@@ -12,7 +12,10 @@
 // wiring slang, so it renders standalone.
 
 import 'package:flutter/material.dart';
+import 'package:matome_flutter/core/db/matome_card.dart' show MatomeSyncRollup;
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/ui/app_card.dart' show MatomeSyncChip;
+import 'package:matome_flutter/ui/matome_detail_panel.dart';
 import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
 
 // ─── Localized sample copy ───────────────────────────────────────────────────
@@ -732,6 +735,14 @@ class _SyncChip extends StatelessWidget {
 }
 
 // ─── The detail side panel ───────────────────────────────────────────────────
+//
+// CONVERGED (#1458): this catalog panel now composes the REAL, PUBLIC panel
+// scaffolding shipped in `package:matome_flutter/ui/matome_detail_panel.dart`
+// (MatomePanelSection / MatomePanelRow / MatomePanelAddRow) and the REAL
+// `MatomeSyncChip` — the SAME widgets the live `_MatomeDetails` composes. There
+// is no longer a hand-built mock of the panel structure to drift from the app;
+// only the SAMPLE DATA lives here. Edit the section widgets in `lib/ui` and both
+// the app and this catalog entry move together.
 
 class MatomeDetailPanel extends StatelessWidget {
   const MatomeDetailPanel({super.key});
@@ -743,6 +754,14 @@ class MatomeDetailPanel extends StatelessWidget {
     final typography = context.typography;
     final c = _copyOf(context);
 
+    MatomeSyncChip chipFor(LetterSync sync) => MatomeSyncChip(
+          rollup: switch (sync) {
+            LetterSync.synced => MatomeSyncRollup.cloud,
+            LetterSync.syncing => MatomeSyncRollup.partial,
+            LetterSync.onDevice => MatomeSyncRollup.onDevice,
+          },
+        );
+
     return Padding(
       padding: EdgeInsets.all(spacing.lg),
       child: Column(
@@ -753,42 +772,83 @@ class MatomeDetailPanel extends StatelessWidget {
             children: [
               Text(
                 c.detail,
-                style: typography.title.copyWith(
-                  color: colors.textPrimary,
-                  fontSize: 18,
-                ),
+                style: typography.title.copyWith(color: colors.textPrimary),
               ),
               const Spacer(),
-              Icon(Icons.close, size: 20, color: colors.textMuted),
+              Icon(Icons.close, size: spacing.md, color: colors.textMuted),
             ],
           ),
           SizedBox(height: spacing.md),
 
-          _PanelSection(
+          // Items · N — compact rows (leading icon · title · time/duration ·
+          // trailing sync chip) + the accent Add row, via the real widgets.
+          MatomePanelSection(
             label: '${c.itemsLabel} · ${_kItems.length}',
             child: Column(
               children: [
                 for (var i = 0; i < _kItems.length; i++)
-                  _PanelItemRow(item: _kItems[i], title: c.itemTitles[i]),
+                  MatomePanelRow(
+                    icon: _kItems[i].icon,
+                    title: c.itemTitles[i],
+                    meta: _kItems[i].duration == null
+                        ? _kItems[i].time
+                        : '${_kItems[i].time} · ${_kItems[i].duration}',
+                    trailing: chipFor(_kItems[i].sync),
+                  ),
                 SizedBox(height: spacing.xs),
-                _AddRow(label: c.addItem),
+                MatomePanelAddRow(label: c.addItem),
               ],
             ),
           ),
 
-          _PanelSection(
+          // People · N — contact rows + Add person.
+          MatomePanelSection(
             label: '${c.contactsLabel} · ${_kPeople.length}',
             child: Column(
               children: [
-                _PanelContactRow(name: 'Ana', role: c.roleOrganizer),
-                _PanelContactRow(name: 'Ken', role: c.roleAttendee),
+                MatomePanelRow(
+                  icon: Icons.person_outline,
+                  leading: CircleAvatar(
+                    radius: spacing.md,
+                    backgroundColor: colors.subtleFill,
+                    child: Text(
+                      'A',
+                      style: typography.label
+                          .copyWith(color: colors.textSecondary),
+                    ),
+                  ),
+                  title: 'Ana',
+                  meta: c.roleOrganizer,
+                  trailing:
+                      Icon(Icons.close, size: spacing.md, color: colors.textMuted),
+                ),
+                MatomePanelRow(
+                  icon: Icons.person_outline,
+                  leading: CircleAvatar(
+                    radius: spacing.md,
+                    backgroundColor: colors.subtleFill,
+                    child: Text(
+                      'K',
+                      style: typography.label
+                          .copyWith(color: colors.textSecondary),
+                    ),
+                  ),
+                  title: 'Ken',
+                  meta: c.roleAttendee,
+                  trailing:
+                      Icon(Icons.close, size: spacing.md, color: colors.textMuted),
+                ),
                 SizedBox(height: spacing.xs),
-                _AddRow(label: c.addContact),
+                MatomePanelAddRow(
+                  icon: Icons.person_add_alt_outlined,
+                  label: c.addContact,
+                ),
               ],
             ),
           ),
 
-          _PanelSection(
+          // Space — filed space + Refile accent action.
+          MatomePanelSection(
             label: c.spaceLabel,
             child: Row(
               children: [
@@ -813,22 +873,27 @@ class MatomeDetailPanel extends StatelessWidget {
             ),
           ),
 
-          _PanelSection(
+          // Notes — body + inline accent "Edit", no trailing divider.
+          MatomePanelSection(
             label: c.notesLabel,
-            trailing: c.edit,
+            showDivider: false,
+            trailing: Text(
+              c.edit,
+              style: typography.label.copyWith(color: colors.accent),
+            ),
             child: Text(
               c.notesBody,
               style: typography.bodySmall.copyWith(color: colors.textSecondary),
             ),
           ),
 
-          SizedBox(height: spacing.sm),
+          // Share — deferred row.
           Align(
             alignment: Alignment.centerLeft,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.ios_share, size: 16, color: colors.textPrimary),
+                Icon(Icons.ios_share, size: spacing.md, color: colors.textPrimary),
                 SizedBox(width: spacing.xs),
                 Text(
                   c.share,
@@ -839,162 +904,6 @@ class MatomeDetailPanel extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PanelSection extends StatelessWidget {
-  const _PanelSection({
-    required this.label,
-    required this.child,
-    this.trailing,
-  });
-
-  final String label;
-  final String? trailing;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: typography.label.copyWith(
-                color: colors.textMuted,
-                letterSpacing: 0.6,
-              ),
-            ),
-            if (trailing != null) ...[
-              const Spacer(),
-              Text(
-                trailing!,
-                style: typography.label.copyWith(color: colors.accent),
-              ),
-            ],
-          ],
-        ),
-        SizedBox(height: spacing.sm),
-        child,
-        SizedBox(height: spacing.md),
-        Divider(height: 1, color: colors.border),
-        SizedBox(height: spacing.md),
-      ],
-    );
-  }
-}
-
-class _PanelItemRow extends StatelessWidget {
-  const _PanelItemRow({required this.item, required this.title});
-
-  final _Item item;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: spacing.sm),
-      child: Row(
-        children: [
-          Icon(item.icon, size: 18, color: colors.textSecondary),
-          SizedBox(width: spacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: typography.bodySmall.copyWith(
-                    color: colors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  item.duration == null
-                      ? item.time
-                      : '${item.time} · ${item.duration}',
-                  style: typography.label.copyWith(color: colors.textMuted),
-                ),
-              ],
-            ),
-          ),
-          _SyncChip(rollup: item.sync),
-        ],
-      ),
-    );
-  }
-}
-
-class _PanelContactRow extends StatelessWidget {
-  const _PanelContactRow({required this.name, required this.role});
-
-  final String name;
-  final String role;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: spacing.sm),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 13,
-            backgroundColor: colors.subtleFill,
-            child: Text(
-              name.characters.first,
-              style: typography.label.copyWith(color: colors.textSecondary),
-            ),
-          ),
-          SizedBox(width: spacing.sm),
-          Text(
-            name,
-            style: typography.bodySmall.copyWith(color: colors.textPrimary),
-          ),
-          SizedBox(width: spacing.sm),
-          Text(
-            role,
-            style: typography.label.copyWith(color: colors.textMuted),
-          ),
-          const Spacer(),
-          Icon(Icons.close, size: 16, color: colors.textMuted),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddRow extends StatelessWidget {
-  const _AddRow({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    return Row(
-      children: [
-        Icon(Icons.add, size: 16, color: colors.accent),
-        SizedBox(width: spacing.xs),
-        Text(label, style: typography.label.copyWith(color: colors.accent)),
-      ],
     );
   }
 }

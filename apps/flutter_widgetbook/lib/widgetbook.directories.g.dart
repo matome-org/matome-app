@@ -10,8 +10,16 @@
 // **************************************************************************
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
+import 'package:matome_widgetbook/proposals/matome_contact_proposal.dart'
+    as _matome_widgetbook_proposals_matome_contact_proposal;
+import 'package:matome_widgetbook/proposals/matome_files_proposal.dart'
+    as _matome_widgetbook_proposals_matome_files_proposal;
 import 'package:matome_widgetbook/proposals/matome_letter_proposal.dart'
     as _matome_widgetbook_proposals_matome_letter_proposal;
+import 'package:matome_widgetbook/proposals/matome_nav_proposal.dart'
+    as _matome_widgetbook_proposals_matome_nav_proposal;
+import 'package:matome_widgetbook/proposals/matome_table_proposal.dart'
+    as _matome_widgetbook_proposals_matome_table_proposal;
 import 'package:matome_widgetbook/widgetbook.dart'
     as _matome_widgetbook_widgetbook;
 import 'package:widgetbook/widgetbook.dart' as _widgetbook;
@@ -185,6 +193,39 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'Matome panel',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomePanelAddRow',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Add row (accent affordance)',
+                builder: _matome_widgetbook_widgetbook.matomePanelAddRowUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomePanelRow',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Item row (icon + meta + sync chip)',
+                builder: _matome_widgetbook_widgetbook.matomePanelRowUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomePanelSection',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Section (label + divider)',
+                builder:
+                    _matome_widgetbook_widgetbook.matomePanelSectionUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Overlays',
         children: [
           _widgetbook.WidgetbookComponent(
@@ -235,6 +276,66 @@ final directories = <_widgetbook.WidgetbookNode>[
   _widgetbook.WidgetbookCategory(
     name: 'Proposals',
     children: [
+      _widgetbook.WidgetbookFolder(
+        name: 'Contact detail',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'ContactDetail',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail — desktop',
+                builder: _matome_widgetbook_proposals_matome_contact_proposal
+                    .detailDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail — mobile',
+                builder: _matome_widgetbook_proposals_matome_contact_proposal
+                    .detailMobileUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail — sparse (minimal info)',
+                builder: _matome_widgetbook_proposals_matome_contact_proposal
+                    .detailSparseUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Files',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesGrid',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Grid — desktop',
+                builder: _matome_widgetbook_proposals_matome_files_proposal
+                    .gridDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Grid — mobile',
+                builder: _matome_widgetbook_proposals_matome_files_proposal
+                    .gridMobileUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesTable',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — desktop',
+                builder: _matome_widgetbook_proposals_matome_files_proposal
+                    .tableDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — mobile (compact)',
+                builder: _matome_widgetbook_proposals_matome_files_proposal
+                    .tableMobileUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
       _widgetbook.WidgetbookFolder(
         name: 'Matome detail',
         children: [
@@ -305,6 +406,71 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'List — grouped',
                 builder: _matome_widgetbook_proposals_matome_letter_proposal
                     .matomeListUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Matome table',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeTable',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — compact (mobile)',
+                builder: _matome_widgetbook_proposals_matome_table_proposal
+                    .tableCompactUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — desktop (sortable)',
+                builder: _matome_widgetbook_proposals_matome_table_proposal
+                    .tableDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — empty',
+                builder: _matome_widgetbook_proposals_matome_table_proposal
+                    .tableEmptyUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — selection + bulk bar',
+                builder: _matome_widgetbook_proposals_matome_table_proposal
+                    .tableSelectionUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Navigation',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeBottomDock',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile dock — bare',
+                builder: _matome_widgetbook_proposals_matome_nav_proposal
+                    .mobileDockBareUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile dock — in context',
+                builder: _matome_widgetbook_proposals_matome_nav_proposal
+                    .mobileDockInContextUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeSidebar',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Desktop sidebar — collapsed (rail)',
+                builder: _matome_widgetbook_proposals_matome_nav_proposal
+                    .desktopSidebarCollapsedUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Desktop sidebar — expanded',
+                builder: _matome_widgetbook_proposals_matome_nav_proposal
+                    .desktopSidebarExpandedUseCase,
               ),
             ],
           ),
