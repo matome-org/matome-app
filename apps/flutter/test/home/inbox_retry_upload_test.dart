@@ -180,6 +180,7 @@ class _ToggleRepository extends RecordingsRepository {
     String? badge,
     String mediaType = 'audio',
     int? workspaceId,
+    int? contentLength,
   }) async {
     if (!coreUp) throw const ApiException('Core unreachable');
     createCalls++;

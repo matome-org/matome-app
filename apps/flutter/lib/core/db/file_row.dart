@@ -42,8 +42,13 @@ FileKind fileKindFromMediaType(String mediaType) {
 ///     [contacts] is the file's MATOME's tagged contacts when it has a matome,
 ///     and EMPTY for an Unfiled file. The DR-003 "people tied to a file directly"
 ///     relation does not exist in the schema yet.
-///   * **size is not persisted** anywhere (neither Core nor Drift store byte
-///     size), so [sizeLabel] is null until a size column lands. UI shows a dash.
+///   * people are matome-mediated (see above).
+///
+/// SIZE (#1471): the recording's byte size IS now persisted end-to-end — captured
+/// client-side at upload (`content_length`), stored in Core (`byte_size`) and
+/// mirrored onto the Drift `byte_size` column. [sizeLabel] is the human-readable
+/// label ("2.4 MB"); it is null ONLY for legacy rows whose `byte_size` was never
+/// declared, in which case the UI shows a dash.
 class FileRow {
   const FileRow({
     required this.id,
@@ -74,8 +79,10 @@ class FileRow {
   /// carries none (legacy / audio / image rows disambiguated by [kind]).
   final String? ext;
 
-  /// Human size label (e.g. "2.4 MB"). **Null** today — size is not persisted
-  /// anywhere yet (schema gap, #1461). The UI renders a dash.
+  /// Human size label (e.g. "2.4 MB"), produced by [formatBytes] from the row's
+  /// persisted `byteSize` (#1471). **Null** only when the row carries no byte
+  /// size (legacy rows created before size was plumbed through), in which case
+  /// the UI renders a dash.
   final String? sizeLabel;
 
   /// Short relative display label for the "When" column / tile meta (e.g. "3h",
@@ -126,7 +133,7 @@ class FileRow {
       name: row.title,
       kind: kind,
       ext: row.originalExtension,
-      sizeLabel: null, // schema gap (#1461): size is not persisted.
+      sizeLabel: formatBytes(row.byteSize), // null only for legacy/no-size rows.
       when: relativeWhen(row.createdAt, now: now),
       whenSort: row.createdAt,
       matome: matomeTitle,
@@ -135,6 +142,35 @@ class FileRow {
       rollup: _rollupForRow(row),
       duration: kind == FileKind.audio ? row.duration : null,
     );
+  }
+
+  /// Formats a byte count into a human-readable size label (#1471).
+  ///
+  /// Pure + deterministic so it is unit-testable and the presentational widgets
+  /// never format. Uses 1024-based (binary) units with the conventional
+  /// KB/MB/GB labels (matching what file managers show). Rules:
+  ///   * `null`        → null (the row has no size → UI renders "—").
+  ///   * `< 0`         → null (a poison/negative size is treated as unknown,
+  ///                     never rendered as a bogus label).
+  ///   * `< 1 KB`      → whole bytes, e.g. "512 B", "0 B".
+  ///   * `< 1 MB`      → KB, 1 decimal trimmed of a trailing ".0", e.g. "640 KB".
+  ///   * `< 1 GB`      → MB, e.g. "2.4 MB".
+  ///   * otherwise     → GB, e.g. "1.3 GB".
+  static String? formatBytes(int? bytes) {
+    if (bytes == null || bytes < 0) return null;
+    const kb = 1024;
+    const mb = 1024 * 1024;
+    const gb = 1024 * 1024 * 1024;
+    if (bytes < kb) return '$bytes B';
+    if (bytes < mb) return '${_trim(bytes / kb)} KB';
+    if (bytes < gb) return '${_trim(bytes / mb)} MB';
+    return '${_trim(bytes / gb)} GB';
+  }
+
+  /// One-decimal rounding that drops a trailing ".0" so "640.0" → "640".
+  static String _trim(double value) {
+    final fixed = value.toStringAsFixed(1);
+    return fixed.endsWith('.0') ? fixed.substring(0, fixed.length - 2) : fixed;
   }
 
   /// Short relative label for an epoch-ms timestamp ("now"/"3h"/"2d"/"5w").

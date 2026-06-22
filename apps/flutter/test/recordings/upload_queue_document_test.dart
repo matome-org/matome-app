@@ -202,6 +202,11 @@ void main() {
       expect(repo.createdMediaType, 'document',
           reason: 'createRecording carried mediaType=document (row.mediaType '
               'flows straight through — the queue never forces audio)');
+      // #1471: the queue computed the on-disk size and declared it as
+      // content_length so Core can persist byte_size (the send leg of the
+      // size round-trip).
+      expect(repo.createdContentLength, bytes.length,
+          reason: 'createRecording declared the real document byte size');
       expect(repo.enqueueCalls, greaterThanOrEqualTo(1),
           reason: 'processing was enqueued after upload');
 
@@ -254,6 +259,7 @@ class _DocCapturingRepository extends RecordingsRepository {
   int createCalls = 0;
   int enqueueCalls = 0;
   String? createdMediaType;
+  int? createdContentLength;
   final int coreIdMinted = 7777;
 
   Recording _recording({required String status, String? summary}) {
@@ -273,9 +279,11 @@ class _DocCapturingRepository extends RecordingsRepository {
     String? badge,
     String mediaType = 'audio',
     int? workspaceId,
+    int? contentLength,
   }) async {
     createCalls++;
     createdMediaType = mediaType;
+    createdContentLength = contentLength;
     return RecordingCreateResult(
       recording: _recording(status: 'pending'),
       // Presign points at the real loopback server so super.uploadFile streams

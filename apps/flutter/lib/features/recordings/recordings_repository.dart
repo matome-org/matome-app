@@ -94,6 +94,7 @@ class RecordingsRepository {
     String? badge,
     String mediaType = 'audio',
     int? workspaceId,
+    int? contentLength,
   }) async {
     AppLog.event(LogCat.upload, 'createRecording: $title');
     try {
@@ -106,6 +107,10 @@ class RecordingsRepository {
           'duration': ?durationSeconds,
           'badge': ?badge,
           'workspace_id': ?workspaceId,
+          // #1471: declare the upload size in bytes. Core SigV4-signs it into the
+          // presigned PUT AND persists it as `byte_size` so the Files view shows
+          // a real size. Omitted when unknown (legacy/streamed callers).
+          'content_length': ?contentLength,
         },
       );
       final status = response.statusCode ?? 0;

@@ -212,6 +212,19 @@ RecordingsCompanion recordingToCompanion(
       ? Value<String?>(coreOwnerId)
       : const Value<String?>.absent();
 
+  // byteSize (#1471): the declared upload size in bytes. Adopt Core's value
+  // whenever it carries one; if Core reports none yet (a row created before the
+  // client declared a size, or a list-row Core hasn't backfilled) keep any
+  // locally-known size rather than null-clobbering it (same absence guard as
+  // duration / transcript above). Emits `Value.absent()` only when BOTH are
+  // null, leaving the column untouched (NULL → "—").
+  final coreByteSize = recording.byteSize;
+  final byteSizeValue = (coreByteSize != null)
+      ? Value<int?>(coreByteSize)
+      : (existing?.byteSize != null)
+          ? Value<int?>(existing!.byteSize)
+          : const Value<int?>.absent();
+
   return RecordingsCompanion(
     id: Value(localId),
     coreId: Value(recording.id),
@@ -230,5 +243,6 @@ RecordingsCompanion recordingToCompanion(
     processingStatus: Value(local.processingStatus),
     matomeId: matomeIdValue,
     ownerId: ownerIdValue,
+    byteSize: byteSizeValue,
   );
 }

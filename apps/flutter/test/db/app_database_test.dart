@@ -71,10 +71,10 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 14 '
-      '(…m012 original_ext + m013 owner_id + m014 contact fields)',
+      'schemaVersion is 15 '
+      '(…m013 owner_id + m014 contact fields + m015 byte_size)',
       () {
-        expect(db.schemaVersion, 14);
+        expect(db.schemaVersion, 15);
       },
     );
 
@@ -548,7 +548,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -668,7 +668,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -818,7 +818,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       final tables = await upgraded
           .customSelect(
@@ -1140,7 +1140,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       final tables = await upgraded
           .customSelect(
@@ -1195,7 +1195,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 14);
+      expect(second.schemaVersion, 15);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1347,7 +1347,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(matomes)')
@@ -1386,7 +1386,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 14);
+      expect(second.schemaVersion, 15);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1546,7 +1546,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1589,7 +1589,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 14);
+      expect(second.schemaVersion, 15);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1812,7 +1812,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1915,7 +1915,7 @@ void main() {
       // must not re-snapshot or re-copy (values already settled stay settled).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 14);
+      expect(second.schemaVersion, 15);
 
       final r =
           await second.recordingsDao.getRecordingById('rec_audio_has_tx');
@@ -2121,7 +2121,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2168,7 +2168,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 14);
+      expect(second.schemaVersion, 15);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2248,6 +2248,32 @@ void main() {
           archived_at INTEGER
         );
       ''');
+      // recordings as of m013 — WITHOUT byte_size (added by m015). Needed so the
+      // m015 `ALTER TABLE recordings ADD COLUMN byte_size` step has a table to
+      // alter when this v13 fixture upgrades through to the current version.
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id),
+          transcript TEXT,
+          notes_legacy_raw TEXT,
+          original_extension TEXT,
+          owner_id TEXT
+        );
+      ''');
       // contacts as of m008..m013 — NO email/phone/company/title yet.
       sdb.execute('''
         CREATE TABLE contacts (
@@ -2305,7 +2331,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 14);
+      expect(upgraded.schemaVersion, 15);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(contacts)')
@@ -2357,12 +2383,147 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 14);
+      expect(second.schemaVersion, 15);
       final cols = await second
           .customSelect('PRAGMA table_info(contacts)')
           .map((r) => r.read<String>('name'))
           .get();
       expect(cols, containsAll(<String>['email', 'phone', 'company', 'title']));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (j7) m015 — recording byte size (#1471). Real-file v14→v15 migration.
+  //
+  // Build a v14-shaped DB by hand (recordings WITHOUT byte_size, user_version=14)
+  // with a pre-existing recording, then open AppDatabase over the same file so
+  // onUpgrade(14→15) runs. Assert the column is added, the pre-existing row
+  // survives (backfilled to NULL → "—"), and a byte size round-trips.
+  // -------------------------------------------------------------------------
+  group('m015 v14→v15 migration (recording byte size)', () {
+    late Directory dir;
+    late File file;
+
+    /// v14-shaped recordings: every column through m014 EXCEPT byte_size, plus a
+    /// pre-existing row. user_version=14.
+    void seedV14Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER,
+          archived_at INTEGER
+        );
+      ''');
+      // recordings as of m014 — NO byte_size yet.
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id),
+          transcript TEXT,
+          notes_legacy_raw TEXT,
+          original_extension TEXT,
+          owner_id TEXT
+        );
+      ''');
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt) "
+        "VALUES ('rec_pre14', 'Pre-existing', '9:00', '0:30', '/tmp/p.m4a', 100);",
+      );
+      sdb.execute('PRAGMA user_version = 14;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m015');
+      file = File('${dir.path}/matome.sqlite');
+      seedV14Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v14 db migrates to v15: byte_size is added and the '
+        'pre-existing row backfills to NULL', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 15);
+
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('byte_size'));
+
+      final pre = await upgraded.recordingsDao.getRecordingById('rec_pre14');
+      expect(pre, isNotNull);
+      expect(pre!.title, 'Pre-existing');
+      expect(pre.byteSize, isNull); // legacy row → "—"
+    });
+
+    test('m015 — a byte size round-trips after migration', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      await upgraded.recordingsDao.insertRecording(
+        RecordingsCompanion.insert(
+          id: 'rec_new15',
+          title: 'Sized',
+          timestamp: '9:00',
+          duration: '0:30',
+          audioFilePath: '/tmp/n.m4a',
+          createdAt: 200,
+          byteSize: const Value(2_516_582),
+        ),
+      );
+
+      final stored = await upgraded.recordingsDao.getRecordingById('rec_new15');
+      expect(stored!.byteSize, 2_516_582);
+    });
+
+    test('m015 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.recordingsDao.getRecordingById('rec_pre14');
+      await first.close();
+
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 15);
+      final cols = await second
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, contains('byte_size'));
     });
   });
 

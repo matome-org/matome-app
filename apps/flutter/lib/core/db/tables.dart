@@ -137,6 +137,16 @@ class Recordings extends Table {
   // did NOT until #1469; this comment is the corrected contract.)
   TextColumn get ownerId => text().named('owner_id').nullable()();
 
+  // m015 (#1471) — the uploaded media's size in BYTES, mirrored from Core's
+  // nullable `recordings.byte_size` (bigint). Captured client-side at upload
+  // (`file.length()` → declared as `content_length`, SigV4-signed into the
+  // presigned PUT) and persisted Core-side; the reconcile path copies it onto
+  // the row so the Files view renders a real size (`FileRow.formatBytes`).
+  // NULLABLE so Drift's additive ALTER ADD COLUMN lands on legacy rows without a
+  // table rebuild; a NULL byte size renders as a dash ("—"). Int (Dart `int` is
+  // 64-bit on native) matches the Core bigint.
+  IntColumn get byteSize => integer().named('byte_size').nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

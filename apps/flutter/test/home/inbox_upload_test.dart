@@ -517,6 +517,7 @@ class _CoreDownRepository extends RecordingsRepository {
     String? badge,
     String mediaType = 'audio',
     int? workspaceId,
+    int? contentLength,
   }) async {
     throw const ApiException('Core unreachable');
   }

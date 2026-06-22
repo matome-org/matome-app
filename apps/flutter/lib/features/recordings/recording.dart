@@ -45,6 +45,7 @@ class Recording {
     this.storageKey,
     this.errorReason,
     this.duration,
+    this.byteSize,
     this.badge,
     this.workspaceId,
     this.matomeId,
@@ -82,6 +83,12 @@ class Recording {
   final String? storageKey;
   final String? errorReason;
   final int? duration;
+
+  /// The uploaded media's size in BYTES (#1471), from Core's nullable
+  /// `recordings.byte_size`. Null when the row carries no declared size (legacy
+  /// rows); the Files view renders a dash in that case.
+  final int? byteSize;
+
   final String? badge;
   final int? workspaceId;
 
@@ -108,6 +115,7 @@ class Recording {
       storageKey: asStringOrNull(json['storage_key']),
       errorReason: asStringOrNull(json['error_reason']),
       duration: asIntOrNull(json['duration']),
+      byteSize: asIntOrNull(json['byte_size']),
       badge: asStringOrNull(json['badge']),
       workspaceId: asIntOrNull(json['workspace_id']),
       matomeId: asIntOrNull(json['matome_id']),

@@ -185,12 +185,18 @@ class UploadQueue {
     UploadDescriptor? upload;
 
     if (coreId == null) {
+      // #1471: declare the on-disk media size so Core persists `byte_size` and
+      // the Files view renders a real size. Best-effort: a missing/unreadable
+      // file leaves it null (the upload itself would fail later anyway), so the
+      // size is simply omitted rather than blocking the create.
+      final contentLength = await _byteSizeOf(row.audioFilePath);
       final RecordingCreateResult created;
       try {
         created = await _repo.createRecording(
           title: row.title,
           durationSeconds: _durationSecondsFor(row),
           mediaType: row.mediaType,
+          contentLength: contentLength,
         );
       } catch (e, st) {
         AppLog.error(
@@ -374,6 +380,21 @@ class UploadQueue {
     if (mins != null) total += (int.tryParse(mins.group(1)!) ?? 0) * 60;
     if (secs != null) total += int.tryParse(secs.group(1)!) ?? 0;
     return total;
+  }
+
+  /// Best-effort on-disk size in bytes of [path] (#1471), or null if the file is
+  /// absent/unreadable. Declared as `content_length` on create so Core persists
+  /// `byte_size` for the Files view; never throws (a real upload failure surfaces
+  /// later on the actual PUT, not here).
+  Future<int?> _byteSizeOf(String path) async {
+    if (path.isEmpty) return null;
+    try {
+      final file = File(path);
+      if (!await file.exists()) return null;
+      return await file.length();
+    } catch (_) {
+      return null;
+    }
   }
 }
 

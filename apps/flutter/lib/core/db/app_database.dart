@@ -113,7 +113,16 @@ part 'app_database.g.dart';
 /// `RecordingsDao.backfillNullOwner` on sync. A missing/blank server owner_id is
 /// rejected, never defaulted. (The version constant is authoritative, not the
 /// prose.)
-const int kSchemaVersion = 14;
+///
+/// v15 (m015, recording byte size — #1471) adds the nullable
+/// `recordings.byte_size` INTEGER column, mirroring Core's nullable
+/// `recordings.byte_size` (bigint). The uploaded media's size in bytes — captured
+/// client-side at upload (`content_length`, SigV4-signed into the presigned PUT),
+/// persisted in Core and copied onto the row by the reconcile path so the Files
+/// view renders a real human size (`FileRow.formatBytes` → "2.4 MB"). Additive +
+/// nullable: Drift's ALTER ADD COLUMN backfills existing rows to NULL (legacy
+/// rows have no declared size), which the UI renders as a dash. No data migration.
+const int kSchemaVersion = 15;
 
 /// The offline-first local store.
 ///
@@ -440,6 +449,24 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(contacts, contacts.phone);
             await m.addColumn(contacts, contacts.company);
             await m.addColumn(contacts, contacts.title);
+          }
+          // m015 — recording byte size (#1471). Mirrors Core's nullable
+          // `recordings.byte_size` (bigint). Additive + nullable: Drift's ALTER
+          // ADD COLUMN backfills every existing row to NULL (legacy rows have no
+          // declared size, rendered as "—"); the reconcile path populates it on
+          // next sync from the recording JSON's `byte_size`. The `recordings`
+          // table predates every migration here, so no `from >=` floor is needed:
+          // any DB reaching here from < 15 has `recordings` WITHOUT `byte_size`,
+          // and the column is added exactly once. NON-LOSSY: only adds a column.
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, nullable, no prod users):
+          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v14 shape,
+          //   -- rebuild `recordings` without `byte_size` via a copy table.
+          //   -- Leaving the column in place is otherwise harmless.
+          //   PRAGMA user_version = 14;
+          if (from < 15) {
+            await m.addColumn(recordings, recordings.byteSize);
           }
         },
         beforeOpen: (details) async {

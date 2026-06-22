@@ -26,6 +26,7 @@ Recording _coreRecording({
   Object? ownerId = '1',
   String title = 'File',
   String status = 'done',
+  Object? byteSize = _absent,
 }) {
   // Build via fromJson so we exercise the real wire-parse (owner_id → TEXT|null).
   return Recording.fromJson(<String, dynamic>{
@@ -34,6 +35,7 @@ Recording _coreRecording({
     'title': title,
     'status': status,
     'media_type': 'audio',
+    if (byteSize != _absent) 'byte_size': byteSize,
     'inserted_at': '2026-06-08T12:00:00Z',
   });
 }
@@ -78,6 +80,45 @@ void main() {
         existing: existing,
       );
       expect(companion.ownerId.value, '2');
+    });
+  });
+
+  group('recordingToCompanion — byte size (#1471)', () {
+    test('adopts the Core byte_size onto the synced row', () {
+      final companion =
+          recordingToCompanion(_coreRecording(id: 1, byteSize: 2_516_582));
+      expect(companion.byteSize.present, isTrue);
+      expect(companion.byteSize.value, 2_516_582);
+    });
+
+    test('absent Core byte_size leaves the column untouched (first insert)', () {
+      final companion = recordingToCompanion(_coreRecording(id: 1));
+      // No local + no Core value → absent → NULL on insert → "—".
+      expect(companion.byteSize.present, isFalse);
+    });
+
+    test('keeps a locally-known size when Core reports none (absence guard)',
+        () async {
+      await db.recordingsDao.upsertRecordingWithMatome(
+        recordingToCompanion(_coreRecording(id: 1, byteSize: 4096)),
+      );
+      final existing = await db.recordingsDao.getRecordingById('1');
+      // A later Core list-row that hasn't computed a size must NOT null it out.
+      final companion = recordingToCompanion(
+        _coreRecording(id: 1),
+        existing: existing,
+      );
+      expect(companion.byteSize.value, 4096);
+    });
+
+    test('full round-trip: Core byte_size → row → FileRow.sizeLabel', () async {
+      await db.recordingsDao.upsertRecordingWithMatome(
+        recordingToCompanion(
+          _coreRecording(id: 1, ownerId: '1', byteSize: 2_516_582),
+        ),
+      );
+      final files = await db.recordingsDao.filesForOwner('1');
+      expect(files.single.sizeLabel, '2.4 MB');
     });
   });
 

@@ -348,6 +348,7 @@ class _ToggleRepository extends RecordingsRepository {
     String? badge,
     String mediaType = 'audio',
     int? workspaceId,
+    int? contentLength,
   }) async {
     if (createDelay > Duration.zero) await Future<void>.delayed(createDelay);
     if (!coreUp) throw const ApiException('Core unreachable');

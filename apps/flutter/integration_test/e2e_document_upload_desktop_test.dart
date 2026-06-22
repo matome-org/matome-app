@@ -353,6 +353,7 @@ class _StubCoreDocRepo extends RecordingsRepository {
     String? badge,
     String mediaType = 'audio',
     int? workspaceId,
+    int? contentLength,
   }) async {
     return RecordingCreateResult(
       recording: _recording(status: 'pending'),
