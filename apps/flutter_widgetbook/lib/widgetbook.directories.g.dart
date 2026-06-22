@@ -10,8 +10,6 @@
 // **************************************************************************
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'package:matome_widgetbook/proposals/matome_files_proposal.dart'
-    as _matome_widgetbook_proposals_matome_files_proposal;
 import 'package:matome_widgetbook/proposals/matome_letter_proposal.dart'
     as _matome_widgetbook_proposals_matome_letter_proposal;
 import 'package:matome_widgetbook/proposals/matome_nav_proposal.dart'
@@ -398,41 +396,6 @@ final directories = <_widgetbook.WidgetbookNode>[
   _widgetbook.WidgetbookCategory(
     name: 'Proposals',
     children: [
-      _widgetbook.WidgetbookFolder(
-        name: 'Files',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'FilesGrid',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Grid — desktop',
-                builder: _matome_widgetbook_proposals_matome_files_proposal
-                    .gridDesktopUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Grid — mobile',
-                builder: _matome_widgetbook_proposals_matome_files_proposal
-                    .gridMobileUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'FilesTable',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Table — desktop',
-                builder: _matome_widgetbook_proposals_matome_files_proposal
-                    .tableDesktopUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Table — mobile (compact)',
-                builder: _matome_widgetbook_proposals_matome_files_proposal
-                    .tableMobileUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
       _widgetbook.WidgetbookFolder(
         name: 'Matome detail',
         children: [
