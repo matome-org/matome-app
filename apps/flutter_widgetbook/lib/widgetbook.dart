@@ -31,6 +31,8 @@ import 'package:matome_flutter/ui/app_text_field.dart';
 import 'package:matome_flutter/ui/avatar.dart';
 import 'package:matome_flutter/ui/empty_state.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
+import 'package:matome_flutter/ui/files_scope_filter.dart';
+import 'package:matome_flutter/ui/inbox_item_card.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
 import 'package:matome_flutter/ui/matome_chip.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
@@ -38,6 +40,8 @@ import 'package:matome_flutter/ui/people_cluster.dart';
 import 'package:matome_flutter/ui/relationship_picker.dart';
 import 'package:matome_flutter/ui/role_chip.dart';
 import 'package:matome_flutter/ui/space_chip.dart';
+import 'package:matome_flutter/ui/space_sync_chip.dart';
+import 'package:matome_flutter/ui/space_sync_tile.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
 import 'package:widgetbook/widgetbook.dart';
 import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
@@ -1535,6 +1539,130 @@ Widget fileViewNotesFilledUseCase(BuildContext context) {
 )
 Widget fileViewNotesEmptyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.notesEmpty);
+}
+
+// ─── Local-first spaces (plan #102, W0) ──────────────────────────────────────
+//
+// The missing widgets for the local/cloud-space model: the sync-state chip with
+// the new `local` state, the inbox entry cards (loose item + draft matome), the
+// space tile with promote affordance + the create sync choice, and the files
+// scope filter. Presentational, not wired — this is the W0 approval gate.
+
+@widgetbook.UseCase(
+  name: 'Sync chip (local · promoting · cloud)',
+  type: SpaceSyncChip,
+  path: '[Widgets]/Local-first spaces',
+)
+Widget spaceSyncChipUseCase(BuildContext context) {
+  return const _UseCaseSurface(
+    width: 320,
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        SpaceSyncChip(state: SpaceSyncState.local),
+        SpaceSyncChip(state: SpaceSyncState.promoting),
+        SpaceSyncChip(state: SpaceSyncState.cloud),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Inbox entry (loose item · draft matome)',
+  type: InboxItemCard,
+  path: '[Widgets]/Local-first spaces',
+)
+Widget inboxItemCardUseCase(BuildContext context) {
+  return const _UseCaseSurface(
+    width: 380,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InboxItemCard(
+          kind: InboxEntryKind.looseItem,
+          icon: Icons.mic_none_rounded,
+          title: 'Standup audio',
+          meta: '2h · 12:04',
+          tagLabel: 'Loose',
+          fileLabel: 'File',
+        ),
+        SizedBox(height: 12),
+        InboxItemCard(
+          kind: InboxEntryKind.draftMatome,
+          title: 'Client X — notes',
+          meta: '3 items · 2h',
+          tagLabel: 'Draft',
+          fileLabel: 'Organize',
+        ),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Space tile (local + promote · cloud)',
+  type: SpaceSyncTile,
+  path: '[Widgets]/Local-first spaces',
+)
+Widget spaceSyncTileUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 380,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SpaceSyncTile(
+          name: 'Personal',
+          meta: '4 matomes',
+          state: SpaceSyncState.local,
+          promoteLabel: 'Turn on sync',
+          onPromote: () {},
+        ),
+        const SizedBox(height: 12),
+        const SpaceSyncTile(
+          name: 'Marketing',
+          meta: '8 matomes',
+          state: SpaceSyncState.cloud,
+          promoteLabel: 'Turn on sync',
+        ),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Create sync choice (local default)',
+  type: SpaceSyncChoice,
+  path: '[Widgets]/Local-first spaces',
+)
+Widget spaceSyncChoiceUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 360,
+    child: SpaceSyncChoice(
+      isLocal: true,
+      localLabel: 'Local (this device)',
+      cloudLabel: 'Cloud (synced)',
+      onChanged: (_) {},
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Files scope filter (All · Loose · In a space)',
+  type: FilesScopeFilter,
+  path: '[Widgets]/Local-first spaces',
+)
+Widget filesScopeFilterUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 360,
+    child: FilesScopeFilter(
+      value: FilesScope.loose,
+      allLabel: 'All',
+      looseLabel: 'Loose',
+      inSpaceLabel: 'In a space',
+      onChanged: (_) {},
+    ),
+  );
 }
 
 class _UseCaseSurface extends StatelessWidget {

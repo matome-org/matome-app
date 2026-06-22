@@ -276,6 +276,9 @@ class Translations$cardStatus$en {
 
 	/// en: 'Sync state'
 	String get syncState => 'Sync state';
+
+	/// en: 'Local'
+	String get local => 'Local';
 }
 
 // Path: recording
@@ -1542,6 +1545,7 @@ extension on Translations {
 			'cardStatus.cloud' => 'Synced',
 			'cardStatus.syncing' => 'Syncing',
 			'cardStatus.syncState' => 'Sync state',
+			'cardStatus.local' => 'Local',
 			'recording.title' => 'Recording',
 			'recording.ready' => 'Ready to Record',
 			'recording.startHint' => 'Tap the button to start recording',

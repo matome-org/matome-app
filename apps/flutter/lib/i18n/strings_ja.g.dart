@@ -165,6 +165,7 @@ class _Translations$cardStatus$ja extends Translations$cardStatus$en {
 	@override String get cloud => '同期済み';
 	@override String get syncing => '同期中';
 	@override String get syncState => '同期状態';
+	@override String get local => 'ローカル';
 }
 
 // Path: recording
@@ -762,6 +763,7 @@ extension on TranslationsJa {
 			'cardStatus.cloud' => '同期済み',
 			'cardStatus.syncing' => '同期中',
 			'cardStatus.syncState' => '同期状態',
+			'cardStatus.local' => 'ローカル',
 			'recording.title' => '録音中',
 			'recording.ready' => '録音準備完了',
 			'recording.startHint' => 'ボタンを押して録音を開始してください',

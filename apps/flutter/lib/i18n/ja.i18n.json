@@ -64,7 +64,8 @@
     "onDevice": "端末内",
     "cloud": "同期済み",
     "syncing": "同期中",
-    "syncState": "同期状態"
+    "syncState": "同期状態",
+    "local": "ローカル"
   },
   "recording": {
     "title": "録音中",

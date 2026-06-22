@@ -64,7 +64,8 @@
     "onDevice": "On device",
     "cloud": "Synced",
     "syncing": "Syncing",
-    "syncState": "Sync state"
+    "syncState": "Sync state",
+    "local": "Local"
   },
   "recording": {
     "title": "Recording",

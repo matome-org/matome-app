@@ -23,8 +23,12 @@ import 'package:matome_flutter/ui/file_type_chip.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
 import 'package:matome_flutter/ui/matome_chip.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
+import 'package:matome_flutter/ui/files_scope_filter.dart';
+import 'package:matome_flutter/ui/inbox_item_card.dart';
 import 'package:matome_flutter/ui/people_cluster.dart';
 import 'package:matome_flutter/ui/relationship_picker.dart';
+import 'package:matome_flutter/ui/space_sync_chip.dart';
+import 'package:matome_flutter/ui/space_sync_tile.dart';
 import 'package:matome_flutter/ui/role_chip.dart';
 import 'package:matome_flutter/ui/space_chip.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
@@ -136,6 +140,10 @@ void main() {
                 GoldenTestScenario(
                   name: 'relationship picker (mixed · filter)',
                   child: _RelationshipPickerMixedSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'local-first spaces (W0 widgets)',
+                  child: _LocalFirstSpacesSample(),
                 ),
               ],
             ),
@@ -1014,6 +1022,72 @@ class _RelationshipPickerSample extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The local-first spaces W0 widgets (plan #102): the sync chip (incl. the new
+/// `local` state), inbox entry cards (loose + draft), the space tile with
+/// promote + the create sync choice, and the files scope filter.
+class _LocalFirstSpacesSample extends StatelessWidget {
+  const _LocalFirstSpacesSample();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            SpaceSyncChip(state: SpaceSyncState.local),
+            SpaceSyncChip(state: SpaceSyncState.promoting),
+            SpaceSyncChip(state: SpaceSyncState.cloud),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const InboxItemCard(
+          kind: InboxEntryKind.looseItem,
+          icon: Icons.mic_none_rounded,
+          title: 'Standup audio',
+          meta: '2h · 12:04',
+          tagLabel: 'Loose',
+          fileLabel: 'File',
+        ),
+        const SizedBox(height: 12),
+        const InboxItemCard(
+          kind: InboxEntryKind.draftMatome,
+          title: 'Client X — notes',
+          meta: '3 items · 2h',
+          tagLabel: 'Draft',
+          fileLabel: 'Organize',
+        ),
+        const SizedBox(height: 12),
+        SpaceSyncTile(
+          name: 'Personal',
+          meta: '4 matomes',
+          state: SpaceSyncState.local,
+          promoteLabel: 'Turn on sync',
+          onPromote: () {},
+        ),
+        const SizedBox(height: 12),
+        SpaceSyncChoice(
+          isLocal: true,
+          localLabel: 'Local',
+          cloudLabel: 'Cloud',
+          onChanged: (_) {},
+        ),
+        const SizedBox(height: 12),
+        FilesScopeFilter(
+          value: FilesScope.loose,
+          allLabel: 'All',
+          looseLabel: 'Loose',
+          inSpaceLabel: 'In a space',
+          onChanged: (_) {},
+        ),
+      ],
     );
   }
 }

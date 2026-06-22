@@ -575,6 +575,56 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'Local-first spaces',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesScopeFilter',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Files scope filter (All · Loose · In a space)',
+                builder: _matome_widgetbook_widgetbook.filesScopeFilterUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'InboxItemCard',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Inbox entry (loose item · draft matome)',
+                builder: _matome_widgetbook_widgetbook.inboxItemCardUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'SpaceSyncChip',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Sync chip (local · promoting · cloud)',
+                builder: _matome_widgetbook_widgetbook.spaceSyncChipUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'SpaceSyncChoice',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Create sync choice (local default)',
+                builder: _matome_widgetbook_widgetbook.spaceSyncChoiceUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'SpaceSyncTile',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Space tile (local + promote · cloud)',
+                builder: _matome_widgetbook_widgetbook.spaceSyncTileUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Matome detail',
         children: [
           _widgetbook.WidgetbookComponent(
