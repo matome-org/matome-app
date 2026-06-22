@@ -558,26 +558,40 @@ class _MatomeDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    // CONVERGENCE (#1479): the live screen renders the PUBLIC, presentational
+    // [MatomeDetailPanel] — the SAME widget the Widgetbook "Detail panel" use
+    // cases render — instead of a parallel inline composition. The panel owns
+    // the header-less section ORDER + divider framing (Items · People · Space ·
+    // Notes · Share); we inject each REAL, provider-bound, interactive section as
+    // a slot so every shipped flow + ValueKey is preserved verbatim. Data is
+    // empty because every section is slotted (the data path is the catalog's).
+    // The `matome-details` anchor key is preserved on the panel so BOTH the
+    // desktop side panel and the mobile "Show more" reveal stay test-reachable.
+    return MatomeDetailPanel(
       key: const ValueKey('matome-details'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+      data: const MatomeDetailPanelData(),
+      showHeader: false,
+      padding: EdgeInsets.zero,
+      slots: MatomeDetailPanelSlots(
         // Items · N — compact rows (leading media icon · title · time/duration ·
-        // trailing per-item sync chip + overflow) and BOTH Add affordances.
-        _RecordingsSection(recordings: matome.recordings, matomeId: id),
-        // People · N — real contacts as compact rows + Add person.
-        _ContactChipsSlot(matomeId: id),
+        // trailing per-item sync chip) + the anchored "Add item" menu (photo /
+        // file, #1449 flag-gated).
+        itemsSection:
+            _RecordingsSection(recordings: matome.recordings, matomeId: id),
+        // People · N — real contacts as compact rows (avatar · name · role ·
+        // detach) + the "Add person" picker.
+        peopleSection: _ContactChipsSlot(matomeId: id),
         // Space — filed space + Refile, or the File-into-space CTA for an Inbox.
-        _SpacePanelSection(id: id),
-        // Notes — body + inline "Edit" trailing.
-        _NotesSection(
+        spaceSection: _SpacePanelSection(id: id),
+        // Notes — the stateful inline editor + the "Edit" trailing.
+        notesSection: _NotesSection(
           description: matome.description,
           controller: controller,
           notesDirty: notesDirty,
         ),
         // Share — deferred ("Coming soon"). The final section drops its divider.
-        const _DeferredActions(),
-      ],
+        shareSection: const _DeferredActions(),
+      ),
     );
   }
 }
