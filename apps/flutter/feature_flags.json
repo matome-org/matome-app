@@ -3,5 +3,5 @@
   "ff.screens.spaces": true,
   "ff.screens.satori": true,
   "ff.screens.contacts": true,
-  "ff.documents": false
+  "ff.documents": true
 }
