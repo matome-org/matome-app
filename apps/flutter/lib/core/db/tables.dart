@@ -116,6 +116,22 @@ class Recordings extends Table {
   TextColumn get originalExtension =>
       text().named('original_extension').nullable()();
 
+  // m013 (#1461) — the OWNING USER's Core id, mirrored onto the row from Core's
+  // NOT-NULL `recordings.owner_id` (server-enforced — see
+  // `MatomeApi.Content.list_recordings`, which filters `owner_id == ^owner_id`).
+  // This is the SECURITY-CRITICAL scoping column for the Files view (A01 — Broken
+  // Access Control): the cross-matome + Unfiled (`matome_id IS NULL`) + Inbox
+  // (`workspace_id IS NULL`) file list MUST be scoped by the owner ON THE ROW
+  // ITSELF, never via a JOIN to matome/workspace that is NULL for an orphan row
+  // (which would either drop or LEAK an unfiled/inbox file). NULLABLE so Drift's
+  // additive ALTER ADD COLUMN lands on legacy rows without a table rebuild; the
+  // owner-scoped query treats a NULL owner as "not the current owner" (excluded),
+  // so a legacy un-backfilled row can never surface for a concrete owner. New
+  // write paths (Core reconcile) populate it from the recording JSON's
+  // `owner_id`. Stored as TEXT (matching the other id columns / the stringified
+  // Core id convention).
+  TextColumn get ownerId => text().named('owner_id').nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

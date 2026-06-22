@@ -71,10 +71,10 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 12 '
-      '(…m010 transcript + m011 notes→transcript backfill + m012 original_ext)',
+      'schemaVersion is 13 '
+      '(…m011 notes→transcript backfill + m012 original_ext + m013 owner_id)',
       () {
-        expect(db.schemaVersion, 12);
+        expect(db.schemaVersion, 13);
       },
     );
 
@@ -548,7 +548,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 12);
+      expect(upgraded.schemaVersion, 13);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -668,7 +668,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 12);
+      expect(upgraded.schemaVersion, 13);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -818,7 +818,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 12);
+      expect(upgraded.schemaVersion, 13);
 
       final tables = await upgraded
           .customSelect(
@@ -1140,7 +1140,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 12);
+      expect(upgraded.schemaVersion, 13);
 
       final tables = await upgraded
           .customSelect(
@@ -1191,7 +1191,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 12);
+      expect(second.schemaVersion, 13);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1343,7 +1343,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 12);
+      expect(upgraded.schemaVersion, 13);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(matomes)')
@@ -1382,7 +1382,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 12);
+      expect(second.schemaVersion, 13);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1542,7 +1542,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 12);
+      expect(upgraded.schemaVersion, 13);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1585,7 +1585,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 12);
+      expect(second.schemaVersion, 13);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1808,7 +1808,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 12);
+      expect(upgraded.schemaVersion, 13);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1911,7 +1911,7 @@ void main() {
       // must not re-snapshot or re-copy (values already settled stay settled).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 12);
+      expect(second.schemaVersion, 13);
 
       final r =
           await second.recordingsDao.getRecordingById('rec_audio_has_tx');
@@ -2117,13 +2117,15 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 12);
+      expect(upgraded.schemaVersion, 13);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
           .get();
       expect(cols, contains('original_extension'));
+      // m013 — owner_id added on the same upgrade path to head.
+      expect(cols, contains('owner_id'));
     });
 
     test('pre-existing row survives; original_extension backfills to NULL; '
@@ -2162,12 +2164,25 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 12);
+      expect(second.schemaVersion, 13);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
           .get();
       expect(cols, contains('original_extension'));
+    });
+
+    test('m013 — owner_id backfills to NULL; pre-existing row never surfaces '
+        'for a concrete owner (A01)', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      final pre = await upgraded.recordingsDao.getRecordingById('rec_pre12');
+      expect(pre, isNotNull);
+      expect(pre!.ownerId, isNull); // additive → NULL backfill (legacy row)
+      // SECURITY: a NULL-owner legacy row is excluded from any owner's Files
+      // view — it can never leak (owner predicate is on the row, NULL != id).
+      expect(await upgraded.recordingsDao.filesForOwner('1'), isEmpty);
     });
 
     test('fresh-install recordings schema == replayed legacy schema (v12 head)',

@@ -7,6 +7,8 @@ mixin _$RecordingsDaoMixin on DatabaseAccessor<AppDatabase> {
   $RecordingsTable get recordings => attachedDatabase.recordings;
   $WorkspacesTable get workspaces => attachedDatabase.workspaces;
   $MatomesTable get matomes => attachedDatabase.matomes;
+  $MatomeContactsTable get matomeContacts => attachedDatabase.matomeContacts;
+  $ContactsTable get contacts => attachedDatabase.contacts;
   RecordingsDaoManager get managers => RecordingsDaoManager(this);
 }
 
@@ -19,4 +21,11 @@ class RecordingsDaoManager {
       $$WorkspacesTableTableManager(_db.attachedDatabase, _db.workspaces);
   $$MatomesTableTableManager get matomes =>
       $$MatomesTableTableManager(_db.attachedDatabase, _db.matomes);
+  $$MatomeContactsTableTableManager get matomeContacts =>
+      $$MatomeContactsTableTableManager(
+        _db.attachedDatabase,
+        _db.matomeContacts,
+      );
+  $$ContactsTableTableManager get contacts =>
+      $$ContactsTableTableManager(_db.attachedDatabase, _db.contacts);
 }

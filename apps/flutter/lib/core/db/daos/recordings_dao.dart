@@ -4,6 +4,7 @@ import '../../../features/matome/matome_ids.dart';
 import '../../../features/recordings/recording_ids.dart'
     show kProcessingStatusPendingUpload;
 import '../app_database.dart';
+import '../file_row.dart';
 import '../recording_card.dart';
 import '../tables.dart';
 
@@ -25,10 +26,86 @@ const int _kMsPerDay = 24 * 60 * 60 * 1000;
 ///
 /// Pure-Dart surface: no HTTP. The sync layer (Wave 3) decides when to pull
 /// from Core and writes through [upsertRecording].
-@DriftAccessor(tables: [Recordings, Workspaces, Matomes])
+@DriftAccessor(
+  tables: [Recordings, Workspaces, Matomes, MatomeContacts, Contacts],
+)
 class RecordingsDao extends DatabaseAccessor<AppDatabase>
     with _$RecordingsDaoMixin {
   RecordingsDao(super.db);
+
+  // ---------------------------------------------------------------------------
+  // Files view — owner-scoped, cross-matome + Unfiled (#1461)
+  // ---------------------------------------------------------------------------
+
+  /// Every file (audio|image|document Item) the [ownerId] user owns, ACROSS all
+  /// matomes AND loose/Unfiled (`matome_id IS NULL`) rows, newest first — the
+  /// data source for the Files view (DR-003 / #1461).
+  ///
+  /// SECURITY (A01 — Broken Access Control, the hard AC): the owner predicate is
+  /// `recordings.owner_id == ownerId` applied DIRECTLY ON THE ROW — NOT via a
+  /// JOIN to matome/workspace (which is NULL for an Unfiled / Inbox row and would
+  /// either drop it or LEAK another owner's orphan). A NULL `owner_id` (legacy
+  /// un-backfilled row) never equals a concrete [ownerId], so it is excluded —
+  /// it can never surface for any owner. This mirrors Core's server-enforced
+  /// `MatomeApi.Content.list_recordings` (`owner_id == ^owner_id`); the column is
+  /// populated on Core reconcile from the recording JSON's `owner_id`.
+  ///
+  /// The matome title (Unfiled when null) and Space name (Inbox when null) are
+  /// resolved by LEFT joins; per-file contacts are the file's MATOME's tagged
+  /// contacts (matome-mediated — schema gap flagged at #1461: there is no
+  /// per-file contact edge, so an Unfiled file has no contacts).
+  Future<List<FileRow>> filesForOwner(String ownerId) async {
+    // (1) The owner-scoped rows, with matome + space names via LEFT joins. The
+    // owner predicate is on `recordings.owner_id` itself so Unfiled/Inbox rows
+    // (NULL matome/workspace) stay scoped.
+    final query = select(recordings).join([
+      leftOuterJoin(matomes, matomes.id.equalsExp(recordings.matomeId)),
+      leftOuterJoin(
+        workspaces,
+        workspaces.id.equalsExp(recordings.workspaceId),
+      ),
+    ])
+      ..where(recordings.ownerId.equals(ownerId))
+      ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
+
+    final rows = await query.get();
+    if (rows.isEmpty) return const [];
+
+    // (2) Contacts per matome (matome-mediated — schema gap). One join over
+    // `matome_contacts` → `contacts` for the matome ids present on this page.
+    final matomeIds = rows
+        .map((r) => r.readTableOrNull(matomes)?.id)
+        .whereType<String>()
+        .toSet()
+        .toList(growable: false);
+    final contactsByMatome = <String, List<String>>{};
+    if (matomeIds.isNotEmpty) {
+      final contactQuery = select(matomeContacts).join([
+        innerJoin(contacts, contacts.id.equalsExp(matomeContacts.contactId)),
+      ])
+        ..where(matomeContacts.matomeId.isIn(matomeIds))
+        ..orderBy([OrderingTerm.asc(contacts.displayName)]);
+      for (final row in await contactQuery.get()) {
+        final mid = row.readTable(matomeContacts).matomeId;
+        final name = row.readTable(contacts).displayName;
+        (contactsByMatome[mid] ??= <String>[]).add(name);
+      }
+    }
+
+    return rows.map((row) {
+      final recording = row.readTable(recordings);
+      final matome = row.readTableOrNull(matomes);
+      final space = row.readTableOrNull(workspaces);
+      return FileRow.fromRow(
+        recording,
+        matomeTitle: matome?.title,
+        spaceName: space?.name,
+        contacts: matome == null
+            ? const <String>[]
+            : (contactsByMatome[matome.id] ?? const <String>[]),
+      );
+    }).toList(growable: false);
+  }
 
   /// All recordings, newest first.
   Future<List<RecordingRow>> getAllRecordings() {

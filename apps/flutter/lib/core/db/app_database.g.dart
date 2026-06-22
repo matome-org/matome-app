@@ -202,6 +202,17 @@ class $RecordingsTable extends Recordings
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _ownerIdMeta = const VerificationMeta(
+    'ownerId',
+  );
+  @override
+  late final GeneratedColumn<String> ownerId = GeneratedColumn<String>(
+    'owner_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -222,6 +233,7 @@ class $RecordingsTable extends Recordings
     transcript,
     notesLegacyRaw,
     originalExtension,
+    ownerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -370,6 +382,12 @@ class $RecordingsTable extends Recordings
         ),
       );
     }
+    if (data.containsKey('owner_id')) {
+      context.handle(
+        _ownerIdMeta,
+        ownerId.isAcceptableOrUnknown(data['owner_id']!, _ownerIdMeta),
+      );
+    }
     return context;
   }
 
@@ -451,6 +469,10 @@ class $RecordingsTable extends Recordings
         DriftSqlType.string,
         data['${effectivePrefix}original_extension'],
       ),
+      ownerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_id'],
+      ),
     );
   }
 
@@ -479,6 +501,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
   final String? transcript;
   final String? notesLegacyRaw;
   final String? originalExtension;
+  final String? ownerId;
   const RecordingRow({
     required this.id,
     required this.title,
@@ -498,6 +521,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     this.transcript,
     this.notesLegacyRaw,
     this.originalExtension,
+    this.ownerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -535,6 +559,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     }
     if (!nullToAbsent || originalExtension != null) {
       map['original_extension'] = Variable<String>(originalExtension);
+    }
+    if (!nullToAbsent || ownerId != null) {
+      map['owner_id'] = Variable<String>(ownerId);
     }
     return map;
   }
@@ -575,6 +602,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       originalExtension: originalExtension == null && nullToAbsent
           ? const Value.absent()
           : Value(originalExtension),
+      ownerId: ownerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ownerId),
     );
   }
 
@@ -604,6 +634,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       originalExtension: serializer.fromJson<String?>(
         json['originalExtension'],
       ),
+      ownerId: serializer.fromJson<String?>(json['ownerId']),
     );
   }
   @override
@@ -628,6 +659,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       'transcript': serializer.toJson<String?>(transcript),
       'notesLegacyRaw': serializer.toJson<String?>(notesLegacyRaw),
       'originalExtension': serializer.toJson<String?>(originalExtension),
+      'ownerId': serializer.toJson<String?>(ownerId),
     };
   }
 
@@ -650,6 +682,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     Value<String?> transcript = const Value.absent(),
     Value<String?> notesLegacyRaw = const Value.absent(),
     Value<String?> originalExtension = const Value.absent(),
+    Value<String?> ownerId = const Value.absent(),
   }) => RecordingRow(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -673,6 +706,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     originalExtension: originalExtension.present
         ? originalExtension.value
         : this.originalExtension,
+    ownerId: ownerId.present ? ownerId.value : this.ownerId,
   );
   RecordingRow copyWithCompanion(RecordingsCompanion data) {
     return RecordingRow(
@@ -708,6 +742,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       originalExtension: data.originalExtension.present
           ? data.originalExtension.value
           : this.originalExtension,
+      ownerId: data.ownerId.present ? data.ownerId.value : this.ownerId,
     );
   }
 
@@ -731,7 +766,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           ..write('matomeId: $matomeId, ')
           ..write('transcript: $transcript, ')
           ..write('notesLegacyRaw: $notesLegacyRaw, ')
-          ..write('originalExtension: $originalExtension')
+          ..write('originalExtension: $originalExtension, ')
+          ..write('ownerId: $ownerId')
           ..write(')'))
         .toString();
   }
@@ -756,6 +792,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     transcript,
     notesLegacyRaw,
     originalExtension,
+    ownerId,
   );
   @override
   bool operator ==(Object other) =>
@@ -778,7 +815,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           other.matomeId == this.matomeId &&
           other.transcript == this.transcript &&
           other.notesLegacyRaw == this.notesLegacyRaw &&
-          other.originalExtension == this.originalExtension);
+          other.originalExtension == this.originalExtension &&
+          other.ownerId == this.ownerId);
 }
 
 class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
@@ -800,6 +838,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
   final Value<String?> transcript;
   final Value<String?> notesLegacyRaw;
   final Value<String?> originalExtension;
+  final Value<String?> ownerId;
   final Value<int> rowid;
   const RecordingsCompanion({
     this.id = const Value.absent(),
@@ -820,6 +859,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.transcript = const Value.absent(),
     this.notesLegacyRaw = const Value.absent(),
     this.originalExtension = const Value.absent(),
+    this.ownerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RecordingsCompanion.insert({
@@ -841,6 +881,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.transcript = const Value.absent(),
     this.notesLegacyRaw = const Value.absent(),
     this.originalExtension = const Value.absent(),
+    this.ownerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title),
@@ -867,6 +908,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Expression<String>? transcript,
     Expression<String>? notesLegacyRaw,
     Expression<String>? originalExtension,
+    Expression<String>? ownerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -888,6 +930,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       if (transcript != null) 'transcript': transcript,
       if (notesLegacyRaw != null) 'notes_legacy_raw': notesLegacyRaw,
       if (originalExtension != null) 'original_extension': originalExtension,
+      if (ownerId != null) 'owner_id': ownerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -911,6 +954,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Value<String?>? transcript,
     Value<String?>? notesLegacyRaw,
     Value<String?>? originalExtension,
+    Value<String?>? ownerId,
     Value<int>? rowid,
   }) {
     return RecordingsCompanion(
@@ -932,6 +976,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       transcript: transcript ?? this.transcript,
       notesLegacyRaw: notesLegacyRaw ?? this.notesLegacyRaw,
       originalExtension: originalExtension ?? this.originalExtension,
+      ownerId: ownerId ?? this.ownerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -993,6 +1038,9 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     if (originalExtension.present) {
       map['original_extension'] = Variable<String>(originalExtension.value);
     }
+    if (ownerId.present) {
+      map['owner_id'] = Variable<String>(ownerId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1020,6 +1068,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
           ..write('transcript: $transcript, ')
           ..write('notesLegacyRaw: $notesLegacyRaw, ')
           ..write('originalExtension: $originalExtension, ')
+          ..write('ownerId: $ownerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -4368,6 +4417,7 @@ typedef $$RecordingsTableCreateCompanionBuilder =
       Value<String?> transcript,
       Value<String?> notesLegacyRaw,
       Value<String?> originalExtension,
+      Value<String?> ownerId,
       Value<int> rowid,
     });
 typedef $$RecordingsTableUpdateCompanionBuilder =
@@ -4390,6 +4440,7 @@ typedef $$RecordingsTableUpdateCompanionBuilder =
       Value<String?> transcript,
       Value<String?> notesLegacyRaw,
       Value<String?> originalExtension,
+      Value<String?> ownerId,
       Value<int> rowid,
     });
 
@@ -4489,6 +4540,11 @@ class $$RecordingsTableFilterComposer
 
   ColumnFilters<String> get originalExtension => $composableBuilder(
     column: $table.originalExtension,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -4591,6 +4647,11 @@ class $$RecordingsTableOrderingComposer
     column: $table.originalExtension,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RecordingsTableAnnotationComposer
@@ -4669,6 +4730,9 @@ class $$RecordingsTableAnnotationComposer
     column: $table.originalExtension,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get ownerId =>
+      $composableBuilder(column: $table.ownerId, builder: (column) => column);
 }
 
 class $$RecordingsTableTableManager
@@ -4720,6 +4784,7 @@ class $$RecordingsTableTableManager
                 Value<String?> transcript = const Value.absent(),
                 Value<String?> notesLegacyRaw = const Value.absent(),
                 Value<String?> originalExtension = const Value.absent(),
+                Value<String?> ownerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion(
                 id: id,
@@ -4740,6 +4805,7 @@ class $$RecordingsTableTableManager
                 transcript: transcript,
                 notesLegacyRaw: notesLegacyRaw,
                 originalExtension: originalExtension,
+                ownerId: ownerId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -4762,6 +4828,7 @@ class $$RecordingsTableTableManager
                 Value<String?> transcript = const Value.absent(),
                 Value<String?> notesLegacyRaw = const Value.absent(),
                 Value<String?> originalExtension = const Value.absent(),
+                Value<String?> ownerId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion.insert(
                 id: id,
@@ -4782,6 +4849,7 @@ class $$RecordingsTableTableManager
                 transcript: transcript,
                 notesLegacyRaw: notesLegacyRaw,
                 originalExtension: originalExtension,
+                ownerId: ownerId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

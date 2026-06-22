@@ -96,7 +96,19 @@ part 'app_database.g.dart';
 /// -design (the column is never read by older code paths). (m011/v11 was the
 /// notes backfill, so the extension column lands as m012 — the version constant
 /// is authoritative, not the prose.)
-const int kSchemaVersion = 12;
+///
+/// v13 (m013, Files owner-scoping column — #1461) adds the nullable
+/// `recordings.owner_id` TEXT column, mirroring Core's NOT-NULL
+/// `recordings.owner_id`. This is the SECURITY-CRITICAL (A01 — Broken Access
+/// Control) scoping column for the Files view: the cross-matome + Unfiled
+/// (`matome_id IS NULL`) + Inbox (`workspace_id IS NULL`) file list is scoped by
+/// the owner ON THE ROW, never via a NULL-able JOIN to matome/workspace.
+/// Additive + nullable: Drift's ALTER ADD COLUMN backfills existing rows to
+/// NULL, and the owner-scoped query excludes NULL-owner rows (a legacy
+/// un-backfilled row can never surface for a concrete owner), so there is no
+/// data migration. The Core reconcile path populates it from the recording
+/// JSON's `owner_id`. (The version constant is authoritative, not the prose.)
+const int kSchemaVersion = 13;
 
 /// The offline-first local store.
 ///
@@ -385,6 +397,17 @@ class AppDatabase extends _$AppDatabase {
           //   PRAGMA user_version = 11;
           if (from < 12) {
             await m.addColumn(recordings, recordings.originalExtension);
+          }
+          // m013 — owner-scoping column on recordings (#1461). Mirrors Core's
+          // NOT-NULL `recordings.owner_id`; the SECURITY-CRITICAL scope for the
+          // Files view's cross-matome + Unfiled + Inbox list. Additive +
+          // nullable: Drift's ALTER ADD COLUMN backfills every existing row to
+          // NULL. No data backfill — a legacy NULL owner is treated as "not the
+          // current owner" by the owner-scoped query (excluded, never leaked);
+          // the Core reconcile path populates it on next sync from the
+          // recording JSON's `owner_id`.
+          if (from < 13) {
+            await m.addColumn(recordings, recordings.ownerId);
           }
         },
         beforeOpen: (details) async {
