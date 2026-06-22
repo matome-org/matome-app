@@ -305,6 +305,7 @@ class _DockShell extends ConsumerWidget {
                     destinations: destinations,
                     selectedId: selectedId,
                     onSelect: onSelect,
+                    onSettings: () => context.go('/inbox/settings'),
                   ),
                 ],
               ),

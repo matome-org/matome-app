@@ -158,11 +158,18 @@ class MatomeBottomDock extends StatelessWidget {
     required this.destinations,
     required this.selectedId,
     required this.onSelect,
+    this.onSettings,
   });
 
   final List<NavDestinationSpec> destinations;
   final String selectedId;
   final ValueChanged<String> onSelect;
+
+  /// Opens Settings. The mobile dock has no other entry point to Settings (the
+  /// desktop sidebar carries its own tile), so a persistent account/profile
+  /// affordance at the dock's trailing edge keeps it reachable from every
+  /// screen. Null hides the affordance.
+  final VoidCallback? onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -193,11 +200,21 @@ class MatomeBottomDock extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               for (final dest in destinations)
-                _DockItem(
-                  dest: dest,
-                  active: dest.id == selectedId,
-                  onTap: () => onSelect(dest.id),
+                // The active pill grows by its label; on narrow widths the
+                // packed destinations + trailing account affordance would
+                // overflow, so each item is loose-flexible and the active
+                // label ellipsizes under pressure rather than overrunning.
+                Flexible(
+                  child: _DockItem(
+                    dest: dest,
+                    active: dest.id == selectedId,
+                    onTap: () => onSelect(dest.id),
+                  ),
                 ),
+              // Persistent account/profile → Settings affordance. The trailing
+              // edge keeps it clear of the navigation destinations and mirrors
+              // the sidebar footer's account row.
+              if (onSettings != null) _DockSettingsButton(onTap: onSettings!),
             ],
           ),
         ),
@@ -262,23 +279,77 @@ class _DockItem extends StatelessWidget {
                   ),
                   // Label only on the active pill — kept out of the layout when
                   // inactive so the dock stays compact.
-                  AnimatedSize(
-                    duration: _kAnim,
-                    curve: _kCurve,
-                    child: active
-                        ? Padding(
-                            padding: EdgeInsets.only(left: spacing.xs),
-                            child: Text(
-                              dest.label,
-                              style: typography.label.copyWith(
-                                color: colors.accentDark,
-                                fontWeight: FontWeight.w700,
+                  // Label only on the active pill, and flexible so it ellipsizes
+                  // (rather than overrunning) when the packed dock is narrow.
+                  Flexible(
+                    child: AnimatedSize(
+                      duration: _kAnim,
+                      curve: _kCurve,
+                      child: active
+                          ? Padding(
+                              padding: EdgeInsets.only(left: spacing.xs),
+                              child: Text(
+                                dest.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: typography.label.copyWith(
+                                  color: colors.accentDark,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The dock's trailing account/profile avatar — the mobile entry point to
+/// Settings. The mobile dock otherwise has no Settings affordance (the desktop
+/// sidebar carries its own tile), so this keeps it reachable from every screen.
+/// A circular [Avatar] with a generic person glyph; tapping calls `onTap`.
+class _DockSettingsButton extends StatelessWidget {
+  const _DockSettingsButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    final t = Translations.of(context);
+
+    return Semantics(
+      button: true,
+      label: t.settings.title,
+      child: Tooltip(
+        message: t.settings.title,
+        child: InkWell(
+          key: const ValueKey('nav-dock-settings'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(radius.pill),
+          // The wrapping Semantics already names this control; keep the inner
+          // avatar from adding a second node under the same label.
+          child: ExcludeSemantics(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: _kMinTapTarget,
+                minHeight: _kMinTapTarget,
+              ),
+              child: Center(
+                child: Avatar(
+                  size: _kAccountAvatarSize,
+                  backgroundColor: colors.textPrimary,
+                  foregroundColor: colors.onTextPrimary,
+                  icon: Icons.person_outline,
+                ),
               ),
             ),
           ),

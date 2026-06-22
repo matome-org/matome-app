@@ -236,6 +236,23 @@ void main() {
 
       expect(find.text('SCREEN:meeting'), findsOneWidget);
     });
+
+    testWidgets('dock Settings affordance routes to /inbox/settings', (
+      tester,
+    ) async {
+      _phone(tester);
+      await tester.pumpWidget(_app(_buildOnRouter()));
+      await tester.pumpAndSettle();
+
+      // The persistent account/profile affordance keeps Settings reachable from
+      // every mobile screen (the desktop sidebar already has its own Settings
+      // tile). Tap it and assert it lands on the inbox-stack settings route.
+      final settings = find.byKey(const ValueKey('nav-dock-settings'));
+      expect(settings, findsOneWidget);
+      await tester.tap(settings);
+      await tester.pumpAndSettle();
+      expect(find.text('SCREEN:settings'), findsOneWidget);
+    });
   });
 
   group('flag ON — desktop sidebar', () {
