@@ -299,7 +299,12 @@
     "deleteTitle": "ファイルを削除しますか？",
     "deleteBody": "$n 件のファイルを削除します。元に戻せます。",
     "deletedMsg": "$n 件を削除しました",
-    "downloadUnavailable": "ダウンロードはまだ利用できません"
+    "downloadUnavailable": "ダウンロードはまだ利用できません",
+    "moveSheetTitle": "まとめに移動",
+    "moveUnfiled": "未整理",
+    "moveUnfiledHint": "まとめなし",
+    "movedMsg": "$n 件を移動しました",
+    "moveNoTargets": "移動先のまとめがまだありません"
   },
   "spaces": {
     "title": "スペース",

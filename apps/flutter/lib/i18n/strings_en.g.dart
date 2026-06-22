@@ -733,6 +733,21 @@ class Translations$files$en {
 
 	/// en: 'Download isn't available yet'
 	String get downloadUnavailable => 'Download isn\'t available yet';
+
+	/// en: 'Move to matome'
+	String get moveSheetTitle => 'Move to matome';
+
+	/// en: 'Unfiled'
+	String get moveUnfiled => 'Unfiled';
+
+	/// en: 'No matome'
+	String get moveUnfiledHint => 'No matome';
+
+	/// en: 'Moved $n'
+	String movedMsg({required Object n}) => 'Moved ${n}';
+
+	/// en: 'No matomes to move into yet'
+	String get moveNoTargets => 'No matomes to move into yet';
 }
 
 // Path: spaces
@@ -1669,6 +1684,11 @@ extension on Translations {
 			'files.deleteBody' => ({required Object n}) => 'Delete ${n} file(s)? You can undo this.',
 			'files.deletedMsg' => ({required Object n}) => 'Deleted ${n}',
 			'files.downloadUnavailable' => 'Download isn\'t available yet',
+			'files.moveSheetTitle' => 'Move to matome',
+			'files.moveUnfiled' => 'Unfiled',
+			'files.moveUnfiledHint' => 'No matome',
+			'files.movedMsg' => ({required Object n}) => 'Moved ${n}',
+			'files.moveNoTargets' => 'No matomes to move into yet',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

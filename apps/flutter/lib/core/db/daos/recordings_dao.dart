@@ -335,6 +335,145 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     return (delete(recordings)..where((r) => r.id.equals(id))).go();
   }
 
+  // ---------------------------------------------------------------------------
+  // Files view — owner-scoped move-to-matome (#1473)
+  // ---------------------------------------------------------------------------
+
+  /// The DISTINCT matomes the [ownerId] user actually has recordings in —
+  /// the filing TARGETS for the Files view's "Move to matome" picker (#1473).
+  ///
+  /// SECURITY (A01 — Broken Access Control): the `matomes` table carries NO
+  /// `owner_id` column, so an owner-scoped picker CANNOT be derived from the
+  /// matome row directly. It is derived from the OWNED recordings instead — a
+  /// matome surfaces as a target ONLY when this owner already owns a recording
+  /// filed into it (`recordings.owner_id == ownerId`). A matome that holds only
+  /// another owner's rows is therefore never offered, so a move can never target
+  /// a matome the owner has no relationship with. Archived matomes are excluded
+  /// (a move into an archived matome would be invisible). Newest happening first,
+  /// to match the rest of the matome listings.
+  Future<List<MatomeRow>> matomeTargetsForOwner(String ownerId) async {
+    final query = selectOnly(recordings, distinct: true)
+      ..addColumns([recordings.matomeId])
+      ..where(
+        recordings.ownerId.equals(ownerId) & recordings.matomeId.isNotNull(),
+      );
+    final ids = (await query.get())
+        .map((r) => r.read(recordings.matomeId))
+        .whereType<String>()
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return const [];
+
+    return (select(matomes)
+          ..where((m) => m.id.isIn(ids) & m.archivedAt.isNull())
+          ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
+        .get();
+  }
+
+  /// The current `matome_id` of each of [ids] that the [ownerId] user owns —
+  /// the prior state the Files view stashes BEFORE a move so Undo can restore it
+  /// (#1473). Owner-scoped (`owner_id == ownerId`) so a caller can never read
+  /// another owner's filing. A NULL value ⟺ the file was Unfiled. Rows not owned
+  /// by [ownerId] are simply absent from the map.
+  Future<Map<String, String?>> matomeIdsForOwnedRecordings(
+    Set<String> ids,
+    String ownerId,
+  ) async {
+    if (ids.isEmpty) return const {};
+    final rows = await (select(recordings)
+          ..where((r) => r.id.isIn(ids) & r.ownerId.equals(ownerId)))
+        .get();
+    return {for (final r in rows) r.id: r.matomeId};
+  }
+
+  /// Reassign the [ids] recordings to [matomeId] (or Unfiled when null),
+  /// OWNER-SCOPED, in a single transaction (#1473). Returns the number of rows
+  /// actually moved.
+  ///
+  /// SECURITY (A01 — Broken Access Control): every UPDATE carries the owner
+  /// predicate (`owner_id == ownerId`) so a caller can ONLY move rows it owns —
+  /// a forged id for another owner's file matches zero rows and is a no-op. The
+  /// [matomeId] target is validated against [matomeTargetsForOwner] by the host
+  /// picker (it only lists the owner's matomes), and a defensive guard here
+  /// rejects a target the owner has no recording relationship with so the DAO is
+  /// safe even if called directly. Both the source and destination matomes have
+  /// their aggregated summary marked stale (ADR-0003 invalidation — each one's
+  /// item set changed).
+  Future<int> moveRecordingsToMatome(
+    Set<String> ids,
+    String? matomeId,
+    String ownerId,
+  ) async {
+    if (ids.isEmpty) return 0;
+    return transaction(() async {
+      // Defense-in-depth owner-scope on the TARGET. The `matomes` table has no
+      // `owner_id`, so a matome's ownership is inferred from the recordings it
+      // holds. A target is rejected ONLY when it is ANOTHER owner's matome — it
+      // contains at least one recording owned by someone else and NONE owned by
+      // this owner. An empty matome (a freshly created destination) and a matome
+      // this owner already has files in are both valid targets. The host picker
+      // additionally only OFFERS the owner's own matomes (matomeTargetsForOwner).
+      if (matomeId != null && await _isForeignMatome(matomeId, ownerId)) {
+        return 0;
+      }
+
+      // Stash the source matomes BEFORE the write so we can invalidate them too.
+      final prior = await matomeIdsForOwnedRecordings(ids, ownerId);
+
+      final moved = await (update(recordings)
+            ..where((r) => r.id.isIn(ids) & r.ownerId.equals(ownerId)))
+          .write(RecordingsCompanion(matomeId: Value(matomeId)));
+
+      // Mark every affected matome's summary stale (source + destination).
+      final affected = <String>{
+        ...prior.values.whereType<String>(),
+        ?matomeId,
+      };
+      for (final mid in affected) {
+        await _markMatomeSummaryStale(mid);
+      }
+      return moved;
+    });
+  }
+
+  /// True when [matomeId] belongs to ANOTHER owner — it holds at least one
+  /// recording owned by someone other than [ownerId] and NONE owned by
+  /// [ownerId]. Used to reject a cross-owner move target while still allowing an
+  /// empty (un-owned) destination matome and the owner's own matomes (#1473).
+  Future<bool> _isForeignMatome(String matomeId, String ownerId) async {
+    final rows = await (select(recordings)
+          ..where((r) => r.matomeId.equals(matomeId)))
+        .get();
+    if (rows.isEmpty) return false; // empty matome — a valid destination.
+    final ownedHere = rows.any((r) => r.ownerId == ownerId);
+    return !ownedHere; // only other-owner rows → foreign.
+  }
+
+  /// Restore each recording in [priorByRecording] to the matome it held before a
+  /// move — the Undo half of [moveRecordingsToMatome] (#1473). Owner-scoped and
+  /// transactional; a NULL value restores the file to Unfiled. Each restore is a
+  /// per-id scoped UPDATE so a forged id cannot rewrite another owner's row.
+  Future<void> restoreRecordingMatomes(
+    Map<String, String?> priorByRecording,
+    String ownerId,
+  ) async {
+    if (priorByRecording.isEmpty) return;
+    await transaction(() async {
+      final affected = <String>{};
+      for (final entry in priorByRecording.entries) {
+        await (update(recordings)
+              ..where(
+                (r) => r.id.equals(entry.key) & r.ownerId.equals(ownerId),
+              ))
+            .write(RecordingsCompanion(matomeId: Value(entry.value)));
+        if (entry.value != null) affected.add(entry.value!);
+      }
+      for (final mid in affected) {
+        await _markMatomeSummaryStale(mid);
+      }
+    });
+  }
+
   /// Recordings whose `createdAt` falls in [startEpoch, endEpoch] inclusive,
   /// newest first. Ports `getRecordingsByDateRange`.
   Future<List<RecordingRow>> recordingsByDateRange(

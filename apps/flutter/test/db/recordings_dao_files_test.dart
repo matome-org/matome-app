@@ -310,4 +310,152 @@ void main() {
       expect(files.firstWhere((f) => f.id == 'a_file').contacts, isEmpty);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // move-to-matome (#1473) — owner-scoped reassignment + targets + undo
+  // -------------------------------------------------------------------------
+
+  group('matomeTargetsForOwner — owner-scoped picker targets (A01)', () {
+    test('lists only matomes the owner has recordings in, newest happening first',
+        () async {
+      await db.matomesDao.create(_matome(id: 'm_a1', title: 'Trip'));
+      await db.matomesDao.create(_matome(id: 'm_a2', title: 'Sprint'));
+      await db.matomesDao.create(_matome(id: 'm_b', title: 'B matome'));
+      // Owner A owns files in m_a1 + m_a2; owner B owns a file in m_b.
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r1', ownerId: _ownerA, matomeId: 'm_a1'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r2', ownerId: _ownerA, matomeId: 'm_a2'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r3', ownerId: _ownerB, matomeId: 'm_b'));
+
+      final targets = await db.recordingsDao.matomeTargetsForOwner(_ownerA);
+      // Only A's two matomes — B's matome is NOT a target for A.
+      expect(targets.map((m) => m.id).toSet(), {'m_a1', 'm_a2'});
+      expect(targets.any((m) => m.id == 'm_b'), isFalse);
+    });
+
+    test('excludes archived matomes', () async {
+      await db.matomesDao.create(_matome(id: 'm_live', title: 'Live'));
+      await db.matomesDao.create(_matome(id: 'm_arch', title: 'Archived'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r1', ownerId: _ownerA, matomeId: 'm_live'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r2', ownerId: _ownerA, matomeId: 'm_arch'));
+      await db.matomesDao.archive('m_arch');
+
+      final targets = await db.recordingsDao.matomeTargetsForOwner(_ownerA);
+      expect(targets.map((m) => m.id), ['m_live']);
+    });
+  });
+
+  group('moveRecordingsToMatome — owner-scoped reassignment (A01)', () {
+    test('reassigns the owner files; the provider query reflects the new matome',
+        () async {
+      await db.matomesDao.create(_matome(id: 'm_src', title: 'Source'));
+      await db.matomesDao.create(_matome(id: 'm_dst', title: 'Dest'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r1', ownerId: _ownerA, matomeId: 'm_src'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r2', ownerId: _ownerA, matomeId: 'm_src'));
+
+      final moved = await db.recordingsDao
+          .moveRecordingsToMatome({'r1', 'r2'}, 'm_dst', _ownerA);
+      expect(moved, 2);
+
+      final files = await db.recordingsDao.filesForOwner(_ownerA);
+      expect(files.firstWhere((f) => f.id == 'r1').matome, 'Dest');
+      expect(files.firstWhere((f) => f.id == 'r2').matome, 'Dest');
+    });
+
+    test('moving to null (Unfiled) clears the matome relation', () async {
+      await db.matomesDao.create(_matome(id: 'm_src', title: 'Source'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r1', ownerId: _ownerA, matomeId: 'm_src'));
+
+      final moved =
+          await db.recordingsDao.moveRecordingsToMatome({'r1'}, null, _ownerA);
+      expect(moved, 1);
+      final files = await db.recordingsDao.filesForOwner(_ownerA);
+      expect(files.single.unfiled, isTrue);
+    });
+
+    test('CROSS-OWNER target is rejected — a no-op, the file is unchanged',
+        () async {
+      // m_b holds only owner B's file → not a target for A. A forged move of A's
+      // file into m_b must move zero rows and leave A's file where it was.
+      await db.matomesDao.create(_matome(id: 'm_a', title: 'A'));
+      await db.matomesDao.create(_matome(id: 'm_b', title: 'B'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r_a', ownerId: _ownerA, matomeId: 'm_a'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r_b', ownerId: _ownerB, matomeId: 'm_b'));
+
+      final moved =
+          await db.recordingsDao.moveRecordingsToMatome({'r_a'}, 'm_b', _ownerA);
+      expect(moved, 0);
+      final files = await db.recordingsDao.filesForOwner(_ownerA);
+      expect(files.single.matome, 'A'); // unchanged
+    });
+
+    test("CROSS-OWNER row id cannot be moved by another owner (owner-scoped WHERE)",
+        () async {
+      // Owner A tries to move owner B's file into A's own matome. The owner
+      // predicate on the UPDATE matches zero rows → no-op, B's file untouched.
+      await db.matomesDao.create(_matome(id: 'm_a', title: 'A'));
+      await db.matomesDao.create(_matome(id: 'm_b', title: 'B'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r_a', ownerId: _ownerA, matomeId: 'm_a'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r_b', ownerId: _ownerB, matomeId: 'm_b'));
+
+      final moved =
+          await db.recordingsDao.moveRecordingsToMatome({'r_b'}, 'm_a', _ownerA);
+      expect(moved, 0);
+      final filesB = await db.recordingsDao.filesForOwner(_ownerB);
+      expect(filesB.single.matome, 'B'); // B's file untouched
+    });
+  });
+
+  group('move undo — stash prior + restore (A01)', () {
+    test('matomeIdsForOwnedRecordings returns prior filing, owner-scoped',
+        () async {
+      await db.matomesDao.create(_matome(id: 'm1', title: 'M1'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r1', ownerId: _ownerA, matomeId: 'm1'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'loose', ownerId: _ownerA, matomeId: null));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r_b', ownerId: _ownerB, matomeId: 'm1'));
+
+      final prior = await db.recordingsDao
+          .matomeIdsForOwnedRecordings({'r1', 'loose', 'r_b'}, _ownerA);
+      // r_b is owner B's → absent. r1 → m1; loose → null.
+      expect(prior, {'r1': 'm1', 'loose': null});
+    });
+
+    test('restoreRecordingMatomes restores the prior matome (including Unfiled)',
+        () async {
+      await db.matomesDao.create(_matome(id: 'm_src', title: 'Source'));
+      await db.matomesDao.create(_matome(id: 'm_dst', title: 'Dest'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r1', ownerId: _ownerA, matomeId: 'm_src'));
+      await db.recordingsDao.insertRecording(
+          _recording(id: 'r2', ownerId: _ownerA, matomeId: null)); // Unfiled
+
+      final prior = await db.recordingsDao
+          .matomeIdsForOwnedRecordings({'r1', 'r2'}, _ownerA);
+      await db.recordingsDao
+          .moveRecordingsToMatome({'r1', 'r2'}, 'm_dst', _ownerA);
+      // Both now in Dest.
+      var files = await db.recordingsDao.filesForOwner(_ownerA);
+      expect(files.every((f) => f.matome == 'Dest'), isTrue);
+
+      // Undo.
+      await db.recordingsDao.restoreRecordingMatomes(prior, _ownerA);
+      files = await db.recordingsDao.filesForOwner(_ownerA);
+      expect(files.firstWhere((f) => f.id == 'r1').matome, 'Source');
+      expect(files.firstWhere((f) => f.id == 'r2').unfiled, isTrue);
+    });
+  });
 }

@@ -350,6 +350,11 @@ class _Translations$files$ja extends Translations$files$en {
 	@override String deleteBody({required Object n}) => '${n} 件のファイルを削除します。元に戻せます。';
 	@override String deletedMsg({required Object n}) => '${n} 件を削除しました';
 	@override String get downloadUnavailable => 'ダウンロードはまだ利用できません';
+	@override String get moveSheetTitle => 'まとめに移動';
+	@override String get moveUnfiled => '未整理';
+	@override String get moveUnfiledHint => 'まとめなし';
+	@override String movedMsg({required Object n}) => '${n} 件を移動しました';
+	@override String get moveNoTargets => '移動先のまとめがまだありません';
 }
 
 // Path: spaces
@@ -937,6 +942,11 @@ extension on TranslationsJa {
 			'files.deleteBody' => ({required Object n}) => '${n} 件のファイルを削除します。元に戻せます。',
 			'files.deletedMsg' => ({required Object n}) => '${n} 件を削除しました',
 			'files.downloadUnavailable' => 'ダウンロードはまだ利用できません',
+			'files.moveSheetTitle' => 'まとめに移動',
+			'files.moveUnfiled' => '未整理',
+			'files.moveUnfiledHint' => 'まとめなし',
+			'files.movedMsg' => ({required Object n}) => '${n} 件を移動しました',
+			'files.moveNoTargets' => '移動先のまとめがまだありません',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

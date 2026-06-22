@@ -15,10 +15,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/db/app_database.dart' show MatomeRow;
 import '../../core/providers.dart';
 import '../../core/settings/settings_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/app_bottom_sheet.dart';
 import '../../ui/loading_indicator.dart';
 import 'files_providers.dart';
 import 'widgets/files_grid.dart';
@@ -98,12 +100,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
       case FileAction.open:
         break; // handled by onOpen
       case FileAction.moveToMatome:
-        // FLAGGED STUB (#1465): a files→matome move target picker is not built
-        // yet (config/#1468 territory). Acknowledge so the affordance is honest
-        // rather than silently doing nothing.
-        messenger.showSnackBar(
-          SnackBar(content: Text(t.files.moveToMatome)),
-        );
+        await _moveToMatome(ids);
       case FileAction.download:
         // FLAGGED STUB (#1465): there is no file-download path in the client
         // yet, so download surfaces a "not available" notice instead of
@@ -125,6 +122,58 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
           SnackBar(content: Text(t.files.deletedMsg(n: ids.length))),
         );
     }
+  }
+
+  /// Real move-to-matome (#1473): open the owner-scoped target picker, reassign
+  /// `recordings.matome_id` via the DAO (owner-scoped — a move can never target
+  /// or touch another owner's row), invalidate the files provider so the rows
+  /// re-read with their new matome, and offer an Undo that restores the prior
+  /// matome of every moved file (NULL ⟺ back to Unfiled).
+  Future<void> _moveToMatome(Set<String> ids) async {
+    if (ids.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final ownerId = ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final dao = ref.read(recordingsDaoProvider);
+
+    final targets =
+        await ref.read(matomeTargetsForCurrentOwnerProvider.future);
+    if (!mounted) return;
+    if (targets.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(t.files.moveNoTargets)));
+      return;
+    }
+
+    // (targetMatomeId) — null sentinel via the Unfiled tile; a non-selection
+    // (dismiss) returns no value and aborts.
+    final picked = await showAppBottomSheet<_MoveTarget>(
+      context: context,
+      builder: (_) => _MoveToMatomeSheet(targets: targets),
+    );
+    if (picked == null || !mounted) return;
+
+    // Stash the prior filing BEFORE the write so Undo can restore it.
+    final prior = await dao.matomeIdsForOwnedRecordings(ids, ownerId);
+    final moved =
+        await dao.moveRecordingsToMatome(ids, picked.matomeId, ownerId);
+    ref.invalidate(filesForCurrentOwnerProvider);
+    ref.invalidate(matomeTargetsForCurrentOwnerProvider);
+    if (!mounted) return;
+    if (moved == 0) return; // owner-scope rejected it — nothing moved.
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(t.files.movedMsg(n: moved)),
+        action: SnackBarAction(
+          label: t.files.undo,
+          onPressed: () async {
+            await dao.restoreRecordingMatomes(prior, ownerId);
+            ref.invalidate(filesForCurrentOwnerProvider);
+            ref.invalidate(matomeTargetsForCurrentOwnerProvider);
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -238,6 +287,60 @@ class _FilesViewToggle extends StatelessWidget {
               FilesView.table, Icons.table_rows_outlined, t.files.viewTable),
         ],
       ),
+    );
+  }
+}
+
+/// The result of the move picker — a chosen matome id, or null ⟺ Unfiled.
+/// A dedicated type (vs a bare nullable String) so the sheet can distinguish
+/// "picked Unfiled" (a real choice) from "dismissed" (the sheet returns null).
+class _MoveTarget {
+  const _MoveTarget(this.matomeId);
+  final String? matomeId;
+}
+
+/// Filing-target picker for the Files view's "Move to matome" action (#1473) —
+/// mirrors [_MoveToSpaceSheet] (keyed ListTiles in an [AppBottomSheet]). Lists
+/// the OWNER's matomes (owner-scoped upstream) plus an "Unfiled" tile that moves
+/// the files OUT of any matome (`matome_id` → NULL).
+class _MoveToMatomeSheet extends StatelessWidget {
+  const _MoveToMatomeSheet({required this.targets});
+
+  final List<MatomeRow> targets;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    return AppBottomSheet(
+      title: Text(
+        t.files.moveSheetTitle,
+        style: typography.body.copyWith(
+          fontWeight: FontWeight.w700,
+          color: colors.textPrimary,
+        ),
+      ),
+      children: [
+        ListTile(
+          key: const ValueKey('files-move-target-unfiled'),
+          leading: Icon(Icons.inbox_outlined, color: colors.textSecondary),
+          title: Text(t.files.moveUnfiled),
+          trailing: Text(
+            t.files.moveUnfiledHint,
+            style: typography.label.copyWith(color: colors.textMuted),
+          ),
+          onTap: () => Navigator.of(context).pop(const _MoveTarget(null)),
+        ),
+        for (final m in targets)
+          ListTile(
+            key: ValueKey('files-move-target-${m.id}'),
+            leading:
+                Icon(Icons.folder_outlined, color: colors.textSecondary),
+            title: Text(m.title),
+            onTap: () => Navigator.of(context).pop(_MoveTarget(m.id)),
+          ),
+      ],
     );
   }
 }

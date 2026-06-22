@@ -299,7 +299,12 @@
     "deleteTitle": "Delete files?",
     "deleteBody": "Delete $n file(s)? You can undo this.",
     "deletedMsg": "Deleted $n",
-    "downloadUnavailable": "Download isn't available yet"
+    "downloadUnavailable": "Download isn't available yet",
+    "moveSheetTitle": "Move to matome",
+    "moveUnfiled": "Unfiled",
+    "moveUnfiledHint": "No matome",
+    "movedMsg": "Moved $n",
+    "moveNoTargets": "No matomes to move into yet"
   },
   "spaces": {
     "title": "Spaces",

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/auth_state.dart';
+import '../../core/db/app_database.dart' show MatomeRow;
 import '../../core/db/file_row.dart';
 import '../../core/providers.dart';
 
@@ -30,4 +31,20 @@ final filesForCurrentOwnerProvider = FutureProvider<List<FileRow>>((ref) async {
   if (ownerId == null) return const <FileRow>[];
   final dao = ref.watch(recordingsDaoProvider);
   return dao.filesForOwner(ownerId);
+});
+
+/// The CURRENT OWNER's matomes — the filing targets for the Files view's
+/// "Move to matome" picker (#1473).
+///
+/// SECURITY (A01): owner-scoped at the data source. `matomes` carries no
+/// `owner_id`, so the targets are derived from the matomes the owner actually
+/// owns recordings in ([RecordingsDao.matomeTargetsForOwner]) — never an
+/// unscoped matome list. Signed out → empty, so the picker can never offer
+/// another owner's matome.
+final matomeTargetsForCurrentOwnerProvider =
+    FutureProvider<List<MatomeRow>>((ref) async {
+  final ownerId = ref.watch(currentOwnerIdProvider);
+  if (ownerId == null) return const <MatomeRow>[];
+  final dao = ref.watch(recordingsDaoProvider);
+  return dao.matomeTargetsForOwner(ownerId);
 });
