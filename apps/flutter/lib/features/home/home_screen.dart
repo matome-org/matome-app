@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,7 +21,6 @@ import '../matome/matome_row_actions.dart';
 import '../matome/widgets/matome_table.dart';
 import '../spaces/filing_spaces_provider.dart';
 import 'home_filters.dart' show formatTimestamp;
-import 'inbox_upload.dart';
 import 'matome_inbox_controller.dart';
 import 'matome_inbox_grouping.dart';
 import '../recordings/upload_retry_service.dart';
@@ -88,8 +85,10 @@ final inboxViewProvider =
 /// individual recordings. Offline-first: the list is driven from Drift via
 /// [matomeInboxControllerProvider], with a Core recording-sync underneath
 /// (recordings still sync and land in matomes). Tap navigates to the matome hub
-/// (`/matome/:id`); the FAB uploads a file (which creates a recording → an
-/// inbox matome).
+/// (`/matome/:id`). Upload now lives on the nav shell's hero "+" Add (same
+/// `inboxUploaderProvider` pipeline) and Settings on the dock / sidebar, so the
+/// inbox no longer carries its own upload FAB or header upload/settings
+/// affordances (#1474 follow-up).
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -131,34 +130,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // stack — the matome hub's AppBar back can pop straight to this list.
       GoRouter.of(context).push('/matome/${item.id}');
     }
-  }
-
-  Future<void> _pickAndUpload() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-      withReadStream: false,
-    );
-    final path = result?.files.single.path;
-    if (path == null || !mounted) return;
-
-    final name = result!.files.single.name;
-    final picked = PickedUpload(
-      file: File(path),
-      title: _titleFromName(name),
-      mediaType: mediaTypeForPath(path),
-    );
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(content: Text('Uploading "${picked.title}"…')),
-    );
-    // Fire-and-forget: the upload inserts the local recording row immediately
-    // (into a fresh Inbox matome via upsertRecordingWithMatome); the matome
-    // controller listens to the recording inbox and re-reads the list.
-    unawaited(
-      ref
-          .read(inboxUploaderProvider)
-          .upload(picked, importFromExternalSource: true),
-    );
   }
 
   /// Bulk / per-row table action wiring. Archive is local-first + recoverable
@@ -255,9 +226,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _searchController.clear();
             setState(() => _search = '');
           },
-          onSettings: () => GoRouter.of(context).go('/inbox/settings'),
-          // On wide there is no FAB; surface upload in the header instead.
-          onUpload: isWide ? _pickAndUpload : null,
         ),
         Expanded(
           child: state.when(
@@ -280,14 +248,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       backgroundColor: colors.background,
-      floatingActionButton: isWide
-          ? null
-          : FloatingActionButton(
-              onPressed: _pickAndUpload,
-              backgroundColor: colors.primary,
-              tooltip: 'Upload a file',
-              child: Icon(Icons.upload_file, color: colors.onAccent),
-            ),
       body: SafeArea(
         bottom: false,
         child: isWide
@@ -348,13 +308,6 @@ class _InboxDetailPane extends ConsumerWidget {
   }
 }
 
-String _titleFromName(String name) {
-  final dot = name.lastIndexOf('.');
-  final base = dot > 0 ? name.substring(0, dot) : name;
-  final trimmed = base.trim();
-  return trimmed.isEmpty ? 'Untitled' : trimmed;
-}
-
 class _Header extends StatelessWidget {
   const _Header({
     required this.total,
@@ -362,8 +315,6 @@ class _Header extends StatelessWidget {
     required this.search,
     required this.onSearchChanged,
     required this.onSearchCleared,
-    required this.onSettings,
-    this.onUpload,
   });
 
   final int total;
@@ -371,10 +322,6 @@ class _Header extends StatelessWidget {
   final String search;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onSearchCleared;
-  final VoidCallback onSettings;
-
-  /// Desktop-only upload entry (the FAB is dropped in the two-pane layout).
-  final VoidCallback? onUpload;
 
   @override
   Widget build(BuildContext context) {
@@ -396,49 +343,29 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'マトメ',
-                      style: typography.label.copyWith(
-                        letterSpacing: 2,
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                    Text(
-                      t.inbox.title,
-                      style: typography.display.copyWith(
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                    if (total > 0)
-                      Text(
-                        t.inbox.matomeCount(n: total),
-                        style: typography.label.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                  ],
+              Text(
+                'マトメ',
+                style: typography.label.copyWith(
+                  letterSpacing: 2,
+                  color: colors.textSecondary,
                 ),
               ),
-              if (onUpload != null) ...[
-                _IconButton(
-                  icon: Icons.upload_file,
-                  onPressed: onUpload!,
-                  semanticLabel: 'Upload a file',
+              Text(
+                t.inbox.title,
+                style: typography.display.copyWith(
+                  color: colors.textPrimary,
                 ),
-                SizedBox(width: spacing.xs),
-              ],
-              _IconButton(
-                icon: Icons.settings_outlined,
-                onPressed: onSettings,
-                semanticLabel: t.a11y.openSettings,
               ),
+              if (total > 0)
+                Text(
+                  t.inbox.matomeCount(n: total),
+                  style: typography.label.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
             ],
           ),
           SizedBox(height: spacing.sm),
@@ -449,56 +376,6 @@ class _Header extends StatelessWidget {
             onCleared: onSearchCleared,
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _IconButton extends StatelessWidget {
-  const _IconButton({
-    required this.icon,
-    required this.onPressed,
-    required this.semanticLabel,
-  });
-
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  /// Screen-reader label + tooltip for this icon-only control (plan #45, W3).
-  final String semanticLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final radius = context.radius;
-
-    // 48×48 minimum tap target (WCAG 2.5.5 / Material).
-    return Tooltip(
-      message: semanticLabel,
-      child: Semantics(
-        button: true,
-        label: semanticLabel,
-        child: SizedBox(
-          width: spacing.xxl,
-          height: spacing.xxl,
-          child: Material(
-            color: colors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(radius.md),
-              side: BorderSide(color: colors.border),
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(radius.md),
-              onTap: onPressed,
-              child: Icon(
-                icon,
-                size: spacing.md + spacing.xxs,
-                color: colors.textSecondary,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -180,6 +180,40 @@ void main() {
     expect(find.byKey(const ValueKey('inbox-view-table')), findsNothing);
   });
 
+  // The redundant upload + settings affordances were removed from the Inbox
+  // (#1474 follow-up): the nav shell's hero "+" Add covers upload (same
+  // inboxUploaderProvider pipeline) and the dock/sidebar cover Settings, so the
+  // inbox FAB, header upload button, and header settings gear are gone.
+  testWidgets('no redundant upload FAB / header upload + settings on Inbox', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _pumpHome(
+        AsyncValue.data([_matome(id: '1', title: 'Standup notes')]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // No upload FloatingActionButton on the inbox (nav shell provides "+").
+    expect(find.byType(FloatingActionButton), findsNothing);
+    // No header upload affordance.
+    expect(find.byTooltip('Upload a file'), findsNothing);
+    expect(find.byIcon(Icons.upload_file), findsNothing);
+    // No header settings gear (reachable from dock / sidebar instead).
+    expect(
+      find.descendant(
+        of: find.byType(HomeScreen),
+        matching: find.byIcon(Icons.settings_outlined),
+      ),
+      findsNothing,
+    );
+    expect(find.byTooltip(t.a11y.openSettings), findsNothing);
+
+    // The search field + list stay intact.
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Standup notes'), findsOneWidget);
+  });
+
   // The default (cards) view keeps rendering the grouped card list.
   testWidgets('renders the card list when the provider holds InboxView.cards', (
     tester,
