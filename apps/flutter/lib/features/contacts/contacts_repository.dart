@@ -42,6 +42,10 @@ class ContactsRepository {
   /// Core id reconciles into `contacts.core_id`).
   Future<Contact> createContact({
     required String displayName,
+    String? email,
+    String? phone,
+    String? company,
+    String? title,
     String? metadata,
     String? linkedUserId,
   }) async {
@@ -50,6 +54,10 @@ class ContactsRepository {
         '/api/contacts',
         data: <String, dynamic>{
           'display_name': displayName,
+          'email': ?email,
+          'phone': ?phone,
+          'company': ?company,
+          'title': ?title,
           'metadata': ?metadata,
           'linked_user_id': ?linkedUserId,
         },
@@ -73,6 +81,10 @@ class ContactsRepository {
   Future<Contact> updateContact(
     int id, {
     String? displayName,
+    String? email,
+    String? phone,
+    String? company,
+    String? title,
     String? metadata,
     String? linkedUserId,
   }) async {
@@ -81,6 +93,10 @@ class ContactsRepository {
         '/api/contacts/$id',
         data: <String, dynamic>{
           'display_name': ?displayName,
+          'email': ?email,
+          'phone': ?phone,
+          'company': ?company,
+          'title': ?title,
           'metadata': ?metadata,
           'linked_user_id': ?linkedUserId,
         },

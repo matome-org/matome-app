@@ -13,6 +13,10 @@ class Contact {
     required this.id,
     required this.ownerId,
     required this.displayName,
+    this.email,
+    this.phone,
+    this.company,
+    this.title,
     this.metadata,
     this.linkedUserId,
     this.insertedAt,
@@ -26,7 +30,14 @@ class Contact {
   final String ownerId;
   final String displayName;
 
-  /// Raw JSON metadata blob (email/phone/etc.), persisted verbatim locally.
+  /// Structured contact fields (#1462). Validated/normalized Core-side on
+  /// write; nullable because Core may emit nulls.
+  final String? email;
+  final String? phone;
+  final String? company;
+  final String? title;
+
+  /// Raw JSON metadata blob (notes/etc.), persisted verbatim locally.
   final String? metadata;
   final String? linkedUserId;
   final DateTime? insertedAt;
@@ -37,6 +48,10 @@ class Contact {
       id: asInt(json['id']),
       ownerId: asString(json['owner_id']),
       displayName: asString(json['display_name']),
+      email: asStringOrNull(json['email']),
+      phone: asStringOrNull(json['phone']),
+      company: asStringOrNull(json['company']),
+      title: asStringOrNull(json['title']),
       metadata: _metadataAsString(json['metadata']),
       linkedUserId: asStringOrNull(json['linked_user_id']),
       insertedAt: asDateTimeOrNull(json['inserted_at']),

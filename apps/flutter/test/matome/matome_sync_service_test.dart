@@ -127,6 +127,10 @@ class FakeContactsRepository extends ContactsRepository {
   @override
   Future<Contact> createContact({
     required String displayName,
+    String? email,
+    String? phone,
+    String? company,
+    String? title,
     String? metadata,
     String? linkedUserId,
   }) async {

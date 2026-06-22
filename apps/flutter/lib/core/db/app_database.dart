@@ -108,7 +108,7 @@ part 'app_database.g.dart';
 /// un-backfilled row can never surface for a concrete owner), so there is no
 /// data migration. The Core reconcile path populates it from the recording
 /// JSON's `owner_id`. (The version constant is authoritative, not the prose.)
-const int kSchemaVersion = 13;
+const int kSchemaVersion = 14;
 
 /// The offline-first local store.
 ///
@@ -408,6 +408,33 @@ class AppDatabase extends _$AppDatabase {
           // recording JSON's `owner_id`.
           if (from < 13) {
             await m.addColumn(recordings, recordings.ownerId);
+          }
+          // m014 — structured contact fields (#1462). Adds the nullable
+          // `contacts.email/phone/company/title` TEXT columns, mirroring Core's
+          // typed columns. Validation/normalization is enforced Core-side on
+          // write; the local store just persists what Core returns. Drift's
+          // ALTER ADD COLUMN backfills existing rows to NULL — no data
+          // migration.
+          //
+          // GUARD `from >= 8`: the `contacts` table is created by m008 via
+          // `m.createTable(contacts)`, which always emits the CURRENT table
+          // definition — already including these four columns. A DB upgrading
+          // from before v8 reaches v8 with the columns already present, so
+          // re-adding them here would throw "duplicate column". Only a DB that
+          // already had the m008-era `contacts` (no structured fields) needs
+          // the ALTER.
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, nullable, no prod users):
+          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v13 shape,
+          //   -- rebuild `contacts` without these columns via a copy table.
+          //   -- Leaving the columns in place is otherwise harmless.
+          //   PRAGMA user_version = 13;
+          if (from >= 8 && from < 14) {
+            await m.addColumn(contacts, contacts.email);
+            await m.addColumn(contacts, contacts.phone);
+            await m.addColumn(contacts, contacts.company);
+            await m.addColumn(contacts, contacts.title);
           }
         },
         beforeOpen: (details) async {

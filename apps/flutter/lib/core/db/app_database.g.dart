@@ -3025,6 +3025,44 @@ class $ContactsTable extends Contacts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _emailMeta = const VerificationMeta('email');
+  @override
+  late final GeneratedColumn<String> email = GeneratedColumn<String>(
+    'email',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _phoneMeta = const VerificationMeta('phone');
+  @override
+  late final GeneratedColumn<String> phone = GeneratedColumn<String>(
+    'phone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _companyMeta = const VerificationMeta(
+    'company',
+  );
+  @override
+  late final GeneratedColumn<String> company = GeneratedColumn<String>(
+    'company',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _metadataMeta = const VerificationMeta(
     'metadata',
   );
@@ -3073,6 +3111,10 @@ class $ContactsTable extends Contacts
     id,
     ownerId,
     displayName,
+    email,
+    phone,
+    company,
+    title,
     metadata,
     linkedUserId,
     createdAt,
@@ -3113,6 +3155,30 @@ class $ContactsTable extends Contacts
       );
     } else if (isInserting) {
       context.missing(_displayNameMeta);
+    }
+    if (data.containsKey('email')) {
+      context.handle(
+        _emailMeta,
+        email.isAcceptableOrUnknown(data['email']!, _emailMeta),
+      );
+    }
+    if (data.containsKey('phone')) {
+      context.handle(
+        _phoneMeta,
+        phone.isAcceptableOrUnknown(data['phone']!, _phoneMeta),
+      );
+    }
+    if (data.containsKey('company')) {
+      context.handle(
+        _companyMeta,
+        company.isAcceptableOrUnknown(data['company']!, _companyMeta),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
     }
     if (data.containsKey('metadata')) {
       context.handle(
@@ -3164,6 +3230,22 @@ class $ContactsTable extends Contacts
         DriftSqlType.string,
         data['${effectivePrefix}display_name'],
       )!,
+      email: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}email'],
+      ),
+      phone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}phone'],
+      ),
+      company: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}company'],
+      ),
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      ),
       metadata: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}metadata'],
@@ -3193,6 +3275,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
   final String id;
   final String ownerId;
   final String displayName;
+  final String? email;
+  final String? phone;
+  final String? company;
+  final String? title;
   final String metadata;
   final String? linkedUserId;
   final int createdAt;
@@ -3201,6 +3287,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
     required this.id,
     required this.ownerId,
     required this.displayName,
+    this.email,
+    this.phone,
+    this.company,
+    this.title,
     required this.metadata,
     this.linkedUserId,
     required this.createdAt,
@@ -3212,6 +3302,18 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
     map['id'] = Variable<String>(id);
     map['owner_id'] = Variable<String>(ownerId);
     map['display_name'] = Variable<String>(displayName);
+    if (!nullToAbsent || email != null) {
+      map['email'] = Variable<String>(email);
+    }
+    if (!nullToAbsent || phone != null) {
+      map['phone'] = Variable<String>(phone);
+    }
+    if (!nullToAbsent || company != null) {
+      map['company'] = Variable<String>(company);
+    }
+    if (!nullToAbsent || title != null) {
+      map['title'] = Variable<String>(title);
+    }
     map['metadata'] = Variable<String>(metadata);
     if (!nullToAbsent || linkedUserId != null) {
       map['linked_user_id'] = Variable<String>(linkedUserId);
@@ -3228,6 +3330,18 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
       id: Value(id),
       ownerId: Value(ownerId),
       displayName: Value(displayName),
+      email: email == null && nullToAbsent
+          ? const Value.absent()
+          : Value(email),
+      phone: phone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(phone),
+      company: company == null && nullToAbsent
+          ? const Value.absent()
+          : Value(company),
+      title: title == null && nullToAbsent
+          ? const Value.absent()
+          : Value(title),
       metadata: Value(metadata),
       linkedUserId: linkedUserId == null && nullToAbsent
           ? const Value.absent()
@@ -3248,6 +3362,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
       id: serializer.fromJson<String>(json['id']),
       ownerId: serializer.fromJson<String>(json['ownerId']),
       displayName: serializer.fromJson<String>(json['displayName']),
+      email: serializer.fromJson<String?>(json['email']),
+      phone: serializer.fromJson<String?>(json['phone']),
+      company: serializer.fromJson<String?>(json['company']),
+      title: serializer.fromJson<String?>(json['title']),
       metadata: serializer.fromJson<String>(json['metadata']),
       linkedUserId: serializer.fromJson<String?>(json['linkedUserId']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
@@ -3261,6 +3379,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
       'id': serializer.toJson<String>(id),
       'ownerId': serializer.toJson<String>(ownerId),
       'displayName': serializer.toJson<String>(displayName),
+      'email': serializer.toJson<String?>(email),
+      'phone': serializer.toJson<String?>(phone),
+      'company': serializer.toJson<String?>(company),
+      'title': serializer.toJson<String?>(title),
       'metadata': serializer.toJson<String>(metadata),
       'linkedUserId': serializer.toJson<String?>(linkedUserId),
       'createdAt': serializer.toJson<int>(createdAt),
@@ -3272,6 +3394,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
     String? id,
     String? ownerId,
     String? displayName,
+    Value<String?> email = const Value.absent(),
+    Value<String?> phone = const Value.absent(),
+    Value<String?> company = const Value.absent(),
+    Value<String?> title = const Value.absent(),
     String? metadata,
     Value<String?> linkedUserId = const Value.absent(),
     int? createdAt,
@@ -3280,6 +3406,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
     id: id ?? this.id,
     ownerId: ownerId ?? this.ownerId,
     displayName: displayName ?? this.displayName,
+    email: email.present ? email.value : this.email,
+    phone: phone.present ? phone.value : this.phone,
+    company: company.present ? company.value : this.company,
+    title: title.present ? title.value : this.title,
     metadata: metadata ?? this.metadata,
     linkedUserId: linkedUserId.present ? linkedUserId.value : this.linkedUserId,
     createdAt: createdAt ?? this.createdAt,
@@ -3292,6 +3422,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
       displayName: data.displayName.present
           ? data.displayName.value
           : this.displayName,
+      email: data.email.present ? data.email.value : this.email,
+      phone: data.phone.present ? data.phone.value : this.phone,
+      company: data.company.present ? data.company.value : this.company,
+      title: data.title.present ? data.title.value : this.title,
       metadata: data.metadata.present ? data.metadata.value : this.metadata,
       linkedUserId: data.linkedUserId.present
           ? data.linkedUserId.value
@@ -3307,6 +3441,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
           ..write('id: $id, ')
           ..write('ownerId: $ownerId, ')
           ..write('displayName: $displayName, ')
+          ..write('email: $email, ')
+          ..write('phone: $phone, ')
+          ..write('company: $company, ')
+          ..write('title: $title, ')
           ..write('metadata: $metadata, ')
           ..write('linkedUserId: $linkedUserId, ')
           ..write('createdAt: $createdAt, ')
@@ -3320,6 +3458,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
     id,
     ownerId,
     displayName,
+    email,
+    phone,
+    company,
+    title,
     metadata,
     linkedUserId,
     createdAt,
@@ -3332,6 +3474,10 @@ class ContactRow extends DataClass implements Insertable<ContactRow> {
           other.id == this.id &&
           other.ownerId == this.ownerId &&
           other.displayName == this.displayName &&
+          other.email == this.email &&
+          other.phone == this.phone &&
+          other.company == this.company &&
+          other.title == this.title &&
           other.metadata == this.metadata &&
           other.linkedUserId == this.linkedUserId &&
           other.createdAt == this.createdAt &&
@@ -3342,6 +3488,10 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
   final Value<String> id;
   final Value<String> ownerId;
   final Value<String> displayName;
+  final Value<String?> email;
+  final Value<String?> phone;
+  final Value<String?> company;
+  final Value<String?> title;
   final Value<String> metadata;
   final Value<String?> linkedUserId;
   final Value<int> createdAt;
@@ -3351,6 +3501,10 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
     this.id = const Value.absent(),
     this.ownerId = const Value.absent(),
     this.displayName = const Value.absent(),
+    this.email = const Value.absent(),
+    this.phone = const Value.absent(),
+    this.company = const Value.absent(),
+    this.title = const Value.absent(),
     this.metadata = const Value.absent(),
     this.linkedUserId = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -3361,6 +3515,10 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
     required String id,
     required String ownerId,
     required String displayName,
+    this.email = const Value.absent(),
+    this.phone = const Value.absent(),
+    this.company = const Value.absent(),
+    this.title = const Value.absent(),
     this.metadata = const Value.absent(),
     this.linkedUserId = const Value.absent(),
     required int createdAt,
@@ -3374,6 +3532,10 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
     Expression<String>? id,
     Expression<String>? ownerId,
     Expression<String>? displayName,
+    Expression<String>? email,
+    Expression<String>? phone,
+    Expression<String>? company,
+    Expression<String>? title,
     Expression<String>? metadata,
     Expression<String>? linkedUserId,
     Expression<int>? createdAt,
@@ -3384,6 +3546,10 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
       if (id != null) 'id': id,
       if (ownerId != null) 'owner_id': ownerId,
       if (displayName != null) 'display_name': displayName,
+      if (email != null) 'email': email,
+      if (phone != null) 'phone': phone,
+      if (company != null) 'company': company,
+      if (title != null) 'title': title,
       if (metadata != null) 'metadata': metadata,
       if (linkedUserId != null) 'linked_user_id': linkedUserId,
       if (createdAt != null) 'created_at': createdAt,
@@ -3396,6 +3562,10 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
     Value<String>? id,
     Value<String>? ownerId,
     Value<String>? displayName,
+    Value<String?>? email,
+    Value<String?>? phone,
+    Value<String?>? company,
+    Value<String?>? title,
     Value<String>? metadata,
     Value<String?>? linkedUserId,
     Value<int>? createdAt,
@@ -3406,6 +3576,10 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
       id: id ?? this.id,
       ownerId: ownerId ?? this.ownerId,
       displayName: displayName ?? this.displayName,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      company: company ?? this.company,
+      title: title ?? this.title,
       metadata: metadata ?? this.metadata,
       linkedUserId: linkedUserId ?? this.linkedUserId,
       createdAt: createdAt ?? this.createdAt,
@@ -3425,6 +3599,18 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
     }
     if (displayName.present) {
       map['display_name'] = Variable<String>(displayName.value);
+    }
+    if (email.present) {
+      map['email'] = Variable<String>(email.value);
+    }
+    if (phone.present) {
+      map['phone'] = Variable<String>(phone.value);
+    }
+    if (company.present) {
+      map['company'] = Variable<String>(company.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
     }
     if (metadata.present) {
       map['metadata'] = Variable<String>(metadata.value);
@@ -3450,6 +3636,10 @@ class ContactsCompanion extends UpdateCompanion<ContactRow> {
           ..write('id: $id, ')
           ..write('ownerId: $ownerId, ')
           ..write('displayName: $displayName, ')
+          ..write('email: $email, ')
+          ..write('phone: $phone, ')
+          ..write('company: $company, ')
+          ..write('title: $title, ')
           ..write('metadata: $metadata, ')
           ..write('linkedUserId: $linkedUserId, ')
           ..write('createdAt: $createdAt, ')
@@ -5928,6 +6118,10 @@ typedef $$ContactsTableCreateCompanionBuilder =
       required String id,
       required String ownerId,
       required String displayName,
+      Value<String?> email,
+      Value<String?> phone,
+      Value<String?> company,
+      Value<String?> title,
       Value<String> metadata,
       Value<String?> linkedUserId,
       required int createdAt,
@@ -5939,6 +6133,10 @@ typedef $$ContactsTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> ownerId,
       Value<String> displayName,
+      Value<String?> email,
+      Value<String?> phone,
+      Value<String?> company,
+      Value<String?> title,
       Value<String> metadata,
       Value<String?> linkedUserId,
       Value<int> createdAt,
@@ -5967,6 +6165,26 @@ class $$ContactsTableFilterComposer
 
   ColumnFilters<String> get displayName => $composableBuilder(
     column: $table.displayName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get phone => $composableBuilder(
+    column: $table.phone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get company => $composableBuilder(
+    column: $table.company,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6015,6 +6233,26 @@ class $$ContactsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get email => $composableBuilder(
+    column: $table.email,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get phone => $composableBuilder(
+    column: $table.phone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get company => $composableBuilder(
+    column: $table.company,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get metadata => $composableBuilder(
     column: $table.metadata,
     builder: (column) => ColumnOrderings(column),
@@ -6055,6 +6293,18 @@ class $$ContactsTableAnnotationComposer
     column: $table.displayName,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get email =>
+      $composableBuilder(column: $table.email, builder: (column) => column);
+
+  GeneratedColumn<String> get phone =>
+      $composableBuilder(column: $table.phone, builder: (column) => column);
+
+  GeneratedColumn<String> get company =>
+      $composableBuilder(column: $table.company, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
 
   GeneratedColumn<String> get metadata =>
       $composableBuilder(column: $table.metadata, builder: (column) => column);
@@ -6105,6 +6355,10 @@ class $$ContactsTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> ownerId = const Value.absent(),
                 Value<String> displayName = const Value.absent(),
+                Value<String?> email = const Value.absent(),
+                Value<String?> phone = const Value.absent(),
+                Value<String?> company = const Value.absent(),
+                Value<String?> title = const Value.absent(),
                 Value<String> metadata = const Value.absent(),
                 Value<String?> linkedUserId = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
@@ -6114,6 +6368,10 @@ class $$ContactsTableTableManager
                 id: id,
                 ownerId: ownerId,
                 displayName: displayName,
+                email: email,
+                phone: phone,
+                company: company,
+                title: title,
                 metadata: metadata,
                 linkedUserId: linkedUserId,
                 createdAt: createdAt,
@@ -6125,6 +6383,10 @@ class $$ContactsTableTableManager
                 required String id,
                 required String ownerId,
                 required String displayName,
+                Value<String?> email = const Value.absent(),
+                Value<String?> phone = const Value.absent(),
+                Value<String?> company = const Value.absent(),
+                Value<String?> title = const Value.absent(),
                 Value<String> metadata = const Value.absent(),
                 Value<String?> linkedUserId = const Value.absent(),
                 required int createdAt,
@@ -6134,6 +6396,10 @@ class $$ContactsTableTableManager
                 id: id,
                 ownerId: ownerId,
                 displayName: displayName,
+                email: email,
+                phone: phone,
+                company: company,
+                title: title,
                 metadata: metadata,
                 linkedUserId: linkedUserId,
                 createdAt: createdAt,

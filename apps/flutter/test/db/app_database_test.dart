@@ -71,10 +71,10 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 13 '
-      '(…m011 notes→transcript backfill + m012 original_ext + m013 owner_id)',
+      'schemaVersion is 14 '
+      '(…m012 original_ext + m013 owner_id + m014 contact fields)',
       () {
-        expect(db.schemaVersion, 13);
+        expect(db.schemaVersion, 14);
       },
     );
 
@@ -548,7 +548,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 13);
+      expect(upgraded.schemaVersion, 14);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -668,7 +668,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 13);
+      expect(upgraded.schemaVersion, 14);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -818,7 +818,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 13);
+      expect(upgraded.schemaVersion, 14);
 
       final tables = await upgraded
           .customSelect(
@@ -1140,7 +1140,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 13);
+      expect(upgraded.schemaVersion, 14);
 
       final tables = await upgraded
           .customSelect(
@@ -1170,6 +1170,10 @@ void main() {
           'id',
           'owner_id',
           'display_name',
+          'email', // m014
+          'phone', // m014
+          'company', // m014
+          'title', // m014
           'metadata',
           'linked_user_id',
           'created_at',
@@ -1191,7 +1195,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 13);
+      expect(second.schemaVersion, 14);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1343,7 +1347,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 13);
+      expect(upgraded.schemaVersion, 14);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(matomes)')
@@ -1382,7 +1386,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 13);
+      expect(second.schemaVersion, 14);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1542,7 +1546,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 13);
+      expect(upgraded.schemaVersion, 14);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1585,7 +1589,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 13);
+      expect(second.schemaVersion, 14);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1808,7 +1812,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 13);
+      expect(upgraded.schemaVersion, 14);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1911,7 +1915,7 @@ void main() {
       // must not re-snapshot or re-copy (values already settled stay settled).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 13);
+      expect(second.schemaVersion, 14);
 
       final r =
           await second.recordingsDao.getRecordingById('rec_audio_has_tx');
@@ -2117,7 +2121,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 13);
+      expect(upgraded.schemaVersion, 14);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2164,7 +2168,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 13);
+      expect(second.schemaVersion, 14);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2199,6 +2203,166 @@ void main() {
           .toSet();
 
       expect(await recCols(replayed), await recCols(fresh));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (j6) m014 — structured contact fields (#1462). Real-file v13→v14 migration.
+  //
+  // Build a v13-shaped DB by hand (contacts WITHOUT email/phone/company/title,
+  // user_version=13) with a pre-existing contact, then open AppDatabase over
+  // the same file so onUpgrade(13→14) runs. Assert the four columns are added,
+  // the pre-existing row survives (backfilled to NULL), and a round-trip of the
+  // new fields persists.
+  // -------------------------------------------------------------------------
+  group('m014 v13→v14 migration (structured contact fields)', () {
+    late Directory dir;
+    late File file;
+
+    /// v13-shaped tables: contacts WITHOUT the structured fields, plus the
+    /// minimum support tables, user_version=13. A pre-existing contact proves
+    /// existing rows survive the additive column adds.
+    void seedV13Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER,
+          archived_at INTEGER
+        );
+      ''');
+      // contacts as of m008..m013 — NO email/phone/company/title yet.
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          role TEXT NOT NULL DEFAULT 'attendee',
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE space_contacts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          space_id TEXT NOT NULL REFERENCES workspaces(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(space_id, contact_id)
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matome_shares (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          matome_id TEXT NOT NULL REFERENCES matomes(id),
+          contact_id TEXT NOT NULL REFERENCES contacts(id),
+          UNIQUE(matome_id, contact_id)
+        );
+      ''');
+      sdb.execute(
+        "INSERT INTO contacts (id, owner_id, display_name, created_at) "
+        "VALUES ('contact_pre13', 'owner1', 'Pre-existing', 100);",
+      );
+      sdb.execute('PRAGMA user_version = 13;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m014');
+      file = File('${dir.path}/matome.sqlite');
+      seedV13Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('opening a v13 db migrates to v14: the four contact columns are added '
+        'and the pre-existing row backfills to NULL', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      expect(upgraded.schemaVersion, 14);
+
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(contacts)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(
+        cols,
+        containsAll(<String>['email', 'phone', 'company', 'title']),
+      );
+
+      // Pre-existing row survived; new fields backfilled to NULL.
+      final pre = await upgraded.contactsDao.getById('contact_pre13');
+      expect(pre, isNotNull);
+      expect(pre!.displayName, 'Pre-existing');
+      expect(pre.email, isNull);
+      expect(pre.phone, isNull);
+      expect(pre.company, isNull);
+      expect(pre.title, isNull);
+    });
+
+    test('m014 — structured fields round-trip after migration', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      await upgraded.contactsDao.create(
+        ContactsCompanion.insert(
+          id: 'contact_new14',
+          ownerId: 'owner1',
+          displayName: 'Alice',
+          email: const Value('alice@example.com'),
+          phone: const Value('+15551234567'),
+          company: const Value('Acme'),
+          title: const Value('CEO'),
+          createdAt: 200,
+        ),
+      );
+
+      final stored = await upgraded.contactsDao.getById('contact_new14');
+      expect(stored!.email, 'alice@example.com');
+      expect(stored.phone, '+15551234567');
+      expect(stored.company, 'Acme');
+      expect(stored.title, 'CEO');
+    });
+
+    test('m014 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.contactsDao.listContacts();
+      await first.close();
+
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 14);
+      final cols = await second
+          .customSelect('PRAGMA table_info(contacts)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, containsAll(<String>['email', 'phone', 'company', 'title']));
     });
   });
 

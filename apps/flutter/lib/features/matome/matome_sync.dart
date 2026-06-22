@@ -106,6 +106,12 @@ ContactsCompanion contactToCompanion(Contact contact, {ContactRow? existing}) {
     coreId: Value(contact.id),
     ownerId: Value(contact.ownerId),
     displayName: Value(contact.displayName),
+    // Structured fields (#1462): sparse Core payload leaves a local value
+    // untouched rather than wiping it (same null-wipe guard as metadata).
+    email: _mergeNullableText(contact.email),
+    phone: _mergeNullableText(contact.phone),
+    company: _mergeNullableText(contact.company),
+    title: _mergeNullableText(contact.title),
     metadata: metadataValue,
     linkedUserId: Value(contact.linkedUserId),
     createdAt: Value(createdAt),

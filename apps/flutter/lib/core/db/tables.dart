@@ -306,7 +306,14 @@ class Contacts extends Table {
 
   TextColumn get displayName => text().named('display_name')();
 
-  // Arbitrary JSON map of contact fields (email/phone/etc). Stored as a TEXT
+  // Structured contact fields (#1462), mirroring Core's typed columns. All
+  // nullable — validation/normalization is enforced Core-side on write.
+  TextColumn get email => text().nullable()();
+  TextColumn get phone => text().nullable()();
+  TextColumn get company => text().nullable()();
+  TextColumn get title => text().nullable()();
+
+  // Arbitrary JSON map of contact fields (notes, etc). Stored as a TEXT
   // blob; defaults to an empty JSON object so a bare insert is valid.
   TextColumn get metadata =>
       text().withDefault(const Constant('{}'))();
