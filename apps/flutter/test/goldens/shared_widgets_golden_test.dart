@@ -8,6 +8,7 @@ import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
+import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_bottom_sheet.dart';
@@ -121,6 +122,82 @@ void main() {
                 GoldenTestScenario(
                   name: 'relation atoms',
                   child: _RelationAtomsSample(),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  });
+
+  group('matome table goldens (desktop)', () {
+    for (final variant in _variants) {
+      goldenTest(
+        'renders ${variant.label}',
+        fileName: 'matome_table_desktop_${variant.fileSuffix}',
+        constraints: const BoxConstraints.tightFor(width: 980, height: 920),
+        pumpBeforeTest: pumpOnce,
+        builder: () {
+          LocaleSettings.setLocaleSync(variant.locale);
+          return _GoldenApp(
+            variant: variant,
+            child: GoldenTestGroup(
+              columns: 1,
+              children: [
+                GoldenTestScenario(
+                  name: 'sortable',
+                  child: const _TableFrame(
+                    height: 480,
+                    child: MatomeTable(rows: _matomeTableRows),
+                  ),
+                ),
+                GoldenTestScenario(
+                  name: 'selection + bulk bar',
+                  child: const _TableFrame(
+                    height: 560,
+                    child: MatomeTable(
+                      rows: _matomeTableRows,
+                      initialSelection: {'r1', 'r4'},
+                    ),
+                  ),
+                ),
+                GoldenTestScenario(
+                  name: 'empty',
+                  child: const _TableFrame(
+                    height: 180,
+                    child: MatomeTable(rows: []),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  });
+
+  group('matome table goldens (compact)', () {
+    for (final variant in _variants) {
+      goldenTest(
+        'renders ${variant.label}',
+        fileName: 'matome_table_compact_${variant.fileSuffix}',
+        constraints: const BoxConstraints.tightFor(width: 440, height: 760),
+        pumpBeforeTest: pumpOnce,
+        builder: () {
+          LocaleSettings.setLocaleSync(variant.locale);
+          return _GoldenApp(
+            variant: variant,
+            child: GoldenTestGroup(
+              columns: 1,
+              children: [
+                GoldenTestScenario(
+                  name: 'mobile rows + sort selector',
+                  child: const _TableFrame(
+                    width: 360,
+                    height: 720,
+                    child: MatomeTable(rows: _matomeTableRows),
+                  ),
                 ),
               ],
             ),
@@ -758,6 +835,102 @@ class _RelationAtomsSample extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Sample rows for the [MatomeTable] goldens — the same fixture the Widgetbook
+/// "Matome table" stories render so the catalog and the regression baseline
+/// stay in lockstep.
+const _matomeTableRows = <MatomeTableRow>[
+  MatomeTableRow(
+    id: 'r1',
+    title: 'Client X — weekly sync',
+    summary: 'Q3 budget approved. Ken to draft the proposal before next week.',
+    when: '2h',
+    whenSort: 100,
+    audio: 2,
+    image: 1,
+    doc: 1,
+    people: 2,
+    space: 'Marketing',
+    rollup: MatomeSyncRollup.cloud,
+  ),
+  MatomeTableRow(
+    id: 'r2',
+    title: 'Design review',
+    summary: 'Walking through the new onboarding screens with the team.',
+    when: '4h',
+    whenSort: 90,
+    audio: 1,
+    image: 0,
+    doc: 0,
+    people: 1,
+    space: null,
+    rollup: MatomeSyncRollup.partial,
+  ),
+  MatomeTableRow(
+    id: 'r3',
+    title: 'Quick voice memo',
+    summary: '',
+    when: '5h',
+    whenSort: 80,
+    audio: 1,
+    image: 0,
+    doc: 0,
+    people: 0,
+    space: null,
+    rollup: MatomeSyncRollup.onDevice,
+  ),
+  MatomeTableRow(
+    id: 'r4',
+    title: 'Sales call — Acme',
+    summary: 'Deal slips to next quarter. Revisit the terms in the contract.',
+    when: '1d',
+    whenSort: 50,
+    audio: 1,
+    image: 0,
+    doc: 2,
+    people: 3,
+    space: 'Sales',
+    rollup: MatomeSyncRollup.cloud,
+  ),
+  MatomeTableRow(
+    id: 'r5',
+    title: 'Workshop notes',
+    summary: 'Roadmap prioritisation exercise with the whole product team.',
+    when: '1d',
+    whenSort: 49,
+    audio: 3,
+    image: 2,
+    doc: 0,
+    people: 4,
+    space: 'Product',
+    rollup: MatomeSyncRollup.partial,
+  ),
+];
+
+/// A fixed-size frame for a [MatomeTable] golden scenario. Pinning BOTH
+/// dimensions stops alchemist's layout `Table` from querying the table's
+/// internal `LayoutBuilder` for intrinsic dimensions (which it cannot provide),
+/// and top-aligns the table inside the frame.
+class _TableFrame extends StatelessWidget {
+  const _TableFrame({
+    required this.child,
+    this.width = 900,
+    required this.height,
+  });
+
+  final Widget child;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Align(alignment: Alignment.topCenter, child: child),
     );
   }
 }

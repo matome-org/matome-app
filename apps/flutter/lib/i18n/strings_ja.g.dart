@@ -299,6 +299,7 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get noFiles => '項目はまだありません';
 	@override String get noPeople => '関係者はまだいません';
 	@override late final _Translations$matome$actions$ja actions = _Translations$matome$actions$ja._(_root);
+	@override late final _Translations$matome$table$ja table = _Translations$matome$table$ja._(_root);
 }
 
 // Path: files
@@ -518,6 +519,46 @@ class _Translations$matome$actions$ja extends Translations$matome$actions$en {
 	@override String get editDateTimeSave => '保存';
 	@override String get editDateTimeUpdated => '日時を更新しました';
 	@override String get editFailed => '保存できませんでした — もう一度お試しください';
+}
+
+// Path: matome.table
+class _Translations$matome$table$ja extends Translations$matome$table$en {
+	_Translations$matome$table$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get colTitle => 'まとめ';
+	@override String get colWhen => '日時';
+	@override String get colItems => '項目';
+	@override String get colPeople => '関係者';
+	@override String get colSpace => '保存先';
+	@override String get colSync => '同期';
+	@override String selected({required Object n}) => '${n} 件選択中';
+	@override String get moveToSpace => '空間へ移動';
+	@override String get archive => 'アーカイブ';
+	@override String get delete => '削除';
+	@override String get clear => '解除';
+	@override String get cancel => 'キャンセル';
+	@override String get undo => '元に戻す';
+	@override String get open => '開く';
+	@override String get sortBy => '並び替え';
+	@override String get inboxLabel => '受信箱';
+	@override String get noSummary => '要約はまだありません';
+	@override String get emptyTitle => '表示する項目がありません';
+	@override String get emptyBody => '取り込んだまとめや整理したまとめがここに行として表示されます。';
+	@override String get deleteTitle => 'まとめを削除しますか？';
+	@override String deleteBody({required Object n}) => '${n} 件のまとめを削除します。元に戻せます。';
+	@override String archivedMsg({required Object n}) => '${n} 件をアーカイブしました';
+	@override String deletedMsg({required Object n}) => '${n} 件を削除しました';
+	@override String get audioUnit => '音声';
+	@override String get imageUnit => '画像';
+	@override String get docUnit => '書類';
+	@override String get peopleUnit => '人';
+	@override String get selectRow => '行を選択';
+	@override String get rowActions => '行の操作';
+	@override String get viewCards => 'カード';
+	@override String get viewTable => 'テーブル';
 }
 
 // Path: fileView.contentsStatus.audio
@@ -756,6 +797,37 @@ extension on TranslationsJa {
 			'matome.actions.editDateTimeSave' => '保存',
 			'matome.actions.editDateTimeUpdated' => '日時を更新しました',
 			'matome.actions.editFailed' => '保存できませんでした — もう一度お試しください',
+			'matome.table.colTitle' => 'まとめ',
+			'matome.table.colWhen' => '日時',
+			'matome.table.colItems' => '項目',
+			'matome.table.colPeople' => '関係者',
+			'matome.table.colSpace' => '保存先',
+			'matome.table.colSync' => '同期',
+			'matome.table.selected' => ({required Object n}) => '${n} 件選択中',
+			'matome.table.moveToSpace' => '空間へ移動',
+			'matome.table.archive' => 'アーカイブ',
+			'matome.table.delete' => '削除',
+			'matome.table.clear' => '解除',
+			'matome.table.cancel' => 'キャンセル',
+			'matome.table.undo' => '元に戻す',
+			'matome.table.open' => '開く',
+			'matome.table.sortBy' => '並び替え',
+			'matome.table.inboxLabel' => '受信箱',
+			'matome.table.noSummary' => '要約はまだありません',
+			'matome.table.emptyTitle' => '表示する項目がありません',
+			'matome.table.emptyBody' => '取り込んだまとめや整理したまとめがここに行として表示されます。',
+			'matome.table.deleteTitle' => 'まとめを削除しますか？',
+			'matome.table.deleteBody' => ({required Object n}) => '${n} 件のまとめを削除します。元に戻せます。',
+			'matome.table.archivedMsg' => ({required Object n}) => '${n} 件をアーカイブしました',
+			'matome.table.deletedMsg' => ({required Object n}) => '${n} 件を削除しました',
+			'matome.table.audioUnit' => '音声',
+			'matome.table.imageUnit' => '画像',
+			'matome.table.docUnit' => '書類',
+			'matome.table.peopleUnit' => '人',
+			'matome.table.selectRow' => '行を選択',
+			'matome.table.rowActions' => '行の操作',
+			'matome.table.viewCards' => 'カード',
+			'matome.table.viewTable' => 'テーブル',
 			'files.unfiled' => '未整理',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',

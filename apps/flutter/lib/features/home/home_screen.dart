@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/db/matome_card.dart';
+import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_button.dart';
@@ -14,8 +15,11 @@ import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
+import '../matome/matome_actions_menu.dart' show MatomeAction;
+import '../matome/matome_detail_controller.dart';
 import '../matome/matome_detail_screen.dart';
 import '../matome/matome_row_actions.dart';
+import '../matome/widgets/matome_table.dart';
 import '../spaces/filing_spaces_provider.dart';
 import 'home_filters.dart' show formatTimestamp;
 import 'inbox_upload.dart';
@@ -32,6 +36,15 @@ const double _wideBreakpoint = 1000;
 /// beside the [MatomeDetailScreen] detail pane. Narrow viewports ignore it and
 /// route to `/matome/:id` as before.
 final inboxSelectionProvider = StateProvider<String?>((ref) => null);
+
+/// How the inbox/home list is presented — the **card** "letter" list (ADR-0005)
+/// or the columnar [MatomeTable] (DR-001). A user-selectable view: the toggle
+/// lives in the header. This is a LOCAL (session) preference; persisting the
+/// choice across launches is owned by #1468 (the inbox config page). The host
+/// only accepts a current view + an onToggle, per that task split.
+enum InboxView { cards, table }
+
+final inboxViewProvider = StateProvider<InboxView>((ref) => InboxView.cards);
 
 /// Inbox / Home screen (S1) under the matome-centric model (#1378): the
 /// top-level managed unit is the **Matome**, so the list shows **inbox
@@ -112,10 +125,87 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// Bulk / per-row table action wiring. Archive is local-first + recoverable
+  /// (controller archive → Undo SnackBar that restores); delete is the
+  /// permanent hard-delete (the table already gated it behind a confirm); move
+  /// reuses the per-matome filing sheet. After any op the inbox re-reads from
+  /// Drift so the rows drop out / return.
+  Future<void> _handleTableBulk(
+    MatomeTableAction action,
+    Set<String> ids,
+  ) async {
+    if (ids.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final inbox = ref.read(matomeInboxControllerProvider.notifier);
+
+    switch (action) {
+      case MatomeTableAction.open:
+        break; // handled by onOpen
+      case MatomeTableAction.moveToSpace:
+        final spaces = ref.read(filingSpacesProvider).valueOrNull ?? const [];
+        if (spaces.isEmpty) return;
+        // Single-target move uses the existing per-row filing sheet; for a
+        // multi-select we file each into the first chosen space.
+        final first = ids.first;
+        final firstItem = ref
+            .read(matomeInboxControllerProvider)
+            .valueOrNull
+            ?.firstWhere((m) => m.id == first);
+        if (firstItem == null) return;
+        await MatomeRowActions(
+          matome: firstItem,
+          spaces: spaces,
+          onOpen: () {},
+        ).handle(context, ref, MatomeAction.moveToSpace);
+        await inbox.reloadFromLocal();
+      case MatomeTableAction.archive:
+        for (final id in ids) {
+          try {
+            await ref
+                .read(matomeDetailControllerProvider(id).notifier)
+                .archive();
+          } catch (_) {
+            // Offline-first: local archive stands; next pull reconciles.
+          }
+        }
+        await inbox.reloadFromLocal();
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(t.matome.table.archivedMsg(n: ids.length)),
+            action: SnackBarAction(
+              label: t.matome.table.undo,
+              onPressed: () async {
+                for (final id in ids) {
+                  try {
+                    await ref
+                        .read(matomeDetailControllerProvider(id).notifier)
+                        .restore();
+                  } catch (_) {}
+                }
+                await inbox.reloadFromLocal();
+              },
+            ),
+          ),
+        );
+      case MatomeTableAction.delete:
+        final dao = ref.read(matomesDaoProvider);
+        for (final id in ids) {
+          await dao.deleteMatome(id);
+        }
+        await inbox.reloadFromLocal();
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(content: Text(t.matome.table.deletedMsg(n: ids.length))),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final state = ref.watch(matomeInboxControllerProvider);
+    final view = ref.watch(inboxViewProvider);
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
     final listColumn = Column(
@@ -132,6 +222,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onSettings: () => GoRouter.of(context).go('/inbox/settings'),
           // On wide there is no FAB; surface upload in the header instead.
           onUpload: isWide ? _pickAndUpload : null,
+          view: view,
+          onToggleView: (v) =>
+              ref.read(inboxViewProvider.notifier).state = v,
         ),
         Expanded(
           child: state.when(
@@ -142,8 +235,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             data: (items) => _Body(
               items: items,
               search: _search,
+              view: view,
               onRefresh: _refresh,
               onTap: _openMatome,
+              onTableBulk: _handleTableBulk,
             ),
           ),
         ),
@@ -235,6 +330,8 @@ class _Header extends StatelessWidget {
     required this.onSearchChanged,
     required this.onSearchCleared,
     required this.onSettings,
+    required this.view,
+    required this.onToggleView,
     this.onUpload,
   });
 
@@ -244,6 +341,10 @@ class _Header extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onSearchCleared;
   final VoidCallback onSettings;
+
+  /// Current list presentation (cards ↔ table) and the toggle to switch it.
+  final InboxView view;
+  final ValueChanged<InboxView> onToggleView;
 
   /// Desktop-only upload entry (the FAB is dropped in the two-pane layout).
   final VoidCallback? onUpload;
@@ -298,6 +399,8 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
+              _ViewToggle(view: view, onToggle: onToggleView),
+              SizedBox(width: spacing.xs),
               if (onUpload != null) ...[
                 _IconButton(
                   icon: Icons.upload_file,
@@ -376,6 +479,68 @@ class _IconButton extends StatelessWidget {
   }
 }
 
+/// A compact two-segment toggle (cards ↔ table) for the inbox list view. The
+/// chosen view is a local session preference; #1468 persists it.
+class _ViewToggle extends StatelessWidget {
+  const _ViewToggle({required this.view, required this.onToggle});
+
+  final InboxView view;
+  final ValueChanged<InboxView> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    Widget segment(InboxView value, IconData icon, String label) {
+      final active = view == value;
+      return Semantics(
+        button: true,
+        selected: active,
+        label: label,
+        child: Tooltip(
+          message: label,
+          child: InkWell(
+            key: ValueKey('inbox-view-${value.name}'),
+            borderRadius: BorderRadius.circular(radius.sm),
+            onTap: () => onToggle(value),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.sm,
+                vertical: spacing.xs,
+              ),
+              child: Icon(
+                icon,
+                size: typography.body.fontSize,
+                color: active ? colors.textPrimary : colors.textMuted,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(radius.md),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          segment(InboxView.cards, Icons.view_agenda_outlined,
+              t.matome.table.viewCards),
+          segment(InboxView.table, Icons.table_rows_outlined,
+              t.matome.table.viewTable),
+        ],
+      ),
+    );
+  }
+}
+
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
@@ -422,14 +587,18 @@ class _Body extends ConsumerWidget {
   const _Body({
     required this.items,
     required this.search,
+    required this.view,
     required this.onRefresh,
     required this.onTap,
+    required this.onTableBulk,
   });
 
   final List<MatomeItem> items;
   final String search;
+  final InboxView view;
   final Future<void> Function() onRefresh;
   final ValueChanged<MatomeItem> onTap;
+  final Future<void> Function(MatomeTableAction, Set<String>) onTableBulk;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -440,6 +609,46 @@ class _Body extends ConsumerWidget {
     // shared across rows (empty while loading, so the menu still opens).
     final spaces = ref.watch(filingSpacesProvider).valueOrNull ?? const [];
     final filtered = searchMatomes(items, search);
+
+    // Table view — the columnar counterpart (DR-001). One flat, sortable list
+    // (no date sections); selection + bulk actions + per-row menu + undo all
+    // live in the widget. Open routes through the same [onTap] as the cards.
+    if (view == InboxView.table) {
+      final byId = {for (final m in filtered) m.id: m};
+      final rows = [
+        for (final m in filtered)
+          matomeTableRowFromItem(
+            m,
+            relativeWhen: formatTimestamp(
+              DateTime.fromMillisecondsSinceEpoch(m.happenedAt),
+            ),
+          ),
+      ];
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        color: colors.primary,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            spacing.md,
+            spacing.sm,
+            spacing.md,
+            spacing.xxl + spacing.xxl,
+          ),
+          children: [
+            MatomeTable(
+              rows: rows,
+              onOpen: (id) {
+                final item = byId[id];
+                if (item != null) onTap(item);
+              },
+              onBulk: onTableBulk,
+            ),
+          ],
+        ),
+      );
+    }
+
     final sections = groupMatomesByDate(
       filtered,
       todayLabel: 'Today',

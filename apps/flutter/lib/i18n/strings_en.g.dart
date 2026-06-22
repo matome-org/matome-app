@@ -600,6 +600,7 @@ class Translations$matome$en {
 	String get noPeople => 'No people yet';
 
 	late final Translations$matome$actions$en actions = Translations$matome$actions$en.internal(_root);
+	late final Translations$matome$table$en table = Translations$matome$table$en.internal(_root);
 }
 
 // Path: files
@@ -1055,6 +1056,108 @@ class Translations$matome$actions$en {
 	String get editFailed => 'Couldn\'t save — please try again';
 }
 
+// Path: matome.table
+class Translations$matome$table$en {
+	Translations$matome$table$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Matome'
+	String get colTitle => 'Matome';
+
+	/// en: 'When'
+	String get colWhen => 'When';
+
+	/// en: 'Items'
+	String get colItems => 'Items';
+
+	/// en: 'People'
+	String get colPeople => 'People';
+
+	/// en: 'Space'
+	String get colSpace => 'Space';
+
+	/// en: 'Sync'
+	String get colSync => 'Sync';
+
+	/// en: '$n selected'
+	String selected({required Object n}) => '${n} selected';
+
+	/// en: 'Move to space'
+	String get moveToSpace => 'Move to space';
+
+	/// en: 'Archive'
+	String get archive => 'Archive';
+
+	/// en: 'Delete'
+	String get delete => 'Delete';
+
+	/// en: 'Clear'
+	String get clear => 'Clear';
+
+	/// en: 'Cancel'
+	String get cancel => 'Cancel';
+
+	/// en: 'Undo'
+	String get undo => 'Undo';
+
+	/// en: 'Open'
+	String get open => 'Open';
+
+	/// en: 'Sort'
+	String get sortBy => 'Sort';
+
+	/// en: 'Inbox'
+	String get inboxLabel => 'Inbox';
+
+	/// en: 'No summary yet'
+	String get noSummary => 'No summary yet';
+
+	/// en: 'Nothing to show'
+	String get emptyTitle => 'Nothing to show';
+
+	/// en: 'Matomes you capture or file will appear here as rows.'
+	String get emptyBody => 'Matomes you capture or file will appear here as rows.';
+
+	/// en: 'Delete matomes?'
+	String get deleteTitle => 'Delete matomes?';
+
+	/// en: 'Delete $n matome(s)? You can undo this.'
+	String deleteBody({required Object n}) => 'Delete ${n} matome(s)? You can undo this.';
+
+	/// en: 'Archived $n'
+	String archivedMsg({required Object n}) => 'Archived ${n}';
+
+	/// en: 'Deleted $n'
+	String deletedMsg({required Object n}) => 'Deleted ${n}';
+
+	/// en: 'audio'
+	String get audioUnit => 'audio';
+
+	/// en: 'images'
+	String get imageUnit => 'images';
+
+	/// en: 'documents'
+	String get docUnit => 'documents';
+
+	/// en: 'people'
+	String get peopleUnit => 'people';
+
+	/// en: 'Select row'
+	String get selectRow => 'Select row';
+
+	/// en: 'Row actions'
+	String get rowActions => 'Row actions';
+
+	/// en: 'Cards'
+	String get viewCards => 'Cards';
+
+	/// en: 'Table'
+	String get viewTable => 'Table';
+}
+
 // Path: fileView.contentsStatus.audio
 class Translations$fileView$contentsStatus$audio$en {
 	Translations$fileView$contentsStatus$audio$en.internal(this._root);
@@ -1309,6 +1412,37 @@ extension on Translations {
 			'matome.actions.editDateTimeSave' => 'Save',
 			'matome.actions.editDateTimeUpdated' => 'Date & time updated',
 			'matome.actions.editFailed' => 'Couldn\'t save — please try again',
+			'matome.table.colTitle' => 'Matome',
+			'matome.table.colWhen' => 'When',
+			'matome.table.colItems' => 'Items',
+			'matome.table.colPeople' => 'People',
+			'matome.table.colSpace' => 'Space',
+			'matome.table.colSync' => 'Sync',
+			'matome.table.selected' => ({required Object n}) => '${n} selected',
+			'matome.table.moveToSpace' => 'Move to space',
+			'matome.table.archive' => 'Archive',
+			'matome.table.delete' => 'Delete',
+			'matome.table.clear' => 'Clear',
+			'matome.table.cancel' => 'Cancel',
+			'matome.table.undo' => 'Undo',
+			'matome.table.open' => 'Open',
+			'matome.table.sortBy' => 'Sort',
+			'matome.table.inboxLabel' => 'Inbox',
+			'matome.table.noSummary' => 'No summary yet',
+			'matome.table.emptyTitle' => 'Nothing to show',
+			'matome.table.emptyBody' => 'Matomes you capture or file will appear here as rows.',
+			'matome.table.deleteTitle' => 'Delete matomes?',
+			'matome.table.deleteBody' => ({required Object n}) => 'Delete ${n} matome(s)? You can undo this.',
+			'matome.table.archivedMsg' => ({required Object n}) => 'Archived ${n}',
+			'matome.table.deletedMsg' => ({required Object n}) => 'Deleted ${n}',
+			'matome.table.audioUnit' => 'audio',
+			'matome.table.imageUnit' => 'images',
+			'matome.table.docUnit' => 'documents',
+			'matome.table.peopleUnit' => 'people',
+			'matome.table.selectRow' => 'Select row',
+			'matome.table.rowActions' => 'Row actions',
+			'matome.table.viewCards' => 'Cards',
+			'matome.table.viewTable' => 'Table',
 			'files.unfiled' => 'Unfiled',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
