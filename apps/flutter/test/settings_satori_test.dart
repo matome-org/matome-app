@@ -11,6 +11,7 @@ import 'package:matome_flutter/app/screens/satori_screen.dart' as satori;
 import 'package:matome_flutter/app/screens/settings_screen.dart';
 import 'package:matome_flutter/app/screens/tab_screens.dart';
 import 'package:matome_flutter/app/shell_scaffold.dart';
+import 'package:matome_flutter/core/config/feature_flags.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
@@ -274,5 +275,9 @@ void main() {
     // Shipped status detail + the "done" check mark.
     expect(find.text(s.roadmapSearchDetail), findsOneWidget);
     expect(find.byIcon(Icons.check), findsOneWidget);
-  });
+    // Satori is a bottom-bar destination only under the LEGACY shell; under
+    // ff.newNavShell the destination (and its route) is gone, so this nav-via-
+    // dock-glyph test is meaningful only OFF. The ON build proves Satori is
+    // unreachable (redirected) in test/app/new_nav_router_test.dart.
+  }, skip: FeatureFlags.newNavShell);
 }

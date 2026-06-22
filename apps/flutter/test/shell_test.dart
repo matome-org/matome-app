@@ -10,6 +10,7 @@ import 'package:matome_flutter/app/screens/recording_screen.dart';
 import 'package:matome_flutter/app/screens/settings_screen.dart';
 import 'package:matome_flutter/app/screens/tab_screens.dart';
 import 'package:matome_flutter/app/shell_scaffold.dart';
+import 'package:matome_flutter/core/config/feature_flags.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
@@ -164,6 +165,21 @@ class _TestAppState extends ConsumerState<_TestApp> {
 }
 
 void main() {
+  // LEGACY-shell characterization (DR-002, #1474). These assertions are about
+  // the OFF reality — the notched BottomAppBar + center-docked mic FAB on mobile
+  // and the Material NavigationRail on desktop. Once `ff.newNavShell` defaults
+  // ON, a plain `flutter test` builds the NEW shell, so this file would assert
+  // chrome that no longer renders. Skip it under the ON build; the dual-flag
+  // gate (`mise run flutter-design-system-check`) runs the suite once with
+  // `--dart-define=ff.newNavShell=false`, which is where this OFF proof stays
+  // green. The ON reality is characterized in test/app/new_nav_*_test.dart.
+  if (FeatureFlags.newNavShell) {
+    test('legacy shell characterization is skipped under the ON build', () {},
+        skip: 'ff.newNavShell is ON; OFF chrome not rendered. '
+            'Run with --dart-define=ff.newNavShell=false to exercise.');
+    return;
+  }
+
   late AppDatabase db;
 
   setUp(() {

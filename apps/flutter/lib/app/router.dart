@@ -82,6 +82,19 @@ Future<String?> _redirectRecordingToMatome(Ref ref, String? recordingId) async {
 ///       /spaces/recording/:id  LEGACY recording link → redirects to parent matome
 ///     /satori               satori root
 ///     /contacts             contacts directory root (#1374)
+/// Safety redirect for the Satori route once it is compiled out (DR-002,
+/// #1467/#1474). Returns the home tab when [FeatureFlags.newNavShell] is ON and
+/// [location] is `/satori` (or a sub-path); otherwise null (no redirect — under
+/// the legacy shell Satori is a real branch and resolves normally). Pure +
+/// flag-aware so a router-level test can assert "a restored `/satori` deep-link
+/// never throws go_router's no-match exception" without spinning up the full
+/// provider graph.
+String? satoriSafetyRedirect(String location) {
+  if (!FeatureFlags.newNavShell) return null;
+  final isSatori = location == '/satori' || location.startsWith('/satori/');
+  return isSatori ? GuardTargets.home : null;
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   // Real auth: the AuthController restores the persisted session on creation
   // (validates tokens via /api/auth/me). Touch it so that bootstrap kicks off
@@ -93,6 +106,16 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     refreshListenable: _AuthListenable(ref),
     redirect: (context, state) {
+      // Satori safety redirect (DR-002, #1467/#1474): under
+      // [FeatureFlags.newNavShell] the Satori branch is dropped from
+      // [shellBranches] and its `/satori` GoRoute is never registered, so a
+      // bookmarked / restored `/satori` deep-link would otherwise fall through
+      // to go_router's error page. Redirect it to the home tab instead of
+      // throwing a "no routes for location" exception (Olivier A05). A no-op
+      // when the flag is OFF (Satori is a real branch then).
+      final satoriRedirect = satoriSafetyRedirect(state.matchedLocation);
+      if (satoriRedirect != null) return satoriRedirect;
+
       final auth = ref.read(authStateProvider);
       return decideRedirect(
         isAuthenticated: auth.isAuthenticated,

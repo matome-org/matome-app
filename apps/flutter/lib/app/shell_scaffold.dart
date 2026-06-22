@@ -254,10 +254,33 @@ class _DockShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
+    // The dock + Add FAB FLOAT over the content (edge-to-edge, no notch), so a
+    // scrollable's last item would otherwise sit permanently under the dock —
+    // unlike the legacy `bottomNavigationBar`, which reserved layout space. Add
+    // that space back as bottom padding via MediaQuery so every branch screen's
+    // bottom content stays reachable (e.g. the Settings "Sign out" tile). The
+    // reserve ≈ FAB + gap + dock (a 48dp tap target plus its vertical padding)
+    // + the bottom anchor inset, derived from the same spacing tokens the
+    // overlay below is laid out with (no magic number).
+    final media = MediaQuery.of(context);
+    final dockReserve = _kDockFabSize +
+        spacing.sm +
+        _kDockTapTarget +
+        spacing.sm * 2 +
+        spacing.sm;
     return Scaffold(
       body: Stack(
         children: [
-          Positioned.fill(child: navigationShell),
+          Positioned.fill(
+            child: MediaQuery(
+              data: media.copyWith(
+                padding: media.padding.copyWith(
+                  bottom: media.padding.bottom + dockReserve,
+                ),
+              ),
+              child: navigationShell,
+            ),
+          ),
           Positioned(
             left: _kZero,
             right: _kZero,
@@ -352,6 +375,15 @@ class _SidebarShellState extends ConsumerState<_SidebarShell> {
 /// an intentional layout primitive (not an ad-hoc magic number) to the
 /// design-system source guard.
 const double _kZero = 0;
+
+/// The floating Add FAB's diameter (mirrors `matome_nav._kFabSize`). Used only
+/// to compute the bottom content reserve in [_DockShell] so a branch screen's
+/// last item is not obscured by the floating dock overlay.
+const double _kDockFabSize = 56;
+
+/// The dock destination's minimum tap target (mirrors
+/// `matome_nav._kMinTapTarget`). Part of the [_DockShell] bottom reserve.
+const double _kDockTapTarget = 48;
 
 /// Phone layout: bottom bar with the docked center mic FAB (unchanged).
 class _MobileShell extends StatelessWidget {
