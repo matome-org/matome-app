@@ -12,8 +12,6 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:matome_widgetbook/proposals/matome_letter_proposal.dart'
     as _matome_widgetbook_proposals_matome_letter_proposal;
-import 'package:matome_widgetbook/proposals/matome_nav_proposal.dart'
-    as _matome_widgetbook_proposals_matome_nav_proposal;
 import 'package:matome_widgetbook/widgetbook.dart'
     as _matome_widgetbook_widgetbook;
 import 'package:widgetbook/widgetbook.dart' as _widgetbook;
@@ -500,41 +498,6 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'List — grouped',
                 builder: _matome_widgetbook_proposals_matome_letter_proposal
                     .matomeListUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Navigation',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomeBottomDock',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Mobile dock — bare',
-                builder: _matome_widgetbook_proposals_matome_nav_proposal
-                    .mobileDockBareUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Mobile dock — in context',
-                builder: _matome_widgetbook_proposals_matome_nav_proposal
-                    .mobileDockInContextUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomeSidebar',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Desktop sidebar — collapsed (rail)',
-                builder: _matome_widgetbook_proposals_matome_nav_proposal
-                    .desktopSidebarCollapsedUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Desktop sidebar — expanded',
-                builder: _matome_widgetbook_proposals_matome_nav_proposal
-                    .desktopSidebarExpandedUseCase,
               ),
             ],
           ),
