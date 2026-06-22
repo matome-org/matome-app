@@ -199,6 +199,7 @@ class MatomePanelAddRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
+    final radius = context.radius;
     final typography = context.typography;
 
     final row = Row(
@@ -210,8 +211,28 @@ class MatomePanelAddRow extends StatelessWidget {
       ],
     );
 
-    if (onTap == null) return row;
-    return InkWell(onTap: onTap, child: row);
+    if (onTap == null) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: spacing.xs),
+        child: row,
+      );
+    }
+    // Explicit click cursor + hover highlight + a padded hit area so the accent
+    // "Add" affordance reads as tappable on desktop/web (a bare InkWell over a
+    // tight Row gave no pointer cursor / no hover feedback).
+    return InkWell(
+      onTap: onTap,
+      mouseCursor: SystemMouseCursors.click,
+      borderRadius: BorderRadius.circular(radius.sm),
+      hoverColor: colors.accent.withValues(alpha: 0.08),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.xs,
+          vertical: spacing.xs,
+        ),
+        child: row,
+      ),
+    );
   }
 }
 
