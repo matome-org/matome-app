@@ -159,6 +159,43 @@ defmodule MatomeApiWeb.RecordingControllerTest do
     assert upload["url"] =~ "X-Amz-SignedHeaders=content-length%3Bhost"
   end
 
+  test "declared content_length is persisted as byte_size and read back", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    recording =
+      post(owner_conn, ~p"/api/recordings", %{title: "Sized file", content_length: 2_516_582})
+      |> json_response(201)
+      |> get_in(["recording"])
+
+    assert recording["byte_size"] == 2_516_582
+
+    # Round-trips through a fresh GET (persisted, not just echoed from create).
+    fetched =
+      get(owner_conn, ~p"/api/recordings/#{recording["id"]}")
+      |> json_response(200)
+      |> get_in(["recording"])
+
+    assert fetched["byte_size"] == 2_516_582
+  end
+
+  test "a recording created without a content_length carries a null byte_size", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+
+    recording =
+      post(owner_conn, ~p"/api/recordings", %{title: "No size"})
+      |> json_response(201)
+      |> get_in(["recording"])
+
+    assert recording["byte_size"] == nil
+
+    fetched =
+      get(owner_conn, ~p"/api/recordings/#{recording["id"]}")
+      |> json_response(200)
+      |> get_in(["recording"])
+
+    assert fetched["byte_size"] == nil
+  end
+
   test "upload completion queues AI processing without exposing the AI engine", %{conn: conn} do
     %{conn: owner_conn} = register_conn(conn)
 

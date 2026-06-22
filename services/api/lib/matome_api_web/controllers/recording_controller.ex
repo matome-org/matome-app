@@ -21,7 +21,7 @@ defmodule MatomeApiWeb.RecordingController do
   end
 
   def create(conn, params) do
-    case Content.create_recording(conn.assigns.current_user, params) do
+    case Content.create_recording(conn.assigns.current_user, persist_attrs(params)) do
       {:ok, recording} ->
         presign_create(conn, recording, params)
 
@@ -53,6 +53,19 @@ defmodule MatomeApiWeb.RecordingController do
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{error: to_string(reason)})
+    end
+  end
+
+  # The client declares the upload size as `content_length` (already SigV4-signed
+  # into the presigned PUT). Persist it as the recording's `byte_size` so the
+  # Files view can render a real human size. Only a valid non-negative integer is
+  # carried through to the changeset; an absent/invalid value leaves `byte_size`
+  # untouched (NULL → "—"), and an oversized value is still rejected downstream
+  # by the presign cap (which reads `content_length` directly from params).
+  defp persist_attrs(params) do
+    case parse_content_length(params["content_length"]) do
+      bytes when is_integer(bytes) -> Map.put(params, "byte_size", bytes)
+      _ -> params
     end
   end
 
@@ -140,6 +153,7 @@ defmodule MatomeApiWeb.RecordingController do
       status: Atom.to_string(recording.status),
       error_reason: recording.error_reason,
       duration: recording.duration,
+      byte_size: recording.byte_size,
       badge: recording.badge,
       workspace_id: recording.workspace_id,
       matome_id: recording.matome_id,

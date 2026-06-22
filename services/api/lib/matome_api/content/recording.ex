@@ -25,6 +25,7 @@ defmodule MatomeApi.Content.Recording do
     field :status, Ecto.Enum, values: @statuses, default: :pending
     field :error_reason, :string
     field :duration, :integer
+    field :byte_size, :integer
     field :badge, :string
 
     belongs_to :owner, User
@@ -45,6 +46,7 @@ defmodule MatomeApi.Content.Recording do
       :status,
       :error_reason,
       :duration,
+      :byte_size,
       :badge,
       :workspace_id,
       :matome_id
@@ -52,6 +54,7 @@ defmodule MatomeApi.Content.Recording do
     |> validate_required([:title])
     |> validate_inclusion(:media_type, @media_types)
     |> validate_number(:duration, greater_than_or_equal_to: 0)
+    |> validate_number(:byte_size, greater_than_or_equal_to: 0)
     |> foreign_key_constraint(:workspace_id)
     |> foreign_key_constraint(:matome_id)
     |> check_constraint(:status, name: :recordings_status_check)
