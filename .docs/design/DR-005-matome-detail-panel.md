@@ -1,10 +1,10 @@
 # DR-005 - Matome detail panel (`MatomeDetailPanel` scaffolding)
 
-> Status: **Accepted** | Date: 2026-06-22 | Task: #1458
-> Source: `apps/flutter_widgetbook/lib/proposals/matome_letter_proposal.dart` (`MatomeDetailPanel` use case)
+> Status: **Accepted** | Date: 2026-06-22 | Task: #1458, reconciled #1475
+> Source: `apps/flutter_widgetbook/lib/proposals/matome_letter_proposal.dart` (`MatomeDetailPanel` use case — restored as the alignment spec in #1475, re-deleted after the green repoint)
 > Canonical widgets: `apps/flutter/lib/ui/matome_detail_panel.dart`
 > (`MatomePanelSection`, `MatomePanelRow`, `MatomePanelAddRow`, `matomeItemIcon`, `matomeItemSyncChip`)
-> Graduated in: #1458 (this); precedent for [DR-000](./DR-000-convergence-procedure.md)
+> Graduated in: #1458; reconciled to the approved proposal in #1475; precedent for [DR-000](./DR-000-convergence-procedure.md)
 
 ## Problem
 
@@ -63,26 +63,62 @@ live screen and the catalog render:
    lives in the catalog; the structure lives once, in `lib/ui`. They can no
    longer drift.
 
-## Deltas from the original proposal (deliberate, regression-forbidden)
+## Reconciliation to the approved proposal (#1475)
 
-The app keeps shipped features the proposal mock did not model — these are
-**intentional** divergences from the static mock, not drift:
+The #1458 graduation kept several **visual** divergences from the approved
+proposal as "deliberate deltas". The owner rejected that: the shipped panel
+visibly differed from the screenshot they approved, and #1470 (commit `7a009c4`)
+compounded it by deleting the approval reference. #1475 restores the proposal as
+the alignment spec and brings the live `_MatomeDetails` (the SINGLE composition
+for BOTH the desktop side panel AND the mobile "Show more" sheet) back to the
+approved **layout**, keeping every real **function** ("proposal visual + real
+functions"):
 
-- **TWO Add affordances**, not the proposal's single "Add item": `matome-add-photo`
-  (image, unconditional) AND `matome-add-file` (document import, #1449,
-  feature-flag gated), both styled as `MatomePanelAddRow`.
-- **Document support** (#1450): document rows show the description glyph
-  (from `original_extension` / media type) and tap-route to the **document host**
-  (`/recording/document/:id`), never the audio host; the doc count is intact.
-- **Real per-item sync** via `matomeItemSyncChip` / `MatomeSyncChip` rollup, not
-  the mock `_SyncChip`.
-- **Real** contacts, Notes edit, File-into-space ("Refile") and the deferred
-  Share ("Coming soon") flows.
-- All existing **ValueKeys** are preserved (`matome-details`,
-  `matome-detail-panel`, `matome-item-<id>`, `matome-image-<id>`,
-  `matome-item-overflow/-delete/-sync-<id>`, `matome-add-photo/-file/-contact`,
-  `matome-edit-notes`, `matome-share`, `matome-file-cta/-filed/-refile`,
-  `matome-contacts`).
+1. **One "Add item" accent row** (`matome-add-item`), not the old split
+   "Add photo / Add file" header. It opens an anchored menu → **Add photo**
+   (`matome-add-photo`, image, unconditional) + **Add file** (`matome-add-file`,
+   document import #1449, feature-flag gated; dropped from the menu when off).
+   Both real import flows are preserved behind the single affordance.
+2. **No inline per-item "…"** on the item row — the row is now the clean
+   approved shape: leading type icon + title + meta (time/duration) + trailing
+   real `matomeItemSyncChip`, nothing else. **Per-item-action relocation
+   decision:** Delete moves to a row **long-press → actions bottom sheet**
+   (`matome-item-overflow-<id>` → `matome-item-delete-<id>` keys preserved on the
+   sheet). Long-press is the cross-surface affordance — it fires on mobile touch
+   AND on desktop secondary-click / press-hold, so the one path serves both the
+   mobile sheet and the desktop side panel without a hover-only reveal a touch
+   laptop or a test driver can't reach. Tap still opens the Item.
+3. **"Add person"** (`matome-add-contact`), the proposal's slang, not "Add contact".
+4. **Notes trailing "Edit"** (`matome-edit-notes`), the proposal's slang, not
+   "Edit notes".
+5. **Share** matches the proposal's plain row (`ios_share` glyph + "Share" in the
+   primary colour, `matome-share`). The deferred state stays honest via a
+   "Coming soon" tooltip + a11y hint and no tap handler — not a dimmed inline
+   "· Coming soon" row.
+6. **Space / "Refile"** was already the correct inbox-vs-filed state — left as-is.
+
+Regression-forbidden features kept intact through the reconciliation: document
+add-file flow + doc icon (`matomeItemIcon`) + doc-host routing
+(`/recording/document/:id`, #1450); the real per-item `MatomeSyncChip` rollup
+(not the mock `_SyncChip`); real contacts, Notes edit, File-into-space; Share
+deferred. All existing **ValueKeys** are preserved (`matome-details`,
+`matome-detail-panel`, `matome-item-<id>`, `matome-image-<id>`,
+`matome-item-overflow/-delete/-sync-<id>`, `matome-add-item`,
+`matome-add-photo/-file/-contact`, `matome-edit-notes`, `matome-share`,
+`matome-file-cta/-filed/-refile`, `matome-contacts`); `MatomePanelRow` gained an
+`onLongPress` hook for the relocated per-item actions.
+
+### Convergence procedure followed (DR-000, done right)
+
+1. Restored the approved `matome_letter_proposal.dart` from `7a009c4~1` as the
+   alignment spec.
+2. Aligned the live widget to it (the six points above), updating the widget
+   tests in lockstep.
+3. Re-pointed the "[Proposals]/Matome detail" use-cases at the restored proposal
+   (which composes the real `lib/ui` scaffolding) and verified GREEN — widgetbook
+   smoke + the "matome detail panel sections" golden of the matched panel.
+4. ONLY THEN re-deleted `matome_letter_proposal.dart` in its own commit, after
+   the green repoint, with this record updated alongside it (the Scribe gate).
 
 ## Rejected alternatives
 
