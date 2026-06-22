@@ -6,8 +6,11 @@ import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
+import 'package:matome_flutter/core/db/file_row.dart';
 import 'package:matome_flutter/features/contacts/widgets/contact_detail.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
+import 'package:matome_flutter/features/files/widgets/files_grid.dart';
+import 'package:matome_flutter/features/files/widgets/files_table.dart';
 import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -551,6 +554,119 @@ const _contactDetailSparse = ContactDetailData(
     ),
   ],
 );
+
+// ─── Files (grid + table, #1465) ──────────────────────────────────────────────
+//
+// CONVERGENCE (DR-000 / DR-003): these stories render the REAL, graduated
+// `FilesGrid` / `FilesTable` shipped in
+// `package:matome_flutter/features/files/widgets/...` — the same widgets the
+// `/files` host screen renders. The proposal mock has been deleted; there is no
+// second implementation to drift from. Copy reads `t.files.*`, so the
+// Localization addon swaps it between en / ja.
+
+@widgetbook.UseCase(
+  name: 'Grid — desktop',
+  type: FilesGrid,
+  path: '[Catalog]/Files',
+)
+Widget filesGridDesktopUseCase(BuildContext context) {
+  return _UseCaseSurface(width: 960, child: FilesGrid(files: _filesSample));
+}
+
+@widgetbook.UseCase(
+  name: 'Grid — mobile',
+  type: FilesGrid,
+  path: '[Catalog]/Files',
+)
+Widget filesGridMobileUseCase(BuildContext context) {
+  return _UseCaseSurface(width: 380, child: FilesGrid(files: _filesSample));
+}
+
+@widgetbook.UseCase(
+  name: 'Table — desktop',
+  type: FilesTable,
+  path: '[Catalog]/Files',
+)
+Widget filesTableDesktopUseCase(BuildContext context) {
+  return _UseCaseSurface(width: 960, child: FilesTable(files: _filesSample));
+}
+
+@widgetbook.UseCase(
+  name: 'Table — mobile (compact)',
+  type: FilesTable,
+  path: '[Catalog]/Files',
+)
+Widget filesTableMobileUseCase(BuildContext context) {
+  return _UseCaseSurface(width: 380, child: FilesTable(files: _filesSample));
+}
+
+/// Sample files for the graduated Files stories. Mirrors the DR-003 fixtures:
+/// every combination of the three independent relations (matome / space /
+/// people) plus their absences (Unfiled / Inbox) — including the load-bearing
+/// "Unfiled but in a space" case (voice-memo). Size is null throughout because
+/// it is not persisted (#1461), so the widgets render the dash, never a
+/// fabricated size.
+const _filesSample = <FileRow>[
+  FileRow(
+    id: 'f1',
+    name: 'Q3 roadmap.pdf',
+    kind: FileKind.document,
+    ext: 'pdf',
+    when: '2h',
+    whenSort: 100,
+    matome: 'Client X — weekly sync',
+    space: 'Marketing',
+    contacts: ['Ana', 'Ken'],
+    rollup: MatomeSyncRollup.cloud,
+  ),
+  FileRow(
+    id: 'f2',
+    name: 'Design sync.m4a',
+    kind: FileKind.audio,
+    ext: 'm4a',
+    when: '4h',
+    whenSort: 90,
+    matome: 'Design review',
+    space: 'Product',
+    contacts: ['Mika'],
+    rollup: MatomeSyncRollup.partial,
+    duration: '12:04',
+  ),
+  FileRow(
+    id: 'f3',
+    name: 'whiteboard.jpg',
+    kind: FileKind.image,
+    ext: 'jpg',
+    when: '5h',
+    whenSort: 80,
+    matome: null, // Unfiled + Inbox
+    space: null,
+    rollup: MatomeSyncRollup.onDevice,
+  ),
+  FileRow(
+    id: 'f5',
+    name: 'voice-memo.m4a',
+    kind: FileKind.audio,
+    ext: 'm4a',
+    when: '1d',
+    whenSort: 49,
+    matome: null, // Unfiled, but filed into a space (space != matome)
+    space: 'Personal',
+    rollup: MatomeSyncRollup.onDevice,
+    duration: '00:48',
+  ),
+  FileRow(
+    id: 'f7',
+    name: 'budget.xlsx',
+    kind: FileKind.document,
+    ext: 'xlsx',
+    when: '3d',
+    whenSort: 20,
+    matome: null, // Unfiled + Inbox
+    space: null,
+    rollup: MatomeSyncRollup.cloud,
+  ),
+];
 
 @widgetbook.UseCase(
   name: 'Audio — ready (transcript)',

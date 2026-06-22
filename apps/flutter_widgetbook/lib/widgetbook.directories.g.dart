@@ -200,6 +200,37 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'Files',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesGrid',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Grid — desktop',
+                builder: _matome_widgetbook_widgetbook.filesGridDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Grid — mobile',
+                builder: _matome_widgetbook_widgetbook.filesGridMobileUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesTable',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — desktop',
+                builder: _matome_widgetbook_widgetbook.filesTableDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — mobile (compact)',
+                builder: _matome_widgetbook_widgetbook.filesTableMobileUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Inputs',
         children: [
           _widgetbook.WidgetbookComponent(
