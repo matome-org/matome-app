@@ -311,6 +311,28 @@ defmodule MatomeApi.ContentTest do
     assert Content.unlink_contact_from_recording(other_owner, recording.id, contact.id) == nil
   end
 
+  test "list reads are owner-scoped on the JOINED endpoint, not just the anchor" do
+    # Defense-in-depth proof: even a hand-forged cross-owner recording_contacts
+    # row (bypassing the owner-scoped link path) must NOT leak the other owner's
+    # contact/recording through the list reads — the join filters on owner too.
+    owner = user_fixture()
+    other_owner = user_fixture()
+
+    assert {:ok, recording} = Content.create_recording(owner, %{title: "Mine"})
+    assert {:ok, other_contact} = Content.create_contact(other_owner, %{display_name: "Mallory"})
+
+    # forge a link from the owner's recording to ANOTHER owner's contact
+    MatomeApi.Repo.insert!(%MatomeApi.Content.RecordingContact{
+      recording_id: recording.id,
+      contact_id: other_contact.id
+    })
+
+    # the owner must NOT see Mallory (she belongs to other_owner)
+    assert Content.list_contacts_for_recording(owner, recording.id) == []
+    # and other_owner must NOT see the owner's recording via that forged row
+    assert Content.list_recordings_for_contact(other_owner, other_contact.id) == []
+  end
+
   test "the unique (recording, contact) index rejects a duplicate raw insert" do
     owner = user_fixture()
     assert {:ok, recording} = Content.create_recording(owner, %{title: "Sync"})

@@ -319,10 +319,16 @@ defmodule MatomeApi.Content do
   """
   def list_contacts_for_recording(%User{} = owner, recording_id) do
     with %Recording{} = recording <- get_recording(owner, recording_id) do
+      # Defense-in-depth: the recording is already owner-verified, and the link
+      # path owner-scopes both endpoints so no cross-owner row can exist — but
+      # filter the joined contact on owner too, so the read is provably scoped
+      # regardless of how a row got there (Olivier — no enumerating another
+      # user's contacts via a stray join row).
       Contact
       |> join(:inner, [contact], rc in RecordingContact,
         on: rc.contact_id == contact.id and rc.recording_id == ^recording.id
       )
+      |> where([contact], contact.owner_id == ^owner.id)
       |> order_by([contact], asc: contact.display_name)
       |> Repo.all()
     end
@@ -335,10 +341,14 @@ defmodule MatomeApi.Content do
   """
   def list_recordings_for_contact(%User{} = owner, contact_id) do
     with %Contact{} = contact <- get_contact(owner, contact_id) do
+      # Defense-in-depth (see list_contacts_for_recording): filter the joined
+      # recording on owner too, so the read is provably owner-scoped on both
+      # endpoints regardless of how a row got there.
       Recording
       |> join(:inner, [recording], rc in RecordingContact,
         on: rc.recording_id == recording.id and rc.contact_id == ^contact.id
       )
+      |> where([recording], recording.owner_id == ^owner.id)
       |> order_by([recording], desc: recording.inserted_at)
       |> Repo.all()
     end

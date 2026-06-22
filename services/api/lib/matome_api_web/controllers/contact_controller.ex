@@ -5,7 +5,8 @@ defmodule MatomeApiWeb.ContactController do
 
   def index(conn, params) do
     json(conn, %{
-      contacts: Enum.map(Content.list_contacts(conn.assigns.current_user, params), &contact_json/1)
+      contacts:
+        Enum.map(Content.list_contacts(conn.assigns.current_user, params), &contact_json/1)
     })
   end
 
