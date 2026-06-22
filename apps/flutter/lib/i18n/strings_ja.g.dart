@@ -49,6 +49,7 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$details$ja details = _Translations$details$ja._(_root);
 	@override late final _Translations$fileView$ja fileView = _Translations$fileView$ja._(_root);
 	@override late final _Translations$matome$ja matome = _Translations$matome$ja._(_root);
+	@override late final _Translations$files$ja files = _Translations$files$ja._(_root);
 	@override late final _Translations$spaces$ja spaces = _Translations$spaces$ja._(_root);
 	@override late final _Translations$calendar$ja calendar = _Translations$calendar$ja._(_root);
 	@override late final _Translations$contacts$ja contacts = _Translations$contacts$ja._(_root);
@@ -298,6 +299,16 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get noFiles => '項目はまだありません';
 	@override String get noPeople => '関係者はまだいません';
 	@override late final _Translations$matome$actions$ja actions = _Translations$matome$actions$ja._(_root);
+}
+
+// Path: files
+class _Translations$files$ja extends Translations$files$en {
+	_Translations$files$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get unfiled => '未整理';
 }
 
 // Path: spaces
@@ -745,6 +756,7 @@ extension on TranslationsJa {
 			'matome.actions.editDateTimeSave' => '保存',
 			'matome.actions.editDateTimeUpdated' => '日時を更新しました',
 			'matome.actions.editFailed' => '保存できませんでした — もう一度お試しください',
+			'files.unfiled' => '未整理',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

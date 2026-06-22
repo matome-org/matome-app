@@ -50,6 +50,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$details$en details = Translations$details$en.internal(_root);
 	late final Translations$fileView$en fileView = Translations$fileView$en.internal(_root);
 	late final Translations$matome$en matome = Translations$matome$en.internal(_root);
+	late final Translations$files$en files = Translations$files$en.internal(_root);
 	late final Translations$spaces$en spaces = Translations$spaces$en.internal(_root);
 	late final Translations$calendar$en calendar = Translations$calendar$en.internal(_root);
 	late final Translations$contacts$en contacts = Translations$contacts$en.internal(_root);
@@ -599,6 +600,18 @@ class Translations$matome$en {
 	String get noPeople => 'No people yet';
 
 	late final Translations$matome$actions$en actions = Translations$matome$actions$en.internal(_root);
+}
+
+// Path: files
+class Translations$files$en {
+	Translations$files$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Unfiled'
+	String get unfiled => 'Unfiled';
 }
 
 // Path: spaces
@@ -1296,6 +1309,7 @@ extension on Translations {
 			'matome.actions.editDateTimeSave' => 'Save',
 			'matome.actions.editDateTimeUpdated' => 'Date & time updated',
 			'matome.actions.editFailed' => 'Couldn\'t save — please try again',
+			'files.unfiled' => 'Unfiled',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

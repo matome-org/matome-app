@@ -225,6 +225,9 @@
       "editFailed": "Couldn't save — please try again"
     }
   },
+  "files": {
+    "unfiled": "Unfiled"
+  },
   "spaces": {
     "title": "Spaces",
     "empty": "No spaces yet",

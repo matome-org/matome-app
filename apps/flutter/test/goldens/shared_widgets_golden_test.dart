@@ -19,7 +19,11 @@ import 'package:matome_flutter/ui/avatar.dart';
 import 'package:matome_flutter/ui/empty_state.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
+import 'package:matome_flutter/ui/matome_chip.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
+import 'package:matome_flutter/ui/people_cluster.dart';
+import 'package:matome_flutter/ui/role_chip.dart';
+import 'package:matome_flutter/ui/space_chip.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
 
 void main() {
@@ -113,6 +117,10 @@ void main() {
                 GoldenTestScenario(
                   name: 'file type chip',
                   child: _FileTypeChipSample(),
+                ),
+                GoldenTestScenario(
+                  name: 'relation atoms',
+                  child: _RelationAtomsSample(),
                 ),
               ],
             ),
@@ -700,6 +708,55 @@ class _FileTypeChipSample extends StatelessWidget {
         ),
         SizedBox(height: 12),
         FileTypeChip(fileName: 'archive.xyz', extension: 'xyz'),
+      ],
+    );
+  }
+}
+
+/// Golden for the shared relationship atoms (#1460): the filled [MatomeChip]
+/// vs the outlined [SpaceChip] (and their Unfiled / Inbox empty states), the
+/// role-tinted [RoleChip] across organizer / speaker / attendee, and the
+/// overlapping [PeopleCluster] with its "+N" overflow. One scenario pins the
+/// whole convergence set the Files + Contact views graduate against.
+class _RelationAtomsSample extends StatelessWidget {
+  const _RelationAtomsSample();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            MatomeChip(matome: 'Client X — weekly sync'),
+            MatomeChip(),
+            SpaceChip(space: 'Marketing'),
+            SpaceChip(),
+          ],
+        ),
+        SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            RoleChip(role: MatomeContactRole.organizer),
+            RoleChip(role: MatomeContactRole.speaker),
+            RoleChip(role: MatomeContactRole.attendee),
+          ],
+        ),
+        SizedBox(height: 12),
+        Row(
+          children: [
+            PeopleCluster(names: ['Ana', 'Ken']),
+            SizedBox(width: 16),
+            PeopleCluster(names: ['Leo', 'Ana', 'Ken', 'Mika', 'Yui']),
+          ],
+        ),
       ],
     );
   }
