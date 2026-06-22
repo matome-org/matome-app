@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/theme/app_theme.dart';
@@ -10,6 +11,27 @@ import '../../ui/app_text_field.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
 import 'contacts_controller.dart';
+
+/// Opens the shared create/edit contact modal, returning the entered
+/// [ContactDraft] (or null if dismissed). Shared by the list screen and the
+/// detail screen so both edit through the same form.
+Future<ContactDraft?> showContactEditDialog(
+  BuildContext context, {
+  ContactRow? existing,
+}) {
+  return showDialog<ContactDraft>(
+    context: context,
+    builder: (_) => _ContactDialog(existing: existing),
+  );
+}
+
+/// Opens the delete-confirmation modal, returning true when confirmed.
+Future<bool?> showContactDeleteDialog(BuildContext context, String name) {
+  return showDialog<bool>(
+    context: context,
+    builder: (_) => _DeleteContactDialog(name: name),
+  );
+}
 
 /// Width past which the contact list reflows into a multi-column grid (desktop /
 /// web), mirroring the Spaces tab.
@@ -24,10 +46,7 @@ class ContactsScreen extends ConsumerWidget {
   const ContactsScreen({super.key});
 
   Future<void> _create(BuildContext context, WidgetRef ref) async {
-    final result = await showDialog<_ContactDraft>(
-      context: context,
-      builder: (_) => const _ContactDialog(),
-    );
+    final result = await showContactEditDialog(context);
     if (result == null || result.name.trim().isEmpty) return;
     await ref.read(contactsControllerProvider.notifier).createContact(
           displayName: result.name,
@@ -35,21 +54,10 @@ class ContactsScreen extends ConsumerWidget {
         );
   }
 
-  Future<void> _edit(
-    BuildContext context,
-    WidgetRef ref,
-    ContactRow contact,
-  ) async {
-    final result = await showDialog<_ContactDraft>(
-      context: context,
-      builder: (_) => _ContactDialog(existing: contact),
-    );
-    if (result == null || result.name.trim().isEmpty) return;
-    await ref.read(contactsControllerProvider.notifier).updateContact(
-          id: contact.id,
-          displayName: result.name,
-          notes: result.notes,
-        );
+  /// Tapping a contact opens its detail screen at `/contacts/:id` (DR-004,
+  /// #1464) — editing now lives behind the detail's Edit affordance.
+  void _open(BuildContext context, ContactRow contact) {
+    context.push('/contacts/${contact.id}');
   }
 
   Future<void> _confirmDelete(
@@ -57,10 +65,7 @@ class ContactsScreen extends ConsumerWidget {
     WidgetRef ref,
     ContactRow contact,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => _DeleteContactDialog(name: contact.displayName),
-    );
+    final confirmed = await showContactDeleteDialog(context, contact.displayName);
     if (confirmed != true) return;
     await ref.read(contactsControllerProvider.notifier).deleteContact(
           contact.id,
@@ -107,7 +112,7 @@ class ContactsScreen extends ConsumerWidget {
                   isWide: isWide,
                   onRefresh: () =>
                       ref.read(contactsControllerProvider.notifier).load(),
-                  onTap: (c) => _edit(context, ref, c),
+                  onTap: (c) => _open(context, c),
                   onLongPress: (c) => _confirmDelete(context, ref, c),
                 ),
               ),
@@ -348,8 +353,8 @@ class _ContactTile extends StatelessWidget {
 }
 
 /// The form result: the trimmed-or-raw display name plus its notes blob.
-class _ContactDraft {
-  const _ContactDraft({required this.name, required this.notes});
+class ContactDraft {
+  const ContactDraft({required this.name, required this.notes});
 
   final String name;
   final String notes;
@@ -388,7 +393,7 @@ class _ContactDialogState extends State<_ContactDialog> {
   }
 
   void _submit() => Navigator.of(context).pop(
-        _ContactDraft(name: _name.text, notes: _notes.text),
+        ContactDraft(name: _name.text, notes: _notes.text),
       );
 
   @override

@@ -7,6 +7,7 @@ import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
+import 'package:matome_flutter/features/contacts/widgets/contact_detail.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
@@ -197,6 +198,52 @@ void main() {
                     width: 360,
                     height: 720,
                     child: MatomeTable(rows: _matomeTableRows),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  });
+
+  group('contact detail goldens', () {
+    for (final variant in _variants) {
+      goldenTest(
+        'renders ${variant.label}',
+        fileName: 'contact_detail_${variant.fileSuffix}',
+        constraints: const BoxConstraints.tightFor(width: 1000, height: 2280),
+        pumpBeforeTest: pumpOnce,
+        builder: () {
+          LocaleSettings.setLocaleSync(variant.locale);
+          return _GoldenApp(
+            variant: variant,
+            child: GoldenTestGroup(
+              columns: 1,
+              children: [
+                GoldenTestScenario(
+                  name: 'detail - desktop (full)',
+                  child: const _TableFrame(
+                    width: 920,
+                    height: 640,
+                    child: ContactDetail(contact: _contactDetailFull),
+                  ),
+                ),
+                GoldenTestScenario(
+                  name: 'detail - sparse (minimal)',
+                  child: const _TableFrame(
+                    width: 920,
+                    height: 420,
+                    child: ContactDetail(contact: _contactDetailSparse),
+                  ),
+                ),
+                GoldenTestScenario(
+                  name: 'detail - mobile (stacked)',
+                  child: const _TableFrame(
+                    width: 380,
+                    height: 1080,
+                    child: ContactDetail(contact: _contactDetailFull),
                   ),
                 ),
               ],
@@ -909,6 +956,67 @@ const _matomeTableRows = <MatomeTableRow>[
     rollup: MatomeSyncRollup.partial,
   ),
 ];
+
+/// Sample data for the graduated [ContactDetail] goldens (DR-004 / #1464) — the
+/// same fixtures the Widgetbook "Contact detail" stories render so the catalog
+/// and the regression baseline stay in lockstep. Copy reads `t.contacts.detail.*`,
+/// so the Localization variants swap section labels between en and ja.
+const _contactDetailFull = ContactDetailData(
+  id: 'c-full',
+  name: 'Ana Ribeiro',
+  avatarIndex: 2,
+  sync: ContactSyncState.synced,
+  company: 'Acme Inc.',
+  title: 'Product Lead',
+  email: 'ana.ribeiro@acme.com',
+  phone: '+55 11 99876-5432',
+  notes: 'Met at the Q2 offsite. Owns the billing roadmap; loops in Ken for '
+      'anything pricing-related. Prefers async updates.',
+  matomes: [
+    ContactMatomeRef(
+      id: 'm1',
+      title: 'Client X — weekly sync',
+      role: MatomeContactRole.organizer,
+      when: '2h',
+    ),
+    ContactMatomeRef(
+      id: 'm2',
+      title: 'Sales call — Acme',
+      role: MatomeContactRole.attendee,
+      when: '1d',
+    ),
+    ContactMatomeRef(
+      id: 'm3',
+      title: 'Roadmap review',
+      role: MatomeContactRole.speaker,
+      when: '3d',
+    ),
+  ],
+  spaces: ['Marketing', 'Sales'],
+  files: [
+    ContactFileRef(
+        id: 'f1', name: 'Q3 roadmap.pdf', kind: ContactFileKind.document),
+    ContactFileRef(
+        id: 'f2', name: 'Design sync.m4a', kind: ContactFileKind.audio),
+    ContactFileRef(
+        id: 'f3', name: 'whiteboard.jpg', kind: ContactFileKind.image),
+  ],
+);
+
+const _contactDetailSparse = ContactDetailData(
+  id: 'c-sparse',
+  name: 'Leo',
+  avatarIndex: 5,
+  sync: ContactSyncState.onDevice,
+  matomes: [
+    ContactMatomeRef(
+      id: 'm2',
+      title: 'Sales call — Acme',
+      role: MatomeContactRole.attendee,
+      when: '1d',
+    ),
+  ],
+);
 
 /// A fixed-size frame for a [MatomeTable] golden scenario. Pinning BOTH
 /// dimensions stops alchemist's layout `Table` from querying the table's

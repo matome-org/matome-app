@@ -8,6 +8,7 @@ import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
 import '../features/auth/welcome_screen.dart';
 import '../features/calendar/calendar_screen.dart';
+import '../features/contacts/contact_detail_screen.dart';
 import '../features/details/file_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/matome/matome_detail_screen.dart';
@@ -290,6 +291,16 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/contacts',
                 builder: (context, state) => const ContactsScreen(),
+                routes: [
+                  // Contact detail (DR-004, #1464): the graduated ContactDetail
+                  // hosted at `/contacts/:id`, pushed from the list.
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) => ContactDetailScreen(
+                      id: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

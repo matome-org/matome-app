@@ -300,7 +300,27 @@
     "cancel": "Cancel",
     "deleteTitle": "Delete contact?",
     "deleteBody": "This contact will be removed from your directory.",
-    "delete": "Delete"
+    "delete": "Delete",
+    "detail": {
+      "edit": "Edit",
+      "merge": "Merge",
+      "delete": "Delete",
+      "actions": "More",
+      "contactInfo": "Contact info",
+      "notes": "Notes",
+      "notesEmpty": "No notes yet",
+      "matomesLabel": "Matomes",
+      "spacesLabel": "Spaces",
+      "filesLabel": "Files",
+      "email": "Email",
+      "phone": "Phone",
+      "company": "Company",
+      "addInfo": "Add",
+      "synced": "Synced",
+      "onDevice": "On device",
+      "empty": "—",
+      "notFound": "Contact not found"
+    }
   },
   "satori": {
     "title": "Satori",

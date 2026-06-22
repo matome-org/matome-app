@@ -7,20 +7,31 @@ import 'package:go_router/go_router.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/contacts/contact_detail_screen.dart';
 import 'package:matome_flutter/features/contacts/contacts_controller.dart';
 import 'package:matome_flutter/features/contacts/contacts_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 /// Widget tests for the Contacts tab (#1374): the directory renders the owner's
-/// contacts, the FAB-create modal adds a contact, tapping a tile edits it, and
-/// long-press + confirm deletes it. No auth user is overridden, so the
-/// placeholder owner id is used throughout.
+/// contacts, the FAB-create modal adds a contact, tapping a tile opens its
+/// detail screen (#1464), and long-press + confirm deletes it. No auth user is
+/// overridden, so the placeholder owner id is used throughout.
 
 Widget _app(AppDatabase db) {
   final router = GoRouter(
     initialLocation: '/contacts',
     routes: [
-      GoRoute(path: '/contacts', builder: (_, _) => const ContactsScreen()),
+      GoRoute(
+        path: '/contacts',
+        builder: (_, _) => const ContactsScreen(),
+        routes: [
+          GoRoute(
+            path: ':id',
+            builder: (_, state) =>
+                ContactDetailScreen(id: state.pathParameters['id']!),
+          ),
+        ],
+      ),
     ],
   );
 
@@ -79,7 +90,7 @@ void main() {
     expect(rows.single.displayName, 'Alan Turing');
   });
 
-  testWidgets('tapping a contact opens the edit modal and saves changes', (
+  testWidgets('tapping a contact opens its detail screen (#1464)', (
     tester,
   ) async {
     await db.contactsDao.create(_contactCompanion(id: 'c1', name: 'Old Name'));
@@ -90,14 +101,32 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('contact-tile-c1')));
     await tester.pumpAndSettle();
 
-    expect(find.text(t.contacts.editTitle), findsOneWidget);
+    // The detail screen hosts the contact name + the Edit affordance.
+    expect(
+      find.byKey(const ValueKey('contact-detail-name')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('contact-detail-edit')), findsOneWidget);
+    expect(find.text('Old Name'), findsWidgets);
+  });
 
+  testWidgets('editing from the detail screen saves changes', (tester) async {
+    await db.contactsDao.create(_contactCompanion(id: 'c1', name: 'Old Name'));
+
+    await tester.pumpWidget(_app(db));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('contact-tile-c1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('contact-detail-edit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(t.contacts.editTitle), findsOneWidget);
     await tester.enterText(find.byType(TextField).first, 'New Name');
     await tester.tap(find.byKey(const ValueKey('save-contact-confirm')));
     await tester.pumpAndSettle();
 
-    expect(find.text('New Name'), findsOneWidget);
-    expect(find.text('Old Name'), findsNothing);
     final row = await db.contactsDao.getById('c1');
     expect(row?.displayName, 'New Name');
   });

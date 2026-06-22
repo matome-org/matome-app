@@ -34,7 +34,15 @@ part 'contacts_dao.g.dart';
 /// omits an existing member never drops that member's row. Membership is a
 /// union (merge), never a replace.
 @DriftAccessor(
-  tables: [Contacts, MatomeContacts, SpaceContacts, MatomeShares],
+  tables: [
+    Contacts,
+    MatomeContacts,
+    SpaceContacts,
+    MatomeShares,
+    Matomes,
+    Workspaces,
+    Recordings,
+  ],
 )
 class ContactsDao extends DatabaseAccessor<AppDatabase>
     with _$ContactsDaoMixin {
@@ -227,6 +235,59 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   }
 
   // ---------------------------------------------------------------------------
+  // Contact-side relationship reads (DR-004 / #1464 — the Contact detail view).
+  // These mirror the matome/space-side reads above, but from the CONTACT end.
+  // ---------------------------------------------------------------------------
+
+  /// The Matomes that [contactId] is tagged in, each paired with the contact's
+  /// `matome_contacts.role` on that Matome, newest happening first. Archived
+  /// Matomes (`archived_at IS NOT NULL`) are excluded so the detail mirrors the
+  /// active list surfaces.
+  Future<List<ContactMatomeEntry>> listMatomesForContact(String contactId) {
+    final query = select(matomeContacts).join([
+      innerJoin(matomes, matomes.id.equalsExp(matomeContacts.matomeId)),
+    ])
+      ..where(matomeContacts.contactId.equals(contactId) &
+          matomes.archivedAt.isNull())
+      ..orderBy([OrderingTerm.desc(matomes.happenedAt)]);
+    return query.map((row) {
+      return ContactMatomeEntry(
+        matome: row.readTable(matomes),
+        role: row.readTable(matomeContacts).role,
+      );
+    }).get();
+  }
+
+  /// The Spaces (workspaces) [contactId] is a member of (`space_contacts`),
+  /// name-ascending.
+  Future<List<WorkspaceRow>> listSpacesForContact(String contactId) {
+    final query = select(spaceContacts).join([
+      innerJoin(workspaces, workspaces.id.equalsExp(spaceContacts.spaceId)),
+    ])
+      ..where(spaceContacts.contactId.equals(contactId))
+      ..orderBy([OrderingTerm.asc(workspaces.name)]);
+    return query.map((row) => row.readTable(workspaces)).get();
+  }
+
+  /// Files (recordings) reachable from [contactId] — MATOME-MEDIATED (#1461):
+  /// there is NO direct contact↔file edge today, so this returns the recordings
+  /// of every Matome the contact is tagged in (via `matome_contacts`), newest
+  /// first, de-duplicated. Returns an empty list when the contact has no matomes
+  /// (or those matomes have no recordings).
+  Future<List<RecordingRow>> listFilesForContactViaMatomes(
+    String contactId,
+  ) async {
+    final matomeRows = await listMatomesForContact(contactId);
+    final matomeIds = matomeRows.map((e) => e.matome.id).toList();
+    if (matomeIds.isEmpty) return const [];
+    final rows = await (select(recordings)
+          ..where((r) => r.matomeId.isIn(matomeIds))
+          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
+        .get();
+    return rows;
+  }
+
+  // ---------------------------------------------------------------------------
   // matome_shares — RESERVED: share a Matome with a user. BEHAVIOUR deferred.
   // ---------------------------------------------------------------------------
 
@@ -283,5 +344,14 @@ class MatomeContactEntry {
   const MatomeContactEntry({required this.contact, required this.role});
 
   final ContactRow contact;
+  final String role;
+}
+
+/// A Matome paired with a Contact's `matome_contacts.role` on it — the
+/// contact-side of [MatomeContactEntry], used by the Contact detail view.
+class ContactMatomeEntry {
+  const ContactMatomeEntry({required this.matome, required this.role});
+
+  final MatomeRow matome;
   final String role;
 }

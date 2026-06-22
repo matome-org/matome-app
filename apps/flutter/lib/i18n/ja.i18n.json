@@ -300,7 +300,27 @@
     "cancel": "キャンセル",
     "deleteTitle": "連絡先を削除しますか？",
     "deleteBody": "この連絡先はディレクトリから削除されます。",
-    "delete": "削除"
+    "delete": "削除",
+    "detail": {
+      "edit": "編集",
+      "merge": "統合",
+      "delete": "削除",
+      "actions": "その他",
+      "contactInfo": "連絡先情報",
+      "notes": "メモ",
+      "notesEmpty": "メモはまだありません",
+      "matomesLabel": "まとめ",
+      "spacesLabel": "スペース",
+      "filesLabel": "ファイル",
+      "email": "メール",
+      "phone": "電話",
+      "company": "会社",
+      "addInfo": "追加",
+      "synced": "同期済み",
+      "onDevice": "端末のみ",
+      "empty": "—",
+      "notFound": "連絡先が見つかりません"
+    }
   },
   "satori": {
     "title": "悟り",

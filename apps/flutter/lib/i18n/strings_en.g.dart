@@ -745,6 +745,8 @@ class Translations$contacts$en {
 
 	/// en: 'Delete'
 	String get delete => 'Delete';
+
+	late final Translations$contacts$detail$en detail = Translations$contacts$detail$en.internal(_root);
 }
 
 // Path: satori
@@ -1158,6 +1160,69 @@ class Translations$matome$table$en {
 	String get viewTable => 'Table';
 }
 
+// Path: contacts.detail
+class Translations$contacts$detail$en {
+	Translations$contacts$detail$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Edit'
+	String get edit => 'Edit';
+
+	/// en: 'Merge'
+	String get merge => 'Merge';
+
+	/// en: 'Delete'
+	String get delete => 'Delete';
+
+	/// en: 'More'
+	String get actions => 'More';
+
+	/// en: 'Contact info'
+	String get contactInfo => 'Contact info';
+
+	/// en: 'Notes'
+	String get notes => 'Notes';
+
+	/// en: 'No notes yet'
+	String get notesEmpty => 'No notes yet';
+
+	/// en: 'Matomes'
+	String get matomesLabel => 'Matomes';
+
+	/// en: 'Spaces'
+	String get spacesLabel => 'Spaces';
+
+	/// en: 'Files'
+	String get filesLabel => 'Files';
+
+	/// en: 'Email'
+	String get email => 'Email';
+
+	/// en: 'Phone'
+	String get phone => 'Phone';
+
+	/// en: 'Company'
+	String get company => 'Company';
+
+	/// en: 'Add'
+	String get addInfo => 'Add';
+
+	/// en: 'Synced'
+	String get synced => 'Synced';
+
+	/// en: 'On device'
+	String get onDevice => 'On device';
+
+	/// en: '—'
+	String get empty => '—';
+
+	/// en: 'Contact not found'
+	String get notFound => 'Contact not found';
+}
+
 // Path: fileView.contentsStatus.audio
 class Translations$fileView$contentsStatus$audio$en {
 	Translations$fileView$contentsStatus$audio$en.internal(this._root);
@@ -1479,6 +1544,24 @@ extension on Translations {
 			'contacts.deleteTitle' => 'Delete contact?',
 			'contacts.deleteBody' => 'This contact will be removed from your directory.',
 			'contacts.delete' => 'Delete',
+			'contacts.detail.edit' => 'Edit',
+			'contacts.detail.merge' => 'Merge',
+			'contacts.detail.delete' => 'Delete',
+			'contacts.detail.actions' => 'More',
+			'contacts.detail.contactInfo' => 'Contact info',
+			'contacts.detail.notes' => 'Notes',
+			'contacts.detail.notesEmpty' => 'No notes yet',
+			'contacts.detail.matomesLabel' => 'Matomes',
+			'contacts.detail.spacesLabel' => 'Spaces',
+			'contacts.detail.filesLabel' => 'Files',
+			'contacts.detail.email' => 'Email',
+			'contacts.detail.phone' => 'Phone',
+			'contacts.detail.company' => 'Company',
+			'contacts.detail.addInfo' => 'Add',
+			'contacts.detail.synced' => 'Synced',
+			'contacts.detail.onDevice' => 'On device',
+			'contacts.detail.empty' => '—',
+			'contacts.detail.notFound' => 'Contact not found',
 			'satori.title' => 'Satori',
 			'satori.subtitle' => '悟 · your AI assistant',
 			'satori.soon' => 'SOON',

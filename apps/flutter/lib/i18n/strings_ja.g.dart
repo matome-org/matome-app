@@ -372,6 +372,7 @@ class _Translations$contacts$ja extends Translations$contacts$en {
 	@override String get deleteTitle => '連絡先を削除しますか？';
 	@override String get deleteBody => 'この連絡先はディレクトリから削除されます。';
 	@override String get delete => '削除';
+	@override late final _Translations$contacts$detail$ja detail = _Translations$contacts$detail$ja._(_root);
 }
 
 // Path: satori
@@ -559,6 +560,33 @@ class _Translations$matome$table$ja extends Translations$matome$table$en {
 	@override String get rowActions => '行の操作';
 	@override String get viewCards => 'カード';
 	@override String get viewTable => 'テーブル';
+}
+
+// Path: contacts.detail
+class _Translations$contacts$detail$ja extends Translations$contacts$detail$en {
+	_Translations$contacts$detail$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get edit => '編集';
+	@override String get merge => '統合';
+	@override String get delete => '削除';
+	@override String get actions => 'その他';
+	@override String get contactInfo => '連絡先情報';
+	@override String get notes => 'メモ';
+	@override String get notesEmpty => 'メモはまだありません';
+	@override String get matomesLabel => 'まとめ';
+	@override String get spacesLabel => 'スペース';
+	@override String get filesLabel => 'ファイル';
+	@override String get email => 'メール';
+	@override String get phone => '電話';
+	@override String get company => '会社';
+	@override String get addInfo => '追加';
+	@override String get synced => '同期済み';
+	@override String get onDevice => '端末のみ';
+	@override String get empty => '—';
+	@override String get notFound => '連絡先が見つかりません';
 }
 
 // Path: fileView.contentsStatus.audio
@@ -864,6 +892,24 @@ extension on TranslationsJa {
 			'contacts.deleteTitle' => '連絡先を削除しますか？',
 			'contacts.deleteBody' => 'この連絡先はディレクトリから削除されます。',
 			'contacts.delete' => '削除',
+			'contacts.detail.edit' => '編集',
+			'contacts.detail.merge' => '統合',
+			'contacts.detail.delete' => '削除',
+			'contacts.detail.actions' => 'その他',
+			'contacts.detail.contactInfo' => '連絡先情報',
+			'contacts.detail.notes' => 'メモ',
+			'contacts.detail.notesEmpty' => 'メモはまだありません',
+			'contacts.detail.matomesLabel' => 'まとめ',
+			'contacts.detail.spacesLabel' => 'スペース',
+			'contacts.detail.filesLabel' => 'ファイル',
+			'contacts.detail.email' => 'メール',
+			'contacts.detail.phone' => '電話',
+			'contacts.detail.company' => '会社',
+			'contacts.detail.addInfo' => '追加',
+			'contacts.detail.synced' => '同期済み',
+			'contacts.detail.onDevice' => '端末のみ',
+			'contacts.detail.empty' => '—',
+			'contacts.detail.notFound' => '連絡先が見つかりません',
 			'satori.title' => '悟り',
 			'satori.subtitle' => '悟 · あなたのAIアシスタント',
 			'satori.soon' => '近日公開',
