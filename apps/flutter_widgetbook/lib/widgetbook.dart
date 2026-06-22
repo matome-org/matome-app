@@ -1665,6 +1665,454 @@ Widget filesScopeFilterUseCase(BuildContext context) {
   );
 }
 
+// ─── Local-first spaces — assembled SCENES (how the screens look) ────────────
+//
+// Atoms in isolation don't show the flow; these compose the W0 widgets into
+// screen-like mockups so the model reads as a real UI. Still presentational /
+// not wired — the live screens map onto these in later waves.
+
+@widgetbook.UseCase(
+  name: 'Scene — Inbox (loose items + draft matomes)',
+  type: InboxItemCard,
+  path: '[Widgets]/Local-first spaces/Scenes',
+)
+Widget sceneInboxUseCase(BuildContext context) {
+  return const _SceneSurface(child: _InboxScene());
+}
+
+@widgetbook.UseCase(
+  name: 'Scene — Spaces (local / cloud + promote)',
+  type: SpaceSyncTile,
+  path: '[Widgets]/Local-first spaces/Scenes',
+)
+Widget sceneSpacesUseCase(BuildContext context) {
+  return const _SceneSurface(child: _SpacesScene());
+}
+
+@widgetbook.UseCase(
+  name: 'Scene — Files (scope filter)',
+  type: FilesScopeFilter,
+  path: '[Widgets]/Local-first spaces/Scenes',
+)
+Widget sceneFilesUseCase(BuildContext context) {
+  return const _SceneSurface(child: _FilesScene());
+}
+
+@widgetbook.UseCase(
+  name: 'Scene — New space sheet (local default)',
+  type: SpaceSyncChoice,
+  path: '[Widgets]/Local-first spaces/Scenes',
+)
+Widget sceneNewSpaceSheetUseCase(BuildContext context) {
+  return const _SceneSurface(child: _NewSpaceSheetScene());
+}
+
+@widgetbook.UseCase(
+  name: 'Scene — Promote to cloud consent',
+  type: SpaceSyncChip,
+  path: '[Widgets]/Local-first spaces/Scenes',
+)
+Widget scenePromoteConsentUseCase(BuildContext context) {
+  return const _SceneSurface(child: _PromoteConsentScene());
+}
+
+/// A phone-width device frame for the scenes: the screen background framed by a
+/// rounded border, so a composed scene reads like a real screen.
+class _SceneSurface extends StatelessWidget {
+  const _SceneSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius.lg),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.background,
+                borderRadius: BorderRadius.circular(radius.lg),
+                border: Border.all(color: colors.border),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A scene section header (screen title + optional trailing).
+class _SceneHeader extends StatelessWidget {
+  const _SceneHeader({required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(spacing.md, spacing.lg, spacing.md, spacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: typography.display.copyWith(color: colors.textPrimary)),
+          if (subtitle != null)
+            Text(subtitle!,
+                style: typography.label.copyWith(color: colors.textSecondary)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The INBOX scene: the unorganized staging — loose items + a draft matome,
+/// each local and offering a file/organize affordance.
+class _InboxScene extends StatelessWidget {
+  const _InboxScene();
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SceneHeader(title: 'Inbox', subtitle: '4 to organize'),
+        Padding(
+          padding: EdgeInsets.fromLTRB(spacing.md, 0, spacing.md, spacing.lg),
+          child: Column(
+            children: const [
+              InboxItemCard(
+                kind: InboxEntryKind.looseItem,
+                icon: Icons.mic_none_rounded,
+                title: 'Standup audio',
+                meta: '2h · 12:04',
+                tagLabel: 'Loose',
+                fileLabel: 'File',
+              ),
+              SizedBox(height: 10),
+              InboxItemCard(
+                kind: InboxEntryKind.looseItem,
+                icon: Icons.image_outlined,
+                title: 'whiteboard.png',
+                meta: '3h · 1.1 MB',
+                tagLabel: 'Loose',
+                fileLabel: 'File',
+              ),
+              SizedBox(height: 10),
+              InboxItemCard(
+                kind: InboxEntryKind.draftMatome,
+                title: 'Client X — notes',
+                meta: '3 items · 4h',
+                tagLabel: 'Draft',
+                fileLabel: 'Organize',
+              ),
+              SizedBox(height: 10),
+              InboxItemCard(
+                kind: InboxEntryKind.looseItem,
+                icon: Icons.description_outlined,
+                title: 'Q3 roadmap.pdf',
+                meta: 'yesterday · 2.4 MB',
+                tagLabel: 'Loose',
+                fileLabel: 'File',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The SPACES scene: spaces with their sync state — a local space offers
+/// "turn on sync", a cloud space is synced.
+class _SpacesScene extends StatelessWidget {
+  const _SpacesScene();
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SceneHeader(title: 'Spaces'),
+        Padding(
+          padding: EdgeInsets.fromLTRB(spacing.md, 0, spacing.md, spacing.lg),
+          child: Column(
+            children: [
+              SpaceSyncTile(
+                name: 'Personal',
+                meta: '4 matomes',
+                state: SpaceSyncState.local,
+                promoteLabel: 'Turn on sync',
+                onPromote: () {},
+              ),
+              const SizedBox(height: 10),
+              const SpaceSyncTile(
+                name: 'Marketing',
+                meta: '8 matomes',
+                state: SpaceSyncState.cloud,
+                promoteLabel: 'Turn on sync',
+              ),
+              const SizedBox(height: 10),
+              SpaceSyncTile(
+                name: 'Ideas',
+                meta: '1 matome',
+                state: SpaceSyncState.local,
+                promoteLabel: 'Turn on sync',
+                onPromote: () {},
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The FILES scene: the scope filter over a list of files, showing loose vs
+/// in-a-space + each file's sync state.
+class _FilesScene extends StatelessWidget {
+  const _FilesScene();
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SceneHeader(title: 'Files'),
+        Padding(
+          padding: EdgeInsets.fromLTRB(spacing.md, 0, spacing.md, spacing.sm),
+          child: FilesScopeFilter(
+            value: FilesScope.all,
+            allLabel: 'All',
+            looseLabel: 'Loose',
+            inSpaceLabel: 'In a space',
+            onChanged: (_) {},
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(spacing.md, 0, spacing.md, spacing.lg),
+          child: Column(
+            children: const [
+              _FileRowMock(
+                icon: Icons.picture_as_pdf_outlined,
+                name: 'Q3 roadmap.pdf',
+                scope: 'Loose',
+                state: SpaceSyncState.local,
+              ),
+              _FileRowMock(
+                icon: Icons.mic_none_rounded,
+                name: 'Standup audio',
+                scope: 'Loose',
+                state: SpaceSyncState.local,
+              ),
+              _FileRowMock(
+                icon: Icons.image_outlined,
+                name: 'launch.png',
+                scope: 'Marketing',
+                state: SpaceSyncState.cloud,
+              ),
+              _FileRowMock(
+                icon: Icons.description_outlined,
+                name: 'spec.md',
+                scope: 'Ideas',
+                state: SpaceSyncState.promoting,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FileRowMock extends StatelessWidget {
+  const _FileRowMock({
+    required this.icon,
+    required this.name,
+    required this.scope,
+    required this.state,
+  });
+
+  final IconData icon;
+  final String name;
+  final String scope;
+  final SpaceSyncState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: spacing.sm),
+      child: Row(
+        children: [
+          Icon(icon, size: spacing.md, color: colors.textSecondary),
+          SizedBox(width: spacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: typography.bodySmall
+                        .copyWith(color: colors.textPrimary)),
+                Text(scope,
+                    style: typography.label.copyWith(color: colors.textMuted)),
+              ],
+            ),
+          ),
+          SizedBox(width: spacing.sm),
+          SpaceSyncChip(state: state, compact: true),
+        ],
+      ),
+    );
+  }
+}
+
+/// The NEW SPACE sheet scene: name field + the local/cloud choice (default
+/// local) + actions.
+class _NewSpaceSheetScene extends StatelessWidget {
+  const _NewSpaceSheetScene();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+    return Padding(
+      padding: EdgeInsets.all(spacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('New space',
+              style: typography.title.copyWith(color: colors.textPrimary)),
+          SizedBox(height: spacing.md),
+          // Name field mock.
+          Container(
+            padding: EdgeInsets.symmetric(
+                horizontal: spacing.md, vertical: spacing.sm),
+            decoration: BoxDecoration(
+              color: colors.subtleFill,
+              borderRadius: BorderRadius.circular(radius.md),
+              border: Border.all(color: colors.border),
+            ),
+            child: Text('Q4 planning',
+                style:
+                    typography.bodySmall.copyWith(color: colors.textPrimary)),
+          ),
+          SizedBox(height: spacing.md),
+          Text('Sync',
+              style: typography.label.copyWith(color: colors.textMuted)),
+          SizedBox(height: spacing.xs),
+          SpaceSyncChoice(
+            isLocal: true,
+            localLabel: 'Local (this device)',
+            cloudLabel: 'Cloud (synced)',
+            onChanged: (_) {},
+          ),
+          SizedBox(height: spacing.xs),
+          Text('Local stays on this device until you turn on sync.',
+              style: typography.label.copyWith(color: colors.textMuted)),
+          SizedBox(height: spacing.lg),
+          PrimaryButton(
+            onPressed: () {},
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onAccent,
+            ),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The PROMOTE-TO-CLOUD consent scene: the data-egress moment — what uploads.
+class _PromoteConsentScene extends StatelessWidget {
+  const _PromoteConsentScene();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    return Padding(
+      padding: EdgeInsets.all(spacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.cloud_upload_outlined,
+                  size: spacing.lg, color: colors.accent),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: Text('Turn on sync for “Personal”?',
+                    style:
+                        typography.title.copyWith(color: colors.textPrimary)),
+              ),
+            ],
+          ),
+          SizedBox(height: spacing.sm),
+          Text(
+            '4 matomes · 12 files will upload to the cloud and sync across your '
+            'devices. This can’t be undone.',
+            style: typography.bodySmall.copyWith(color: colors.textSecondary),
+          ),
+          SizedBox(height: spacing.md),
+          Row(
+            children: [
+              const SpaceSyncChip(state: SpaceSyncState.local),
+              Icon(Icons.arrow_forward, size: spacing.md, color: colors.textMuted),
+              const SpaceSyncChip(state: SpaceSyncState.cloud),
+            ],
+          ),
+          SizedBox(height: spacing.lg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AppTextButton(onPressed: () {}, child: const Text('Cancel')),
+              SizedBox(width: spacing.sm),
+              PrimaryButton(
+                onPressed: () {},
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.primary,
+                  foregroundColor: colors.onAccent,
+                ),
+                child: const Text('Turn on sync'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _UseCaseSurface extends StatelessWidget {
   const _UseCaseSurface({required this.child, this.width = 420});
 

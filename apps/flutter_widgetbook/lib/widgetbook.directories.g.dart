@@ -595,6 +595,58 @@ final directories = <_widgetbook.WidgetbookNode>[
               ),
             ],
           ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Scenes',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'FilesScopeFilter',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Scene — Files (scope filter)',
+                    builder: _matome_widgetbook_widgetbook.sceneFilesUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'InboxItemCard',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Scene — Inbox (loose items + draft matomes)',
+                    builder: _matome_widgetbook_widgetbook.sceneInboxUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'SpaceSyncChip',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Scene — Promote to cloud consent',
+                    builder: _matome_widgetbook_widgetbook
+                        .scenePromoteConsentUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'SpaceSyncChoice',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Scene — New space sheet (local default)',
+                    builder:
+                        _matome_widgetbook_widgetbook.sceneNewSpaceSheetUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'SpaceSyncTile',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Scene — Spaces (local / cloud + promote)',
+                    builder: _matome_widgetbook_widgetbook.sceneSpacesUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
           _widgetbook.WidgetbookComponent(
             name: 'SpaceSyncChip',
             useCases: [
