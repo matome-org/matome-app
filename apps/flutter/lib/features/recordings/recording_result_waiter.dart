@@ -113,7 +113,10 @@ class RecordingResultWaiter {
   Recording _recordingFromEvent(RecordingStatusEvent event) {
     return Recording(
       id: event.recordingId,
-      ownerId: 0,
+      // A status event carries no owner; this synthetic Recording is only used
+      // to fold terminal status onto the real row, never persisted, so owner is
+      // left null (#1469 — never default to a poison "0").
+      ownerId: null,
       title: '',
       status: event.status,
       summary: event.summary,

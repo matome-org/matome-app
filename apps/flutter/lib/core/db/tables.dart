@@ -126,10 +126,15 @@ class Recordings extends Table {
   // (which would either drop or LEAK an unfiled/inbox file). NULLABLE so Drift's
   // additive ALTER ADD COLUMN lands on legacy rows without a table rebuild; the
   // owner-scoped query treats a NULL owner as "not the current owner" (excluded),
-  // so a legacy un-backfilled row can never surface for a concrete owner. New
-  // write paths (Core reconcile) populate it from the recording JSON's
-  // `owner_id`. Stored as TEXT (matching the other id columns / the stringified
-  // Core id convention).
+  // so a legacy un-backfilled row can never surface for a concrete owner. The
+  // Core reconcile path (#1469 — `recordingToCompanion` in inbox_sync.dart)
+  // populates it from the recording JSON's NOT-NULL `owner_id`, REJECTING a
+  // missing/blank value rather than defaulting it to a poison `0`/`""`; rows with
+  // no Core counterpart (local-only uploads, legacy rows) are stamped with the
+  // authenticated session owner by `RecordingsDao.backfillNullOwner` on sync.
+  // Stored as TEXT (matching the other id columns / the stringified Core id
+  // convention). (m013 originally claimed the reconcile already wrote this — it
+  // did NOT until #1469; this comment is the corrected contract.)
   TextColumn get ownerId => text().named('owner_id').nullable()();
 
   @override

@@ -50,7 +50,9 @@ void main() {
       badge: 'dart',
     );
     final id = created.recording.id;
-    final ownerId = created.recording.ownerId;
+    // #1469: Recording.ownerId is the TEXT Core id; the socket topic is keyed on
+    // the numeric Core user id, so parse it back to int for the channel.
+    final ownerId = int.parse(created.recording.ownerId!);
     // ignore: avoid_print
     print('CREATED id=$id owner=$ownerId presign=${created.upload.method} '
         '${created.upload.url.split('?').first}');

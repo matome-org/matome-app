@@ -100,7 +100,7 @@ void main() {
     // exactly what a partial socket broadcast (or a race loser) yields.
     const sparse = Recording(
       id: 5,
-      ownerId: 1,
+      ownerId: '1',
       title: '',
       status: RecordingStatus.done,
     );
@@ -125,7 +125,7 @@ void main() {
 
     const full = Recording(
       id: 5,
-      ownerId: 1,
+      ownerId: '1',
       title: 'Rec',
       status: RecordingStatus.done,
       summary: 'fresh summary',

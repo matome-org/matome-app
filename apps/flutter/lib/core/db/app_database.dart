@@ -107,7 +107,12 @@ part 'app_database.g.dart';
 /// NULL, and the owner-scoped query excludes NULL-owner rows (a legacy
 /// un-backfilled row can never surface for a concrete owner), so there is no
 /// data migration. The Core reconcile path populates it from the recording
-/// JSON's `owner_id`. (The version constant is authoritative, not the prose.)
+/// JSON's NOT-NULL `owner_id` (#1469 — the original m013 prose claimed this was
+/// already done; it was NOT until #1469 wired `recordingToCompanion`); a row with
+/// no Core counterpart is stamped with the authenticated session owner by
+/// `RecordingsDao.backfillNullOwner` on sync. A missing/blank server owner_id is
+/// rejected, never defaulted. (The version constant is authoritative, not the
+/// prose.)
 const int kSchemaVersion = 14;
 
 /// The offline-first local store.

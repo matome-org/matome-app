@@ -332,7 +332,11 @@ Future<RecordingResult> liveRecordingResultAwaiter({
   final socket = RecordingStatusSocket(
     apiBaseUrl: AppConfig.apiBaseUrl,
     tokenStore: ref.read(tokenStoreProvider),
-    ownerId: recording.ownerId,
+    // #1469: `Recording.ownerId` is now the TEXT/string Core id. The socket's
+    // `user:{ownerId}` topic is keyed on the numeric Core user id, so parse it
+    // back to int (0 when absent — a missing owner means no real channel to
+    // join; connect/join then fails and the poll fallback takes over).
+    ownerId: int.tryParse(recording.ownerId ?? '') ?? 0,
   );
 
   RecordingResultWaiter? waiter;

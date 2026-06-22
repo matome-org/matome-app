@@ -107,6 +107,29 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     }).toList(growable: false);
   }
 
+  /// Backfill the owning user onto every NULL-owner local row (#1469).
+  ///
+  /// SECURITY (A01): pre-#1469 the sync path never wrote `owner_id`, so every
+  /// synced row landed NULL-owner and is INVISIBLE to [filesForOwner] (fail-
+  /// closed — a NULL owner never equals a concrete id). The Core reconcile now
+  /// stamps the server `owner_id` on rows that round-trip, but a LOCAL-ONLY row
+  /// (a `rec_local_<uuid>` upload whose Core create has not reconciled, or any
+  /// legacy NULL-owner row that predates this fix) has no server owner_id to
+  /// adopt. This one-time-per-sync pass stamps the AUTHENTICATED session owner
+  /// onto those rows so the user's own files become visible after sign-in.
+  ///
+  /// SAFETY: it ONLY writes rows where `owner_id IS NULL` — it can never
+  /// overwrite (and so never reassign) a row that already carries a real owner.
+  /// [ownerId] MUST be the current session owner (non-empty); callers pass the
+  /// stringified Core user id from the authenticated session, never a param.
+  /// Returns the number of rows backfilled.
+  Future<int> backfillNullOwner(String ownerId) {
+    assert(ownerId.isNotEmpty, 'backfillNullOwner requires a non-empty owner');
+    if (ownerId.isEmpty) return Future.value(0);
+    return (update(recordings)..where((r) => r.ownerId.isNull()))
+        .write(RecordingsCompanion(ownerId: Value(ownerId)));
+  }
+
   /// All recordings, newest first.
   Future<List<RecordingRow>> getAllRecordings() {
     return (select(

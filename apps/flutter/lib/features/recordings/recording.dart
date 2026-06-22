@@ -26,9 +26,12 @@ enum RecordingStatus {
 
 /// A user's recording, per the `/api/recordings` contract.
 ///
-/// Hand-written with tolerant parsing: only `id`, `owner_id`, `title` and
-/// `status` are treated as required; everything else is nullable because the
-/// backend may emit nulls before processing completes.
+/// Hand-written with tolerant parsing: only `id`, `title` and `status` are
+/// treated as required; everything else is nullable because the backend may emit
+/// nulls before processing completes. `owner_id` is NOT NULL on Core but is
+/// parsed defensively as a nullable STRING (#1469): a missing/blank value yields
+/// `null` so the sync write path can REJECT it rather than default it to a
+/// cross-owner POISON value (`0`/`""`).
 class Recording {
   const Recording({
     required this.id,
@@ -50,7 +53,18 @@ class Recording {
   });
 
   final int id;
-  final int ownerId;
+
+  /// The OWNING USER's Core id, as the TEXT/string id it is on the wire.
+  ///
+  /// SECURITY (#1469, A01 — Broken Access Control): Core's `recordings.owner_id`
+  /// is NOT NULL and server-enforced (`MatomeApi.Content.list_recordings` filters
+  /// `owner_id == ^owner_id`), and the Drift mirror column is TEXT (tables.dart).
+  /// It is parsed as a STRING — NEVER coerced through `asInt` (which would turn an
+  /// absent value into `0`, a POISON value that collides across owners). A
+  /// missing/blank `owner_id` parses to `null` here so the write path can REJECT
+  /// it (leave the column untouched) rather than default it — the owner-scoped
+  /// Files query treats a NULL owner as "not the current owner" (excluded).
+  final String? ownerId;
   final String title;
   final RecordingStatus status;
   final String? summary;
@@ -81,7 +95,10 @@ class Recording {
   factory Recording.fromJson(Map<String, dynamic> json) {
     return Recording(
       id: asInt(json['id']),
-      ownerId: asInt(json['owner_id']),
+      // #1469: parse owner_id as the TEXT id it is. `asStringOrNull` yields null
+      // for an absent value; we ALSO collapse a blank string to null so the write
+      // path can reject it (never default a missing owner to "0"/"").
+      ownerId: _ownerIdOrNull(json['owner_id']),
       title: asString(json['title']),
       status: RecordingStatus.fromName(asStringOrNull(json['status'])),
       summary: asStringOrNull(json['summary']),
@@ -97,6 +114,18 @@ class Recording {
       insertedAt: asDateTimeOrNull(json['inserted_at']),
       updatedAt: asDateTimeOrNull(json['updated_at']),
     );
+  }
+
+  /// Parses a wire `owner_id` into a non-empty TEXT id, or null.
+  ///
+  /// Returns null for an absent value AND for a blank/whitespace string, so a
+  /// missing owner is never mistaken for a real one. NEVER coerces through
+  /// `asInt` (which would default a missing value to `0` — the #1469 poison).
+  static String? _ownerIdOrNull(Object? value) {
+    final id = asStringOrNull(value);
+    if (id == null) return null;
+    final trimmed = id.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   /// Parses the `{ "recordings": [...] }` envelope into a typed list.

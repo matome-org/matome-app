@@ -10,6 +10,7 @@ import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 
@@ -19,6 +20,11 @@ import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 ProviderContainer _container(
   AppDatabase db, {
   List<Map<String, dynamic>>? recordings,
+  // #1469: the authenticated owner the sync backfill stamps onto NULL-owner
+  // local rows. Overridden directly so the test never builds the real
+  // authController chain (which would hit flutter_secure_storage / the platform
+  // binding). Defaults to '1' to match the `_remote` owner_id.
+  String? ownerId = '1',
 }) {
   final dio = Dio(BaseOptions(
     baseUrl: 'http://localhost:4000',
@@ -43,6 +49,7 @@ ProviderContainer _container(
   return ProviderContainer(overrides: [
     appDatabaseProvider.overrideWithValue(db),
     recordingsRepositoryProvider.overrideWithValue(repo),
+    currentOwnerIdProvider.overrideWithValue(ownerId),
   ]);
 }
 
@@ -293,6 +300,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       appDatabaseProvider.overrideWithValue(db),
       recordingsRepositoryProvider.overrideWithValue(repo),
+      currentOwnerIdProvider.overrideWithValue('1'),
     ]);
     addTearDown(container.dispose);
 
@@ -398,6 +406,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       appDatabaseProvider.overrideWithValue(db),
       recordingsRepositoryProvider.overrideWithValue(repo),
+      currentOwnerIdProvider.overrideWithValue('1'),
     ]);
     addTearDown(container.dispose);
 
@@ -696,5 +705,59 @@ void main() {
     row = await db.recordingsDao.getRecordingById('13');
     expect(row!.transcript, 'transcript v2'); // Core-owned: pull updates it
     expect(row.notes, 'edited between pulls'); // user-owned: survives the pull
+  });
+
+  // #1469 (SECURITY, A01): refresh() must leave every Inbox row owner-scoped so
+  // the #1461 Files view is populated for the current owner and never leaks.
+  group('#1469 owner-scoping on refresh', () {
+    test('a Core-synced row carries Core owner_id and is owner-visible',
+        () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final container = _container(db, recordings: [
+        _remote(id: 21, title: 'Owned'),
+      ], ownerId: '1');
+      addTearDown(container.dispose);
+
+      await container.read(inboxControllerProvider.notifier).refresh();
+      await _awaitItems(container);
+
+      final row = await db.recordingsDao.getRecordingById('21');
+      expect(row!.ownerId, '1'); // from Core's owner_id, not "0"
+      final files = await db.recordingsDao.filesForOwner('1');
+      expect(files.map((f) => f.id), contains('21'));
+      expect(await db.recordingsDao.filesForOwner('2'), isEmpty); // no leak
+    });
+
+    test('refresh BACKFILLS a local-only NULL-owner row to the session owner',
+        () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+
+      // A local-only upload that never reconciled with Core (NULL owner).
+      await db.recordingsDao.upsertRecordingWithMatome(
+        RecordingsCompanion.insert(
+          id: 'rec_local_y',
+          title: 'Local memo',
+          timestamp: '9:00 AM',
+          duration: '0:30',
+          audioFilePath: '/tmp/y.m4a',
+          createdAt: 1000,
+        ),
+      );
+      // Invisible before the sync backfill.
+      expect(await db.recordingsDao.filesForOwner('1'), isEmpty);
+
+      // Core list is empty, but refresh still runs the owner backfill pass.
+      final container = _container(db, recordings: const [], ownerId: '1');
+      addTearDown(container.dispose);
+      await container.read(inboxControllerProvider.notifier).refresh();
+      await _awaitItems(container);
+
+      final row = await db.recordingsDao.getRecordingById('rec_local_y');
+      expect(row!.ownerId, '1'); // stamped by the session-owner backfill
+      expect((await db.recordingsDao.filesForOwner('1')).map((f) => f.id),
+          ['rec_local_y']);
+    });
   });
 }

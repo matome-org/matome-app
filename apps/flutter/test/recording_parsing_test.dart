@@ -26,7 +26,7 @@ void main() {
       final r = Recording.fromJson(json);
 
       expect(r.id, 1);
-      expect(r.ownerId, 1);
+      expect(r.ownerId, '1'); // #1469: parsed as the TEXT id it is
       expect(r.title, 'Standup notes');
       expect(r.status, RecordingStatus.done);
       expect(r.summary, 'Short AI summary');
@@ -90,6 +90,59 @@ void main() {
       expect(r.duration, 90);
       expect(r.status, RecordingStatus.failed);
       expect(r.errorReason, 'transcode_failed');
+    });
+
+    // #1469 (SECURITY, A01): owner_id is the TEXT scope for the Files view. It
+    // must be parsed as a STRING, never coerced through asInt (which would turn a
+    // missing value into 0 — a cross-owner poison). A missing/blank owner_id must
+    // parse to null so the write path can REJECT it rather than default it.
+    test('parses a numeric owner_id as its string form', () {
+      final r = Recording.fromJson({
+        'id': 1,
+        'owner_id': 42,
+        'title': 't',
+        'status': 'done',
+      });
+      expect(r.ownerId, '42');
+    });
+
+    test('parses a string owner_id verbatim', () {
+      final r = Recording.fromJson({
+        'id': 1,
+        'owner_id': 'usr_abc',
+        'title': 't',
+        'status': 'done',
+      });
+      expect(r.ownerId, 'usr_abc');
+    });
+
+    test('a MISSING owner_id parses to null (never coerced to 0)', () {
+      final r = Recording.fromJson({
+        'id': 1,
+        'title': 't',
+        'status': 'done',
+      });
+      expect(r.ownerId, isNull);
+    });
+
+    test('a NULL owner_id parses to null', () {
+      final r = Recording.fromJson({
+        'id': 1,
+        'owner_id': null,
+        'title': 't',
+        'status': 'done',
+      });
+      expect(r.ownerId, isNull);
+    });
+
+    test('a BLANK/whitespace owner_id parses to null (rejected, not "")', () {
+      final r = Recording.fromJson({
+        'id': 1,
+        'owner_id': '   ',
+        'title': 't',
+        'status': 'done',
+      });
+      expect(r.ownerId, isNull);
     });
   });
 

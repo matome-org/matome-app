@@ -9,7 +9,7 @@ import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 Recording _rec(int id, RecordingStatus status, {String? errorReason}) =>
     Recording(
       id: id,
-      ownerId: 1,
+      ownerId: '1',
       title: 'rec $id',
       status: status,
       errorReason: errorReason,

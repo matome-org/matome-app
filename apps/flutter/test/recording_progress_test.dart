@@ -16,7 +16,7 @@ void main() {
     test('done -> done phase, attaches recording', () {
       const done = Recording(
         id: 6,
-        ownerId: 1,
+        ownerId: '1',
         title: 't',
         status: RecordingStatus.done,
       );

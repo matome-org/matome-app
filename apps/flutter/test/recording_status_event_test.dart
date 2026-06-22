@@ -75,7 +75,7 @@ void main() {
         () {
       const base = Recording(
         id: 6,
-        ownerId: 1,
+        ownerId: '1',
         title: 'Standup',
         status: RecordingStatus.processing,
         mediaType: 'audio',
@@ -95,7 +95,7 @@ void main() {
       expect(merged.transcript, 'done transcript');
       // Fields not carried by the event survive.
       expect(merged.title, 'Standup');
-      expect(merged.ownerId, 1);
+      expect(merged.ownerId, '1');
       expect(merged.storageKey, 'owners/1/recordings/6/media');
     });
   });

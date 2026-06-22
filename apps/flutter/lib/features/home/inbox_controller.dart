@@ -9,6 +9,7 @@ import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
+import '../files/files_providers.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recordings_repository.dart';
 import '../recordings/upload_queue.dart';
@@ -78,6 +79,16 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         LogCat.sync,
         'inbox refresh ok fetched=${remote.length} upserted=$upserted',
       );
+      // OWNER BACKFILL (#1469, A01): the upsert above stamps Core's owner_id on
+      // every row that round-tripped, but a LOCAL-ONLY row (a not-yet-reconciled
+      // upload, or a legacy NULL-owner row from before this fix) has no server
+      // owner to adopt. Stamp the AUTHENTICATED session owner onto the remaining
+      // NULL-owner rows so the user's own files surface in /files. Only NULL-owner
+      // rows are touched — a row that already carries a real owner is never
+      // reassigned. Skipped when signed out (no owner id). Best-effort: the owner
+      // read is guarded so an unresolved session never aborts an otherwise-good
+      // sync (the freshly-synced rows already carry their Core owner_id).
+      await _backfillOwnerBestEffort();
     } on ApiException catch (error, stack) {
       // Network/offline OR auth/server error. We keep the cached rows either
       // way (offline-first), but a 401 / non-network failure is NOT "offline" —
@@ -109,6 +120,31 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
 
     final next = await AsyncValue.guard(_loadItems);
     if (mounted) state = next;
+  }
+
+  /// Stamps the authenticated session owner onto NULL-owner local rows (#1469).
+  /// Best-effort: any failure to resolve the session owner (e.g. a not-yet-
+  /// initialized auth chain) is swallowed so it never aborts a successful sync —
+  /// freshly-synced rows already carry their Core owner_id; only local-only rows
+  /// rely on this pass.
+  Future<void> _backfillOwnerBestEffort() async {
+    String? ownerId;
+    try {
+      ownerId = _ref.read(currentOwnerIdProvider);
+    } catch (error, stack) {
+      AppLog.error(
+        LogCat.sync,
+        'inbox owner backfill: session owner unavailable',
+        error,
+        stack,
+      );
+      return;
+    }
+    if (ownerId == null || ownerId.isEmpty) return;
+    final backfilled = await _dao.backfillNullOwner(ownerId);
+    if (backfilled > 0) {
+      AppLog.event(LogCat.sync, 'inbox owner backfill rows=$backfilled');
+    }
   }
 
   /// Move a recording out of the Inbox into [workspaceId]. Writes locally first

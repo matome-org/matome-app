@@ -188,6 +188,30 @@ RecordingsCompanion recordingToCompanion(
   final mergedAudioFilePath =
       (coreStorageKey.isEmpty && hasLocalCopy) ? existingAudioPath : coreStorageKey;
 
+  // OWNER-SCOPING (#1469, A01 — Broken Access Control). `recordings.owner_id` is
+  // the SECURITY-CRITICAL scope for the Files view (filesForOwner): a NULL owner
+  // is excluded from every owner's view (fail-closed), and a wrong/poison owner
+  // (e.g. "0" from the old `asInt` bug) would LEAK across owners. The merge rule:
+  //
+  //   * Core is the AUTHORITY on ownership — its `recordings.owner_id` is NOT
+  //     NULL and server-enforced (`list_recordings` filters `owner_id ==
+  //     ^owner_id`). When Core carries a non-empty owner_id we adopt it verbatim
+  //     (last-write-wins from the server; this also BACKFILLS a previously
+  //     NULL-owner local row on the next sync).
+  //   * A missing/blank Core owner_id is REJECTED, never defaulted: emit
+  //     `Value.absent()` so the column is LEFT UNTOUCHED. On a first-time insert
+  //     that means the row lands NULL-owner (correctly invisible until a later
+  //     sync supplies a real owner); on an update it preserves the existing good
+  //     owner rather than null-clobbering it. We NEVER write `0`/`""`.
+  //
+  // CONFLICT RESOLUTION (owner mismatch): Core wins. A non-empty server owner_id
+  // overwrites a differing local owner — the server is the single source of truth
+  // for who owns a row, so a stale/incorrect local owner is corrected on sync.
+  final coreOwnerId = recording.ownerId;
+  final ownerIdValue = (coreOwnerId != null && coreOwnerId.isNotEmpty)
+      ? Value<String?>(coreOwnerId)
+      : const Value<String?>.absent();
+
   return RecordingsCompanion(
     id: Value(localId),
     coreId: Value(recording.id),
@@ -205,5 +229,6 @@ RecordingsCompanion recordingToCompanion(
     mediaType: Value(recording.mediaType ?? 'audio'),
     processingStatus: Value(local.processingStatus),
     matomeId: matomeIdValue,
+    ownerId: ownerIdValue,
   );
 }

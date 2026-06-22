@@ -160,7 +160,7 @@ class FakeRecordingsRepository extends RecordingsRepository {
     patched.add({'id': id, 'matome_id': matomeId});
     return Recording(
       id: id,
-      ownerId: 1,
+      ownerId: '1',
       title: title ?? 'r',
       status: RecordingStatus.done,
       matomeId: matomeId,
