@@ -189,7 +189,8 @@ void main() {
       expect(find.text('SCREEN:/files'), findsOneWidget);
     });
 
-    testWidgets('Add FAB opens the 4 real flows', (tester) async {
+    testWidgets('Add FAB opens the available flows (Add file gated off)',
+        (tester) async {
       _phone(tester);
       await tester.pumpWidget(_app(_buildOnRouter()));
       await tester.pumpAndSettle();
@@ -200,10 +201,12 @@ void main() {
       await tester.tap(find.byType(MatomeAddFab));
       await tester.pumpAndSettle();
 
-      // All 4 options present, in the NavAddOption order.
+      // The non-gated options are present; "Add file" (document import) is
+      // hidden because ff.documents defaults off (#1449) — consistent with the
+      // matome detail picker.
       expect(find.text(t.nav.recordAudio), findsOneWidget);
       expect(find.text(t.nav.addPhoto), findsOneWidget);
-      expect(find.text(t.nav.addFile), findsOneWidget);
+      expect(find.text(t.nav.addFile), findsNothing);
       expect(find.text(t.nav.recordMeeting), findsOneWidget);
     });
 
@@ -299,7 +302,8 @@ void main() {
       expect(find.text('SCREEN:settings'), findsOneWidget);
     });
 
-    testWidgets('sidebar Add opens the 4 real flows', (tester) async {
+    testWidgets('sidebar Add opens the available flows (Add file gated off)',
+        (tester) async {
       _desktop(tester);
       await tester.pumpWidget(_app(_buildOnRouter()));
       await tester.pumpAndSettle();
@@ -315,7 +319,8 @@ void main() {
 
       expect(find.text(t.nav.recordAudio), findsOneWidget);
       expect(find.text(t.nav.addPhoto), findsOneWidget);
-      expect(find.text(t.nav.addFile), findsOneWidget);
+      // "Add file" hidden — ff.documents defaults off (#1449).
+      expect(find.text(t.nav.addFile), findsNothing);
       expect(find.text(t.nav.recordMeeting), findsOneWidget);
     });
   });

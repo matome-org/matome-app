@@ -123,12 +123,13 @@ MenuStyle _addMenuStyle(BuildContext context) {
 List<Widget> _addMenuChildren(
   BuildContext context,
   ValueChanged<NavAddOption>? onAddOption,
+  List<NavAddOption> options,
 ) {
   final colors = context.colors;
   final typography = context.typography;
   final t = Translations.of(context);
   return [
-    for (final option in NavAddOption.values)
+    for (final option in options)
       MenuItemButton(
         leadingIcon: Icon(
           option.icon,
@@ -364,9 +365,17 @@ class _DockSettingsButton extends StatelessWidget {
 /// NOT a record-only button. Presentational: the host positions it and handles
 /// the chosen [NavAddOption] via [onAddOption].
 class MatomeAddFab extends StatelessWidget {
-  const MatomeAddFab({super.key, this.onAddOption});
+  const MatomeAddFab({
+    super.key,
+    this.onAddOption,
+    this.options = NavAddOption.values,
+  });
 
   final ValueChanged<NavAddOption>? onAddOption;
+
+  /// The add-menu options to offer. Defaults to all; the host trims options the
+  /// active feature flags gate out (e.g. "Add file" when `ff.documents` is off).
+  final List<NavAddOption> options;
 
   @override
   Widget build(BuildContext context) {
@@ -376,7 +385,7 @@ class MatomeAddFab extends StatelessWidget {
     return MenuAnchor(
       style: _addMenuStyle(context),
       alignmentOffset: Offset(0, context.spacing.xs),
-      menuChildren: _addMenuChildren(context, onAddOption),
+      menuChildren: _addMenuChildren(context, onAddOption, options),
       builder: (context, controller, child) {
         return Tooltip(
           message: t.nav.add,
@@ -426,6 +435,7 @@ class MatomeSidebar extends StatelessWidget {
     required this.onSelect,
     required this.onToggle,
     this.onAddOption,
+    this.options = NavAddOption.values,
     this.onSettings,
     this.accountName,
   });
@@ -436,6 +446,11 @@ class MatomeSidebar extends StatelessWidget {
   final ValueChanged<String> onSelect;
   final VoidCallback onToggle;
   final ValueChanged<NavAddOption>? onAddOption;
+
+  /// The add-menu options to offer (host trims flag-gated ones, e.g. "Add file"
+  /// when `ff.documents` is off). Defaults to all.
+  final List<NavAddOption> options;
+
   final VoidCallback? onSettings;
 
   /// Account display name shown (expanded only) in the footer; its first glyph
@@ -466,7 +481,11 @@ class MatomeSidebar extends StatelessWidget {
               spacing.sm,
               spacing.md,
             ),
-            child: _AddButton(expanded: expanded, onAddOption: onAddOption),
+            child: _AddButton(
+              expanded: expanded,
+              onAddOption: onAddOption,
+              options: options,
+            ),
           ),
           Expanded(
             child: ListView(
@@ -562,10 +581,15 @@ class _SidebarHeader extends StatelessWidget {
 /// meeting). Collapsed it's a gold `+` tile; expanded it's a labelled button
 /// with a caret. Not a record-only button.
 class _AddButton extends StatelessWidget {
-  const _AddButton({required this.expanded, this.onAddOption});
+  const _AddButton({
+    required this.expanded,
+    this.onAddOption,
+    this.options = NavAddOption.values,
+  });
 
   final bool expanded;
   final ValueChanged<NavAddOption>? onAddOption;
+  final List<NavAddOption> options;
 
   @override
   Widget build(BuildContext context) {
@@ -578,7 +602,7 @@ class _AddButton extends StatelessWidget {
     return MenuAnchor(
       style: _addMenuStyle(context),
       alignmentOffset: Offset(0, context.spacing.xxs),
-      menuChildren: _addMenuChildren(context, onAddOption),
+      menuChildren: _addMenuChildren(context, onAddOption, options),
       builder: (context, controller, child) {
         void toggle() =>
             controller.isOpen ? controller.close() : controller.open();

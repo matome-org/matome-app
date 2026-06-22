@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/config/feature_flags.dart';
+import '../core/observability/app_log.dart';
 import '../core/theme/app_theme.dart';
 import '../features/home/inbox_upload.dart';
 import '../features/recording/meeting_recorder.dart';
@@ -188,6 +189,15 @@ class _GraduatedShell extends ConsumerWidget {
 /// The photo/file imports reuse the SAME `inboxUploaderProvider.upload(...)`
 /// pipeline the legacy desktop `_NewCaptureMenu._importFile` already drives, so
 /// a picked file lands in a fresh Inbox matome exactly as before.
+/// The add-menu options the nav hero "+" offers, trimming flag-gated ones.
+/// "Add file" (document import) is hidden while `ff.documents` is off — matching
+/// the matome detail picker — so the affordance never appears when the document
+/// flow is still dark (#1449).
+List<NavAddOption> _availableAddOptions() => [
+      for (final o in NavAddOption.values)
+        if (o != NavAddOption.addFile || FeatureFlags.documents) o,
+    ];
+
 Future<void> _handleAddOption(
   BuildContext context,
   WidgetRef ref,
@@ -213,26 +223,43 @@ Future<void> _pickAndUpload(
   WidgetRef ref, {
   required FileType type,
 }) async {
-  final result = await FilePicker.platform.pickFiles(type: type);
-  final path = result?.files.single.path;
-  if (path == null || !context.mounted) return;
+  // Instrumented (#nav-add): the picker open + outcome are logged so a no-op
+  // (cancel, or a Linux picker backend that yields no path) is never silent.
+  AppLog.event(LogCat.action, 'nav add: picker opening (type=$type)');
+  try {
+    final result = await FilePicker.platform.pickFiles(type: type);
+    final path = result?.files.single.path;
+    if (path == null) {
+      AppLog.event(LogCat.action, 'nav add: cancelled (no path)');
+      return;
+    }
+    if (!context.mounted) return;
 
-  final name = result!.files.single.name;
-  final dot = name.lastIndexOf('.');
-  final base = (dot > 0 ? name.substring(0, dot) : name).trim();
-  final picked = PickedUpload(
-    file: File(path),
-    title: base.isEmpty ? 'Untitled' : base,
-    mediaType: mediaTypeForPath(path),
-  );
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Uploading "${picked.title}"…')),
-  );
-  unawaited(
-    ref
-        .read(inboxUploaderProvider)
-        .upload(picked, importFromExternalSource: true),
-  );
+    final name = result!.files.single.name;
+    final dot = name.lastIndexOf('.');
+    final base = (dot > 0 ? name.substring(0, dot) : name).trim();
+    final picked = PickedUpload(
+      file: File(path),
+      title: base.isEmpty ? 'Untitled' : base,
+      mediaType: mediaTypeForPath(path),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Uploading "${picked.title}"…')),
+    );
+    AppLog.event(LogCat.action, 'nav add: uploading "${picked.title}"');
+    unawaited(
+      ref
+          .read(inboxUploaderProvider)
+          .upload(picked, importFromExternalSource: true),
+    );
+  } catch (e, st) {
+    // A picker/copy/insert failure on desktop must surface, not vanish.
+    AppLog.error(LogCat.action, 'nav add: pick/upload failed', e, st);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(t.matome.addFileFailed(error: '$e'))),
+    );
+  }
 }
 
 /// Mobile new-shell layout: branch content with the floating [MatomeBottomDock]
@@ -297,6 +324,7 @@ class _DockShell extends ConsumerWidget {
                       bottom: spacing.sm,
                     ),
                     child: MatomeAddFab(
+                      options: _availableAddOptions(),
                       onAddOption: (option) =>
                           _handleAddOption(context, ref, option),
                     ),
@@ -357,6 +385,7 @@ class _SidebarShellState extends ConsumerState<_SidebarShell> {
             onSelect: widget.onSelect,
             onToggle: () => setState(() => _expandedOverride = !_expanded),
             onAddOption: (option) => _handleAddOption(context, ref, option),
+            options: _availableAddOptions(),
             onSettings: () => context.go('/inbox/settings'),
             accountName: account,
           ),
