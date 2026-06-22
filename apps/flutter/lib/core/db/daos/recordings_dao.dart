@@ -112,7 +112,11 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
       final directQuery = select(recordingContacts).join([
         innerJoin(contacts, contacts.id.equalsExp(recordingContacts.contactId)),
       ])
-        ..where(recordingContacts.recordingId.isIn(recordingIds))
+        // Recording ids are already owner-scoped (the page is owner B-free);
+        // also filter the joined contact on owner so a stray cross-owner link
+        // row can never surface another owner's contact name (defense-in-depth).
+        ..where(recordingContacts.recordingId.isIn(recordingIds) &
+            contacts.ownerId.equals(ownerId))
         ..orderBy([OrderingTerm.asc(contacts.displayName)]);
       for (final row in await directQuery.get()) {
         final rid = row.readTable(recordingContacts).recordingId;

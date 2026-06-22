@@ -288,5 +288,26 @@ void main() {
       expect(loose.contacts, ['Alice']);
       expect(loose.unfiled, isTrue);
     });
+
+    test('a cross-owner contact linked to an owned file does NOT leak into the '
+        "people cluster (defense-in-depth)", () async {
+      // Forge a direct link from owner A's file to a contact owned by B. The
+      // file is A's, but the people cluster must filter the joined contact on
+      // owner, so B's contact never surfaces in A's view.
+      await db.contactsDao.create(ContactsCompanion.insert(
+        id: 'b_contact',
+        ownerId: _ownerB,
+        displayName: 'Mallory',
+        createdAt: 1000,
+      ));
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'a_file', ownerId: _ownerA, matomeId: null),
+      );
+      await db.contactsDao
+          .linkContactToRecording(recordingId: 'a_file', contactId: 'b_contact');
+
+      final files = await db.recordingsDao.filesForOwner(_ownerA);
+      expect(files.firstWhere((f) => f.id == 'a_file').contacts, isEmpty);
+    });
   });
 }
