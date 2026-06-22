@@ -5,6 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 const _widgetbookExemptions = <String, String>{};
 const _goldenExemptions = <String, String>{};
 
+/// Allow-list escape hatch for PUBLIC presentational widgets under
+/// lib/features/** that the Widgetbook-coverage rule would otherwise require a
+/// use-case for. Each entry MUST carry a documented reason of >= 12 characters.
+/// This is the SAME pattern as [_widgetbookExemptions] for lib/ui, kept so a
+/// genuine exception (never a "skip the work" entry) has a reviewed home.
+///
+/// Today this is intentionally EMPTY: every uncovered presentational feature
+/// widget got a real use-case (#1477) rather than an allow-list line.
+const _featureWidgetbookExemptions = <String, String>{};
+
 void main() {
   test('Widgetbook coverage requires generated runtime directories', () {
     const coverage = _WidgetbookCoverage(
@@ -82,6 +92,86 @@ void main() {
     );
   });
 
+  test(
+    'presentational feature widgets (lib/features/**) have Widgetbook coverage',
+    () {
+      // OWNER DIRECTIVE (#1477): ALL presentational feature widgets must live in
+      // Widgetbook, enforced here. This test was added RED — before the matching
+      // use-cases landed it failed listing AudioPlayerBar, AuthField,
+      // AuthScaffold, AuthSubmitButton, FileActionsMenu, FilesBulkBar,
+      // FilesEmptyState, FilesMutedDash, FilesUndoBar, MatomeActionsMenu — and
+      // turns GREEN once each has a real @widgetbook.UseCase rendering the REAL
+      // widget. (Widgets already covered before #1477 — e.g. ContactDetail,
+      // FileView, FilesGrid/Table, MatomeTable, the nav trio — keep passing.)
+      //
+      // RULE (BEHAVIOR-based, not directory-based — so a presentational widget
+      // sitting OUTSIDE a /widgets folder is still caught):
+      //   INCLUDE a public class iff it `extends StatelessWidget` or
+      //   `StatefulWidget` AND its name does NOT end in `Screen`.
+      //   EXCLUDE provider-bound widgets (`extends ConsumerWidget` /
+      //   `ConsumerStatefulWidget`) and `*Screen` classes. Those need fake
+      //   providers / full app scaffolding to render and are tracked as the
+      //   SEPARATE screens-coverage effort — they are excluded BY THE RULE, not
+      //   silently allow-listed.
+      //
+      // GOLDEN DECISION (#1477): the shared visual-regression (golden) suite
+      // requirement stays lib/ui-ONLY. Feature widgets require a use-case but
+      // NOT a shared golden. Rationale: lib/ui is the bounded primitive layer
+      // (~25 widgets) whose pixels are the design-system contract; feature
+      // widgets compose those primitives and are far more numerous, so gating
+      // every one on a golden would balloon the golden suite (and its
+      // maintenance/flake surface) without adding contract coverage the
+      // primitive goldens don't already give. Documented states live in the
+      // Widgetbook catalog instead; promote a feature widget into the golden
+      // suite case-by-case when its composition itself is load-bearing (as
+      // FileView already is).
+      final components = _discoverFeatureComponents();
+      expect(
+        components,
+        isNotEmpty,
+        reason:
+            'Expected to discover public presentational Widget classes under '
+            'lib/features/** (non-Consumer, non-*Screen).',
+      );
+
+      _expectValidExemptions(
+        components: components,
+        exemptions: _featureWidgetbookExemptions,
+        coverageName: 'feature Widgetbook',
+        scopeLabel: 'lib/features/**',
+      );
+
+      final widgetbookCoverage = _readWidgetbookCoverage();
+      final missingWidgetbook = components
+          .where(
+            (component) =>
+                !_featureWidgetbookExemptions.containsKey(component.className) &&
+                !_hasWidgetbookCoverage(widgetbookCoverage, component.className),
+          )
+          .toList();
+
+      expect(
+        missingWidgetbook,
+        isEmpty,
+        reason: _coverageFailure(
+          title:
+              'Missing Widgetbook coverage for presentational feature widgets.',
+          components: missingWidgetbook,
+          remediation:
+              'Add a @widgetbook.UseCase(type: ComponentName, ...) rendering the '
+              'REAL widget with representative sample data in '
+              '../flutter_widgetbook/lib/widgetbook.dart, regenerate '
+              'widgetbook.directories.g.dart (keep the generated '
+              'WidgetbookComponent(name: ComponentName) entry), or — only for a '
+              'genuine exception — add a reviewed reason to '
+              '_featureWidgetbookExemptions. Provider-bound (Consumer*) widgets '
+              'and *Screen classes are out of scope and should be left as such, '
+              'not allow-listed.',
+        ),
+      );
+    },
+  );
+
   test('Widgetbook dependencies stay isolated from matome_flutter', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final productionSources = Directory('lib')
@@ -137,6 +227,33 @@ List<String> _publicWidgetClasses(String source) {
   ).allMatches(source).map((match) => match.group(1)!).toList();
 }
 
+/// Discovers PUBLIC presentational widgets under lib/features/** using the
+/// behavior-based rule (#1477): a class that `extends StatelessWidget` /
+/// `StatefulWidget` (NOT a Consumer*) whose name does not end in `Screen`.
+/// Provider-bound widgets (`ConsumerWidget`/`ConsumerStatefulWidget`) and
+/// `*Screen` classes are excluded by construction — they belong to the separate
+/// screens-coverage effort.
+List<_UiComponent> _discoverFeatureComponents() {
+  final files =
+      Directory('lib/features')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.dart'))
+          .where((file) => !file.path.endsWith('.g.dart'))
+          .where((file) => !file.path.endsWith('.freezed.dart'))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
+
+  return [
+    for (final file in files)
+      for (final className in _publicWidgetClasses(file.readAsStringSync()))
+        // Behavior-based exclusion: *Screen classes are screens, not catalog
+        // components, regardless of which base they extend.
+        if (!className.endsWith('Screen'))
+          _UiComponent(className: className, path: file.path),
+  ];
+}
+
 _WidgetbookCoverage _readWidgetbookCoverage() {
   final widgetbookSource = File('../flutter_widgetbook/lib/widgetbook.dart');
   final generatedSource = File(
@@ -177,6 +294,7 @@ void _expectValidExemptions({
   required List<_UiComponent> components,
   required Map<String, String> exemptions,
   required String coverageName,
+  String scopeLabel = 'lib/ui/**',
 }) {
   final componentNames = components
       .map((component) => component.className)
@@ -195,7 +313,7 @@ void _expectValidExemptions({
     isEmpty,
     reason:
         '$coverageName exemptions must name a current public Widget class in '
-        'lib/ui/** and include a documented reason of at least 12 characters.',
+        '$scopeLabel and include a documented reason of at least 12 characters.',
   );
 }
 
