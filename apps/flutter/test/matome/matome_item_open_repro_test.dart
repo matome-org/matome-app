@@ -94,6 +94,15 @@ void main() {
           builder: (context, state) =>
               FileDetailScreen.byId(id: state.pathParameters['id']!),
         ),
+        // Image Items drill into the unified image host (#1438/#1450), a
+        // SEPARATE route from the audio host — the live `lib/app/router.dart`
+        // registers it, so a faithful repro router must too. Without it the
+        // imperative `/recording/image/:id` push has no match and nothing opens.
+        GoRoute(
+          path: '/recording/image/:id',
+          builder: (context, state) =>
+              FileDetailScreen.imageById(id: state.pathParameters['id']!),
+        ),
       ],
     );
   }
