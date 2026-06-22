@@ -263,3 +263,320 @@ MatomeSyncChip matomeItemSyncChip(RecordingItem item, {Key? key}) {
         item.isOnCloud ? MatomeSyncRollup.cloud : MatomeSyncRollup.onDevice,
   );
 }
+
+// ─── Assembled Detail panel (presentational) ─────────────────────────────────
+//
+// The COMPLETE Details panel, assembled from the section atoms above into one
+// public, presentational widget. This is the "Matome detail" component the
+// Widgetbook tree (and its shared golden) render — so the tree reads
+// "MatomeDetailPanel" (a detail panel), not "MatomePanelSection" (an atom).
+//
+// It is strictly props-in: a [MatomeDetailPanelData] describes the sections
+// (items, people, space filing, notes, share) and the optional callbacks. The
+// live screen still composes the section atoms directly against its providers
+// (`features/matome/matome_detail_screen.dart`'s `_MatomeDetails`); wiring that
+// screen onto this assembled widget is tracked as a follow-up so the shipped,
+// provider-bound panel is not put at regression risk by this IA reorg.
+
+/// One item row in the assembled [MatomeDetailPanel]: a media type (drives the
+/// leading glyph via [matomeItemIcon]), a title, a time/duration meta line, and
+/// whether the item is reconciled to the cloud (drives the trailing sync chip).
+class MatomeDetailPanelItem {
+  const MatomeDetailPanelItem({
+    required this.mediaType,
+    required this.title,
+    required this.meta,
+    required this.onCloud,
+  });
+
+  final String mediaType;
+  final String title;
+  final String meta;
+  final bool onCloud;
+}
+
+/// One contact row in the assembled [MatomeDetailPanel]: an initials avatar, a
+/// name, and a role meta line.
+class MatomeDetailPanelContact {
+  const MatomeDetailPanelContact({
+    required this.initial,
+    required this.name,
+    required this.role,
+  });
+
+  final String initial;
+  final String name;
+  final String role;
+}
+
+/// The presentational data for an assembled [MatomeDetailPanel]. Plain props —
+/// no providers, no DB — so both the catalog (static fixtures) and, in future,
+/// the live screen (mapped from controller state) can drive the same widget.
+class MatomeDetailPanelData {
+  const MatomeDetailPanelData({
+    this.title = 'Detail',
+    this.items = const [],
+    this.contacts = const [],
+    this.spaceName,
+    this.notes,
+    this.addItemLabel = 'Add item',
+    this.addPersonLabel = 'Add person',
+    this.notesLabel = 'Notes',
+    this.notesEditLabel = 'Edit',
+    this.spaceLabel = 'Space',
+    this.refileLabel = 'Refile',
+    this.fileIntoSpaceLabel = 'File into space',
+    this.shareLabel = 'Share',
+  });
+
+  final String title;
+  final List<MatomeDetailPanelItem> items;
+  final List<MatomeDetailPanelContact> contacts;
+
+  /// The filed space (folder) name, or null for an Inbox matome (renders the
+  /// "File into space" accent pill instead of folder + "Refile").
+  final String? spaceName;
+
+  /// The notes body. When null/empty the Notes section is still rendered with
+  /// its label + Edit affordance but no body.
+  final String? notes;
+
+  final String addItemLabel;
+  final String addPersonLabel;
+  final String notesLabel;
+  final String notesEditLabel;
+  final String spaceLabel;
+  final String refileLabel;
+  final String fileIntoSpaceLabel;
+  final String shareLabel;
+
+  bool get isInbox => spaceName == null || spaceName!.isEmpty;
+}
+
+/// The COMPLETE Matome **Details panel** — the owner-approved sectioned layout
+/// (Items · N → People · N → Space → Notes → Share) assembled from the
+/// [MatomePanelSection] / [MatomePanelRow] / [MatomePanelAddRow] atoms. Purely
+/// presentational and driven by [MatomeDetailPanelData]; callbacks are optional
+/// so the catalog can render it inert.
+class MatomeDetailPanel extends StatelessWidget {
+  const MatomeDetailPanel({
+    super.key,
+    required this.data,
+    this.onClose,
+    this.onAddItem,
+    this.onAddPerson,
+    this.onEditNotes,
+    this.onRefile,
+    this.onFileIntoSpace,
+    this.onShare,
+  });
+
+  final MatomeDetailPanelData data;
+  final VoidCallback? onClose;
+  final VoidCallback? onAddItem;
+  final VoidCallback? onAddPerson;
+  final VoidCallback? onEditNotes;
+  final VoidCallback? onRefile;
+  final VoidCallback? onFileIntoSpace;
+  final VoidCallback? onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+
+    return Padding(
+      padding: EdgeInsets.all(spacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Panel header.
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  data.title,
+                  style: typography.title.copyWith(color: colors.textPrimary),
+                ),
+              ),
+              if (onClose != null)
+                InkWell(
+                  onTap: onClose,
+                  child: Icon(
+                    Icons.close,
+                    size: spacing.md,
+                    color: colors.textMuted,
+                  ),
+                )
+              else
+                Icon(Icons.close, size: spacing.md, color: colors.textMuted),
+            ],
+          ),
+          SizedBox(height: spacing.md),
+
+          // Items · N.
+          MatomePanelSection(
+            label: 'Items · ${data.items.length}',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final item in data.items) ...[
+                  MatomePanelRow(
+                    icon: matomeItemIcon(item.mediaType),
+                    title: item.title,
+                    meta: item.meta,
+                    trailing: MatomeSyncChip(
+                      rollup: item.onCloud
+                          ? MatomeSyncRollup.cloud
+                          : MatomeSyncRollup.onDevice,
+                    ),
+                  ),
+                  SizedBox(height: spacing.xs),
+                ],
+                MatomePanelAddRow(label: data.addItemLabel, onTap: onAddItem),
+              ],
+            ),
+          ),
+
+          // People · N.
+          MatomePanelSection(
+            label: 'People · ${data.contacts.length}',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final contact in data.contacts) ...[
+                  MatomePanelRow(
+                    icon: Icons.person_outline,
+                    leading: CircleAvatar(
+                      radius: spacing.md,
+                      backgroundColor: colors.subtleFill,
+                      child: Text(
+                        contact.initial,
+                        style: typography.label.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    title: contact.name,
+                    meta: contact.role,
+                  ),
+                  SizedBox(height: spacing.xs),
+                ],
+                MatomePanelAddRow(
+                  icon: Icons.person_add_alt_outlined,
+                  label: data.addPersonLabel,
+                  onTap: onAddPerson,
+                ),
+              ],
+            ),
+          ),
+
+          // Space — filed (folder + name + Refile) or inbox (File into space).
+          MatomePanelSection(
+            label: data.spaceLabel,
+            child: data.isInbox
+                ? Row(
+                    children: [
+                      Icon(
+                        Icons.folder_outlined,
+                        size: spacing.md,
+                        color: colors.textSecondary,
+                      ),
+                      SizedBox(width: spacing.xs),
+                      Material(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(radius.pill),
+                        child: InkWell(
+                          onTap: onFileIntoSpace,
+                          borderRadius: BorderRadius.circular(radius.pill),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: spacing.sm,
+                              vertical: spacing.xxs,
+                            ),
+                            child: Text(
+                              data.fileIntoSpaceLabel,
+                              style: typography.label.copyWith(
+                                color: colors.onAccent,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Icon(
+                        Icons.folder_outlined,
+                        size: spacing.md,
+                        color: colors.textSecondary,
+                      ),
+                      SizedBox(width: spacing.xs),
+                      Expanded(
+                        child: Text(
+                          data.spaceName!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: typography.bodySmall.copyWith(
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: onRefile,
+                        child: Text(
+                          data.refileLabel,
+                          style: typography.label.copyWith(
+                            color: colors.accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+
+          // Notes — label + inline accent "Edit" + body, no trailing divider.
+          MatomePanelSection(
+            label: data.notesLabel,
+            showDivider: false,
+            trailing: Text(
+              data.notesEditLabel,
+              style: typography.label.copyWith(color: colors.accent),
+            ),
+            onTrailingTap: onEditNotes,
+            child: Text(
+              (data.notes != null && data.notes!.isNotEmpty)
+                  ? data.notes!
+                  : '',
+              style: typography.bodySmall.copyWith(color: colors.textSecondary),
+            ),
+          ),
+
+          // Share — deferred affordance row.
+          InkWell(
+            onTap: onShare,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.ios_share,
+                  size: spacing.md,
+                  color: colors.textPrimary,
+                ),
+                SizedBox(width: spacing.xs),
+                Text(
+                  data.shareLabel,
+                  style: typography.label.copyWith(color: colors.textPrimary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

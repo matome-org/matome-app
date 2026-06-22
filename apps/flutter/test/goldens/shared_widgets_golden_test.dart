@@ -101,6 +101,10 @@ void main() {
                   child: _MatomeDetailPanelSample(),
                 ),
                 GoldenTestScenario(
+                  name: 'matome detail panel (assembled)',
+                  child: _MatomeDetailPanelAssembledSample(),
+                ),
+                GoldenTestScenario(
                   name: 'bottom sheet shell',
                   child: _BottomSheetSample(),
                 ),
@@ -704,6 +708,62 @@ class _MatomeDetailPanelSample extends StatelessWidget {
               MatomePanelAddRow(label: 'Add item'),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Golden for the COMPLETE, assembled [MatomeDetailPanel] (#1478): the public
+/// `lib/ui/matome_detail_panel.dart` widget that composes the section atoms into
+/// the full owner-approved panel (Items · People · Space · Notes · Share). This
+/// is the same widget the Widgetbook "Detail panel" use-cases render. Pins the
+/// FILED state (folder + Refile); the inbox variant differs only in the Space
+/// row and is covered by the catalog.
+class _MatomeDetailPanelAssembledSample extends StatelessWidget {
+  const _MatomeDetailPanelAssembledSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors =
+        Theme.of(context).extension<MatomeColors>() ?? MatomeColors.light;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.border),
+      ),
+      child: const MatomeDetailPanel(
+        data: MatomeDetailPanelData(
+          items: [
+            MatomeDetailPanelItem(
+              mediaType: 'audio',
+              title: 'Meeting audio',
+              meta: '14:30 · 12:04',
+              onCloud: true,
+            ),
+            MatomeDetailPanelItem(
+              mediaType: 'document',
+              title: 'Quarterly report',
+              meta: '15:24',
+              onCloud: false,
+            ),
+          ],
+          contacts: [
+            MatomeDetailPanelContact(
+              initial: 'A',
+              name: 'Ana',
+              role: 'Organizer',
+            ),
+            MatomeDetailPanelContact(
+              initial: 'K',
+              name: 'Ken',
+              role: 'Attendee',
+            ),
+          ],
+          spaceName: 'Marketing',
+          notes: 'Recap the decisions, owners, and next steps.',
         ),
       ),
     );
