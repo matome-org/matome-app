@@ -641,6 +641,7 @@ class Translations$matome$en {
 	/// en: 'No people yet'
 	String get noPeople => 'No people yet';
 
+	late final Translations$matome$relationPicker$en relationPicker = Translations$matome$relationPicker$en.internal(_root);
 	late final Translations$matome$actions$en actions = Translations$matome$actions$en.internal(_root);
 	late final Translations$matome$table$en table = Translations$matome$table$en.internal(_root);
 }
@@ -1104,6 +1105,66 @@ class Translations$fileView$contentsStatus$en {
 	late final Translations$fileView$contentsStatus$audio$en audio = Translations$fileView$contentsStatus$audio$en.internal(_root);
 	late final Translations$fileView$contentsStatus$image$en image = Translations$fileView$contentsStatus$image$en.internal(_root);
 	late final Translations$fileView$contentsStatus$doc$en doc = Translations$fileView$contentsStatus$doc$en.internal(_root);
+}
+
+// Path: matome.relationPicker
+class Translations$matome$relationPicker$en {
+	Translations$matome$relationPicker$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Add to this matome'
+	String get addToThisMatome => 'Add to this matome';
+
+	/// en: 'Search contacts, files, spaces'
+	String get search => 'Search contacts, files, spaces';
+
+	/// en: 'Contacts'
+	String get typeContacts => 'Contacts';
+
+	/// en: 'Files'
+	String get typeFiles => 'Files';
+
+	/// en: 'Spaces'
+	String get typeSpaces => 'Spaces';
+
+	/// en: 'Contact'
+	String get labelContact => 'Contact';
+
+	/// en: 'File'
+	String get labelFile => 'File';
+
+	/// en: 'Space'
+	String get labelSpace => 'Space';
+
+	/// en: 'Record audio'
+	String get recordAudio => 'Record audio';
+
+	/// en: 'Create contact'
+	String get createContact => 'Create contact';
+
+	/// en: 'New space'
+	String get newSpace => 'New space';
+
+	/// en: 'New contact'
+	String get createContactTitle => 'New contact';
+
+	/// en: 'Contact name'
+	String get createContactHint => 'Contact name';
+
+	/// en: 'New space'
+	String get newSpaceTitle => 'New space';
+
+	/// en: 'Space name'
+	String get newSpaceHint => 'Space name';
+
+	/// en: 'No matches. Use the create actions above.'
+	String get empty => 'No matches. Use the create actions above.';
+
+	/// en: 'Add'
+	String get add => 'Add';
 }
 
 // Path: matome.actions
@@ -1604,6 +1665,23 @@ extension on Translations {
 			'matome.filesPreviewMore' => ({required Object n}) => '+${n}',
 			'matome.noFiles' => 'No items yet',
 			'matome.noPeople' => 'No people yet',
+			'matome.relationPicker.addToThisMatome' => 'Add to this matome',
+			'matome.relationPicker.search' => 'Search contacts, files, spaces',
+			'matome.relationPicker.typeContacts' => 'Contacts',
+			'matome.relationPicker.typeFiles' => 'Files',
+			'matome.relationPicker.typeSpaces' => 'Spaces',
+			'matome.relationPicker.labelContact' => 'Contact',
+			'matome.relationPicker.labelFile' => 'File',
+			'matome.relationPicker.labelSpace' => 'Space',
+			'matome.relationPicker.recordAudio' => 'Record audio',
+			'matome.relationPicker.createContact' => 'Create contact',
+			'matome.relationPicker.newSpace' => 'New space',
+			'matome.relationPicker.createContactTitle' => 'New contact',
+			'matome.relationPicker.createContactHint' => 'Contact name',
+			'matome.relationPicker.newSpaceTitle' => 'New space',
+			'matome.relationPicker.newSpaceHint' => 'Space name',
+			'matome.relationPicker.empty' => 'No matches. Use the create actions above.',
+			'matome.relationPicker.add' => 'Add',
 			'matome.actions.menuTooltip' => 'More',
 			'matome.actions.rename' => 'Rename',
 			'matome.actions.editDateTime' => 'Edit date & time',

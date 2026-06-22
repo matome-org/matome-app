@@ -172,15 +172,28 @@ void main() {
       expect(tester.widget(addItem), isA<MatomePanelAddRow>());
       expect(find.text(t.matome.addItem), findsOneWidget);
 
-      // The split photo/file rows are NOT rendered up front — they live inside
-      // the menu, which is closed until "Add item" is tapped.
-      expect(find.byKey(const ValueKey('matome-add-photo')), findsNothing);
+      // The create actions are NOT rendered up front — they live inside the
+      // unified "Add anything" picker, which opens only when "Add item" is
+      // tapped.
+      expect(
+          find.byKey(const ValueKey('relationship-action-photo')), findsNothing);
 
-      // Tapping "Add item" opens the menu → "Add photo" entry surfaces. ("Add
-      // file" is flag-gated — pinned by the dedicated add-file suite.)
+      // Tapping "Add item" opens the unified "Add anything" picker → the "Add
+      // photo" create action surfaces. ("Add file" is flag-gated — pinned by the
+      // add-file suite.)
       await tester.tap(addItem);
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('matome-add-photo')), findsOneWidget);
+      expect(find.byKey(const ValueKey('relationship-action-photo')),
+          findsOneWidget);
+      // The unified surface carries the cross-entity type filter (All +
+      // Contacts/Files/Spaces) and the create-contact / new-space actions.
+      expect(find.text(t.matome.relationPicker.typeContacts), findsOneWidget);
+      expect(find.text(t.matome.relationPicker.typeFiles), findsOneWidget);
+      expect(find.text(t.matome.relationPicker.typeSpaces), findsOneWidget);
+      expect(find.byKey(const ValueKey('relationship-action-create-contact')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('relationship-action-new-space')),
+          findsOneWidget);
     },
   );
 

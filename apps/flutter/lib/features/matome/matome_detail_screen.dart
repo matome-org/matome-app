@@ -22,8 +22,10 @@ import '../../ui/app_button.dart';
 import '../../ui/app_dialog.dart';
 import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
+import '../../core/db/file_row.dart';
 import '../../ui/loading_indicator.dart';
 import '../../ui/matome_detail_panel.dart';
+import '../../ui/relationship_picker.dart';
 import '../home/home_filters.dart' show formatTimestamp;
 import 'matome_actions_menu.dart';
 import 'matome_detail_controller.dart';
@@ -1550,6 +1552,203 @@ class _RecordingsSection extends ConsumerWidget {
     }
   }
 
+  /// The leading glyph for a candidate file row, by media kind.
+  IconData _fileIcon(FileKind kind) {
+    switch (kind) {
+      case FileKind.image:
+        return Icons.image_outlined;
+      case FileKind.document:
+        return Icons.description_outlined;
+      case FileKind.audio:
+        return Icons.mic_none_rounded;
+    }
+  }
+
+  /// A small name-entry dialog for the picker's "Create contact" / "New space"
+  /// actions. Returns the trimmed name, or null on cancel.
+  Future<String?> _promptName(
+    BuildContext context, {
+    required String title,
+    required String hint,
+  }) async {
+    final field = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AppDialog(
+        title: Text(title),
+        content: AppTextField(
+          controller: field,
+          autofocus: true,
+          hint: hint,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => Navigator.of(ctx).pop(field.text.trim()),
+        ),
+        actions: [
+          AppTextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(t.matome.cancel),
+          ),
+          AppTextButton(
+            onPressed: () => Navigator.of(ctx).pop(field.text.trim()),
+            child: Text(t.matome.save),
+          ),
+        ],
+      ),
+    );
+    field.dispose();
+    return result;
+  }
+
+  /// Opens the unified "Add anything" relationship picker. Gathers the owner's
+  /// Contacts / Files / Spaces (the matome's own type is omitted), minus what is
+  /// already linked, then routes the result: a create/source action runs its
+  /// flow; a multi-select pick links each candidate by its type (space is
+  /// single-valued — last-wins).
+  Future<void> _openAddAnything(BuildContext context, WidgetRef ref) async {
+    final controller =
+        ref.read(matomeDetailControllerProvider(matomeId).notifier);
+    final stateNow = ref.read(matomeDetailControllerProvider(matomeId));
+    final matome = stateNow.matome;
+    if (matome == null) return;
+
+    final attachedIds = stateNow.contacts.map((e) => e.contact.id).toSet();
+    final directory = await controller.directoryContacts();
+    final files = await controller.candidateFiles();
+    if (!context.mounted) return;
+
+    final tp = t.matome.relationPicker;
+    final candidates = <RelationshipCandidate>[
+      for (final c in directory)
+        if (!attachedIds.contains(c.id))
+          RelationshipCandidate(
+            id: c.id,
+            typeId: 'contact',
+            title: c.displayName,
+            subtitle: tp.labelContact,
+            icon: Icons.person_outline,
+          ),
+      for (final f in files)
+        RelationshipCandidate(
+          id: f.id,
+          typeId: 'file',
+          title: f.name,
+          subtitle: f.sizeLabel == null
+              ? tp.labelFile
+              : '${tp.labelFile} · ${f.sizeLabel}',
+          icon: _fileIcon(f.kind),
+        ),
+      for (final w in stateNow.spaces)
+        RelationshipCandidate(
+          id: w.id,
+          typeId: 'space',
+          title: w.name,
+          subtitle: tp.labelSpace,
+          icon: Icons.folder_outlined,
+          linked: w.id == matome.spaceId,
+        ),
+    ];
+
+    final data = RelationshipPickerData(
+      title: tp.addToThisMatome,
+      mode: RelationshipSelectMode.multi,
+      searchHint: tp.search,
+      confirmLabel: tp.add,
+      emptyLabel: tp.empty,
+      types: [
+        RelationshipType(
+          id: 'contact',
+          label: tp.typeContacts,
+          icon: Icons.person_outline,
+        ),
+        RelationshipType(
+          id: 'file',
+          label: tp.typeFiles,
+          icon: Icons.insert_drive_file_outlined,
+        ),
+        RelationshipType(
+          id: 'space',
+          label: tp.typeSpaces,
+          icon: Icons.folder_outlined,
+        ),
+      ],
+      candidates: candidates,
+      actions: [
+        RelationshipAction(
+          id: 'photo',
+          label: t.matome.addPhoto,
+          icon: Icons.add_photo_alternate_outlined,
+        ),
+        if (FeatureFlags.documents)
+          RelationshipAction(
+            id: 'file',
+            label: t.matome.addFile,
+            icon: Icons.upload_file_outlined,
+          ),
+        // Record audio into this matome has no flow yet — a deferred stub.
+        RelationshipAction(
+          id: 'record',
+          label: tp.recordAudio,
+          icon: Icons.mic_none_rounded,
+          enabled: false,
+          tooltip: t.matome.comingSoon,
+        ),
+        RelationshipAction(
+          id: 'create-contact',
+          label: tp.createContact,
+          icon: Icons.person_add_alt_1_outlined,
+        ),
+        RelationshipAction(
+          id: 'new-space',
+          label: tp.newSpace,
+          icon: Icons.create_new_folder_outlined,
+        ),
+      ],
+    );
+
+    final typeById = {for (final c in candidates) c.id: c.typeId};
+
+    final result = await showRelationshipPicker(context: context, data: data);
+    if (result == null || !context.mounted) return;
+
+    if (result.isAction) {
+      switch (result.actionId) {
+        case 'photo':
+          await _addPhoto(context);
+        case 'file':
+          await _addFile(context);
+        case 'create-contact':
+          final name = await _promptName(
+            context,
+            title: tp.createContactTitle,
+            hint: tp.createContactHint,
+          );
+          if (name != null && name.isNotEmpty) {
+            await controller.createContactAndAttach(name);
+          }
+        case 'new-space':
+          final name = await _promptName(
+            context,
+            title: tp.newSpaceTitle,
+            hint: tp.newSpaceHint,
+          );
+          if (name != null && name.isNotEmpty) {
+            await controller.createSpaceAndFile(name);
+          }
+      }
+      return;
+    }
+
+    final ids = result.candidateIds ?? const <String>[];
+    final fileIds = ids.where((i) => typeById[i] == 'file').toSet();
+    final spaceIds = ids.where((i) => typeById[i] == 'space').toList();
+    for (final i in ids) {
+      if (typeById[i] == 'contact') await controller.attachContact(i);
+    }
+    if (fileIds.isNotEmpty) await controller.linkFiles(fileIds);
+    // Space is single-valued: last selection wins.
+    if (spaceIds.isNotEmpty) await controller.fileIntoSpace(spaceIds.last);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
@@ -1571,88 +1770,20 @@ class _RecordingsSection extends ConsumerWidget {
               ),
             ),
           SizedBox(height: spacing.xs),
-          // The owner-APPROVED proposal carries a SINGLE "Add item" accent row
-          // (#1475), not the old split "Add photo / Add file" header. The two
-          // real flows are preserved BEHIND it: tapping "Add item" opens an
-          // anchored menu → "Add photo" (image, unconditional) + "Add file"
-          // (document import, #1449, flag-gated). When the documents flag is OFF
-          // the menu drops only the "Add file" entry; "Add photo" — and the
-          // dynamic-mediaType persistence — stay. The `matome-add-item` /
-          // `matome-add-photo` / `matome-add-file` keys ride on the row + menu
-          // entries so the picker flows stay reachable from tests.
-          _AddItemMenu(
-            onAddPhoto: () => _addPhoto(context),
-            onAddFile: () => _addFile(context),
+          // "Add item" now opens the UNIFIED relationship picker (the approved
+          // "Add anything"): one searchable, type-filtered surface to link
+          // existing Contacts / Files / Spaces to this matome AND create new
+          // content (Add photo/file, Create contact, New space). Record audio is
+          // a deferred stub until its record-into-matome flow ships. The
+          // per-section "Add person" / "File into a space" affordances COEXIST
+          // (owner decision) — this is an additional, broader entry point.
+          MatomePanelAddRow(
+            key: const ValueKey('matome-add-item'),
+            label: t.matome.addItem,
+            onTap: () => _openAddAnything(context, ref),
           ),
         ],
       ),
-    );
-  }
-}
-
-/// The single "Add item" accent affordance (#1475): an anchored menu that fronts
-/// BOTH real import flows. The "Add item" row matches the approved proposal; the
-/// per-flow choice (photo / file) lives in the menu rather than as two competing
-/// header rows. "Add file" is gated by the documents flag (#1449) — when off the
-/// menu shows only "Add photo".
-class _AddItemMenu extends StatelessWidget {
-  const _AddItemMenu({required this.onAddPhoto, required this.onAddFile});
-
-  final VoidCallback onAddPhoto;
-  final VoidCallback onAddFile;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
-
-    Widget entry(Key key, IconData icon, String label, VoidCallback onTap) =>
-        MenuItemButton(
-          key: key,
-          leadingIcon: Icon(icon, size: spacing.md, color: colors.textSecondary),
-          onPressed: onTap,
-          child: Text(
-            label,
-            style: typography.bodySmall.copyWith(color: colors.textPrimary),
-          ),
-        );
-
-    return MenuAnchor(
-      style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(colors.surface),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(context.radius.md),
-            side: BorderSide(color: colors.border),
-          ),
-        ),
-        padding: WidgetStatePropertyAll(
-          EdgeInsets.symmetric(vertical: spacing.xs),
-        ),
-      ),
-      builder: (context, controller, child) => MatomePanelAddRow(
-        key: const ValueKey('matome-add-item'),
-        icon: Icons.add,
-        label: t.matome.addItem,
-        onTap: () =>
-            controller.isOpen ? controller.close() : controller.open(),
-      ),
-      menuChildren: [
-        entry(
-          const ValueKey('matome-add-photo'),
-          Icons.add_photo_alternate_outlined,
-          t.matome.addPhoto,
-          onAddPhoto,
-        ),
-        if (FeatureFlags.documents)
-          entry(
-            const ValueKey('matome-add-file'),
-            Icons.upload_file_outlined,
-            t.matome.addFile,
-            onAddFile,
-          ),
-      ],
     );
   }
 }

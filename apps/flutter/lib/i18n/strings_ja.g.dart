@@ -312,6 +312,7 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String filesPreviewMore({required Object n}) => '他${n}件';
 	@override String get noFiles => '項目はまだありません';
 	@override String get noPeople => '関係者はまだいません';
+	@override late final _Translations$matome$relationPicker$ja relationPicker = _Translations$matome$relationPicker$ja._(_root);
 	@override late final _Translations$matome$actions$ja actions = _Translations$matome$actions$ja._(_root);
 	@override late final _Translations$matome$table$ja table = _Translations$matome$table$ja._(_root);
 }
@@ -530,6 +531,32 @@ class _Translations$fileView$contentsStatus$ja extends Translations$fileView$con
 	@override late final _Translations$fileView$contentsStatus$audio$ja audio = _Translations$fileView$contentsStatus$audio$ja._(_root);
 	@override late final _Translations$fileView$contentsStatus$image$ja image = _Translations$fileView$contentsStatus$image$ja._(_root);
 	@override late final _Translations$fileView$contentsStatus$doc$ja doc = _Translations$fileView$contentsStatus$doc$ja._(_root);
+}
+
+// Path: matome.relationPicker
+class _Translations$matome$relationPicker$ja extends Translations$matome$relationPicker$en {
+	_Translations$matome$relationPicker$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get addToThisMatome => 'このまとめに追加';
+	@override String get search => '連絡先・ファイル・スペースを検索';
+	@override String get typeContacts => '連絡先';
+	@override String get typeFiles => 'ファイル';
+	@override String get typeSpaces => 'スペース';
+	@override String get labelContact => '連絡先';
+	@override String get labelFile => 'ファイル';
+	@override String get labelSpace => 'スペース';
+	@override String get recordAudio => '録音';
+	@override String get createContact => '連絡先を作成';
+	@override String get newSpace => '新しいスペース';
+	@override String get createContactTitle => '新しい連絡先';
+	@override String get createContactHint => '連絡先の名前';
+	@override String get newSpaceTitle => '新しいスペース';
+	@override String get newSpaceHint => 'スペース名';
+	@override String get empty => '一致なし。上の作成アクションを使ってください。';
+	@override String get add => '追加';
 }
 
 // Path: matome.actions
@@ -858,6 +885,23 @@ extension on TranslationsJa {
 			'matome.filesPreviewMore' => ({required Object n}) => '他${n}件',
 			'matome.noFiles' => '項目はまだありません',
 			'matome.noPeople' => '関係者はまだいません',
+			'matome.relationPicker.addToThisMatome' => 'このまとめに追加',
+			'matome.relationPicker.search' => '連絡先・ファイル・スペースを検索',
+			'matome.relationPicker.typeContacts' => '連絡先',
+			'matome.relationPicker.typeFiles' => 'ファイル',
+			'matome.relationPicker.typeSpaces' => 'スペース',
+			'matome.relationPicker.labelContact' => '連絡先',
+			'matome.relationPicker.labelFile' => 'ファイル',
+			'matome.relationPicker.labelSpace' => 'スペース',
+			'matome.relationPicker.recordAudio' => '録音',
+			'matome.relationPicker.createContact' => '連絡先を作成',
+			'matome.relationPicker.newSpace' => '新しいスペース',
+			'matome.relationPicker.createContactTitle' => '新しい連絡先',
+			'matome.relationPicker.createContactHint' => '連絡先の名前',
+			'matome.relationPicker.newSpaceTitle' => '新しいスペース',
+			'matome.relationPicker.newSpaceHint' => 'スペース名',
+			'matome.relationPicker.empty' => '一致なし。上の作成アクションを使ってください。',
+			'matome.relationPicker.add' => '追加',
 			'matome.actions.menuTooltip' => 'その他',
 			'matome.actions.rename' => '名前を変更',
 			'matome.actions.editDateTime' => '日時を編集',

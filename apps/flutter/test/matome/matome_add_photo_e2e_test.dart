@@ -12,6 +12,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
+import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/home/inbox_upload.dart'
@@ -48,14 +49,15 @@ Future<void> revealDetails(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// #1475: "Add photo" lives inside the single "Add item" menu now (not a split
-/// header row). Open the menu so the "Add photo" entry is reachable.
+/// "Add photo" now lives as a create action inside the unified "Add anything"
+/// relationship picker (opened by "Add item"). Open it, then tap the photo
+/// action.
 Future<void> tapAddPhoto(WidgetTester tester) async {
   final addItem = find.byKey(const ValueKey('matome-add-item'));
   await tester.ensureVisible(addItem);
   await tester.tap(addItem);
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('matome-add-photo')));
+  await tester.tap(find.byKey(const ValueKey('relationship-action-photo')));
 }
 
 /// Fake path_provider that points the app "documents" dir at a real temp dir,
@@ -353,6 +355,10 @@ void main() {
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
         uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
+        // "Add item" now reads the owner id (authStateProvider → AuthController),
+        // which touches the secure token store on creation — give it an in-memory
+        // store so the flow stays plugin-free in tests.
+        tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
       ],
     );
     addTearDown(c.dispose);
@@ -373,24 +379,31 @@ void main() {
     await revealDetails(tester);
     expect(find.byType(Image), findsNothing);
 
-    // Open the single "Add item" menu so the "Add photo" entry is reachable
-    // (#1475), then tap it — drives _addPhoto end to end (real durable copy
-    // needs runAsync for the file I/O).
+    // Open the unified "Add anything" picker (via "Add item") so the "Add
+    // photo" create action is reachable, then tap it — drives _addPhoto end to
+    // end (real durable copy needs runAsync for the file I/O).
     final addItem = find.byKey(const ValueKey('matome-add-item'));
     await tester.ensureVisible(addItem);
     await tester.tap(addItem);
     await tester.pumpAndSettle();
-    final addPhoto = find.byKey(const ValueKey('matome-add-photo'));
+    final addPhoto =
+        find.byKey(const ValueKey('relationship-action-photo'));
     expect(addPhoto, findsOneWidget,
-        reason: 'the Add-item menu must surface the Add photo entry');
+        reason: 'the Add-anything picker must surface the Add photo action');
     // Tap the Add-photo menu entry and drive _addPhoto end to end inside
     // runAsync (the real durable copy does file I/O). The menu item is in an
     // overlay route, so pump a frame inside runAsync to dispatch its onPressed
     // before awaiting the import I/O.
     await tester.runAsync(() async {
       await tester.tap(addPhoto);
-      await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      // The action lives in a dialog now: tapping pops it (a reverse transition),
+      // THEN the _addPhoto continuation runs the fake picker + the real durable
+      // copy + insert. Interleave frame pumps with real delays so both the
+      // dialog dismiss and the real file I/O complete before we assert.
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
     });
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -440,6 +453,7 @@ void main() {
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
         uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
+        tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
         matomeDetailControllerProvider.overrideWith(
           (ref, id) => MatomeDetailController(
             ref,

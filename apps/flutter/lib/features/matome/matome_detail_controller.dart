@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../app/auth_state.dart';
 import '../../core/db/app_database.dart';
@@ -11,6 +12,7 @@ import '../../core/db/daos/contacts_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/spaces_dao.dart';
+import '../../core/db/file_row.dart';
 import '../../core/db/matome_card.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
@@ -140,6 +142,65 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
       role: role,
     );
     await load();
+  }
+
+  /// The owner's files that are NOT already Items of this Matome — the Files
+  /// candidates for the unified "Add anything" picker. Owner-scoped via
+  /// [RecordingsDao.filesForOwner]; excludes the current Items by id.
+  Future<List<FileRow>> candidateFiles() async {
+    final all = await _recordingsDao.filesForOwner(_ownerId);
+    final here =
+        (state.matome?.recordings ?? const []).map((r) => r.id).toSet();
+    return all.where((f) => !here.contains(f.id)).toList();
+  }
+
+  /// MOVE the given owner files into this Matome — the Files link of the unified
+  /// picker. A recording has ONE matome (#1473), so linking REASSIGNS each row's
+  /// `matome_id` to this Matome. Owner-scoped (the DAO rejects foreign targets);
+  /// reloads so the new Items appear. Returns the number moved.
+  Future<int> linkFiles(Set<String> recordingIds) async {
+    if (recordingIds.isEmpty) return 0;
+    AppLog.event(
+        LogCat.action, 'linkFiles ${recordingIds.length} -> ${state.id}');
+    final moved = await _recordingsDao.moveRecordingsToMatome(
+      recordingIds,
+      state.id,
+      _ownerId,
+    );
+    await load();
+    return moved;
+  }
+
+  /// Create a directory contact for the owner and immediately tag it in this
+  /// Matome — the picker's "Create contact" action. The created id reuses the
+  /// `contact_local_<uuid>` convention; `metadata` falls back to its column
+  /// default ('{}'). [attachContact] reloads.
+  Future<void> createContactAndAttach(String displayName) async {
+    final name = displayName.trim();
+    if (name.isEmpty) return;
+    final id = 'contact_local_${const Uuid().v4()}';
+    AppLog.event(
+        LogCat.action, 'createContactAndAttach $id -> ${state.id}');
+    await _contactsDao.create(
+      ContactsCompanion.insert(
+        id: id,
+        ownerId: _ownerId,
+        displayName: name,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+    await attachContact(id);
+  }
+
+  /// Create a Space (workspace) and file this Matome into it — the picker's
+  /// "New space" action (single-valued, last-wins). [fileIntoSpace] reloads.
+  Future<void> createSpaceAndFile(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final ws = await _ref.read(workspacesDaoProvider).createWorkspace(trimmed);
+    AppLog.event(
+        LogCat.action, 'createSpaceAndFile ${ws.id} -> ${state.id}');
+    await fileIntoSpace(ws.id);
   }
 
   /// Untag [contactId] from this Matome — EXPLICIT removal of the

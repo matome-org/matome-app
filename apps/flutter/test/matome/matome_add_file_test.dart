@@ -217,15 +217,17 @@ void main() {
     await tester.tap(toggle);
     await tester.pumpAndSettle();
 
-    // The single "Add item" affordance fronts the photo/file menu (#1475).
+    // "Add item" opens the unified "Add anything" picker; its create actions
+    // include Add photo, and Add file only when the documents flag is ON.
     final addItem = find.byKey(const ValueKey('matome-add-item'));
     await tester.ensureVisible(addItem);
     await tester.tap(addItem);
     await tester.pumpAndSettle();
 
-    // Add photo is unconditional; Add file is dropped from the menu when the
-    // documents flag is OFF.
-    expect(find.byKey(const ValueKey('matome-add-photo')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matome-add-file')), findsNothing);
+    // Add photo is unconditional; Add file is dropped when the documents flag
+    // is OFF.
+    expect(
+        find.byKey(const ValueKey('relationship-action-photo')), findsOneWidget);
+    expect(find.byKey(const ValueKey('relationship-action-file')), findsNothing);
   });
 }
