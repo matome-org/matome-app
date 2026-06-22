@@ -58,6 +58,23 @@ W7 rewrite leaves a deliberate seam rather than an accident.
   the existing go_router top-level route is reused. The mobile-first inline
   reveal and the wide side panel are two presentations of one screen.
 
+#### The panel structure is the canonical `MatomeDetailPanel` scaffolding (#1458)
+- The **approved sectioned panel layout** (labeled, divider-framed sections in
+  the order Items · N → People · N → Space → Notes → Share, with compact item
+  rows + a per-item sync chip + accent "Add …" rows + an inline Notes "Edit") is
+  owned by the **public** presentation-only scaffolding in
+  **`apps/flutter/lib/ui/matome_detail_panel.dart`** (`MatomePanelSection`,
+  `MatomePanelRow`, `MatomePanelAddRow`, `matomeItemIcon`, `matomeItemSyncChip`).
+  This is the **single** implementation: both `_MatomeDetails` (the live screen)
+  and the Widgetbook "Detail panel" use case compose it, so they cannot drift.
+  The full graduation/convergence rationale — including the deliberate deltas
+  from the original proposal mock (two Add affordances, document host routing,
+  the real `MatomeSyncChip` per item) — is recorded in
+  [DR-005](../design/DR-005-matome-detail-panel.md). Per
+  [DR-000](../design/DR-000-convergence-procedure.md), the panel-structure mock
+  in `proposals/matome_letter_proposal.dart` was retired (collapsed onto the real
+  scaffolding) only AFTER the repoint verified green.
+
 #### Chosen breakpoint: **900 px** (`_matomeWidePanelBreakpoint`)
 - **Value**: available width `>= 900` → persistent drawer; `< 900` → the mobile
   "Show more" sheet. The split is hosted by a **`LayoutBuilder`** inside
