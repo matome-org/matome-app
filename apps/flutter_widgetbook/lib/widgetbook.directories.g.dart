@@ -12,111 +12,55 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:matome_widgetbook/foundations_stories.dart'
     as _matome_widgetbook_foundations_stories;
-import 'package:matome_widgetbook/matome_detail_panel_stories.dart'
-    as _matome_widgetbook_matome_detail_panel_stories;
 import 'package:matome_widgetbook/widgetbook.dart'
     as _matome_widgetbook_widgetbook;
 import 'package:widgetbook/widgetbook.dart' as _widgetbook;
 
 final directories = <_widgetbook.WidgetbookNode>[
   _widgetbook.WidgetbookCategory(
-    name: 'Catalog',
+    name: 'Foundations',
+    children: [
+      _widgetbook.WidgetbookComponent(
+        name: 'AppTypography',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Typography',
+            builder: _matome_widgetbook_foundations_stories.typographyUseCase,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'Icons',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Icons',
+            builder: _matome_widgetbook_foundations_stories.iconsUseCase,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'MatomeColors',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Colors',
+            builder: _matome_widgetbook_foundations_stories.colorsUseCase,
+          ),
+        ],
+      ),
+    ],
+  ),
+  _widgetbook.WidgetbookCategory(
+    name: 'Widgets',
     children: [
       _widgetbook.WidgetbookFolder(
         name: 'Auth',
         children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'AuthField',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Field (labeled + obscured)',
-                builder: _matome_widgetbook_widgetbook.authFieldUseCase,
-              ),
-            ],
-          ),
           _widgetbook.WidgetbookComponent(
             name: 'AuthScaffold',
             useCases: [
               _widgetbook.WidgetbookUseCase(
                 name: 'Scaffold (form column + back)',
                 builder: _matome_widgetbook_widgetbook.authScaffoldUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'AuthSubmitButton',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Submit button (idle · loading · disabled)',
-                builder: _matome_widgetbook_widgetbook.authSubmitButtonUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Avatars',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'Avatar',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Icon + initials',
-                builder: _matome_widgetbook_widgetbook.avatarsUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Buttons',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'AppTextButton',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Text actions',
-                builder: _matome_widgetbook_widgetbook.appTextButtonsUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'PrimaryButton',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Primary states',
-                builder: _matome_widgetbook_widgetbook.primaryButtonsUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Cards',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'AppCard',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Calendar row',
-                builder: _matome_widgetbook_widgetbook.appCardCalendarUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Done',
-                builder: _matome_widgetbook_widgetbook.appCardDoneUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Failed',
-                builder: _matome_widgetbook_widgetbook.appCardFailedUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Pending upload',
-                builder:
-                    _matome_widgetbook_widgetbook.appCardPendingUploadUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Processing',
-                builder: _matome_widgetbook_widgetbook.appCardProcessingUseCase,
               ),
             ],
           ),
@@ -148,53 +92,402 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
-        name: 'Details',
+        name: 'Design system',
         children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'AudioPlayerBar',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Player — playing (12:04)',
-                builder:
-                    _matome_widgetbook_widgetbook.audioPlayerBarPlayingUseCase,
+          _widgetbook.WidgetbookFolder(
+            name: 'Auth',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'AppTextField',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Fields + submit',
+                    builder: _matome_widgetbook_widgetbook.authFieldsUseCase,
+                  ),
+                ],
               ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Player — unavailable',
-                builder: _matome_widgetbook_widgetbook
-                    .audioPlayerBarUnavailableUseCase,
+              _widgetbook.WidgetbookComponent(
+                name: 'AuthErrorBanner',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Error + loading',
+                    builder: _matome_widgetbook_widgetbook.authFeedbackUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'AuthField',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Field (labeled + obscured)',
+                    builder: _matome_widgetbook_widgetbook.authFieldUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'AuthSubmitButton',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Submit button (idle · loading · disabled)',
+                    builder:
+                        _matome_widgetbook_widgetbook.authSubmitButtonUseCase,
+                  ),
+                ],
               ),
             ],
           ),
-          _widgetbook.WidgetbookComponent(
-            name: 'FileActionsMenu',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'File overflow menu (delete-only)',
-                builder:
-                    _matome_widgetbook_widgetbook.detailsFileActionsMenuUseCase,
+          _widgetbook.WidgetbookFolder(
+            name: 'Avatars',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'Avatar',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Icon + initials',
+                    builder: _matome_widgetbook_widgetbook.avatarsUseCase,
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Feedback',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'EmptyState',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Centered message',
-                builder: _matome_widgetbook_widgetbook.emptyStateUseCase,
+          _widgetbook.WidgetbookFolder(
+            name: 'Buttons',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'AppTextButton',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Text actions',
+                    builder:
+                        _matome_widgetbook_widgetbook.appTextButtonsUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'PrimaryButton',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Primary states',
+                    builder:
+                        _matome_widgetbook_widgetbook.primaryButtonsUseCase,
+                  ),
+                ],
               ),
             ],
           ),
-          _widgetbook.WidgetbookComponent(
-            name: 'LoadingIndicator',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Spinner sizes',
-                builder: _matome_widgetbook_widgetbook.loadingIndicatorUseCase,
+          _widgetbook.WidgetbookFolder(
+            name: 'Cards',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'AppCard',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Calendar row',
+                    builder:
+                        _matome_widgetbook_widgetbook.appCardCalendarUseCase,
+                  ),
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Done',
+                    builder: _matome_widgetbook_widgetbook.appCardDoneUseCase,
+                  ),
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Failed',
+                    builder: _matome_widgetbook_widgetbook.appCardFailedUseCase,
+                  ),
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Pending upload',
+                    builder: _matome_widgetbook_widgetbook
+                        .appCardPendingUploadUseCase,
+                  ),
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Processing',
+                    builder:
+                        _matome_widgetbook_widgetbook.appCardProcessingUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Details',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'AudioPlayerBar',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Player — playing (12:04)',
+                    builder: _matome_widgetbook_widgetbook
+                        .audioPlayerBarPlayingUseCase,
+                  ),
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Player — unavailable',
+                    builder: _matome_widgetbook_widgetbook
+                        .audioPlayerBarUnavailableUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'FileActionsMenu',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'File overflow menu (delete-only)',
+                    builder: _matome_widgetbook_widgetbook
+                        .detailsFileActionsMenuUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Feedback',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'EmptyState',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Centered message',
+                    builder: _matome_widgetbook_widgetbook.emptyStateUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'LoadingIndicator',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Spinner sizes',
+                    builder:
+                        _matome_widgetbook_widgetbook.loadingIndicatorUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'File view',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'FileTypeChip',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Document media header',
+                    builder: _matome_widgetbook_widgetbook.fileTypeChipUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Files chrome',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'FileActionsMenu',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Per-file overflow menu',
+                    builder: _matome_widgetbook_widgetbook
+                        .filesFileActionsMenuUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'FilesBulkBar',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Bulk bar (selection active)',
+                    builder: _matome_widgetbook_widgetbook.filesBulkBarUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'FilesEmptyState',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Empty state (no files)',
+                    builder:
+                        _matome_widgetbook_widgetbook.filesEmptyStateUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'FilesMutedDash',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Muted dash (absent value)',
+                    builder:
+                        _matome_widgetbook_widgetbook.filesMutedDashUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'FilesUndoBar',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Undo bar (after delete)',
+                    builder: _matome_widgetbook_widgetbook.filesUndoBarUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Inputs',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'AppTextField',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Labeled states',
+                    builder: _matome_widgetbook_widgetbook.appTextFieldsUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Matome',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'MatomeActionsMenu',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Matome overflow menu',
+                    builder:
+                        _matome_widgetbook_widgetbook.matomeActionsMenuUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'MatomeAddFab',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Add FAB',
+                    builder: _matome_widgetbook_widgetbook.matomeAddFabUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Overlays',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'AppBottomSheet',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Action list',
+                    builder:
+                        _matome_widgetbook_widgetbook.appBottomSheetUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'AppDialog',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Confirmation',
+                    builder: _matome_widgetbook_widgetbook.appDialogUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Panel atoms',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'MatomePanelAddRow',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Add row (accent affordance)',
+                    builder:
+                        _matome_widgetbook_widgetbook.matomePanelAddRowUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'MatomePanelRow',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Item row (icon + meta + sync chip)',
+                    builder:
+                        _matome_widgetbook_widgetbook.matomePanelRowUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'MatomePanelSection',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Section (label + divider)',
+                    builder:
+                        _matome_widgetbook_widgetbook.matomePanelSectionUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Relations',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'MatomeChip',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Matome chip (filled · Unfiled)',
+                    builder: _matome_widgetbook_widgetbook.matomeChipUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'PeopleCluster',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'People cluster (overlap · +N overflow)',
+                    builder: _matome_widgetbook_widgetbook.peopleClusterUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'RoleChip',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Role chip (organizer · speaker · attendee)',
+                    builder: _matome_widgetbook_widgetbook.roleChipUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'SpaceChip',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Space chip (outlined · Inbox)',
+                    builder: _matome_widgetbook_widgetbook.spaceChipUseCase,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookFolder(
+            name: 'Status',
+            children: [
+              _widgetbook.WidgetbookComponent(
+                name: 'MatomeSyncChip',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Sync chip',
+                    builder:
+                        _matome_widgetbook_widgetbook.matomeSyncChipUseCase,
+                  ),
+                ],
+              ),
+              _widgetbook.WidgetbookComponent(
+                name: 'StatusBadge',
+                useCases: [
+                  _widgetbook.WidgetbookUseCase(
+                    name: 'Sync states',
+                    builder: _matome_widgetbook_widgetbook.statusBadgesUseCase,
+                  ),
+                ],
               ),
             ],
           ),
@@ -203,15 +496,6 @@ final directories = <_widgetbook.WidgetbookNode>[
       _widgetbook.WidgetbookFolder(
         name: 'File view',
         children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'FileTypeChip',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Document media header',
-                builder: _matome_widgetbook_widgetbook.fileTypeChipUseCase,
-              ),
-            ],
-          ),
           _widgetbook.WidgetbookComponent(
             name: 'FileView',
             useCases: [
@@ -291,141 +575,18 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
-        name: 'Files chrome',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'FileActionsMenu',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Per-file overflow menu',
-                builder:
-                    _matome_widgetbook_widgetbook.filesFileActionsMenuUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'FilesBulkBar',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Bulk bar (selection active)',
-                builder: _matome_widgetbook_widgetbook.filesBulkBarUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'FilesEmptyState',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Empty state (no files)',
-                builder: _matome_widgetbook_widgetbook.filesEmptyStateUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'FilesMutedDash',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Muted dash (absent value)',
-                builder: _matome_widgetbook_widgetbook.filesMutedDashUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'FilesUndoBar',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Undo bar (after delete)',
-                builder: _matome_widgetbook_widgetbook.filesUndoBarUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Inputs',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'AppTextField',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Labeled states',
-                builder: _matome_widgetbook_widgetbook.appTextFieldsUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Matome',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomeActionsMenu',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Matome overflow menu',
-                builder: _matome_widgetbook_widgetbook.matomeActionsMenuUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomeAddFab',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Add FAB',
-                builder: _matome_widgetbook_widgetbook.matomeAddFabUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
         name: 'Matome detail',
         children: [
           _widgetbook.WidgetbookComponent(
-            name: 'MatomePanelSection',
+            name: 'MatomeDetailPanel',
             useCases: [
               _widgetbook.WidgetbookUseCase(
                 name: 'Detail panel — filed',
-                builder: _matome_widgetbook_matome_detail_panel_stories
-                    .detailPanelFiledUseCase,
+                builder: _matome_widgetbook_widgetbook.detailPanelFiledUseCase,
               ),
               _widgetbook.WidgetbookUseCase(
                 name: 'Detail panel — inbox',
-                builder: _matome_widgetbook_matome_detail_panel_stories
-                    .detailPanelInboxUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Matome panel',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomePanelAddRow',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Add row (accent affordance)',
-                builder: _matome_widgetbook_widgetbook.matomePanelAddRowUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomePanelRow',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Item row (icon + meta + sync chip)',
-                builder: _matome_widgetbook_widgetbook.matomePanelRowUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomePanelSection',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Section (label + divider)',
-                builder:
-                    _matome_widgetbook_widgetbook.matomePanelSectionUseCase,
+                builder: _matome_widgetbook_widgetbook.detailPanelInboxUseCase,
               ),
             ],
           ),
@@ -489,153 +650,6 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'Desktop sidebar — expanded',
                 builder:
                     _matome_widgetbook_widgetbook.desktopSidebarExpandedUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Overlays',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'AppBottomSheet',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Action list',
-                builder: _matome_widgetbook_widgetbook.appBottomSheetUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'AppDialog',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Confirmation',
-                builder: _matome_widgetbook_widgetbook.appDialogUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Relations',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomeChip',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Matome chip (filled · Unfiled)',
-                builder: _matome_widgetbook_widgetbook.matomeChipUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'PeopleCluster',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'People cluster (overlap · +N overflow)',
-                builder: _matome_widgetbook_widgetbook.peopleClusterUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'RoleChip',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Role chip (organizer · speaker · attendee)',
-                builder: _matome_widgetbook_widgetbook.roleChipUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'SpaceChip',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Space chip (outlined · Inbox)',
-                builder: _matome_widgetbook_widgetbook.spaceChipUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Status',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomeSyncChip',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Sync chip',
-                builder: _matome_widgetbook_widgetbook.matomeSyncChipUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'StatusBadge',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Sync states',
-                builder: _matome_widgetbook_widgetbook.statusBadgesUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-    ],
-  ),
-  _widgetbook.WidgetbookCategory(
-    name: 'Foundations',
-    children: [
-      _widgetbook.WidgetbookComponent(
-        name: 'AppTypography',
-        useCases: [
-          _widgetbook.WidgetbookUseCase(
-            name: 'Typography',
-            builder: _matome_widgetbook_foundations_stories.typographyUseCase,
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookComponent(
-        name: 'Icons',
-        useCases: [
-          _widgetbook.WidgetbookUseCase(
-            name: 'Icons',
-            builder: _matome_widgetbook_foundations_stories.iconsUseCase,
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookComponent(
-        name: 'MatomeColors',
-        useCases: [
-          _widgetbook.WidgetbookUseCase(
-            name: 'Colors',
-            builder: _matome_widgetbook_foundations_stories.colorsUseCase,
-          ),
-        ],
-      ),
-    ],
-  ),
-  _widgetbook.WidgetbookCategory(
-    name: 'Shared widgets',
-    children: [
-      _widgetbook.WidgetbookFolder(
-        name: 'Auth',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'AppTextField',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Fields + submit',
-                builder: _matome_widgetbook_widgetbook.authFieldsUseCase,
-              ),
-            ],
-          ),
-          _widgetbook.WidgetbookComponent(
-            name: 'AuthErrorBanner',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Error + loading',
-                builder: _matome_widgetbook_widgetbook.authFeedbackUseCase,
               ),
             ],
           ),

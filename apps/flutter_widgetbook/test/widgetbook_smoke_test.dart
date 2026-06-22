@@ -14,7 +14,8 @@ void main() {
   testWidgets('Avatar use case renders without runtime errors', (tester) async {
     await tester.pumpWidget(
       const MatomeWidgetbook(
-        initialRoute: '/?path=catalog%2Favatars%2Favatar%2Ficon-%2B-initials',
+        initialRoute:
+            '/?path=widgets%2Fdesign-system%2Favatars%2Favatar%2Ficon-%2B-initials',
       ),
     );
     await tester.pump();
