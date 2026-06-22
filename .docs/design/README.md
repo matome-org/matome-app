@@ -14,17 +14,24 @@ graduation task back to the owner-approved decision it implements.
 
 ## The proposals being graduated
 
-Source mocks live in `apps/flutter_widgetbook/lib/proposals/`. Each is a static,
-provider-free Widgetbook mockup that carries the production interaction model so
-the eventual host screen is a thin wiring layer over a real widget.
+> **[Proposals] → [Catalog] migration complete (#1470).** Every proposal mock
+> under `apps/flutter_widgetbook/lib/proposals/` has graduated into a real
+> widget and been deleted; the directory and the Widgetbook `[Proposals]`
+> section no longer exist. The "Graduated widget" column below now points at the
+> shipped widget each proposal became — there are no live source mocks left.
 
-| Decision record | Source proposal | Public widget(s) |
-| --- | --- | --- |
-| [DR-001 Matome table](./DR-001-matome-table.md) | `matome_table_proposal.dart` | `MatomeTable` |
-| [DR-002 Navigation](./DR-002-navigation.md) | `matome_nav_proposal.dart` | `MatomeBottomDock`, `MatomeSidebar` |
-| [DR-003 Files](./DR-003-files.md) | `matome_files_proposal.dart` | `FilesGrid`, `FilesTable` |
-| [DR-004 Contact detail](./DR-004-contact-detail.md) | `matome_contact_proposal.dart` | `ContactDetail` |
-| [DR-000 Convergence procedure](./DR-000-convergence-procedure.md) | (cross-cutting; #1458 precedent) | — |
+Each row was a static, provider-free Widgetbook mockup that carried the
+production interaction model so the host screen became a thin wiring layer over
+the now-shipped widget.
+
+| Decision record | Graduated widget(s) (was a `proposals/*` mock) |
+| --- | --- |
+| [DR-001 Matome table](./DR-001-matome-table.md) | `MatomeTable` (`apps/flutter/lib/features/matome/widgets/matome_table.dart`) |
+| [DR-002 Navigation](./DR-002-navigation.md) | `MatomeBottomDock`, `MatomeSidebar` (`apps/flutter/lib/features/shell/widgets/matome_nav.dart`) |
+| [DR-003 Files](./DR-003-files.md) | `FilesGrid`, `FilesTable` (`apps/flutter/lib/features/files/widgets/files_grid.dart`, `.../files_table.dart`) |
+| [DR-004 Contact detail](./DR-004-contact-detail.md) | `ContactDetail` (`apps/flutter/lib/features/contacts/widgets/contact_detail.dart`) |
+| [DR-005 Matome detail (letter + panel)](./DR-005-matome-detail-panel.md) | `MatomePanelSection`/`MatomePanelRow`/`MatomePanelAddRow` (`apps/flutter/lib/ui/matome_detail_panel.dart`); `_MatomeLetterCard` (`apps/flutter/lib/features/matome/matome_detail_screen.dart`); `MatomeActionsMenu` (`apps/flutter/lib/features/matome/matome_actions_menu.dart`) |
+| [DR-000 Convergence procedure](./DR-000-convergence-procedure.md) | (cross-cutting; #1458 precedent) — |
 
 ## The load-bearing decisions (read these first)
 
@@ -43,9 +50,11 @@ called out in full in the relevant records, summarised here:
    "Personal"), or both at once. They are NOT synonyms.
    See [DR-003](./DR-003-files.md).
 
-All four graduations follow the same convergence procedure — promote the real
+Every graduation followed the same convergence procedure — promote the real
 widget, repoint the use-case, verify green, then delete the mock in its own
-revertable commit. See [DR-000](./DR-000-convergence-procedure.md).
+revertable commit. The last mock (`matome_letter_proposal.dart`) and the empty
+`proposals/` directory were removed in #1470. See
+[DR-000](./DR-000-convergence-procedure.md).
 
 ## Shared atoms (where the chips live)
 
@@ -58,18 +67,20 @@ chip. This is owned by task #1460.
 
 ## Traceability table
 
-Every graduation task (#1459–#1468) → source proposal + region + the
-owner-approved decision it implements.
+Every graduation task (#1459–#1468) → the widget it graduated (the
+`proposals/*` mocks it came from are all deleted; this column now points at the
+shipped widget) + region + the owner-approved decision it implements.
 
-| Task | What it does | Source proposal | Region / view-model | Owner-approved decision implemented |
+| Task | What it does | Graduated widget (was a `proposals/*` mock) | Region / view-model | Owner-approved decision implemented |
 | --- | --- | --- | --- | --- |
-| **#1459** (this) | Decision-records + traceability | all 4 proposals | the records themselves | Capture rationale before any mock is deleted; record the convergence procedure |
-| **#1460** Shared atoms | Promote `MatomeChip` / `SpaceChip` / `RoleChip` / `PeopleCluster` to `lib/ui` | all 4 | the four chip/cluster widgets used across files + contact + nav | Separate atom per relation axis; reuse existing `MatomeSyncChip` + `StatusBadge` (no second sync chip) |
-| **#1461** Files data layer | `_File` → `FileRow` view-model + matome/space/people/sync fields | `matome_files_proposal.dart` | `_File` model (`unfiled`/`inInbox` getters; `matome`, `space`, `contacts`, `rollup`) | matome ≠ space ≠ people are three independent relations; Unfiled vs Inbox per-dimension absence |
-| **#1462** Core contact fields | Add identity fields to Core | `matome_contact_proposal.dart` | identity section: `email` / `phone` / `company` / `title` | These fields are PROPOSED; today only `displayName` + `notes` exist → Core must add them |
-| **#1463** Matome table graduation | Promote `MatomeTable` into the app | `matome_table_proposal.dart` | `MatomeTable` | Sortable columns, select-all + per-row select, bulk bar w/ confirm+undo, per-row menu, keyboard `x`-to-select, compact rows < 720dp |
-| **#1464** Contact detail graduation | Promote `ContactDetail` into the app | `matome_contact_proposal.dart` | `ContactDetail` | Header + identity + notes + three relationship sections (Matomes w/ `RoleChip`, Spaces, Files); responsive 2-col / stacked |
-| **#1465** Files graduation | Promote `FilesGrid` + `FilesTable` into the app | `matome_files_proposal.dart` | `FilesGrid`, `FilesTable` | Three independent indicators (`MatomeChip` filled, `SpaceChip` outlined, `PeopleCluster`, `MatomeSyncChip`); Unfiled/Inbox copy |
-| **#1466** Nav widgets graduation | Promote `MatomeBottomDock` + `MatomeSidebar` | `matome_nav_proposal.dart` | `MatomeBottomDock`, `MatomeSidebar` | Floating dock w/ active label pill; offset gold "Add" FAB (menu, not record-only); branded sidebar, soft-tint active (NO left-stripe); Satori hidden |
-| **#1467** Nav shell cutover | Wire the nav widgets into the shell | `matome_nav_proposal.dart` + `apps/flutter/lib/app/shell_scaffold.dart` | shell integration; the shell being replaced | Destinations + order: inbox · calendar · files · contacts · spaces; Satori excluded from visible list but kept in enum |
-| **#1468** Config view-prefs | Persist cards↔table / grid↔table toggles | `matome_table_proposal.dart` + `matome_files_proposal.dart` | the view toggles | Table is a user-selectable view alongside cards; grid↔table toggle for files (config toggle) |
+| **#1459** | Decision-records + traceability | (the records themselves) | the records themselves | Capture rationale before any mock is deleted; record the convergence procedure |
+| **#1460** Shared atoms | Promote `MatomeChip` / `SpaceChip` / `RoleChip` / `PeopleCluster` to `lib/ui` | `apps/flutter/lib/ui/matome_chip.dart`, `space_chip.dart`, `role_chip.dart`, `people_cluster.dart` | the four chip/cluster widgets used across files + contact + nav | Separate atom per relation axis; reuse existing `MatomeSyncChip` + `StatusBadge` (no second sync chip) |
+| **#1461** Files data layer | `_File` → `FileRow` view-model + matome/space/people/sync fields | `FileRow` view-model (in `apps/flutter/lib/features/files/`) | `FileRow` model (`unfiled`/`inInbox` getters; `matome`, `space`, `contacts`, `rollup`) | matome ≠ space ≠ people are three independent relations; Unfiled vs Inbox per-dimension absence |
+| **#1462** Core contact fields | Add identity fields to Core | Core contact identity fields (`apps/flutter/lib/core/db/tables.dart`) | identity section: `email` / `phone` / `company` / `title` | These fields were PROPOSED; Core added them alongside `displayName` + `notes` |
+| **#1463** Matome table graduation | Promote `MatomeTable` into the app | `MatomeTable` (`apps/flutter/lib/features/matome/widgets/matome_table.dart`) | `MatomeTable` | Sortable columns, select-all + per-row select, bulk bar w/ confirm+undo, per-row menu, keyboard `x`-to-select, compact rows < 720dp |
+| **#1464** Contact detail graduation | Promote `ContactDetail` into the app | `ContactDetail` (`apps/flutter/lib/features/contacts/widgets/contact_detail.dart`) | `ContactDetail` | Header + identity + notes + three relationship sections (Matomes w/ `RoleChip`, Spaces, Files); responsive 2-col / stacked |
+| **#1465** Files graduation | Promote `FilesGrid` + `FilesTable` into the app | `FilesGrid`, `FilesTable` (`apps/flutter/lib/features/files/widgets/files_grid.dart`, `.../files_table.dart`) | `FilesGrid`, `FilesTable` | Three independent indicators (`MatomeChip` filled, `SpaceChip` outlined, `PeopleCluster`, `MatomeSyncChip`); Unfiled/Inbox copy |
+| **#1466** Nav widgets graduation | Promote `MatomeBottomDock` + `MatomeSidebar` | `MatomeBottomDock`, `MatomeSidebar` (`apps/flutter/lib/features/shell/widgets/matome_nav.dart`) | `MatomeBottomDock`, `MatomeSidebar` | Floating dock w/ active label pill; offset gold "Add" FAB (menu, not record-only); branded sidebar, soft-tint active (NO left-stripe); Satori hidden |
+| **#1467** Nav shell cutover | Wire the nav widgets into the shell | `MatomeBottomDock`/`MatomeSidebar` wired in the shell (`apps/flutter/lib/features/shell/`) | shell integration; the shell being replaced | Destinations + order: inbox · calendar · files · contacts · spaces; Satori excluded from visible list but kept in enum |
+| **#1468** Config view-prefs | Persist cards↔table / grid↔table toggles | view-pref toggles on `MatomeTable` + `FilesGrid`/`FilesTable` | the view toggles | Table is a user-selectable view alongside cards; grid↔table toggle for files (config toggle) |
+| **#1470** [Proposals] teardown | Delete last mock + empty `proposals/`; repoint this table | (no widget — cleanup) | this README + `widgetbook.directories.g.dart` | [Proposals] → [Catalog] migration complete; every proposal mock has graduated, so the source-proposal references are repointed at the shipped widgets |
