@@ -95,6 +95,31 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'Contact detail',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'ContactDetail',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail — desktop',
+                builder:
+                    _matome_widgetbook_widgetbook.contactDetailDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail — mobile',
+                builder:
+                    _matome_widgetbook_widgetbook.contactDetailMobileUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail — sparse (minimal info)',
+                builder:
+                    _matome_widgetbook_widgetbook.contactDetailSparseUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Feedback',
         children: [
           _widgetbook.WidgetbookComponent(

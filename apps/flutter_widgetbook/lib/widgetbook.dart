@@ -6,6 +6,7 @@ import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
+import 'package:matome_flutter/features/contacts/widgets/contact_detail.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
@@ -446,6 +447,110 @@ Widget matomeTableCompactUseCase(BuildContext context) {
 Widget matomeTableEmptyUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 920, child: MatomeTable(rows: []));
 }
+
+// ─── Contact detail (#1464) ───────────────────────────────────────────────────
+//
+// CONVERGENCE (DR-000 / DR-004): these stories render the REAL, graduated
+// `ContactDetail` shipped in
+// `package:matome_flutter/features/contacts/widgets/contact_detail.dart` — the
+// same widget the `/contacts/:id` screen hosts. The proposal mock has been
+// deleted; there is no second implementation to drift from. Copy reads
+// `t.contacts.detail.*`, so the Localization addon swaps it between en / ja.
+
+@widgetbook.UseCase(
+  name: 'Detail — desktop',
+  type: ContactDetail,
+  path: '[Catalog]/Contact detail',
+)
+Widget contactDetailDesktopUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 920,
+    child: ContactDetail(contact: _contactDetailFull),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Detail — mobile',
+  type: ContactDetail,
+  path: '[Catalog]/Contact detail',
+)
+Widget contactDetailMobileUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 380,
+    child: ContactDetail(contact: _contactDetailFull),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Detail — sparse (minimal info)',
+  type: ContactDetail,
+  path: '[Catalog]/Contact detail',
+)
+Widget contactDetailSparseUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 920,
+    child: ContactDetail(contact: _contactDetailSparse),
+  );
+}
+
+/// Sample data for the graduated [ContactDetail] stories — mirrors the shared
+/// goldens' fixtures so the catalog and the regression baseline stay in lockstep.
+const _contactDetailFull = ContactDetailData(
+  id: 'c-full',
+  name: 'Ana Ribeiro',
+  avatarIndex: 2,
+  sync: ContactSyncState.synced,
+  company: 'Acme Inc.',
+  title: 'Product Lead',
+  email: 'ana.ribeiro@acme.com',
+  phone: '+55 11 99876-5432',
+  notes: 'Met at the Q2 offsite. Owns the billing roadmap; loops in Ken for '
+      'anything pricing-related. Prefers async updates.',
+  matomes: [
+    ContactMatomeRef(
+      id: 'm1',
+      title: 'Client X — weekly sync',
+      role: MatomeContactRole.organizer,
+      when: '2h',
+    ),
+    ContactMatomeRef(
+      id: 'm2',
+      title: 'Sales call — Acme',
+      role: MatomeContactRole.attendee,
+      when: '1d',
+    ),
+    ContactMatomeRef(
+      id: 'm3',
+      title: 'Roadmap review',
+      role: MatomeContactRole.speaker,
+      when: '3d',
+    ),
+  ],
+  spaces: ['Marketing', 'Sales'],
+  files: [
+    ContactFileRef(
+        id: 'f1', name: 'Q3 roadmap.pdf', kind: ContactFileKind.document),
+    ContactFileRef(
+        id: 'f2', name: 'Design sync.m4a', kind: ContactFileKind.audio),
+    ContactFileRef(
+        id: 'f3', name: 'whiteboard.jpg', kind: ContactFileKind.image),
+  ],
+);
+
+const _contactDetailSparse = ContactDetailData(
+  id: 'c-sparse',
+  name: 'Leo',
+  avatarIndex: 5,
+  sync: ContactSyncState.onDevice,
+  matomes: [
+    ContactMatomeRef(
+      id: 'm2',
+      title: 'Sales call — Acme',
+      role: MatomeContactRole.attendee,
+      when: '1d',
+    ),
+  ],
+);
 
 @widgetbook.UseCase(
   name: 'Audio — ready (transcript)',
