@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/config/feature_flags.dart';
 import '../core/providers.dart';
 import '../ui/file_detail_page.dart';
 import '../features/auth/login_screen.dart';
@@ -27,6 +28,7 @@ final _calendarKey = GlobalKey<NavigatorState>(debugLabel: 'calendar');
 final _spacesKey = GlobalKey<NavigatorState>(debugLabel: 'spaces');
 final _satoriKey = GlobalKey<NavigatorState>(debugLabel: 'satori');
 final _contactsKey = GlobalKey<NavigatorState>(debugLabel: 'contacts');
+final _filesKey = GlobalKey<NavigatorState>(debugLabel: 'files');
 
 /// Bridges Riverpod auth state into go_router's [GoRouter.refreshListenable]
 /// so the redirect re-runs whenever auth resolves.
@@ -130,15 +132,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       // Files section (DR-003 / #1465): the cross-matome, owner-scoped Files
-      // view (grid + table). Lives on the root navigator and is reachable by
-      // deep-link today; the nav-destination cutover is #1467, so it is NOT yet
-      // a shell tab. Allow-listed in the auth guard so an authed deep-link is
-      // not bounced to /inbox.
-      GoRoute(
-        path: '/files',
-        parentNavigatorKey: _rootKey,
-        builder: (context, state) => const FilesScreen(),
-      ),
+      // view (grid + table). Under the LEGACY shell it lives on the root
+      // navigator as a deep-link-only route (NOT a tab). Under
+      // [FeatureFlags.newNavShell] (#1467) `/files` is PROMOTED to a stateful
+      // shell branch below, so this root route is compiled out to avoid a
+      // duplicate `/files` GoRoute. Allow-listed in the auth guard so an authed
+      // deep-link is not bounced to /inbox.
+      if (!FeatureFlags.newNavShell)
+        GoRoute(
+          path: '/files',
+          parentNavigatorKey: _rootKey,
+          builder: (context, state) => const FilesScreen(),
+        ),
       // Single-recording details (#1378): the drill-DOWN route used from inside
       // the Matome hub to open ONE Item. Distinct from the legacy recording
       // deep-links, which now redirect UP to the parent matome — so this route
@@ -201,122 +206,143 @@ final routerProvider = Provider<GoRouter>((ref) {
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             ShellScaffold(navigationShell: navigationShell),
-        // Branches are gated by the same build-time flags as the shell's
-        // destinations (see [ShellTab]/[enabledTabs]); a disabled tab drops its
-        // whole branch here AND its destination there, so the StatefulShell
-        // indices stay aligned. Inbox is the fixed home and is always present.
+        // Branches are built from [shellBranches] — the SINGLE ordered list both
+        // this route tree and the active shell's destinations derive from, so
+        // `StatefulNavigationShell.currentIndex` / `goBranch(index)` always line
+        // up no matter which tabs the flags drop and regardless of the new-shell
+        // reorder. Each tab maps to its branch via [_branchFor]; a tab that is
+        // not enabled (e.g. Satori under [FeatureFlags.newNavShell], whose route
+        // is therefore COMPILED OUT and unreachable) never reaches this list.
+        // Inbox is the fixed home and is always present.
         branches: [
-          if (ShellTab.inbox.enabled)
-            StatefulShellBranch(
-            navigatorKey: _inboxKey,
-            routes: [
-              GoRoute(
-                path: '/inbox',
-                builder: (context, state) => const HomeScreen(),
-                routes: [
-                  GoRoute(
-                    path: 'settings',
-                    builder: (context, state) => const SettingsScreen(),
-                  ),
-                  GoRoute(
-                    // LEGACY recording deep-link → parent matome (#1378).
-                    path: ':id',
-                    redirect: (context, state) => _redirectRecordingToMatome(
-                      ref,
-                      state.pathParameters['id'],
-                    ),
-                    builder: (context, state) => RecordingDetailScreen(
-                      id: state.pathParameters['id']!,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (ShellTab.calendar.enabled)
-            StatefulShellBranch(
-            navigatorKey: _calendarKey,
-            routes: [
-              GoRoute(
-                path: '/calendar',
-                builder: (context, state) => const CalendarScreen(),
-                routes: [
-                  GoRoute(
-                    // LEGACY recording deep-link → parent matome (#1378).
-                    path: ':id',
-                    redirect: (context, state) => _redirectRecordingToMatome(
-                      ref,
-                      state.pathParameters['id'],
-                    ),
-                    builder: (context, state) => RecordingDetailScreen(
-                      id: state.pathParameters['id']!,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (ShellTab.spaces.enabled)
-            StatefulShellBranch(
-            navigatorKey: _spacesKey,
-            routes: [
-              GoRoute(
-                path: '/spaces',
-                builder: (context, state) => const SpacesScreen(),
-                routes: [
-                  GoRoute(
-                    // LEGACY recording-in-a-space deep-link → parent matome.
-                    path: 'recording/:id',
-                    redirect: (context, state) => _redirectRecordingToMatome(
-                      ref,
-                      state.pathParameters['id'],
-                    ),
-                    builder: (context, state) => SpaceRecordingScreen(
-                      id: state.pathParameters['id']!,
-                    ),
-                  ),
-                  GoRoute(
-                    path: ':spaceId',
-                    builder: (context, state) => SpaceDetailScreen(
-                      spaceId: state.pathParameters['spaceId']!,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (ShellTab.satori.enabled)
-            StatefulShellBranch(
-            navigatorKey: _satoriKey,
-            routes: [
-              GoRoute(
-                path: '/satori',
-                builder: (context, state) => const SatoriScreen(),
-              ),
-            ],
-          ),
-          if (ShellTab.contacts.enabled)
-            StatefulShellBranch(
-            navigatorKey: _contactsKey,
-            routes: [
-              GoRoute(
-                path: '/contacts',
-                builder: (context, state) => const ContactsScreen(),
-                routes: [
-                  // Contact detail (DR-004, #1464): the graduated ContactDetail
-                  // hosted at `/contacts/:id`, pushed from the list.
-                  GoRoute(
-                    path: ':id',
-                    builder: (context, state) => ContactDetailScreen(
-                      id: state.pathParameters['id']!,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          for (final tab in shellBranches) _branchFor(ref, tab),
         ],
       ),
     ],
   );
 });
+
+/// Maps a [ShellTab] to its [StatefulShellBranch] (route subtree). Driven from
+/// [shellBranches] so the branch order matches the active shell's destination
+/// order exactly — the indexed-stack indices the shell navigates with stay
+/// aligned with the routes here under BOTH [FeatureFlags.newNavShell] states.
+StatefulShellBranch _branchFor(Ref ref, ShellTab tab) {
+  return switch (tab) {
+    ShellTab.inbox => StatefulShellBranch(
+        navigatorKey: _inboxKey,
+        routes: [
+          GoRoute(
+            path: '/inbox',
+            builder: (context, state) => const HomeScreen(),
+            routes: [
+              GoRoute(
+                path: 'settings',
+                builder: (context, state) => const SettingsScreen(),
+              ),
+              GoRoute(
+                // LEGACY recording deep-link → parent matome (#1378).
+                path: ':id',
+                redirect: (context, state) => _redirectRecordingToMatome(
+                  ref,
+                  state.pathParameters['id'],
+                ),
+                builder: (context, state) => RecordingDetailScreen(
+                  id: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ShellTab.calendar => StatefulShellBranch(
+        navigatorKey: _calendarKey,
+        routes: [
+          GoRoute(
+            path: '/calendar',
+            builder: (context, state) => const CalendarScreen(),
+            routes: [
+              GoRoute(
+                // LEGACY recording deep-link → parent matome (#1378).
+                path: ':id',
+                redirect: (context, state) => _redirectRecordingToMatome(
+                  ref,
+                  state.pathParameters['id'],
+                ),
+                builder: (context, state) => RecordingDetailScreen(
+                  id: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ShellTab.spaces => StatefulShellBranch(
+        navigatorKey: _spacesKey,
+        routes: [
+          GoRoute(
+            path: '/spaces',
+            builder: (context, state) => const SpacesScreen(),
+            routes: [
+              GoRoute(
+                // LEGACY recording-in-a-space deep-link → parent matome.
+                path: 'recording/:id',
+                redirect: (context, state) => _redirectRecordingToMatome(
+                  ref,
+                  state.pathParameters['id'],
+                ),
+                builder: (context, state) => SpaceRecordingScreen(
+                  id: state.pathParameters['id']!,
+                ),
+              ),
+              GoRoute(
+                path: ':spaceId',
+                builder: (context, state) => SpaceDetailScreen(
+                  spaceId: state.pathParameters['spaceId']!,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ShellTab.satori => StatefulShellBranch(
+        navigatorKey: _satoriKey,
+        routes: [
+          GoRoute(
+            path: '/satori',
+            builder: (context, state) => const SatoriScreen(),
+          ),
+        ],
+      ),
+    ShellTab.contacts => StatefulShellBranch(
+        navigatorKey: _contactsKey,
+        routes: [
+          GoRoute(
+            path: '/contacts',
+            builder: (context, state) => const ContactsScreen(),
+            routes: [
+              // Contact detail (DR-004, #1464): the graduated ContactDetail
+              // hosted at `/contacts/:id`, pushed from the list.
+              GoRoute(
+                path: ':id',
+                builder: (context, state) => ContactDetailScreen(
+                  id: state.pathParameters['id']!,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    // Files (DR-002/#1467): a shell branch only under newNavShell. Under the
+    // legacy shell `files` is never in [shellBranches], so this arm is unused
+    // and `/files` stays the root deep-link route above.
+    ShellTab.files => StatefulShellBranch(
+        navigatorKey: _filesKey,
+        routes: [
+          GoRoute(
+            path: '/files',
+            builder: (context, state) => const FilesScreen(),
+          ),
+        ],
+      ),
+  };
+}

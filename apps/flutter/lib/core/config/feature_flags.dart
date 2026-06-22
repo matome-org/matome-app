@@ -49,4 +49,19 @@ class FeatureFlags {
     'ff.documents',
     defaultValue: false,
   );
+
+  /// Graduated navigation shell (DR-002, #1467). Default OFF — the highest
+  /// regression surface in the migration. When OFF the shipped shell renders
+  /// unchanged (notched `BottomAppBar` + center-docked mic FAB on mobile,
+  /// Material `NavigationRail` on desktop). When ON the branded
+  /// [MatomeBottomDock] (mobile) / [MatomeSidebar] (desktop) drive navigation,
+  /// the destinations reorder to inbox · calendar · files · contacts · spaces,
+  /// the Satori ROUTE is compiled out (not merely hidden — its shell branch sits
+  /// behind a `const` `if (!newNavShell)`), and the `/files` destination becomes
+  /// a shell branch. Rollback is a single flag flip back to OFF (revert this
+  /// const / drop the `--dart-define`), no other code change.
+  static const bool newNavShell = bool.fromEnvironment(
+    'ff.newNavShell',
+    defaultValue: false,
+  );
 }

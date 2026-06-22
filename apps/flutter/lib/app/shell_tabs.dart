@@ -19,15 +19,22 @@ enum ShellTab {
   calendar,
   spaces,
   satori,
-  contacts;
+  contacts,
+  files;
 
   /// Build-time visibility. Inbox is never hidden (the app needs a home).
+  ///
+  /// [ShellTab.files] is the graduated-shell destination (DR-002, #1467) and is
+  /// ONLY a navigable shell branch under [FeatureFlags.newNavShell]; under the
+  /// legacy shell `/files` stays a root-level deep-link route, so `files` is not
+  /// "enabled" as a legacy tab.
   bool get enabled => switch (this) {
         ShellTab.inbox => true,
         ShellTab.calendar => FeatureFlags.calendar,
         ShellTab.spaces => FeatureFlags.spaces,
         ShellTab.satori => FeatureFlags.satori,
         ShellTab.contacts => FeatureFlags.contacts,
+        ShellTab.files => FeatureFlags.newNavShell,
       };
 
   /// The branch's root location (matches the GoRoute paths in `router.dart`).
@@ -37,6 +44,7 @@ enum ShellTab {
         ShellTab.spaces => '/spaces',
         ShellTab.satori => '/satori',
         ShellTab.contacts => '/contacts',
+        ShellTab.files => '/files',
       };
 
   IconData get icon => switch (this) {
@@ -45,6 +53,7 @@ enum ShellTab {
         ShellTab.spaces => Icons.folder_outlined,
         ShellTab.satori => Icons.auto_awesome_outlined,
         ShellTab.contacts => Icons.contacts_outlined,
+        ShellTab.files => Icons.description_outlined,
       };
 
   IconData get selectedIcon => switch (this) {
@@ -53,6 +62,7 @@ enum ShellTab {
         ShellTab.spaces => Icons.folder,
         ShellTab.satori => Icons.auto_awesome,
         ShellTab.contacts => Icons.contacts,
+        ShellTab.files => Icons.description,
       };
 
   String get label => switch (this) {
@@ -61,10 +71,38 @@ enum ShellTab {
         ShellTab.spaces => t.spaces.title,
         ShellTab.satori => t.satori.title,
         ShellTab.contacts => t.contacts.title,
+        ShellTab.files => t.files.title,
       };
 }
 
 /// The tabs enabled by the current build's [FeatureFlags], in canonical order.
-/// Drives both the router's shell branches and the shell's destinations.
-final List<ShellTab> enabledTabs =
-    ShellTab.values.where((t) => t.enabled).toList(growable: false);
+/// Drives the LEGACY shell's destinations (NavigationRail / bottom-bar).
+final List<ShellTab> enabledTabs = ShellTab.values
+    .where((t) => t.enabled && t != ShellTab.files)
+    .toList(growable: false);
+
+/// The single ordered list of shell branches the router AND the active shell
+/// build from, so `StatefulNavigationShell.currentIndex` / `goBranch(index)`
+/// always line up no matter which tabs the flags drop.
+///
+/// - [FeatureFlags.newNavShell] **OFF** → the shipped order
+///   (inbox · calendar · spaces · satori · contacts, flags applied). Identical
+///   to [enabledTabs], so the legacy shell is untouched.
+/// - **ON** → the DR-002 order (inbox · calendar · files · contacts · spaces),
+///   Satori EXCLUDED (its route is compiled out in `router.dart`) and `/files`
+///   promoted to a branch.
+///
+/// Inbox is always present (the app needs a home). The router gates each
+/// branch by the SAME predicate ([ShellTab.enabled]) so the branch list here
+/// and the route tree there stay aligned.
+List<ShellTab> get shellBranches {
+  if (!FeatureFlags.newNavShell) return enabledTabs;
+  const order = [
+    ShellTab.inbox,
+    ShellTab.calendar,
+    ShellTab.files,
+    ShellTab.contacts,
+    ShellTab.spaces,
+  ];
+  return order.where((t) => t.enabled).toList(growable: false);
+}

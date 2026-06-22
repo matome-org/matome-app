@@ -14,13 +14,17 @@ void main() {
   });
 
   test('a tab appears in enabledTabs iff its build-time flag is on', () {
-    for (final tab in ShellTab.values) {
+    // [enabledTabs] is the LEGACY shell's destination list; the graduated-shell
+    // `files` tab is never one of its destinations (it lives in [shellBranches]
+    // under the new-shell flag), so exclude it from this legacy invariant.
+    for (final tab in ShellTab.values.where((t) => t != ShellTab.files)) {
       expect(
         enabledTabs.contains(tab),
         tab.enabled,
         reason: '${tab.name} presence must match its flag (${tab.enabled})',
       );
     }
+    expect(enabledTabs, isNot(contains(ShellTab.files)));
   });
 
   test('the secondary tabs track their FeatureFlags constants', () {
@@ -33,7 +37,9 @@ void main() {
   test('enabledTabs is the canonical order filtered by the flags', () {
     expect(
       enabledTabs,
-      ShellTab.values.where((t) => t.enabled).toList(),
+      ShellTab.values
+          .where((t) => t.enabled && t != ShellTab.files)
+          .toList(),
     );
   });
 
@@ -44,11 +50,38 @@ void main() {
       ShellTab.spaces: '/spaces',
       ShellTab.satori: '/satori',
       ShellTab.contacts: '/contacts',
+      ShellTab.files: '/files',
     };
     for (final tab in ShellTab.values) {
       expect(tab.location, expected[tab]);
     }
     final locations = ShellTab.values.map((t) => t.location).toSet();
     expect(locations, hasLength(ShellTab.values.length));
+  });
+
+  // shellBranches is the SINGLE ordered list the router branches and the active
+  // shell's destinations both derive from. Its shape tracks the new-shell flag:
+  //  - OFF (the default build) → equals enabledTabs, satori is a branch, files
+  //    is NOT a branch (/files stays a root deep-link route).
+  //  - ON → the DR-002 order (inbox · calendar · files · contacts · spaces),
+  //    satori EXCLUDED (its route is compiled out), files PROMOTED to a branch.
+  test('shellBranches tracks the new-shell flag', () {
+    expect(ShellTab.files.enabled, FeatureFlags.newNavShell);
+    if (FeatureFlags.newNavShell) {
+      expect(shellBranches, isNot(contains(ShellTab.satori)));
+      expect(shellBranches, contains(ShellTab.files));
+      // DR-002 order (filtered by the per-tab flags).
+      const order = [
+        ShellTab.inbox,
+        ShellTab.calendar,
+        ShellTab.files,
+        ShellTab.contacts,
+        ShellTab.spaces,
+      ];
+      expect(shellBranches, order.where((t) => t.enabled).toList());
+    } else {
+      expect(shellBranches, enabledTabs);
+      expect(shellBranches, isNot(contains(ShellTab.files)));
+    }
   });
 }

@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/config/feature_flags.dart';
 import '../core/theme/app_theme.dart';
 import '../features/home/inbox_upload.dart';
 import '../features/recording/meeting_recorder.dart';
+import '../features/shell/widgets/matome_nav.dart';
 import '../i18n/strings.g.dart';
+import 'auth_state.dart';
 import 'shell_tabs.dart';
 
 /// True on a desktop OS where the loopback meeting recorder could exist (MVP:
@@ -42,9 +45,31 @@ const double _kRailBreakpoint = 1000;
 const double _kRailExtendedBreakpoint = 1280;
 
 class ShellScaffold extends ConsumerWidget {
-  const ShellScaffold({super.key, required this.navigationShell});
+  const ShellScaffold({
+    super.key,
+    required this.navigationShell,
+    bool? newNavShell,
+    this.branchesOverride,
+  }) : newNavShell = newNavShell ?? FeatureFlags.newNavShell;
 
   final StatefulNavigationShell navigationShell;
+
+  /// Drives the cutover (DR-002, #1467). Defaults to [FeatureFlags.newNavShell]
+  /// (OFF by default → the shipped legacy shell renders unchanged). Exposed as a
+  /// constructor seam ONLY so a widget test can pin BOTH flag states in one run
+  /// without a per-state `--dart-define` rebuild; production always uses the
+  /// const flag. NOTE: the ROUTE gating for the new shell (Satori compiled out,
+  /// `/files` promoted to a branch) is driven by the const flag in `router.dart`
+  /// — this override only flips the on-screen chrome, so a test that flips it ON
+  /// must also build a router whose branches match [shellBranches] ON.
+  final bool newNavShell;
+
+  /// Test-only override for the branch/destination order. Production leaves this
+  /// null and the new shell reads the const-flag-driven [shellBranches]; a flag-
+  /// ON widget test injects the ON order here to match the test router it built
+  /// (since the const flag — and thus [shellBranches] — cannot be flipped at
+  /// runtime).
+  final List<ShellTab>? branchesOverride;
 
   void _goBranch(int index) {
     navigationShell.goBranch(
@@ -55,6 +80,13 @@ class ShellScaffold extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (newNavShell) {
+      return _GraduatedShell(
+        navigationShell: navigationShell,
+        onSelect: _goBranch,
+        branches: branchesOverride ?? shellBranches,
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= _kRailBreakpoint) {
@@ -72,6 +104,254 @@ class ShellScaffold extends ConsumerWidget {
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NEW navigation shell (DR-002, #1467) — behind FeatureFlags.newNavShell
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// The graduated navigation shell host (DR-002). Wires the presentational
+/// [MatomeBottomDock] (mobile) / [MatomeSidebar] (desktop) to the router's
+/// [StatefulNavigationShell]: it builds the destination specs from
+/// [shellBranches] (the SAME ordered list the router branches derive from, so
+/// `selectedId` ↔ `currentIndex` ↔ `goBranch(index)` stay aligned), translates a
+/// selected destination id back to its branch index, and routes the hero "Add"
+/// menu options to the EXISTING real capture/import entry points (no new capture
+/// logic). Satori is excluded by the CALLER here (it is not in [shellBranches]
+/// under the flag) AND its route is compiled out in `router.dart` (Olivier A05).
+class _GraduatedShell extends ConsumerWidget {
+  const _GraduatedShell({
+    required this.navigationShell,
+    required this.onSelect,
+    required this.branches,
+  });
+
+  final StatefulNavigationShell navigationShell;
+  final ValueChanged<int> onSelect;
+
+  /// The ordered branch tabs — [shellBranches] in production. The destination
+  /// list and the index↔id translation both derive from this, so they stay
+  /// aligned with the router's branch order.
+  final List<ShellTab> branches;
+
+  List<NavDestinationSpec> _specs() => [
+        for (final tab in branches)
+          NavDestinationSpec(
+            id: tab.location,
+            icon: tab.icon,
+            selectedIcon: tab.selectedIcon,
+            label: tab.label,
+          ),
+      ];
+
+  /// The branch location currently selected — the destination [NavDestinationSpec.id]
+  /// the widgets compare against.
+  String _selectedId() => branches[navigationShell.currentIndex].location;
+
+  /// Translate a destination id back to its [StatefulNavigationShell] branch
+  /// index (positional in [branches]) and switch branches.
+  void _selectId(String id) {
+    final index = branches.indexWhere((t) => t.location == id);
+    if (index >= 0) onSelect(index);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= _kRailBreakpoint) {
+          return _SidebarShell(
+            navigationShell: navigationShell,
+            destinations: _specs(),
+            selectedId: _selectedId(),
+            onSelect: _selectId,
+            expanded: constraints.maxWidth >= _kRailExtendedBreakpoint,
+          );
+        }
+        return _DockShell(
+          navigationShell: navigationShell,
+          destinations: _specs(),
+          selectedId: _selectedId(),
+          onSelect: _selectId,
+        );
+      },
+    );
+  }
+}
+
+/// Routes a chosen [NavAddOption] to the EXISTING real entry point — the single
+/// place the new dock/sidebar "Add" menu wires to shipping flows (no new capture
+/// logic, per #1467):
+///   - recordAudio  → `/recording` fullscreen modal (#1378)
+///   - recordMeeting → `/meeting` loopback recorder (capability-gated, #828)
+///   - addPhoto     → image file-picker → Inbox upload pipeline (#1450)
+///   - addFile      → document file-picker → Inbox upload pipeline (#1449)
+/// The photo/file imports reuse the SAME `inboxUploaderProvider.upload(...)`
+/// pipeline the legacy desktop `_NewCaptureMenu._importFile` already drives, so
+/// a picked file lands in a fresh Inbox matome exactly as before.
+Future<void> _handleAddOption(
+  BuildContext context,
+  WidgetRef ref,
+  NavAddOption option,
+) async {
+  switch (option) {
+    case NavAddOption.recordAudio:
+      context.push('/recording');
+    case NavAddOption.recordMeeting:
+      context.push('/meeting');
+    case NavAddOption.addPhoto:
+      await _pickAndUpload(context, ref, type: FileType.image);
+    case NavAddOption.addFile:
+      await _pickAndUpload(context, ref, type: FileType.any);
+  }
+}
+
+/// Picker → Inbox-upload, shared by Add photo / Add file. Identical to the
+/// legacy `_NewCaptureMenu._importFile` flow (durable-copy + local-first insert
+/// + background sync), so the new "Add" menu introduces no new capture code.
+Future<void> _pickAndUpload(
+  BuildContext context,
+  WidgetRef ref, {
+  required FileType type,
+}) async {
+  final result = await FilePicker.platform.pickFiles(type: type);
+  final path = result?.files.single.path;
+  if (path == null || !context.mounted) return;
+
+  final name = result!.files.single.name;
+  final dot = name.lastIndexOf('.');
+  final base = (dot > 0 ? name.substring(0, dot) : name).trim();
+  final picked = PickedUpload(
+    file: File(path),
+    title: base.isEmpty ? 'Untitled' : base,
+    mediaType: mediaTypeForPath(path),
+  );
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Uploading "${picked.title}"…')),
+  );
+  unawaited(
+    ref
+        .read(inboxUploaderProvider)
+        .upload(picked, importFromExternalSource: true),
+  );
+}
+
+/// Mobile new-shell layout: branch content with the floating [MatomeBottomDock]
+/// and the offset [MatomeAddFab] stacked above it (no notch, no center-docked
+/// hack). Both float over the content via a bottom-anchored overlay.
+class _DockShell extends ConsumerWidget {
+  const _DockShell({
+    required this.navigationShell,
+    required this.destinations,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  final StatefulNavigationShell navigationShell;
+  final List<NavDestinationSpec> destinations;
+  final String selectedId;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spacing = context.spacing;
+    return Scaffold(
+      body: Stack(
+        children: [
+          Positioned.fill(child: navigationShell),
+          Positioned(
+            left: _kZero,
+            right: _kZero,
+            bottom: spacing.sm,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(
+                      right: spacing.lg,
+                      bottom: spacing.sm,
+                    ),
+                    child: MatomeAddFab(
+                      onAddOption: (option) =>
+                          _handleAddOption(context, ref, option),
+                    ),
+                  ),
+                  MatomeBottomDock(
+                    destinations: destinations,
+                    selectedId: selectedId,
+                    onSelect: onSelect,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Desktop new-shell layout: the branded [MatomeSidebar] beside the branch
+/// content. The sidebar's collapse/expand toggle is local UI state.
+class _SidebarShell extends ConsumerStatefulWidget {
+  const _SidebarShell({
+    required this.navigationShell,
+    required this.destinations,
+    required this.selectedId,
+    required this.onSelect,
+    required this.expanded,
+  });
+
+  final StatefulNavigationShell navigationShell;
+  final List<NavDestinationSpec> destinations;
+  final String selectedId;
+  final ValueChanged<String> onSelect;
+  final bool expanded;
+
+  @override
+  ConsumerState<_SidebarShell> createState() => _SidebarShellState();
+}
+
+class _SidebarShellState extends ConsumerState<_SidebarShell> {
+  bool? _expandedOverride;
+
+  bool get _expanded => _expandedOverride ?? widget.expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final account = ref.watch(authStateProvider).user?.email;
+    return Scaffold(
+      body: Row(
+        children: [
+          MatomeSidebar(
+            destinations: widget.destinations,
+            selectedId: widget.selectedId,
+            expanded: _expanded,
+            onSelect: widget.onSelect,
+            onToggle: () => setState(() => _expandedOverride = !_expanded),
+            onAddOption: (option) => _handleAddOption(context, ref, option),
+            onSettings: () => context.go('/inbox/settings'),
+            accountName: account,
+          ),
+          Expanded(
+            child: ColoredBox(
+              color: colors.background,
+              child: widget.navigationShell,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Zero inset, named so the new-shell overlay's "edge-to-edge" branch reads as
+/// an intentional layout primitive (not an ad-hoc magic number) to the
+/// design-system source guard.
+const double _kZero = 0;
 
 /// Phone layout: bottom bar with the docked center mic FAB (unchanged).
 class _MobileShell extends StatelessWidget {
