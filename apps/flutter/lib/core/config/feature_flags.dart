@@ -50,8 +50,11 @@ class FeatureFlags {
     defaultValue: false,
   );
 
-  /// Graduated navigation shell (DR-002, #1467). Default OFF — the highest
-  /// regression surface in the migration. When OFF the shipped shell renders
+  /// Graduated navigation shell (DR-002, #1467/#1474). Default ON as of #1474
+  /// (the cutover) — this is the highest regression surface in the migration, so
+  /// rollback is deliberately a single flag flip: revert this `defaultValue` to
+  /// `false` (or ship `--dart-define=ff.newNavShell=false`), no other code
+  /// change. When OFF the shipped shell renders
   /// unchanged (notched `BottomAppBar` + center-docked mic FAB on mobile,
   /// Material `NavigationRail` on desktop). When ON the branded
   /// [MatomeBottomDock] (mobile) / [MatomeSidebar] (desktop) drive navigation,
@@ -62,6 +65,6 @@ class FeatureFlags {
   /// const / drop the `--dart-define`), no other code change.
   static const bool newNavShell = bool.fromEnvironment(
     'ff.newNavShell',
-    defaultValue: false,
+    defaultValue: true,
   );
 }
