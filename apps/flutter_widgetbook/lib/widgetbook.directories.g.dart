@@ -10,6 +10,8 @@
 // **************************************************************************
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
+import 'package:matome_widgetbook/foundations_stories.dart'
+    as _matome_widgetbook_foundations_stories;
 import 'package:matome_widgetbook/matome_detail_panel_stories.dart'
     as _matome_widgetbook_matome_detail_panel_stories;
 import 'package:matome_widgetbook/widgetbook.dart'
@@ -440,6 +442,38 @@ final directories = <_widgetbook.WidgetbookNode>[
                 builder: _matome_widgetbook_widgetbook.statusBadgesUseCase,
               ),
             ],
+          ),
+        ],
+      ),
+    ],
+  ),
+  _widgetbook.WidgetbookCategory(
+    name: 'Foundations',
+    children: [
+      _widgetbook.WidgetbookComponent(
+        name: 'AppTypography',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Typography',
+            builder: _matome_widgetbook_foundations_stories.typographyUseCase,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'Icons',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Icons',
+            builder: _matome_widgetbook_foundations_stories.iconsUseCase,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'MatomeColors',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Colors',
+            builder: _matome_widgetbook_foundations_stories.colorsUseCase,
           ),
         ],
       ),
