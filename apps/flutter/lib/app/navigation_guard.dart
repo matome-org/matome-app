@@ -36,6 +36,10 @@ const _tabPrefixes = [
   '/satori',
   '/contacts',
   '/matome',
+  // The Files section (#1465) — an authenticated route reachable by deep-link
+  // today; the nav destination cutover is #1467. Allow-listed so an authed user
+  // landing on /files is not bounced to /inbox.
+  '/files',
 ];
 // Capture modals living above the shell on the root navigator: the mic
 // recorder (`/recording`) and the desktop meeting recorder (`/meeting`).

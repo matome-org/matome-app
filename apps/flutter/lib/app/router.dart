@@ -10,6 +10,7 @@ import '../features/auth/welcome_screen.dart';
 import '../features/calendar/calendar_screen.dart';
 import '../features/contacts/contact_detail_screen.dart';
 import '../features/details/file_detail_screen.dart';
+import '../features/files/files_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/matome/matome_detail_screen.dart';
 import 'auth_state.dart';
@@ -127,6 +128,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => MatomeDetailScreen(
           id: state.pathParameters['id']!,
         ),
+      ),
+      // Files section (DR-003 / #1465): the cross-matome, owner-scoped Files
+      // view (grid + table). Lives on the root navigator and is reachable by
+      // deep-link today; the nav-destination cutover is #1467, so it is NOT yet
+      // a shell tab. Allow-listed in the auth guard so an authed deep-link is
+      // not bounced to /inbox.
+      GoRoute(
+        path: '/files',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const FilesScreen(),
       ),
       // Single-recording details (#1378): the drill-DOWN route used from inside
       // the Matome hub to open ONE Item. Distinct from the legacy recording

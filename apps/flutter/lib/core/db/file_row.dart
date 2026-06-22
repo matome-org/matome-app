@@ -49,6 +49,7 @@ class FileRow {
     required this.id,
     required this.name,
     required this.kind,
+    required this.when,
     required this.whenSort,
     required this.rollup,
     this.ext,
@@ -76,6 +77,11 @@ class FileRow {
   /// Human size label (e.g. "2.4 MB"). **Null** today — size is not persisted
   /// anywhere yet (schema gap, #1461). The UI renders a dash.
   final String? sizeLabel;
+
+  /// Short relative display label for the "When" column / tile meta (e.g. "3h",
+  /// "2d", "now") — derived from `createdAt` so the widget stays presentational
+  /// and never touches the clock.
+  final String when;
 
   /// Sort key for "When" — the recording's `createdAt` (epoch ms), newest-first.
   final int whenSort;
@@ -112,6 +118,7 @@ class FileRow {
     String? matomeTitle,
     String? spaceName,
     List<String> contacts = const [],
+    DateTime? now,
   }) {
     final kind = fileKindFromMediaType(row.mediaType);
     return FileRow(
@@ -120,6 +127,7 @@ class FileRow {
       kind: kind,
       ext: row.originalExtension,
       sizeLabel: null, // schema gap (#1461): size is not persisted.
+      when: relativeWhen(row.createdAt, now: now),
       whenSort: row.createdAt,
       matome: matomeTitle,
       space: spaceName,
@@ -127,6 +135,21 @@ class FileRow {
       rollup: _rollupForRow(row),
       duration: kind == FileKind.audio ? row.duration : null,
     );
+  }
+
+  /// Short relative label for an epoch-ms timestamp ("now"/"3h"/"2d"/"5w").
+  /// Pure (and unit-testable) so the Files view-model carries a ready-to-render
+  /// "When" string and the presentational widgets never read the clock. Mirrors
+  /// the Inbox card's `formatTimestamp` buckets.
+  static String relativeWhen(int createdAtMs, {DateTime? now}) {
+    final when = DateTime.fromMillisecondsSinceEpoch(createdAtMs).toLocal();
+    final reference = now ?? DateTime.now();
+    final diff = reference.difference(when);
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    return '${diff.inDays ~/ 7}w';
   }
 
   /// Single-file sync rollup, using the SAME [RecordingItem.isOnCloud] rule the

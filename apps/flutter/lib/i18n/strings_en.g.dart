@@ -613,6 +613,90 @@ class Translations$files$en {
 
 	/// en: 'Unfiled'
 	String get unfiled => 'Unfiled';
+
+	/// en: 'Files'
+	String get title => 'Files';
+
+	/// en: 'Name'
+	String get colName => 'Name';
+
+	/// en: 'Matome'
+	String get colMatome => 'Matome';
+
+	/// en: 'Space'
+	String get colSpace => 'Space';
+
+	/// en: 'People'
+	String get colPeople => 'People';
+
+	/// en: 'When'
+	String get colWhen => 'When';
+
+	/// en: 'Size'
+	String get colSize => 'Size';
+
+	/// en: 'Sync'
+	String get colSync => 'Sync';
+
+	/// en: '$n selected'
+	String selected({required Object n}) => '${n} selected';
+
+	/// en: 'Move to matome'
+	String get moveToMatome => 'Move to matome';
+
+	/// en: 'Download'
+	String get download => 'Download';
+
+	/// en: 'Delete'
+	String get delete => 'Delete';
+
+	/// en: 'Clear'
+	String get clear => 'Clear';
+
+	/// en: 'Cancel'
+	String get cancel => 'Cancel';
+
+	/// en: 'Undo'
+	String get undo => 'Undo';
+
+	/// en: 'Open'
+	String get open => 'Open';
+
+	/// en: 'Sort'
+	String get sortBy => 'Sort';
+
+	/// en: 'Select file'
+	String get selectFile => 'Select file';
+
+	/// en: 'File actions'
+	String get fileActions => 'File actions';
+
+	/// en: '—'
+	String get noSize => '—';
+
+	/// en: 'Grid'
+	String get viewGrid => 'Grid';
+
+	/// en: 'Table'
+	String get viewTable => 'Table';
+
+	/// en: 'No files'
+	String get emptyTitle => 'No files';
+
+	/// en: 'Files you capture or import appear here, in or out of a matome.'
+	String get emptyBody => 'Files you capture or import appear here, in or out of a matome.';
+
+	/// en: 'Delete files?'
+	String get deleteTitle => 'Delete files?';
+
+	/// en: 'Delete $n file(s)? You can undo this.'
+	String deleteBody({required Object n}) => 'Delete ${n} file(s)? You can undo this.';
+
+	/// en: 'Deleted $n'
+	String deletedMsg({required Object n}) => 'Deleted ${n}';
+
+	/// en: 'Download isn't available yet'
+	String get downloadUnavailable => 'Download isn\'t available yet';
 }
 
 // Path: spaces
@@ -1509,6 +1593,34 @@ extension on Translations {
 			'matome.table.viewCards' => 'Cards',
 			'matome.table.viewTable' => 'Table',
 			'files.unfiled' => 'Unfiled',
+			'files.title' => 'Files',
+			'files.colName' => 'Name',
+			'files.colMatome' => 'Matome',
+			'files.colSpace' => 'Space',
+			'files.colPeople' => 'People',
+			'files.colWhen' => 'When',
+			'files.colSize' => 'Size',
+			'files.colSync' => 'Sync',
+			'files.selected' => ({required Object n}) => '${n} selected',
+			'files.moveToMatome' => 'Move to matome',
+			'files.download' => 'Download',
+			'files.delete' => 'Delete',
+			'files.clear' => 'Clear',
+			'files.cancel' => 'Cancel',
+			'files.undo' => 'Undo',
+			'files.open' => 'Open',
+			'files.sortBy' => 'Sort',
+			'files.selectFile' => 'Select file',
+			'files.fileActions' => 'File actions',
+			'files.noSize' => '—',
+			'files.viewGrid' => 'Grid',
+			'files.viewTable' => 'Table',
+			'files.emptyTitle' => 'No files',
+			'files.emptyBody' => 'Files you capture or import appear here, in or out of a matome.',
+			'files.deleteTitle' => 'Delete files?',
+			'files.deleteBody' => ({required Object n}) => 'Delete ${n} file(s)? You can undo this.',
+			'files.deletedMsg' => ({required Object n}) => 'Deleted ${n}',
+			'files.downloadUnavailable' => 'Download isn\'t available yet',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

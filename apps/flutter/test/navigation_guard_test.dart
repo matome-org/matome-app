@@ -56,6 +56,19 @@ void main() {
       }
     });
 
+    // The Files section (#1465) is an authenticated route reachable by
+    // deep-link; the guard must not bounce an authed user off /files.
+    test('authed on /files stays put', () {
+      for (final loc in ['/files', '/files/anything']) {
+        expect(
+          decideRedirect(
+              isAuthenticated: true, isLoading: false, location: loc),
+          isNull,
+          reason: loc,
+        );
+      }
+    });
+
     test('authed in nested tab stack stays put', () {
       expect(
         decideRedirect(

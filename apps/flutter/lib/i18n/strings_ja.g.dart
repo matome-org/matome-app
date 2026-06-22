@@ -310,6 +310,34 @@ class _Translations$files$ja extends Translations$files$en {
 
 	// Translations
 	@override String get unfiled => '未整理';
+	@override String get title => 'ファイル';
+	@override String get colName => '名前';
+	@override String get colMatome => 'まとめ';
+	@override String get colSpace => '保存先';
+	@override String get colPeople => '関係者';
+	@override String get colWhen => '日時';
+	@override String get colSize => 'サイズ';
+	@override String get colSync => '同期';
+	@override String selected({required Object n}) => '${n} 件選択中';
+	@override String get moveToMatome => 'まとめへ移動';
+	@override String get download => 'ダウンロード';
+	@override String get delete => '削除';
+	@override String get clear => '解除';
+	@override String get cancel => 'キャンセル';
+	@override String get undo => '元に戻す';
+	@override String get open => '開く';
+	@override String get sortBy => '並び替え';
+	@override String get selectFile => 'ファイルを選択';
+	@override String get fileActions => 'ファイルの操作';
+	@override String get noSize => '—';
+	@override String get viewGrid => 'グリッド';
+	@override String get viewTable => 'テーブル';
+	@override String get emptyTitle => 'ファイルがありません';
+	@override String get emptyBody => '取り込んだファイルは、まとめの有無に関わらずここに表示されます。';
+	@override String get deleteTitle => 'ファイルを削除しますか？';
+	@override String deleteBody({required Object n}) => '${n} 件のファイルを削除します。元に戻せます。';
+	@override String deletedMsg({required Object n}) => '${n} 件を削除しました';
+	@override String get downloadUnavailable => 'ダウンロードはまだ利用できません';
 }
 
 // Path: spaces
@@ -857,6 +885,34 @@ extension on TranslationsJa {
 			'matome.table.viewCards' => 'カード',
 			'matome.table.viewTable' => 'テーブル',
 			'files.unfiled' => '未整理',
+			'files.title' => 'ファイル',
+			'files.colName' => '名前',
+			'files.colMatome' => 'まとめ',
+			'files.colSpace' => '保存先',
+			'files.colPeople' => '関係者',
+			'files.colWhen' => '日時',
+			'files.colSize' => 'サイズ',
+			'files.colSync' => '同期',
+			'files.selected' => ({required Object n}) => '${n} 件選択中',
+			'files.moveToMatome' => 'まとめへ移動',
+			'files.download' => 'ダウンロード',
+			'files.delete' => '削除',
+			'files.clear' => '解除',
+			'files.cancel' => 'キャンセル',
+			'files.undo' => '元に戻す',
+			'files.open' => '開く',
+			'files.sortBy' => '並び替え',
+			'files.selectFile' => 'ファイルを選択',
+			'files.fileActions' => 'ファイルの操作',
+			'files.noSize' => '—',
+			'files.viewGrid' => 'グリッド',
+			'files.viewTable' => 'テーブル',
+			'files.emptyTitle' => 'ファイルがありません',
+			'files.emptyBody' => '取り込んだファイルは、まとめの有無に関わらずここに表示されます。',
+			'files.deleteTitle' => 'ファイルを削除しますか？',
+			'files.deleteBody' => ({required Object n}) => '${n} 件のファイルを削除します。元に戻せます。',
+			'files.deletedMsg' => ({required Object n}) => '${n} 件を削除しました',
+			'files.downloadUnavailable' => 'ダウンロードはまだ利用できません',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',
