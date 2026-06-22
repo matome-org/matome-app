@@ -39,6 +39,12 @@ defmodule MatomeApiWeb.Router do
       get "/recordings/search", RecordingController, :search
       get "/recordings/:id/download-url", RecordingController, :download_url
       post "/recordings/:id/process", RecordingController, :process
+      post "/recordings/:recording_id/contacts", RecordingController, :link_contact
+
+      delete "/recordings/:recording_id/contacts/:contact_id",
+             RecordingController,
+             :unlink_contact
+
       resources "/recordings", RecordingController, except: [:new, :edit]
 
       get "/matomes/search", MatomeController, :search

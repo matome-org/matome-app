@@ -3,7 +3,7 @@ defmodule MatomeApi.Content.Recording do
   import Ecto.Changeset
 
   alias MatomeApi.Auth.User
-  alias MatomeApi.Content.{Matome, Workspace}
+  alias MatomeApi.Content.{Matome, RecordingContact, Workspace}
 
   @statuses [:pending, :processing, :done, :failed]
 
@@ -31,6 +31,7 @@ defmodule MatomeApi.Content.Recording do
     belongs_to :owner, User
     belongs_to :workspace, Workspace
     belongs_to :matome, Matome
+    has_many :recording_contacts, RecordingContact
 
     timestamps(type: :utc_datetime)
   end

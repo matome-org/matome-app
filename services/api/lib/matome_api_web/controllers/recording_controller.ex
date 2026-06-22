@@ -130,6 +130,39 @@ defmodule MatomeApiWeb.RecordingController do
     end
   end
 
+  def link_contact(conn, %{"recording_id" => recording_id, "contact_id" => contact_id}) do
+    case Content.link_contact_to_recording(conn.assigns.current_user, recording_id, contact_id) do
+      nil ->
+        not_found(conn)
+
+      {:ok, _join} ->
+        case Content.list_contacts_for_recording(conn.assigns.current_user, recording_id) do
+          nil -> not_found(conn)
+          contacts -> conn |> put_status(:created) |> json(%{contacts: contacts_json(contacts)})
+        end
+
+      {:error, changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: errors_on(changeset)})
+    end
+  end
+
+  def unlink_contact(conn, %{"recording_id" => recording_id, "contact_id" => contact_id}) do
+    case Content.unlink_contact_from_recording(
+           conn.assigns.current_user,
+           recording_id,
+           contact_id
+         ) do
+      nil ->
+        not_found(conn)
+
+      {:ok, _join} ->
+        send_resp(conn, :no_content, "")
+
+      {:error, changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: errors_on(changeset)})
+    end
+  end
+
   def download_url(conn, %{"id" => id}) do
     with %{} = recording <- Content.get_recording(conn.assigns.current_user, id),
          {:ok, download} <- Presigner.presign_download(recording.storage_key) do
@@ -159,6 +192,21 @@ defmodule MatomeApiWeb.RecordingController do
       matome_id: recording.matome_id,
       inserted_at: recording.inserted_at,
       updated_at: recording.updated_at
+    }
+  end
+
+  defp contacts_json(contacts), do: Enum.map(contacts, &contact_json/1)
+
+  defp contact_json(contact) do
+    %{
+      id: contact.id,
+      owner_id: contact.owner_id,
+      display_name: contact.display_name,
+      email: contact.email,
+      phone: contact.phone,
+      company: contact.company,
+      title: contact.title,
+      linked_user_id: contact.linked_user_id
     }
   end
 

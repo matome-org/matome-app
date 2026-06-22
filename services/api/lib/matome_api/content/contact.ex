@@ -3,7 +3,7 @@ defmodule MatomeApi.Content.Contact do
   import Ecto.Changeset
 
   alias MatomeApi.Auth.User
-  alias MatomeApi.Content.MatomeContact
+  alias MatomeApi.Content.{MatomeContact, RecordingContact}
 
   # Bound every user-controlled string field (#1462, Olivier HIGH AC).
   @max_email 254
@@ -31,6 +31,7 @@ defmodule MatomeApi.Content.Contact do
     belongs_to :owner, User
     belongs_to :linked_user, User
     has_many :matome_contacts, MatomeContact
+    has_many :recording_contacts, RecordingContact
 
     timestamps(type: :utc_datetime)
   end
@@ -70,7 +71,9 @@ defmodule MatomeApi.Content.Contact do
         changeset
         |> put_change(:phone, normalized)
         |> validate_length(:phone, max: @max_phone)
-        |> validate_format(:phone, @phone_normalized_format, message: "is not a valid phone number")
+        |> validate_format(:phone, @phone_normalized_format,
+          message: "is not a valid phone number"
+        )
     end
   end
 end

@@ -241,6 +241,42 @@ defmodule MatomeApiWeb.RecordingControllerTest do
     assert length(search["recordings"]) == 1
   end
 
+  test "link and unlink a contact directly to a recording over the API", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+    %{conn: other_conn} = register_conn(build_conn())
+
+    recording =
+      post(owner_conn, ~p"/api/recordings", %{title: "Kickoff"})
+      |> json_response(201)
+      |> get_in(["recording"])
+
+    contact =
+      post(owner_conn, ~p"/api/contacts", %{display_name: "Alice"})
+      |> json_response(201)
+      |> get_in(["contact"])
+
+    linked =
+      post(owner_conn, ~p"/api/recordings/#{recording["id"]}/contacts", %{
+        contact_id: contact["id"]
+      })
+      |> json_response(201)
+
+    assert [%{"id" => cid, "display_name" => "Alice"}] = linked["contacts"]
+    assert cid == contact["id"]
+
+    # cross-owner cannot link to this recording (404, not silently applied)
+    assert post(other_conn, ~p"/api/recordings/#{recording["id"]}/contacts", %{
+             contact_id: contact["id"]
+           })
+           |> json_response(404)
+
+    assert delete(
+             owner_conn,
+             ~p"/api/recordings/#{recording["id"]}/contacts/#{contact["id"]}"
+           )
+           |> response(204) == ""
+  end
+
   defp register_conn(conn) do
     email = "user-#{System.unique_integer([:positive])}@example.com"
     register_conn = post(conn, ~p"/api/auth/register", %{email: email, password: @password})

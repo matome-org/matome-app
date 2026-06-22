@@ -4,7 +4,16 @@ defmodule MatomeApi.Content do
   alias Ecto.Changeset
   alias MatomeApi.AIEngine.DispatchJob
   alias MatomeApi.Auth.User
-  alias MatomeApi.Content.{Contact, Matome, MatomeContact, Recording, Workspace}
+
+  alias MatomeApi.Content.{
+    Contact,
+    Matome,
+    MatomeContact,
+    Recording,
+    RecordingContact,
+    Workspace
+  }
+
   alias MatomeApi.Repo
 
   def list_workspaces(%User{id: owner_id}, params \\ %{}) do
@@ -257,6 +266,81 @@ defmodule MatomeApi.Content do
          %MatomeContact{} = join <-
            Repo.get_by(MatomeContact, matome_id: matome.id, contact_id: contact.id) do
       Repo.delete(join)
+    end
+  end
+
+  ## Recording ↔ Contact (direct file↔contact edge, #1472)
+
+  @doc """
+  Link an owner-scoped contact directly to an owner-scoped recording (file).
+
+  SECURITY (Olivier): owner-scopes BOTH endpoints — the recording AND the
+  contact must each belong to the actor BEFORE the join is written. An
+  out-of-scope `recording_id` OR `contact_id` short-circuits the `with` and
+  returns `nil` (the caller maps that to 404), so a user can never attach to —
+  or, via the cross-owner read returning nothing, enumerate — another user's
+  recordings or contacts. Idempotent: a re-link of an existing pair is a no-op
+  upsert (the UNIQUE(recording_id, contact_id) target), mirroring
+  `attach_contact`.
+  """
+  def link_contact_to_recording(%User{} = owner, recording_id, contact_id) do
+    with %Recording{} = recording <- get_recording(owner, recording_id),
+         %Contact{} = contact <- get_contact(owner, contact_id) do
+      %RecordingContact{}
+      |> RecordingContact.changeset(%{
+        "recording_id" => recording.id,
+        "contact_id" => contact.id
+      })
+      |> Repo.insert(
+        on_conflict: {:replace, [:updated_at]},
+        conflict_target: [:recording_id, :contact_id]
+      )
+    end
+  end
+
+  @doc """
+  Remove a direct recording↔contact link. Owner-scopes BOTH endpoints (same
+  proof as `link_contact_to_recording`): an out-of-scope id returns `nil`.
+  """
+  def unlink_contact_from_recording(%User{} = owner, recording_id, contact_id) do
+    with %Recording{} = recording <- get_recording(owner, recording_id),
+         %Contact{} = contact <- get_contact(owner, contact_id),
+         %RecordingContact{} = join <-
+           Repo.get_by(RecordingContact, recording_id: recording.id, contact_id: contact.id) do
+      Repo.delete(join)
+    end
+  end
+
+  @doc """
+  The contacts linked DIRECTLY (via `recording_contacts`) to an owner-scoped
+  recording, display-name ascending. Owner-scoped on the recording: a
+  cross-owner read returns `nil` (the security proof — another user's links are
+  invisible).
+  """
+  def list_contacts_for_recording(%User{} = owner, recording_id) do
+    with %Recording{} = recording <- get_recording(owner, recording_id) do
+      Contact
+      |> join(:inner, [contact], rc in RecordingContact,
+        on: rc.contact_id == contact.id and rc.recording_id == ^recording.id
+      )
+      |> order_by([contact], asc: contact.display_name)
+      |> Repo.all()
+    end
+  end
+
+  @doc """
+  The recordings (files) linked DIRECTLY (via `recording_contacts`) to an
+  owner-scoped contact, newest first. Owner-scoped on the contact: a cross-owner
+  read returns `nil`.
+  """
+  def list_recordings_for_contact(%User{} = owner, contact_id) do
+    with %Contact{} = contact <- get_contact(owner, contact_id) do
+      Recording
+      |> join(:inner, [recording], rc in RecordingContact,
+        on: rc.recording_id == recording.id and rc.contact_id == ^contact.id
+      )
+      |> order_by([recording], desc: recording.inserted_at)
+      |> Repo.all()
     end
   end
 

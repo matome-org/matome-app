@@ -266,6 +266,72 @@ defmodule MatomeApi.ContentTest do
     assert Content.get_matome(owner, matome.id).matome_contacts == []
   end
 
+  test "link and unlink a contact directly to a recording, owner scoped both ways" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+
+    assert {:ok, recording} = Content.create_recording(owner, %{title: "Kickoff"})
+    assert {:ok, contact} = Content.create_contact(owner, %{display_name: "Alice"})
+    assert {:ok, other_recording} = Content.create_recording(other_owner, %{title: "Theirs"})
+    assert {:ok, other_contact} = Content.create_contact(other_owner, %{display_name: "Mallory"})
+
+    assert {:ok, join} = Content.link_contact_to_recording(owner, recording.id, contact.id)
+    assert join.recording_id == recording.id
+    assert join.contact_id == contact.id
+
+    # the direct edge is readable both ways for the owner
+    assert [%{id: cid}] = Content.list_contacts_for_recording(owner, recording.id)
+    assert cid == contact.id
+    assert [%{id: rid}] = Content.list_recordings_for_contact(owner, contact.id)
+    assert rid == recording.id
+
+    # idempotent: re-linking the same pair does not duplicate
+    assert {:ok, _} = Content.link_contact_to_recording(owner, recording.id, contact.id)
+    assert length(Content.list_contacts_for_recording(owner, recording.id)) == 1
+
+    # SECURITY (Olivier): linking requires BOTH endpoints owned by the actor.
+    # another owner's contact cannot be attached to my recording
+    assert Content.link_contact_to_recording(owner, recording.id, other_contact.id) == nil
+    # my contact cannot be attached to another owner's recording
+    assert Content.link_contact_to_recording(owner, other_recording.id, contact.id) == nil
+    # a cross-owner actor cannot link to my recording at all
+    assert Content.link_contact_to_recording(other_owner, recording.id, other_contact.id) == nil
+
+    # SECURITY: a cross-owner read returns nothing (the data-leak proof) — the
+    # owner's link is invisible to another user.
+    assert Content.list_contacts_for_recording(other_owner, recording.id) == nil
+    assert Content.list_recordings_for_contact(other_owner, contact.id) == nil
+
+    # the owner's edge is untouched by the rejected cross-owner attempts
+    assert length(Content.list_contacts_for_recording(owner, recording.id)) == 1
+
+    assert {:ok, _} = Content.unlink_contact_from_recording(owner, recording.id, contact.id)
+    assert Content.list_contacts_for_recording(owner, recording.id) == []
+    # a cross-owner unlink is rejected, not silently applied
+    assert Content.unlink_contact_from_recording(other_owner, recording.id, contact.id) == nil
+  end
+
+  test "the unique (recording, contact) index rejects a duplicate raw insert" do
+    owner = user_fixture()
+    assert {:ok, recording} = Content.create_recording(owner, %{title: "Sync"})
+    assert {:ok, contact} = Content.create_contact(owner, %{display_name: "Bob"})
+
+    attrs = %{"recording_id" => recording.id, "contact_id" => contact.id}
+
+    assert {:ok, _} =
+             %MatomeApi.Content.RecordingContact{}
+             |> MatomeApi.Content.RecordingContact.changeset(attrs)
+             |> MatomeApi.Repo.insert()
+
+    # a second raw insert of the same pair violates the UNIQUE index
+    assert {:error, changeset} =
+             %MatomeApi.Content.RecordingContact{}
+             |> MatomeApi.Content.RecordingContact.changeset(attrs)
+             |> MatomeApi.Repo.insert()
+
+    assert %{recording_id: [_ | _]} = errors_on(changeset)
+  end
+
   defp user_fixture do
     email = "user-#{System.unique_integer([:positive])}@example.com"
     assert {:ok, %{user: user}} = Auth.register_user(%{email: email, password: @password})
