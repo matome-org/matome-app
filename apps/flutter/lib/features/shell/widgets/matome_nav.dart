@@ -170,31 +170,36 @@ class MatomeBottomDock extends StatelessWidget {
     final spacing = context.spacing;
     final radius = context.radius;
 
-    return Material(
-      color: colors.surface,
-      elevation: context.elevation.level3,
-      shadowColor: colors.textPrimary,
-      borderRadius: BorderRadius.circular(radius.xl),
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: spacing.md),
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.xs,
-          vertical: spacing.xs,
-        ),
-        decoration: BoxDecoration(
+    // Single floating bar: the border lives on the Material's own shape (with
+    // the shadow), and the side-gap is OUTER padding. A bordered inner Container
+    // inset from the Material edge previously drew a second rounded rect — the
+    // "weird inner border".
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: spacing.md),
+      child: Material(
+        color: colors.surface,
+        elevation: context.elevation.level3,
+        shadowColor: colors.textPrimary,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radius.xl),
-          border: Border.all(color: colors.border),
+          side: BorderSide(color: colors.border),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            for (final dest in destinations)
-              _DockItem(
-                dest: dest,
-                active: dest.id == selectedId,
-                onTap: () => onSelect(dest.id),
-              ),
-          ],
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.xs,
+            vertical: spacing.xs,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final dest in destinations)
+                _DockItem(
+                  dest: dest,
+                  active: dest.id == selectedId,
+                  onTap: () => onSelect(dest.id),
+                ),
+            ],
+          ),
         ),
       ),
     );
