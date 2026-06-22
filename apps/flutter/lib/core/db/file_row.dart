@@ -35,14 +35,12 @@ FileKind fileKindFromMediaType(String mediaType) {
 ///   * [space]  == null  ⟺  **Inbox**   (no space relation)  — [inInbox].
 ///   * [contacts] empty   ⟺  nobody tagged.
 ///
-/// SCHEMA GAPS flagged at #1461 (mapped to what the schema can supply, degrading
-/// gracefully — see the spike comment):
-///   * **people are matome-mediated, not independent.** There is no per-file
-///     `recording_contacts` edge; contacts attach via `matome_contacts`. So
-///     [contacts] is the file's MATOME's tagged contacts when it has a matome,
-///     and EMPTY for an Unfiled file. The DR-003 "people tied to a file directly"
-///     relation does not exist in the schema yet.
-///   * people are matome-mediated (see above).
+/// PEOPLE (#1472 — the #1461 schema gap is now CLOSED): the per-file
+/// `recording_contacts` direct edge exists and is the SOURCE OF TRUTH. [contacts]
+/// is the UNION of the file's DIRECT contacts and its matome's tagged contacts
+/// (matome-mediated, #1461), de-duplicated by name (DR-003). An Unfiled file can
+/// now carry people via the direct edge; it is only EMPTY when nobody is linked
+/// either way. See `RecordingsDao.filesForOwner`.
 ///
 /// SIZE (#1471): the recording's byte size IS now persisted end-to-end — captured
 /// client-side at upload (`content_length`), stored in Core (`byte_size`) and
@@ -100,8 +98,9 @@ class FileRow {
   /// Space (`workspaces.name`); a loose file can still live in a space.
   final String? space;
 
-  /// people tagged on the file (contact display names). Matome-mediated today
-  /// (schema gap — see class doc): the file's matome's contacts, or empty.
+  /// people linked to the file (contact display names). UNION of the file's
+  /// DIRECT contacts (`recording_contacts`, #1472 — source of truth) and its
+  /// matome's tagged contacts, de-duplicated (see class doc); empty ⟺ nobody.
   final List<String> contacts;
 
   /// Sync rollup — reuses [MatomeSyncRollup] / [RecordingItem.isOnCloud].
@@ -118,8 +117,9 @@ class FileRow {
 
   /// Maps a persisted [RecordingRow] plus its resolved relation display values
   /// to the UI row. [matomeTitle] / [spaceName] come from the owner-scoped
-  /// query's joins (null when Unfiled / Inbox); [contacts] from the matome's
-  /// `matome_contacts` (empty when Unfiled).
+  /// query's joins (null when Unfiled / Inbox); [contacts] is the UNION of the
+  /// file's direct `recording_contacts` and its matome's `matome_contacts`
+  /// (#1472, DR-003) — empty only when nobody is linked either way.
   factory FileRow.fromRow(
     RecordingRow row, {
     String? matomeTitle,

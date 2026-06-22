@@ -157,4 +157,85 @@ void main() {
       expect(await dao.listFilesForContactViaMatomes('c1'), isEmpty);
     });
   });
+
+  group('recording_contacts — the DIRECT file↔contact edge (#1472)', () {
+    test('link/unlink/list both ways, idempotent add', () async {
+      await _seedContact(db, 'c1');
+      await _seedMatome(db, id: 'm1');
+      await _seedRecording(db, id: 'r1', matomeId: 'm1');
+
+      await dao.linkContactToRecording(recordingId: 'r1', contactId: 'c1');
+      // idempotent: re-link is a no-op (UNIQUE(recording_id, contact_id))
+      await dao.linkContactToRecording(recordingId: 'r1', contactId: 'c1');
+
+      expect((await dao.listContactsForFile('r1')).map((c) => c.id), ['c1']);
+      expect((await dao.listFilesForContact('c1')).map((r) => r.id), ['r1']);
+
+      final removed = await dao.unlinkContactFromRecording(
+          recordingId: 'r1', contactId: 'c1');
+      expect(removed, 1);
+      expect(await dao.listContactsForFile('r1'), isEmpty);
+      expect(await dao.listFilesForContact('c1'), isEmpty);
+    });
+
+    test('listFilesForContact returns only directly-linked files, newest first',
+        () async {
+      await _seedContact(db, 'c1');
+      await _seedMatome(db, id: 'm1');
+      await _seedRecording(db, id: 'r1', matomeId: 'm1', createdAt: 100);
+      await _seedRecording(db, id: 'r2', matomeId: 'm1', createdAt: 900);
+      await _seedRecording(db, id: 'rOther', matomeId: 'm1');
+
+      await dao.linkContactToRecording(recordingId: 'r1', contactId: 'c1');
+      await dao.linkContactToRecording(recordingId: 'r2', contactId: 'c1');
+
+      final result = await dao.listFilesForContact('c1');
+      expect(result.map((r) => r.id).toList(), ['r2', 'r1']);
+    });
+
+    test('deleteContact cascades the direct recording_contacts edges',
+        () async {
+      await _seedContact(db, 'c1');
+      await _seedMatome(db, id: 'm1');
+      await _seedRecording(db, id: 'r1', matomeId: 'm1');
+      await dao.linkContactToRecording(recordingId: 'r1', contactId: 'c1');
+
+      await dao.deleteContact('c1');
+      expect(await dao.listContactsForFile('r1'), isEmpty);
+    });
+  });
+
+  group('listFilesForContactUnion (direct ∪ matome-mediated, #1472)', () {
+    test('unions direct and matome-mediated files, de-duped by id, newest first',
+        () async {
+      await _seedContact(db, 'c1');
+      await _seedMatome(db, id: 'm1');
+      await dao.addContactToMatome(matomeId: 'm1', contactId: 'c1');
+      // via matome
+      await _seedRecording(db, id: 'rViaMatome', matomeId: 'm1', createdAt: 100);
+      // both direct AND via matome — must appear exactly once
+      await _seedRecording(db, id: 'rBoth', matomeId: 'm1', createdAt: 500);
+      await dao.linkContactToRecording(recordingId: 'rBoth', contactId: 'c1');
+      // direct only, on an Unfiled file (no matome) — proves direct surfaces it
+      await db.recordingsDao.insertRecording(
+        RecordingsCompanion.insert(
+          id: 'rDirectOnly',
+          title: 'Unfiled direct',
+          timestamp: '9:00 AM',
+          duration: '0:30',
+          audioFilePath: '/tmp/rDirectOnly.m4a',
+          createdAt: 900,
+        ),
+      );
+      await dao.linkContactToRecording(
+          recordingId: 'rDirectOnly', contactId: 'c1');
+
+      final ids = (await dao.listFilesForContactUnion('c1'))
+          .map((r) => r.id)
+          .toList();
+      // newest first; rBoth de-duplicated to a single entry
+      expect(ids, ['rDirectOnly', 'rBoth', 'rViaMatome']);
+      expect(ids.where((id) => id == 'rBoth').length, 1);
+    });
+  });
 }

@@ -42,6 +42,7 @@ part 'contacts_dao.g.dart';
     Matomes,
     Workspaces,
     Recordings,
+    RecordingContacts,
   ],
 )
 class ContactsDao extends DatabaseAccessor<AppDatabase>
@@ -105,6 +106,8 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
     return transaction(() async {
       await (delete(matomeContacts)..where((e) => e.contactId.equals(id))).go();
       await (delete(spaceContacts)..where((e) => e.contactId.equals(id))).go();
+      await (delete(recordingContacts)..where((e) => e.contactId.equals(id)))
+          .go();
       return (delete(contacts)..where((c) => c.id.equals(id))).go();
     });
   }
@@ -235,6 +238,73 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   }
 
   // ---------------------------------------------------------------------------
+  // recording_contacts — the DIRECT file↔contact edge (#1472).
+  //
+  // The source of truth for which contacts a file (recording) is about. Mirrors
+  // Core's `recording_contacts` and the matome/space edge DAOs above: add is
+  // idempotent (insertOrIgnore on UNIQUE(recording_id, contact_id)), removal is
+  // EXPLICIT-ONLY (set-merge rule). Owner-scoping is the CALLER's contract — as
+  // with every edge DAO here, callers pass ids of rows the session owner owns
+  // (the Files view + Contact detail only ever resolve owned ids); Core enforces
+  // both-endpoints owner-scoping server-side (Content.link_contact_to_recording).
+  // ---------------------------------------------------------------------------
+
+  /// Idempotently link [contactId] DIRECTLY to [recordingId]. UNIQUE
+  /// (recording_id, contact_id) makes a re-add a no-op (set-merge rule).
+  Future<void> linkContactToRecording({
+    required String recordingId,
+    required String contactId,
+    String? id,
+  }) {
+    return into(recordingContacts).insert(
+      RecordingContactsCompanion.insert(
+        id: id ?? _mintEdgeId('rc', recordingId, contactId),
+        recordingId: recordingId,
+        contactId: contactId,
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+
+  /// Remove a single (recording, contact) direct edge. EXPLICIT-ONLY removal.
+  /// Returns rows deleted.
+  Future<int> unlinkContactFromRecording({
+    required String recordingId,
+    required String contactId,
+  }) {
+    return (delete(recordingContacts)
+          ..where((e) =>
+              e.recordingId.equals(recordingId) &
+              e.contactId.equals(contactId)))
+        .go();
+  }
+
+  /// The Contacts linked DIRECTLY to [recordingId] (via `recording_contacts`),
+  /// display-name ascending.
+  Future<List<ContactRow>> listContactsForFile(String recordingId) {
+    final query = select(recordingContacts).join([
+      innerJoin(contacts, contacts.id.equalsExp(recordingContacts.contactId)),
+    ])
+      ..where(recordingContacts.recordingId.equals(recordingId))
+      ..orderBy([OrderingTerm.asc(contacts.displayName)]);
+    return query.map((row) => row.readTable(contacts)).get();
+  }
+
+  /// The Files (recordings) linked DIRECTLY to [contactId] (via
+  /// `recording_contacts`), newest first.
+  Future<List<RecordingRow>> listFilesForContact(String contactId) {
+    final query = select(recordingContacts).join([
+      innerJoin(
+        recordings,
+        recordings.id.equalsExp(recordingContacts.recordingId),
+      ),
+    ])
+      ..where(recordingContacts.contactId.equals(contactId))
+      ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
+    return query.map((row) => row.readTable(recordings)).get();
+  }
+
+  // ---------------------------------------------------------------------------
   // Contact-side relationship reads (DR-004 / #1464 — the Contact detail view).
   // These mirror the matome/space-side reads above, but from the CONTACT end.
   // ---------------------------------------------------------------------------
@@ -285,6 +355,32 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
           ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
         .get();
     return rows;
+  }
+
+  /// Files reachable from [contactId] — the DIRECT edge (`recording_contacts`,
+  /// #1472) UNIONed with the MATOME-MEDIATED set (`listFilesForContactViaMatomes`,
+  /// #1464), de-duplicated by recording id (direct wins on a tie), newest first.
+  ///
+  /// DR-003 decision: the direct edge is the source of truth, but the
+  /// matome-mediated set is kept as an additional UNION so a file the contact is
+  /// reachable from via its matome still surfaces. De-duplication by id means a
+  /// file linked BOTH directly and via its matome is counted exactly once (no
+  /// double-count). Returns newest-first.
+  Future<List<RecordingRow>> listFilesForContactUnion(String contactId) async {
+    final direct = await listFilesForContact(contactId);
+    final viaMatomes = await listFilesForContactViaMatomes(contactId);
+
+    final byId = <String, RecordingRow>{};
+    for (final row in direct) {
+      byId[row.id] = row;
+    }
+    for (final row in viaMatomes) {
+      byId.putIfAbsent(row.id, () => row);
+    }
+
+    final merged = byId.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return merged;
   }
 
   // ---------------------------------------------------------------------------

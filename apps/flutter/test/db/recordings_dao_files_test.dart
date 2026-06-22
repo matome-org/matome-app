@@ -238,8 +238,55 @@ void main() {
       expect(aud.kind, FileKind.audio);
       expect(aud.duration, '1:23');
       expect(aud.unfiled, isTrue);
-      expect(aud.contacts, isEmpty); // unfiled → no matome → no contacts
+      expect(aud.contacts, isEmpty); // unfiled, no direct link → no contacts
       expect(aud.rollup, MatomeSyncRollup.onDevice); // no coreId
+    });
+  });
+
+  group('filesForOwner — direct file↔contact edge in the people cluster (#1472)',
+      () {
+    test('people union direct + matome-mediated, de-duped; direct surfaces on '
+        'an Unfiled file', () async {
+      await db.matomesDao.create(_matome(id: 'm1', title: 'Q3'));
+      // Bob is tagged on the matome; Alice is linked DIRECTLY to the file; Carol
+      // is linked BOTH ways and must appear exactly once.
+      for (final c in ['alice', 'bob', 'carol']) {
+        await db.contactsDao.create(ContactsCompanion.insert(
+          id: c,
+          ownerId: _ownerA,
+          displayName: c[0].toUpperCase() + c.substring(1),
+          createdAt: 1000,
+        ));
+      }
+      await db.contactsDao.addContactToMatome(matomeId: 'm1', contactId: 'bob');
+      await db.contactsDao
+          .addContactToMatome(matomeId: 'm1', contactId: 'carol');
+
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'filed', ownerId: _ownerA, matomeId: 'm1'),
+      );
+      await db.contactsDao
+          .linkContactToRecording(recordingId: 'filed', contactId: 'alice');
+      await db.contactsDao
+          .linkContactToRecording(recordingId: 'filed', contactId: 'carol');
+
+      // an UNFILED file with a direct contact link — previously impossible.
+      await db.recordingsDao.insertRecording(
+        _recording(id: 'loose', ownerId: _ownerA, matomeId: null),
+      );
+      await db.contactsDao
+          .linkContactToRecording(recordingId: 'loose', contactId: 'alice');
+
+      final files = await db.recordingsDao.filesForOwner(_ownerA);
+      final filed = files.firstWhere((f) => f.id == 'filed');
+      final loose = files.firstWhere((f) => f.id == 'loose');
+
+      // direct (Alice, Carol) ∪ matome (Bob, Carol), Carol de-duplicated.
+      expect(filed.contacts.toSet(), {'Alice', 'Bob', 'Carol'});
+      expect(filed.contacts.where((n) => n == 'Carol').length, 1);
+      // the Unfiled file now shows its direct person.
+      expect(loose.contacts, ['Alice']);
+      expect(loose.unfiled, isTrue);
     });
   });
 }

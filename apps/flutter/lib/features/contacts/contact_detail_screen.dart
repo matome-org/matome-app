@@ -18,8 +18,10 @@ const double _kContactDetailMaxWidth = 920;
 
 /// Loads the full [ContactDetailData] for [contactId] from the local store: the
 /// contact row + its `matome_contacts` roles + `space_contacts` memberships +
-/// the files reachable via its matomes (MATOME-MEDIATED — there is no direct
-/// contact↔file edge, #1461). Returns null when the contact does not exist.
+/// its files. Files come from the DIRECT file↔contact edge (`recording_contacts`,
+/// #1472) UNIONed with the matome-mediated set (de-duplicated by id — DR-003);
+/// the direct edge is the source of truth. Returns null when the contact does
+/// not exist.
 final contactDetailProvider =
     FutureProvider.family<ContactDetailData?, String>((ref, contactId) async {
   final dao = ref.watch(contactsDaoProvider);
@@ -28,7 +30,7 @@ final contactDetailProvider =
 
   final matomeEntries = await dao.listMatomesForContact(contactId);
   final spaces = await dao.listSpacesForContact(contactId);
-  final files = await dao.listFilesForContactViaMatomes(contactId);
+  final files = await dao.listFilesForContactUnion(contactId);
 
   // The contact's index in the owner directory drives the avatar tint so it
   // matches the list tile's colour; fall back to a hash when not found.
@@ -94,8 +96,9 @@ class ContactDetailScreen extends ConsumerWidget {
   final String id;
 
   Future<void> _openMatomeFile(BuildContext context, String fileId) async {
-    // A file is a recording reachable via the contact's matomes. Route by its
-    // media type so a document/image never hits the audio-only detail host.
+    // A file is a recording linked to the contact (directly via
+    // `recording_contacts`, or via its matome). Route by its media type so a
+    // document/image never hits the audio-only detail host.
     final container = ProviderScope.containerOf(context, listen: false);
     final row =
         await container.read(recordingsDaoProvider).getRecordingById(fileId);

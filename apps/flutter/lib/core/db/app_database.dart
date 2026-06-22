@@ -122,7 +122,17 @@ part 'app_database.g.dart';
 /// view renders a real human size (`FileRow.formatBytes` → "2.4 MB"). Additive +
 /// nullable: Drift's ALTER ADD COLUMN backfills existing rows to NULL (legacy
 /// rows have no declared size), which the UI renders as a dash. No data migration.
-const int kSchemaVersion = 15;
+///
+/// v16 (m016, direct file↔contact edge — #1472) creates the `recording_contacts`
+/// join table (TEXT id PK, `recording_id`/`contact_id` FK-hint columns, UNIQUE
+/// (recording_id, contact_id)), mirroring Core's `recording_contacts`. This is
+/// the DIRECT file↔contact relation — before it, a file's "people" were
+/// matome-mediated only (DR-003). Additive (a brand-new table via
+/// `m.createTable`), so no data migration and nothing to backfill; existing rows
+/// are untouched. DOWN (documented, no automatic Drift downgrade): `DROP TABLE
+/// recording_contacts; PRAGMA user_version = 15;` — non-lossy, dropping only the
+/// new join.
+const int kSchemaVersion = 16;
 
 /// The offline-first local store.
 ///
@@ -142,6 +152,7 @@ const int kSchemaVersion = 15;
     MatomeContacts,
     SpaceContacts,
     MatomeShares,
+    RecordingContacts,
   ],
   daos: [
     RecordingsDao,
@@ -467,6 +478,22 @@ class AppDatabase extends _$AppDatabase {
           //   PRAGMA user_version = 14;
           if (from < 15) {
             await m.addColumn(recordings, recordings.byteSize);
+          }
+          // m016 — direct file↔contact edge (#1472). Creates the
+          // `recording_contacts` join table (mirrors Core's `recording_contacts`),
+          // the DIRECT file↔contact relation that replaces the matome-mediated-only
+          // people model (DR-003) as the source of truth. Additive — a brand-new
+          // table via `m.createTable`, so no data migration and existing rows are
+          // untouched. `createTable` always emits the CURRENT definition (TEXT id
+          // PK + UNIQUE(recording_id, contact_id)), so no `from >=` floor is needed:
+          // any DB reaching here from < 16 simply gains the table once.
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, non-lossy, drops only the new join):
+          //   DROP TABLE IF EXISTS recording_contacts;
+          //   PRAGMA user_version = 15;
+          if (from < 16) {
+            await m.createTable(recordingContacts);
           }
         },
         beforeOpen: (details) async {

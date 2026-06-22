@@ -52,6 +52,31 @@ The matome chip is **filled** and the space chip is **outlined** specifically so
 the two relationships read as **distinct categories at a glance** rather than as
 two instances of the same thing.
 
+### People data source — the DIRECT file↔contact edge (#1472)
+
+The **people** axis is a **first-class, direct relation**: a `recording_contacts`
+join (Core `recording_contacts`, Drift m016) links a contact DIRECTLY to a file.
+This is the **source of truth** for `PeopleCluster`.
+
+> Historical note: when the Files view first shipped (#1461), there was no
+> per-file contact edge, so people were **matome-mediated** — a file's "people"
+> were its *matome's* tagged contacts (`matome_contacts`), and a loose/Unfiled
+> file therefore showed no people at all. #1472 closed that gap by adding the
+> direct edge. The relation is no longer matome-mediated; do not reintroduce a
+> JOIN-through-matome as the primary source.
+
+**Resolution rule (decided, #1472):** `PeopleCluster` (grid + table) and the
+Contact detail "Files" section read the **direct edge UNIONed with the
+matome-mediated set, de-duplicated by contact / file id** (direct wins on a tie,
+so nothing double-counts). The direct edge is authoritative; the matome-mediated
+set is kept only as an additional union so a person reachable via the file's
+matome still surfaces. An Unfiled file (no matome) now correctly shows the people
+linked to it directly — previously impossible. See `RecordingsDao.filesForOwner`
+(people union per file) and `ContactsDao.listFilesForContactUnion` (Contact
+detail). Both endpoints are **owner-scoped** server-side
+(`MatomeApi.Content.link_contact_to_recording` verifies the file AND the contact
+belong to the actor before linking).
+
 ## LOAD-BEARING DECISION 2 — "Unfiled" vs "Inbox" are distinct per-dimension absences
 
 These are **NOT synonyms**. Each is the absence of a *different* relation:

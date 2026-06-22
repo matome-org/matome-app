@@ -147,7 +147,8 @@ void main() {
       expect(find.text('Sales'), findsOneWidget);
     });
 
-    testWidgets('renders the matome-mediated files', (tester) async {
+    testWidgets('renders the linked files (direct edge ∪ matome-mediated, #1472)',
+        (tester) async {
       await _pump(tester);
       expect(find.text('Q3 roadmap.pdf'), findsOneWidget);
       expect(find.text('Design sync.m4a'), findsOneWidget);

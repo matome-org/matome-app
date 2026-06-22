@@ -27,7 +27,14 @@ const int _kMsPerDay = 24 * 60 * 60 * 1000;
 /// Pure-Dart surface: no HTTP. The sync layer (Wave 3) decides when to pull
 /// from Core and writes through [upsertRecording].
 @DriftAccessor(
-  tables: [Recordings, Workspaces, Matomes, MatomeContacts, Contacts],
+  tables: [
+    Recordings,
+    Workspaces,
+    Matomes,
+    MatomeContacts,
+    Contacts,
+    RecordingContacts,
+  ],
 )
 class RecordingsDao extends DatabaseAccessor<AppDatabase>
     with _$RecordingsDaoMixin {
@@ -51,9 +58,11 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// populated on Core reconcile from the recording JSON's `owner_id`.
   ///
   /// The matome title (Unfiled when null) and Space name (Inbox when null) are
-  /// resolved by LEFT joins; per-file contacts are the file's MATOME's tagged
-  /// contacts (matome-mediated — schema gap flagged at #1461: there is no
-  /// per-file contact edge, so an Unfiled file has no contacts).
+  /// resolved by LEFT joins; per-file contacts are the UNION (#1472, DR-003) of
+  /// the file's DIRECT contacts (`recording_contacts` — the source of truth, and
+  /// the ONLY source for an Unfiled file) and its MATOME's tagged contacts
+  /// (matome-mediated, #1461), de-duplicated by name so a contact linked both
+  /// ways shows once. An Unfiled file with a direct link now shows that person.
   Future<List<FileRow>> filesForOwner(String ownerId) async {
     // (1) The owner-scoped rows, with matome + space names via LEFT joins. The
     // owner predicate is on `recordings.owner_id` itself so Unfiled/Inbox rows
@@ -92,17 +101,48 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
       }
     }
 
+    // (3) DIRECT per-file contacts (`recording_contacts`, #1472 — the source of
+    // truth). One join over `recording_contacts` → `contacts` for the recording
+    // ids on this page. Unlike the matome-mediated set, this also resolves
+    // contacts for Unfiled files (no matome).
+    final recordingIds =
+        rows.map((r) => r.readTable(recordings).id).toList(growable: false);
+    final contactsByRecording = <String, List<String>>{};
+    if (recordingIds.isNotEmpty) {
+      final directQuery = select(recordingContacts).join([
+        innerJoin(contacts, contacts.id.equalsExp(recordingContacts.contactId)),
+      ])
+        ..where(recordingContacts.recordingId.isIn(recordingIds))
+        ..orderBy([OrderingTerm.asc(contacts.displayName)]);
+      for (final row in await directQuery.get()) {
+        final rid = row.readTable(recordingContacts).recordingId;
+        final name = row.readTable(contacts).displayName;
+        (contactsByRecording[rid] ??= <String>[]).add(name);
+      }
+    }
+
     return rows.map((row) {
       final recording = row.readTable(recordings);
       final matome = row.readTableOrNull(matomes);
       final space = row.readTableOrNull(workspaces);
+      // UNION direct + matome-mediated names, de-duplicated (direct first) so a
+      // contact linked both ways is shown once. Order: direct names (display-name
+      // asc), then any matome-only names not already present.
+      final names = <String>[];
+      final seen = <String>{};
+      for (final n in contactsByRecording[recording.id] ?? const <String>[]) {
+        if (seen.add(n)) names.add(n);
+      }
+      if (matome != null) {
+        for (final n in contactsByMatome[matome.id] ?? const <String>[]) {
+          if (seen.add(n)) names.add(n);
+        }
+      }
       return FileRow.fromRow(
         recording,
         matomeTitle: matome?.title,
         spaceName: space?.name,
-        contacts: matome == null
-            ? const <String>[]
-            : (contactsByMatome[matome.id] ?? const <String>[]),
+        contacts: names,
       );
     }).toList(growable: false);
   }

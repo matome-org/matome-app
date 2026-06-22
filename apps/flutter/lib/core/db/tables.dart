@@ -405,6 +405,40 @@ class SpaceContacts extends Table {
       ];
 }
 
+/// Edge: a Contact linked DIRECTLY to a file (recording) — the direct
+/// file↔contact relation (#1472), mirroring Core's `recording_contacts`.
+///
+/// m016 (#1472). Before this, file↔contact was MATOME-MEDIATED only (DR-003):
+/// a file's "people" were its matome's tagged contacts. This table is the
+/// DIRECT edge — the source of truth for which contacts a file is about — and
+/// the Files people indicator + Contact detail Files now read it (UNIONed with
+/// the matome-mediated set, de-duplicated, so nothing double-counts; DR-003).
+///
+/// UNIQUE(recording_id, contact_id) makes the add idempotent (set-merge rule —
+/// a re-sync re-adding an existing edge is a no-op). Deletion-cascade is by
+/// EXPLICIT DAO deletes (see [MatomeContacts] doc — this drift build emits no
+/// REFERENCES DDL, so an on-disk FK cascade would silently not fire);
+/// `references(...)` is kept as a relation hint for query joins only.
+@DataClassName('RecordingContactRow')
+class RecordingContacts extends Table {
+  @override
+  String get tableName => 'recording_contacts';
+
+  TextColumn get id => text()();
+  TextColumn get recordingId =>
+      text().named('recording_id').references(Recordings, #id)();
+  TextColumn get contactId =>
+      text().named('contact_id').references(Contacts, #id)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+        {recordingId, contactId},
+      ];
+}
+
 /// Edge: a Matome shared with a user (ADR-0004 — `matome_shares`).
 ///
 /// m008, RESERVED — sharing BEHAVIOUR is deferred to the `matome-collaboration`
