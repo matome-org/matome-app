@@ -10,6 +10,8 @@
 // **************************************************************************
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
+import 'package:matome_widgetbook/matome_detail_panel_stories.dart'
+    as _matome_widgetbook_matome_detail_panel_stories;
 import 'package:matome_widgetbook/widgetbook.dart'
     as _matome_widgetbook_widgetbook;
 import 'package:widgetbook/widgetbook.dart' as _widgetbook;
@@ -233,6 +235,26 @@ final directories = <_widgetbook.WidgetbookNode>[
               _widgetbook.WidgetbookUseCase(
                 name: 'Labeled states',
                 builder: _matome_widgetbook_widgetbook.appTextFieldsUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Matome detail',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomePanelSection',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail panel — filed',
+                builder: _matome_widgetbook_matome_detail_panel_stories
+                    .detailPanelFiledUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Detail panel — inbox',
+                builder: _matome_widgetbook_matome_detail_panel_stories
+                    .detailPanelInboxUseCase,
               ),
             ],
           ),
