@@ -30,7 +30,6 @@ import 'package:matome_flutter/core/db/matome_card.dart' show MatomeSyncRollup;
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/ui/app_button.dart';
 import 'package:matome_flutter/ui/app_dialog.dart';
-import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
 
 // ─── Sample model ────────────────────────────────────────────────────────────
 
@@ -374,50 +373,6 @@ const double _wActions = 40;
 
 /// Below this the table folds into condensed rows (a phone-width fallback).
 const double _kCompactBreakpoint = 720;
-
-// ─── Use cases ───────────────────────────────────────────────────────────────
-
-@widgetbook.UseCase(
-  name: 'Table — desktop (sortable)',
-  type: MatomeTable,
-  path: '[Proposals]/Matome table',
-)
-Widget tableDesktopUseCase(BuildContext context) {
-  return _Surface(width: 920, child: MatomeTable(rows: _copyOf(context).rows));
-}
-
-@widgetbook.UseCase(
-  name: 'Table — selection + bulk bar',
-  type: MatomeTable,
-  path: '[Proposals]/Matome table',
-)
-Widget tableSelectionUseCase(BuildContext context) {
-  return _Surface(
-    width: 920,
-    child: MatomeTable(
-      rows: _copyOf(context).rows,
-      initialSelection: {'r1', 'r4'},
-    ),
-  );
-}
-
-@widgetbook.UseCase(
-  name: 'Table — compact (mobile)',
-  type: MatomeTable,
-  path: '[Proposals]/Matome table',
-)
-Widget tableCompactUseCase(BuildContext context) {
-  return _Surface(width: 380, child: MatomeTable(rows: _copyOf(context).rows));
-}
-
-@widgetbook.UseCase(
-  name: 'Table — empty',
-  type: MatomeTable,
-  path: '[Proposals]/Matome table',
-)
-Widget tableEmptyUseCase(BuildContext context) {
-  return const _Surface(width: 920, child: MatomeTable(rows: []));
-}
 
 // ─── The table ───────────────────────────────────────────────────────────────
 
@@ -1845,25 +1800,3 @@ class _EmptyRows extends StatelessWidget {
   }
 }
 
-// ─── Surface wrapper ─────────────────────────────────────────────────────────
-
-class _Surface extends StatelessWidget {
-  const _Surface({required this.child, this.width = 920});
-
-  final Widget child;
-  final double width;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: width),
-          child: child,
-        ),
-      ),
-    );
-  }
-}

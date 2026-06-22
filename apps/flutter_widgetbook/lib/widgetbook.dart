@@ -7,6 +7,7 @@ import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
+import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_bottom_sheet.dart';
@@ -395,6 +396,55 @@ Widget peopleClusterUseCase(BuildContext context) {
       ],
     ),
   );
+}
+
+// ─── Matome table (#1463) ─────────────────────────────────────────────────────
+//
+// CONVERGENCE (DR-000 / DR-001): these stories render the REAL, graduated
+// `MatomeTable` shipped in
+// `package:matome_flutter/features/matome/widgets/matome_table.dart` — the same
+// widget the live inbox renders. There is no proposal mock to drift from.
+
+@widgetbook.UseCase(
+  name: 'Table — desktop (sortable)',
+  type: MatomeTable,
+  path: '[Catalog]/Matome table',
+)
+Widget matomeTableDesktopUseCase(BuildContext context) {
+  return _UseCaseSurface(width: 920, child: MatomeTable(rows: _matomeTableRows));
+}
+
+@widgetbook.UseCase(
+  name: 'Table — selection + bulk bar',
+  type: MatomeTable,
+  path: '[Catalog]/Matome table',
+)
+Widget matomeTableSelectionUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 920,
+    child: MatomeTable(
+      rows: _matomeTableRows,
+      initialSelection: const {'r1', 'r4'},
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Table — compact (mobile)',
+  type: MatomeTable,
+  path: '[Catalog]/Matome table',
+)
+Widget matomeTableCompactUseCase(BuildContext context) {
+  return _UseCaseSurface(width: 380, child: MatomeTable(rows: _matomeTableRows));
+}
+
+@widgetbook.UseCase(
+  name: 'Table — empty',
+  type: MatomeTable,
+  path: '[Catalog]/Matome table',
+)
+Widget matomeTableEmptyUseCase(BuildContext context) {
+  return const _UseCaseSurface(width: 920, child: MatomeTable(rows: []));
 }
 
 @widgetbook.UseCase(
@@ -923,6 +973,78 @@ class _StatusBadgesSample extends StatelessWidget {
     );
   }
 }
+
+/// Sample rows for the graduated [MatomeTable] stories — the same fixture the
+/// shared goldens render so the catalog and the regression baseline stay in
+/// lockstep. (Copy is English; the table reads `t.matome.table.*`, so the
+/// Localization addon swaps column labels / chips between en and ja.)
+const _matomeTableRows = <MatomeTableRow>[
+  MatomeTableRow(
+    id: 'r1',
+    title: 'Client X — weekly sync',
+    summary: 'Q3 budget approved. Ken to draft the proposal before next week.',
+    when: '2h',
+    whenSort: 100,
+    audio: 2,
+    image: 1,
+    doc: 1,
+    people: 2,
+    space: 'Marketing',
+    rollup: MatomeSyncRollup.cloud,
+  ),
+  MatomeTableRow(
+    id: 'r2',
+    title: 'Design review',
+    summary: 'Walking through the new onboarding screens with the team.',
+    when: '4h',
+    whenSort: 90,
+    audio: 1,
+    image: 0,
+    doc: 0,
+    people: 1,
+    space: null,
+    rollup: MatomeSyncRollup.partial,
+  ),
+  MatomeTableRow(
+    id: 'r3',
+    title: 'Quick voice memo',
+    summary: '',
+    when: '5h',
+    whenSort: 80,
+    audio: 1,
+    image: 0,
+    doc: 0,
+    people: 0,
+    space: null,
+    rollup: MatomeSyncRollup.onDevice,
+  ),
+  MatomeTableRow(
+    id: 'r4',
+    title: 'Sales call — Acme',
+    summary: 'Deal slips to next quarter. Revisit the terms in the contract.',
+    when: '1d',
+    whenSort: 50,
+    audio: 1,
+    image: 0,
+    doc: 2,
+    people: 3,
+    space: 'Sales',
+    rollup: MatomeSyncRollup.cloud,
+  ),
+  MatomeTableRow(
+    id: 'r5',
+    title: 'Workshop notes',
+    summary: 'Roadmap prioritisation exercise with the whole product team.',
+    when: '1d',
+    whenSort: 49,
+    audio: 3,
+    image: 2,
+    doc: 0,
+    people: 4,
+    space: 'Product',
+    rollup: MatomeSyncRollup.partial,
+  ),
+];
 
 class _MatomeSyncChipSample extends StatelessWidget {
   const _MatomeSyncChipSample();

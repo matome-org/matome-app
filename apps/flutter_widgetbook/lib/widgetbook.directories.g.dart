@@ -18,8 +18,6 @@ import 'package:matome_widgetbook/proposals/matome_letter_proposal.dart'
     as _matome_widgetbook_proposals_matome_letter_proposal;
 import 'package:matome_widgetbook/proposals/matome_nav_proposal.dart'
     as _matome_widgetbook_proposals_matome_nav_proposal;
-import 'package:matome_widgetbook/proposals/matome_table_proposal.dart'
-    as _matome_widgetbook_proposals_matome_table_proposal;
 import 'package:matome_widgetbook/widgetbook.dart'
     as _matome_widgetbook_widgetbook;
 import 'package:widgetbook/widgetbook.dart' as _widgetbook;
@@ -220,6 +218,35 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'Section (label + divider)',
                 builder:
                     _matome_widgetbook_widgetbook.matomePanelSectionUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Matome table',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeTable',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — compact (mobile)',
+                builder:
+                    _matome_widgetbook_widgetbook.matomeTableCompactUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — desktop (sortable)',
+                builder:
+                    _matome_widgetbook_widgetbook.matomeTableDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — empty',
+                builder: _matome_widgetbook_widgetbook.matomeTableEmptyUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table — selection + bulk bar',
+                builder:
+                    _matome_widgetbook_widgetbook.matomeTableSelectionUseCase,
               ),
             ],
           ),
@@ -447,36 +474,6 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'List — grouped',
                 builder: _matome_widgetbook_proposals_matome_letter_proposal
                     .matomeListUseCase,
-              ),
-            ],
-          ),
-        ],
-      ),
-      _widgetbook.WidgetbookFolder(
-        name: 'Matome table',
-        children: [
-          _widgetbook.WidgetbookComponent(
-            name: 'MatomeTable',
-            useCases: [
-              _widgetbook.WidgetbookUseCase(
-                name: 'Table — compact (mobile)',
-                builder: _matome_widgetbook_proposals_matome_table_proposal
-                    .tableCompactUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Table — desktop (sortable)',
-                builder: _matome_widgetbook_proposals_matome_table_proposal
-                    .tableDesktopUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Table — empty',
-                builder: _matome_widgetbook_proposals_matome_table_proposal
-                    .tableEmptyUseCase,
-              ),
-              _widgetbook.WidgetbookUseCase(
-                name: 'Table — selection + bulk bar',
-                builder: _matome_widgetbook_proposals_matome_table_proposal
-                    .tableSelectionUseCase,
               ),
             ],
           ),
