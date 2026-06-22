@@ -26,9 +26,14 @@
   },
   "nav": {
     "createNew": "新規",
+    "add": "追加",
     "recordAudio": "音声を録音",
     "recordMeeting": "会議を録音",
-    "importFile": "ファイルを取り込む"
+    "importFile": "ファイルを取り込む",
+    "addPhoto": "写真を追加",
+    "addFile": "ファイルを追加",
+    "collapse": "折りたたむ",
+    "expand": "広げる"
   },
   "inbox": {
     "title": "受信箱",

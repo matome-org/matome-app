@@ -26,9 +26,14 @@
   },
   "nav": {
     "createNew": "New",
+    "add": "Add",
     "recordAudio": "Record audio",
     "recordMeeting": "Record meeting",
-    "importFile": "Import file"
+    "importFile": "Import file",
+    "addPhoto": "Add photo",
+    "addFile": "Add file",
+    "collapse": "Collapse",
+    "expand": "Expand"
   },
   "inbox": {
     "title": "Inbox",

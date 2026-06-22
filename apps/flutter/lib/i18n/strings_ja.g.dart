@@ -112,9 +112,14 @@ class _Translations$nav$ja extends Translations$nav$en {
 
 	// Translations
 	@override String get createNew => '新規';
+	@override String get add => '追加';
 	@override String get recordAudio => '音声を録音';
 	@override String get recordMeeting => '会議を録音';
 	@override String get importFile => 'ファイルを取り込む';
+	@override String get addPhoto => '写真を追加';
+	@override String get addFile => 'ファイルを追加';
+	@override String get collapse => '折りたたむ';
+	@override String get expand => '広げる';
 }
 
 // Path: inbox
@@ -681,9 +686,14 @@ extension on TranslationsJa {
 			'settings.langEn' => 'English',
 			'settings.langJa' => '日本語',
 			'nav.createNew' => '新規',
+			'nav.add' => '追加',
 			'nav.recordAudio' => '音声を録音',
 			'nav.recordMeeting' => '会議を録音',
 			'nav.importFile' => 'ファイルを取り込む',
+			'nav.addPhoto' => '写真を追加',
+			'nav.addFile' => 'ファイルを追加',
+			'nav.collapse' => '折りたたむ',
+			'nav.expand' => '広げる',
 			'inbox.title' => '受信箱',
 			'inbox.searchPlaceholder' => 'トランスクリプト、タグ、スペースを検索...',
 			'inbox.noResults' => '録音が見つかりません',

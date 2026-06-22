@@ -154,6 +154,9 @@ class Translations$nav$en {
 	/// en: 'New'
 	String get createNew => 'New';
 
+	/// en: 'Add'
+	String get add => 'Add';
+
 	/// en: 'Record audio'
 	String get recordAudio => 'Record audio';
 
@@ -162,6 +165,18 @@ class Translations$nav$en {
 
 	/// en: 'Import file'
 	String get importFile => 'Import file';
+
+	/// en: 'Add photo'
+	String get addPhoto => 'Add photo';
+
+	/// en: 'Add file'
+	String get addFile => 'Add file';
+
+	/// en: 'Collapse'
+	String get collapse => 'Collapse';
+
+	/// en: 'Expand'
+	String get expand => 'Expand';
 }
 
 // Path: inbox
@@ -1389,9 +1404,14 @@ extension on Translations {
 			'settings.langEn' => 'English',
 			'settings.langJa' => '日本語',
 			'nav.createNew' => 'New',
+			'nav.add' => 'Add',
 			'nav.recordAudio' => 'Record audio',
 			'nav.recordMeeting' => 'Record meeting',
 			'nav.importFile' => 'Import file',
+			'nav.addPhoto' => 'Add photo',
+			'nav.addFile' => 'Add file',
+			'nav.collapse' => 'Collapse',
+			'nav.expand' => 'Expand',
 			'inbox.title' => 'Inbox',
 			'inbox.searchPlaceholder' => 'Search transcripts, tags, spaces…',
 			'inbox.noResults' => 'No recordings found',
