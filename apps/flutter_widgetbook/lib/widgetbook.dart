@@ -6,11 +6,19 @@ import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
+import 'package:matome_flutter/core/audio/audio_playback.dart';
 import 'package:matome_flutter/core/db/file_row.dart';
 import 'package:matome_flutter/features/contacts/widgets/contact_detail.dart';
+import 'package:matome_flutter/features/details/audio_player_bar.dart';
+import 'package:matome_flutter/features/details/details_controller.dart'
+    show AudioSource, AudioSourceKind;
+import 'package:matome_flutter/features/details/file_actions_menu.dart'
+    as details_actions;
 import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/files/widgets/files_grid.dart';
 import 'package:matome_flutter/features/files/widgets/files_table.dart';
+import 'package:matome_flutter/features/files/widgets/files_view_shared.dart';
+import 'package:matome_flutter/features/matome/matome_actions_menu.dart';
 import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/shell/widgets/matome_nav.dart';
@@ -669,6 +677,242 @@ const _filesSample = <FileRow>[
   ),
 ];
 
+// ─── Files chrome (selection / undo / empty / menu, #1477) ───────────────────
+//
+// The presentational chrome shipped in
+// `package:matome_flutter/features/files/widgets/files_view_shared.dart` — the
+// SAME widgets `FilesGrid` / `FilesTable` compose: the bulk-action bar, the undo
+// bar, the empty state, the per-file overflow menu, and the muted "no size"
+// dash. Strictly props-in / callbacks-out, so each renders standalone here.
+
+@widgetbook.UseCase(
+  name: 'Bulk bar (selection active)',
+  type: FilesBulkBar,
+  path: '[Catalog]/Files chrome',
+)
+Widget filesBulkBarUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 720,
+    child: FilesBulkBar(
+      count: 3,
+      onClear: () {},
+      onMove: () {},
+      onDownload: () {},
+      onDelete: () {},
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Undo bar (after delete)',
+  type: FilesUndoBar,
+  path: '[Catalog]/Files chrome',
+)
+Widget filesUndoBarUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 720,
+    child: FilesUndoBar(
+      message: t.files.deletedMsg(n: 3),
+      onUndo: () {},
+      onDismiss: () {},
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Empty state (no files)',
+  type: FilesEmptyState,
+  path: '[Catalog]/Files chrome',
+)
+Widget filesEmptyStateUseCase(BuildContext context) {
+  return const _UseCaseSurface(width: 480, child: FilesEmptyState());
+}
+
+@widgetbook.UseCase(
+  name: 'Muted dash (absent value)',
+  type: FilesMutedDash,
+  path: '[Catalog]/Files chrome',
+)
+Widget filesMutedDashUseCase(BuildContext context) {
+  return const _UseCaseSurface(width: 240, child: FilesMutedDash());
+}
+
+@widgetbook.UseCase(
+  name: 'Per-file overflow menu',
+  type: FileActionsMenu,
+  path: '[Catalog]/Files chrome',
+)
+Widget filesFileActionsMenuUseCase(BuildContext context) {
+  // The shared files overflow menu (open · move · download · delete). Rendered
+  // top-aligned so the popup has room to expand when opened.
+  return _UseCaseSurface(
+    width: 240,
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: FileActionsMenu(onAction: (_) {}),
+    ),
+  );
+}
+
+// ─── Details / overflow + auth + audio (#1477) ───────────────────────────────
+
+@widgetbook.UseCase(
+  name: 'File overflow menu (delete-only)',
+  type: FileActionsMenu,
+  path: '[Catalog]/Details',
+)
+Widget detailsFileActionsMenuUseCase(BuildContext context) {
+  // The Details-screen file overflow ("…") — a single destructive Delete,
+  // anchored like the matome actions menu. Both the default and the [dense]
+  // (list-row) trigger are shown.
+  return _UseCaseSurface(
+    width: 240,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        details_actions.FileActionsMenu(onDelete: () {}),
+        details_actions.FileActionsMenu(onDelete: () {}, dense: true),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Matome overflow menu',
+  type: MatomeActionsMenu,
+  path: '[Catalog]/Matome',
+)
+Widget matomeActionsMenuUseCase(BuildContext context) {
+  // Matome-level secondary actions (rename · edit · regenerate · move · share
+  // (soon) · copy · archive), default and [dense] triggers.
+  return _UseCaseSurface(
+    width: 240,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        MatomeActionsMenu(onAction: (_) {}),
+        MatomeActionsMenu(onAction: (_) {}, dense: true),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Add FAB',
+  type: MatomeAddFab,
+  path: '[Catalog]/Matome',
+)
+Widget matomeAddFabUseCase(BuildContext context) {
+  // The mobile-shell "add" FAB in isolation (also shown in context under
+  // [Catalog]/Navigation › Mobile dock).
+  return const _UseCaseSurface(width: 200, child: Center(child: MatomeAddFab()));
+}
+
+// ─── Auth widgets (#1477) ────────────────────────────────────────────────────
+//
+// The shared auth primitives shipped in
+// `package:matome_flutter/features/auth/auth_widgets.dart`: the responsive
+// [AuthScaffold], the labeled [AuthField], and the loading-aware
+// [AuthSubmitButton]. (AuthErrorBanner already has a story under [Shared
+// widgets]/Auth.)
+
+@widgetbook.UseCase(
+  name: 'Scaffold (form column + back)',
+  type: AuthScaffold,
+  path: '[Catalog]/Auth',
+)
+Widget authScaffoldUseCase(BuildContext context) {
+  return SizedBox(
+    height: 560,
+    child: AuthScaffold(
+      title: t.welcome.signIn,
+      onBack: () {},
+      children: const [_AuthScaffoldBody()],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Field (labeled + obscured)',
+  type: AuthField,
+  path: '[Catalog]/Auth',
+)
+Widget authFieldUseCase(BuildContext context) {
+  return const _UseCaseSurface(child: _AuthFieldSample());
+}
+
+@widgetbook.UseCase(
+  name: 'Submit button (idle · loading · disabled)',
+  type: AuthSubmitButton,
+  path: '[Catalog]/Auth',
+)
+Widget authSubmitButtonUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AuthSubmitButton(
+          label: t.welcome.signIn,
+          loading: false,
+          onPressed: () {},
+        ),
+        const SizedBox(height: 12),
+        AuthSubmitButton(
+          label: t.welcome.signIn,
+          loading: true,
+          onPressed: () {},
+        ),
+        const SizedBox(height: 12),
+        AuthSubmitButton(
+          label: t.welcome.signIn,
+          loading: false,
+          onPressed: null,
+        ),
+      ],
+    ),
+  );
+}
+
+// ─── Audio player bar (#1477) ────────────────────────────────────────────────
+//
+// `AudioPlayerBar` from
+// `package:matome_flutter/features/details/audio_player_bar.dart`. It is NOT
+// provider-bound — it takes an [AudioSource] plus an INJECTABLE [AudioPlayback]
+// (the production factory is for real builds). The catalog injects a tiny fake
+// playback so the "playing" surface renders deterministically with no engine,
+// and renders the graceful "unavailable" state from `AudioSource.none()`.
+
+@widgetbook.UseCase(
+  name: 'Player — playing (12:04)',
+  type: AudioPlayerBar,
+  path: '[Catalog]/Details',
+)
+Widget audioPlayerBarPlayingUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    child: AudioPlayerBar(
+      source: const AudioSource(AudioSourceKind.remoteUrl, 'sample://clip'),
+      player: _FakeAudioPlayback(
+        duration: const Duration(minutes: 12, seconds: 4),
+        position: const Duration(minutes: 3, seconds: 18),
+        playing: true,
+      ),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Player — unavailable',
+  type: AudioPlayerBar,
+  path: '[Catalog]/Details',
+)
+Widget audioPlayerBarUnavailableUseCase(BuildContext context) {
+  // No playable source resolved → the graceful "audio unavailable" surface.
+  return const _UseCaseSurface(
+    child: AudioPlayerBar(source: AudioSource.none()),
+  );
+}
+
 @widgetbook.UseCase(
   name: 'Audio — ready (transcript)',
   type: FileView,
@@ -968,6 +1212,160 @@ class _AuthControlsSampleState extends State<_AuthControlsSample> {
       ],
     );
   }
+}
+
+/// The body of the [AuthScaffold] story: the real auth field + submit button so
+/// the scaffold is shown doing its actual job (centered, width-constrained,
+/// scrollable form column) rather than empty.
+class _AuthScaffoldBody extends StatefulWidget {
+  const _AuthScaffoldBody();
+
+  @override
+  State<_AuthScaffoldBody> createState() => _AuthScaffoldBodyState();
+}
+
+class _AuthScaffoldBodyState extends State<_AuthScaffoldBody> {
+  late final TextEditingController _email = TextEditingController(
+    text: 'demo@matome.app',
+  );
+  late final TextEditingController _password = TextEditingController(
+    text: 'alchemy123',
+  );
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AuthField(
+          controller: _email,
+          label: t.auth.email,
+          hint: t.auth.emailPlaceholder,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 16),
+        AuthField(
+          controller: _password,
+          label: t.auth.password,
+          hint: t.auth.passwordPlaceholder,
+          obscure: true,
+          textInputAction: TextInputAction.done,
+        ),
+        const SizedBox(height: 24),
+        AuthSubmitButton(
+          label: t.welcome.signIn,
+          loading: false,
+          onPressed: () {},
+        ),
+      ],
+    );
+  }
+}
+
+/// A single [AuthField] (label + obscured sibling) in isolation.
+class _AuthFieldSample extends StatefulWidget {
+  const _AuthFieldSample();
+
+  @override
+  State<_AuthFieldSample> createState() => _AuthFieldSampleState();
+}
+
+class _AuthFieldSampleState extends State<_AuthFieldSample> {
+  late final TextEditingController _email = TextEditingController(
+    text: 'demo@matome.app',
+  );
+  late final TextEditingController _password = TextEditingController(
+    text: 'alchemy123',
+  );
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AuthField(
+          controller: _email,
+          label: t.auth.email,
+          hint: t.auth.emailPlaceholder,
+          keyboardType: TextInputType.emailAddress,
+        ),
+        const SizedBox(height: 16),
+        AuthField(
+          controller: _password,
+          label: t.auth.password,
+          hint: t.auth.passwordPlaceholder,
+          obscure: true,
+        ),
+      ],
+    );
+  }
+}
+
+/// A tiny in-catalog [AudioPlayback] fake so [AudioPlayerBar]'s "playing" surface
+/// renders deterministically with no real engine. It holds a fixed
+/// position/duration and a single play/pause snapshot — enough to draw the
+/// button, the scrubber and the time labels. Seeks/plays are inert.
+class _FakeAudioPlayback implements AudioPlayback {
+  _FakeAudioPlayback({
+    required Duration duration,
+    required Duration position,
+    required this.playing,
+  })  : _duration = duration,
+        _position = position;
+
+  final Duration _duration;
+  final Duration _position;
+
+  @override
+  final bool playing;
+
+  @override
+  Duration get duration => _duration;
+
+  @override
+  Duration get position => _position;
+
+  @override
+  Stream<PlaybackState> get playerStateStream =>
+      Stream<PlaybackState>.value(PlaybackState(playing: playing));
+
+  @override
+  Stream<Duration> get positionStream => Stream<Duration>.value(_position);
+
+  @override
+  Future<Duration?> setFilePath(String path) async => _duration;
+
+  @override
+  Future<Duration?> setUrl(String url) async => _duration;
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> seek(Duration position) async {}
+
+  @override
+  Future<void> dispose() async {}
 }
 
 class _PrimaryButtonsSample extends StatelessWidget {

@@ -23,6 +23,38 @@ final directories = <_widgetbook.WidgetbookNode>[
     name: 'Catalog',
     children: [
       _widgetbook.WidgetbookFolder(
+        name: 'Auth',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'AuthField',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Field (labeled + obscured)',
+                builder: _matome_widgetbook_widgetbook.authFieldUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'AuthScaffold',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Scaffold (form column + back)',
+                builder: _matome_widgetbook_widgetbook.authScaffoldUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'AuthSubmitButton',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Submit button (idle · loading · disabled)',
+                builder: _matome_widgetbook_widgetbook.authSubmitButtonUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Avatars',
         children: [
           _widgetbook.WidgetbookComponent(
@@ -110,6 +142,36 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'Detail — sparse (minimal info)',
                 builder:
                     _matome_widgetbook_widgetbook.contactDetailSparseUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Details',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'AudioPlayerBar',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Player — playing (12:04)',
+                builder:
+                    _matome_widgetbook_widgetbook.audioPlayerBarPlayingUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Player — unavailable',
+                builder: _matome_widgetbook_widgetbook
+                    .audioPlayerBarUnavailableUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'FileActionsMenu',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'File overflow menu (delete-only)',
+                builder:
+                    _matome_widgetbook_widgetbook.detailsFileActionsMenuUseCase,
               ),
             ],
           ),
@@ -229,6 +291,57 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'Files chrome',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'FileActionsMenu',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Per-file overflow menu',
+                builder:
+                    _matome_widgetbook_widgetbook.filesFileActionsMenuUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesBulkBar',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Bulk bar (selection active)',
+                builder: _matome_widgetbook_widgetbook.filesBulkBarUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesEmptyState',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Empty state (no files)',
+                builder: _matome_widgetbook_widgetbook.filesEmptyStateUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesMutedDash',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Muted dash (absent value)',
+                builder: _matome_widgetbook_widgetbook.filesMutedDashUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesUndoBar',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Undo bar (after delete)',
+                builder: _matome_widgetbook_widgetbook.filesUndoBarUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Inputs',
         children: [
           _widgetbook.WidgetbookComponent(
@@ -237,6 +350,29 @@ final directories = <_widgetbook.WidgetbookNode>[
               _widgetbook.WidgetbookUseCase(
                 name: 'Labeled states',
                 builder: _matome_widgetbook_widgetbook.appTextFieldsUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Matome',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeActionsMenu',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Matome overflow menu',
+                builder: _matome_widgetbook_widgetbook.matomeActionsMenuUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeAddFab',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Add FAB',
+                builder: _matome_widgetbook_widgetbook.matomeAddFabUseCase,
               ),
             ],
           ),
