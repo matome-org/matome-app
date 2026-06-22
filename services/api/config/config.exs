@@ -62,6 +62,11 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Redact PII / secrets from any logged request params (#1462). Phoenix's
+# default only filters "password"; contact email/phone are PII and must never
+# reach logs or telemetry payloads.
+config :phoenix, :filter_parameters, ["password", "email", "phone"]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

@@ -172,6 +172,67 @@ defmodule MatomeApi.ContentTest do
     assert {:ok, _} = Content.delete_contact(owner, contact.id)
   end
 
+  test "structured contact fields persist, normalize, and round-trip owner scoped" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+
+    assert {:ok, contact} =
+             Content.create_contact(owner, %{
+               display_name: "Alice",
+               email: "  Alice@Example.COM ",
+               phone: "+1 (555) 123-4567",
+               company: "Acme",
+               title: "CEO"
+             })
+
+    # email lowercased+trimmed, phone separators stripped
+    assert contact.email == "alice@example.com"
+    assert contact.phone == "+15551234567"
+    assert contact.company == "Acme"
+    assert contact.title == "CEO"
+
+    # round-trips through a fresh read
+    reloaded = Content.get_contact(owner, contact.id)
+    assert reloaded.email == "alice@example.com"
+    assert reloaded.phone == "+15551234567"
+    assert reloaded.company == "Acme"
+    assert reloaded.title == "CEO"
+
+    # owner B cannot read owner A's contact fields
+    assert Content.get_contact(other_owner, contact.id) == nil
+
+    # owner B cannot write owner A's contact fields
+    assert Content.update_contact(other_owner, contact.id, %{email: "evil@example.com"}) == nil
+    assert Content.get_contact(owner, contact.id).email == "alice@example.com"
+  end
+
+  test "structured contact validation rejects malformed email and phone" do
+    owner = user_fixture()
+
+    assert {:error, changeset} =
+             Content.create_contact(owner, %{display_name: "Bad", email: "not-an-email"})
+
+    assert %{email: ["is not a valid email"]} = errors_on(changeset)
+
+    assert {:error, changeset} =
+             Content.create_contact(owner, %{display_name: "Bad", phone: "abc-123"})
+
+    assert %{phone: ["is not a valid phone number"]} = errors_on(changeset)
+
+    # length bounds (Olivier HARD AC): over-long company/title rejected
+    long = String.duplicate("x", 300)
+
+    assert {:error, changeset} =
+             Content.create_contact(owner, %{display_name: "Bad", company: long})
+
+    assert %{company: [_ | _]} = errors_on(changeset)
+
+    assert {:error, changeset} =
+             Content.create_contact(owner, %{display_name: "Bad", title: long})
+
+    assert %{title: [_ | _]} = errors_on(changeset)
+  end
+
   test "attach and detach contacts on a matome are owner scoped" do
     owner = user_fixture()
     other_owner = user_fixture()
