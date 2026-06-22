@@ -55,6 +55,10 @@ class SpacesScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: colors.background,
       floatingActionButton: FloatingActionButton(
+        // Unique hero tag — see ContactsScreen: branches stay alive in the nav
+        // shell's IndexedStack, so default-tagged FABs collide and crash hero
+        // transitions (route/dialog opens).
+        heroTag: 'spaces-create-fab',
         onPressed: () => _create(context, ref),
         backgroundColor: colors.primary,
         tooltip: t.spaces.createTitle,

@@ -81,6 +81,11 @@ class ContactsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: colors.background,
       floatingActionButton: FloatingActionButton(
+        // Unique hero tag: the nav shell keeps every visited branch alive in an
+        // IndexedStack, so a default-tagged FAB here collides with the Spaces
+        // branch's FAB and throws on the next route/dialog hero transition
+        // (which silently aborted the Add-anything picker open).
+        heroTag: 'contacts-create-fab',
         onPressed: () => _create(context, ref),
         backgroundColor: colors.primary,
         tooltip: t.contacts.createTitle,
