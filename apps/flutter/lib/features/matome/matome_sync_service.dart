@@ -3,15 +3,20 @@ import 'dart:developer' as developer;
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
 import '../../core/db/daos/recordings_dao.dart';
+import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../contacts/contacts_repository.dart';
 import '../recordings/recordings_repository.dart';
+import '../spaces/current_caller.dart';
+import '../spaces/space_ref_mapping.dart';
+import '../spaces/sync_policy.dart';
 import 'matome.dart';
 import 'matome_sync.dart';
 import 'matomes_repository.dart';
@@ -41,6 +46,7 @@ class MatomeSyncService {
   MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
   ContactsDao get _contactsDao => _ref.read(contactsDaoProvider);
   RecordingsDao get _recordingsDao => _ref.read(recordingsDaoProvider);
+  WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
   MatomesRepository get _matomesRepo => _ref.read(matomesRepositoryProvider);
   ContactsRepository get _contactsRepo => _ref.read(contactsRepositoryProvider);
   RecordingsRepository get _recordingsRepo =>
@@ -189,23 +195,37 @@ class MatomeSyncService {
     for (final matome in filed) {
       // Space-scoped guard (defensive — the query already filters): an untriaged
       // Matome must never reach Core.
+      final spaceId = matome.spaceId;
+      if (spaceId == null) continue;
+
+      // DATA-EGRESS GATE (#1501, plan #102 W6 / spec R2.1 / W4-audit #74801 P2).
+      // This is the OTHER egress path the upload queue's `_maySync` already
+      // routes through the ONE operation-keyed gate. Behind the
+      // `localFirstSpaces` flag, a matome (and its children) egress ONLY when its
+      // EFFECTIVE space is a CLOUD space — decided by
+      // `SyncPolicy.can(caller, Operation.spaceSync, space)` over the ONE
+      // resolver, NOT by the old `int.tryParse(spaceId)` numeric-id heuristic
+      // (which gated on Core-backed-ness, NEVER on `is_local`). After this there
+      // is ONE operation-keyed decision point for ALL egress (queue + matome
+      // push); no second sync-eligibility predicate survives anywhere (R1.2).
       //
-      // INLINE SYNC-ELIGIBILITY CHECK (pre-#102). This is the live drain gate
-      // today (`space_id != null` ⇒ push). Plan #102 W1 #1493 introduced the ONE
-      // authoritative resolver `EffectiveSpace.isCloudSynced` (lib/features/
-      // spaces/effective_space.dart) — the SOLE sync-eligibility authority. This
-      // site is DEFERRED to W4 #1498, which routes the drain through the single
-      // operation-keyed gate that consults the resolver (so local spaces stop
-      // draining), behind the `localFirstSpaces` flag. Until then this check is
-      // unchanged so #1493 ships dark and changes no live sync behaviour. Do NOT
-      // add a second `is_local` predicate here — that recompute is exactly what
-      // the resolver exists to prevent (ADR-0006 §2 / spec R1.2).
-      if (matome.spaceId == null) continue;
+      // Flag OFF ⇒ byte-unchanged: the gate is compiled out, so the only filter
+      // is the legacy "Core-backed numeric id" check below — exactly the pre-#102
+      // behaviour (`space_id != null` ⇒ push when numeric).
+      if (FeatureFlags.localFirstSpaces && !await _maySyncSpace(spaceId)) {
+        AppLog.event(
+          LogCat.sync,
+          'pushFiled: HELD (effective space not cloud) ${matome.id}',
+        );
+        continue;
+      }
 
       // The Space must be Core-backed (a numeric workspace id) to file the
       // Matome under it. A locally-created `ws_<...>` Space has no Core
       // counterpart, so its Matomes can't be pushed yet — left local-only.
-      final coreWorkspaceId = int.tryParse(matome.spaceId!);
+      // (Behind the flag, the gate above already HELD every local space; this
+      // remains as the Core-id projection AND the flag-OFF eligibility filter.)
+      final coreWorkspaceId = int.tryParse(spaceId);
       if (coreWorkspaceId == null) continue;
 
       var coreId = matome.coreId;
@@ -234,6 +254,25 @@ class MatomeSyncService {
     // ARCHIVE-INTENT RE-PUSH (#1431, audit #70912): a separate pass so an
     // archive POST that fails (offline) cannot abort the active-matome push.
     await pushArchives();
+  }
+
+  /// Whether a matome filed into space [spaceId] may egress to Core, routed
+  /// through the ONE operation-keyed gate [SyncPolicy.can] over the ONE resolver
+  /// (#1501, plan #102 W6 / spec R2.1). Identical decision shape to the upload
+  /// queue's `_maySync` so there is ONE egress predicate for the whole program.
+  ///
+  /// Returns true ONLY when [spaceId] resolves to a known `workspaces` row that
+  /// is a CLOUD space. A LOCAL space, or an unknown/local-only `ws_…` id with no
+  /// row, returns false — the matome stays local-only (fail-closed; filing ≠
+  /// sync, spec R2). Only called behind the `localFirstSpaces` flag.
+  Future<bool> _maySyncSpace(String spaceId) async {
+    final spaceRow = await _workspacesDao.getWorkspaceById(spaceId);
+    if (spaceRow == null) return false; // fail-closed: unknown/local-only space.
+    return SyncPolicy.can(
+      currentCaller(_ref),
+      Operation.spaceSync,
+      spaceRefFromRow(spaceRow),
+    );
   }
 
   /// Converge Core to ARCHIVED for every locally-archived, reconciled Matome

@@ -146,6 +146,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
         recording,
         matomeTitle: matome?.title,
         spaceName: space?.name,
+        // matome WINS (R1.1): the resolver reads the matome's space first; pass
+        // it so the Files filter's effective-space partition honours precedence.
+        matomeSpaceId: matome?.spaceId,
         contacts: names,
       );
     }).toList(growable: false);
@@ -526,6 +529,28 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
         await _markMatomeSummaryStale(mid);
       }
     });
+  }
+
+  /// File a LOOSE item directly into a space (or back to Inbox when [spaceId]
+  /// is null), OWNER-SCOPED (local-first-spaces #102 W6 / #1501, ADR-0006 §1).
+  /// Writes `recordings.workspace_id` only — it does NOT touch `matome_id` (a
+  /// matome's space still WINS the effective-space rule; this is the "file a
+  /// loose item with no matome" path). Returns the number of rows moved.
+  ///
+  /// SECURITY (A01 — Broken Access Control): the UPDATE carries the owner
+  /// predicate (`owner_id == ownerId`) so a caller can ONLY file a row it owns —
+  /// a forged id for another owner's file matches zero rows and is a no-op
+  /// (returns 0). This is the local mirror of Core's server-enforced owner scope
+  /// on the assign; the egress decision (whether the move syncs) is settled
+  /// SEPARATELY by the sync gate, not here — filing ≠ sync (spec R2).
+  Future<int> fileRecordingIntoSpace(
+    String recordingId,
+    String? spaceId,
+    String ownerId,
+  ) {
+    return (update(recordings)
+          ..where((r) => r.id.equals(recordingId) & r.ownerId.equals(ownerId)))
+        .write(RecordingsCompanion(workspaceId: Value(spaceId)));
   }
 
   /// Recordings whose `createdAt` falls in [startEpoch, endEpoch] inclusive,

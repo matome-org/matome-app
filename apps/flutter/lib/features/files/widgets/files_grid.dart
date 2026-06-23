@@ -131,6 +131,8 @@ class _FilesGridState extends State<FilesGrid> {
         widget.onOpen?.call(f.id);
       case FileAction.moveToMatome:
         _move({f.id});
+      case FileAction.fileIntoSpace:
+        widget.onBulk?.call(FileAction.fileIntoSpace, {f.id});
       case FileAction.download:
         _download({f.id});
       case FileAction.delete:

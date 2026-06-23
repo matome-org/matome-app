@@ -16,13 +16,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/db/app_database.dart' show MatomeRow;
+import '../../core/config/feature_flags.dart';
+import '../../core/db/app_database.dart' show MatomeRow, WorkspaceRow;
+import '../../core/db/file_row.dart';
 import '../../core/providers.dart';
 import '../../core/settings/settings_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_bottom_sheet.dart';
+import '../../ui/files_scope_filter.dart';
 import '../../ui/loading_indicator.dart';
+import '../home/inbox_controller.dart';
 import 'files_providers.dart';
 import 'widgets/files_grid.dart';
 import 'widgets/files_table.dart';
@@ -81,6 +85,24 @@ class FilesScreen extends ConsumerStatefulWidget {
 }
 
 class _FilesScreenState extends ConsumerState<FilesScreen> {
+  /// The active Files filter (All / Loose / In-space), local UI state. Default
+  /// All. Loose ⟺ effective space NULL, In-space ⟺ effective space non-null —
+  /// both resolved via the ONE resolver (`FileRow.effectiveInSpace`), never an
+  /// inline recompute (spec R1.2).
+  FilesScope _scope = FilesScope.all;
+
+  /// Partition [files] by the active [_scope] using the resolver-backed
+  /// effective-space bit on each [FileRow]. No re-resolution here — the bit was
+  /// computed once in the DAO via `EffectiveSpace.effectiveSpaceId`.
+  List<FileRow> _applyScope(List<FileRow> files) {
+    return switch (_scope) {
+      FilesScope.all => files,
+      FilesScope.loose => files.where((f) => f.loose).toList(growable: false),
+      FilesScope.inSpace =>
+        files.where((f) => f.effectiveInSpace).toList(growable: false),
+    };
+  }
+
   Future<void> _openFile(String fileId) async {
     // A file is a recording; route by its media type so a document/image never
     // hits the audio-only detail host (mirrors the contacts host, #1464).
@@ -103,6 +125,8 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         break; // handled by onOpen
       case FileAction.moveToMatome:
         await _moveToMatome(ids);
+      case FileAction.fileIntoSpace:
+        await _fileIntoSpace(ids);
       case FileAction.download:
         // FLAGGED STUB (#1465): there is no file-download path in the client
         // yet, so download surfaces a "not available" notice instead of
@@ -178,6 +202,46 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     );
   }
 
+  /// File the selected loose items DIRECTLY into a space (no matome) — the
+  /// local-first-spaces #102 W6 / #1501 file-into-space flow. Opens the
+  /// space-target picker (owner's spaces + an "Inbox" tile that clears the
+  /// space), then routes each pick through [InboxController.fileIntoSpace] which
+  /// is OWNER-SCOPED on the assign AND gates the Core egress: filing into a
+  /// LOCAL space holds locally (no upload); filing into a CLOUD space lets the
+  /// gate drain it — sync follows the space type, enforced by the gate not the
+  /// picker (spec R2).
+  Future<void> _fileIntoSpace(Set<String> ids) async {
+    if (ids.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final ownerId = ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+
+    final targets = await ref.read(workspacesDaoProvider).getWorkspaces();
+    if (!mounted) return;
+    if (targets.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(t.files.fileNoSpaces)));
+      return;
+    }
+
+    final picked = await showAppBottomSheet<_FileSpaceTarget>(
+      context: context,
+      builder: (_) => _FileIntoSpaceSheet(targets: targets),
+    );
+    if (picked == null || !mounted) return;
+
+    final inbox = ref.read(inboxControllerProvider.notifier);
+    var filed = 0;
+    for (final id in ids) {
+      final ok = await inbox.fileIntoSpace(id, picked.spaceId, ownerId: ownerId);
+      if (ok) filed++;
+    }
+    ref.invalidate(filesForCurrentOwnerProvider);
+    if (!mounted || filed == 0) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text(t.files.filedMsg(n: filed))),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -198,26 +262,51 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         child: async.when(
           loading: () => Center(child: LoadingIndicator(color: colors.primary)),
           error: (err, _) => _CenteredMessage(message: err.toString()),
-          data: (files) => SingleChildScrollView(
-            padding: EdgeInsets.all(context.spacing.lg),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: _kFilesMaxWidth),
-                child: view == FilesView.grid
-                    ? FilesGrid(
-                        files: files,
-                        onOpen: _openFile,
-                        onBulk: _onBulk,
-                      )
-                    : FilesTable(
-                        files: files,
-                        onOpen: _openFile,
-                        onBulk: _onBulk,
-                      ),
+          data: (files) {
+            final scoped = _applyScope(files);
+            return SingleChildScrollView(
+              padding: EdgeInsets.all(context.spacing.lg),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _kFilesMaxWidth),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Files filter (All / Loose / In-space) — wired to the
+                      // resolver-backed effective-space bit (#1501). Surfaced
+                      // only behind the local-first-spaces flag; the `const if`
+                      // tree-shakes it out when OFF (shipped reality).
+                      if (FeatureFlags.localFirstSpaces) ...[
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: FilesScopeFilter(
+                            value: _scope,
+                            allLabel: t.files.scopeAll,
+                            looseLabel: t.files.scopeLoose,
+                            inSpaceLabel: t.files.scopeInSpace,
+                            onChanged: (s) => setState(() => _scope = s),
+                          ),
+                        ),
+                        SizedBox(height: context.spacing.md),
+                      ],
+                      view == FilesView.grid
+                          ? FilesGrid(
+                              files: scoped,
+                              onOpen: _openFile,
+                              onBulk: _onBulk,
+                            )
+                          : FilesTable(
+                              files: scoped,
+                              onOpen: _openFile,
+                              onBulk: _onBulk,
+                            ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -272,6 +361,65 @@ class _MoveToMatomeSheet extends StatelessWidget {
                 Icon(Icons.folder_outlined, color: colors.textSecondary),
             title: Text(m.title),
             onTap: () => Navigator.of(context).pop(_MoveTarget(m.id)),
+          ),
+      ],
+    );
+  }
+}
+
+/// The result of the file-into-space picker — a chosen space id, or null ⟺
+/// Inbox (clear the space). A dedicated type (vs a bare nullable String) so the
+/// sheet distinguishes "picked Inbox" (a real choice) from "dismissed" (null).
+class _FileSpaceTarget {
+  const _FileSpaceTarget(this.spaceId);
+  final String? spaceId;
+}
+
+/// Space-target picker for the Files view's "File into space" action (#1501) —
+/// mirrors [_MoveToMatomeSheet]. Lists the owner's spaces plus an "Inbox" tile
+/// that files the items OUT of any space (`workspace_id` → NULL). Filing here is
+/// pure organization; whether it SYNCS is decided downstream by the gate (filing
+/// ≠ sync, spec R2) — the sheet never makes that decision.
+class _FileIntoSpaceSheet extends StatelessWidget {
+  const _FileIntoSpaceSheet({required this.targets});
+
+  final List<WorkspaceRow> targets;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    return AppBottomSheet(
+      title: Text(
+        t.files.fileIntoSpace,
+        style: typography.body.copyWith(
+          fontWeight: FontWeight.w700,
+          color: colors.textPrimary,
+        ),
+      ),
+      children: [
+        ListTile(
+          key: const ValueKey('files-space-target-inbox'),
+          leading: Icon(Icons.inbox_outlined, color: colors.textSecondary),
+          title: Text(t.files.fileIntoSpaceInbox),
+          trailing: Text(
+            t.files.fileIntoSpaceInboxHint,
+            style: typography.label.copyWith(color: colors.textMuted),
+          ),
+          onTap: () => Navigator.of(context).pop(const _FileSpaceTarget(null)),
+        ),
+        for (final w in targets)
+          ListTile(
+            key: ValueKey('files-space-target-${w.id}'),
+            leading: Icon(
+              w.isLocal == 1
+                  ? Icons.workspaces_outline
+                  : Icons.cloud_outlined,
+              color: colors.textSecondary,
+            ),
+            title: Text(w.name),
+            onTap: () => Navigator.of(context).pop(_FileSpaceTarget(w.id)),
           ),
       ],
     );

@@ -338,7 +338,15 @@
     "moveUnfiled": "未整理",
     "moveUnfiledHint": "まとめなし",
     "movedMsg": "$n 件を移動しました",
-    "moveNoTargets": "移動先のまとめがまだありません"
+    "moveNoTargets": "移動先のまとめがまだありません",
+    "scopeAll": "すべて",
+    "scopeLoose": "未整理",
+    "scopeInSpace": "スペース内",
+    "fileIntoSpace": "スペースに整理",
+    "fileIntoSpaceInbox": "受信トレイ",
+    "fileIntoSpaceInboxHint": "スペースなし",
+    "fileNoSpaces": "整理先のスペースがまだありません",
+    "filedMsg": "$n 件を整理しました"
   },
   "spaces": {
     "title": "スペース",

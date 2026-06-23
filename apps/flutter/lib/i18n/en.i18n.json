@@ -338,7 +338,15 @@
     "moveUnfiled": "Unfiled",
     "moveUnfiledHint": "No matome",
     "movedMsg": "Moved $n",
-    "moveNoTargets": "No matomes to move into yet"
+    "moveNoTargets": "No matomes to move into yet",
+    "scopeAll": "All",
+    "scopeLoose": "Loose",
+    "scopeInSpace": "In space",
+    "fileIntoSpace": "File into space",
+    "fileIntoSpaceInbox": "Inbox",
+    "fileIntoSpaceInboxHint": "No space",
+    "fileNoSpaces": "No spaces to file into yet",
+    "filedMsg": "Filed $n"
   },
   "spaces": {
     "title": "Spaces",

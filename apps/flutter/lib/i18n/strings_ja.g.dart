@@ -371,6 +371,14 @@ class _Translations$files$ja extends Translations$files$en {
 	@override String get moveUnfiledHint => 'まとめなし';
 	@override String movedMsg({required Object n}) => '${n} 件を移動しました';
 	@override String get moveNoTargets => '移動先のまとめがまだありません';
+	@override String get scopeAll => 'すべて';
+	@override String get scopeLoose => '未整理';
+	@override String get scopeInSpace => 'スペース内';
+	@override String get fileIntoSpace => 'スペースに整理';
+	@override String get fileIntoSpaceInbox => '受信トレイ';
+	@override String get fileIntoSpaceInboxHint => 'スペースなし';
+	@override String get fileNoSpaces => '整理先のスペースがまだありません';
+	@override String filedMsg({required Object n}) => '${n} 件を整理しました';
 }
 
 // Path: spaces
@@ -1021,6 +1029,14 @@ extension on TranslationsJa {
 			'files.moveUnfiledHint' => 'まとめなし',
 			'files.movedMsg' => ({required Object n}) => '${n} 件を移動しました',
 			'files.moveNoTargets' => '移動先のまとめがまだありません',
+			'files.scopeAll' => 'すべて',
+			'files.scopeLoose' => '未整理',
+			'files.scopeInSpace' => 'スペース内',
+			'files.fileIntoSpace' => 'スペースに整理',
+			'files.fileIntoSpaceInbox' => '受信トレイ',
+			'files.fileIntoSpaceInboxHint' => 'スペースなし',
+			'files.fileNoSpaces' => '整理先のスペースがまだありません',
+			'files.filedMsg' => ({required Object n}) => '${n} 件を整理しました',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

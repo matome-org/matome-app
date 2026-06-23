@@ -8,6 +8,7 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/contacts/contact.dart';
 import 'package:matome_flutter/features/contacts/contacts_repository.dart';
 import 'package:matome_flutter/features/matome/matome.dart';
@@ -181,6 +182,11 @@ ProviderContainer _container(
         .overrideWithValue(contacts ?? FakeContactsRepository()),
     recordingsRepositoryProvider
         .overrideWithValue(recordings ?? FakeRecordingsRepository()),
+    // pushFiled's egress gate (#1501) reads the caller via currentOwnerIdProvider.
+    // Override it so the test never builds the real auth chain (secure-storage
+    // platform channels). The id is the future-PDP input; spaceSync gates only on
+    // the space being cloud, so it changes no assertion here.
+    currentOwnerIdProvider.overrideWithValue('owner-1'),
   ]);
   return container;
 }
@@ -193,6 +199,11 @@ Future<String> _seedCoreSpace(AppDatabase db, int coreId) async {
           id: '$coreId',
           name: 'Space $coreId',
           createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+          // A Core-backed space is a CLOUD space (is_local = 0). Set it
+          // EXPLICITLY (not the m017 default-local) so the pushFiled egress gate
+          // (#1501, behind ff.localFirstSpaces) lets these filed matomes drain
+          // under BOTH flag states — a Core space that syncs today stays cloud.
+          isLocal: const Value(0),
         ),
       );
   return '$coreId';

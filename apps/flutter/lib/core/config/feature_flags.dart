@@ -76,14 +76,23 @@ class FeatureFlags {
   /// behaviour, and sync gating (the operation-keyed drain/access gate). They
   /// flip as a unit, behind this const, or none of them do.
   ///
-  /// W1 reality: nothing reads this yet — the #1493 resolver shipped DARK and
-  /// the schema/behaviour land in later waves. The point of this task is that
-  /// the single switch exists, is registered in the FeatureFlags registry the
-  /// same way [newNavShell] / [documents] are, and has its dual-flag CI lane so
-  /// both the OFF (shipped) and ON (future) realities stay green as later waves
-  /// build behind it. Rollback is a single flag flip back to OFF (revert this
-  /// const's `defaultValue`, or ship `--dart-define=ff.localFirstSpaces=false`),
-  /// no other code change.
+  /// W6 reality (the FINAL wave, #1501): every coupled piece now reads this flag
+  /// behind a `const` gate — the #1493 resolver, loose capture/inbox, AND the
+  /// single operation-keyed EGRESS gate for ALL paths: the upload-queue drain
+  /// (`_maySync`), the moveToSpace / fileIntoSpace Core PATCH, and the
+  /// matome-push (`MatomeSyncService.pushFiled`, #1501 — the last second
+  /// predicate closed). There is now ONE sync-eligibility decision point for the
+  /// whole program; no `int.tryParse(spaceId)` heuristic survives as an egress
+  /// gate. The dual-flag CI lane (`mise run flutter-design-system-check`) keeps
+  /// BOTH the OFF (shipped) and ON (future) realities green.
+  ///
+  /// DEFAULT STILL OFF — the cutover flip is the OWNER'S final switch. W6 wires
+  /// the whole behaviour and proves both lanes green; it deliberately does NOT
+  /// flip the default (the build's #1501 mandate: "if in doubt, leave default
+  /// OFF and document that the cutover flip is the owner's final switch").
+  /// Flipping is a ONE-LINE change: set `defaultValue: true` here (or ship
+  /// `--dart-define=ff.localFirstSpaces=true`); rollback is the same line back to
+  /// `false`, no other code change.
   static const bool localFirstSpaces = bool.fromEnvironment(
     'ff.localFirstSpaces',
     defaultValue: false,

@@ -794,6 +794,30 @@ class Translations$files$en {
 
 	/// en: 'No matomes to move into yet'
 	String get moveNoTargets => 'No matomes to move into yet';
+
+	/// en: 'All'
+	String get scopeAll => 'All';
+
+	/// en: 'Loose'
+	String get scopeLoose => 'Loose';
+
+	/// en: 'In space'
+	String get scopeInSpace => 'In space';
+
+	/// en: 'File into space'
+	String get fileIntoSpace => 'File into space';
+
+	/// en: 'Inbox'
+	String get fileIntoSpaceInbox => 'Inbox';
+
+	/// en: 'No space'
+	String get fileIntoSpaceInboxHint => 'No space';
+
+	/// en: 'No spaces to file into yet'
+	String get fileNoSpaces => 'No spaces to file into yet';
+
+	/// en: 'Filed $n'
+	String filedMsg({required Object n}) => 'Filed ${n}';
 }
 
 // Path: spaces
@@ -1827,6 +1851,14 @@ extension on Translations {
 			'files.moveUnfiledHint' => 'No matome',
 			'files.movedMsg' => ({required Object n}) => 'Moved ${n}',
 			'files.moveNoTargets' => 'No matomes to move into yet',
+			'files.scopeAll' => 'All',
+			'files.scopeLoose' => 'Loose',
+			'files.scopeInSpace' => 'In space',
+			'files.fileIntoSpace' => 'File into space',
+			'files.fileIntoSpaceInbox' => 'Inbox',
+			'files.fileIntoSpaceInboxHint' => 'No space',
+			'files.fileNoSpaces' => 'No spaces to file into yet',
+			'files.filedMsg' => ({required Object n}) => 'Filed ${n}',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

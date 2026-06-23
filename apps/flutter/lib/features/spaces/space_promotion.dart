@@ -79,9 +79,9 @@ import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
-import '../files/files_providers.dart';
 import '../matome/matome_sync_service.dart';
 import '../recordings/upload_queue.dart';
+import 'current_caller.dart';
 import 'space_ref_mapping.dart';
 import 'spaces_repository.dart';
 import 'sync_policy.dart';
@@ -167,14 +167,9 @@ class SpacePromotionService {
 
   /// The acting [Caller] — the future-PDP input. Best-effort owner id; an
   /// unresolved auth chain yields an anonymous caller (which the owner-scope
-  /// gate then DENIES — fail-closed, no signed-out promotion).
-  Caller _caller() {
-    try {
-      return Caller(userId: _ref.read(currentOwnerIdProvider));
-    } catch (_) {
-      return Caller.anonymous;
-    }
-  }
+  /// gate then DENIES — fail-closed, no signed-out promotion). Routed through
+  /// the ONE shared resolver [currentCaller] (W4-audit #74801 P3).
+  Caller _caller() => currentCaller(_ref);
 
   /// Compute the ITEMIZED CONSENT (spec R3.2) for promoting [spaceId]: the count
   /// of items whose EFFECTIVE space is this space and that have NO Core row yet

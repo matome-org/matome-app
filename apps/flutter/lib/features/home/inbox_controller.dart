@@ -14,6 +14,7 @@ import '../files/files_providers.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recordings_repository.dart';
 import '../recordings/upload_queue.dart';
+import '../spaces/current_caller.dart';
 import '../spaces/space_ref_mapping.dart';
 import '../spaces/sync_policy.dart';
 import 'inbox_item.dart';
@@ -225,21 +226,72 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     if (!FeatureFlags.localFirstSpaces) return true;
     final spaceRow = await _workspacesDao.getWorkspaceById(workspaceId);
     if (spaceRow == null) return false; // fail-closed: unknown space.
-    // BEST-EFFORT caller id (the future-PDP input): an unresolved auth chain
-    // yields an anonymous caller rather than throwing. The `spaceSync` decision
-    // today gates only on the space being cloud, so a null user id never widens
-    // access — it stays fail-closed.
-    String? ownerId;
-    try {
-      ownerId = _ref.read(currentOwnerIdProvider);
-    } catch (_) {
-      ownerId = null;
-    }
+    // BEST-EFFORT caller id (the future-PDP input), via the ONE shared resolver
+    // (W4-audit #74801 P3). An unresolved auth chain yields an anonymous caller
+    // rather than throwing; the `spaceSync` decision today gates only on the
+    // space being cloud, so a null user id never widens access — fail-closed.
     return SyncPolicy.can(
-      Caller(userId: ownerId),
+      currentCaller(_ref),
       Operation.spaceSync,
       spaceRefFromRow(spaceRow),
     );
+  }
+
+  /// File a LOOSE item directly into [spaceId] (or back to Inbox when null),
+  /// OWNER-SCOPED (local-first-spaces #102 W6 / #1501) — the "file a loose item
+  /// into a space, no matome" path the Files action drives. Writes locally first
+  /// (owner-scoped, so a caller can only file a row it OWNS — a non-owner assign
+  /// is a no-op) then gates the Core egress EXACTLY like [moveToSpace]: filing
+  /// into a LOCAL space holds locally (no upload); filing into a CLOUD space
+  /// lets the gate drain it — sync follows the space type, enforced by the gate
+  /// not the picker (spec R2). Returns whether a row was filed (owner-scope pass).
+  Future<bool> fileIntoSpace(
+    String recordingId,
+    String? spaceId, {
+    required String ownerId,
+  }) async {
+    AppLog.event(
+      LogCat.action,
+      'fileIntoSpace recording=$recordingId space=$spaceId',
+    );
+    // OWNER-SCOPED local write (A01): a forged id for another owner's file moves
+    // zero rows — the assign is rejected at the data source, not the picker.
+    final moved =
+        await _dao.fileRecordingIntoSpace(recordingId, spaceId, ownerId);
+    await reloadFromLocal();
+    if (moved == 0) return false; // not the caller's row — nothing filed.
+
+    // Back to Inbox (null) is purely local — nothing to egress.
+    if (spaceId == null) return true;
+
+    // DATA-EGRESS GATE (#1498/#1501, spec R2.1): the SAME operation-keyed gate
+    // the upload queue + pushFiled use. Filing into a LOCAL space holds locally
+    // (no Core PATCH); only landing in a CLOUD space syncs.
+    if (!await _maySyncMoveTarget(spaceId)) return true;
+
+    final row = await _dao.getRecordingById(recordingId);
+    final coreId = row?.coreId;
+    final coreWorkspaceId = int.tryParse(spaceId);
+    if (coreId != null && coreWorkspaceId != null) {
+      try {
+        await _repo.updateRecording(coreId, workspaceId: coreWorkspaceId);
+      } on ApiException catch (error, stack) {
+        if (error.isUnauthorized || error.statusCode != null) {
+          developer.log(
+            'fileIntoSpace Core PATCH failed',
+            name: 'inbox.file',
+            error: error,
+          );
+          AppLog.error(
+            LogCat.sync,
+            'fileIntoSpace Core PATCH failed recording=$recordingId',
+            error,
+            stack,
+          );
+        }
+      }
+    }
+    return true;
   }
 
   /// All workspaces available as move-to-space targets.

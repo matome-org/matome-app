@@ -1,3 +1,4 @@
+import '../../features/spaces/effective_space.dart';
 import 'app_database.dart';
 import 'matome_card.dart';
 import 'recording_card.dart';
@@ -62,6 +63,7 @@ class FileRow {
     this.contacts = const [],
     this.duration,
     this.localOnly = false,
+    this.effectiveInSpace = false,
   });
 
   /// The recording id (PK) — stable identity for selection / per-row actions.
@@ -116,11 +118,25 @@ class FileRow {
   /// cloud-space rows keep their rollup).
   final bool localOnly;
 
+  /// Local-first spaces (#102 W6 / #1501): whether the file's EFFECTIVE space is
+  /// non-null — resolved by the ONE resolver (`matome.space_id ?? workspace_id`,
+  /// matome WINS), NOT a raw read of the [space] column. This is the
+  /// authoritative "in a space" bit the Files filter (All / Loose / In-space)
+  /// partitions on: Loose ⟺ `!effectiveInSpace` (effective space NULL),
+  /// In-space ⟺ `effectiveInSpace`. Default false (loose) for legacy callers
+  /// that don't supply the matome membership.
+  final bool effectiveInSpace;
+
   /// no matome relation (DR-003 "Unfiled").
   bool get unfiled => matome == null;
 
   /// no space relation (DR-003 "Inbox").
   bool get inInbox => space == null;
+
+  /// LOOSE (local-first-spaces #102 W6): effective space is NULL — the file is
+  /// in neither a matome-with-a-space nor a directly-filed space. The complement
+  /// of [effectiveInSpace]. The Files filter's Loose partition.
+  bool get loose => !effectiveInSpace;
 
   /// Maps a persisted [RecordingRow] plus its resolved relation display values
   /// to the UI row. [matomeTitle] / [spaceName] come from the owner-scoped
@@ -131,10 +147,17 @@ class FileRow {
     RecordingRow row, {
     String? matomeTitle,
     String? spaceName,
+    String? matomeSpaceId,
     List<String> contacts = const [],
     DateTime? now,
   }) {
     final kind = fileKindFromMediaType(row.mediaType);
+    // EFFECTIVE space via the ONE resolver (matome WINS): a file is "in a space"
+    // iff `matome.space_id ?? recording.workspace_id` is non-null. No inline
+    // recompute — the Files filter partitions on this resolved bit (spec R1.2).
+    final effectiveSpaceId = EffectiveSpace.effectiveSpaceId(
+      ItemMembership(matomeSpaceId: matomeSpaceId, workspaceId: row.workspaceId),
+    );
     return FileRow(
       id: row.id,
       name: row.title,
@@ -145,6 +168,7 @@ class FileRow {
       whenSort: row.createdAt,
       matome: matomeTitle,
       space: spaceName,
+      effectiveInSpace: effectiveSpaceId != null,
       contacts: contacts,
       rollup: _rollupForRow(row),
       duration: kind == FileKind.audio ? row.duration : null,

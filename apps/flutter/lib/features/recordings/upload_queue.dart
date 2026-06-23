@@ -13,9 +13,9 @@ import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../../i18n/strings.g.dart';
-import '../files/files_providers.dart';
 import '../home/inbox_controller.dart';
 import '../home/inbox_upload.dart';
+import '../spaces/current_caller.dart';
 import '../spaces/effective_space.dart';
 import '../spaces/space_ref_mapping.dart';
 import '../spaces/sync_policy.dart';
@@ -230,22 +230,10 @@ class UploadQueue {
     if (spaceRow == null) return false;
 
     return SyncPolicy.can(
-      _currentCaller(),
+      currentCaller(_ref),
       Operation.spaceSync,
       spaceRefFromRow(spaceRow),
     );
-  }
-
-  /// The acting [Caller] — the future-PDP input. Reads the authenticated owner
-  /// id BEST-EFFORT: an unresolved auth chain yields an anonymous caller rather
-  /// than throwing (the `spaceSync` decision today gates only on the space being
-  /// cloud, so a null user id never WIDENS access — it stays fail-closed).
-  Caller _currentCaller() {
-    try {
-      return Caller(userId: _ref.read(currentOwnerIdProvider));
-    } catch (_) {
-      return Caller.anonymous;
-    }
   }
 
   Future<void> _drainRow(RecordingRow row) async {

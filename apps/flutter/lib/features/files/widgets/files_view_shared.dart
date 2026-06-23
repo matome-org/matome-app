@@ -16,6 +16,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/config/feature_flags.dart';
 import '../../../core/db/file_row.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../i18n/strings.g.dart';
@@ -28,7 +29,13 @@ import '../../../ui/file_type_chip.dart';
 enum FileSortKey { name, when, size }
 
 /// Per-file overflow-menu actions and the targets of the bulk-action bar.
-enum FileAction { open, moveToMatome, download, delete }
+///
+/// [fileIntoSpace] (local-first-spaces #102 W6 / #1501) files the item directly
+/// into a SPACE (no matome) — distinct from [moveToMatome] (a matome is a group;
+/// a space is the sync boundary). It is surfaced only behind
+/// `FeatureFlags.localFirstSpaces`; the host ([FilesScreen]) owns the gating so
+/// the shared widgets stay flag-free and presentational.
+enum FileAction { open, moveToMatome, fileIntoSpace, download, delete }
 
 /// Open one file (row/tile tap, Enter, per-file Open). Host → navigation.
 typedef FileOpenCallback = void Function(String id);
@@ -166,6 +173,12 @@ class FileActionsMenu extends StatelessWidget {
         item(Icons.open_in_new, t.files.open, FileAction.open),
         item(Icons.drive_file_move_outlined, t.files.moveToMatome,
             FileAction.moveToMatome),
+        // File-into-space (#1501) — a SPACE is the sync boundary, distinct from a
+        // matome group. Surfaced only behind the local-first-spaces flag; the
+        // `const if` tree-shakes the entry out when OFF (shipped reality).
+        if (FeatureFlags.localFirstSpaces)
+          item(Icons.workspaces_outline, t.files.fileIntoSpace,
+              FileAction.fileIntoSpace),
         item(Icons.download_outlined, t.files.download, FileAction.download),
         Divider(height: spacing.sm, color: colors.border),
         item(Icons.delete_outline, t.files.delete, FileAction.delete,
