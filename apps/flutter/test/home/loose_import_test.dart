@@ -12,6 +12,7 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
@@ -173,6 +174,9 @@ void main() {
         final container = ProviderContainer(overrides: [
           appDatabaseProvider.overrideWithValue(db),
           recordingsRepositoryProvider.overrideWithValue(repo),
+          // The W4 gate's [Caller] reads this; override so the drain never
+          // builds the real auth chain (secure-storage platform channels).
+          currentOwnerIdProvider.overrideWithValue('owner-1'),
           uploadQueueProvider.overrideWith(
             (ref) => UploadQueue(
               ref,
@@ -183,10 +187,22 @@ void main() {
         ]);
         addTearDown(container.dispose);
 
+        // The CLOUD space the recording is filed into (`is_local = 0`) — a real
+        // `workspaces` row so the W4 data-egress gate can resolve it to a CLOUD
+        // SpaceRef and ALLOW the drain. (The gate fails-closed on an unknown
+        // space id, so the synced-path regression needs the space to exist.)
+        await db.into(db.workspaces).insert(WorkspacesCompanion.insert(
+              id: '7',
+              name: 'Cloud space',
+              createdAt: DateTime.now().millisecondsSinceEpoch,
+              isLocal: const Value(0),
+            ));
+
         // A recording ALREADY filed into a cloud space (workspaceId set to a
         // numeric Core space id), pending_upload — the synced reality the W4
-        // gate consults via the resolver. The upload queue gates ONLY on
-        // processingStatus, so the loose-import change must not stop it draining.
+        // gate consults via the resolver. The upload queue drains it ONLY
+        // because the effective space resolves to CLOUD; the loose-import change
+        // must not stop the synced path.
         const localId = 'rec_local_cloud_filed';
         await db.recordingsDao.insertRecording(
           RecordingsCompanion(

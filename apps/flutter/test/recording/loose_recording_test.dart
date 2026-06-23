@@ -196,8 +196,11 @@ void main() {
     );
 
     test(
-      'no id regression (#43): a loose recording still reconciles its Core id '
-      'into coreId on the SAME local-PK row when Core is reachable (no dup)',
+      'W4 gate (#1498): a loose recording is HELD even when Core is reachable — '
+      'effective space is NULL (Inbox), so it NEVER drains/reconciles a coreId '
+      '(nothing-in-inbox-uploads). No id regression: the local-PK row is intact, '
+      'coreId stays NULL for the queue to drain once it is filed into a cloud '
+      'space.',
       () async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
         addTearDown(db.close);
@@ -228,21 +231,26 @@ void main() {
 
         final row = await db.recordingsDao.getRecordingById(localId);
         expect(row, isNotNull);
-        // Loose membership SURVIVES the Core reconcile — capture is decoupled
-        // from organization; the upload only fills coreId/status.
+        // Loose membership: capture is decoupled from organization.
         expect(row!.matomeId, isNull,
-            reason: 'a loose recording stays loose after the Core reconcile');
+            reason: 'a finished recording lands loose (no matome minted)');
         expect(row.workspaceId, isNull);
-        // The Core id reconciled onto the SAME local-PK row — exactly one row
-        // carries coreId 777, so the by-coreId lookup is unambiguous (no dup).
-        expect(row.id, localId);
-        expect(row.coreId, 777,
-            reason: 'loose path still reconciles coreId — no id regression');
-        expect(row.processingStatus, 'done');
+        // W4 DATA-EGRESS GATE (#1498 / spec R2): the effective space is NULL
+        // (Inbox), so the inline `drainRow` in InboxUploader.upload is HELD —
+        // the loose item NEVER egresses to Core even though Core is reachable.
+        expect(row.id, localId, reason: 'local-PK row is intact');
+        expect(row.coreId, isNull,
+            reason:
+                'HELD by the gate: a loose (Inbox) item never reconciles a '
+                'coreId — nothing-in-inbox-uploads (#1498)');
+        expect(row.processingStatus, kProcessingStatusPendingUpload,
+            reason: 'held rows stay retriable; they drain only once filed into '
+                'a cloud space');
+        // No row was created on Core, so no by-coreId row exists (no dup, and
+        // no leak): the loose item produced ZERO Core state.
         final byCore = await db.recordingsDao.recordingByCoreId(777);
-        expect(byCore, isNotNull);
-        expect(byCore!.id, localId,
-            reason: 'no duplicate-coreId: the loose row owns coreId 777');
+        expect(byCore, isNull,
+            reason: 'a held loose item creates NO Core row (zero egress)');
       },
       skip: _flagOn ? false : 'ON-only lane',
     );

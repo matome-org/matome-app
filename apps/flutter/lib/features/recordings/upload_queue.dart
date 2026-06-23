@@ -4,14 +4,21 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
+import '../../core/db/daos/matomes_dao.dart';
 import '../../core/db/daos/recordings_dao.dart';
+import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../../i18n/strings.g.dart';
+import '../files/files_providers.dart';
 import '../home/inbox_controller.dart';
 import '../home/inbox_upload.dart';
+import '../spaces/effective_space.dart';
+import '../spaces/space_ref_mapping.dart';
+import '../spaces/sync_policy.dart';
 import 'recording.dart';
 import 'recording_ids.dart';
 import 'recordings_repository.dart';
@@ -103,6 +110,8 @@ class UploadQueue {
 
   RecordingsRepository get _repo => _ref.read(recordingsRepositoryProvider);
   RecordingsDao get _dao => _ref.read(recordingsDaoProvider);
+  WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
+  MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
   InboxController get _inbox => _ref.read(inboxControllerProvider.notifier);
 
   /// Per-local-id hooks registered by callers that own recorder-session
@@ -168,9 +177,74 @@ class UploadQueue {
       // Only `pending_upload` rows are drainable. A row that already reconciled
       // to processing/done/failed is intentionally skipped (idempotency).
       if (row.processingStatus != kProcessingStatusPendingUpload) return;
+      // DATA-EGRESS GATE (#1498, plan #102 W4 / spec R2.1). Behind the
+      // `localFirstSpaces` flag, an item drains ONLY when its EFFECTIVE space is
+      // a CLOUD space — routed through the ONE operation-keyed decision point
+      // [SyncPolicy.can]. Inbox items (effective space NULL) and items in a
+      // LOCAL space are HELD here, never egressed. This is the SINGLE drain
+      // decision point: `drain()`, `drainRow()` and the manual retry all pass
+      // through it. Flag OFF ⇒ byte-unchanged (no gate, drain on pending_upload).
+      if (FeatureFlags.localFirstSpaces && !await _maySync(row)) {
+        AppLog.event(
+          LogCat.upload,
+          'drainRow: HELD (effective space not cloud) $localId',
+        );
+        return;
+      }
       await _drainRow(row);
     } finally {
       _inFlight.remove(localId);
+    }
+  }
+
+  /// The data-egress decision for a single row, routed through the ONE
+  /// operation-keyed gate [SyncPolicy.can] over the ONE resolver
+  /// [EffectiveSpace]. Resolves the row's EFFECTIVE space
+  /// (`matome.space_id ?? recording.workspace_id`, matome WINS) to a [SpaceRef]
+  /// VALUE OBJECT, then asks the gate whether `Operation.spaceSync` is allowed.
+  ///
+  /// Returns true ONLY for an effective space that exists AND is cloud. Inbox
+  /// (NULL effective space), a LOCAL effective space, or an unknown/missing
+  /// space all resolve to false (fail-closed — never egressed). The
+  /// sync-eligibility predicate is NOT recomputed here: it is computed once,
+  /// inside the resolver/gate.
+  Future<bool> _maySync(RecordingRow row) async {
+    // matome WINS: if the row is in a matome, the matome's space_id is the
+    // authoritative effective space and the row's own workspaceId is shadowed.
+    String? matomeSpaceId;
+    final matomeId = row.matomeId;
+    if (matomeId != null) {
+      final matome = await _matomesDao.getById(matomeId);
+      matomeSpaceId = matome?.spaceId;
+    }
+    final membership = ItemMembership(
+      matomeSpaceId: matomeSpaceId,
+      workspaceId: row.workspaceId,
+    );
+    final spaceId = EffectiveSpace.effectiveSpaceId(membership);
+    if (spaceId == null) return false; // Inbox — never egressed.
+
+    final spaceRow = await _workspacesDao.getWorkspaceById(spaceId);
+    // Fail-closed: an effective space id with no known `workspaces` row is
+    // treated as not-syncable (never silently uploaded).
+    if (spaceRow == null) return false;
+
+    return SyncPolicy.can(
+      _currentCaller(),
+      Operation.spaceSync,
+      spaceRefFromRow(spaceRow),
+    );
+  }
+
+  /// The acting [Caller] — the future-PDP input. Reads the authenticated owner
+  /// id BEST-EFFORT: an unresolved auth chain yields an anonymous caller rather
+  /// than throwing (the `spaceSync` decision today gates only on the space being
+  /// cloud, so a null user id never WIDENS access — it stays fail-closed).
+  Caller _currentCaller() {
+    try {
+      return Caller(userId: _ref.read(currentOwnerIdProvider));
+    } catch (_) {
+      return Caller.anonymous;
     }
   }
 

@@ -14,6 +14,8 @@ import '../files/files_providers.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recordings_repository.dart';
 import '../recordings/upload_queue.dart';
+import '../spaces/space_ref_mapping.dart';
+import '../spaces/sync_policy.dart';
 import 'inbox_item.dart';
 import 'inbox_sync.dart';
 
@@ -165,6 +167,18 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     );
     await reloadFromLocal();
 
+    // DATA-EGRESS GATE (#1498, plan #102 W4 / spec R2.1). Filing into a LOCAL
+    // space is ALLOWED (filing ≠ sync) — the local move above always holds —
+    // but it MUST NOT push to Core. The Core PATCH below is exactly the egress
+    // step (it makes a `rec_local_<uuid>` row eligible to sync to a cloud
+    // space), so behind the `localFirstSpaces` flag it routes through the ONE
+    // operation-keyed gate [SyncPolicy.can] over the ONE resolver, NOT the old
+    // `int.tryParse(workspaceId)` numeric-id heuristic (which gated on
+    // Core-backed-ness, NEVER on `is_local`, and so could leak a filing into a
+    // LOCAL Core space up to cloud — W3-audit #74712). Filing into a local
+    // space stays purely local; only landing in a CLOUD space syncs.
+    if (!await _maySyncMoveTarget(workspaceId)) return;
+
     // Persist to Core only when the recording is reconciled with Core (its
     // `coreId` column is set) AND the target space is Core-backed (numeric id).
     // A `rec_local_<uuid>` row that hasn't uploaded yet has `coreId` null — the
@@ -196,6 +210,36 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         }
       }
     }
+  }
+
+  /// Whether filing a recording into [workspaceId] may proceed to the Core
+  /// PATCH (the data-egress step), routed through the ONE operation-keyed gate
+  /// [SyncPolicy.can] over the ONE resolver (#1498, plan #102 W4).
+  ///
+  /// Flag OFF ⇒ always true (byte-unchanged: the legacy numeric-id gate that
+  /// follows is the sole filter). Flag ON ⇒ true ONLY when the target space
+  /// resolves to a CLOUD space; a LOCAL space (or an unknown/local-only `ws_…`
+  /// id with no `workspaces` row) returns false, so the local file-move holds
+  /// but NO upload is enqueued — filing ≠ sync (spec R2).
+  Future<bool> _maySyncMoveTarget(String workspaceId) async {
+    if (!FeatureFlags.localFirstSpaces) return true;
+    final spaceRow = await _workspacesDao.getWorkspaceById(workspaceId);
+    if (spaceRow == null) return false; // fail-closed: unknown space.
+    // BEST-EFFORT caller id (the future-PDP input): an unresolved auth chain
+    // yields an anonymous caller rather than throwing. The `spaceSync` decision
+    // today gates only on the space being cloud, so a null user id never widens
+    // access — it stays fail-closed.
+    String? ownerId;
+    try {
+      ownerId = _ref.read(currentOwnerIdProvider);
+    } catch (_) {
+      ownerId = null;
+    }
+    return SyncPolicy.can(
+      Caller(userId: ownerId),
+      Operation.spaceSync,
+      spaceRefFromRow(spaceRow),
+    );
   }
 
   /// All workspaces available as move-to-space targets.

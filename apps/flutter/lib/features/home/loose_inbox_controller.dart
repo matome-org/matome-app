@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/feature_flags.dart';
+import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/providers.dart';
 import 'inbox_controller.dart';
@@ -44,15 +45,23 @@ class LooseInboxController
 
   Future<List<InboxItem>> _loadItems() async {
     final rows = await _dao.getLooseRecordings();
+    // Pair each item with its SOURCE row so the resolver-confirm reads the row's
+    // REAL membership, not constant nulls. `getLooseRecordings` narrows to
+    // `matomeId IS NULL AND workspaceId IS NULL`, so the confirm normally passes
+    // every row — but routing the row's ACTUAL `workspaceId` (a loose row has no
+    // matome wrapper, so the matome-space side is genuinely NULL) through the
+    // ONE resolver makes the guard REAL: a row that slipped in with a non-null
+    // `workspaceId` resolves to a non-null effective space and is correctly
+    // EXCLUDED from the loose Inbox, instead of the previous inert no-op (#74712,
+    // spec R1.2 — never an inline re-derivation).
+    final byId = <String, RecordingRow>{for (final row in rows) row.id: row};
     final items = rows.map(InboxItem.fromRow).toList(growable: false);
-    // Confirm membership through the ONE resolver. `getLooseRecordings` already
-    // narrows to `matomeId IS NULL AND workspaceId IS NULL`, so both membership
-    // sides are NULL and the resolver returns NULL (Inbox) — this is the
-    // resolver-routed proof, never an inline re-derivation (spec R1.2).
     return inboxLooseItems(
       items,
+      // A loose recording has no matome wrapper, so its matome-space side is
+      // genuinely NULL — the resolver then keys off the row's own workspaceId.
       matomeSpaceIdOf: (_) => null,
-      workspaceIdOf: (_) => null,
+      workspaceIdOf: (item) => byId[item.id]?.workspaceId,
     );
   }
 
