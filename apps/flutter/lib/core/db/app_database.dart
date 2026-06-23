@@ -168,7 +168,49 @@ part 'app_database.g.dart';
 ///   -- `workspaces` without `is_local` via a copy table. Leaving the column in
 ///   -- place is otherwise harmless (default-local, old code ignores it).
 ///   PRAGMA user_version = 16;
-const int kSchemaVersion = 17;
+///
+/// v18 (m018, W5 backfill — local-first-spaces #102 W5, #1500, sync-gate spec
+/// §4 M1/M3) is the CORRECTIVE backfill m017 left undone. m017 landed
+/// `is_local` default 1 (LOCAL) on EVERY existing workspace — but in the LIVE
+/// world today filed spaces SYNC: pre-#102 sync-eligibility is `matome.space_id
+/// != null` (verified: `matomes_dao.dart` `listFiledMatomes`,
+/// `matome_sync_service.dart` push gate). So leaving every existing synced space
+/// at `is_local = 1` would silently DARKEN it (stop its items syncing) the
+/// moment the `localFirstSpaces` gate (W4 #1498) goes live. m018 flips the
+/// SYNCED spaces back to CLOUD (`is_local = 0`) so today's sync reality is
+/// preserved EXACTLY.
+///
+/// THE RULE (which spaces sync today ⇒ map to CLOUD): a workspace is CLOUD iff
+/// it is reachable by a **filed matome** (`matomes.space_id = w.id`) — the EXACT
+/// pre-#102 sync gate verified in spec §4.1 (the live drain pushes filed
+/// matomes, never bare recordings). A workspace with NO filed matome syncs
+/// NOTHING today, so it STAYS LOCAL (`is_local = 1`) — default-local is the
+/// safe, spec-§4.1-faithful choice (cloud ONLY because it truly syncs today).
+/// The direct-file (M6) seam is deliberately NOT a "syncs today" signal: a bare
+/// recording does not reach Core today (the drain pushes matomes), and m007's
+/// forced mint means none exist. This is backfill-only: it writes ONLY
+/// `is_local`, never deletes/moves a row, never touches Core, and is IDEMPOTENT
+/// (re-running re-derives the same set).
+///
+/// FORWARD-COMPAT (H6, spec R2.2): m018 sets Axis A (`is_local`) coherently and
+/// leaves Axis B (m006 `space_type`, default 'personal') UNTOUCHED, so NO row
+/// lands in an illegal combo (`local+org`, or `org` left local). Invariants
+/// hold: `local ⟹ personal` (untouched rows stay personal), `org ⟹ cloud`
+/// (no org rows exist in #102; the flip only ever moves personal→cloud, never
+/// org→local).
+///
+/// LOOSE BACKFILL (M5): pre-#102, m007's forced-mint gave EVERY recording a
+/// matome, so NO loose recordings exist today — m018 creates none. The M5 loose
+/// shape (reversing the forced mint) is the DOWN/reversal direction, not a
+/// forward data change here. m018's forward write is the `is_local` flip ALONE.
+///
+/// DOWN-migration / reversal (no automatic Drift downgrade; the compensating
+/// path is [reverseW5Backfill] — proven by test): restore the pre-#102 /
+/// m017-default label state by setting every row back to `is_local = 1`
+/// (local). Non-lossy — it touches only the `is_local` label, never data.
+///   UPDATE workspaces SET is_local = 1;
+///   PRAGMA user_version = 17;
+const int kSchemaVersion = 18;
 
 /// The offline-first local store.
 ///
@@ -561,6 +603,25 @@ class AppDatabase extends _$AppDatabase {
           if (from < 17) {
             await m.addColumn(workspaces, workspaces.isLocal);
           }
+          // m018 — W5 CORRECTIVE backfill (local-first-spaces #102 W5, #1500,
+          // sync-gate spec §4 M1/M3). m017 defaulted EVERY workspace to
+          // is_local=1 (LOCAL), but filed spaces SYNC in the live world today
+          // (pre-#102 gate: matome.space_id != null). Leaving a synced space at
+          // is_local=1 would DARKEN it under the W4 #1498 gate. This step flips
+          // the spaces whose items sync today back to CLOUD (is_local=0),
+          // preserving today's sync reality EXACTLY.
+          //
+          // Backfill-only + non-destructive + idempotent: writes ONLY is_local,
+          // never deletes/moves a row, never touches Core. The CLOUD set is
+          // re-derived from live membership each run, so a re-run changes
+          // nothing. Axis B (`space_type`) is left untouched (default 'personal')
+          // so no row lands in an illegal combo (H6 / spec R2.2).
+          //
+          // Reversal: [reverseW5Backfill] restores the m017-default state
+          // (is_local=1 on every row) — proven by test (#1500 gate).
+          if (from < 18) {
+            await _backfillCloudSyncedSpaces();
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
@@ -688,6 +749,122 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
+  /// The SQL predicate (a `WHERE` fragment on `workspaces w`) that selects the
+  /// spaces which SYNC TODAY and therefore map to CLOUD (`is_local = 0`) in the
+  /// W5 backfill (#1500, sync-gate spec §4 M1/M3).
+  ///
+  /// A space syncs today iff it is reachable by a FILED MATOME
+  /// (`matomes.space_id = w.id`) — the EXACT pre-#102 sync gate verified in spec
+  /// §4.1 (`matome.space_id != null` ⇒ pushed; the live drain iterates
+  /// `listFiledMatomes`). A bare recording with no matome does NOT reach Core
+  /// today (the drain pushes matomes, never bare recordings; and m007's forced
+  /// mint means no bare recording exists anyway), so the DIRECT-FILE (M6) seam
+  /// is deliberately NOT a "syncs today" signal — including it would risk
+  /// over-classifying a space cloud on a row that does not actually sync. A
+  /// space with no filed matome syncs nothing today, so it stays LOCAL (the
+  /// m017 default). Sharing this predicate between the backfill UPDATE and the
+  /// dry-run audit guarantees the audit counts the EXACT rows the backfill
+  /// flips.
+  static const String _kSyncsTodayPredicate =
+      'EXISTS (SELECT 1 FROM matomes m WHERE m.space_id = w.id)';
+
+  /// m018 W5 backfill (#1500): flip every workspace that SYNCS TODAY from the
+  /// m017 LOCAL default to CLOUD (`is_local = 0`), preserving today's live sync
+  /// reality (sync-gate spec §4 M1/M3, §4.1 verified invariant).
+  ///
+  /// BACKFILL-ONLY + NON-DESTRUCTIVE: the single statement writes ONLY
+  /// `is_local`; it never deletes/moves a row, never touches Core, never touches
+  /// Axis B (`space_type`). IDEMPOTENT: the CLOUD set is re-derived from live
+  /// membership every run, and `is_local = 0` is a fixed target, so a re-run
+  /// re-selects the same rows and changes nothing. Runs inside the surrounding
+  /// migration so a failure rolls the whole step back.
+  ///
+  /// FORWARD-COMPAT (H6 / spec R2.2): only personal spaces exist in #102, so the
+  /// flip is always personal→cloud — never org→local or local+org. The
+  /// invariants `local ⟹ personal` / `org ⟹ cloud` are preserved without
+  /// touching `space_type`.
+  Future<void> _backfillCloudSyncedSpaces() async {
+    await customStatement(
+      'UPDATE workspaces AS w SET is_local = 0 '
+      'WHERE ($_kSyncsTodayPredicate) AND w.is_local != 0',
+    );
+  }
+
+  /// COMPENSATING / DOWN path for the m018 W5 backfill (#1500 reversal gate).
+  /// Drift is forward-only on device, so reversal is an EXPLICIT,
+  /// test-proven method rather than an automatic downgrade.
+  ///
+  /// Restores the pre-#102 / m017-default label state: sets every workspace back
+  /// to `is_local = 1` (LOCAL). Non-lossy — it touches only the `is_local`
+  /// label, never row data, never Core. The caller is responsible for pinning
+  /// `PRAGMA user_version = 17` if it wants the DB to re-run m018 on the next
+  /// open; [reverseW5Backfill] alone only undoes the label flip.
+  @visibleForTesting
+  Future<void> reverseW5Backfill() async {
+    await customStatement('UPDATE workspaces SET is_local = 1');
+  }
+
+  /// DRY-RUN AUDIT for the m018 W5 backfill (#1500): bucket counts over the
+  /// CURRENT `workspaces` / `matomes` / `recordings` state, including the
+  /// tenancy split, so the two-axis invariants are verifiable BEFORE/AFTER the
+  /// real run.
+  ///
+  /// Buckets (Axis A × membership):
+  ///   * `looseRecordings`   — recordings with no matome (effective space NULL;
+  ///     should be 0 today because of m007's forced mint).
+  ///   * `draftMatomes`      — matomes with `space_id IS NULL` (Inbox / draft;
+  ///     effective space NULL; never sync).
+  ///   * `localSpaces`       — workspaces with `is_local = 1`.
+  ///   * `cloudSpaces`       — workspaces with `is_local = 0`.
+  ///   * `syncsTodaySpaces`  — workspaces the backfill rule classifies CLOUD
+  ///     (have ≥1 item that syncs today) — the target CLOUD set.
+  ///   * `illegalLocalOrg`   — ROWS in an illegal Axis-A×B combo
+  ///     (`is_local = 1 AND space_type = 'org'`, or `space_type = 'org' AND
+  ///     is_local != 0`). MUST be 0 (H6 invariant).
+  /// Plus the tenancy split of the workspaces table
+  /// (`tenancyPersonal/Shared/Org`). Read-only — mutates nothing.
+  Future<W5BackfillAudit> dryRunW5Backfill() async {
+    Future<int> count(String sql) async {
+      final row = await customSelect(sql).getSingle();
+      return row.read<int>('c');
+    }
+
+    return W5BackfillAudit(
+      looseRecordings: await count(
+        // TRUE loose = effective space NULL = no matome AND no directly-filed
+        // workspace (spec R1). A bare recording WITH a workspace is direct-filed
+        // (M6), not loose. Should be 0 today (m007 forced mint).
+        'SELECT COUNT(*) AS c FROM recordings '
+        'WHERE matome_id IS NULL AND workspaceId IS NULL',
+      ),
+      draftMatomes: await count(
+        'SELECT COUNT(*) AS c FROM matomes WHERE space_id IS NULL',
+      ),
+      localSpaces: await count(
+        'SELECT COUNT(*) AS c FROM workspaces WHERE is_local = 1',
+      ),
+      cloudSpaces: await count(
+        'SELECT COUNT(*) AS c FROM workspaces WHERE is_local = 0',
+      ),
+      syncsTodaySpaces: await count(
+        'SELECT COUNT(*) AS c FROM workspaces w WHERE $_kSyncsTodayPredicate',
+      ),
+      tenancyPersonal: await count(
+        "SELECT COUNT(*) AS c FROM workspaces WHERE space_type = 'personal'",
+      ),
+      tenancyShared: await count(
+        "SELECT COUNT(*) AS c FROM workspaces WHERE space_type = 'shared'",
+      ),
+      tenancyOrg: await count(
+        "SELECT COUNT(*) AS c FROM workspaces WHERE space_type = 'org'",
+      ),
+      illegalLocalOrg: await count(
+        "SELECT COUNT(*) AS c FROM workspaces "
+        "WHERE space_type = 'org' AND is_local != 0",
+      ),
+    );
+  }
+
   /// m011 backfill (#1436): snapshot legacy `notes` then copy-forward into an
   /// empty `transcript` for audio rows — THE IRREVERSIBLE step, made
   /// reversible-by-construction. Runs inside the surrounding migration so a
@@ -727,4 +904,56 @@ class AppDatabase extends _$AppDatabase {
       "AND notes IS NOT NULL AND notes != ''",
     );
   }
+}
+
+/// Immutable before/after audit of the m018 W5 backfill (#1500, sync-gate spec
+/// §4). Returned by [AppDatabase.dryRunW5Backfill]; the migration's bucket +
+/// tenancy counts are read off this so the two-axis invariants are verifiable
+/// at migration time (and the dry-run is reviewable before the real run).
+class W5BackfillAudit {
+  const W5BackfillAudit({
+    required this.looseRecordings,
+    required this.draftMatomes,
+    required this.localSpaces,
+    required this.cloudSpaces,
+    required this.syncsTodaySpaces,
+    required this.tenancyPersonal,
+    required this.tenancyShared,
+    required this.tenancyOrg,
+    required this.illegalLocalOrg,
+  });
+
+  /// Recordings with no matome (effective space NULL ⇒ Inbox/loose). Should be
+  /// 0 today (m007 forced mint gave every recording a matome).
+  final int looseRecordings;
+
+  /// Matomes with `space_id IS NULL` — draft / Inbox matomes (never sync).
+  final int draftMatomes;
+
+  /// Workspaces with `is_local = 1` (LOCAL, Axis A).
+  final int localSpaces;
+
+  /// Workspaces with `is_local = 0` (CLOUD, Axis A).
+  final int cloudSpaces;
+
+  /// Workspaces the backfill rule classifies CLOUD (≥1 item that syncs today) —
+  /// the target CLOUD set the flip produces.
+  final int syncsTodaySpaces;
+
+  /// Tenancy split (Axis B, `space_type`).
+  final int tenancyPersonal;
+  final int tenancyShared;
+  final int tenancyOrg;
+
+  /// Rows in an ILLEGAL Axis-A×B combo (`org` left non-cloud). MUST be 0 (H6 /
+  /// spec R2.2: `org ⟹ cloud`).
+  final int illegalLocalOrg;
+
+  @override
+  String toString() => 'W5BackfillAudit('
+      'loose: $looseRecordings, draft: $draftMatomes, '
+      'local: $localSpaces, cloud: $cloudSpaces, '
+      'syncsToday: $syncsTodaySpaces, '
+      'tenancy[personal: $tenancyPersonal, shared: $tenancyShared, '
+      'org: $tenancyOrg], illegalLocalOrg: $illegalLocalOrg)';
 }

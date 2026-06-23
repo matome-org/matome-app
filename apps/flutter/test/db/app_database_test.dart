@@ -71,10 +71,10 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 17 '
-      '(…m015 byte_size + m016 recording_contacts + m017 is_local)',
+      'schemaVersion is 18 '
+      '(…m016 recording_contacts + m017 is_local + m018 W5 backfill)',
       () {
-        expect(db.schemaVersion, 17);
+        expect(db.schemaVersion, 18);
       },
     );
 
@@ -567,7 +567,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -687,7 +687,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -837,7 +837,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final tables = await upgraded
           .customSelect(
@@ -1159,7 +1159,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final tables = await upgraded
           .customSelect(
@@ -1214,7 +1214,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1366,7 +1366,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(matomes)')
@@ -1405,7 +1405,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1565,7 +1565,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1608,7 +1608,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1831,7 +1831,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1934,7 +1934,7 @@ void main() {
       // must not re-snapshot or re-copy (values already settled stay settled).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
 
       final r =
           await second.recordingsDao.getRecordingById('rec_audio_has_tx');
@@ -2140,7 +2140,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2187,7 +2187,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2350,7 +2350,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(contacts)')
@@ -2402,7 +2402,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
       final cols = await second
           .customSelect('PRAGMA table_info(contacts)')
           .map((r) => r.read<String>('name'))
@@ -2496,7 +2496,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2537,7 +2537,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2651,7 +2651,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 17);
+      expect(upgraded.schemaVersion, 18);
 
       final tables = await upgraded
           .customSelect(
@@ -2682,7 +2682,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
       final tables = await second
           .customSelect(
               "SELECT name FROM sqlite_master WHERE type='table'")
@@ -2826,7 +2826,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 17);
+        expect(upgraded.schemaVersion, 18);
 
         // is_local column now exists on workspaces.
         final cols = await upgraded
@@ -2895,13 +2895,438 @@ void main() {
       // Re-opening at v17 must not re-run m017 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 17);
+      expect(second.schemaVersion, 18);
       final all = await second
           .customSelect('SELECT id, is_local FROM workspaces')
           .map((r) => r.read<int>('is_local'))
           .get();
       expect(all, isNotEmpty);
       expect(all.every((v) => v == 1), isTrue);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (k0b) m018 — W5 CORRECTIVE backfill (local-first-spaces #102 W5, #1500,
+  // sync-gate spec §4 M1/M3). m017 defaulted EVERY workspace to is_local=1
+  // (LOCAL), but filed spaces SYNC in the live world today (pre-#102 gate:
+  // matome.space_id != null). m018 flips the SYNCED spaces back to CLOUD
+  // (is_local=0) so today's sync reality is preserved exactly — the failure to
+  // prevent is silently DARKENING a live synced space.
+  //
+  // Build a v17-shaped DB by hand (workspaces WITH is_local default 1, matomes
+  // + recordings present, user_version=17) with a representative pre-migration
+  // mix, then open AppDatabase over the same file so onUpgrade(17→18) runs.
+  //
+  // Fixture (the §4 mapping, one space per pre-state):
+  //   * ws_synced_matome — has a FILED matome (space_id = it) ⇒ syncs today (M1)
+  //     ⇒ must flip to CLOUD (is_local=0).
+  //   * ws_direct_no_matome — has only a BARE recording (workspaceId = it,
+  //     matome_id NULL). A bare recording does NOT reach Core today (the live
+  //     drain pushes filed matomes, never bare recordings), so this space syncs
+  //     NOTHING today ⇒ stays LOCAL. (This row also can't exist under m007's
+  //     forced mint — it is here only to PROVE the direct-file seam is not a
+  //     "syncs today" signal and is not over-classified cloud.)
+  //   * ws_empty — NO items ⇒ syncs nothing today ⇒ stays LOCAL (is_local=1).
+  //   * ws_default_personal — seeded default, NO items here ⇒ stays LOCAL.
+  //   * a DRAFT matome (space_id NULL) ⇒ effective space NULL (Inbox); never
+  //     touched, never synced (M2).
+  // -------------------------------------------------------------------------
+  group('m018 v17→v18 migration (W5 backfill is_local)', () {
+    late Directory dir;
+    late File file;
+
+    /// v17-shaped DB: workspaces WITH is_local (m017) default 1, plus matomes /
+    /// recordings carrying a representative pre-migration mix. user_version=17.
+    void seedV17Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT,
+          is_local INTEGER NOT NULL DEFAULT 1
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER,
+          archived_at INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id),
+          transcript TEXT,
+          notes_legacy_raw TEXT,
+          original_extension TEXT,
+          owner_id TEXT,
+          byte_size INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          email TEXT, phone TEXT, company TEXT, title TEXT,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          recording_id TEXT NOT NULL,
+          contact_id TEXT NOT NULL,
+          UNIQUE(recording_id, contact_id)
+        );
+      ''');
+      // Spaces — all seeded is_local=1 (the m017 default state).
+      for (final (id, name) in const [
+        ('ws_default_personal', 'Pessoal'),
+        ('ws_synced_matome', 'Synced via matome'),
+        ('ws_direct_no_matome', 'Direct bare recording'),
+        ('ws_empty', 'Empty unused'),
+      ]) {
+        sdb.execute(
+          "INSERT INTO workspaces "
+          "(id, name, isDefault, createdAt, space_type, owner_id, is_local) "
+          "VALUES ('$id', '$name', 0, 100, 'personal', NULL, 1);",
+        );
+      }
+      // M1 — a FILED matome reachable from ws_synced_matome (syncs today).
+      sdb.execute(
+        "INSERT INTO matomes (id, space_id, title, happened_at, created_at) "
+        "VALUES ('mat_filed', 'ws_synced_matome', 'Filed', 1, 1);",
+      );
+      // A recording wrapped by the filed matome (matome_id set ⇒ NOT loose).
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, "
+        " workspaceId, matome_id) "
+        "VALUES ('rec_in_matome', 'R', '9:00', '0:30', '/tmp/a.m4a', 1, "
+        " 'ws_synced_matome', 'mat_filed');",
+      );
+      // A BARE recording filed DIRECTLY into ws_direct_no_matome with NO matome
+      // wrapper (matome_id NULL). A bare recording does NOT sync today, so this
+      // space stays LOCAL — proving the direct-file seam is not over-classified.
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, "
+        " workspaceId, matome_id) "
+        "VALUES ('rec_direct', 'R2', '9:00', '0:30', '/tmp/b.m4a', 1, "
+        " 'ws_direct_no_matome', NULL);",
+      );
+      // M2 — a DRAFT matome (space_id NULL ⇒ Inbox); never synced, never
+      // touched by the backfill.
+      sdb.execute(
+        "INSERT INTO matomes (id, space_id, title, happened_at, created_at) "
+        "VALUES ('mat_draft', NULL, 'Draft', 1, 1);",
+      );
+      sdb.execute('PRAGMA user_version = 17;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m018');
+      file = File('${dir.path}/matome.sqlite');
+      seedV17Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    Future<Map<String, int>> isLocalById(AppDatabase d) async {
+      final rows = await d
+          .customSelect('SELECT id, is_local FROM workspaces')
+          .map((r) => (r.read<String>('id'), r.read<int>('is_local')))
+          .get();
+      return {for (final (id, v) in rows) id: v};
+    }
+
+    // FIXTURE-IN / FIXTURE-OUT — the §4 table, one assertion per pre-state.
+    test(
+      'v17→v18 flips ONLY the synced spaces to CLOUD; unused stay LOCAL '
+      '(§4 M1/M3/M6 per-space labels)',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
+        expect(upgraded.schemaVersion, 18);
+
+        final byId = await isLocalById(upgraded);
+        // M1 — filed-matome space syncs today ⇒ CLOUD (0).
+        expect(byId['ws_synced_matome'], 0,
+            reason: 'filed-matome space syncs today ⇒ cloud');
+        // Bare-recording-only space does NOT sync today ⇒ stays LOCAL (1) — the
+        // direct-file seam is not a "syncs today" signal.
+        expect(byId['ws_direct_no_matome'], 1,
+            reason: 'bare recording does not sync today ⇒ stays local');
+        // No items ⇒ syncs nothing ⇒ stays LOCAL (1) — no darkening, no
+        // exposure.
+        expect(byId['ws_empty'], 1, reason: 'empty space stays local');
+        expect(byId['ws_default_personal'], 1,
+            reason: 'unused default space stays local');
+
+        // M2 — the draft matome is untouched and stays Inbox (space NULL).
+        final draftSpace = await upgraded
+            .customSelect(
+              "SELECT space_id FROM matomes WHERE id = 'mat_draft'",
+            )
+            .map((r) => r.read<String?>('space_id'))
+            .getSingle();
+        expect(draftSpace, isNull, reason: 'draft matome stays Inbox');
+
+        // NON-DESTRUCTIVE: no Core data moved — every seeded row still present,
+        // recordings keep their matome wiring.
+        final recCount = await upgraded
+            .customSelect('SELECT COUNT(*) AS c FROM recordings')
+            .map((r) => r.read<int>('c'))
+            .getSingle();
+        expect(recCount, 2);
+      },
+    );
+
+    // FORCED-MINT invariant — no loose recordings exist today (m007).
+    test('no loose recordings exist pre/post backfill (m007 forced-mint)',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+      final audit = await upgraded.dryRunW5Backfill();
+      expect(audit.looseRecordings, 0);
+    });
+
+    // NO ILLEGAL AXIS COMBO — after backfill, no row is local+org / org+local;
+    // every flipped row stays personal (Axis B untouched).
+    test('no illegal Axis-A×B combo after backfill; local ⟹ personal holds',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      final audit = await upgraded.dryRunW5Backfill();
+      expect(audit.illegalLocalOrg, 0);
+
+      final rows = await upgraded
+          .customSelect('SELECT space_type, is_local FROM workspaces')
+          .get();
+      for (final r in rows) {
+        final type = r.read<String>('space_type');
+        final isLocal = r.read<int>('is_local');
+        // Axis B untouched: every row is still 'personal'.
+        expect(type, 'personal');
+        // local ⟹ personal (trivially true here) and org ⟹ cloud (no org).
+        if (isLocal == 1) expect(type, 'personal');
+      }
+    });
+
+    // DRY-RUN AUDIT — before/after bucket + tenancy counts.
+    test('dry-run audit: before vs after bucket + tenancy split', () async {
+      // BEFORE — open a raw handle at v17 WITHOUT triggering the upgrade is not
+      // possible via AppDatabase (it always migrates), so compute the "before"
+      // by reversing immediately after open, then re-running forward.
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      // AFTER (forward already ran on open):
+      final after = await upgraded.dryRunW5Backfill();
+      expect(after.looseRecordings, 0);
+      expect(after.draftMatomes, 1);
+      expect(after.cloudSpaces, 1); // only ws_synced_matome (filed matome)
+      expect(after.localSpaces, 3); // direct-no-matome + empty + default
+      expect(after.syncsTodaySpaces, 1);
+      expect(after.tenancyPersonal, 4);
+      expect(after.tenancyShared, 0);
+      expect(after.tenancyOrg, 0);
+      expect(after.illegalLocalOrg, 0);
+
+      // BEFORE (reverse to the m017-default label state and re-audit):
+      await upgraded.reverseW5Backfill();
+      final before = await upgraded.dryRunW5Backfill();
+      expect(before.cloudSpaces, 0); // m017 default: all local
+      expect(before.localSpaces, 4);
+      // The CLOUD TARGET set is stable — the rule still classifies 1 as cloud
+      // even while they are currently labelled local.
+      expect(before.syncsTodaySpaces, 1);
+    });
+
+    // IDEMPOTENCY — re-running the backfill (re-open + explicit re-run) changes
+    // nothing.
+    test('m018 backfill is idempotent (re-open + explicit re-run)', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      final afterFirst = await isLocalById(first);
+      await first.close();
+
+      // Re-open at v18 — m018 must NOT re-run (no crash) and the labels are
+      // identical.
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 18);
+
+      // Explicit re-run of the corrective backfill is a no-op too (the CLOUD
+      // set is re-derived; already-cloud rows are skipped by the WHERE guard).
+      await second.customStatement(
+        'UPDATE workspaces AS w SET is_local = 0 '
+        'WHERE EXISTS (SELECT 1 FROM matomes m WHERE m.space_id = w.id) '
+        'AND w.is_local != 0',
+      );
+      final afterSecond = await isLocalById(second);
+      expect(afterSecond, afterFirst);
+      expect(afterSecond['ws_synced_matome'], 0);
+      expect(afterSecond['ws_direct_no_matome'], 1);
+      expect(afterSecond['ws_empty'], 1);
+    });
+
+    // ROLLBACK PROVEN — forward then compensating restores the prior (m017
+    // default) state; then forward again re-derives the cloud set.
+    test('rollback restores the m017-default state, forward re-derives it',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      // Forward already ran: 1 cloud (the filed-matome space).
+      final forward = await isLocalById(upgraded);
+      expect(forward.values.where((v) => v == 0).length, 1);
+
+      // COMPENSATING / DOWN: restore the prior label state (all local).
+      await upgraded.reverseW5Backfill();
+      final reversed = await isLocalById(upgraded);
+      expect(reversed.values.every((v) => v == 1), isTrue,
+          reason: 'rollback ⇒ every row back to m017 default local (1)');
+
+      // Re-running forward re-derives the identical cloud set (proves the
+      // forward is a pure function of live membership).
+      await upgraded.customStatement(
+        'UPDATE workspaces AS w SET is_local = 0 '
+        'WHERE EXISTS (SELECT 1 FROM matomes m WHERE m.space_id = w.id) '
+        'AND w.is_local != 0',
+      );
+      final reforward = await isLocalById(upgraded);
+      expect(reforward, forward,
+          reason: 'forward is a pure function of live membership');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (k0c) m018 W5 backfill — EMPTY DB (no spaces, no items). The migration must
+  // not crash and must produce zero rows in every bucket. A fresh onCreate
+  // (v18) install seeds exactly the default Space (local), no items.
+  // -------------------------------------------------------------------------
+  group('m018 W5 backfill — empty / fresh DB', () {
+    test('empty v17 DB migrates to v18 with zero items, no crash', () async {
+      final dir = Directory.systemTemp.createTempSync('matome_m018_empty');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final file = File('${dir.path}/matome.sqlite');
+
+      // Minimal v17 shape with NO workspaces / matomes / recordings at all.
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT,
+          is_local INTEGER NOT NULL DEFAULT 1
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT, aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER, archived_at INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL, summary TEXT,
+          timestamp TEXT NOT NULL, duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL, createdAt INTEGER NOT NULL,
+          notes TEXT, workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER, matome_id TEXT REFERENCES matomes(id),
+          transcript TEXT, notes_legacy_raw TEXT, original_extension TEXT,
+          owner_id TEXT, byte_size INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL, segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY, owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL, email TEXT, phone TEXT, company TEXT,
+          title TEXT, metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT, created_at INTEGER NOT NULL, core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          recording_id TEXT NOT NULL, contact_id TEXT NOT NULL,
+          UNIQUE(recording_id, contact_id)
+        );
+      ''');
+      sdb.execute('PRAGMA user_version = 17;');
+      sdb.dispose();
+
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+      expect(upgraded.schemaVersion, 18);
+
+      final audit = await upgraded.dryRunW5Backfill();
+      expect(audit.looseRecordings, 0);
+      expect(audit.draftMatomes, 0);
+      expect(audit.localSpaces, 0);
+      expect(audit.cloudSpaces, 0);
+      expect(audit.syncsTodaySpaces, 0);
+      expect(audit.tenancyPersonal, 0);
+      expect(audit.illegalLocalOrg, 0);
     });
   });
 
