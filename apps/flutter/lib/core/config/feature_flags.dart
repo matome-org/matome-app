@@ -67,4 +67,25 @@ class FeatureFlags {
     'ff.newNavShell',
     defaultValue: true,
   );
+
+  /// Local-first spaces (ADR-0006 / spec sync-gate-and-promotion, plan #102).
+  /// Default OFF (dark) — this is the SINGLE-FLIP rollback switch for the whole
+  /// item-organization-decoupled-from-sync behaviour. This ONE flag must drive
+  /// every coupled piece together so a half-flipped state cannot occur:
+  /// effective-space resolution (the #1493 resolver), loose capture, inbox
+  /// behaviour, and sync gating (the operation-keyed drain/access gate). They
+  /// flip as a unit, behind this const, or none of them do.
+  ///
+  /// W1 reality: nothing reads this yet — the #1493 resolver shipped DARK and
+  /// the schema/behaviour land in later waves. The point of this task is that
+  /// the single switch exists, is registered in the FeatureFlags registry the
+  /// same way [newNavShell] / [documents] are, and has its dual-flag CI lane so
+  /// both the OFF (shipped) and ON (future) realities stay green as later waves
+  /// build behind it. Rollback is a single flag flip back to OFF (revert this
+  /// const's `defaultValue`, or ship `--dart-define=ff.localFirstSpaces=false`),
+  /// no other code change.
+  static const bool localFirstSpaces = bool.fromEnvironment(
+    'ff.localFirstSpaces',
+    defaultValue: false,
+  );
 }
