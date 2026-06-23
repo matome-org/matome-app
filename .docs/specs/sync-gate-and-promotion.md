@@ -184,6 +184,39 @@ Core for the first time. v1 **includes** promotion (#1499).
 - **No silent default arm.** The promotion-state type is sealed/exhaustive; a new
   state is a compile error at every switch (mirrors R2.1).
 
+> **R3.4.1 — state location (PINNED, #1499 build).** The promotion state is held
+> in a **transient controller** (`SpacePromotionService` →
+> `sealed class PromotionState { PromotionLocal | PromotionInProgress |
+> PromotionCloud | PromotionFailed }`), **NOT** a new schema column. The
+> **durable** progress is already encoded by **`workspaces.is_local`** (flipped
+> local→cloud by the atomic re-key) and each item's **`coreId`** (set on first
+> successful push); the controller's state is **re-derived** from those on
+> resume — so no promotion-state column is added (that would be out of scope).
+> Implementation: `apps/flutter/lib/features/spaces/space_promotion.dart` +
+> `WorkspacesDao.promoteToCloud` (the atomic re-key).
+
+> **R3.4.2 — the re-key (how `is_local` flips to cloud).** A LOCAL space has a
+> `ws_<...>` id with no Core counterpart; a CLOUD space's local id **IS** the
+> stringified Core numeric id (the `coreWorkspaceIdToLocal` convention the
+> existing space-scoped sync relies on, `int.tryParse(spaceId)`). Promotion
+> therefore **RE-KEYS** the row in ONE Drift transaction: drop the old
+> `ws_<...>` row, insert a `is_local = 0` row at the minted Core numeric id
+> (preserving name/owner/type), then re-point its matomes (`space_id`) and
+> directly-filed recordings (`workspace_id`) to the new id. After the flip the
+> items' effective space is cloud, so the **existing** drain pushes them — no
+> parallel uploader. The re-key is **idempotent**: a missing old row ⇒ no-op.
+
+> **R3.4.3 — promote-while-draining contract (PINNED): NEXT-DRAIN.** The flip is
+> a single atomic transaction; the promotion's drain and every subsequent
+> trigger read the item set **fresh**, so the **next** drain after the flip
+> picks up the full set (no consent-time snapshot to go stale). An **in-flight**
+> item already mid-upload is guarded by the upload queue's per-id single-flight
+> (`_inFlight`) — promotion never interrupts or double-sends it. A **new** item
+> filed into the space **after** the flip syncs normally via R2 on the next
+> drain (not special-cased). An item **moved out** mid-promotion is correctly
+> not required for the space to reach `cloud` (the completion check re-resolves
+> the live set each pass).
+
 ### 3.5 Partial failure & resume (NORMATIVE)
 
 > **R3.5.** Promotion is **per-item and resumable**:

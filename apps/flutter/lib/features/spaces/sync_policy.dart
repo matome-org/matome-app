@@ -49,6 +49,19 @@ enum Operation {
   /// IFF the effective space is a CLOUD space (today: owner ⇒ allow). This is
   /// the gate the upload-queue drain and the moveToSpace Core PATCH consult.
   spaceSync,
+
+  /// Promote a LOCAL space to cloud — the data-egress *authorization* gate for
+  /// promotion (plan #102 W4 / #1499 / spec R3.6). UNLIKE [spaceSync], this is
+  /// keyed on OWNER-SCOPE, NOT on the space being cloud — the whole point is to
+  /// promote a space that is STILL local. Permitted IFF the caller OWNS the
+  /// space (today: a resolved caller whose id matches `space.ownerId`, OR — when
+  /// `ownerId` is the reserved/unset m006 NULL — a resolved caller, since every
+  /// #102 personal space is the current user's). A non-owner (a future
+  /// shared/org case) is DENIED at this one gate (spec R3.6), so promotion's
+  /// Core writes never run for a space the caller does not own. No new role enum
+  /// is introduced — the deferred PDP governs this key later with zero call-site
+  /// change.
+  spacePromote,
 }
 
 /// The PRINCIPAL a [SyncPolicy] decision is made FOR — the future-PDP input
@@ -104,10 +117,36 @@ abstract final class SyncPolicy {
     return switch (op) {
       // The data-egress gate: delegate to the ONE resolver. No recompute here.
       Operation.spaceSync => EffectiveSpace.spaceIsCloud(space),
+      // Promotion authz (spec R3.6): OWNER-SCOPE, never `is_local` — a local
+      // space is exactly what promotion turns cloud, so gating on cloudness here
+      // would make promotion impossible. Permitted iff the caller owns the
+      // space. When the space carries a concrete `ownerId` (future shared/org),
+      // the caller's resolved id MUST match it — a non-owner is DENIED. When
+      // `ownerId` is the reserved/unset m006 NULL (every #102 personal space),
+      // any RESOLVED caller is the owner (their own personal space); an
+      // unresolved/anonymous caller (null userId) is DENIED — fail-closed, no
+      // signed-out promotion.
+      Operation.spacePromote => _ownsSpace(caller, space),
       // Filing/organizing and reading are allowed for any resolvable space;
       // local spaces organize without syncing (the spaceSync gate enforces the
       // egress boundary, not the picker).
       Operation.spaceWrite || Operation.spaceRead => true,
     };
+  }
+
+  /// Owner-scope predicate for [Operation.spacePromote] (spec R3.6). A caller
+  /// owns [space] iff:
+  ///   * the space names an owner (`ownerId != null`) AND the caller's resolved
+  ///     id equals it — a non-owner is rejected (the future shared/org case); or
+  ///   * the space has no named owner (reserved/unset m006 NULL — every #102
+  ///     personal space) AND the caller is RESOLVED (a non-null user id) — it is
+  ///     the caller's own personal space.
+  /// An anonymous/unresolved caller (null userId) never owns — fail-closed.
+  static bool _ownsSpace(Caller caller, SpaceRef space) {
+    final callerId = caller.userId;
+    if (callerId == null) return false; // signed-out / unresolved — deny.
+    final ownerId = space.ownerId;
+    if (ownerId == null) return true; // unowned personal space ⇒ caller's own.
+    return ownerId == callerId; // explicit owner ⇒ must match.
   }
 }

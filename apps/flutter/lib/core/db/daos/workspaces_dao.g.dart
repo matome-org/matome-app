@@ -6,6 +6,7 @@ part of 'workspaces_dao.dart';
 mixin _$WorkspacesDaoMixin on DatabaseAccessor<AppDatabase> {
   $WorkspacesTable get workspaces => attachedDatabase.workspaces;
   $RecordingsTable get recordings => attachedDatabase.recordings;
+  $MatomesTable get matomes => attachedDatabase.matomes;
   WorkspacesDaoManager get managers => WorkspacesDaoManager(this);
 }
 
@@ -16,4 +17,6 @@ class WorkspacesDaoManager {
       $$WorkspacesTableTableManager(_db.attachedDatabase, _db.workspaces);
   $$RecordingsTableTableManager get recordings =>
       $$RecordingsTableTableManager(_db.attachedDatabase, _db.recordings);
+  $$MatomesTableTableManager get matomes =>
+      $$MatomesTableTableManager(_db.attachedDatabase, _db.matomes);
 }

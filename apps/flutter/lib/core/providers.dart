@@ -5,6 +5,7 @@ import '../features/auth/auth_repository.dart';
 import '../features/contacts/contacts_repository.dart';
 import '../features/matome/matomes_repository.dart';
 import '../features/recordings/recordings_repository.dart';
+import '../features/spaces/spaces_repository.dart';
 import 'db/app_database.dart';
 import 'http/api_client.dart';
 import 'http/api_exception.dart';
@@ -63,6 +64,13 @@ final matomesRepositoryProvider = Provider<MatomesRepository>((ref) {
 /// HTTP repository for Contact sync (task #1377). Overridable in tests.
 final contactsRepositoryProvider = Provider<ContactsRepository>((ref) {
   return ContactsRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+/// HTTP repository for Space (workspace) Core writes — the `POST /api/spaces`
+/// create used by local→cloud promotion (plan #102 W4 / #1499). Overridable in
+/// tests with a fake counting repo.
+final spacesRepositoryProvider = Provider<SpacesRepository>((ref) {
+  return SpacesRepository(apiClient: ref.watch(apiClientProvider));
 });
 
 /// Offline-first local store (Drift). Opened once and disposed with the

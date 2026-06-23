@@ -68,14 +68,63 @@ void main() {
     });
   });
 
+  group('Operation.spacePromote — promotion authz (owner-scope, NOT cloudness)',
+      () {
+    // R3.6: promotion gates on OWNERSHIP, not on the space being cloud — the
+    // whole point is to promote a space that is STILL local. So a LOCAL space
+    // is promotable by its owner (unlike spaceSync, which DENIES local).
+    const ownedByCaller = SpaceRef(
+      id: 'l',
+      syncMode: SpaceSyncMode.local,
+      ownerId: 'user-1',
+    );
+    const ownedByOther = SpaceRef(
+      id: 'l2',
+      syncMode: SpaceSyncMode.local,
+      ownerId: 'someone-else',
+    );
+    const unowned = SpaceRef(id: 'l3', syncMode: SpaceSyncMode.local);
+
+    test('owner of a LOCAL space MAY promote it (cloudness is NOT the gate)',
+        () {
+      expect(SyncPolicy.can(caller, Operation.spacePromote, ownedByCaller),
+          isTrue);
+    });
+
+    test('a NON-OWNER caller is DENIED (spec R3.6 — no foreign promote)', () {
+      expect(SyncPolicy.can(caller, Operation.spacePromote, ownedByOther),
+          isFalse);
+    });
+
+    test('an unowned personal space (m006 NULL owner) ⇒ caller owns it', () {
+      expect(
+          SyncPolicy.can(caller, Operation.spacePromote, unowned), isTrue);
+    });
+
+    test('an anonymous/unresolved caller NEVER promotes (fail-closed)', () {
+      expect(SyncPolicy.can(Caller.anonymous, Operation.spacePromote, unowned),
+          isFalse);
+      expect(
+          SyncPolicy.can(Caller.anonymous, Operation.spacePromote, ownedByCaller),
+          isFalse);
+    });
+
+    test('a NULL space is denied (nothing to promote)', () {
+      expect(SyncPolicy.can(caller, Operation.spacePromote, null), isFalse);
+    });
+  });
+
   test('Operation catalog is minimal (no role enum baked in)', () {
     // The catalog is the stable key set; it must stay minimal in #102. This pins
     // the seam so a future operation is added deliberately (and a role enum is
-    // never introduced as the gate key).
+    // never introduced as the gate key). `spacePromote` (W4 #1499) is the
+    // owner-scope authz key for promotion — added deliberately as a catalog
+    // entry, not a new gate.
     expect(Operation.values, <Operation>[
       Operation.spaceRead,
       Operation.spaceWrite,
       Operation.spaceSync,
+      Operation.spacePromote,
     ]);
   });
 }
