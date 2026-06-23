@@ -258,6 +258,31 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     return into(recordings).insertOnConflictUpdate(entry);
   }
 
+  /// LOOSE insert (local-first-spaces #102 W2, ADR-0006 §1/§3). Persists a brand
+  /// new recording with NO Matome and NO Space — `matomeId = NULL`,
+  /// `workspaceId = NULL` — so its effective space is NULL and it lands in the
+  /// Inbox (a VIEW; INBOX ⟺ effectiveSpace == NULL). This is the reversal of the
+  /// ADR-0003 forced-Matome invariant: an imported item may now exist with no
+  /// matome at all.
+  ///
+  /// Unlike [upsertRecordingWithMatome] there is NO mint here — the whole point
+  /// is that organization (matome / space) is DECOUPLED from capture. Used ONLY
+  /// behind `FeatureFlags.localFirstSpaces` on the import path; the synced /
+  /// reconcile paths keep their existing Matome-minting upsert.
+  ///
+  /// `matomeId`/`workspaceId` on [entry] are forced absent so a caller's stray
+  /// value can never sneak organization back in. A plain insert (not an upsert):
+  /// the import path mints a fresh `rec_local_<uuid>` PK, so there is never a row
+  /// to replace.
+  Future<void> insertLooseRecording(RecordingsCompanion entry) {
+    return into(recordings).insert(
+      entry.copyWith(
+        matomeId: const Value(null),
+        workspaceId: const Value(null),
+      ),
+    );
+  }
+
   /// Local-first upsert that GUARANTEES the recording is an Item of a Matome
   /// (ADR-0003 invariant 1/4 — a recording is never persisted without a Matome,
   /// created in the SAME transaction so the FK never sees an orphan window).

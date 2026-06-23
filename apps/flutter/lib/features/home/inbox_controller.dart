@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
@@ -202,14 +203,30 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
 
   /// Insert a locally-created (just-uploaded) recording row so it shows in the
   /// Inbox immediately as "processing", before Core confirms. Mirrors
-  /// apps/mobile uploadRecordingService createRecording-then-render.
+  /// apps/mobile uploadRecordingService createRecording-then-render. This is the
+  /// SOLE import-path persistence step (nav "+" Add photo / Add file → the
+  /// `InboxUploader.upload` pipeline) — the synced / Core-reconcile paths do NOT
+  /// route through here.
   ///
-  /// m007 (ADR-0003): a recording is never persisted without a Matome. This
-  /// goes through [RecordingsDao.upsertRecordingWithMatome], which mints the
-  /// Matome in the SAME transaction (Inbox upload → Inbox Matome) so the
-  /// recording.matomeId FK never sees an orphan window.
+  /// Local-first-spaces (#102 W2, ADR-0006 §1): with [FeatureFlags.localFirstSpaces]
+  /// ON, an import lands LOOSE — no matome, no space ([RecordingsDao.insertLooseRecording],
+  /// `matomeId = NULL`, `workspaceId = NULL`) — so its effective space is NULL
+  /// and it lands in the Inbox. Organization is DECOUPLED from capture; no
+  /// matome is minted. The upload/sync gate is UNCHANGED (W4 #1498 owns that):
+  /// the row still drains through the [UploadQueue] exactly as before, so a
+  /// recording already in a cloud space keeps uploading.
+  ///
+  /// With the flag OFF the behaviour is BYTE-FOR-BYTE unchanged: m007 (ADR-0003)
+  /// forbids a Matome-less recording, so the row goes through
+  /// [RecordingsDao.upsertRecordingWithMatome], which mints the Matome in the
+  /// SAME transaction (Inbox upload → Inbox Matome) so the recording.matomeId FK
+  /// never sees an orphan window.
   Future<void> insertLocalUpload(RecordingsCompanion entry) async {
-    await _dao.upsertRecordingWithMatome(entry);
+    if (FeatureFlags.localFirstSpaces) {
+      await _dao.insertLooseRecording(entry);
+    } else {
+      await _dao.upsertRecordingWithMatome(entry);
+    }
     await reloadFromLocal();
   }
 
