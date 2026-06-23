@@ -132,7 +132,43 @@ part 'app_database.g.dart';
 /// are untouched. DOWN (documented, no automatic Drift downgrade): `DROP TABLE
 /// recording_contacts; PRAGMA user_version = 15;` — non-lossy, dropping only the
 /// new join.
-const int kSchemaVersion = 16;
+///
+/// v17 (m017, workspaces.is_local — local-first-spaces #102 W1, ADR-0006 §5 /
+/// sync-gate spec R2) adds the **sync-mode** bit to the Space (the `workspaces`
+/// table): `is_local` INTEGER NOT NULL DEFAULT 1 (local). `is_local = 1` ⟹ a
+/// LOCAL space — client-only, its items NEVER reach Core; `is_local = 0` ⟹ a
+/// CLOUD space whose items sync. Additive + defaulted, so Drift's ALTER ADD
+/// COLUMN backfills EVERY existing row to 1 (local) and old code that never
+/// reads the column is unaffected. This ships DARK: m017 only lands the column;
+/// no sync gate keys off it until the W-tasks (resolver #1493, drain #1498) and
+/// the `localFirstSpaces` flag wire it.
+///
+/// FORWARD-COMPAT (H5, ADR-0006 H4 / spec R2.2): `is_local` is **Axis A
+/// (sync)** and is **ORTHOGONAL** to the reserved m006 `space_type` (**Axis B,
+/// tenancy** — `personal | shared | org`). The two columns are NEVER collapsed:
+/// sync keys off Axis A only, tenancy off Axis B only. This step does NOT touch
+/// `space_type` (default 'personal') or `owner_id` (nullable, a stable SSO-ready
+/// user id) — they are byte-conserved. Coupling invariants (documented, not
+/// enforced here): **local ⟹ personal** (a local space is always personal) and
+/// **org ⟹ cloud**; `personal` may be `local` OR `cloud`. Default-local + the
+/// spec §4.1-verified "filed ⇒ already syncs today" fact means migrating an
+/// existing (filed) space to cloud is a SEPARATE backfill (W5 #1500) — m017
+/// alone leaves every existing row LOCAL and changes no sync reality.
+///
+/// The `workspaces` table predates every recent migration here, so no `from >=`
+/// floor is needed: any DB reaching this step from < 17 already has
+/// `workspaces` WITHOUT `is_local`, and the column is added exactly once. A
+/// `createTable(workspaces)` on a fresh m002 install already emits the CURRENT
+/// definition (including `is_local`), so the ALTER only fires for an existing DB.
+///
+/// DOWN-migration / reversal (no automatic Drift downgrade; documented for
+/// discipline — additive, defaulted, ships dark; a true revert is a
+/// compensating m018, ADR-0006 acceptance):
+///   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v16 shape, rebuild
+///   -- `workspaces` without `is_local` via a copy table. Leaving the column in
+///   -- place is otherwise harmless (default-local, old code ignores it).
+///   PRAGMA user_version = 16;
+const int kSchemaVersion = 17;
 
 /// The offline-first local store.
 ///
@@ -494,6 +530,36 @@ class AppDatabase extends _$AppDatabase {
           //   PRAGMA user_version = 15;
           if (from < 16) {
             await m.createTable(recordingContacts);
+          }
+          // m017 — workspaces.is_local (local-first-spaces #102 W1, ADR-0006
+          // §5 / sync-gate spec R2). Adds the SYNC-MODE bit (Axis A) to the
+          // Space: `is_local` INTEGER NOT NULL DEFAULT 1 (local). Drift's ALTER
+          // ADD COLUMN backfills EVERY existing row to 1 (local) from the column
+          // default — no data rewrite, no per-row UPDATE. Old code that never
+          // reads the column is unaffected; the column ships DARK (no sync gate
+          // keys off it until later W-tasks behind the `localFirstSpaces` flag).
+          //
+          // FORWARD-COMPAT (H5): is_local (Axis A: sync) is ORTHOGONAL to the
+          // reserved m006 `space_type` (Axis B: tenancy). This step touches
+          // NEITHER `space_type` (default 'personal') NOR `owner_id` (nullable,
+          // SSO-ready stable user id) — they are byte-conserved. Invariant
+          // (documented, not enforced here): local ⟹ personal. Migrating an
+          // existing filed space to CLOUD is a SEPARATE backfill (W5 #1500); m017
+          // alone leaves every existing row LOCAL and changes no sync reality.
+          //
+          // The `workspaces` table predates this step, so no `from >=` floor is
+          // needed: any DB reaching here from < 17 has `workspaces` WITHOUT
+          // `is_local`, and the column is added exactly once.
+          //
+          // DOWN-migration / reversal (no automatic Drift downgrade; documented
+          // for discipline — additive, defaulted, ships dark; a true revert is a
+          // compensating m018):
+          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v16 shape,
+          //   -- rebuild `workspaces` without `is_local` via a copy table.
+          //   -- Leaving the column in place is otherwise harmless.
+          //   PRAGMA user_version = 16;
+          if (from < 17) {
+            await m.addColumn(workspaces, workspaces.isLocal);
           }
         },
         beforeOpen: (details) async {

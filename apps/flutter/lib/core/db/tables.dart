@@ -239,7 +239,19 @@ class Workspaces extends Table {
 
   // m006 — reserved Space owner (user id). Nullable + UNENFORCED until the
   // `matome-collaboration` plan builds ACLs (ADR-0004 "schema-ready").
+  // SSO-ready: this is a STABLE user id, not an email (ADR-0006 H4).
   TextColumn get ownerId => text().named('owner_id').nullable()();
+
+  // m017 — sync mode (Axis A: sync), local-first-spaces plan #102 / ADR-0006
+  // §5. `is_local = 1` ⟹ LOCAL space (client-only; its items NEVER reach Core);
+  // `is_local = 0` ⟹ CLOUD space (its items sync). NOT NULL, **default 1
+  // (local)** so a new Space and every migrated row is local unless explicitly
+  // made cloud. ORTHOGONAL to the m006 `space_type` (Axis B: tenancy) — the two
+  // are never collapsed (ADR-0006 H4 / sync-gate spec R2.2). Invariant:
+  // **local ⟹ personal** (a local space is always personal; org/shared are
+  // inherently cloud). Old code ignores this column.
+  IntColumn get isLocal =>
+      integer().named('is_local').withDefault(const Constant(1))();
 
   @override
   Set<Column> get primaryKey => {id};

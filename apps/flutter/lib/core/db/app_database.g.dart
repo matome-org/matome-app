@@ -1195,6 +1195,18 @@ class $WorkspacesTable extends Workspaces
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isLocalMeta = const VerificationMeta(
+    'isLocal',
+  );
+  @override
+  late final GeneratedColumn<int> isLocal = GeneratedColumn<int>(
+    'is_local',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1203,6 +1215,7 @@ class $WorkspacesTable extends Workspaces
     createdAt,
     spaceType,
     ownerId,
+    isLocal,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1255,6 +1268,12 @@ class $WorkspacesTable extends Workspaces
         ownerId.isAcceptableOrUnknown(data['owner_id']!, _ownerIdMeta),
       );
     }
+    if (data.containsKey('is_local')) {
+      context.handle(
+        _isLocalMeta,
+        isLocal.isAcceptableOrUnknown(data['is_local']!, _isLocalMeta),
+      );
+    }
     return context;
   }
 
@@ -1288,6 +1307,10 @@ class $WorkspacesTable extends Workspaces
         DriftSqlType.string,
         data['${effectivePrefix}owner_id'],
       ),
+      isLocal: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_local'],
+      )!,
     );
   }
 
@@ -1304,6 +1327,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
   final int createdAt;
   final String spaceType;
   final String? ownerId;
+  final int isLocal;
   const WorkspaceRow({
     required this.id,
     required this.name,
@@ -1311,6 +1335,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
     required this.createdAt,
     required this.spaceType,
     this.ownerId,
+    required this.isLocal,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1323,6 +1348,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
     if (!nullToAbsent || ownerId != null) {
       map['owner_id'] = Variable<String>(ownerId);
     }
+    map['is_local'] = Variable<int>(isLocal);
     return map;
   }
 
@@ -1336,6 +1362,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
       ownerId: ownerId == null && nullToAbsent
           ? const Value.absent()
           : Value(ownerId),
+      isLocal: Value(isLocal),
     );
   }
 
@@ -1351,6 +1378,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
       createdAt: serializer.fromJson<int>(json['createdAt']),
       spaceType: serializer.fromJson<String>(json['spaceType']),
       ownerId: serializer.fromJson<String?>(json['ownerId']),
+      isLocal: serializer.fromJson<int>(json['isLocal']),
     );
   }
   @override
@@ -1363,6 +1391,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
       'createdAt': serializer.toJson<int>(createdAt),
       'spaceType': serializer.toJson<String>(spaceType),
       'ownerId': serializer.toJson<String?>(ownerId),
+      'isLocal': serializer.toJson<int>(isLocal),
     };
   }
 
@@ -1373,6 +1402,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
     int? createdAt,
     String? spaceType,
     Value<String?> ownerId = const Value.absent(),
+    int? isLocal,
   }) => WorkspaceRow(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -1380,6 +1410,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
     createdAt: createdAt ?? this.createdAt,
     spaceType: spaceType ?? this.spaceType,
     ownerId: ownerId.present ? ownerId.value : this.ownerId,
+    isLocal: isLocal ?? this.isLocal,
   );
   WorkspaceRow copyWithCompanion(WorkspacesCompanion data) {
     return WorkspaceRow(
@@ -1389,6 +1420,7 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       spaceType: data.spaceType.present ? data.spaceType.value : this.spaceType,
       ownerId: data.ownerId.present ? data.ownerId.value : this.ownerId,
+      isLocal: data.isLocal.present ? data.isLocal.value : this.isLocal,
     );
   }
 
@@ -1400,14 +1432,15 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
           ..write('isDefault: $isDefault, ')
           ..write('createdAt: $createdAt, ')
           ..write('spaceType: $spaceType, ')
-          ..write('ownerId: $ownerId')
+          ..write('ownerId: $ownerId, ')
+          ..write('isLocal: $isLocal')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, name, isDefault, createdAt, spaceType, ownerId);
+      Object.hash(id, name, isDefault, createdAt, spaceType, ownerId, isLocal);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1417,7 +1450,8 @@ class WorkspaceRow extends DataClass implements Insertable<WorkspaceRow> {
           other.isDefault == this.isDefault &&
           other.createdAt == this.createdAt &&
           other.spaceType == this.spaceType &&
-          other.ownerId == this.ownerId);
+          other.ownerId == this.ownerId &&
+          other.isLocal == this.isLocal);
 }
 
 class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
@@ -1427,6 +1461,7 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
   final Value<int> createdAt;
   final Value<String> spaceType;
   final Value<String?> ownerId;
+  final Value<int> isLocal;
   final Value<int> rowid;
   const WorkspacesCompanion({
     this.id = const Value.absent(),
@@ -1435,6 +1470,7 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     this.createdAt = const Value.absent(),
     this.spaceType = const Value.absent(),
     this.ownerId = const Value.absent(),
+    this.isLocal = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   WorkspacesCompanion.insert({
@@ -1444,6 +1480,7 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     required int createdAt,
     this.spaceType = const Value.absent(),
     this.ownerId = const Value.absent(),
+    this.isLocal = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -1455,6 +1492,7 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     Expression<int>? createdAt,
     Expression<String>? spaceType,
     Expression<String>? ownerId,
+    Expression<int>? isLocal,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1464,6 +1502,7 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
       if (createdAt != null) 'createdAt': createdAt,
       if (spaceType != null) 'space_type': spaceType,
       if (ownerId != null) 'owner_id': ownerId,
+      if (isLocal != null) 'is_local': isLocal,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1475,6 +1514,7 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     Value<int>? createdAt,
     Value<String>? spaceType,
     Value<String?>? ownerId,
+    Value<int>? isLocal,
     Value<int>? rowid,
   }) {
     return WorkspacesCompanion(
@@ -1484,6 +1524,7 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
       createdAt: createdAt ?? this.createdAt,
       spaceType: spaceType ?? this.spaceType,
       ownerId: ownerId ?? this.ownerId,
+      isLocal: isLocal ?? this.isLocal,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1509,6 +1550,9 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
     if (ownerId.present) {
       map['owner_id'] = Variable<String>(ownerId.value);
     }
+    if (isLocal.present) {
+      map['is_local'] = Variable<int>(isLocal.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1524,6 +1568,7 @@ class WorkspacesCompanion extends UpdateCompanion<WorkspaceRow> {
           ..write('createdAt: $createdAt, ')
           ..write('spaceType: $spaceType, ')
           ..write('ownerId: $ownerId, ')
+          ..write('isLocal: $isLocal, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5420,6 +5465,7 @@ typedef $$WorkspacesTableCreateCompanionBuilder =
       required int createdAt,
       Value<String> spaceType,
       Value<String?> ownerId,
+      Value<int> isLocal,
       Value<int> rowid,
     });
 typedef $$WorkspacesTableUpdateCompanionBuilder =
@@ -5430,6 +5476,7 @@ typedef $$WorkspacesTableUpdateCompanionBuilder =
       Value<int> createdAt,
       Value<String> spaceType,
       Value<String?> ownerId,
+      Value<int> isLocal,
       Value<int> rowid,
     });
 
@@ -5469,6 +5516,11 @@ class $$WorkspacesTableFilterComposer
 
   ColumnFilters<String> get ownerId => $composableBuilder(
     column: $table.ownerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isLocal => $composableBuilder(
+    column: $table.isLocal,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5511,6 +5563,11 @@ class $$WorkspacesTableOrderingComposer
     column: $table.ownerId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get isLocal => $composableBuilder(
+    column: $table.isLocal,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$WorkspacesTableAnnotationComposer
@@ -5539,6 +5596,9 @@ class $$WorkspacesTableAnnotationComposer
 
   GeneratedColumn<String> get ownerId =>
       $composableBuilder(column: $table.ownerId, builder: (column) => column);
+
+  GeneratedColumn<int> get isLocal =>
+      $composableBuilder(column: $table.isLocal, builder: (column) => column);
 }
 
 class $$WorkspacesTableTableManager
@@ -5578,6 +5638,7 @@ class $$WorkspacesTableTableManager
                 Value<int> createdAt = const Value.absent(),
                 Value<String> spaceType = const Value.absent(),
                 Value<String?> ownerId = const Value.absent(),
+                Value<int> isLocal = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WorkspacesCompanion(
                 id: id,
@@ -5586,6 +5647,7 @@ class $$WorkspacesTableTableManager
                 createdAt: createdAt,
                 spaceType: spaceType,
                 ownerId: ownerId,
+                isLocal: isLocal,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5596,6 +5658,7 @@ class $$WorkspacesTableTableManager
                 required int createdAt,
                 Value<String> spaceType = const Value.absent(),
                 Value<String?> ownerId = const Value.absent(),
+                Value<int> isLocal = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WorkspacesCompanion.insert(
                 id: id,
@@ -5604,6 +5667,7 @@ class $$WorkspacesTableTableManager
                 createdAt: createdAt,
                 spaceType: spaceType,
                 ownerId: ownerId,
+                isLocal: isLocal,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

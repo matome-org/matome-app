@@ -71,10 +71,10 @@ void main() {
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
     test(
-      'schemaVersion is 16 '
-      '(…m014 contact fields + m015 byte_size + m016 recording_contacts)',
+      'schemaVersion is 17 '
+      '(…m015 byte_size + m016 recording_contacts + m017 is_local)',
       () {
-        expect(db.schemaVersion, 16);
+        expect(db.schemaVersion, 17);
       },
     );
 
@@ -120,6 +120,7 @@ void main() {
           'createdAt',
           'space_type', // m006
           'owner_id', // m006
+          'is_local', // m017
         ]),
       );
     });
@@ -566,7 +567,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -686,7 +687,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       // m006 columns now exist on workspaces.
       final wsCols = await upgraded
@@ -836,7 +837,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final tables = await upgraded
           .customSelect(
@@ -1158,7 +1159,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final tables = await upgraded
           .customSelect(
@@ -1213,7 +1214,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 16);
+      expect(second.schemaVersion, 17);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1365,7 +1366,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(matomes)')
@@ -1404,7 +1405,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 16);
+      expect(second.schemaVersion, 17);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1564,7 +1565,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1607,7 +1608,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 16);
+      expect(second.schemaVersion, 17);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1830,7 +1831,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -1933,7 +1934,7 @@ void main() {
       // must not re-snapshot or re-copy (values already settled stay settled).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 16);
+      expect(second.schemaVersion, 17);
 
       final r =
           await second.recordingsDao.getRecordingById('rec_audio_has_tx');
@@ -2139,7 +2140,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2186,7 +2187,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 16);
+      expect(second.schemaVersion, 17);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2349,7 +2350,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(contacts)')
@@ -2401,7 +2402,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 16);
+      expect(second.schemaVersion, 17);
       final cols = await second
           .customSelect('PRAGMA table_info(contacts)')
           .map((r) => r.read<String>('name'))
@@ -2495,7 +2496,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2536,7 +2537,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 16);
+      expect(second.schemaVersion, 17);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2650,7 +2651,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 16);
+      expect(upgraded.schemaVersion, 17);
 
       final tables = await upgraded
           .customSelect(
@@ -2681,13 +2682,226 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 16);
+      expect(second.schemaVersion, 17);
       final tables = await second
           .customSelect(
               "SELECT name FROM sqlite_master WHERE type='table'")
           .map((r) => r.read<String>('name'))
           .get();
       expect(tables, contains('recording_contacts'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (k0) m017 — workspaces.is_local (local-first-spaces, plan #102 W1,
+  // ADR-0006 §5 / sync-gate spec R2). Real-file v16→v17 migration.
+  //
+  // Build a v16-shaped DB by hand (workspaces WITH the m006 columns
+  // space_type/owner_id but WITHOUT is_local, recording_contacts present,
+  // user_version=16), seed the default + a second Space, then open AppDatabase
+  // over the same file so onUpgrade(16→17) runs. Assert: is_local is added
+  // NOT-NULL default 1 (local), EVERY existing row backfills to is_local=1
+  // (local), the m006 columns (space_type/owner_id) are UNTOUCHED (Axis A is
+  // orthogonal to Axis B), and re-opening is idempotent.
+  //
+  // FORWARD-COMPAT INVARIANT (H5, ADR-0006 H4): is_local (Axis A: sync) is
+  // ORTHOGONAL to space_type (Axis B: tenancy). The migration MUST NOT collapse
+  // them or regress the m006 columns. Invariant: local ⟹ personal — every row
+  // that backfills to is_local=1 retains space_type='personal'.
+  // -------------------------------------------------------------------------
+  group('m017 v16→v17 migration (workspaces.is_local)', () {
+    late Directory dir;
+    late File file;
+
+    /// v16-shaped DB: workspaces WITH the m006 columns (space_type/owner_id)
+    /// but WITHOUT is_local; recording_contacts present. user_version=16.
+    void seedV16Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER,
+          archived_at INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id),
+          transcript TEXT,
+          notes_legacy_raw TEXT,
+          original_extension TEXT,
+          owner_id TEXT,
+          byte_size INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          email TEXT,
+          phone TEXT,
+          company TEXT,
+          title TEXT,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          recording_id TEXT NOT NULL,
+          contact_id TEXT NOT NULL,
+          UNIQUE(recording_id, contact_id)
+        );
+      ''');
+      // The pre-existing default Space + a user-created Space, both carrying the
+      // m006 columns at non-default values so we can prove they are UNTOUCHED.
+      sdb.execute(
+        "INSERT INTO workspaces "
+        "(id, name, isDefault, createdAt, space_type, owner_id) "
+        "VALUES ('ws_default_personal', 'Pessoal', 1, 100, 'personal', NULL);",
+      );
+      sdb.execute(
+        "INSERT INTO workspaces "
+        "(id, name, isDefault, createdAt, space_type, owner_id) "
+        "VALUES ('ws_work', 'Work', 0, 200, 'personal', 'u_owner');",
+      );
+      sdb.execute('PRAGMA user_version = 16;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m017');
+      file = File('${dir.path}/matome.sqlite');
+      seedV16Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test(
+      'opening a v16 db migrates to v17: is_local added, every row backfills '
+      'to local (1)',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
+
+        expect(upgraded.schemaVersion, 17);
+
+        // is_local column now exists on workspaces.
+        final cols = await upgraded
+            .customSelect('PRAGMA table_info(workspaces)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(cols, contains('is_local'));
+
+        // EVERY existing row defaults to is_local = 1 (local). Local spaces
+        // never reach Core (ADR-0006 §5).
+        final rows = await upgraded
+            .customSelect('SELECT id, is_local FROM workspaces')
+            .map((r) => (r.read<String>('id'), r.read<int>('is_local')))
+            .get();
+        expect(rows, isNotEmpty);
+        for (final (id, isLocal) in rows) {
+          expect(isLocal, 1, reason: '$id must backfill to local (1)');
+        }
+      },
+    );
+
+    test(
+      'm017 does NOT regress the m006 columns (Axis A ⟂ Axis B); '
+      'invariant local ⟹ personal holds',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
+
+        // The two m006 columns survive untouched alongside the new is_local.
+        final cols = await upgraded
+            .customSelect('PRAGMA table_info(workspaces)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(cols, containsAll(<String>['space_type', 'owner_id', 'is_local']));
+
+        // space_type / owner_id are byte-for-byte preserved; and every row that
+        // is local (is_local=1) is personal — the local ⟹ personal invariant.
+        final rows = await upgraded
+            .customSelect(
+              'SELECT id, space_type, owner_id, is_local FROM workspaces',
+            )
+            .get();
+        final byId = {for (final r in rows) r.read<String>('id'): r};
+        // Default Space: type preserved 'personal', owner still NULL.
+        expect(byId['ws_default_personal']!.read<String>('space_type'),
+            'personal');
+        expect(byId['ws_default_personal']!.read<String?>('owner_id'), isNull);
+        // Work Space: type preserved 'personal', owner still 'u_owner' (a
+        // stable user id, SSO-ready) — m006 not regressed.
+        expect(byId['ws_work']!.read<String>('space_type'), 'personal');
+        expect(byId['ws_work']!.read<String?>('owner_id'), 'u_owner');
+        // local ⟹ personal: every local row is personal.
+        for (final r in rows) {
+          if (r.read<int>('is_local') == 1) {
+            expect(r.read<String>('space_type'), 'personal');
+          }
+        }
+      },
+    );
+
+    test('m017 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.workspacesDao.getWorkspaces();
+      await first.close();
+
+      // Re-opening at v17 must not re-run m017 (no duplicate-column crash).
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 17);
+      final all = await second
+          .customSelect('SELECT id, is_local FROM workspaces')
+          .map((r) => r.read<int>('is_local'))
+          .get();
+      expect(all, isNotEmpty);
+      expect(all.every((v) => v == 1), isTrue);
     });
   });
 
