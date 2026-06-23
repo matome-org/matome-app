@@ -243,6 +243,42 @@ class Translations$inbox$en {
 
 	/// en: 'Select a matome to preview'
 	String get selectHint => 'Select a matome to preview';
+
+	/// en: 'Loose'
+	String get looseTag => 'Loose';
+
+	/// en: 'Draft'
+	String get draftTag => 'Draft';
+
+	/// en: 'File'
+	String get fileAction => 'File';
+
+	/// en: 'Organize'
+	String get organizeAction => 'Organize';
+
+	/// en: '$type · $time'
+	String looseMeta({required Object type, required Object time}) => '${type} · ${time}';
+
+	/// en: '$n items'
+	String draftMeta({required Object n}) => '${n} items';
+
+	/// en: 'File into a space'
+	String get fileIntoSpaceTitle => 'File into a space';
+
+	/// en: 'Search spaces'
+	String get fileSearchHint => 'Search spaces';
+
+	/// en: 'No spaces yet'
+	String get fileEmpty => 'No spaces yet';
+
+	/// en: 'Group into a matome'
+	String get groupIntoMatomeTitle => 'Group into a matome';
+
+	/// en: 'Search matomes'
+	String get groupSearchHint => 'Search matomes';
+
+	/// en: 'No matomes yet'
+	String get groupEmpty => 'No matomes yet';
 }
 
 // Path: cardStatus
@@ -1537,6 +1573,18 @@ extension on Translations {
 			'inbox.noMatchesHint' => 'Try a different search term.',
 			'inbox.loadFailed' => 'Couldn\'t load matomes',
 			'inbox.selectHint' => 'Select a matome to preview',
+			'inbox.looseTag' => 'Loose',
+			'inbox.draftTag' => 'Draft',
+			'inbox.fileAction' => 'File',
+			'inbox.organizeAction' => 'Organize',
+			'inbox.looseMeta' => ({required Object type, required Object time}) => '${type} · ${time}',
+			'inbox.draftMeta' => ({required Object n}) => '${n} items',
+			'inbox.fileIntoSpaceTitle' => 'File into a space',
+			'inbox.fileSearchHint' => 'Search spaces',
+			'inbox.fileEmpty' => 'No spaces yet',
+			'inbox.groupIntoMatomeTitle' => 'Group into a matome',
+			'inbox.groupSearchHint' => 'Search matomes',
+			'inbox.groupEmpty' => 'No matomes yet',
 			'cardStatus.pendingUpload' => 'Saved on device · waiting to upload',
 			'cardStatus.processing' => 'Transcribing…',
 			'cardStatus.failed' => 'Upload failed',

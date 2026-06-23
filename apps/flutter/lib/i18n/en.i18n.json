@@ -54,7 +54,19 @@
     "noMatches": "No matching matomes",
     "noMatchesHint": "Try a different search term.",
     "loadFailed": "Couldn't load matomes",
-    "selectHint": "Select a matome to preview"
+    "selectHint": "Select a matome to preview",
+    "looseTag": "Loose",
+    "draftTag": "Draft",
+    "fileAction": "File",
+    "organizeAction": "Organize",
+    "looseMeta": "$type · $time",
+    "draftMeta": "$n items",
+    "fileIntoSpaceTitle": "File into a space",
+    "fileSearchHint": "Search spaces",
+    "fileEmpty": "No spaces yet",
+    "groupIntoMatomeTitle": "Group into a matome",
+    "groupSearchHint": "Search matomes",
+    "groupEmpty": "No matomes yet"
   },
   "cardStatus": {
     "pendingUpload": "Saved on device · waiting to upload",

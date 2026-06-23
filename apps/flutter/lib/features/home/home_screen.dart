@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/feature_flags.dart';
 import '../../core/db/matome_card.dart';
 import '../../core/providers.dart';
 import '../../core/settings/settings_store.dart';
@@ -21,6 +22,8 @@ import '../matome/matome_row_actions.dart';
 import '../matome/widgets/matome_table.dart';
 import '../spaces/filing_spaces_provider.dart';
 import 'home_filters.dart' show formatTimestamp;
+import 'loose_inbox_controller.dart';
+import 'loose_inbox_section.dart';
 import 'matome_inbox_controller.dart';
 import 'matome_inbox_grouping.dart';
 import '../recordings/upload_retry_service.dart';
@@ -450,6 +453,20 @@ class _Body extends ConsumerWidget {
     final spaces = ref.watch(filingSpacesProvider).valueOrNull ?? const [];
     final filtered = searchMatomes(items, search);
 
+    // Local-first-spaces #102 W3: the Inbox is the VIEW over effective-space-NULL
+    // — loose items AND draft matomes. With the flag ON the LOOSE half renders as
+    // [InboxItemCard]s above the (draft-)matome list. The flag is a compile-time
+    // const, so with it OFF this whole branch (and the loose-items watch) tree-
+    // shakes out and the Inbox is byte-unchanged. A `LooseInboxSection` is a
+    // ConsumerWidget that watches the loose controller itself; here we only need
+    // to know whether any loose items exist so the empty-state doesn't show while
+    // loose items are present.
+    final hasLoose = FeatureFlags.localFirstSpaces &&
+        (ref.watch(looseInboxControllerProvider).valueOrNull?.isNotEmpty ??
+            false);
+    const looseSection =
+        FeatureFlags.localFirstSpaces ? LooseInboxSection() : SizedBox.shrink();
+
     // Table view — the columnar counterpart (DR-001). One flat, sortable list
     // (no date sections); selection + bulk actions + per-row menu + undo all
     // live in the widget. Open routes through the same [onTap] as the cards.
@@ -476,6 +493,7 @@ class _Body extends ConsumerWidget {
             spacing.xxl + spacing.xxl,
           ),
           children: [
+            looseSection,
             MatomeTable(
               rows: rows,
               onOpen: (id) {
@@ -495,7 +513,7 @@ class _Body extends ConsumerWidget {
       yesterdayLabel: 'Yesterday',
     );
 
-    if (sections.isEmpty) {
+    if (sections.isEmpty && !hasLoose) {
       return RefreshIndicator(
         onRefresh: onRefresh,
         color: colors.primary,
@@ -505,6 +523,24 @@ class _Body extends ConsumerWidget {
             SizedBox(height: MediaQuery.sizeOf(context).height * 0.18),
             _EmptyState(searching: search.trim().isNotEmpty),
           ],
+        ),
+      );
+    }
+
+    // No matomes but loose items present (flag ON): render just the loose list.
+    if (sections.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        color: colors.primary,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            spacing.md,
+            spacing.sm,
+            spacing.md,
+            spacing.xxl + spacing.xxl,
+          ),
+          children: const [looseSection],
         ),
       );
     }
@@ -520,8 +556,17 @@ class _Body extends ConsumerWidget {
           spacing.md,
           spacing.xxl + spacing.xxl,
         ),
-        itemCount: sections.length,
-        itemBuilder: (context, index) {
+        // +1 leading slot for the loose-items section (flag ON only); index 0
+        // is the loose section, the matome date-sections follow it.
+        itemCount: sections.length + (hasLoose ? 1 : 0),
+        itemBuilder: (context, rawIndex) {
+          if (hasLoose && rawIndex == 0) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: spacing.sm),
+              child: looseSection,
+            );
+          }
+          final index = hasLoose ? rawIndex - 1 : rawIndex;
           final section = sections[index];
           final sectionTopPadding = index == 0
               ? spacing.xxs - spacing.xxs

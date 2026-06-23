@@ -54,7 +54,19 @@
     "noMatches": "一致するマトメがありません",
     "noMatchesHint": "別の検索語をお試しください。",
     "loadFailed": "マトメを読み込めませんでした",
-    "selectHint": "プレビューするマトメを選択"
+    "selectHint": "プレビューするマトメを選択",
+    "looseTag": "未整理",
+    "draftTag": "下書き",
+    "fileAction": "整理",
+    "organizeAction": "整理",
+    "looseMeta": "$type · $time",
+    "draftMeta": "$n 件",
+    "fileIntoSpaceTitle": "スペースに整理",
+    "fileSearchHint": "スペースを検索",
+    "fileEmpty": "スペースがありません",
+    "groupIntoMatomeTitle": "マトメにまとめる",
+    "groupSearchHint": "マトメを検索",
+    "groupEmpty": "マトメがありません"
   },
   "cardStatus": {
     "pendingUpload": "端末に保存済み · アップロード待ち",

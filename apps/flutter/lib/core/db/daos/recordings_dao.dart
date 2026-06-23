@@ -189,6 +189,28 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
         .get();
   }
 
+  /// LOOSE recordings — `matomeId IS NULL AND workspaceId IS NULL`, newest
+  /// first (local-first-spaces #102 W3, ADR-0006 §1).
+  ///
+  /// These are the items whose EFFECTIVE SPACE is NULL *without* being inside a
+  /// matome: a bare recording/photo/doc captured behind the flag
+  /// ([insertLooseRecording]) that has not been grouped into a matome OR filed
+  /// into a space. Together with DRAFT matomes (`spaceId IS NULL`) they make up
+  /// the W3 Inbox VIEW (INBOX ⟺ effectiveSpace == NULL, spec R1.3).
+  ///
+  /// This differs from [getInboxRecordings] (`workspaceId IS NULL` ONLY), which
+  /// also returns recordings that ARE in a matome — those belong to their matome
+  /// card, not to a loose card. Membership is still settled by the ONE resolver
+  /// (`EffectiveSpace.effectiveSpaceId`); this query only narrows the candidate
+  /// rows to the loose ones the resolver then confirms (`matomeSpaceId` NULL via
+  /// no matome, `workspaceId` NULL).
+  Future<List<RecordingRow>> getLooseRecordings() {
+    return (select(recordings)
+          ..where((r) => r.matomeId.isNull() & r.workspaceId.isNull())
+          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
+        .get();
+  }
+
   /// All recordings in a workspace, newest first.
   Future<List<RecordingRow>> getRecordingsInWorkspace(String workspaceId) {
     return (select(recordings)

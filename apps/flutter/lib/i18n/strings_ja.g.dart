@@ -148,6 +148,18 @@ class _Translations$inbox$ja extends Translations$inbox$en {
 	@override String get noMatchesHint => '別の検索語をお試しください。';
 	@override String get loadFailed => 'マトメを読み込めませんでした';
 	@override String get selectHint => 'プレビューするマトメを選択';
+	@override String get looseTag => '未整理';
+	@override String get draftTag => '下書き';
+	@override String get fileAction => '整理';
+	@override String get organizeAction => '整理';
+	@override String looseMeta({required Object type, required Object time}) => '${type} · ${time}';
+	@override String draftMeta({required Object n}) => '${n} 件';
+	@override String get fileIntoSpaceTitle => 'スペースに整理';
+	@override String get fileSearchHint => 'スペースを検索';
+	@override String get fileEmpty => 'スペースがありません';
+	@override String get groupIntoMatomeTitle => 'マトメにまとめる';
+	@override String get groupSearchHint => 'マトメを検索';
+	@override String get groupEmpty => 'マトメがありません';
 }
 
 // Path: cardStatus
@@ -755,6 +767,18 @@ extension on TranslationsJa {
 			'inbox.noMatchesHint' => '別の検索語をお試しください。',
 			'inbox.loadFailed' => 'マトメを読み込めませんでした',
 			'inbox.selectHint' => 'プレビューするマトメを選択',
+			'inbox.looseTag' => '未整理',
+			'inbox.draftTag' => '下書き',
+			'inbox.fileAction' => '整理',
+			'inbox.organizeAction' => '整理',
+			'inbox.looseMeta' => ({required Object type, required Object time}) => '${type} · ${time}',
+			'inbox.draftMeta' => ({required Object n}) => '${n} 件',
+			'inbox.fileIntoSpaceTitle' => 'スペースに整理',
+			'inbox.fileSearchHint' => 'スペースを検索',
+			'inbox.fileEmpty' => 'スペースがありません',
+			'inbox.groupIntoMatomeTitle' => 'マトメにまとめる',
+			'inbox.groupSearchHint' => 'マトメを検索',
+			'inbox.groupEmpty' => 'マトメがありません',
 			'cardStatus.pendingUpload' => '端末に保存済み · アップロード待ち',
 			'cardStatus.processing' => '文字起こし中…',
 			'cardStatus.failed' => 'アップロードに失敗しました',
