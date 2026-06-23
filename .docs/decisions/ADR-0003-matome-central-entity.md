@@ -1,6 +1,13 @@
 # ADR-0003 - Matome as the central entity
 
-> Status: **Accepted** | Date: 2026-06-19 | Plan: `matome-centric-pivot`
+> Status: **Superseded** | Date: 2026-06-19 | Plan: `matome-centric-pivot`
+> Superseded-by: **ADR-0006** (item organization decoupled from sync, plan #102,
+> 2026-06-22). The **forced-Matome invariant** below — "every recording belongs
+> to exactly one Matome" (invariants 1–4) — is **repealed**: items may now land
+> **loose** (no matome, no space). The m007 forced-mint backfill is reversed by
+> the plan-#102 W5 migration. The Matome-as-central-*entity* concept and the
+> Space/containment/`aggregatedSummary` decisions still stand; only the *forced*
+> 1-recording-→-1-Matome rule is superseded. Read ADR-0006 for the current model.
 
 ## Context
 

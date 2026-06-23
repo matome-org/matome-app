@@ -2,9 +2,16 @@
 
 Canonical terms for the Matome-centric model. Use these exact identifiers in
 code, commits, PR titles, and docs so `git log --grep` and search stay reliable.
-See ADR-0003 (entity), ADR-0004 (identity/permissions/triage), and
-ADR-0005 (letter detail + responsive panel). The sync vocabulary and the
-archive lifecycle are detailed in [matome-lifecycle.md](matome-lifecycle.md).
+See ADR-0003 (entity — forced-Matome rule **superseded** by ADR-0006),
+ADR-0004 (identity/permissions/triage — **amended** by ADR-0006),
+ADR-0005 (letter detail + responsive panel), and
+**ADR-0006** (item organization decoupled from sync, plan #102 — the current
+loose-item / draft-matome / local-vs-cloud-space model). The sync vocabulary and
+the archive lifecycle are detailed in [matome-lifecycle.md](matome-lifecycle.md).
+
+> **BANNED term: "unfiled".** Never use it in code, UI, commits, or docs — it
+> conflates three distinct states. Say **loose** (item with no matome and no
+> space), **draft** (matome with no space), or **Inbox** (the derived view).
 
 | Term | Canonical code id | Meaning |
 | --- | --- | --- |
@@ -12,8 +19,13 @@ archive lifecycle are detailed in [matome-lifecycle.md](matome-lifecycle.md).
 | **Matome** (brand) | `Matome*` prefix (`MatomeColors`, `MatomeThemeContext`) | App/theme namespace. Pre-existing; never collapse into the entity. |
 | **Space** | `Space` (table stays `workspaces`) | The Notion-*workspace* analogue: a container of Matomes. `type` = personal \| shared \| org. Logical rename of the legacy `workspace`. |
 | **workspace** | `workspaces` table / `workspaceId` | Legacy *internal* name for Space. Physical table + FK keep this name (ADR-0003); display/code concept is `Space`. |
-| **Inbox** | `spaceId == null` | A Matome's untriaged state: local-only, not synced (except web, which is server-backed). Not a table — a derived state. |
-| **Triage** | — | The act of enriching a Matome (photos/notes/contacts/share) and filing it into a Space (default: personal). The trigger that ends local-only and starts sync. |
+| **Inbox** | `effectiveSpace == null` | A **VIEW** (never a stored field/sentinel): everything whose **effective space is NULL** — loose items + draft matomes. Unsynced. Generalizes the old `spaceId == null` rule to the *effective* space (ADR-0006). Web is server-backed. |
+| **Loose item** | `matomeId == null && workspaceId == null` | An item with **no matome and no space**. Effective space NULL → Inbox, never syncs. Audio may now land loose (ADR-0006 repeals the ADR-0003 forced-Matome rule). BAN "unfiled". |
+| **Draft matome** | `matome.spaceId == null` | A matome with items but **no space**. Effective space NULL → Inbox, unsynced, until filed into a space. |
+| **Effective space** | `effectiveSpace(item)` resolver (#1493) | `matome.spaceId` if the item is in a matome (matome **wins**), else `recording.workspaceId`, else NULL. The single sync-eligibility authority. Reading `recording.workspaceId` directly is wrong for matome items (it is **shadowed**, not cleared — ADR-0006). |
+| **Local space** | `workspaces.is_local == true` | Client-only space; its items **never** sync. The **default** for a new space (m017). |
+| **Cloud space** | `workspaces.is_local == false` | A synced space. **Sync ⟺ an item's effective space is a cloud space.** Local→cloud promotion is one-way (ADR-0006, #1499). |
+| **Triage** | — | The act of enriching a Matome (photos/notes/contacts/share) and filing it into a Space. **No longer the sync trigger** (ADR-0006): filing organizes; **landing in a cloud space** syncs. |
 | **Synced** | `MatomeSyncRollup.cloud` | Sync-chip label when **all** of a Matome's items reached Core. The normalized cloud vocabulary (W1). Code id `cardStatus.cloud` → "Synced" / "同期済み" (`lib/i18n/*.i18n.json`). |
 | **Syncing** | `MatomeSyncRollup.partial` | Sync-chip label when **some** items reached Core (in-flight, or a stuck/failed child — see ADR-0005 trade-off). Code id `cardStatus.syncing` → "Syncing" / "同期中". |
 | **On device** | `MatomeSyncRollup.onDevice` | Sync-chip label when **no** item has reached Core yet (local-only). Code id `cardStatus.onDevice` → "On device" / "端末内". |

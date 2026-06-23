@@ -1,7 +1,13 @@
 # ADR-0004 - Identity, permissions, and the triage lifecycle
 
-> Status: **Accepted** | Date: 2026-06-19 | Plan: `matome-centric-pivot`
+> Status: **Accepted (amended)** | Date: 2026-06-19 | Plan: `matome-centric-pivot`
 > (build of the collaboration behaviour is deferred — see "Schema-ready, build later")
+> Amended-by: **ADR-0006** (item organization decoupled from sync, plan #102,
+> 2026-06-22). Two amendments below: (a) **filing no longer implies sync** — sync
+> is gated on the new `is_local` space bit, not on "filed into a Space"; and
+> (b) the **two-axis space model + invariants + the two forward-compat seams**
+> are **locked** here as the binding forward path for the deferred org/RBAC work.
+> See the "Amendment (ADR-0006, plan #102)" block at the foot of this file.
 
 ## Context
 
@@ -70,3 +76,53 @@ Plan `matome-centric-pivot` lands the **fields/tables** above
   collaboration plan.
 - The no-consent profile decision is an **open risk**, not a closed one; flagged
   here so it is not silently inherited at launch.
+
+## Amendment (ADR-0006, plan #102 `local-first-spaces`, 2026-06-22)
+
+ADR-0006 decouples **organization** from **sync**. Two amendments to this ADR:
+
+### (a) Filing no longer implies sync
+
+The triage lifecycle above made "file into a Space" the single act that *both*
+organized a Matome *and* started sync (`spaceId == null ⟺ local-only / unsynced`,
+"now syncs" on filing). That **filing ⟹ sync** arrow is **cut**. A space now
+carries `is_local` (m017):
+
+- Sync happens **iff** an item's **effective space** is a **cloud** space
+  (`is_local = false`) — not merely because it was filed.
+- Filing into a **local** space organizes without syncing. The Inbox predicate is
+  now over the **effective** space (`effectiveSpace == NULL`), a VIEW owned by the
+  resolver — see ADR-0006 §2–§5.
+
+### (b) LOCKED forward-compat contract (binding; the deferred org/RBAC path)
+
+The deferred `matome-collaboration` / org / admin / data-policy / SSO / RBAC work
+MUST plug into the seams below **without a rewrite**. This is the binding contract:
+
+- **Two axes, never collapsed.** Axis A **sync mode** (`workspaces.is_local`:
+  `local | cloud`, built in m017) is **orthogonal** to Axis B **tenancy**
+  (`workspaces.space_type`: `personal | shared | org`, the m006 column, reserved /
+  unenforced). The two columns do **NOT** merge. Sync keys off Axis A only;
+  tenancy keys off Axis B only.
+- **Invariants** couple them without collapsing: **`local ⟹ personal`**,
+  **`org ⟹ cloud`**; `personal` may be `local` **or** `cloud`. A PR that keys sync
+  off `space_type`, adds an `org_local` cell, or merges the columns violates this.
+- **Seam 1 — the resolver (#1493) is the only sync-eligibility authority.** It
+  consumes a Space value object `{ id, syncMode, tenancy, ownerId }`; `tenancy` /
+  `ownerId` are constants today (personal / current user) but are in the signature
+  so org-spaces add **one branch**, not a rewrite.
+- **Seam 2 — authorization is OPERATION-KEYED at one decision point (#1498).** The
+  access / drain predicate guards by a stable **operation catalog key**
+  (`SyncPolicy.can(caller, Operation.spaceSync, space)`) — **NOT by a role**, never
+  inline `if isCloud`. Today returns `isCloudSynced` (owner ⇒ allow); later a PDP
+  resolves `caller → groups → (custom) roles → operations` from **data** behind the
+  same call site, mirroring a future Core **Bodyguard/PDP** seam. The sync-status
+  type is **sealed / exhaustive** (a future `orgManaged` / `policyBlocked` is a
+  compile error at every switch).
+- **No fixed role enum.** Roles and operations are future **DATA**, not enums. The
+  reserved `space_members(role: owner|admin|member|viewer)` schema in this ADR is a
+  placeholder, not the target — #102 must NOT freeze it. The full configurable
+  model (**users × groups × custom roles × operations + PDP + engine choice**:
+  OpenFGA/Oso/Casbin/hand-rolled) is a **separate deferred authorization plan**,
+  captured in project comment **#74119** (tag **`#future-plan`**).
+- **`owner_id` = stable user id** (not email) so SSO-linked identities map cleanly.
