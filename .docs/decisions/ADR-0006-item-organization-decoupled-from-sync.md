@@ -47,7 +47,7 @@ FILED INTO A SPACE item.workspaceId set, no matome          (filed directly, no 
 
 - A **matome** may be a **draft**: it exists with items but has **no space**
   (`matome.spaceId = NULL`). A draft matome and its items are organized but
-  unfiled-into-a-space.
+  not yet filed into a space.
 - The forced-Matome invariant of ADR-0003 is **repealed**: an audio recording (or
   any item) may now land **loose**, with no matome at all. This is the reversal
   m007 has to undo (the W5 migration backfills, see #1500 / the
