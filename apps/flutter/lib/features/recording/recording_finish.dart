@@ -99,6 +99,27 @@ class RecordingFinisher {
     //    survive even if Core never answers; the queue retries a failed upload
     //    and RETAINS the local audio on a confirmed `done` (#46 W2 / #871 — the
     //    durable `audioFilePath` is the canonical copy until the user deletes it).
+    //
+    //    LOOSE CAPTURE (#102 W2, ADR-0006 §1 / spec sync-gate-and-promotion):
+    //    [InboxUploader.upload] persists through [InboxController.insertLocalUpload],
+    //    which is gated on [FeatureFlags.localFirstSpaces]. With the flag ON a
+    //    finished recording lands LOOSE — matomeId NULL, workspaceId NULL — so
+    //    its effective space is NULL and it lands in the Inbox with NO auto-minted
+    //    Matome (the ADR-0003 m007 forced-Matome invariant is repealed). With the
+    //    flag OFF the recording mints a Matome exactly as today. The recorder
+    //    FINISH path and the file/photo import path therefore share ONE gated
+    //    persistence chokepoint — capture is uniformly decoupled from
+    //    organization behind the single flag.
+    //
+    //    #43 COUPLING — NO ID REGRESSION: in the local-first-recordings plan
+    //    (#43 W2) this path already mints a LOCAL `rec_local_<uuid>` PK (the
+    //    `localId` returned below), NOT the Core id; the Core id reconciles into
+    //    the SEPARATE `coreId` column once the upload lands. Making the row loose
+    //    only NULLs matomeId/workspaceId — the PK and `coreId` reconciliation are
+    //    untouched. So the older "PK == Core id" concern is moot here: there is
+    //    no Core id at the PK to clash with, the loose row still owns its coreId
+    //    after reconcile (no duplicate-coreId — d8cc85d), and the local-PK
+    //    Core-first semantics hold on both flag lanes.
     final localId = await _uploader.upload(
       PickedUpload(
         file: File(path),
