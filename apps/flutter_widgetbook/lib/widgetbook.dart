@@ -1676,7 +1676,7 @@ Widget filesScopeFilterUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — Inbox (loose items + draft matomes)',
   type: InboxItemCard,
-  path: '[Widgets]/Local-first spaces/Scenes',
+  path: '[Widgets]/Local-first spaces',
 )
 Widget sceneInboxUseCase(BuildContext context) {
   return const _SceneSurface(child: _InboxScene());
@@ -1685,7 +1685,7 @@ Widget sceneInboxUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — Spaces (local / cloud + promote)',
   type: SpaceSyncTile,
-  path: '[Widgets]/Local-first spaces/Scenes',
+  path: '[Widgets]/Local-first spaces',
 )
 Widget sceneSpacesUseCase(BuildContext context) {
   return const _SceneSurface(child: _SpacesScene());
@@ -1694,7 +1694,7 @@ Widget sceneSpacesUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — Files (scope filter)',
   type: FilesScopeFilter,
-  path: '[Widgets]/Local-first spaces/Scenes',
+  path: '[Widgets]/Local-first spaces',
 )
 Widget sceneFilesUseCase(BuildContext context) {
   return const _SceneSurface(child: _FilesScene());
@@ -1703,7 +1703,7 @@ Widget sceneFilesUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — New space sheet (local default)',
   type: SpaceSyncChoice,
-  path: '[Widgets]/Local-first spaces/Scenes',
+  path: '[Widgets]/Local-first spaces',
 )
 Widget sceneNewSpaceSheetUseCase(BuildContext context) {
   return const _SceneSurface(child: _NewSpaceSheetScene());
@@ -1712,7 +1712,7 @@ Widget sceneNewSpaceSheetUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — Promote to cloud consent',
   type: SpaceSyncChip,
-  path: '[Widgets]/Local-first spaces/Scenes',
+  path: '[Widgets]/Local-first spaces',
 )
 Widget scenePromoteConsentUseCase(BuildContext context) {
   return const _SceneSurface(child: _PromoteConsentScene());
@@ -1911,12 +1911,11 @@ class _FilesScene extends StatelessWidget {
         ),
         // The REAL FilesGrid (same widget the Files screen ships), composed
         // under the new scope filter — loose rows render the `local` sync state.
+        // FilesGrid shrink-wraps (Column+Wrap), so it sizes to its content like
+        // the sibling scenes — no fixed height (a pinned box clipped it).
         Padding(
           padding: EdgeInsets.fromLTRB(spacing.md, 0, spacing.md, spacing.lg),
-          child: SizedBox(
-            height: 460,
-            child: FilesGrid(files: _filesSample),
-          ),
+          child: FilesGrid(files: _filesSample),
         ),
       ],
     );

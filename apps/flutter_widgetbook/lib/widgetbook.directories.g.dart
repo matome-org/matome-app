@@ -584,6 +584,10 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'Files scope filter (All · Loose · In a space)',
                 builder: _matome_widgetbook_widgetbook.filesScopeFilterUseCase,
               ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Scene — Files (scope filter)',
+                builder: _matome_widgetbook_widgetbook.sceneFilesUseCase,
+              ),
             ],
           ),
           _widgetbook.WidgetbookComponent(
@@ -593,63 +597,20 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'Inbox entry (loose item · draft matome)',
                 builder: _matome_widgetbook_widgetbook.inboxItemCardUseCase,
               ),
-            ],
-          ),
-          _widgetbook.WidgetbookFolder(
-            name: 'Scenes',
-            children: [
-              _widgetbook.WidgetbookComponent(
-                name: 'FilesScopeFilter',
-                useCases: [
-                  _widgetbook.WidgetbookUseCase(
-                    name: 'Scene — Files (scope filter)',
-                    builder: _matome_widgetbook_widgetbook.sceneFilesUseCase,
-                  ),
-                ],
-              ),
-              _widgetbook.WidgetbookComponent(
-                name: 'InboxItemCard',
-                useCases: [
-                  _widgetbook.WidgetbookUseCase(
-                    name: 'Scene — Inbox (loose items + draft matomes)',
-                    builder: _matome_widgetbook_widgetbook.sceneInboxUseCase,
-                  ),
-                ],
-              ),
-              _widgetbook.WidgetbookComponent(
-                name: 'SpaceSyncChip',
-                useCases: [
-                  _widgetbook.WidgetbookUseCase(
-                    name: 'Scene — Promote to cloud consent',
-                    builder: _matome_widgetbook_widgetbook
-                        .scenePromoteConsentUseCase,
-                  ),
-                ],
-              ),
-              _widgetbook.WidgetbookComponent(
-                name: 'SpaceSyncChoice',
-                useCases: [
-                  _widgetbook.WidgetbookUseCase(
-                    name: 'Scene — New space sheet (local default)',
-                    builder:
-                        _matome_widgetbook_widgetbook.sceneNewSpaceSheetUseCase,
-                  ),
-                ],
-              ),
-              _widgetbook.WidgetbookComponent(
-                name: 'SpaceSyncTile',
-                useCases: [
-                  _widgetbook.WidgetbookUseCase(
-                    name: 'Scene — Spaces (local / cloud + promote)',
-                    builder: _matome_widgetbook_widgetbook.sceneSpacesUseCase,
-                  ),
-                ],
+              _widgetbook.WidgetbookUseCase(
+                name: 'Scene — Inbox (loose items + draft matomes)',
+                builder: _matome_widgetbook_widgetbook.sceneInboxUseCase,
               ),
             ],
           ),
           _widgetbook.WidgetbookComponent(
             name: 'SpaceSyncChip',
             useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Scene — Promote to cloud consent',
+                builder:
+                    _matome_widgetbook_widgetbook.scenePromoteConsentUseCase,
+              ),
               _widgetbook.WidgetbookUseCase(
                 name: 'Sync chip (local · promoting · cloud)',
                 builder: _matome_widgetbook_widgetbook.spaceSyncChipUseCase,
@@ -663,11 +624,20 @@ final directories = <_widgetbook.WidgetbookNode>[
                 name: 'Create sync choice (local default)',
                 builder: _matome_widgetbook_widgetbook.spaceSyncChoiceUseCase,
               ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Scene — New space sheet (local default)',
+                builder:
+                    _matome_widgetbook_widgetbook.sceneNewSpaceSheetUseCase,
+              ),
             ],
           ),
           _widgetbook.WidgetbookComponent(
             name: 'SpaceSyncTile',
             useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Scene — Spaces (local / cloud + promote)',
+                builder: _matome_widgetbook_widgetbook.sceneSpacesUseCase,
+              ),
               _widgetbook.WidgetbookUseCase(
                 name: 'Space tile (local + promote · cloud)',
                 builder: _matome_widgetbook_widgetbook.spaceSyncTileUseCase,

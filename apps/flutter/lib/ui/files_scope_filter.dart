@@ -3,7 +3,12 @@
 /// The Files screen needs to filter by organization: everything, only the
 /// **loose** items (effective space NULL), or only items **in a space**. This
 /// replaces the ambiguous "Unfiled" wording (glossary bans it). Presentational
-/// segmented control; NOT wired — W0 is the widgetbook approval gate.
+/// only — NOT wired; W0 is the widgetbook approval gate.
+///
+/// Style follows the app-standard filter pattern (the RelationshipPicker
+/// `_FilterChips` strip): a row of pill chips, each independently outlined, the
+/// active one filled accent, optional leading icon. NOT a segmented control —
+/// the rest of the app filters with chips.
 library;
 
 import 'package:flutter/material.dart';
@@ -22,8 +27,9 @@ enum FilesScope {
   inSpace,
 }
 
-/// A three-option segmented control over [FilesScope]. Labels are caller-
-/// supplied (i18n owned by the feature layer).
+/// A three-option chip filter over [FilesScope]. Labels are caller-supplied
+/// (i18n owned by the feature layer). Matches the app-standard filter chip
+/// strip — pill chips, accent-filled when active, outlined otherwise.
 class FilesScopeFilter extends StatelessWidget {
   const FilesScopeFilter({
     super.key,
@@ -42,54 +48,52 @@ class FilesScopeFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final radius = context.radius;
+    final spacing = context.spacing;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.subtleFill,
-        borderRadius: BorderRadius.circular(radius.md),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _Seg(
-            label: allLabel,
-            scope: FilesScope.all,
-            selected: value == FilesScope.all,
-            onTap: () => onChanged(FilesScope.all),
-          ),
-          _Seg(
-            label: looseLabel,
-            scope: FilesScope.loose,
-            selected: value == FilesScope.loose,
-            onTap: () => onChanged(FilesScope.loose),
-          ),
-          _Seg(
-            label: inSpaceLabel,
-            scope: FilesScope.inSpace,
-            selected: value == FilesScope.inSpace,
-            onTap: () => onChanged(FilesScope.inSpace),
-          ),
-        ],
-      ),
+    return Wrap(
+      spacing: spacing.xs,
+      runSpacing: spacing.xs,
+      children: [
+        _FilterChip(
+          label: allLabel,
+          scope: FilesScope.all,
+          selected: value == FilesScope.all,
+          onTap: () => onChanged(FilesScope.all),
+        ),
+        _FilterChip(
+          icon: Icons.inbox_outlined,
+          label: looseLabel,
+          scope: FilesScope.loose,
+          selected: value == FilesScope.loose,
+          onTap: () => onChanged(FilesScope.loose),
+        ),
+        _FilterChip(
+          icon: Icons.folder_outlined,
+          label: inSpaceLabel,
+          scope: FilesScope.inSpace,
+          selected: value == FilesScope.inSpace,
+          onTap: () => onChanged(FilesScope.inSpace),
+        ),
+      ],
     );
   }
 }
 
-class _Seg extends StatelessWidget {
-  const _Seg({
+/// One filter pill — mirrors the app-standard chip (RelationshipPicker).
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
     required this.label,
     required this.scope,
     required this.selected,
     required this.onTap,
+    this.icon,
   });
 
   final String label;
   final FilesScope scope;
   final bool selected;
   final VoidCallback onTap;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -97,26 +101,38 @@ class _Seg extends StatelessWidget {
     final spacing = context.spacing;
     final radius = context.radius;
     final typography = context.typography;
+
     final fg = selected ? colors.onAccent : colors.textSecondary;
 
-    return InkWell(
-      key: ValueKey('files-scope-${scope.name}'),
-      onTap: onTap,
-      mouseCursor: SystemMouseCursors.click,
-      borderRadius: BorderRadius.circular(radius.md),
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.md,
-          vertical: spacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? colors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(radius.md),
-        ),
-        child: Text(
-          label,
-          style:
-              typography.label.copyWith(color: fg, fontWeight: FontWeight.w600),
+    return Material(
+      color: selected ? colors.primary : Colors.transparent,
+      borderRadius: BorderRadius.circular(radius.pill),
+      child: InkWell(
+        key: ValueKey('files-scope-${scope.name}'),
+        onTap: onTap,
+        mouseCursor: SystemMouseCursors.click,
+        borderRadius: BorderRadius.circular(radius.pill),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.sm,
+            vertical: spacing.xxs,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius.pill),
+            border: Border.all(
+              color: selected ? colors.primary : colors.border,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: spacing.md, color: fg),
+                SizedBox(width: spacing.xxs),
+              ],
+              Text(label, style: typography.label.copyWith(color: fg)),
+            ],
+          ),
         ),
       ),
     );
