@@ -6,6 +6,9 @@
 > Amends: **ADR-0004** (triage lifecycle) — filing no longer implies sync; see the
 > ADR-0004 amendment block for the locked forward-compat contract.
 > Owner sign-off: project decision comment **#74124** (W0 gate cleared, 2026-06-22).
+> Normative companion: **[W0 spec — sync gate, effective space, promotion runbook
+> & migration map](../specs/sync-gate-and-promotion.md)** (the binding contract the
+> build cites; this ADR holds the decision, the spec holds the rules).
 
 ## Context
 
@@ -47,7 +50,8 @@ FILED INTO A SPACE item.workspaceId set, no matome          (filed directly, no 
   unfiled-into-a-space.
 - The forced-Matome invariant of ADR-0003 is **repealed**: an audio recording (or
   any item) may now land **loose**, with no matome at all. This is the reversal
-  m007 has to undo (the W5 migration backfills, see #1500 / the W0 spec).
+  m007 has to undo (the W5 migration backfills, see #1500 / the
+  [W0 spec](../specs/sync-gate-and-promotion.md#4-migration-mapping-table-verifiable)).
 
 These three states + the draft-matome flag are **composable**: "loose item",
 "draft matome with loose-from-a-space items", and "item filed directly into a
@@ -118,7 +122,8 @@ A space carries a new bit (m017, additive, default local):
 - **Default = local.** A newly created space is local unless the user chooses
   cloud at creation.
 - **Promotable local → cloud** (one-way, in v1, with consent + idempotency + a
-  state machine + partial-failure handling — see #1499 / the W0 spec). There is
+  state machine + partial-failure handling — see #1499 / the
+  [W0 spec §3](../specs/sync-gate-and-promotion.md#3-promotion-runbook--local--cloud-v1)). There is
   no cloud → local demotion in v1.
 
 The sync predicate is therefore:
