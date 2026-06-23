@@ -189,6 +189,17 @@ class MatomeSyncService {
     for (final matome in filed) {
       // Space-scoped guard (defensive — the query already filters): an untriaged
       // Matome must never reach Core.
+      //
+      // INLINE SYNC-ELIGIBILITY CHECK (pre-#102). This is the live drain gate
+      // today (`space_id != null` ⇒ push). Plan #102 W1 #1493 introduced the ONE
+      // authoritative resolver `EffectiveSpace.isCloudSynced` (lib/features/
+      // spaces/effective_space.dart) — the SOLE sync-eligibility authority. This
+      // site is DEFERRED to W4 #1498, which routes the drain through the single
+      // operation-keyed gate that consults the resolver (so local spaces stop
+      // draining), behind the `localFirstSpaces` flag. Until then this check is
+      // unchanged so #1493 ships dark and changes no live sync behaviour. Do NOT
+      // add a second `is_local` predicate here — that recompute is exactly what
+      // the resolver exists to prevent (ADR-0006 §2 / spec R1.2).
       if (matome.spaceId == null) continue;
 
       // The Space must be Core-backed (a numeric workspace id) to file the

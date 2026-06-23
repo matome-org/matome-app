@@ -112,6 +112,15 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// exactly the Matomes eligible for Core push (ADR-0004 space-scoped sync,
   /// task #1377); Inbox Matomes (`space_id IS NULL`) stay local-only. Excludes
   /// archived (#1409) — an archived Matome is not re-pushed.
+  ///
+  /// INLINE SYNC-ELIGIBILITY CHECK (pre-#102): `space_id IS NOT NULL` is today's
+  /// push set. Plan #102 W1 #1493 added the ONE authoritative resolver
+  /// `EffectiveSpace.isCloudSynced` (lib/features/spaces/effective_space.dart) —
+  /// the SOLE sync-eligibility authority. Routing this query through the resolver
+  /// (so LOCAL spaces are excluded from the drain) is DEFERRED to W4 #1498's
+  /// operation-keyed gate, behind the `localFirstSpaces` flag. Unchanged here so
+  /// #1493 ships dark. Do NOT inline a second `is_local` predicate (ADR-0006 §2 /
+  /// spec R1.2 — a second recompute leaks private data).
   Future<List<MatomeRow>> listFiledMatomes() {
     return (select(matomes)
           ..where((m) => m.spaceId.isNotNull() & m.archivedAt.isNull())
