@@ -139,16 +139,19 @@ class _PaneCloseBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    // A LEFT-aligned back arrow — the app's established detail-dismiss pattern
+    // (the full-screen matome/file detail shows a ← at top-left). Mirrors it so
+    // the pane close is consistent, not a competing top-right "×".
     return Container(
       height: 44,
-      alignment: Alignment.centerRight,
+      alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: IconButton(
         key: const ValueKey('master-detail-close-pane'),
-        icon: Icon(Icons.close, color: colors.textSecondary),
-        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        icon: Icon(Icons.arrow_back, color: colors.textSecondary),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
         onPressed: onClose,
       ),
     );
