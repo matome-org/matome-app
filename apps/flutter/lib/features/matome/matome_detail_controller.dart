@@ -19,6 +19,8 @@ import '../../core/providers.dart';
 import '../contacts/contacts_controller.dart' show kPlaceholderContactOwnerId;
 import '../home/inbox_upload.dart'
     show DurableImportCopy, PickedUpload, durableImportCopy, mediaTypeForPath;
+import '../home/matome_inbox_controller.dart'
+    show matomeInboxControllerProvider;
 import '../recordings/recording_ids.dart';
 import '../recordings/upload_queue.dart' show uploadQueueProvider;
 import 'matome_sync_service.dart';
@@ -142,6 +144,9 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
       role: role,
     );
     await load();
+    // The inbox/master list is a one-shot load; nudge it so the open-beside
+    // table/cards reflect the new people count (master-detail).
+    _ref.read(matomeInboxControllerProvider.notifier).reloadFromLocal();
   }
 
   /// The owner's files that are NOT already Items of this Matome — the Files
@@ -214,6 +219,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
       contactId: contactId,
     );
     await load();
+    _ref.read(matomeInboxControllerProvider.notifier).reloadFromLocal();
   }
 
   /// Change the edge [role] of an already-attached [contactId]. Reloads.
