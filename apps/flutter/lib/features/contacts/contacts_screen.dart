@@ -116,21 +116,21 @@ class ContactsScreen extends ConsumerWidget {
     final colors = context.colors;
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
-    // When the unified scaffold shows the reading pane the master only gets a
-    // fraction of the window, so the wide multi-column grid (sized for the full
-    // window) would overflow its narrow column. Reflow the master to the list in
-    // that case. The split is actually rendered when a tap would select in-pane
-    // AND there's something to show (always-mode shows the empty pane; onClick
-    // only splits once a contact is selected). OFF and pane-hidden paths keep
-    // the window-width decision, so the shipped reality is byte-for-byte
-    // unchanged.
+    // When the reading pane CAN be shown (flag ON, expanded width, a non-off
+    // mode) the directory is the master column of a master–detail split, so it
+    // must stay the proposal's vertical LIST of [ContactTile] — never the wide
+    // multi-column grid (which is sized for the full window and would also
+    // overflow the narrow master column once the pane opens). The grid path
+    // applies ONLY when no pane is ever shown: flag OFF, off mode, or a narrow
+    // width. That keys off [MasterDetailScaffold.selectsOnTap] (the single
+    // source of truth) rather than whether a contact is currently selected, so
+    // an onClick surface with nothing selected yet still shows the list, exactly
+    // like the approved `_mdContactsList` proposal scene.
     final mode =
         ref.watch(readingPaneModeProvider(ReadingPaneSurface.contacts));
-    final paneShown = FeatureFlags.masterDetailLayout &&
-        MasterDetailScaffold.selectsOnTap(context, mode) &&
-        (mode == ReadingPaneMode.always ||
-            ref.watch(contactsSelectionProvider) != null);
-    final masterIsWide = paneShown ? false : isWide;
+    final paneCanShow = FeatureFlags.masterDetailLayout &&
+        MasterDetailScaffold.selectsOnTap(context, mode);
+    final masterIsWide = paneCanShow ? false : isWide;
 
     // W4 (#1544): never point the reading pane at a contact that has left the
     // loaded list (deleted, or absent after a reload). Reconcile after the frame
