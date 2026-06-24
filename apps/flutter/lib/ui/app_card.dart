@@ -32,6 +32,7 @@ class AppCard extends StatelessWidget {
        statusLabel = null,
        durationLabel = null,
        onAction = null,
+       selected = false,
        _variant = _AppCardVariant.recording;
 
   const AppCard.calendar({
@@ -49,6 +50,7 @@ class AppCard extends StatelessWidget {
        onRetry = null,
        onAction = null,
        trailing = null,
+       selected = false,
        _variant = _AppCardVariant.calendar;
 
   /// A **Matome** row (#1378, reworked #1412): the top-level managed unit. A
@@ -65,6 +67,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onAction,
+    this.selected = false,
   }) : card = null,
        id = null,
        title = null,
@@ -81,6 +84,11 @@ class AppCard extends StatelessWidget {
   final String? relativeTime;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+
+  /// When true, renders the master-detail OPEN state: an accent left bar +
+  /// accent tint, marking the row currently shown in the reading pane.
+  final bool selected;
+
   final VoidCallback? onRetry;
 
   /// Optional trailing widget rendered INSIDE the recording card's border,
@@ -146,7 +154,7 @@ class AppCard extends StatelessWidget {
       button: true,
       label: 'Matome: ${m.title}',
       child: Material(
-        color: colors.surface,
+        color: selected ? colors.accentSoft : colors.surface,
         borderRadius: BorderRadius.circular(radius.lg),
         child: InkWell(
           key: ValueKey('matome-card-${m.id}'),
@@ -158,7 +166,14 @@ class AppCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(radius.lg),
-              border: Border.all(color: colors.border),
+              border: selected
+                  ? Border(
+                      left: BorderSide(color: colors.accent, width: 3),
+                      top: BorderSide(color: colors.border),
+                      right: BorderSide(color: colors.border),
+                      bottom: BorderSide(color: colors.border),
+                    )
+                  : Border.all(color: colors.border),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,

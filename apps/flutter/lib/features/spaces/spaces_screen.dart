@@ -172,6 +172,7 @@ class SpacesScreen extends ConsumerWidget {
             data: (spaces) => _Body(
               spaces: spaces,
               isWide: masterIsWide,
+              activeId: ref.watch(spacesSelectionProvider),
               onRefresh: () =>
                   ref.read(spacesControllerProvider.notifier).load(),
               onTap: (s) => _openSpace(context, ref, s),
@@ -440,6 +441,7 @@ class _Body extends StatelessWidget {
     required this.onTap,
     required this.onLongPress,
     required this.onPromote,
+    this.activeId,
   });
 
   final List<SpaceCard> spaces;
@@ -448,6 +450,7 @@ class _Body extends StatelessWidget {
   final ValueChanged<SpaceCard> onTap;
   final ValueChanged<SpaceCard> onLongPress;
   final ValueChanged<SpaceCard> onPromote;
+  final String? activeId;
 
   @override
   Widget build(BuildContext context) {
@@ -495,6 +498,7 @@ class _Body extends StatelessWidget {
           meta: t.spaces.matomeCount(n: space.count),
           state: space.isLocal ? SpaceSyncState.local : SpaceSyncState.cloud,
           promoteLabel: t.spaces.turnOnSync,
+          selected: space.id == activeId,
           onTap: () => onTap(space),
           onPromote: space.isLocal ? () => onPromote(space) : null,
         ),

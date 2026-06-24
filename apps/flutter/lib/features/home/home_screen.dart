@@ -690,6 +690,7 @@ class _Body extends ConsumerWidget {
                   padding: EdgeInsets.only(bottom: spacing.sm),
                   child: AppCard.matome(
                     matome: item,
+                    selected: item.id == ref.watch(inboxSelectionProvider),
                     relativeTime: formatTimestamp(
                       DateTime.fromMillisecondsSinceEpoch(item.happenedAt),
                     ),

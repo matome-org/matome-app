@@ -169,6 +169,7 @@ class ContactsScreen extends ConsumerWidget {
             data: (contacts) => _Body(
               contacts: contacts,
               isWide: masterIsWide,
+              activeId: ref.watch(contactsSelectionProvider),
               onRefresh: () =>
                   ref.read(contactsControllerProvider.notifier).load(),
               onTap: (c) => _open(context, ref, c),
@@ -408,10 +409,12 @@ class _Body extends StatelessWidget {
     required this.onRefresh,
     required this.onTap,
     required this.onLongPress,
+    this.activeId,
   });
 
   final List<ContactRow> contacts;
   final bool isWide;
+  final String? activeId;
   final Future<void> Function() onRefresh;
   final ValueChanged<ContactRow> onTap;
   final ValueChanged<ContactRow> onLongPress;
@@ -453,6 +456,7 @@ class _Body extends StatelessWidget {
         name: contact.displayName,
         notes: contactNotes(contact),
         color: colors.spaceColor(index),
+        selected: contact.id == activeId,
         onTap: () => onTap(contact),
         onLongPress: () => onLongPress(contact),
       );

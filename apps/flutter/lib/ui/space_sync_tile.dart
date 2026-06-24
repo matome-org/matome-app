@@ -24,6 +24,7 @@ class SpaceSyncTile extends StatelessWidget {
     required this.promoteLabel,
     this.onTap,
     this.onPromote,
+    this.selected = false,
   });
 
   final String name;
@@ -41,6 +42,9 @@ class SpaceSyncTile extends StatelessWidget {
   /// Promote local→cloud. Shown only when [state] is [SpaceSyncState.local].
   final VoidCallback? onPromote;
 
+  /// When true, renders the master-detail OPEN state: accent left bar + tint.
+  final bool selected;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -53,9 +57,16 @@ class SpaceSyncTile extends StatelessWidget {
     final card = Container(
       padding: EdgeInsets.all(spacing.md),
       decoration: BoxDecoration(
-        color: colors.surface,
+        color: selected ? colors.accentSoft : colors.surface,
         borderRadius: BorderRadius.circular(radius.lg),
-        border: Border.all(color: colors.border),
+        border: selected
+            ? Border(
+                left: BorderSide(color: colors.accent, width: 3),
+                top: BorderSide(color: colors.border),
+                right: BorderSide(color: colors.border),
+                bottom: BorderSide(color: colors.border),
+              )
+            : Border.all(color: colors.border),
       ),
       child: Row(
         children: [
