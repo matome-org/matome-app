@@ -3,8 +3,8 @@
 // (effective_space.dart) so the resolver stays free of any Drift dependency.
 //
 // This is the SINGLE place a `WorkspaceRow` becomes the resolver's value
-// object. It maps the persisted columns to the two orthogonal axes (ADR-0006
-// H4 / spec R2.2):
+// object. It maps the persisted columns to the two orthogonal axes
+// (.docs/internal/architecture.md §5 / spec R2.2):
 //   * Axis A (sync)    — `is_local` (m017): 1 ⇒ local, 0 ⇒ cloud.
 //   * Axis B (tenancy) — `space_type` (m006): personal | shared | org.
 //

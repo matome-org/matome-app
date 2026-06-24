@@ -38,7 +38,7 @@ const double _wideBreakpoint = 1000;
 /// route to `/matome/:id` as before.
 final inboxSelectionProvider = StateProvider<String?>((ref) => null);
 
-/// How the inbox/home list is presented — the **card** "letter" list (ADR-0005)
+/// How the inbox/home list is presented — the **card** "letter" list (.docs/internal/architecture.md §11 (D5))
 /// or the columnar [MatomeTable] (DR-001). A user-selectable view controlled
 /// from Settings → "Default views" (#1468); the on-screen header toggle was
 /// removed (#1474) so Settings is the single control. The screen still renders

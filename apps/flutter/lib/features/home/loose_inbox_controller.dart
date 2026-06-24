@@ -9,7 +9,7 @@ import 'inbox_effective_view.dart';
 import 'inbox_item.dart';
 
 /// Drives the LOOSE half of the W3 Inbox VIEW (local-first-spaces #102 W3,
-/// ADR-0006 §1): bare items whose effective space is NULL — a recording with no
+/// .docs/internal/architecture.md §5): bare items whose effective space is NULL — a recording with no
 /// matome and no space ([RecordingsDao.getLooseRecordings]).
 ///
 /// Gated behind [FeatureFlags.localFirstSpaces]: with the flag OFF this

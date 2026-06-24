@@ -259,7 +259,8 @@ void main() {
   group('lane: ff.localFirstSpaces=false (OFF / shipped reality)', () {
     test(
       'a finished recording is UNCHANGED — a fresh Matome is minted '
-      '(m007/ADR-0003 forced invariant), the recording is an Item of it',
+      '(m007 forced-Matome invariant, architecture.md §11 D3), the recording '
+      'is an Item of it',
       () async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
         addTearDown(db.close);

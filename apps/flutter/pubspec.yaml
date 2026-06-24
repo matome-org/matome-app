@@ -73,7 +73,8 @@ dependencies:
   drift_flutter: ^0.2.0
   # Direct dependency so the web connection can build an in-memory sqlite3 VFS
   # (WasmSqlite3 + InMemoryFileSystem) for the online-only web client — see
-  # core/db/connection_web.dart (ADR-0001 #2). Already pulled transitively by
+  # core/db/connection_web.dart (.docs/internal/architecture.md §11 D1).
+  # Already pulled transitively by
   # drift; pinned here to make the direct import explicit.
   sqlite3: ^2.4.0
   path_provider: ^2.1.4
@@ -87,8 +88,8 @@ dependencies:
   #     that `drift_flutter` force-pulls → manifest-merger collision.
   #   * Linux  — its CMake forces `OPENSSL_USE_STATIC_LIBS ON`; distros that
   #     ship only shared OpenSSL (e.g. Arch) fail `find_package(OpenSSL)`.
-  # Interim decision = OS full-disk encryption (FDE) reliance, documented in
-  # .docs/flutter-migration-report.md. Re-enable by dropping `drift_flutter` for
+  # Interim decision = OS full-disk encryption (FDE) reliance.
+  # Re-enable by dropping `drift_flutter` for
   # a hand-rolled native connection (or a sqlcipher build with a distinct
   # namespace + shared-OpenSSL) and uncommenting:
   #   sqlcipher_flutter_libs: ^0.6.0

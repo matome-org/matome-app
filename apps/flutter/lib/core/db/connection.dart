@@ -18,8 +18,7 @@ import 'connection_native.dart'
 /// requirement), so the lab build **relies on OS full-disk encryption (FDE)**
 /// as the documented interim decision. The keying machinery is shipped and
 /// unit-tested; enabling SQLCipher is a localized flip — see
-/// `connection_native.dart` (`kSqlCipherEnabled`) and the Security section of
-/// `.docs/flutter-migration-report.md`.
+/// `connection_native.dart` (`kSqlCipherEnabled`).
 ///
 /// On **web** there is no SQLCipher equivalent for the drift wasm worker, so the
 /// web DB is never encrypted at-rest; the browser storage sandbox (OPFS /

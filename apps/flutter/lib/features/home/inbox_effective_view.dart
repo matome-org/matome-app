@@ -1,5 +1,5 @@
 /// The Inbox VIEW over effective-space-NULL (local-first-spaces #102 W3,
-/// ADR-0006 §1 / sync-gate spec R1.3).
+/// .docs/internal/architecture.md §5 / sync gate §5 R1.3).
 ///
 /// > INBOX ⟺ effectiveSpace == NULL — a VIEW over everything, not a stored
 /// > field. Two kinds of thing have a NULL effective space and so live in the
@@ -9,7 +9,7 @@
 /// This file is the SINGLE place the Inbox membership predicate is computed, and
 /// it routes EVERY decision through the ONE authoritative resolver
 /// [EffectiveSpace] — it never re-derives `effectiveSpace` with an inline
-/// `spaceId == null` (ADR-0006 §2 / spec R1.2: a second recompute leaks private
+/// `spaceId == null` (.docs/internal/architecture.md §5 / spec R1.2: a second recompute leaks private
 /// data). The DAO queries pre-narrow the candidate rows; this layer is the
 /// resolver-backed confirmation that each candidate's effective space really is
 /// NULL.

@@ -1,5 +1,5 @@
 /// The LOOSE-items section of the W3 Inbox VIEW (local-first-spaces #102 W3,
-/// ADR-0006 §1). Renders the loose half of the effective-space-NULL Inbox — bare
+/// .docs/internal/architecture.md §5). Renders the loose half of the effective-space-NULL Inbox — bare
 /// items with no matome and no space — using the W0 [InboxItemCard], above the
 /// draft-matome list the home screen already shows.
 ///

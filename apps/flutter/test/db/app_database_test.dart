@@ -738,7 +738,7 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // (g2) m007 — Matome central entity (matome-centric-pivot, ADR-0003).
+  // (g2) m007 — Matome central entity (matome-centric-pivot, .docs/internal/architecture.md §11 (D3)).
   //
   // The KEYSTONE migration. Build a v6-shaped DB by hand (recordings WITHOUT
   // matome_id, NO matomes table, user_version=6), seed an Inbox recording
@@ -1057,7 +1057,7 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // (j) m008 — Contacts schema (ADR-0004). Real-file v7→v8 migration.
+  // (j) m008 — Contacts schema (.docs/internal/architecture.md §11 (D4)). Real-file v7→v8 migration.
   //
   // Build a v7-shaped DB by hand (matomes + workspaces + recordings, NO
   // contacts/edge tables, user_version=7), then open AppDatabase over the same
@@ -2694,7 +2694,7 @@ void main() {
 
   // -------------------------------------------------------------------------
   // (k0) m017 — workspaces.is_local (local-first-spaces, plan #102 W1,
-  // ADR-0006 §5 / sync-gate spec R2). Real-file v16→v17 migration.
+  // .docs/internal/architecture.md §5). Real-file v16→v17 migration.
   //
   // Build a v16-shaped DB by hand (workspaces WITH the m006 columns
   // space_type/owner_id but WITHOUT is_local, recording_contacts present,
@@ -2704,7 +2704,7 @@ void main() {
   // (local), the m006 columns (space_type/owner_id) are UNTOUCHED (Axis A is
   // orthogonal to Axis B), and re-opening is idempotent.
   //
-  // FORWARD-COMPAT INVARIANT (H5, ADR-0006 H4): is_local (Axis A: sync) is
+  // FORWARD-COMPAT INVARIANT (H5, .docs/internal/architecture.md §5): is_local (Axis A: sync) is
   // ORTHOGONAL to space_type (Axis B: tenancy). The migration MUST NOT collapse
   // them or regress the m006 columns. Invariant: local ⟹ personal — every row
   // that backfills to is_local=1 retains space_type='personal'.
@@ -2836,7 +2836,7 @@ void main() {
         expect(cols, contains('is_local'));
 
         // EVERY existing row defaults to is_local = 1 (local). Local spaces
-        // never reach Core (ADR-0006 §5).
+        // never reach Core (.docs/internal/architecture.md §5).
         final rows = await upgraded
             .customSelect('SELECT id, is_local FROM workspaces')
             .map((r) => (r.read<String>('id'), r.read<int>('is_local')))

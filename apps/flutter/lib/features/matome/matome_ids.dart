@@ -1,4 +1,4 @@
-/// Local-first Matome id model (matome-centric-pivot, ADR-0003 / ADR-0004).
+/// Local-first Matome id model (matome-centric-pivot, .docs/internal/architecture.md §11 (D3) / .docs/internal/architecture.md §11 (D4)).
 ///
 /// A Matome is minted the instant capture/import finishes — before it is
 /// triaged into a Space and therefore before any Core id can exist. We mint a
@@ -16,7 +16,7 @@ import 'package:uuid/uuid.dart';
 const _uuid = Uuid();
 
 /// Prefix marking a Matome id as locally-minted (no Core id yet — Inbox /
-/// untriaged, `spaceId == null`, never synced; see ADR-0004).
+/// untriaged, `spaceId == null`, never synced; see .docs/internal/architecture.md §11 (D4)).
 const String kLocalMatomeIdPrefix = 'mat_local_';
 
 /// Mints a fresh local Matome id of the form `mat_local_<uuid-v4>`.

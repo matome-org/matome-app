@@ -72,14 +72,14 @@ class Recordings extends Table {
   // whose id is a stringified Core id, so they reconcile without a PK remap.
   IntColumn get coreId => integer().named('coreId').nullable()();
 
-  // m007 — matome-centric-pivot (ADR-0003). Every recording is an *Item* of
+  // m007 — matome-centric-pivot (.docs/internal/architecture.md §11 (D3)). Every recording is an *Item* of
   // exactly ONE Matome (`recording.matomeId` FK → matomes(id); 1 recording → 1
   // Matome, move never copy). The column is declared NULLABLE here so Drift's
   // ALTER ADD COLUMN can land on legacy rows; the m007 migration then BACKFILLS
   // one Matome per recording and points every row at it, after which the column
   // is non-null for every persisted row. New write paths must create the Matome
   // in the SAME transaction as the recording so the FK never sees an orphan
-  // (ADR-0003 invariant 4). The DB keeps it nullable only to allow the additive
+  // (.docs/internal/architecture.md §11 (D3) invariant 4). The DB keeps it nullable only to allow the additive
   // ALTER without a table rebuild — the contract is "non-null after backfill".
   TextColumn get matomeId =>
       text().named('matome_id').nullable().references(Matomes, #id)();
@@ -151,21 +151,21 @@ class Recordings extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// The **Matome** — the central entity of the matome-centric pivot (ADR-0003).
+/// The **Matome** — the central entity of the matome-centric pivot (.docs/internal/architecture.md §11 (D3)).
 ///
 /// A Matome (まとめ — "a compiled whole") aggregates Items (recordings of
 /// `mediaType` audio|image), contacts, notes and summaries about one happening.
 /// Every recording belongs to exactly one Matome; a quick voice note is a
 /// Matome with a single item.
 ///
-/// Local-first lifecycle (ADR-0004): a Matome is minted `mat_local_<uuid>` and
+/// Local-first lifecycle (.docs/internal/architecture.md §11 (D4)): a Matome is minted `mat_local_<uuid>` and
 /// stays Core-less (`coreId` NULL) while in the Inbox (`spaceId == null` —
 /// untriaged, local-only, NOT synced). `coreId` is assigned on first sync,
 /// which only happens once the Matome is filed into a (synced) Space. This
 /// mirrors the proven `recording_ids.dart` / m005 reconciliation pattern.
 ///
 /// `space_id` reuses the existing `workspaces` table (the Space rename is
-/// logical — ADR-0003). NULL ⟺ Inbox.
+/// logical — .docs/internal/architecture.md §11 (D3)). NULL ⟺ Inbox.
 @DataClassName('MatomeRow')
 class Matomes extends Table {
   @override
@@ -174,7 +174,7 @@ class Matomes extends Table {
   TextColumn get id => text()();
 
   // FK → workspaces(id) (the Space). NULL ⟺ Inbox ⟺ local-only/untriaged/
-  // unsynced (ADR-0004). A Matome enters the sync domain only when filed into a
+  // unsynced (.docs/internal/architecture.md §11 (D4)). A Matome enters the sync domain only when filed into a
   // Space.
   TextColumn get spaceId =>
       text().named('space_id').nullable().references(Workspaces, #id)();
@@ -187,7 +187,7 @@ class Matomes extends Table {
 
   TextColumn get description => text().nullable()();
 
-  // ADR-0003 "open decisions resolved": the aggregated (Matome-level) summary is
+  // .docs/internal/architecture.md §11 (D3) "open decisions resolved": the aggregated (Matome-level) summary is
   // STORED (denormalized), regenerated when the item set changes. `summaryStale`
   // flags pending regeneration. This task only adds the columns; regeneration is
   // a later wave. The aggregated summary syncs as its own field with a
@@ -217,8 +217,8 @@ class Matomes extends Table {
 ///
 /// The physical table is kept named `workspaces` (preserving m002 history and
 /// the `recordings.workspaceId` FK lineage). The code/UI concept is **Space**
-/// (ADR-0003 — the rename is logical, not physical). m006 extends it with two
-/// collaboration-schema columns that are reserved/unenforced (ADR-0004):
+/// (.docs/internal/architecture.md §11 (D3) — the rename is logical, not physical). m006 extends it with two
+/// collaboration-schema columns that are reserved/unenforced (.docs/internal/architecture.md §11 (D4)):
 ///   * `space_type` ∈ { personal | shared | org } (NOT NULL default 'personal')
 ///   * `owner_id`   — reserved Space owner user id (nullable, unenforced)
 @DataClassName('WorkspaceRow')
@@ -238,16 +238,16 @@ class Workspaces extends Table {
       text().named('space_type').withDefault(const Constant('personal'))();
 
   // m006 — reserved Space owner (user id). Nullable + UNENFORCED until the
-  // `matome-collaboration` plan builds ACLs (ADR-0004 "schema-ready").
-  // SSO-ready: this is a STABLE user id, not an email (ADR-0006 H4).
+  // `matome-collaboration` plan builds ACLs (.docs/internal/architecture.md §11 (D4) "schema-ready").
+  // SSO-ready: this is a STABLE user id, not an email (.docs/internal/architecture.md §11 (D6)).
   TextColumn get ownerId => text().named('owner_id').nullable()();
 
-  // m017 — sync mode (Axis A: sync), local-first-spaces plan #102 / ADR-0006
-  // §5. `is_local = 1` ⟹ LOCAL space (client-only; its items NEVER reach Core);
+  // m017 — sync mode (Axis A: sync), local-first-spaces plan #102 /
+  // .docs/internal/architecture.md §5. `is_local = 1` ⟹ LOCAL space (client-only; its items NEVER reach Core);
   // `is_local = 0` ⟹ CLOUD space (its items sync). NOT NULL, **default 1
   // (local)** so a new Space and every migrated row is local unless explicitly
   // made cloud. ORTHOGONAL to the m006 `space_type` (Axis B: tenancy) — the two
-  // are never collapsed (ADR-0006 H4 / sync-gate spec R2.2). Invariant:
+  // are never collapsed (.docs/internal/architecture.md §5). Invariant:
   // **local ⟹ personal** (a local space is always personal; org/shared are
   // inherently cloud). Old code ignores this column.
   IntColumn get isLocal =>
@@ -257,7 +257,7 @@ class Workspaces extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Membership edge of a Space (the RBAC join — ADR-0004).
+/// Membership edge of a Space (the RBAC join — .docs/internal/architecture.md §11 (D4)).
 ///
 /// m006, reserved/UNENFORCED: the columns and table exist so the collaboration
 /// plan can land behaviour later, but no ACL logic reads them today.
@@ -278,7 +278,7 @@ class SpaceMembers extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// An organization that may own Spaces (multi-tenant — ADR-0004).
+/// An organization that may own Spaces (multi-tenant — .docs/internal/architecture.md §11 (D4)).
 ///
 /// m006, reserved/UNENFORCED: present so org-owned Spaces can be modelled by
 /// the collaboration plan; no org management exists yet.
@@ -311,7 +311,7 @@ class RecordingDrafts extends Table {
       integer().named('duration_ms').withDefault(const Constant(0))();
 }
 
-/// A **Contact** — an owner-owned person record (ADR-0004 — identity & contacts).
+/// A **Contact** — an owner-owned person record (.docs/internal/architecture.md §11 (D4) — identity & contacts).
 ///
 /// m008, SCHEMA-READY / NOT ENFORCED: a Contact is owned by a user
 /// (`owner_id`), carries a `display_name` and arbitrary JSON `metadata`, and may
@@ -359,7 +359,7 @@ class Contacts extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Edge: a Contact tagged in a Matome (ADR-0004 — `matome_contacts`).
+/// Edge: a Contact tagged in a Matome (.docs/internal/architecture.md §11 (D4) — `matome_contacts`).
 ///
 /// m008, SCHEMA-READY. `role` ∈ { organizer | attendee | speaker } (default
 /// 'attendee'). UNIQUE(matome_id, contact_id) makes the add idempotent (a
@@ -391,7 +391,7 @@ class MatomeContacts extends Table {
       ];
 }
 
-/// Edge: a Contact as a member of a Space (ADR-0004 — `space_contacts`).
+/// Edge: a Contact as a member of a Space (.docs/internal/architecture.md §11 (D4) — `space_contacts`).
 ///
 /// m008, SCHEMA-READY. UNIQUE(space_id, contact_id) → idempotent add. The
 /// space FK references `workspaces` (the Space — the rename is logical).
@@ -451,7 +451,7 @@ class RecordingContacts extends Table {
       ];
 }
 
-/// Edge: a Matome shared with a user (ADR-0004 — `matome_shares`).
+/// Edge: a Matome shared with a user (.docs/internal/architecture.md §11 (D4) — `matome_shares`).
 ///
 /// m008, RESERVED — sharing BEHAVIOUR is deferred to the `matome-collaboration`
 /// plan; this table only persists the intent. `permission` defaults to 'read'.

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // SyncPolicy — the ONE operation-keyed decision point for sync/data-egress
-// (local-first-spaces #102 W4 / #1498, ADR-0006 H4 seam 2, sync-gate spec R2.1).
+// (local-first-spaces #102 W4 / #1498, .docs/internal/architecture.md §5 seam 2, sync gate §5 R2.1).
 //
 // This is the client mirror of a future Core Bodyguard seam. EVERY data-egress
 // decision (the upload-queue drain, the moveToSpace Core PATCH, later promotion)
@@ -33,7 +33,7 @@
 
 import 'effective_space.dart';
 
-/// The minimal, STABLE operation catalog the gate keys on (ADR-0006 H4 seam 2 /
+/// The minimal, STABLE operation catalog the gate keys on (.docs/internal/architecture.md §5 seam 2 /
 /// spec R2.1). Adding `orgManaged` etc. later is a catalog entry, NOT a new
 /// call site. Deliberately NOT a role enum — roles are future DATA.
 enum Operation {
@@ -65,7 +65,7 @@ enum Operation {
 }
 
 /// The PRINCIPAL a [SyncPolicy] decision is made FOR — the future-PDP input
-/// (ADR-0006 H4). Carries the current user's STABLE id (SSO-ready; not an
+/// (.docs/internal/architecture.md §5). Carries the current user's STABLE id (SSO-ready; not an
 /// email). Constant "current user" in #102; an INPUT to the future PDP, never
 /// the authority. Present in the signature so the PDP adds resolution
 /// (caller → groups → roles → operations) without a call-site rewrite.

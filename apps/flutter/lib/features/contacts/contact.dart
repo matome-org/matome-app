@@ -3,7 +3,7 @@ import 'dart:convert';
 import '../../core/http/json_utils.dart';
 import '../../core/observability/app_log.dart';
 
-/// A user's Contact, per the `/api/contacts` contract (ADR-0004, task #1377).
+/// A user's Contact, per the `/api/contacts` contract (.docs/internal/architecture.md §11 (D4), task #1377).
 ///
 /// Hand-written with tolerant parsing: only `id`, `owner_id` and `display_name`
 /// are treated as required; everything else is nullable because Core may emit

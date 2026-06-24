@@ -9,12 +9,12 @@ import '../tables.dart';
 part 'matomes_dao.g.dart';
 
 /// CRUD + query DAO for the **Matome** — the central entity of the
-/// matome-centric pivot (ADR-0003). A Matome aggregates Items (recordings);
+/// matome-centric pivot (.docs/internal/architecture.md §11 (D3)). A Matome aggregates Items (recordings);
 /// every recording is an Item of exactly one Matome (`recordings.matome_id` FK).
 ///
 /// Pure-Dart surface: no HTTP. The sync layer decides when to pull from Core
 /// and writes through these methods. `spaceId == null` ⟺ Inbox ⟺
-/// local-only/untriaged (ADR-0004).
+/// local-only/untriaged (.docs/internal/architecture.md §11 (D4)).
 @DriftAccessor(tables: [Matomes, Recordings, MatomeContacts, Workspaces])
 class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   MatomesDao(super.db);
@@ -55,7 +55,7 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
 
   /// Delete a Matome by id, EXPLICITLY cascading its contact/share edges
   /// (`matome_contacts` + `matome_shares`) via [ContactsDao.deleteMatomeEdges]
-  /// — the Contacts themselves survive (ADR-0004 deletion-cascade). Runs in a
+  /// — the Contacts themselves survive (.docs/internal/architecture.md §11 (D4) deletion-cascade). Runs in a
   /// transaction so the Matome and its edges go atomically. Named `deleteMatome`
   /// (not `delete`) so it does not shadow the inherited
   /// [DatabaseAccessor.delete] query builder. Returns `matomes` rows deleted.
@@ -109,7 +109,7 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   }
 
   /// Filed Matomes — `space_id IS NOT NULL` (triaged), newest first. These are
-  /// exactly the Matomes eligible for Core push (ADR-0004 space-scoped sync,
+  /// exactly the Matomes eligible for Core push (.docs/internal/architecture.md §11 (D4) space-scoped sync,
   /// task #1377); Inbox Matomes (`space_id IS NULL`) stay local-only. Excludes
   /// archived (#1409) — an archived Matome is not re-pushed.
   ///
@@ -119,8 +119,8 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// the SOLE sync-eligibility authority. Routing this query through the resolver
   /// (so LOCAL spaces are excluded from the drain) is DEFERRED to W4 #1498's
   /// operation-keyed gate, behind the `localFirstSpaces` flag. Unchanged here so
-  /// #1493 ships dark. Do NOT inline a second `is_local` predicate (ADR-0006 §2 /
-  /// spec R1.2 — a second recompute leaks private data).
+  /// #1493 ships dark. Do NOT inline a second `is_local` predicate
+  /// (.docs/internal/architecture.md §5 — a second recompute leaks private data).
   Future<List<MatomeRow>> listFiledMatomes() {
     return (select(matomes)
           ..where((m) => m.spaceId.isNotNull() & m.archivedAt.isNull())
@@ -320,7 +320,7 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   // Mutations on the Matome <-> Item relationship & summary
   // ---------------------------------------------------------------------------
 
-  /// File this Matome INTO a Space — the core triage action (ADR-0004): sets
+  /// File this Matome INTO a Space — the core triage action (.docs/internal/architecture.md §11 (D4)): sets
   /// `space_id`, moving the Matome out of the Inbox and into the sync domain.
   /// Returns rows updated (0 if [matomeId] does not exist). Alias
   /// [moveMatomeToSpace] re-files an already-filed Matome into a different Space.
@@ -335,11 +335,11 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
       fileIntoSpace(matomeId, spaceId);
 
   /// Re-assign a recording to a different Matome (move, never copy — a recording
-  /// is an Item of exactly ONE Matome; ADR-0003 invariant). Returns the number
+  /// is an Item of exactly ONE Matome; .docs/internal/architecture.md §11 (D3) invariant). Returns the number
   /// of recording rows updated (0 if [recordingId] does not exist).
   ///
   /// The item set of BOTH the source and the destination Matome changed, so
-  /// both have their aggregated summary marked stale (ADR-0003 invalidation):
+  /// both have their aggregated summary marked stale (.docs/internal/architecture.md §11 (D3) invalidation):
   /// the source lost a contributing Item, the destination gained one. Runs in a
   /// transaction so the move + both stale-marks go atomically.
   Future<int> moveRecordingToMatome(String recordingId, String matomeId) {
@@ -382,7 +382,7 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   }
 
   /// Recompute the aggregated summary from the Matome's CURRENT child Items and
-  /// store it, clearing the stale flag (ADR-0003). Deterministic LOCAL
+  /// store it, clearing the stale flag (.docs/internal/architecture.md §11 (D3)). Deterministic LOCAL
   /// composition via [composeAggregatedSummary] — no AI/backend call (that is
   /// the sync/backend wave's job).
   ///

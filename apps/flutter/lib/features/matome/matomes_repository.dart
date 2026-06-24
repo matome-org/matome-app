@@ -7,7 +7,7 @@ import 'matome.dart';
 /// Drives the authenticated user's Matomes against the Core API (task #1377).
 ///
 /// Mirrors [RecordingsRepository]: a thin Bearer-authed HTTP surface with no
-/// local state. Space-scoped sync (ADR-0004) decides WHEN to call these — only
+/// local state. Space-scoped sync (.docs/internal/architecture.md §11 (D4)) decides WHEN to call these — only
 /// a Matome filed into a Space is ever pushed here. Plain generative constructor
 /// so tests can subclass/fake it the same way the recordings repo allows.
 class MatomesRepository {

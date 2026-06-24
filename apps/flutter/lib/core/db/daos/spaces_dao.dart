@@ -8,10 +8,10 @@ import '../tables.dart';
 part 'spaces_dao.g.dart';
 
 /// Canonical id of the seeded default personal Space (the default triage
-/// destination — ADR-0004). Kept in sync with `_seedDefaultWorkspace`.
+/// destination — .docs/internal/architecture.md §11 (D4)). Kept in sync with `_seedDefaultWorkspace`.
 const String kDefaultPersonalSpaceId = 'ws_default_personal';
 
-/// DAO for the **Space** collaboration schema landed by m006 (ADR-0003/0004).
+/// DAO for the **Space** collaboration schema landed by m006 (.docs/internal/architecture.md §11 (D3)/(D4)).
 ///
 /// The physical table is still `workspaces` (the rename is logical); this DAO
 /// exposes the new `space_type`/`owner_id` reads plus reserved CRUD stubs for
@@ -53,7 +53,7 @@ class SpacesDao extends DatabaseAccessor<AppDatabase> with _$SpacesDaoMixin {
   }
 
   /// Ensures the seeded default personal Space exists and is typed 'personal'
-  /// (the default triage destination — ADR-0004). Idempotent: inserts the row
+  /// (the default triage destination — .docs/internal/architecture.md §11 (D4)). Idempotent: inserts the row
   /// if missing, otherwise normalises its `space_type` to 'personal'. Returns
   /// the (now-guaranteed) row.
   Future<WorkspaceRow> ensureDefaultPersonalSpace() async {

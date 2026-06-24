@@ -3,7 +3,7 @@ import 'package:matome_flutter/features/spaces/effective_space.dart';
 
 // ---------------------------------------------------------------------------
 // Table-driven matrix for the ONE authoritative effectiveSpace / isCloudSynced
-// resolver (#1493, plan #102 W1 — ADR-0006 §2/§5, sync-gate spec R1/R2).
+// resolver (#1493, plan #102 W1 — .docs/internal/architecture.md §5, sync gate §5 R1/R2).
 //
 // The membership matrix (R1):
 //   loose            (matomeSpaceId null, workspaceId null)        → Inbox (NULL)

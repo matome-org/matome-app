@@ -3,7 +3,7 @@ import 'package:drift/drift.dart' show Value;
 import '../../core/db/recording_card.dart';
 
 /// Local, deterministic composition of a Matome's `aggregatedSummary` from its
-/// child Items (recordings) — ADR-0003.
+/// child Items (recordings) — .docs/internal/architecture.md §11 (D3).
 ///
 /// This is the W1 stand-in for the eventual Core-AI aggregation: NO backend /
 /// AI call. It rolls each Item that carries a non-empty `summary` into a titled
@@ -48,7 +48,7 @@ String? composeAggregatedSummary(List<RecordingItem> recordings) {
 /// Sparse-sync null-wipe guard for the Matome `aggregatedSummary`, mirroring
 /// `inbox_sync.dart` `mergeText` (the recording-level B3 data-loss guard).
 ///
-/// The Matome is its own synced unit (ADR-0003) and `aggregatedSummary` syncs
+/// The Matome is its own synced unit (.docs/internal/architecture.md §11 (D3)) and `aggregatedSummary` syncs
 /// as its own reconcilable field. A sparse Core payload — one that omits or
 /// nulls the aggregate even though a good local value exists — must NEVER erase
 /// it. Returns [Value.absent] when [incoming] is null/blank so a partial UPDATE

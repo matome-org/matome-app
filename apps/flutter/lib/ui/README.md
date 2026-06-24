@@ -170,4 +170,4 @@ Exceptions are narrow, reviewed, and time-bound. Do not bypass the gate with bro
 | WCAG AA text/icon pairs still pass | `flutter test test/core/theme/app_theme_contrast_test.dart` |
 | Catalog states render locally | `CHROME_EXECUTABLE=/usr/bin/chromium flutter build web -t lib/widgetbook.dart` in `apps/flutter_widgetbook` |
 | Golden gate remains stable | `flutter test test/goldens/shared_widgets_golden_test.dart` |
-| ADR stays current | `.docs/decisions/ADR-0002-flutter-design-system-foundation.md` |
+| Decision stays current | `.docs/internal/architecture.md §11 (D2)` |

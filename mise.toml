@@ -305,7 +305,8 @@ flutter test --dart-define=ff.newNavShell=true $NAV_SUITE
 echo "── nav suite: ff.newNavShell=false (legacy OFF reality) ──"
 flutter test --dart-define=ff.newNavShell=false $NAV_SUITE
 
-# Dual-flag local-first-spaces grading (ADR-0006 / plan #102 W1). The
+# Dual-flag local-first-spaces grading (.docs/internal/architecture.md §11 D6
+# / plan #102 W1). The
 # `localFirstSpaces` const is the single-flip rollback switch for the whole
 # item-organization-decoupled-from-sync behaviour; it ships DARK (default OFF).
 # A plain `flutter test` only exercises the OFF reality, so grade BOTH realities

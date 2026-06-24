@@ -42,7 +42,7 @@ class MatomeDetailState {
   final MatomeItem? matome;
 
   /// Spaces the Matome can be filed into — the personal Space is guaranteed to
-  /// be present and is the default/most-prominent destination (ADR-0004).
+  /// be present and is the default/most-prominent destination (.docs/internal/architecture.md §11 (D4)).
   final List<WorkspaceRow> spaces;
 
   /// Contacts tagged in this Matome (the `matome_contacts` edges), each paired
@@ -74,7 +74,7 @@ class MatomeDetailState {
 /// source is ALWAYS Drift — the sync layer reconciles Core into Drift, so this
 /// screen never reaches the network (mirrors [DetailsController]).
 ///
-/// Triage (ADR-0004) = enrich + FILE INTO A SPACE. [fileIntoSpace] sets
+/// Triage (.docs/internal/architecture.md §11 (D4)) = enrich + FILE INTO A SPACE. [fileIntoSpace] sets
 /// `matome.spaceId`, moving the Matome out of the Inbox and into the sync
 /// domain; [saveNotes] edits the description; [addPhoto] imports an image as an
 /// Item of this Matome.
@@ -238,11 +238,11 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   }
 
   /// The seeded default personal Space — the default triage destination
-  /// (ADR-0004). Exposed so the UI can mark it as the most-prominent option.
+  /// (.docs/internal/architecture.md §11 (D4)). Exposed so the UI can mark it as the most-prominent option.
   Future<WorkspaceRow> defaultPersonalSpace() =>
       _spacesDao.ensureDefaultPersonalSpace();
 
-  /// FILE this Matome into [spaceId] — the core triage action (ADR-0004): sets
+  /// FILE this Matome into [spaceId] — the core triage action (.docs/internal/architecture.md §11 (D4)): sets
   /// `space_id`, moving it out of the Inbox into the sync domain. Reloads so the
   /// screen reflects the filed state (and any inbox list elsewhere drops it).
   Future<void> fileIntoSpace(String spaceId) async {
@@ -269,7 +269,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   }
 
   /// Regenerate the stored aggregated summary from the Matome's CURRENT Items
-  /// (ADR-0003). Deterministic LOCAL composition via the DAO — no AI/backend
+  /// (.docs/internal/architecture.md §11 (D3)). Deterministic LOCAL composition via the DAO — no AI/backend
   /// call. Stores the rollup and clears the stale flag (or NULLs it when no Item
   /// has a summary yet). Reloads so the hub reflects the fresh summary.
   Future<void> regenerateSummary() async {

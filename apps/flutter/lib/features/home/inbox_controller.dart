@@ -69,7 +69,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         // stringified-id PK for rows that predate the coreId column.
         final existing = await _dao.recordingByCoreId(recording.id) ??
             await _dao.getRecordingById(coreIdToLocalId(recording.id));
-        // m007 (ADR-0003): a Core-originated recording must also become an Item
+        // m007 (.docs/internal/architecture.md §11 (D3)): a Core-originated recording must also become an Item
         // of a Matome. `upsertRecordingWithMatome` reuses the existing row's
         // Matome when there is one (the merge-guard already preserves it) and
         // otherwise mints a fresh Inbox/filed Matome in the same transaction —
@@ -304,7 +304,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// `InboxUploader.upload` pipeline) — the synced / Core-reconcile paths do NOT
   /// route through here.
   ///
-  /// Local-first-spaces (#102 W2, ADR-0006 §1): with [FeatureFlags.localFirstSpaces]
+  /// Local-first-spaces (#102 W2, .docs/internal/architecture.md §5): with [FeatureFlags.localFirstSpaces]
   /// ON, an import lands LOOSE — no matome, no space ([RecordingsDao.insertLooseRecording],
   /// `matomeId = NULL`, `workspaceId = NULL`) — so its effective space is NULL
   /// and it lands in the Inbox. Organization is DECOUPLED from capture; no
@@ -312,7 +312,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// the row still drains through the [UploadQueue] exactly as before, so a
   /// recording already in a cloud space keeps uploading.
   ///
-  /// With the flag OFF the behaviour is BYTE-FOR-BYTE unchanged: m007 (ADR-0003)
+  /// With the flag OFF the behaviour is BYTE-FOR-BYTE unchanged: m007 (.docs/internal/architecture.md §11 (D3))
   /// forbids a Matome-less recording, so the row goes through
   /// [RecordingsDao.upsertRecordingWithMatome], which mints the Matome in the
   /// SAME transaction (Inbox upload → Inbox Matome) so the recording.matomeId FK

@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/config/feature_flags.dart';
 
 /// Dual-flag lane for the `localFirstSpaces` single-flip rollback switch
-/// (ADR-0006 / spec sync-gate-and-promotion, plan #102 W1).
+/// (.docs/internal/architecture.md §5, plan #102 W1).
 ///
 /// `FeatureFlags.localFirstSpaces` is a `const bool.fromEnvironment`, so it
 /// cannot be flipped at runtime — its value is baked in at build time by the

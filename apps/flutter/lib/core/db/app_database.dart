@@ -25,17 +25,17 @@ part 'app_database.g.dart';
 /// v6 (m006, matome-centric-pivot Wave 1) adds collaboration *schema* to the
 /// Space (the `workspaces` table): `space_type` + `owner_id` columns and the
 /// `space_members` / `organizations` tables. Reserved/UNENFORCED — no ACL
-/// behaviour ships until the `matome-collaboration` plan (ADR-0004).
+/// behaviour ships until the `matome-collaboration` plan (.docs/internal/architecture.md §11 (D4)).
 ///
 /// v7 (m007, matome-centric-pivot — the KEYSTONE data slice) makes the
-/// **Matome** the central entity (ADR-0003): adds the `matomes` table and the
+/// **Matome** the central entity (.docs/internal/architecture.md §11 (D3)): adds the `matomes` table and the
 /// `recordings.matome_id` FK, and BACKFILLS one Matome per existing recording
-/// so every recording is an Item of exactly one Matome. (Note: ADR-0003 drafts
+/// so every recording is an Item of exactly one Matome. (Note: .docs/internal/architecture.md §11 (D3) drafts
 /// this as "m006"; m006 was taken by the Space-evolution slice above, so the
 /// Matome slice lands as m007 — the version number, not the ADR prose, is
 /// authoritative.)
 ///
-/// v8 (m008, Contacts schema — ADR-0004) adds the owner-owned `contacts` table
+/// v8 (m008, Contacts schema — .docs/internal/architecture.md §11 (D4)) adds the owner-owned `contacts` table
 /// and the three edge tables `matome_contacts` / `space_contacts` /
 /// `matome_shares`. SCHEMA-READY, NOT ENFORCED — no sharing/profile/ACL logic
 /// and no UI; behaviour is deferred to the `matome-collaboration` plan. (The
@@ -133,8 +133,8 @@ part 'app_database.g.dart';
 /// recording_contacts; PRAGMA user_version = 15;` — non-lossy, dropping only the
 /// new join.
 ///
-/// v17 (m017, workspaces.is_local — local-first-spaces #102 W1, ADR-0006 §5 /
-/// sync-gate spec R2) adds the **sync-mode** bit to the Space (the `workspaces`
+/// v17 (m017, workspaces.is_local — local-first-spaces #102 W1,
+/// .docs/internal/architecture.md §5) adds the **sync-mode** bit to the Space (the `workspaces`
 /// table): `is_local` INTEGER NOT NULL DEFAULT 1 (local). `is_local = 1` ⟹ a
 /// LOCAL space — client-only, its items NEVER reach Core; `is_local = 0` ⟹ a
 /// CLOUD space whose items sync. Additive + defaulted, so Drift's ALTER ADD
@@ -143,7 +143,7 @@ part 'app_database.g.dart';
 /// no sync gate keys off it until the W-tasks (resolver #1493, drain #1498) and
 /// the `localFirstSpaces` flag wire it.
 ///
-/// FORWARD-COMPAT (H5, ADR-0006 H4 / spec R2.2): `is_local` is **Axis A
+/// FORWARD-COMPAT (H5, .docs/internal/architecture.md §5): `is_local` is **Axis A
 /// (sync)** and is **ORTHOGONAL** to the reserved m006 `space_type` (**Axis B,
 /// tenancy** — `personal | shared | org`). The two columns are NEVER collapsed:
 /// sync keys off Axis A only, tenancy off Axis B only. This step does NOT touch
@@ -163,7 +163,7 @@ part 'app_database.g.dart';
 ///
 /// DOWN-migration / reversal (no automatic Drift downgrade; documented for
 /// discipline — additive, defaulted, ships dark; a true revert is a
-/// compensating m018, ADR-0006 acceptance):
+/// compensating m018, .docs/internal/architecture.md §11 (D6) acceptance):
 ///   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v16 shape, rebuild
 ///   -- `workspaces` without `is_local` via a copy table. Leaving the column in
 ///   -- place is otherwise harmless (default-local, old code ignores it).
@@ -309,7 +309,7 @@ class AppDatabase extends _$AppDatabase {
             );
           }
           // m006 — Space collaboration schema (matome-centric-pivot Wave 1,
-          // ADR-0003/0004). The Space rename is LOGICAL: the table stays named
+          // .docs/internal/architecture.md §11 (D3)/(D4)). The Space rename is LOGICAL: the table stays named
           // `workspaces`. Two columns are added to it and two reserved tables
           // are created. All collaboration columns are UNENFORCED — no ACL
           // logic reads them until the `matome-collaboration` plan.
@@ -318,7 +318,7 @@ class AppDatabase extends _$AppDatabase {
           // backfills existing rows: `space_type` → 'personal' (its column
           // default), `owner_id` → NULL. The seeded default Space ('Pessoal',
           // isDefault=1) therefore becomes type 'personal' — it is the default
-          // triage destination (ADR-0004). The explicit UPDATE below is a
+          // triage destination (.docs/internal/architecture.md §11 (D4)). The explicit UPDATE below is a
           // belt-and-braces backfill in case a prior build had already created
           // the column without the default.
           //
@@ -341,19 +341,19 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(organizations);
           }
           // m007 — Matome becomes the central entity (matome-centric-pivot,
-          // ADR-0003 — the KEYSTONE data slice). Adds the `matomes` table and
+          // .docs/internal/architecture.md §11 (D3) — the KEYSTONE data slice). Adds the `matomes` table and
           // the `recordings.matome_id` FK, then BACKFILLS one Matome per
           // existing recording so every recording is an Item of exactly one
-          // Matome (ADR-0003 invariant 1/2). The Matome is minted local-only
+          // Matome (.docs/internal/architecture.md §11 (D3) invariant 1/2). The Matome is minted local-only
           // (`mat_local_<uuid>`, `core_id` NULL — Inbox/untriaged until
-          // triaged into a Space; ADR-0004) and takes its `space_id` from the
+          // triaged into a Space; .docs/internal/architecture.md §11 (D4)) and takes its `space_id` from the
           // recording's existing `workspaceId` so a recording already filed in a
           // Space yields a Space-filed Matome, and an Inbox recording
           // (workspaceId NULL) yields an Inbox Matome.
           //
           // ORDERING: the Matome row is INSERTed BEFORE the recording is
           // pointed at it, so the (eventually-non-null) FK never sees an orphan
-          // window (ADR-0003 invariant 4). `recordings.matomeId` is added as a
+          // window (.docs/internal/architecture.md §11 (D3) invariant 4). `recordings.matomeId` is added as a
           // nullable column (Drift ALTER ADD can't add a NOT NULL column to a
           // populated table), then the backfill makes it non-null for every
           // row; the WHERE matome_id IS NULL guard makes the whole step
@@ -372,7 +372,7 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(recordings, recordings.matomeId);
             await _backfillMatomesPerRecording();
           }
-          // m008 — Contacts schema (ADR-0004). Creates the owner-owned
+          // m008 — Contacts schema (.docs/internal/architecture.md §11 (D4)). Creates the owner-owned
           // `contacts` table and the three edge tables `matome_contacts`,
           // `space_contacts` and `matome_shares`. New domain — NO backfill.
           // SCHEMA-READY / NOT ENFORCED: no sharing / profile / ACL logic and
@@ -573,8 +573,8 @@ class AppDatabase extends _$AppDatabase {
           if (from < 16) {
             await m.createTable(recordingContacts);
           }
-          // m017 — workspaces.is_local (local-first-spaces #102 W1, ADR-0006
-          // §5 / sync-gate spec R2). Adds the SYNC-MODE bit (Axis A) to the
+          // m017 — workspaces.is_local (local-first-spaces #102 W1,
+          // .docs/internal/architecture.md §5). Adds the SYNC-MODE bit (Axis A) to the
           // Space: `is_local` INTEGER NOT NULL DEFAULT 1 (local). Drift's ALTER
           // ADD COLUMN backfills EVERY existing row to 1 (local) from the column
           // default — no data rewrite, no per-row UPDATE. Old code that never
@@ -684,7 +684,7 @@ class AppDatabase extends _$AppDatabase {
   /// Space), mirroring migration 002's `INSERT OR IGNORE`. Idempotent.
   ///
   /// `spaceType` is pinned to 'personal' — this is the default triage
-  /// destination (ADR-0004). On a fresh install (onCreate) the column exists
+  /// destination (.docs/internal/architecture.md §11 (D4)). On a fresh install (onCreate) the column exists
   /// from `createAll()`; on the m002 upgrade path the column is absent until
   /// m006 runs, so the companion only sets it when meaningful (the column
   /// default 'personal' covers the pre-m006 insert).
@@ -702,7 +702,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// m007 backfill: create exactly one Matome per existing recording and point
-  /// the recording at it (ADR-0003 invariant 1/2 — every recording ∈ exactly
+  /// the recording at it (.docs/internal/architecture.md §11 (D3) invariant 1/2 — every recording ∈ exactly
   /// one Matome). Each Matome is minted local-only (`mat_local_<uuid>`,
   /// `core_id` NULL); its `space_id` is the recording's existing `workspaceId`
   /// (so an Inbox recording → an Inbox Matome, a filed recording → a filed

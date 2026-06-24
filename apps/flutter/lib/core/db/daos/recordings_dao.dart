@@ -193,7 +193,7 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   }
 
   /// LOOSE recordings — `matomeId IS NULL AND workspaceId IS NULL`, newest
-  /// first (local-first-spaces #102 W3, ADR-0006 §1).
+  /// first (local-first-spaces #102 W3, .docs/internal/architecture.md §5).
   ///
   /// These are the items whose EFFECTIVE SPACE is NULL *without* being inside a
   /// matome: a bare recording/photo/doc captured behind the flag
@@ -283,11 +283,11 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     return into(recordings).insertOnConflictUpdate(entry);
   }
 
-  /// LOOSE insert (local-first-spaces #102 W2, ADR-0006 §1/§3). Persists a brand
+  /// LOOSE insert (local-first-spaces #102 W2, .docs/internal/architecture.md §5). Persists a brand
   /// new recording with NO Matome and NO Space — `matomeId = NULL`,
   /// `workspaceId = NULL` — so its effective space is NULL and it lands in the
   /// Inbox (a VIEW; INBOX ⟺ effectiveSpace == NULL). This is the reversal of the
-  /// ADR-0003 forced-Matome invariant: an imported item may now exist with no
+  /// .docs/internal/architecture.md §11 (D3) forced-Matome invariant: an imported item may now exist with no
   /// matome at all.
   ///
   /// Unlike [upsertRecordingWithMatome] there is NO mint here — the whole point
@@ -309,7 +309,7 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   }
 
   /// Local-first upsert that GUARANTEES the recording is an Item of a Matome
-  /// (ADR-0003 invariant 1/4 — a recording is never persisted without a Matome,
+  /// (.docs/internal/architecture.md §11 (D3) invariant 1/4 — a recording is never persisted without a Matome,
   /// created in the SAME transaction so the FK never sees an orphan window).
   ///
   /// If [entry] already carries a `matome_id`, it is upserted unchanged (the
@@ -326,7 +326,7 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     return transaction(() async {
       // Caller already supplied a Matome — respect it verbatim. The owning
       // Matome's item set / a child summary changed, so its aggregated summary
-      // is now stale (ADR-0003 invalidation): a new Item was added or an
+      // is now stale (.docs/internal/architecture.md §11 (D3) invalidation): a new Item was added or an
       // existing one's summary was reconciled in.
       if (entry.matomeId.present && entry.matomeId.value != null) {
         await into(recordings).insertOnConflictUpdate(entry);
@@ -374,7 +374,7 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   }
 
   /// Flags the owning Matome's aggregated summary as pending regeneration —
-  /// its item set / a child summary changed (ADR-0003 invalidation). Mirrors
+  /// its item set / a child summary changed (.docs/internal/architecture.md §11 (D3) invalidation). Mirrors
   /// [MatomesDao.markSummaryStale]; written inline so it joins the caller's
   /// transaction (the `Matomes` table is in this accessor).
   Future<void> _markMatomeSummaryStale(String matomeId) async {
@@ -454,7 +454,7 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// picker (it only lists the owner's matomes), and a defensive guard here
   /// rejects a target the owner has no recording relationship with so the DAO is
   /// safe even if called directly. Both the source and destination matomes have
-  /// their aggregated summary marked stale (ADR-0003 invalidation — each one's
+  /// their aggregated summary marked stale (.docs/internal/architecture.md §11 (D3) invalidation — each one's
   /// item set changed).
   Future<int> moveRecordingsToMatome(
     Set<String> ids,
@@ -532,7 +532,7 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   }
 
   /// File a LOOSE item directly into a space (or back to Inbox when [spaceId]
-  /// is null), OWNER-SCOPED (local-first-spaces #102 W6 / #1501, ADR-0006 §1).
+  /// is null), OWNER-SCOPED (local-first-spaces #102 W6 / #1501, .docs/internal/architecture.md §5).
   /// Writes `recordings.workspace_id` only — it does NOT touch `matome_id` (a
   /// matome's space still WINS the effective-space rule; this is the "file a
   /// loose item with no matome" path). Returns the number of rows moved.

@@ -4,7 +4,7 @@ import 'package:sqlite3/wasm.dart';
 
 import 'db_encryption.dart';
 
-/// Web connection — **online-only, in-memory** (ADR-0001 #2).
+/// Web connection — **online-only, in-memory** (.docs/internal/architecture.md §11 (D1)).
 ///
 /// matome web is an authenticated, online-only client: it reads from the Core
 /// API and does NOT persist a local mirror at-rest. There is no SQLCipher

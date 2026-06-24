@@ -18,7 +18,7 @@ class MatomeContactEdge {
   }
 }
 
-/// A user's Matome, per the `/api/matomes` contract (ADR-0003/0004, task #1377).
+/// A user's Matome, per the `/api/matomes` contract (.docs/internal/architecture.md §11 (D3) / .docs/internal/architecture.md §11 (D4), task #1377).
 ///
 /// Hand-written, tolerant parsing: only `id`, `owner_id` and `title` are
 /// required. `workspace_id` is the Space (a Matome is only ever returned filed

@@ -4,8 +4,7 @@ import 'package:logging/logging.dart';
 ///
 /// `token` is the Guardian access token (JWT) that `phoenix_socket` puts in the
 /// WS connect URL (`?token=<jwt>`) per the Phoenix Socket contract; `ticket`
-/// covers the planned short-TTL socket-ticket follow-up (see the Security note
-/// in `.docs/flutter-migration-report.md`).
+/// covers the planned short-TTL socket-ticket follow-up.
 const List<String> _sensitiveQueryKeys = ['token', 'ticket'];
 
 /// Replaces the values of any sensitive query params in [message] with

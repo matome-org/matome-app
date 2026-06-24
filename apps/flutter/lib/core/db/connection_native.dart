@@ -15,8 +15,7 @@ Future<String> _matomeDbDirectory() async {
 
 /// Whether to apply SQLCipher at-rest encryption on native platforms.
 ///
-/// **Currently `false`** — see the Security section of
-/// `.docs/flutter-migration-report.md` (#815). `sqlcipher_flutter_libs` cannot
+/// **Currently `false`** (#815). `sqlcipher_flutter_libs` cannot
 /// be co-built with `drift_flutter` in the current version set (Android plugin
 /// namespace collision; Linux static-OpenSSL requirement), so the lab build
 /// relies on OS full-disk encryption (FDE) for at-rest protection. The keying

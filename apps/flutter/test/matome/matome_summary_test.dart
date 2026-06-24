@@ -5,7 +5,7 @@ import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/features/matome/matome_summary.dart';
 
 /// Pure-function tests for the deterministic local aggregated-summary generator
-/// and the sparse-sync null-wipe merge guard (Omakiten #1376, ADR-0003).
+/// and the sparse-sync null-wipe merge guard (Omakiten #1376, .docs/internal/architecture.md §11 (D3)).
 
 RecordingItem _item({
   required String id,

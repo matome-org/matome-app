@@ -5,7 +5,7 @@ import '../contacts/contact.dart';
 import 'matome.dart';
 import 'matome_summary.dart';
 
-/// Core <-> Drift reconciliation for space-scoped Matome/Contact sync (ADR-0004,
+/// Core <-> Drift reconciliation for space-scoped Matome/Contact sync (.docs/internal/architecture.md §11 (D4),
 /// task #1377). Mirrors `inbox_sync.dart` (the recordings sync): a remote payload
 /// is mapped to a Drift upsert companion with PER-FIELD merge-guards so a sparse
 /// Core row never clobbers a local-only edit that has not round-tripped yet.

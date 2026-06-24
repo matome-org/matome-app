@@ -18,7 +18,7 @@ enum MatomeSyncRollup { onDevice, partial, cloud }
 /// DB row keeps the raw SQLite columns, this card exposes the typed view the
 /// Matome detail/list screens consume.
 ///
-/// A Matome (ADR-0003) aggregates Items (audio|image recordings), with a stored
+/// A Matome (.docs/internal/architecture.md §11 (D3)) aggregates Items (audio|image recordings), with a stored
 /// [aggregatedSummary] regenerated when the item set changes. [isInbox] is the
 /// derived untriaged state (`spaceId == null`); [isLocalOnly] is true while the
 /// Matome has not been reconciled to a Core id (Inbox / not yet synced).
@@ -57,7 +57,7 @@ class MatomeItem {
 
   final String? description;
 
-  /// Stored, Matome-level summary across the items (ADR-0003). NULL until first
+  /// Stored, Matome-level summary across the items (.docs/internal/architecture.md §11 (D3)). NULL until first
   /// regeneration.
   final String? aggregatedSummary;
 
@@ -105,13 +105,13 @@ class MatomeItem {
   /// (#1431/I-1).
   final int? archivedAt;
 
-  /// Derived untriaged state — `spaceId == null` (glossary: Inbox).
+  /// Derived untriaged state — `spaceId == null` (.docs/internal/architecture.md §12 (Glossary): Inbox).
   bool get isInbox => spaceId == null;
 
   /// Whether this Matome is archived (soft-deleted) — `archivedAt != null`.
   bool get isArchived => archivedAt != null;
 
-  /// Local-only / not-yet-synced — no reconciled Core id yet (ADR-0004).
+  /// Local-only / not-yet-synced — no reconciled Core id yet (.docs/internal/architecture.md §11 (D4)).
   bool get isLocalOnly => coreId == null;
 
   /// Sync state rolled up from the hydrated child Items, using the same

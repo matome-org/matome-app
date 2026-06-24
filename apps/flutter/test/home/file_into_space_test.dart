@@ -1,5 +1,5 @@
 // W6 #1501 — file a LOOSE item DIRECTLY into a space (no matome) end-to-end
-// (plan #102, spec R2 / ADR-0006 §1). Three load-bearing invariants:
+// (plan #102, .docs/internal/architecture.md §5). Three load-bearing invariants:
 //
 //   1. owner-scope authz on the assign — a NON-owner cannot file another owner's
 //      row (the local write is owner-scoped; a forged id moves zero rows).

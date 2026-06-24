@@ -8,9 +8,8 @@ import 'package:matome_flutter/core/db/app_database.dart';
 // On-disk native open + read-back (#815). The SQLCipher `setup` hook wraps
 // exactly this native open/migration/read path; proving a real on-disk file
 // opens, migrates, and reads back gives the keyed-open round-trip its
-// foundation. (SQLCipher itself is not active in the lab build — FDE interim;
-// see .docs/flutter-migration-report.md. The key lifecycle is covered by
-// db_encryption_test.dart.)
+// foundation. (SQLCipher itself is not active in the lab build — FDE interim.
+// The key lifecycle is covered by db_encryption_test.dart.)
 // ---------------------------------------------------------------------------
 
 void main() {

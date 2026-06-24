@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // effectiveSpace / isCloudSynced — the ONE authoritative sync-eligibility
-// resolver (local-first-spaces #102 W1, ADR-0006 §2/§5, sync-gate spec R1/R2).
+// resolver (local-first-spaces #102 W1, .docs/internal/architecture.md §5, sync gate §5 R1/R2).
 //
 // This file is the SPINE of plan #102. It owns the single precedence rule
 // `effectiveSpaceId = matome.space_id ?? recording.workspace_id` (matome WINS)
@@ -12,7 +12,7 @@
 // > column, or an inline `if (workspaceId != null)`. A second recompute leaks
 // > private data (Olivier) — that is the failure this file prevents.
 //
-// FORWARD-COMPAT seams this file LOCKS IN (ADR-0006 H4 / spec R1.4, R2.1):
+// FORWARD-COMPAT seams this file LOCKS IN (.docs/internal/architecture.md §5 / spec R1.4, R2.1):
 //   * The resolver consumes a Space VALUE OBJECT [SpaceRef] carrying
 //     { id, syncMode, tenancy, ownerId }. `tenancy` is CONSTANT `personal` and
 //     `ownerId` is the current user TODAY, but both are PRESENT IN THE SIGNATURE
@@ -30,7 +30,7 @@
 /// Axis A — the sync mode of a Space (`workspaces.is_local`, m017).
 ///
 /// ORTHOGONAL to tenancy ([SpaceTenancy], Axis B) — the two are NEVER collapsed
-/// (ADR-0006 H4 / spec R2.2). Sync keys off this axis ONLY.
+/// (.docs/internal/architecture.md §5 / spec R2.2). Sync keys off this axis ONLY.
 enum SpaceSyncMode {
   /// `is_local = true` — client-only; its items NEVER reach Core.
   local,
@@ -47,7 +47,7 @@ enum SpaceSyncMode {
 /// `local ⟹ personal`, `org ⟹ cloud`; `personal` may be local OR cloud.
 enum SpaceTenancy { personal, shared, org }
 
-/// The Space VALUE OBJECT the resolver consumes (ADR-0006 H4 seam 1 / spec
+/// The Space VALUE OBJECT the resolver consumes (.docs/internal/architecture.md §5 seam 1 / spec
 /// R1.4). Carries exactly what a sync-eligibility decision needs, decoupled
 /// from the Drift row so the resolver is pure and DB-free.
 ///
@@ -71,7 +71,7 @@ class SpaceRef {
   /// Axis B — who owns it? Constant `personal` in #102 (reserved seam).
   final SpaceTenancy tenancy;
 
-  /// The owning user's STABLE id (not an email — SSO-ready, ADR-0006 H4).
+  /// The owning user's STABLE id (not an email — SSO-ready, .docs/internal/architecture.md §5).
   /// Constant "current user" in #102; an INPUT to the future PDP, never the
   /// authority. Nullable because the reserved m006 `owner_id` may be unset.
   final String? ownerId;
@@ -100,7 +100,7 @@ class SpaceRef {
 /// resolved by the caller from `matome.space_id`); NULL when the item is loose,
 /// or in a DRAFT matome (a matome with no space). [workspaceId] is the item's
 /// OWN directly-filed space (`recording.workspace_id`); it is SHADOWED — never
-/// authoritative — whenever the item is in a matome (ADR-0006 §4).
+/// authoritative — whenever the item is in a matome (.docs/internal/architecture.md §5).
 class ItemMembership {
   const ItemMembership({this.matomeSpaceId, this.workspaceId});
 
@@ -113,7 +113,7 @@ class ItemMembership {
   final String? workspaceId;
 }
 
-/// SEALED, EXHAUSTIVE sync-status of an item (ADR-0006 H4 / spec R2.1).
+/// SEALED, EXHAUSTIVE sync-status of an item (.docs/internal/architecture.md §5 / spec R2.1).
 ///
 /// Adding a future case (`orgManaged` / `policyBlocked`) is a COMPILE ERROR at
 /// every exhaustive `switch` over this type — there is NO catch-all `default:`
@@ -152,7 +152,7 @@ final class SyncCloud extends SyncStatus {
 
 /// The ONE authoritative sync-eligibility resolver (#1493). Every
 /// sync-eligibility decision in the program routes through here — no second
-/// computation anywhere (ADR-0006 §2 / spec R1.2).
+/// computation anywhere (.docs/internal/architecture.md §5 / spec R1.2).
 abstract final class EffectiveSpace {
   EffectiveSpace._();
 

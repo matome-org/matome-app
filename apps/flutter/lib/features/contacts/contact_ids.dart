@@ -1,4 +1,4 @@
-/// Local-first Contact id model (matome-centric-pivot, ADR-0004 — Contacts
+/// Local-first Contact id model (matome-centric-pivot, .docs/internal/architecture.md §11 (D4) — Contacts
 /// schema slice, m008).
 ///
 /// A Contact is owner-owned and minted on device the instant it is created —

@@ -21,7 +21,7 @@ import 'matome.dart';
 import 'matome_sync.dart';
 import 'matomes_repository.dart';
 
-/// Space-scoped Matome + Contact sync (ADR-0004, task #1377), mirroring the
+/// Space-scoped Matome + Contact sync (.docs/internal/architecture.md §11 (D4), task #1377), mirroring the
 /// recordings sync in `inbox_controller` / `inbox_sync`.
 ///
 /// Cohesive, single-entry orchestration (no scheduler): [sync] PUSHES filed

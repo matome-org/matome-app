@@ -68,7 +68,7 @@ class FeatureFlags {
     defaultValue: true,
   );
 
-  /// Local-first spaces (ADR-0006 / spec sync-gate-and-promotion, plan #102).
+  /// Local-first spaces (.docs/internal/architecture.md §5, plan #102).
   /// Default OFF (dark) — this is the SINGLE-FLIP rollback switch for the whole
   /// item-organization-decoupled-from-sync behaviour. This ONE flag must drive
   /// every coupled piece together so a half-flipped state cannot occur:

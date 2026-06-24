@@ -100,12 +100,12 @@ class RecordingFinisher {
     //    and RETAINS the local audio on a confirmed `done` (#46 W2 / #871 — the
     //    durable `audioFilePath` is the canonical copy until the user deletes it).
     //
-    //    LOOSE CAPTURE (#102 W2, ADR-0006 §1 / spec sync-gate-and-promotion):
+    //    LOOSE CAPTURE (#102 W2, .docs/internal/architecture.md §5):
     //    [InboxUploader.upload] persists through [InboxController.insertLocalUpload],
     //    which is gated on [FeatureFlags.localFirstSpaces]. With the flag ON a
     //    finished recording lands LOOSE — matomeId NULL, workspaceId NULL — so
     //    its effective space is NULL and it lands in the Inbox with NO auto-minted
-    //    Matome (the ADR-0003 m007 forced-Matome invariant is repealed). With the
+    //    Matome (the .docs/internal/architecture.md §11 (D3) m007 forced-Matome invariant is repealed). With the
     //    flag OFF the recording mints a Matome exactly as today. The recorder
     //    FINISH path and the file/photo import path therefore share ONE gated
     //    persistence chokepoint — capture is uniformly decoupled from

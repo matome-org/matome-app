@@ -123,7 +123,7 @@ RecordingsCompanion recordingToCompanion(
           ? existing!.workspaceId
           : coreWorkspaceId;
 
-  // matomeId merge-guard (m007, ADR-0003): every local recording is an Item of
+  // matomeId merge-guard (m007, .docs/internal/architecture.md §11 (D3)): every local recording is an Item of
   // exactly one Matome, but Core does NOT yet carry a Matome id on its
   // recording payload. A naive upsert that left `matome_id` ABSENT would be
   // fine on update, but `recordingToCompanion` builds a FULL companion used

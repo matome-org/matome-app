@@ -5,7 +5,7 @@ import '../tables.dart';
 
 part 'contacts_dao.g.dart';
 
-/// CRUD + edge DAO for **Contacts** and their join tables (ADR-0004 — identity
+/// CRUD + edge DAO for **Contacts** and their join tables (.docs/internal/architecture.md §11 (D4) — identity
 /// & contacts, m008).
 ///
 /// SCHEMA-READY, NOT ENFORCED: none of these methods apply ACL / permission /
@@ -13,7 +13,7 @@ part 'contacts_dao.g.dart';
 /// `matome-collaboration` plan can build behaviour on top later. Do not gate
 /// any access on them today.
 ///
-/// Deletion-cascade contract (ADR-0004): cascade is done by EXPLICIT DAO
+/// Deletion-cascade contract (.docs/internal/architecture.md §11 (D4)): cascade is done by EXPLICIT DAO
 /// DELETES inside a transaction — NOT by an on-disk FK `onDelete` clause. This
 /// project's drift build does not emit REFERENCES DDL (the `.references(...)`
 /// hints are relation/query metadata only; the generated DDL carries no FK), so

@@ -1,5 +1,5 @@
 // A *real* tabular view of the Matome list — the columnar counterpart to the
-// card / "letter" list (ADR-0005). Where cards answer "what is this matome
+// card / "letter" list (.docs/internal/architecture.md §11 (D5)). Where cards answer "what is this matome
 // about", the table answers "let me scan, sort, and act on many matomes at
 // once": a header row of sortable columns, per-row selection with a bulk-action
 // bar, a per-row overflow menu, and aligned data cells.

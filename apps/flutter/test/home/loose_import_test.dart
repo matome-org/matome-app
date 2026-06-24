@@ -24,7 +24,7 @@ import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 /// Local-first-spaces #102 W2 — imports land LOOSE behind the flag, the
 /// flag-off path is byte-for-byte unchanged, and the existing synced (upload)
-/// path is NOT broken (ADR-0006 §1/§3, spec sync-gate-and-promotion).
+/// path is NOT broken (.docs/internal/architecture.md §5).
 ///
 /// `FeatureFlags.localFirstSpaces` is a compile-time `const bool.fromEnvironment`,
 /// so this file is run TWICE by the `flutter-design-system-check` gate — once
@@ -238,8 +238,8 @@ void main() {
 
   group('lane: ff.localFirstSpaces=false (OFF / shipped reality)', () {
     test(
-      'import is UNCHANGED — a fresh Matome is minted (m007/ADR-0003 forced '
-      'invariant), the recording is an Item of it',
+      'import is UNCHANGED — a fresh Matome is minted (m007 forced-Matome '
+      'invariant, architecture.md §11 D3), the recording is an Item of it',
       () async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
         addTearDown(db.close);

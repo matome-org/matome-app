@@ -36,7 +36,7 @@ import 'matome_detail_controller.dart';
 /// child-Item list (with an add-photo action), the aggregated summary, and
 /// editable notes.
 ///
-/// Triage (ADR-0004) = enrich + FILE INTO A SPACE (default = personal). An Inbox
+/// Triage (.docs/internal/architecture.md §11 (D4)) = enrich + FILE INTO A SPACE (default = personal). An Inbox
 /// Matome surfaces a "File into a space" CTA; once filed it shows its Space and
 /// allows re-filing. Tag-contacts / Share are DEFERRED to W3 — surfaced as a
 /// disabled "coming soon" row, no model invented here.
@@ -191,11 +191,11 @@ class _MatomeDetailScreenState extends ConsumerState<MatomeDetailScreen> {
 /// Details screen).
 const double _matomeReadingMaxWidth = 720;
 
-/// W8 (#1414 / ADR-0005) responsive breakpoint. At or above this available
+/// W8 (#1414 / .docs/internal/architecture.md §11 (D5)) responsive breakpoint. At or above this available
 /// width the management surface is presented as a PERSISTENT side panel beside
 /// the letter (the "drawer"); below it the letter keeps its mobile "Show more"
 /// reveal (the "sheet"). This is a layout swap on the SAME `/matome/:id` route
-/// — no nested navigator, no deep-link change — per ADR-0005's fixed nav model.
+/// — no nested navigator, no deep-link change — per .docs/internal/architecture.md §11 (D5)'s fixed nav model.
 ///
 /// 900 is chosen as a desktop/large-tablet-landscape threshold: above it there
 /// is room for a ~720px reading letter AND a ~360px panel side by side; below
@@ -220,7 +220,7 @@ const double _matomePanelWidth = 360;
 /// presentation. On a wide viewport (>= [_matomeWidePanelBreakpoint], W8 /
 /// #1414) this body instead splits into the letter + a persistent side panel
 /// via [_WideDetailLayout]; the same `/matome/:id` route, a breakpoint-driven
-/// layout swap (ADR-0005), no nested navigator.
+/// layout swap (.docs/internal/architecture.md §11 (D5)), no nested navigator.
 class _MatomeDetailBody extends ConsumerWidget {
   const _MatomeDetailBody({required this.id, required this.notesDirty});
 
@@ -251,7 +251,7 @@ class _MatomeDetailBody extends ConsumerWidget {
 
     final matome = state.matome!;
 
-    // W8 SEAM resolved (ADR-0005): a breakpoint-driven layout swap on the same
+    // W8 SEAM resolved (.docs/internal/architecture.md §11 (D5)): a breakpoint-driven layout swap on the same
     // route. Wide → the letter narrows and the management surface sits in a
     // persistent panel beside it; narrow → the letter keeps its "Show more"
     // sheet reveal.
@@ -443,7 +443,7 @@ class _MatomeLetterCard extends ConsumerStatefulWidget {
 
   /// Whether the letter hosts its own "Show more" reveal of [_MatomeDetails].
   /// True on narrow (the sheet presentation); false on wide, where the detail
-  /// lives in the persistent side panel instead (W8 / ADR-0005).
+  /// lives in the persistent side panel instead (W8 / .docs/internal/architecture.md §11 (D5)).
   final bool showDetailToggle;
 
   @override
@@ -455,7 +455,7 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
   /// by default so the card reads as a calm letter; "Show more" expands the
   /// detail in place. Only consulted in the narrow/sheet presentation — on wide
   /// (`showDetailToggle == false`) the toggle is not built and the detail lives
-  /// in the persistent side panel instead (W8 / #1414, ADR-0005).
+  /// in the persistent side panel instead (W8 / #1414, .docs/internal/architecture.md §11 (D5)).
   bool _expanded = false;
 
   @override
@@ -500,7 +500,7 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
           SizedBox(height: spacing.sm),
           _StatusMetaRow(rollup: matome.syncRollup),
           // "Show more" affordance — the narrow/sheet presentation. On wide
-          // (W8 / ADR-0005) the detail lives in the persistent side panel
+          // (W8 / .docs/internal/architecture.md §11 (D5)) the detail lives in the persistent side panel
           // instead, so the toggle and its inline reveal are suppressed.
           if (widget.showDetailToggle) ...[
             SizedBox(height: spacing.md),
@@ -1138,7 +1138,7 @@ class _RenameDialogState extends State<_RenameDialog> {
 /// contacts as role-bearing chips (each with a detach affordance) and an
 /// "Add contact" action that opens a directory picker. Only the local
 /// `matome_contacts` edge is touched here — viewing the linked-user PROFILE and
-/// SHARING the Matome stay deferred (ADR-0004 / matome-collaboration).
+/// SHARING the Matome stay deferred (.docs/internal/architecture.md §11 (D4) / matome-collaboration).
 class _ContactChipsSlot extends ConsumerWidget {
   const _ContactChipsSlot({required this.matomeId});
 
@@ -1348,7 +1348,7 @@ class _FilingSection extends ConsumerWidget {
   }
 }
 
-/// The file-into-a-space sheet. The default personal Space (ADR-0004) is the
+/// The file-into-a-space sheet. The default personal Space (.docs/internal/architecture.md §11 (D4)) is the
 /// most-prominent option — it is ordered first by the controller and flagged
 /// here as the default destination.
 class _FileIntoSpaceSheet extends StatelessWidget {
@@ -1932,7 +1932,7 @@ class _ImageThumb extends StatelessWidget {
 
 // ─── Aggregated summary ──────────────────────────────────────────────────────
 
-/// The stored aggregated summary (ADR-0003) plus its regenerate affordance. A
+/// The stored aggregated summary (.docs/internal/architecture.md §11 (D3)) plus its regenerate affordance. A
 /// "Regenerate summary" action surfaces when the summary is flagged stale (the
 /// item set / a child summary changed) OR when there is no summary yet but the
 /// Matome already has Items to roll up — either way the deterministic local
@@ -2150,7 +2150,7 @@ class _NotesSectionState extends State<_NotesSection> {
 
 // ─── Deferred actions (W3) ───────────────────────────────────────────────────
 
-/// Share is the only remaining DEFERRED affordance (ADR-0004 / the
+/// Share is the only remaining DEFERRED affordance (.docs/internal/architecture.md §11 (D4) / the
 /// matome-collaboration plan). It now matches the approved proposal's Share row
 /// layout (#1475): a plain leading `ios_share` glyph + the "Share" label in the
 /// primary text colour, NOT the old dimmed "· Coming soon" row — so it reads as

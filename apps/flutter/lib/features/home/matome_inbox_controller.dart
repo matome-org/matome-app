@@ -55,7 +55,7 @@ class MatomeInboxController
     await reloadFromLocal();
   }
 
-  /// File an inbox matome into [spaceId] — the triage move (ADR-0004): the
+  /// File an inbox matome into [spaceId] — the triage move (.docs/internal/architecture.md §11 (D4)): the
   /// matome leaves the Inbox immediately. Reloads so the row drops out.
   Future<void> fileIntoSpace(String matomeId, String spaceId) async {
     await _matomesDao.fileIntoSpace(matomeId, spaceId);

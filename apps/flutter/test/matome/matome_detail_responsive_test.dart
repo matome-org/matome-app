@@ -11,7 +11,7 @@ import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 /// W8 (#1414) — the detail panel presentation is RESPONSIVE on the SAME
-/// `/matome/:id` route (ADR-0005): a breakpoint-driven layout swap, not a route
+/// `/matome/:id` route (.docs/internal/architecture.md §11 (D5)): a breakpoint-driven layout swap, not a route
 /// change. Below the breakpoint the letter keeps its mobile "Show more" reveal
 /// (the sheet presentation); above it the management surface is a PERSISTENT
 /// side panel beside the letter, visible without tapping anything.

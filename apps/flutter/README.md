@@ -3,9 +3,6 @@
 Flutter client for matome — the migration target replacing the RN/Expo app
 (`apps/mobile`). Flutter **3.44.1** (stable), managed via `mise`.
 
-See the cutover report at `.docs/flutter-migration-report.md` for per-platform
-status, the full parity audit, and remaining gaps.
-
 ## Prerequisites
 
 ```bash
