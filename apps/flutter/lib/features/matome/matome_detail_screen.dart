@@ -149,7 +149,11 @@ class _MatomeDetailScreenState extends ConsumerState<MatomeDetailScreen> {
     final colors = context.colors;
 
     final title = state.matome?.title ?? '';
-    final body = _MatomeDetailBody(id: id, notesDirty: _notesDirty);
+    final body = _MatomeDetailBody(
+      id: id,
+      notesDirty: _notesDirty,
+      fillWidth: widget.embedded,
+    );
 
     if (widget.embedded) {
       return Material(color: colors.background, child: body);
@@ -193,7 +197,7 @@ class _MatomeDetailScreenState extends ConsumerState<MatomeDetailScreen> {
 
 /// Reading-width clamp for long-form detail content on wide panes (mirrors the
 /// Details screen).
-const double _matomeReadingMaxWidth = 720;
+const double _matomeReadingMaxWidth = 920;
 
 /// The matome detail body, reshaped into the approved LETTER format (W7, #1413 /
 /// Widgetbook `MatomeLetterCard`). The card reads top-to-bottom like a letter:
@@ -210,13 +214,21 @@ const double _matomeReadingMaxWidth = 720;
 /// via [_WideDetailLayout]; the same `/matome/:id` route, a breakpoint-driven
 /// layout swap (.docs/internal/architecture.md §11 (D5)), no nested navigator.
 class _MatomeDetailBody extends ConsumerWidget {
-  const _MatomeDetailBody({required this.id, required this.notesDirty});
+  const _MatomeDetailBody({
+    required this.id,
+    required this.notesDirty,
+    this.fillWidth = false,
+  });
 
   final String id;
 
   /// Lifted unsaved-notes signal (see [_MatomeDetailScreenState]). Threaded down
   /// to the [_NotesSection] so its edit/save toggles the Scaffold leave-guard.
   final ValueNotifier<bool> notesDirty;
+
+  /// In the reading pane the letter FILLS the available width (matching the
+  /// contact pane); full screen it is clamped to a reading width.
+  final bool fillWidth;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -243,25 +255,30 @@ class _MatomeDetailBody extends ConsumerWidget {
     // the mobile layout is the standard on every width — the wide two-pane
     // (letter + persistent side panel) split is retired. The letter's
     // "Show more" reveal hosts the Items/People/Space/Notes sections inline.
+    final letter = ListView(
+      padding: EdgeInsets.fromLTRB(
+        spacing.md,
+        spacing.md,
+        spacing.md,
+        spacing.xxl + spacing.xxl,
+      ),
+      children: [
+        _MatomeLetterCard(
+          id: id,
+          matome: matome,
+          spaces: state.spaces,
+          notesDirty: notesDirty,
+        ),
+      ],
+    );
+
+    // Reading pane → fill the pane width (match the contact pane). Full screen
+    // → clamp to a reading width and centre.
+    if (fillWidth) return letter;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _matomeReadingMaxWidth),
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            spacing.md,
-            spacing.md,
-            spacing.md,
-            spacing.xxl + spacing.xxl,
-          ),
-          children: [
-            _MatomeLetterCard(
-              id: id,
-              matome: matome,
-              spaces: state.spaces,
-              notesDirty: notesDirty,
-            ),
-          ],
-        ),
+        child: letter,
       ),
     );
   }

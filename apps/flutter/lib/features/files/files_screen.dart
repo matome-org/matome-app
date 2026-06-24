@@ -451,6 +451,7 @@ class _FilesPaneDetail extends ConsumerWidget {
       color: colors.background,
       child: fileReadingCard(
         context,
+        fill: true,
         child: FileView(
           key: const ValueKey('files-pane-view'),
           data: FileViewData(

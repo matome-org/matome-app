@@ -143,29 +143,39 @@ class FileViewData {
 /// Reading-width clamp for the file card (mirrors the matome letter's reading
 /// width). A named primitive so it is a reviewed design-system size, not an
 /// ad-hoc inline literal.
-const double _kFileReadingMaxWidth = 720;
+const double _kFileReadingMaxWidth = 920;
 
-/// Frames file-detail content as a centred, bordered reading CARD — the shared
+/// Frames file-detail content as a bordered reading CARD — the shared
 /// presentation used by BOTH the reading pane and the full-screen file detail,
-/// so a file reads as a card (max ~720px, surface, border) consistent with the
-/// matome letter card and the ContactDetail card — not an edge-to-edge view.
-Widget fileReadingCard(BuildContext context, {required Widget child}) {
+/// so a file reads as a card (surface, border) consistent with the matome
+/// letter card and the ContactDetail card — not an edge-to-edge view.
+///
+/// [fill] true (the reading pane) lets the card FILL the available width to
+/// match the contact pane; false (full screen) clamps + centres it to a reading
+/// width.
+Widget fileReadingCard(
+  BuildContext context, {
+  required Widget child,
+  bool fill = false,
+}) {
   final colors = context.colors;
   final spacing = context.spacing;
   final radius = context.radius;
+  final card = Container(
+    margin: EdgeInsets.all(spacing.md),
+    clipBehavior: Clip.antiAlias,
+    decoration: BoxDecoration(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(radius.lg),
+      border: Border.all(color: colors.border),
+    ),
+    child: child,
+  );
+  if (fill) return card;
   return Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: _kFileReadingMaxWidth),
-      child: Container(
-        margin: EdgeInsets.all(spacing.md),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(radius.lg),
-          border: Border.all(color: colors.border),
-        ),
-        child: child,
-      ),
+      child: card,
     ),
   );
 }
