@@ -902,6 +902,15 @@ class Translations$spaces$en {
 
 	/// en: 'Select a space to preview its matomes'
 	String get selectHint => 'Select a space to preview its matomes';
+
+	/// en: 'Turn on sync'
+	String get turnOnSync => 'Turn on sync';
+
+	/// en: 'Local'
+	String get local => 'Local';
+
+	/// en: 'Cloud'
+	String get cloud => 'Cloud';
 }
 
 // Path: calendar
@@ -1920,6 +1929,9 @@ extension on Translations {
 			'spaces.detailEmptyMatomes' => 'No matomes in this space yet',
 			'spaces.matomeCount' => ({required Object n}) => '${n} matomes',
 			'spaces.selectHint' => 'Select a space to preview its matomes',
+			'spaces.turnOnSync' => 'Turn on sync',
+			'spaces.local' => 'Local',
+			'spaces.cloud' => 'Cloud',
 			'calendar.title' => 'Calendar',
 			'calendar.noRecordings' => 'No recordings for this day',
 			'calendar.noMatomes' => 'No matomes for this day',

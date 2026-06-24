@@ -373,7 +373,10 @@
     "detailEmpty": "No recordings in this space yet",
     "detailEmptyMatomes": "No matomes in this space yet",
     "matomeCount": "$n matomes",
-    "selectHint": "Select a space to preview its matomes"
+    "selectHint": "Select a space to preview its matomes",
+    "turnOnSync": "Turn on sync",
+    "local": "Local",
+    "cloud": "Cloud"
   },
   "calendar": {
     "title": "Calendar",

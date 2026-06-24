@@ -373,7 +373,10 @@
     "detailEmpty": "このスペースにはまだ録音がありません",
     "detailEmptyMatomes": "このスペースにはまだマトメがありません",
     "matomeCount": "$n 件のマトメ",
-    "selectHint": "スペースを選択するとマトメが表示されます"
+    "selectHint": "スペースを選択するとマトメが表示されます",
+    "turnOnSync": "同期をオンにする",
+    "local": "ローカル",
+    "cloud": "クラウド"
   },
   "calendar": {
     "title": "カレンダー",
