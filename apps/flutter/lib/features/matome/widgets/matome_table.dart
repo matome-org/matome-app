@@ -945,7 +945,7 @@ class _ItemMix extends StatelessWidget {
     ];
     if (tokens.isEmpty) return const _MutedDash();
     return Wrap(
-      spacing: spacing.sm,
+      spacing: spacing.md,
       runSpacing: spacing.xxs,
       alignment: WrapAlignment.end,
       children: tokens,
@@ -967,7 +967,7 @@ class _IconCount extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: context.typography.bodySmall.fontSize, color: colors.textMuted),
-        SizedBox(width: context.spacing.xxs),
+        SizedBox(width: context.spacing.xs),
         Text('$count',
             style: typography.label.copyWith(color: colors.textSecondary)),
       ],
@@ -1245,7 +1245,7 @@ class _CompactRowState extends State<_CompactRow> {
                     ),
                     SizedBox(height: spacing.xs),
                     Wrap(
-                      spacing: spacing.sm,
+                      spacing: spacing.md,
                       runSpacing: spacing.xs,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [

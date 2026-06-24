@@ -902,7 +902,7 @@ class _CompactRowState extends State<_CompactRow> {
                     ),
                     SizedBox(height: spacing.xxs),
                     Wrap(
-                      spacing: spacing.sm,
+                      spacing: spacing.md,
                       runSpacing: spacing.xs,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
