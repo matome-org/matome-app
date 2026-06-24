@@ -34,7 +34,12 @@ class SpacesController extends StateNotifier<AsyncValue<List<SpaceCard>>> {
     final cards = <SpaceCard>[];
     for (final ws in workspaces) {
       final recordings = await _recordingsDao.getRecordingsInWorkspace(ws.id);
-      cards.add(SpaceCard(id: ws.id, name: ws.name, count: recordings.length));
+      cards.add(SpaceCard(
+        id: ws.id,
+        name: ws.name,
+        count: recordings.length,
+        isLocal: ws.isLocal == 1,
+      ));
     }
     return cards;
   }

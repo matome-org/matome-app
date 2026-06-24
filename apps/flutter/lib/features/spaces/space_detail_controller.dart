@@ -6,11 +6,19 @@ import '../../core/providers.dart';
 /// State for the Space detail screen (`/spaces/:spaceId`): the workspace name
 /// (for the header) plus the **matomes** filed into it (#1378).
 class SpaceDetailState {
-  const SpaceDetailState({required this.name, required this.items});
+  const SpaceDetailState({
+    required this.name,
+    required this.items,
+    this.isLocal = false,
+  });
 
   /// Workspace name, or null if the workspace no longer exists.
   final String? name;
   final List<MatomeItem> items;
+
+  /// Local-first-spaces (#102): whether this space is local-only vs cloud.
+  /// Drives the reading-pane header's "· Local/Cloud" suffix.
+  final bool isLocal;
 }
 
 /// Drives the Space detail screen (S5) under the matome-centric model (#1378).
@@ -32,7 +40,11 @@ class SpaceDetailController
 
     final workspace = await workspacesDao.getWorkspaceById(spaceId);
     final items = await matomesDao.listMatomeItemsInSpace(spaceId);
-    return SpaceDetailState(name: workspace?.name, items: items);
+    return SpaceDetailState(
+      name: workspace?.name,
+      items: items,
+      isLocal: workspace?.isLocal == 1,
+    );
   }
 
   Future<void> load() async {

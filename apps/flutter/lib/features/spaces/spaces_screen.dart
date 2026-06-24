@@ -7,17 +7,18 @@ import '../../core/settings/reading_pane.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_button.dart';
-import '../../ui/app_card.dart';
 import '../../ui/app_dialog.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
 import '../../ui/master_detail_scaffold.dart';
+import '../../ui/space_sync_chip.dart';
+import '../../ui/space_sync_tile.dart';
 import '../home/home_filters.dart' show formatTimestamp;
-import '../matome/matome_row_actions.dart';
-import 'filing_spaces_provider.dart';
+import '../matome/widgets/matome_table.dart';
 import 'space_card.dart';
 import 'space_detail_controller.dart';
+import 'space_promotion.dart';
 import 'spaces_controller.dart';
 
 /// Selected space for the master-detail reading pane (W4, #1543). On expanded
@@ -88,26 +89,50 @@ class SpacesScreen extends ConsumerWidget {
     GoRouter.of(context).push('/spaces/${space.id}');
   }
 
+  /// Promote a LOCAL space to the cloud (local-first-spaces #102 W4). Surfaces
+  /// the itemized consent (the count of items that will LEAVE THE DEVICE) and,
+  /// on affirmative consent only, runs the existing [SpacePromotionService]
+  /// flow. The result (cloud / failed) refreshes the list so the tile's sync
+  /// chip reflects the new state.
+  Future<void> _promote(
+    BuildContext context,
+    WidgetRef ref,
+    SpaceCard space,
+  ) async {
+    final consent =
+        await ref.read(spacePromotionServiceProvider).consentFor(space.id);
+    if (!context.mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _PromoteSpaceDialog(consent: consent),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(spacePromotionServiceProvider).promote(space.id);
+    } on PromotionNotAuthorized {
+      // Owner-scope denial — nothing to surface beyond leaving the space local.
+    }
+    await ref.read(spacesControllerProvider.notifier).load();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(spacesControllerProvider);
     final colors = context.colors;
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
-    // When the unified scaffold shows the reading pane the master only gets a
-    // fraction of the window, so the wide multi-column grid (sized for the full
-    // window) would overflow its narrow column. Reflow the master to the list
-    // in that case. The split is actually rendered when a tap would select
-    // in-pane AND there's something to show (always-mode shows the empty pane;
-    // onClick only splits once a space is selected). OFF and pane-hidden paths
-    // keep the window-width decision, so the shipped reality is byte-for-byte
-    // unchanged.
+    // When the reading pane CAN be shown (flag ON, expanded width, a non-off
+    // mode) the list is the master column of a master–detail split, so it stays
+    // the proposal's vertical list of [SpaceSyncTile] — never the wide
+    // multi-column grid (sized for the full window, which would also overflow
+    // the narrow master column once the pane opens). The grid path applies ONLY
+    // when no pane is ever shown: flag OFF, off mode, or a narrow width. Keys
+    // off [MasterDetailScaffold.selectsOnTap] (the single source of truth), not
+    // whether a space is currently selected.
     final mode = ref.watch(readingPaneModeProvider(ReadingPaneSurface.spaces));
-    final paneShown = FeatureFlags.masterDetailLayout &&
-        MasterDetailScaffold.selectsOnTap(context, mode) &&
-        (mode == ReadingPaneMode.always ||
-            ref.watch(spacesSelectionProvider) != null);
-    final masterIsWide = paneShown ? false : isWide;
+    final paneCanShow = FeatureFlags.masterDetailLayout &&
+        MasterDetailScaffold.selectsOnTap(context, mode);
+    final masterIsWide = paneCanShow ? false : isWide;
 
     // W4 (#1543): never point the reading pane at a space that has left the
     // loaded list (deleted, or absent after a reload). Reconcile after the
@@ -151,6 +176,7 @@ class SpacesScreen extends ConsumerWidget {
                   ref.read(spacesControllerProvider.notifier).load(),
               onTap: (s) => _openSpace(context, ref, s),
               onLongPress: (s) => _confirmDelete(context, ref, s),
+              onPromote: (s) => _promote(context, ref, s),
             ),
           ),
         ),
@@ -196,12 +222,13 @@ class SpacesScreen extends ConsumerWidget {
   }
 }
 
-/// The reading-pane detail for a selected space (W4, #1543). Lists the SAME
-/// **matomes** the routed [SpaceDetailScreen] lists, fed off the SAME data
-/// source ([spaceDetailControllerProvider]) — NOT the routed Scaffold. There is
-/// no Scaffold/AppBar here: the pane is embedded beside the master, so it owns
-/// no chrome. Tapping a matome routes to the matome hub (`/matome/:id`), the
-/// same as the routed detail.
+/// The reading-pane detail for a selected space (W4, #1543). Mirrors the
+/// approved `_mdSpaceDetail` proposal: a header (space name + "N matomes ·
+/// Local/Cloud") above the REAL [MatomeTable] of the space's matomes, fed off
+/// the SAME data source ([spaceDetailControllerProvider]) — NOT the routed
+/// Scaffold. There is no Scaffold/AppBar here: the pane is embedded beside the
+/// master, so it owns no chrome. Tapping a matome routes to the matome hub
+/// (`/matome/:id`), the same as the routed detail.
 class _SpacePaneDetail extends ConsumerWidget {
   const _SpacePaneDetail({super.key, required this.spaceId});
 
@@ -213,7 +240,6 @@ class _SpacePaneDetail extends ConsumerWidget {
     final spacing = context.spacing;
     final typography = context.typography;
     final state = ref.watch(spaceDetailControllerProvider(spaceId));
-    final spaces = ref.watch(filingSpacesProvider).valueOrNull ?? const [];
 
     return ColoredBox(
       color: colors.background,
@@ -231,15 +257,57 @@ class _SpacePaneDetail extends ConsumerWidget {
         ),
         data: (detail) {
           final items = detail.items;
+          final syncLabel = detail.isLocal ? t.spaces.local : t.spaces.cloud;
+          final header = Padding(
+            padding: EdgeInsets.fromLTRB(
+              spacing.md,
+              spacing.md,
+              spacing.md,
+              spacing.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  detail.name ?? '',
+                  style: typography.title.copyWith(color: colors.textPrimary),
+                ),
+                Text(
+                  '${t.spaces.matomeCount(n: items.length)} · $syncLabel',
+                  style: typography.label.copyWith(color: colors.textMuted),
+                ),
+              ],
+            ),
+          );
+
           if (items.isEmpty) {
-            return EmptyState(
-              icon: Icons.inbox_outlined,
-              title: t.spaces.detailEmptyMatomes,
-              titleStyle:
-                  typography.bodySmall.copyWith(color: colors.textSecondary),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                header,
+                Expanded(
+                  child: EmptyState(
+                    icon: Icons.inbox_outlined,
+                    title: t.spaces.detailEmptyMatomes,
+                    titleStyle: typography.bodySmall
+                        .copyWith(color: colors.textSecondary),
+                  ),
+                ),
+              ],
             );
           }
-          return ListView.builder(
+
+          final rows = [
+            for (final m in items)
+              matomeTableRowFromItem(
+                m,
+                relativeWhen: formatTimestamp(
+                  DateTime.fromMillisecondsSinceEpoch(m.happenedAt),
+                ),
+              ),
+          ];
+
+          return ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               spacing.md,
@@ -247,27 +315,30 @@ class _SpacePaneDetail extends ConsumerWidget {
               spacing.md,
               spacing.xxl + spacing.xxl,
             ),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return Padding(
+            children: [
+              Padding(
                 padding: EdgeInsets.only(bottom: spacing.sm),
-                child: AppCard.matome(
-                  key: ValueKey('space-pane-matome-${item.id}'),
-                  matome: item,
-                  relativeTime: formatTimestamp(
-                    DateTime.fromMillisecondsSinceEpoch(item.happenedAt),
-                  ),
-                  onTap: () => GoRouter.of(context).push('/matome/${item.id}'),
-                  onAction: (action) => MatomeRowActions(
-                    matome: item,
-                    spaces: spaces,
-                    onOpen: () =>
-                        GoRouter.of(context).push('/matome/${item.id}'),
-                  ).handle(context, ref, action),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      detail.name ?? '',
+                      style:
+                          typography.title.copyWith(color: colors.textPrimary),
+                    ),
+                    Text(
+                      '${t.spaces.matomeCount(n: items.length)} · $syncLabel',
+                      style:
+                          typography.label.copyWith(color: colors.textMuted),
+                    ),
+                  ],
                 ),
-              );
-            },
+              ),
+              MatomeTable(
+                rows: rows,
+                onOpen: (id) => GoRouter.of(context).push('/matome/$id'),
+              ),
+            ],
           );
         },
       ),
@@ -366,6 +437,7 @@ class _Body extends StatelessWidget {
     required this.onRefresh,
     required this.onTap,
     required this.onLongPress,
+    required this.onPromote,
   });
 
   final List<SpaceCard> spaces;
@@ -373,6 +445,7 @@ class _Body extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final ValueChanged<SpaceCard> onTap;
   final ValueChanged<SpaceCard> onLongPress;
+  final ValueChanged<SpaceCard> onPromote;
 
   @override
   Widget build(BuildContext context) {
@@ -406,11 +479,23 @@ class _Body extends StatelessWidget {
 
     Widget tile(int index) {
       final space = spaces[index];
-      return _SpaceTile(
-        space: space,
-        color: colors.spaceColor(index),
-        onTap: () => onTap(space),
+      // Converge to the approved `_mdSpacesList` proposal: the real
+      // [SpaceSyncTile] (name + "N matomes" + a Local/Cloud chip, and — while
+      // local — a "Turn on sync" promote affordance). The tile owns its own tap
+      // [InkWell]; long-press (delete) is not part of [SpaceSyncTile], so it is
+      // layered here via a [GestureDetector] that also carries the stable
+      // `space-tile-<id>` key the screen's tap/long-press/route tests key off.
+      return GestureDetector(
+        key: ValueKey('space-tile-${space.id}'),
         onLongPress: () => onLongPress(space),
+        child: SpaceSyncTile(
+          name: space.name,
+          meta: t.spaces.matomeCount(n: space.count),
+          state: space.isLocal ? SpaceSyncState.local : SpaceSyncState.cloud,
+          promoteLabel: t.spaces.turnOnSync,
+          onTap: () => onTap(space),
+          onPromote: space.isLocal ? () => onPromote(space) : null,
+        ),
       );
     }
 
@@ -423,7 +508,10 @@ class _Body extends StatelessWidget {
               padding: padding,
               gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 360,
-                mainAxisExtent: spacing.xxl + spacing.lg,
+                // Taller than the old compact tile: the real [SpaceSyncTile] is
+                // a richer card (md padding + a sync chip and, while local, a
+                // promote affordance stacked beside the name/meta).
+                mainAxisExtent: spacing.xxl * 2 + spacing.lg,
                 crossAxisSpacing: spacing.sm,
                 mainAxisSpacing: spacing.sm,
               ),
@@ -441,93 +529,37 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _SpaceTile extends StatelessWidget {
-  const _SpaceTile({
-    required this.space,
-    required this.color,
-    required this.onTap,
-    required this.onLongPress,
-  });
+/// Affirmative-consent dialog for promoting a LOCAL space to the cloud
+/// (local-first-spaces #102 W4). States the itemized count of items that will
+/// LEAVE THE DEVICE (the data-egress moment) before any Core write.
+class _PromoteSpaceDialog extends StatelessWidget {
+  const _PromoteSpaceDialog({required this.consent});
 
-  final SpaceCard space;
-  final Color color;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final PromotionConsent consent;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final spacing = context.spacing;
-    final radius = context.radius;
-    final typography = context.typography;
 
-    return Semantics(
-      button: true,
-      label: 'Space: ${space.name}',
-      child: Material(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(radius.lg),
-        child: InkWell(
-          key: ValueKey('space-tile-${space.id}'),
-          onTap: onTap,
-          onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(radius.lg),
-          child: Container(
-            padding: EdgeInsets.all(spacing.sm),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(radius.lg),
-              border: Border.all(color: colors.border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: spacing.xl + spacing.xs,
-                  height: spacing.xl + spacing.xs,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.13),
-                    borderRadius: BorderRadius.circular(radius.md),
-                  ),
-                  child: Icon(
-                    Icons.folder_outlined,
-                    size: typography.title.fontSize,
-                    color: color,
-                  ),
-                ),
-                SizedBox(width: spacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        space.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: typography.bodySmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                      SizedBox(height: spacing.xxs),
-                      Text(
-                        t.spaces.count(n: space.count),
-                        style: typography.label.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  size: spacing.md + spacing.xxs,
-                  color: colors.textMuted,
-                ),
-              ],
-            ),
-          ),
-        ),
+    return AppDialog(
+      backgroundColor: colors.surface,
+      title: Text(t.spaces.turnOnSync),
+      content: Text(
+        '${consent.spaceName}\n\n'
+        '${t.spaces.matomeCount(n: consent.totalCount)}',
       ),
+      actions: [
+        AppTextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(t.spaces.cancel),
+        ),
+        PrimaryButton(
+          key: const ValueKey('promote-space-confirm'),
+          onPressed: () => Navigator.of(context).pop(true),
+          style: FilledButton.styleFrom(backgroundColor: colors.primary),
+          child: Text(t.spaces.turnOnSync),
+        ),
+      ],
     );
   }
 }

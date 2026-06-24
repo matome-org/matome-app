@@ -113,9 +113,11 @@ void main() {
     expect(find.text('Work'), findsOneWidget);
     expect(find.text('Ideas'), findsOneWidget);
     expect(find.text('Pessoal'), findsOneWidget); // seeded default
-    expect(find.text(t.spaces.count(n: 2)), findsOneWidget); // Work
-    // Ideas + Pessoal both have 0 recordings.
-    expect(find.text(t.spaces.count(n: 0)), findsNWidgets(2));
+    // The master now renders the real [SpaceSyncTile]; its meta line is the
+    // proposal's "N matomes" format (driven off the same count).
+    expect(find.text(t.spaces.matomeCount(n: 2)), findsOneWidget); // Work
+    // Ideas + Pessoal both have 0 items.
+    expect(find.text(t.spaces.matomeCount(n: 0)), findsNWidgets(2));
   });
 
   testWidgets('shows only the seeded default when no spaces were created', (
