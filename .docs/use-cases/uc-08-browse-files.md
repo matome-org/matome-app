@@ -30,8 +30,13 @@ behind a confirm). Download is presented in the UI but is a stub.
 
 ## Alternate & exception flows
 - **Scope resolution** — the scope filter uses the effective-space resolver to decide loose vs in-space membership.
-- **Delete** — delete is a permanent hard-delete, gated behind a confirmation.
+- **Delete** — delete is a permanent hard-delete, gated behind a confirmation. When the deleted file was open in the reading pane, the pane selection clears.
 - **Download** — selecting download shows a "not available" notice; the action is a stub.
+- **Master–detail reading pane (flag-gated, `FeatureFlags.masterDetailLayout`)** — when ON, Files renders through the unified `MasterDetailScaffold`. The shared `MasterDetailScaffold.showsPane` predicate (global `readingPaneProvider` position × current width class) is the single source of truth for tap behaviour:
+  - Reading pane = Right AND width class = expanded → the grid/table renders FULL-WIDTH (no 1080-cap centring, killing the wide-window whitespace) beside a read-only `FileView` reading pane; tapping a file selects it in the pane (`filesSelectionProvider`) instead of navigating.
+  - Reading pane = Off, or a narrower (medium/compact) width → the master is full-width and tapping a file routes to its media-typed detail (UC-10), exactly as the flag-OFF reality.
+  - The pane selection is reconciled after each frame so it never points at a file that has left the loaded list (deleted, moved out of the active scope, or absent after a reload).
+  - Flag OFF (shipped default) → the centred 1080 column + route-on-tap, byte-for-byte unchanged.
 
 ## Sequence
 ```mermaid
@@ -68,7 +73,9 @@ sequenceDiagram
 | **FR-AUTH-7** | The files surface is owner-scoped; no cross-owner reads/writes. |
 
 ## Code anchors
-- `apps/flutter/lib/features/files/files_screen.dart` — `FilesScreen` / `FilesController`: grid/table, selection, bulk actions.
+- `apps/flutter/lib/features/files/files_screen.dart` — `FilesScreen`: grid/table, selection, bulk actions; `filesSelectionProvider` + `_FilesPaneDetail` (the flag-gated `FileView` reading pane).
+- `apps/flutter/lib/ui/master_detail_scaffold.dart` — `MasterDetailScaffold` + `showsPane` predicate driving the Files reading-pane layout (flag ON).
+- `apps/flutter/lib/core/settings/reading_pane.dart` — `readingPaneProvider` (global reading-pane position).
 - `apps/flutter/lib/ui/files_scope_filter.dart` — `FilesScopeFilter` with `FilesScope` (`all` | `loose` | `inSpace`).
 - `apps/flutter/lib/features/spaces/effective_space.dart` — effective-space resolver: loose vs in-space classification.
 - `apps/flutter/lib/app/router.dart` — route `/files`.

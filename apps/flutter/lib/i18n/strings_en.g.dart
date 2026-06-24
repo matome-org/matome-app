@@ -830,6 +830,9 @@ class Translations$files$en {
 
 	/// en: 'Filed $n'
 	String filedMsg({required Object n}) => 'Filed ${n}';
+
+	/// en: 'Select a file to read it here'
+	String get selectHint => 'Select a file to read it here';
 }
 
 // Path: spaces
@@ -1875,6 +1878,7 @@ extension on Translations {
 			'files.fileIntoSpaceInboxHint' => 'No space',
 			'files.fileNoSpaces' => 'No spaces to file into yet',
 			'files.filedMsg' => ({required Object n}) => 'Filed ${n}',
+			'files.selectHint' => 'Select a file to read it here',
 			'spaces.title' => 'Spaces',
 			'spaces.empty' => 'No spaces yet',
 			'spaces.emptyHint' => 'Tap + to create a space and organize your recordings',

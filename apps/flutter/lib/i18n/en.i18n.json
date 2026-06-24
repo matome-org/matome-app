@@ -350,7 +350,8 @@
     "fileIntoSpaceInbox": "Inbox",
     "fileIntoSpaceInboxHint": "No space",
     "fileNoSpaces": "No spaces to file into yet",
-    "filedMsg": "Filed $n"
+    "filedMsg": "Filed $n",
+    "selectHint": "Select a file to read it here"
   },
   "spaces": {
     "title": "Spaces",

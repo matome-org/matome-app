@@ -20,12 +20,17 @@ import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart' show MatomeRow, WorkspaceRow;
 import '../../core/db/file_row.dart';
 import '../../core/providers.dart';
+import '../../core/settings/reading_pane.dart';
 import '../../core/settings/settings_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_bottom_sheet.dart';
 import '../../ui/files_scope_filter.dart';
 import '../../ui/loading_indicator.dart';
+import '../../ui/master_detail_scaffold.dart';
+import '../details/details_controller.dart';
+import '../details/file_detail_screen.dart' show mediaKindForType;
+import '../details/file_view.dart';
 import '../home/inbox_controller.dart';
 import 'files_providers.dart';
 import 'widgets/files_grid.dart';
@@ -74,8 +79,19 @@ final filesViewProvider =
   (ref) => FilesViewController(ref.watch(settingsStoreProvider)),
 );
 
-/// The reading-width cap for the centred content on wide windows.
+/// The reading-width cap for the centred content on wide windows. Used only on
+/// the shipped (flag-OFF) path; the [MasterDetailScaffold] path renders the
+/// master full-width (no 1080 cap) so the right reading pane fills the freed
+/// whitespace.
 const double _kFilesMaxWidth = 1080;
+
+/// Selected Files row for the master-detail reading pane (W3, #1542). On
+/// expanded widths with the reading pane on the right, tapping a file sets this
+/// instead of navigating, so the grid/table stays visible beside the
+/// [_FilesPaneDetail] reading pane. Narrower widths (and the flag-OFF reality)
+/// ignore it and route to `/recording/...` as before — the [showsPane]
+/// predicate in [_FilesScreenState._openFile] is the single source of truth.
+final filesSelectionProvider = StateProvider<String?>((ref) => null);
 
 class FilesScreen extends ConsumerStatefulWidget {
   const FilesScreen({super.key});
@@ -103,7 +119,28 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     };
   }
 
+  /// Clear the reading-pane selection so it never points at a file that is no
+  /// longer in the loaded list (deleted, moved out of scope, or absent after a
+  /// reload). Only meaningful behind the master-detail layout (where the pane is
+  /// driven by [filesSelectionProvider]); a no-op cost otherwise.
+  void _clearFilesSelection() {
+    if (ref.read(filesSelectionProvider) != null) {
+      ref.read(filesSelectionProvider.notifier).state = null;
+    }
+  }
+
   Future<void> _openFile(String fileId) async {
+    // W3 (#1542): the unified [MasterDetailScaffold] owns the layout decision;
+    // its [showsPane] predicate is the single source of truth for whether a tap
+    // selects in-pane (pane visible) or navigates full-screen.
+    if (FeatureFlags.masterDetailLayout &&
+        MasterDetailScaffold.showsPane(
+          context,
+          ref.read(readingPaneProvider),
+        )) {
+      ref.read(filesSelectionProvider.notifier).state = fileId;
+      return;
+    }
     // A file is a recording; route by its media type so a document/image never
     // hits the audio-only detail host (mirrors the contacts host, #1464).
     final row = await ref.read(recordingsDaoProvider).getRecordingById(fileId);
@@ -144,6 +181,10 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         }
         ref.invalidate(filesForCurrentOwnerProvider);
         if (!mounted) return;
+        // Never leave the reading pane pointing at a deleted file.
+        if (ids.contains(ref.read(filesSelectionProvider))) {
+          _clearFilesSelection();
+        }
         messenger.showSnackBar(
           SnackBar(content: Text(t.files.deletedMsg(n: ids.length))),
         );
@@ -264,49 +305,193 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
           error: (err, _) => _CenteredMessage(message: err.toString()),
           data: (files) {
             final scoped = _applyScope(files);
-            return SingleChildScrollView(
-              padding: EdgeInsets.all(context.spacing.lg),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: _kFilesMaxWidth),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Files filter (All / Loose / In-space) — wired to the
-                      // resolver-backed effective-space bit (#1501). Surfaced
-                      // only behind the local-first-spaces flag; the `const if`
-                      // tree-shakes it out when OFF (shipped reality).
-                      if (FeatureFlags.localFirstSpaces) ...[
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: FilesScopeFilter(
-                            value: _scope,
-                            allLabel: t.files.scopeAll,
-                            looseLabel: t.files.scopeLoose,
-                            inSpaceLabel: t.files.scopeInSpace,
-                            onChanged: (s) => setState(() => _scope = s),
-                          ),
-                        ),
-                        SizedBox(height: context.spacing.md),
-                      ],
-                      view == FilesView.grid
-                          ? FilesGrid(
-                              files: scoped,
-                              onOpen: _openFile,
-                              onBulk: _onBulk,
-                            )
-                          : FilesTable(
-                              files: scoped,
-                              onOpen: _openFile,
-                              onBulk: _onBulk,
-                            ),
-                    ],
-                  ),
-                ),
-              ),
-            );
+
+            // W3 (#1542): never point the reading pane at a file that has left
+            // the loaded list (deleted / filed / out of the active scope /
+            // absent after a reload). Reconcile after the frame so we don't
+            // mutate a provider mid-build. Only meaningful behind the flag.
+            if (FeatureFlags.masterDetailLayout) {
+              final selectedId = ref.watch(filesSelectionProvider);
+              if (selectedId != null &&
+                  !scoped.any((f) => f.id == selectedId)) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _clearFilesSelection();
+                });
+              }
+            }
+
+            if (FeatureFlags.masterDetailLayout) {
+              // W3 (#1542): the Files surface renders through the unified
+              // [MasterDetailScaffold]. The scaffold owns the layout decision
+              // (master full-width vs master + reading pane) from the GLOBAL
+              // [readingPaneProvider] and the current width class; tap-vs-
+              // navigate is decided by the same [showsPane] predicate in
+              // [_openFile], so the two can never drift. The master is the
+              // grid/table at FULL WIDTH (no 1080 centring) so the freed
+              // whitespace is filled by the pane (the original complaint).
+              final selectedId = ref.watch(filesSelectionProvider);
+              return MasterDetailScaffold(
+                master: _master(scoped, view, centered: false),
+                detail: selectedId != null
+                    ? _FilesPaneDetail(
+                        key: ValueKey(selectedId),
+                        id: selectedId,
+                      )
+                    : null,
+                emptyState: const _FilesPaneEmptyState(),
+                pane: ref.watch(readingPaneProvider),
+              );
+            }
+
+            // Shipped behaviour (flag OFF): the centred 1080 column, byte-for-
+            // byte unchanged.
+            return _master(scoped, view, centered: true);
           },
+        ),
+      ),
+    );
+  }
+
+  /// The master column: the (flag-gated) scope filter above the grid/table.
+  /// [centered] = true wraps it in the shipped `SingleChildScrollView > Align >
+  /// ConstrainedBox(1080)` (flag-OFF reality); [centered] = false renders it
+  /// full-width with just padding (the [MasterDetailScaffold] path), so the
+  /// reading pane fills the freed whitespace.
+  Widget _master(List<FileRow> scoped, FilesView view, {required bool centered}) {
+    final column = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Files filter (All / Loose / In-space) — wired to the resolver-backed
+        // effective-space bit (#1501). Surfaced only behind the local-first-
+        // spaces flag; the `const if` tree-shakes it out when OFF (shipped
+        // reality).
+        if (FeatureFlags.localFirstSpaces) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilesScopeFilter(
+              value: _scope,
+              allLabel: t.files.scopeAll,
+              looseLabel: t.files.scopeLoose,
+              inSpaceLabel: t.files.scopeInSpace,
+              onChanged: (s) => setState(() => _scope = s),
+            ),
+          ),
+          SizedBox(height: context.spacing.md),
+        ],
+        view == FilesView.grid
+            ? FilesGrid(
+                files: scoped,
+                onOpen: _openFile,
+                onBulk: _onBulk,
+              )
+            : FilesTable(
+                files: scoped,
+                onOpen: _openFile,
+                onBulk: _onBulk,
+              ),
+      ],
+    );
+
+    if (!centered) {
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(context.spacing.lg),
+        child: column,
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(context.spacing.lg),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _kFilesMaxWidth),
+          child: column,
+        ),
+      ),
+    );
+  }
+}
+
+/// The reading-pane detail for a selected file (W3, #1542). Renders the SAME
+/// presentational [FileView] the file detail screen uses, fed off the SAME data
+/// source ([detailsControllerProvider]) — NOT the multi-Scaffold
+/// [FileDetailScreen]. There is no Scaffold/AppBar here: the pane is embedded
+/// beside the master, so it owns no chrome. Notes are read-only in the pane (the
+/// full edit lifecycle — dirty tracking, leave-guard, save FAB — lives on the
+/// routed [FileDetailScreen]); the pane is the at-a-glance read surface.
+class _FilesPaneDetail extends ConsumerWidget {
+  const _FilesPaneDetail({super.key, required this.id});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final state = ref.watch(detailsControllerProvider(id));
+
+    if (state.isLoading) {
+      return ColoredBox(
+        color: colors.background,
+        child: Center(child: LoadingIndicator(color: colors.primary)),
+      );
+    }
+    final row = state.row;
+    if (state.notFound || row == null) {
+      return const _FilesPaneEmptyState();
+    }
+
+    final mediaKind = mediaKindForType(row.mediaType);
+    return ColoredBox(
+      color: colors.background,
+      child: FileView(
+        key: const ValueKey('files-pane-view'),
+        data: FileViewData(
+          title: state.title.isEmpty ? t.recording.title : state.title,
+          mediaKind: mediaKind,
+          place: row.badge,
+          syncCoreId: state.coreId,
+          processingStatus: row.processingStatus,
+          // The machine-owned Contents (audio → transcript, doc → stub summary;
+          // image keeps it null). Read-only, derived from the row's OWN fields.
+          contentsText: mediaKind == FileMediaKind.image ? null : row.transcript,
+          notesText: row.notes,
+        ),
+        // The pane is a read surface — the editable Notes lifecycle stays on the
+        // routed detail screen.
+        notesReadOnly: true,
+      ),
+    );
+  }
+}
+
+/// The "select a file to read it here" teaching placeholder shown in the
+/// reading pane when nothing is selected.
+class _FilesPaneEmptyState extends StatelessWidget {
+  const _FilesPaneEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return ColoredBox(
+      color: colors.background,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.touch_app_outlined,
+              size: spacing.xxl,
+              color: colors.textMuted,
+            ),
+            SizedBox(height: spacing.sm),
+            Text(
+              t.files.selectHint,
+              style: typography.bodySmall.copyWith(color: colors.textMuted),
+            ),
+          ],
         ),
       ),
     );

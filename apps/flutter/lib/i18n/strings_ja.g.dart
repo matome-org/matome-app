@@ -383,6 +383,7 @@ class _Translations$files$ja extends Translations$files$en {
 	@override String get fileIntoSpaceInboxHint => 'スペースなし';
 	@override String get fileNoSpaces => '整理先のスペースがまだありません';
 	@override String filedMsg({required Object n}) => '${n} 件を整理しました';
+	@override String get selectHint => 'ファイルを選択するとここに表示されます';
 }
 
 // Path: spaces
@@ -1045,6 +1046,7 @@ extension on TranslationsJa {
 			'files.fileIntoSpaceInboxHint' => 'スペースなし',
 			'files.fileNoSpaces' => '整理先のスペースがまだありません',
 			'files.filedMsg' => ({required Object n}) => '${n} 件を整理しました',
+			'files.selectHint' => 'ファイルを選択するとここに表示されます',
 			'spaces.title' => 'スペース',
 			'spaces.empty' => 'スペースがありません',
 			'spaces.emptyHint' => '+ をタップしてスペースを作成し、録音を整理しましょう',

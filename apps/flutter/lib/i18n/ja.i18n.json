@@ -350,7 +350,8 @@
     "fileIntoSpaceInbox": "受信トレイ",
     "fileIntoSpaceInboxHint": "スペースなし",
     "fileNoSpaces": "整理先のスペースがまだありません",
-    "filedMsg": "$n 件を整理しました"
+    "filedMsg": "$n 件を整理しました",
+    "selectHint": "ファイルを選択するとここに表示されます"
   },
   "spaces": {
     "title": "スペース",
