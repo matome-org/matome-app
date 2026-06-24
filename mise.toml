@@ -320,6 +320,19 @@ flutter test --dart-define=ff.localFirstSpaces=false $LFS_SUITE
 echo "── local-first-spaces lane: ff.localFirstSpaces=true (ON / future-wave reality) ──"
 flutter test --dart-define=ff.localFirstSpaces=true $LFS_SUITE
 
+# Dual-flag master-detail grading (plan W2, #1541). `ff.masterDetailLayout` is
+# the single-flip rollback switch for the responsive master-detail surfaces; it
+# ships DARK (default OFF). A plain `flutter test` only exercises the OFF
+# (shipped two-pane) reality, so grade BOTH explicitly — forced OFF (shipped)
+# and forced ON (scaffold-driven reading pane) — so neither rots as later waves
+# (W3–W4) route more surfaces through the scaffold. The lane file self-skips the
+# wrong-build group, so each invocation proves exactly its reality.
+MD_SUITE="test/home/inbox_master_detail_test.dart"
+echo "── master-detail lane: ff.masterDetailLayout=false (OFF / shipped two-pane) ──"
+flutter test --dart-define=ff.masterDetailLayout=false $MD_SUITE
+echo "── master-detail lane: ff.masterDetailLayout=true (ON / scaffold-driven) ──"
+flutter test --dart-define=ff.masterDetailLayout=true $MD_SUITE
+
 cd ../flutter_widgetbook
 export CHROME_EXECUTABLE=/usr/bin/chromium
 generated_before=""

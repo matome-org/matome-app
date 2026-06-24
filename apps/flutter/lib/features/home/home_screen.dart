@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/config/feature_flags.dart';
 import '../../core/db/matome_card.dart';
 import '../../core/providers.dart';
+import '../../core/settings/reading_pane.dart';
 import '../../core/settings/settings_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
@@ -15,6 +16,7 @@ import '../../ui/app_card.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
+import '../../ui/master_detail_scaffold.dart';
 import '../matome/matome_actions_menu.dart' show MatomeAction;
 import '../matome/matome_detail_controller.dart';
 import '../matome/matome_detail_screen.dart';
@@ -123,7 +125,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _refresh() =>
       ref.read(matomeInboxControllerProvider.notifier).refresh();
 
+  /// Clear the reading-pane selection so it never points at a matome that is no
+  /// longer in the loaded list (archived, deleted, or absent after a reload).
+  /// Only meaningful behind the master-detail layout (where the pane is driven
+  /// by [inboxSelectionProvider]); a no-op cost otherwise.
+  void _clearInboxSelection() {
+    if (ref.read(inboxSelectionProvider) != null) {
+      ref.read(inboxSelectionProvider.notifier).state = null;
+    }
+  }
+
   void _openMatome(MatomeItem item) {
+    if (FeatureFlags.masterDetailLayout) {
+      // W2 (#1541): the unified [MasterDetailScaffold] owns the layout decision;
+      // its [showsPane] predicate is the single source of truth for whether a
+      // tap selects in-pane (pane visible) or navigates full-screen.
+      if (MasterDetailScaffold.showsPane(
+        context,
+        ref.read(readingPaneProvider),
+      )) {
+        ref.read(inboxSelectionProvider.notifier).state = item.id;
+      } else {
+        GoRouter.of(context).push('/matome/${item.id}');
+      }
+      return;
+    }
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
     if (isWide) {
       // Two-pane: select in place, keep the list visible.
@@ -180,6 +206,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
         await inbox.reloadFromLocal();
         if (!mounted) return;
+        // Never leave the reading pane pointing at an archived matome.
+        if (ids.contains(ref.read(inboxSelectionProvider))) {
+          _clearInboxSelection();
+        }
         messenger.showSnackBar(
           SnackBar(
             content: Text(t.matome.table.archivedMsg(n: ids.length)),
@@ -205,6 +235,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
         await inbox.reloadFromLocal();
         if (!mounted) return;
+        // Never leave the reading pane pointing at a deleted matome.
+        if (ids.contains(ref.read(inboxSelectionProvider))) {
+          _clearInboxSelection();
+        }
         messenger.showSnackBar(
           SnackBar(content: Text(t.matome.table.deletedMsg(n: ids.length))),
         );
@@ -217,6 +251,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final state = ref.watch(matomeInboxControllerProvider);
     final view = ref.watch(inboxViewProvider);
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
+
+    // Reading-pane selection: never point the pane at a matome that has left the
+    // loaded list (deleted / filed / absent after a reload). Reconcile after the
+    // frame so we don't mutate a provider mid-build.
+    if (FeatureFlags.masterDetailLayout) {
+      final selectedId = ref.watch(inboxSelectionProvider);
+      final items = state.valueOrNull;
+      if (selectedId != null &&
+          items != null &&
+          !items.any((m) => m.id == selectedId)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _clearInboxSelection();
+        });
+      }
+    }
 
     final listColumn = Column(
       children: [
@@ -249,19 +298,78 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ],
     );
 
+    final Widget body;
+    if (FeatureFlags.masterDetailLayout) {
+      // W2 (#1541): the inbox renders through the unified [MasterDetailScaffold].
+      // The scaffold owns the layout decision (master full-width vs master +
+      // reading pane) from the GLOBAL [readingPaneProvider] and the current
+      // width class; tap-vs-navigate is decided by the same [showsPane]
+      // predicate in [_openMatome], so the two can never drift.
+      final selectedId = ref.watch(inboxSelectionProvider);
+      body = MasterDetailScaffold(
+        master: listColumn,
+        detail: selectedId != null
+            ? MatomeDetailScreen(
+                key: ValueKey(selectedId),
+                id: selectedId,
+                embedded: true,
+              )
+            : null,
+        emptyState: const _InboxPaneEmptyState(),
+        pane: ref.watch(readingPaneProvider),
+      );
+    } else {
+      // Shipped behaviour (flag OFF): the `_wideBreakpoint`=1000 two-pane Row.
+      body = isWide
+          ? Row(
+              children: [
+                Expanded(flex: 2, child: listColumn),
+                VerticalDivider(width: 1, thickness: 1, color: colors.border),
+                const Expanded(flex: 3, child: _InboxDetailPane()),
+              ],
+            )
+          : listColumn;
+    }
+
     return Scaffold(
       backgroundColor: colors.background,
-      body: SafeArea(
-        bottom: false,
-        child: isWide
-            ? Row(
-                children: [
-                  Expanded(flex: 2, child: listColumn),
-                  VerticalDivider(width: 1, thickness: 1, color: colors.border),
-                  const Expanded(flex: 3, child: _InboxDetailPane()),
-                ],
-              )
-            : listColumn,
+      body: SafeArea(bottom: false, child: body),
+    );
+  }
+}
+
+/// The "select a matome to read it here" teaching placeholder shown in the
+/// reading pane when nothing is selected. Extracted from [_InboxDetailPane]'s
+/// null branch so the [MasterDetailScaffold] `emptyState` and the legacy
+/// two-pane share ONE placeholder (no drift between the flag-ON / flag-OFF
+/// realities).
+class _InboxPaneEmptyState extends StatelessWidget {
+  const _InboxPaneEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return ColoredBox(
+      color: colors.background,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.touch_app_outlined,
+              size: spacing.xxl,
+              color: colors.textMuted,
+            ),
+            SizedBox(height: spacing.sm),
+            Text(
+              t.inbox.selectHint,
+              style: typography.bodySmall.copyWith(color: colors.textMuted),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -275,32 +383,10 @@ class _InboxDetailPane extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final typography = context.typography;
     final selectedId = ref.watch(inboxSelectionProvider);
 
     if (selectedId == null) {
-      return ColoredBox(
-        color: colors.background,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.touch_app_outlined,
-                size: spacing.xxl,
-                color: colors.textMuted,
-              ),
-              SizedBox(height: spacing.sm),
-              Text(
-                t.inbox.selectHint,
-                style: typography.bodySmall.copyWith(color: colors.textMuted),
-              ),
-            ],
-          ),
-        ),
-      );
+      return const _InboxPaneEmptyState();
     }
 
     return MatomeDetailScreen(
