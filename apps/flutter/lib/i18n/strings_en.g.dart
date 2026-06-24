@@ -169,11 +169,26 @@ class Translations$settings$en {
 	/// en: 'Reading pane'
 	String get readingPane => 'Reading pane';
 
-	/// en: 'Right'
-	String get readingPaneRight => 'Right';
+	/// en: 'Always'
+	String get readingPaneAlways => 'Always';
+
+	/// en: 'On click'
+	String get readingPaneOnClick => 'On click';
 
 	/// en: 'Off'
 	String get readingPaneOff => 'Off';
+
+	/// en: 'Inbox'
+	String get readingPaneInbox => 'Inbox';
+
+	/// en: 'Files'
+	String get readingPaneFiles => 'Files';
+
+	/// en: 'Spaces'
+	String get readingPaneSpaces => 'Spaces';
+
+	/// en: 'Contacts'
+	String get readingPaneContacts => 'Contacts';
 }
 
 // Path: nav
@@ -1599,8 +1614,13 @@ extension on Translations {
 			'settings.viewTableFiles' => 'Table',
 			'settings.layout' => 'Layout',
 			'settings.readingPane' => 'Reading pane',
-			'settings.readingPaneRight' => 'Right',
+			'settings.readingPaneAlways' => 'Always',
+			'settings.readingPaneOnClick' => 'On click',
 			'settings.readingPaneOff' => 'Off',
+			'settings.readingPaneInbox' => 'Inbox',
+			'settings.readingPaneFiles' => 'Files',
+			'settings.readingPaneSpaces' => 'Spaces',
+			'settings.readingPaneContacts' => 'Contacts',
 			'nav.createNew' => 'New',
 			'nav.add' => 'Add',
 			'nav.recordAudio' => 'Record audio',

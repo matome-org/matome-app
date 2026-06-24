@@ -111,8 +111,13 @@ class _Translations$settings$ja extends Translations$settings$en {
 	@override String get viewTableFiles => 'テーブル';
 	@override String get layout => 'レイアウト';
 	@override String get readingPane => '読み取りペイン';
-	@override String get readingPaneRight => '右';
+	@override String get readingPaneAlways => '常に表示';
+	@override String get readingPaneOnClick => 'クリック時';
 	@override String get readingPaneOff => 'オフ';
+	@override String get readingPaneInbox => '受信トレイ';
+	@override String get readingPaneFiles => 'ファイル';
+	@override String get readingPaneSpaces => 'スペース';
+	@override String get readingPaneContacts => '連絡先';
 }
 
 // Path: nav
@@ -763,8 +768,13 @@ extension on TranslationsJa {
 			'settings.viewTableFiles' => 'テーブル',
 			'settings.layout' => 'レイアウト',
 			'settings.readingPane' => '読み取りペイン',
-			'settings.readingPaneRight' => '右',
+			'settings.readingPaneAlways' => '常に表示',
+			'settings.readingPaneOnClick' => 'クリック時',
 			'settings.readingPaneOff' => 'オフ',
+			'settings.readingPaneInbox' => '受信トレイ',
+			'settings.readingPaneFiles' => 'ファイル',
+			'settings.readingPaneSpaces' => 'スペース',
+			'settings.readingPaneContacts' => '連絡先',
 			'nav.createNew' => '新規',
 			'nav.add' => '追加',
 			'nav.recordAudio' => '音声を録音',

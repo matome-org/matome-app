@@ -32,8 +32,13 @@
     "viewTableFiles": "テーブル",
     "layout": "レイアウト",
     "readingPane": "読み取りペイン",
-    "readingPaneRight": "右",
-    "readingPaneOff": "オフ"
+    "readingPaneAlways": "常に表示",
+    "readingPaneOnClick": "クリック時",
+    "readingPaneOff": "オフ",
+    "readingPaneInbox": "受信トレイ",
+    "readingPaneFiles": "ファイル",
+    "readingPaneSpaces": "スペース",
+    "readingPaneContacts": "連絡先"
   },
   "nav": {
     "createNew": "新規",

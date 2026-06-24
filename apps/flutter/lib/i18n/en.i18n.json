@@ -32,8 +32,13 @@
     "viewTableFiles": "Table",
     "layout": "Layout",
     "readingPane": "Reading pane",
-    "readingPaneRight": "Right",
-    "readingPaneOff": "Off"
+    "readingPaneAlways": "Always",
+    "readingPaneOnClick": "On click",
+    "readingPaneOff": "Off",
+    "readingPaneInbox": "Inbox",
+    "readingPaneFiles": "Files",
+    "readingPaneSpaces": "Spaces",
+    "readingPaneContacts": "Contacts"
   },
   "nav": {
     "createNew": "New",
