@@ -63,6 +63,15 @@ i18n/      -> slang translations (en/ja JSON → generated strings)
   `lib/core/config/feature_flags.dart`, supplied by the root
   `apps/flutter/feature_flags.json` via `--dart-define-from-file`. A disabled
   screen is tree-shaken out, not merely hidden.
+- **Design catalog**: `apps/flutter_widgetbook` (`mise run storybook`) *renders*
+  app widgets; it never *defines* shippable ones. `apps/flutter/lib` is the
+  source of truth — the catalog imports it via `package:matome_flutter/...` and
+  writes only use-cases/stories (the sole local widgets are the
+  `MatomeWidgetbook` entry point and fixtures/scenes wrapping real app widgets;
+  enforced by a catalog provenance check). Author proposals app-first (real
+  widget under `proposals/` or behind a disabled flag, plus a catalog use-case
+  that imports it); graduate by moving the file or flipping the flag — never
+  reimplement.
 
 ### Core API (`services/api`)
 
