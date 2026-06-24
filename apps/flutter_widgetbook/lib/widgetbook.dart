@@ -1166,7 +1166,7 @@ Widget contactTileUseCase(BuildContext context) {
 // case is sized at 1280×720 so the pane is shown.
 
 @widgetbook.UseCase(
-  name: 'Right pane',
+  name: 'Always (split pane)',
   type: MasterDetailScaffold,
   path: '[Widgets]/Master-detail scaffold',
 )
@@ -1175,7 +1175,25 @@ Widget masterDetailScaffoldUseCase(BuildContext context) {
     width: 1280,
     height: 720,
     child: MasterDetailScaffold(
-      pane: ReadingPanePosition.right,
+      mode: ReadingPaneMode.always,
+      master: _MasterDetailMasterSample(),
+      detail: _MasterDetailDetailSample(),
+      emptyState: _MasterDetailEmptySample(),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'On click (split appears once selected)',
+  type: MasterDetailScaffold,
+  path: '[Widgets]/Master-detail scaffold',
+)
+Widget masterDetailScaffoldOnClickUseCase(BuildContext context) {
+  return const SizedBox(
+    width: 1280,
+    height: 720,
+    child: MasterDetailScaffold(
+      mode: ReadingPaneMode.onClick,
       master: _MasterDetailMasterSample(),
       detail: _MasterDetailDetailSample(),
       emptyState: _MasterDetailEmptySample(),
@@ -2212,7 +2230,7 @@ enum _MdSurface { inbox, files, spaces, contacts }
 
 enum _MdDensity { list, table }
 
-enum _MdPanel { right, off }
+enum _MdPanel { always, onClick, off }
 
 const double _mdDesktopW = 1280;
 const double _mdDesktopH = 720;
@@ -2249,7 +2267,7 @@ class MasterDetailLayout extends StatelessWidget {
             children: [
               _MdTopBar(surface: surface, panel: panel),
               Expanded(
-                child: panel == _MdPanel.right
+                child: panel != _MdPanel.off
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -2393,8 +2411,11 @@ class _MdTopBar extends StatelessWidget {
     final radius = context.radius;
     final typography = context.typography;
     final title = _mdTitle(surface);
-    final paneState =
-        panel == _MdPanel.right ? 'Reading pane: Right' : 'Reading pane: Off';
+    final paneState = switch (panel) {
+      _MdPanel.always => 'Reading pane: Always',
+      _MdPanel.onClick => 'Reading pane: On click',
+      _MdPanel.off => 'Reading pane: Off',
+    };
     return Container(
       height: 52,
       padding: EdgeInsets.symmetric(horizontal: spacing.lg),
@@ -2750,7 +2771,7 @@ Widget mdInboxListPanelUseCase(BuildContext context) {
     child: MasterDetailLayout(
       surface: _MdSurface.inbox,
       density: _MdDensity.list,
-      panel: _MdPanel.right,
+      panel: _MdPanel.always,
     ),
   );
 }
@@ -2784,7 +2805,7 @@ Widget mdInboxTablePanelUseCase(BuildContext context) {
     child: MasterDetailLayout(
       surface: _MdSurface.inbox,
       density: _MdDensity.table,
-      panel: _MdPanel.right,
+      panel: _MdPanel.always,
     ),
   );
 }
@@ -2818,8 +2839,25 @@ Widget mdInboxEmptyPaneUseCase(BuildContext context) {
     child: MasterDetailLayout(
       surface: _MdSurface.inbox,
       density: _MdDensity.list,
-      panel: _MdPanel.right,
+      panel: _MdPanel.always,
       emptyPane: true,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'List · desktop · on click (split once selected)',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdInboxListOnClickUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.inbox,
+      density: _MdDensity.list,
+      panel: _MdPanel.onClick,
     ),
   );
 }
@@ -2838,7 +2876,7 @@ Widget mdFilesGridPanelUseCase(BuildContext context) {
     child: MasterDetailLayout(
       surface: _MdSurface.files,
       density: _MdDensity.list,
-      panel: _MdPanel.right,
+      panel: _MdPanel.always,
     ),
   );
 }
@@ -2872,7 +2910,7 @@ Widget mdFilesTablePanelUseCase(BuildContext context) {
     child: MasterDetailLayout(
       surface: _MdSurface.files,
       density: _MdDensity.table,
-      panel: _MdPanel.right,
+      panel: _MdPanel.always,
     ),
   );
 }
@@ -2908,7 +2946,7 @@ Widget mdSpacesPanelUseCase(BuildContext context) {
     child: MasterDetailLayout(
       surface: _MdSurface.spaces,
       density: _MdDensity.list,
-      panel: _MdPanel.right,
+      panel: _MdPanel.always,
     ),
   );
 }
@@ -2942,7 +2980,7 @@ Widget mdContactsPanelUseCase(BuildContext context) {
     child: MasterDetailLayout(
       surface: _MdSurface.contacts,
       density: _MdDensity.list,
-      panel: _MdPanel.right,
+      panel: _MdPanel.always,
     ),
   );
 }

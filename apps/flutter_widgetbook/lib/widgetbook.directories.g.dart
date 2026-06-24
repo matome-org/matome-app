@@ -90,6 +90,11 @@ final directories = <_widgetbook.WidgetbookNode>[
                     _matome_widgetbook_widgetbook.mdInboxListNoPanelUseCase,
               ),
               _widgetbook.WidgetbookUseCase(
+                name: 'List · desktop · on click (split once selected)',
+                builder:
+                    _matome_widgetbook_widgetbook.mdInboxListOnClickUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
                 name: 'List · desktop · with side panel',
                 builder: _matome_widgetbook_widgetbook.mdInboxListPanelUseCase,
               ),
@@ -746,9 +751,14 @@ final directories = <_widgetbook.WidgetbookNode>[
             name: 'MasterDetailScaffold',
             useCases: [
               _widgetbook.WidgetbookUseCase(
-                name: 'Right pane',
+                name: 'Always (split pane)',
                 builder:
                     _matome_widgetbook_widgetbook.masterDetailScaffoldUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'On click (split appears once selected)',
+                builder: _matome_widgetbook_widgetbook
+                    .masterDetailScaffoldOnClickUseCase,
               ),
             ],
           ),
