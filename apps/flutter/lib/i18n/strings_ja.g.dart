@@ -435,6 +435,7 @@ class _Translations$contacts$ja extends Translations$contacts$en {
 	@override String count({required Object n}) => '${n} 件の連絡先';
 	@override String get empty => '連絡先がありません';
 	@override String get emptyHint => '+ をタップして連絡先を追加しましょう';
+	@override String get selectHint => '連絡先を選択するとプレビューが表示されます';
 	@override String get createTitle => '新しい連絡先';
 	@override String get editTitle => '連絡先を編集';
 	@override String get nameLabel => '名前';
@@ -1072,6 +1073,7 @@ extension on TranslationsJa {
 			'contacts.count' => ({required Object n}) => '${n} 件の連絡先',
 			'contacts.empty' => '連絡先がありません',
 			'contacts.emptyHint' => '+ をタップして連絡先を追加しましょう',
+			'contacts.selectHint' => '連絡先を選択するとプレビューが表示されます',
 			'contacts.createTitle' => '新しい連絡先',
 			'contacts.editTitle' => '連絡先を編集',
 			'contacts.nameLabel' => '名前',

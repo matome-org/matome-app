@@ -382,6 +382,7 @@
     "count": "$n 件の連絡先",
     "empty": "連絡先がありません",
     "emptyHint": "+ をタップして連絡先を追加しましょう",
+    "selectHint": "連絡先を選択するとプレビューが表示されます",
     "createTitle": "新しい連絡先",
     "editTitle": "連絡先を編集",
     "nameLabel": "名前",

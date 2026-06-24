@@ -382,6 +382,7 @@
     "count": "$n contacts",
     "empty": "No contacts yet",
     "emptyHint": "Tap + to add people to your directory",
+    "selectHint": "Select a contact to preview",
     "createTitle": "New contact",
     "editTitle": "Edit contact",
     "nameLabel": "Name",

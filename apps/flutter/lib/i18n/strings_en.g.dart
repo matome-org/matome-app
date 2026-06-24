@@ -933,6 +933,9 @@ class Translations$contacts$en {
 	/// en: 'Tap + to add people to your directory'
 	String get emptyHint => 'Tap + to add people to your directory';
 
+	/// en: 'Select a contact to preview'
+	String get selectHint => 'Select a contact to preview';
+
 	/// en: 'New contact'
 	String get createTitle => 'New contact';
 
@@ -1906,6 +1909,7 @@ extension on Translations {
 			'contacts.count' => ({required Object n}) => '${n} contacts',
 			'contacts.empty' => 'No contacts yet',
 			'contacts.emptyHint' => 'Tap + to add people to your directory',
+			'contacts.selectHint' => 'Select a contact to preview',
 			'contacts.createTitle' => 'New contact',
 			'contacts.editTitle' => 'Edit contact',
 			'contacts.nameLabel' => 'Name',
