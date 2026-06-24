@@ -149,8 +149,9 @@ List<Widget> _addMenuChildren(
 // MOBILE — floating dock
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// The floating bottom navigation dock. The active destination expands into a
-/// gold-tinted label pill; the rest stay icon-only. It does NOT host the "Add"
+/// The floating bottom navigation dock. ICON-ONLY: every destination is a bare
+/// glyph and the active one carries a gold-tinted background (no label text — a
+/// packed dock can't truncate a label into a stub). It does NOT host the "Add"
 /// FAB itself — the FAB ([MatomeAddFab]) is positioned by the shell just above
 /// the dock so it can float over scrollable content.
 class MatomeBottomDock extends StatelessWidget {
@@ -240,7 +241,6 @@ class _DockItem extends StatelessWidget {
     final colors = context.colors;
     final spacing = context.spacing;
     final radius = context.radius;
-    final typography = context.typography;
 
     return Semantics(
       button: true,
@@ -250,8 +250,7 @@ class _DockItem extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(radius.pill),
         // The wrapping Semantics already names this destination; exclude the
-        // inner glyph/label so the active pill's Text doesn't add a duplicate
-        // node under the same label.
+        // inner glyph so it doesn't add a duplicate node under the same label.
         child: ExcludeSemantics(
           child: ConstrainedBox(
             constraints: const BoxConstraints(
@@ -270,39 +269,14 @@ class _DockItem extends StatelessWidget {
                 color: active ? colors.accentSoft : null,
                 borderRadius: BorderRadius.circular(radius.pill),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    active ? dest.selectedIcon : dest.icon,
-                    size: _kNavIconSize,
-                    color: active ? colors.accentDark : colors.textMuted,
-                  ),
-                  // Label only on the active pill — kept out of the layout when
-                  // inactive so the dock stays compact.
-                  // Label only on the active pill, and flexible so it ellipsizes
-                  // (rather than overrunning) when the packed dock is narrow.
-                  Flexible(
-                    child: AnimatedSize(
-                      duration: _kAnim,
-                      curve: _kCurve,
-                      child: active
-                          ? Padding(
-                              padding: EdgeInsets.only(left: spacing.xs),
-                              child: Text(
-                                dest.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: typography.label.copyWith(
-                                  color: colors.accentDark,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                  ),
-                ],
+              // ICON-ONLY (owner decision 2026-06-23): the dock shows no labels
+              // — the active destination is marked by the gold-tinted background
+              // only, so a packed dock never truncates a label into a stub. The
+              // destination name stays on the wrapping Semantics for a11y.
+              child: Icon(
+                active ? dest.selectedIcon : dest.icon,
+                size: _kNavIconSize,
+                color: active ? colors.accentDark : colors.textMuted,
               ),
             ),
           ),
