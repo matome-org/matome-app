@@ -171,6 +171,20 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookFolder(
+        name: 'Contact tile',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'ContactTile',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Default',
+                builder: _matome_widgetbook_widgetbook.contactTileUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
         name: 'Design system',
         children: [
           _widgetbook.WidgetbookFolder(
@@ -720,6 +734,21 @@ final directories = <_widgetbook.WidgetbookNode>[
               _widgetbook.WidgetbookUseCase(
                 name: 'Space tile (local + promote · cloud)',
                 builder: _matome_widgetbook_widgetbook.spaceSyncTileUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Master-detail scaffold',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MasterDetailScaffold',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Right pane',
+                builder:
+                    _matome_widgetbook_widgetbook.masterDetailScaffoldUseCase,
               ),
             ],
           ),

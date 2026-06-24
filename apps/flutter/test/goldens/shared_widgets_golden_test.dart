@@ -22,6 +22,7 @@ import 'package:matome_flutter/ui/empty_state.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
 import 'package:matome_flutter/ui/matome_chip.dart';
+import 'package:matome_flutter/ui/master_detail_scaffold.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
 import 'package:matome_flutter/ui/files_scope_filter.dart';
 import 'package:matome_flutter/ui/inbox_item_card.dart';
@@ -265,6 +266,44 @@ void main() {
                     width: 380,
                     height: 1080,
                     child: ContactDetail(contact: _contactDetailFull),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  });
+
+  group('master-detail scaffold goldens', () {
+    for (final variant in _variants) {
+      goldenTest(
+        'renders ${variant.label}',
+        fileName: 'master_detail_scaffold_${variant.fileSuffix}',
+        // Width >= 1024 so the WidthClass is `expanded` and the reading pane is
+        // actually shown (master + detail side-by-side), which is the layout
+        // decision this scaffold owns.
+        constraints: const BoxConstraints.tightFor(width: 1280, height: 560),
+        pumpBeforeTest: pumpOnce,
+        builder: () {
+          LocaleSettings.setLocaleSync(variant.locale);
+          return _GoldenApp(
+            variant: variant,
+            child: GoldenTestGroup(
+              columns: 1,
+              children: [
+                GoldenTestScenario(
+                  name: 'right pane (expanded)',
+                  child: const SizedBox(
+                    width: 1200,
+                    height: 480,
+                    child: MasterDetailScaffold(
+                      pane: ReadingPanePosition.right,
+                      master: _MasterDetailMasterSample(),
+                      detail: _MasterDetailDetailSample(),
+                      emptyState: _MasterDetailEmptySample(),
+                    ),
                   ),
                 ),
               ],
@@ -1519,6 +1558,95 @@ class _FileViewSampleWidget extends StatelessWidget {
         border: Border.all(color: colors.border),
       ),
       child: FileView(data: _fileViewSampleData(sample)),
+    );
+  }
+}
+
+/// A short, scrollable list of cards standing in for the [MasterDetailScaffold]
+/// master column — mirrors the Widgetbook "Master-detail scaffold" use case so
+/// the catalog and the regression baseline stay in lockstep.
+class _MasterDetailMasterSample extends StatelessWidget {
+  const _MasterDetailMasterSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    const items = [
+      ('Client X — weekly sync', 'Marketing · 2h'),
+      ('Design review', 'Product · 4h'),
+      ('Sales call — Acme', 'Sales · 1d'),
+      ('Workshop notes', 'Product · 1d'),
+    ];
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        for (final (index, (title, meta)) in items.indexed) ...[
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(radius.lg),
+              border: Border.all(
+                color: index == 0 ? colors.accent : colors.border,
+              ),
+            ),
+            child: ListTile(
+              title: Text(title),
+              subtitle: Text(meta),
+              selected: index == 0,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+}
+
+/// The reading-pane content for the selected master row.
+class _MasterDetailDetailSample extends StatelessWidget {
+  const _MasterDetailDetailSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Client X — weekly sync',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Q3 budget approved. Ken to draft the proposal before next week.',
+            style: TextStyle(color: colors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The empty reading pane (no selection).
+class _MasterDetailEmptySample extends StatelessWidget {
+  const _MasterDetailEmptySample();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 220,
+      child: EmptyState(
+        icon: Icons.list_alt_outlined,
+        title: 'Nothing selected',
+        message: 'Pick an item on the left to read it here.',
+      ),
     );
   }
 }

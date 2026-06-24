@@ -36,6 +36,7 @@ import 'package:matome_flutter/ui/files_scope_filter.dart';
 import 'package:matome_flutter/ui/inbox_item_card.dart';
 import 'package:matome_flutter/ui/loading_indicator.dart';
 import 'package:matome_flutter/ui/matome_chip.dart';
+import 'package:matome_flutter/ui/master_detail_scaffold.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
 import 'package:matome_flutter/ui/people_cluster.dart';
 import 'package:matome_flutter/ui/relationship_picker.dart';
@@ -1120,6 +1121,151 @@ const _contactDetailSparse = ContactDetailData(
     ),
   ],
 );
+
+// ─── Contact tile (W1) ────────────────────────────────────────────────────────
+//
+// The REAL `ContactTile` from
+// `package:matome_flutter/features/contacts/widgets/contact_tile.dart` — one row
+// in the `/contacts` directory (tinted person glyph · name · optional notes ·
+// chevron). PRESENTATIONAL: the caller owns the accent [color]
+// (`context.colors.spaceColor(index)`).
+
+@widgetbook.UseCase(
+  name: 'Default',
+  type: ContactTile,
+  path: '[Widgets]/Contact tile',
+)
+Widget contactTileUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 380,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ContactTile(
+          name: 'Ana Ribeiro',
+          color: context.colors.spaceColor(0),
+          notes: 'Product Lead · Acme Inc.',
+          onTap: () {},
+        ),
+        const SizedBox(height: 12),
+        ContactTile(
+          name: 'Leo',
+          color: context.colors.spaceColor(1),
+          onTap: () {},
+        ),
+      ],
+    ),
+  );
+}
+
+// ─── Master–detail scaffold (W1) ─────────────────────────────────────────────
+//
+// The REAL, presentational `MasterDetailScaffold` from
+// `package:matome_flutter/ui/master_detail_scaffold.dart`. On expanded widths
+// with the pane on the right it renders master + reading pane side-by-side; this
+// case is sized at 1280×720 so the pane is shown.
+
+@widgetbook.UseCase(
+  name: 'Right pane',
+  type: MasterDetailScaffold,
+  path: '[Widgets]/Master-detail scaffold',
+)
+Widget masterDetailScaffoldUseCase(BuildContext context) {
+  return const SizedBox(
+    width: 1280,
+    height: 720,
+    child: MasterDetailScaffold(
+      pane: ReadingPanePosition.right,
+      master: _MasterDetailMasterSample(),
+      detail: _MasterDetailDetailSample(),
+      emptyState: _MasterDetailEmptySample(),
+    ),
+  );
+}
+
+/// A short, scrollable list of cards standing in for the master column.
+class _MasterDetailMasterSample extends StatelessWidget {
+  const _MasterDetailMasterSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    const items = [
+      ('Client X — weekly sync', 'Marketing · 2h'),
+      ('Design review', 'Product · 4h'),
+      ('Sales call — Acme', 'Sales · 1d'),
+      ('Workshop notes', 'Product · 1d'),
+    ];
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        for (final (index, (title, meta)) in items.indexed) ...[
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(radius.lg),
+              border: Border.all(
+                color: index == 0 ? colors.accent : colors.border,
+              ),
+            ),
+            child: ListTile(
+              title: Text(title),
+              subtitle: Text(meta),
+              selected: index == 0,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+}
+
+/// The reading-pane content for the selected master row.
+class _MasterDetailDetailSample extends StatelessWidget {
+  const _MasterDetailDetailSample();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Client X — weekly sync',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Q3 budget approved. Ken to draft the proposal before next week.',
+            style: TextStyle(color: colors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The empty reading pane (no selection).
+class _MasterDetailEmptySample extends StatelessWidget {
+  const _MasterDetailEmptySample();
+
+  @override
+  Widget build(BuildContext context) {
+    return const EmptyState(
+      icon: Icons.list_alt_outlined,
+      title: 'Nothing selected',
+      message: 'Pick an item on the left to read it here.',
+    );
+  }
+}
 
 // ─── Files (grid + table, #1465) ──────────────────────────────────────────────
 //
