@@ -299,7 +299,7 @@ void main() {
                     width: 1200,
                     height: 480,
                     child: MasterDetailScaffold(
-                      pane: ReadingPanePosition.right,
+                      mode: ReadingPaneMode.always,
                       master: _MasterDetailMasterSample(),
                       detail: _MasterDetailDetailSample(),
                       emptyState: _MasterDetailEmptySample(),

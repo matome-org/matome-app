@@ -89,7 +89,7 @@ const double _kFilesMaxWidth = 1080;
 /// expanded widths with the reading pane on the right, tapping a file sets this
 /// instead of navigating, so the grid/table stays visible beside the
 /// [_FilesPaneDetail] reading pane. Narrower widths (and the flag-OFF reality)
-/// ignore it and route to `/recording/...` as before — the [showsPane]
+/// ignore it and route to `/recording/...` as before — the [selectsOnTap]
 /// predicate in [_FilesScreenState._openFile] is the single source of truth.
 final filesSelectionProvider = StateProvider<String?>((ref) => null);
 
@@ -131,12 +131,12 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
 
   Future<void> _openFile(String fileId) async {
     // W3 (#1542): the unified [MasterDetailScaffold] owns the layout decision;
-    // its [showsPane] predicate is the single source of truth for whether a tap
-    // selects in-pane (pane visible) or navigates full-screen.
+    // its [selectsOnTap] predicate is the single source of truth for whether a
+    // tap selects in-pane (pane reality) or navigates full-screen.
     if (FeatureFlags.masterDetailLayout &&
-        MasterDetailScaffold.showsPane(
+        MasterDetailScaffold.selectsOnTap(
           context,
-          ref.read(readingPaneProvider),
+          ref.read(readingPaneModeProvider(ReadingPaneSurface.files)),
         )) {
       ref.read(filesSelectionProvider.notifier).state = fileId;
       return;
@@ -323,12 +323,12 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
             if (FeatureFlags.masterDetailLayout) {
               // W3 (#1542): the Files surface renders through the unified
               // [MasterDetailScaffold]. The scaffold owns the layout decision
-              // (master full-width vs master + reading pane) from the GLOBAL
-              // [readingPaneProvider] and the current width class; tap-vs-
-              // navigate is decided by the same [showsPane] predicate in
-              // [_openFile], so the two can never drift. The master is the
-              // grid/table at FULL WIDTH (no 1080 centring) so the freed
-              // whitespace is filled by the pane (the original complaint).
+              // (master full-width vs master + reading pane) from the
+              // per-surface [readingPaneModeProvider] and the current width
+              // class; tap-vs-navigate is decided by the same [selectsOnTap]
+              // predicate in [_openFile], so the two can never drift. The
+              // master is the grid/table at FULL WIDTH (no 1080 centring) so the
+              // freed whitespace is filled by the pane (the original complaint).
               final selectedId = ref.watch(filesSelectionProvider);
               return MasterDetailScaffold(
                 master: _master(scoped, view, centered: false),
@@ -339,7 +339,9 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
                       )
                     : null,
                 emptyState: const _FilesPaneEmptyState(),
-                pane: ref.watch(readingPaneProvider),
+                mode: ref.watch(
+                  readingPaneModeProvider(ReadingPaneSurface.files),
+                ),
               );
             }
 

@@ -45,7 +45,7 @@ Future<bool?> showContactDeleteDialog(BuildContext context, String name) {
 /// of navigating, so the directory stays visible beside the [_ContactsPaneDetail]
 /// reading pane (the selected contact's real [ContactDetail]). Narrower widths
 /// (and the flag-OFF reality) ignore it and route to `/contacts/:id` as before —
-/// the [MasterDetailScaffold.showsPane] predicate in [ContactsScreen._open] is
+/// the [MasterDetailScaffold.selectsOnTap] predicate in [ContactsScreen._open] is
 /// the single source of truth.
 final contactsSelectionProvider = StateProvider<String?>((ref) => null);
 
@@ -71,16 +71,16 @@ class ContactsScreen extends ConsumerWidget {
   }
 
   /// Open a contact. W4 (#1544): the unified [MasterDetailScaffold] owns the
-  /// layout decision; its [showsPane] predicate is the single source of truth
+  /// layout decision; its [selectsOnTap] predicate is the single source of truth
   /// for whether a tap selects in-pane (pane visible) or navigates full-screen.
   /// When the pane is hidden (flag OFF, narrow width, or pane = off) it opens
   /// the contact's detail screen at `/contacts/:id` (DR-004, #1464) — editing
   /// lives behind the detail's Edit affordance there.
   void _open(BuildContext context, WidgetRef ref, ContactRow contact) {
     if (FeatureFlags.masterDetailLayout &&
-        MasterDetailScaffold.showsPane(
+        MasterDetailScaffold.selectsOnTap(
           context,
-          ref.read(readingPaneProvider),
+          ref.read(readingPaneModeProvider(ReadingPaneSurface.contacts)),
         )) {
       ref.read(contactsSelectionProvider.notifier).state = contact.id;
       return;
@@ -119,10 +119,17 @@ class ContactsScreen extends ConsumerWidget {
     // When the unified scaffold shows the reading pane the master only gets a
     // fraction of the window, so the wide multi-column grid (sized for the full
     // window) would overflow its narrow column. Reflow the master to the list in
-    // that case. OFF and pane-hidden paths keep the window-width decision, so the
-    // shipped reality is byte-for-byte unchanged.
+    // that case. The split is actually rendered when a tap would select in-pane
+    // AND there's something to show (always-mode shows the empty pane; onClick
+    // only splits once a contact is selected). OFF and pane-hidden paths keep
+    // the window-width decision, so the shipped reality is byte-for-byte
+    // unchanged.
+    final mode =
+        ref.watch(readingPaneModeProvider(ReadingPaneSurface.contacts));
     final paneShown = FeatureFlags.masterDetailLayout &&
-        MasterDetailScaffold.showsPane(context, ref.watch(readingPaneProvider));
+        MasterDetailScaffold.selectsOnTap(context, mode) &&
+        (mode == ReadingPaneMode.always ||
+            ref.watch(contactsSelectionProvider) != null);
     final masterIsWide = paneShown ? false : isWide;
 
     // W4 (#1544): never point the reading pane at a contact that has left the
@@ -176,10 +183,10 @@ class ContactsScreen extends ConsumerWidget {
     if (FeatureFlags.masterDetailLayout) {
       // W4 (#1544): the Contacts surface renders through the unified
       // [MasterDetailScaffold]. The scaffold owns the layout decision (master
-      // full-width vs master + reading pane) from the GLOBAL
-      // [readingPaneProvider] and the current width class; tap-vs-navigate is
-      // decided by the same [showsPane] predicate in [_open], so the two can
-      // never drift. The pane is the selected contact's real [ContactDetail].
+      // full-width vs master + reading pane) from the per-surface
+      // [readingPaneModeProvider] and the current width class; tap-vs-navigate
+      // is decided by the same [selectsOnTap] predicate in [_open], so the two
+      // can never drift. The pane is the selected contact's real [ContactDetail].
       final selectedId = ref.watch(contactsSelectionProvider);
       body = MasterDetailScaffold(
         master: listColumn,
@@ -187,7 +194,7 @@ class ContactsScreen extends ConsumerWidget {
             ? _ContactsPaneDetail(key: ValueKey(selectedId), contactId: selectedId)
             : null,
         emptyState: const _ContactPaneEmptyState(),
-        pane: ref.watch(readingPaneProvider),
+        mode: mode,
       );
     } else {
       // Shipped behaviour (flag OFF): the directory, byte-for-byte unchanged.

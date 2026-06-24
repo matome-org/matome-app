@@ -24,7 +24,6 @@ class SettingsScreen extends ConsumerWidget {
     final locale = ref.watch(localeControllerProvider);
     final inboxView = ref.watch(inboxViewProvider);
     final filesView = ref.watch(filesViewProvider);
-    final readingPane = ref.watch(readingPaneProvider);
     final user = ref.watch(authStateProvider).user;
 
     return Scaffold(
@@ -124,26 +123,21 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
           _SectionHeader(t.settings.layout),
-          _SubHeader(t.settings.readingPane),
-          RadioGroup<ReadingPanePosition>(
-            groupValue: readingPane,
-            onChanged: (p) {
-              if (p != null) {
-                ref.read(readingPaneProvider.notifier).setPosition(p);
-              }
-            },
-            child: Column(
-              children: [
-                RadioListTile<ReadingPanePosition>(
-                  value: ReadingPanePosition.right,
-                  title: Text(t.settings.readingPaneRight),
-                ),
-                RadioListTile<ReadingPanePosition>(
-                  value: ReadingPanePosition.off,
-                  title: Text(t.settings.readingPaneOff),
-                ),
-              ],
-            ),
+          _ReadingPaneBlock(
+            surface: ReadingPaneSurface.inbox,
+            label: t.settings.readingPaneInbox,
+          ),
+          _ReadingPaneBlock(
+            surface: ReadingPaneSurface.files,
+            label: t.settings.readingPaneFiles,
+          ),
+          _ReadingPaneBlock(
+            surface: ReadingPaneSurface.spaces,
+            label: t.settings.readingPaneSpaces,
+          ),
+          _ReadingPaneBlock(
+            surface: ReadingPaneSurface.contacts,
+            label: t.settings.readingPaneContacts,
           ),
           const Divider(),
           _SectionHeader(t.settings.account),
@@ -159,6 +153,52 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One per-surface reading-pane control: a sub-header naming the surface above
+/// an Always / On click / Off radio set wired to the surface's persisted mode.
+/// Mirrors the per-view radio/_SubHeader style of the "Default views" section.
+class _ReadingPaneBlock extends ConsumerWidget {
+  const _ReadingPaneBlock({required this.surface, required this.label});
+
+  final ReadingPaneSurface surface;
+  final String label;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(readingPaneModeProvider(surface));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SubHeader(label),
+        RadioGroup<ReadingPaneMode>(
+          groupValue: mode,
+          onChanged: (m) {
+            if (m != null) {
+              ref.read(readingPaneModeProvider(surface).notifier).setMode(m);
+            }
+          },
+          child: Column(
+            children: [
+              RadioListTile<ReadingPaneMode>(
+                value: ReadingPaneMode.always,
+                title: Text(t.settings.readingPaneAlways),
+              ),
+              RadioListTile<ReadingPaneMode>(
+                value: ReadingPaneMode.onClick,
+                title: Text(t.settings.readingPaneOnClick),
+              ),
+              RadioListTile<ReadingPaneMode>(
+                value: ReadingPaneMode.off,
+                title: Text(t.settings.readingPaneOff),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

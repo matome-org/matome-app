@@ -73,7 +73,7 @@ Future<void> _seedMatome(
 
 ProviderContainer _container(
   AppDatabase db, {
-  ReadingPanePosition? pane,
+  ReadingPaneMode? mode,
 }) {
   final c = ProviderContainer(overrides: [
     appDatabaseProvider.overrideWithValue(db),
@@ -89,21 +89,21 @@ ProviderContainer _container(
     uploadRetryServiceProvider.overrideWith(
       (ref) => _InertRetryService(ref),
     ),
-    if (pane != null)
-      readingPaneProvider.overrideWith(
-        (ref) => _StubReadingPane(pane),
+    if (mode != null)
+      readingPaneModeProvider(ReadingPaneSurface.inbox).overrideWith(
+        (ref) => _StubReadingPane(ReadingPaneSurface.inbox, mode),
       ),
   ]);
   addTearDown(c.dispose);
   return c;
 }
 
-/// A reading-pane controller pinned to a fixed position (in-memory store, the
-/// position set synchronously so the pumped tree sees it on the first frame).
-class _StubReadingPane extends ReadingPaneController {
-  _StubReadingPane(ReadingPanePosition position)
-      : super(InMemorySettingsStore()) {
-    state = position;
+/// A reading-pane controller pinned to a fixed mode (in-memory store, the mode
+/// set synchronously so the pumped tree sees it on the first frame).
+class _StubReadingPane extends ReadingPaneModeController {
+  _StubReadingPane(ReadingPaneSurface surface, ReadingPaneMode mode)
+      : super(InMemorySettingsStore(), surface) {
+    state = mode;
   }
 }
 
@@ -156,7 +156,7 @@ void main() {
   // ── ON lane: scaffold-driven reading pane ─────────────────────────────────
   group('lane: ff.masterDetailLayout=true (ON / MasterDetailScaffold)', () {
     testWidgets(
-      'Right pane + expanded width (1280) + a selection → the detail pane '
+      'always pane + expanded width (1280) + a selection → the detail pane '
       '(MatomeDetailScreen) is present',
       (tester) async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -164,7 +164,7 @@ void main() {
         await _seedMatome(db, id: 'm1', title: 'Standup notes');
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         // Pre-select a matome so the pane has content.
         container.read(inboxSelectionProvider.notifier).state = 'm1';
 
@@ -178,6 +178,34 @@ void main() {
     );
 
     testWidgets(
+      'onClick + expanded: nothing selected → full-width list (no detail, no '
+      'empty hint); tapping a matome opens the pane (split appears)',
+      (tester) async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        await _seedMatome(db, id: 'm1', title: 'Standup notes');
+
+        _setSize(tester, const Size(1280, 900));
+        final container = _container(db, mode: ReadingPaneMode.onClick);
+
+        await tester.pumpWidget(_app(container));
+        await tester.pumpAndSettle();
+
+        // Master full-width until a selection exists: no detail, no empty hint.
+        expect(find.byType(MatomeDetailScreen), findsNothing);
+        expect(find.text(t.inbox.selectHint), findsNothing);
+
+        await tester.tap(find.text('Standup notes'));
+        await tester.pumpAndSettle();
+
+        // The tap selects in-pane (no navigation) and opens the split.
+        expect(container.read(inboxSelectionProvider), 'm1');
+        expect(find.byType(MatomeDetailScreen), findsOneWidget);
+      },
+      skip: !_flagOn,
+    );
+
+    testWidgets(
       'reading pane = off → full-width list, no pane even at expanded width',
       (tester) async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -185,7 +213,7 @@ void main() {
         await _seedMatome(db, id: 'm1', title: 'Standup notes');
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.off);
+        final container = _container(db, mode: ReadingPaneMode.off);
         // Even with a selection set, the OFF pane never renders a detail.
         container.read(inboxSelectionProvider.notifier).state = 'm1';
 
@@ -207,7 +235,7 @@ void main() {
         await _seedMatome(db, id: 'm1', title: 'Standup notes');
 
         _setSize(tester, const Size(400, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         container.read(inboxSelectionProvider.notifier).state = 'm1';
 
         await tester.pumpWidget(_app(container));
@@ -227,7 +255,7 @@ void main() {
         await _seedMatome(db, id: 'm1', title: 'Standup notes');
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         container.read(inboxSelectionProvider.notifier).state = 'm1';
 
         await tester.pumpWidget(_app(container));

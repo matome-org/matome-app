@@ -9,7 +9,7 @@ void main() {
   const detailKey = Key('test-detail');
   const emptyKey = Key('test-empty');
 
-  Widget harness({Widget? detail, required ReadingPanePosition pane}) {
+  Widget harness({Widget? detail, required ReadingPaneMode mode}) {
     return MaterialApp(
       theme: buildLightTheme(),
       home: Scaffold(
@@ -25,7 +25,7 @@ void main() {
             color: Color(0xFF445566),
             child: SizedBox.expand(),
           ),
-          pane: pane,
+          mode: mode,
         ),
       ),
     );
@@ -43,17 +43,14 @@ void main() {
     tester.view.physicalSize = Size(width, height);
   }
 
-  tearDown(() {
-    // tester.view is reset per-test via addTearDown below; this is a safety net.
-  });
-
+  // ── always ────────────────────────────────────────────────────────────────
   testWidgets(
-    'Right + expanded + detail non-null → master AND detail both render',
+    'always + expanded + detail non-null → master AND detail both render',
     (tester) async {
       addTearDown(tester.view.reset);
       setWidth(tester, 1280);
       await tester.pumpWidget(
-        harness(detail: detailWidget(), pane: ReadingPanePosition.right),
+        harness(detail: detailWidget(), mode: ReadingPaneMode.always),
       );
 
       expect(find.byKey(masterKey), findsOneWidget);
@@ -63,12 +60,12 @@ void main() {
   );
 
   testWidgets(
-    'Right + expanded + detail null → master + emptyState (detail absent)',
+    'always + expanded + detail null → master + emptyState (detail absent)',
     (tester) async {
       addTearDown(tester.view.reset);
       setWidth(tester, 1280);
       await tester.pumpWidget(
-        harness(detail: null, pane: ReadingPanePosition.right),
+        harness(detail: null, mode: ReadingPaneMode.always),
       );
 
       expect(find.byKey(masterKey), findsOneWidget);
@@ -77,13 +74,45 @@ void main() {
     },
   );
 
+  // ── onClick ─────────────────────────────────────────────────────────────--
   testWidgets(
-    'Off + expanded → master only; pane/detail not in tree',
+    'onClick + expanded + no selection → master full-width (no pane/empty)',
     (tester) async {
       addTearDown(tester.view.reset);
       setWidth(tester, 1280);
       await tester.pumpWidget(
-        harness(detail: detailWidget(), pane: ReadingPanePosition.off),
+        harness(detail: null, mode: ReadingPaneMode.onClick),
+      );
+
+      expect(find.byKey(masterKey), findsOneWidget);
+      expect(find.byKey(emptyKey), findsNothing);
+      expect(find.byKey(detailKey), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'onClick + expanded + a selection → split (master + detail)',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      setWidth(tester, 1280);
+      await tester.pumpWidget(
+        harness(detail: detailWidget(), mode: ReadingPaneMode.onClick),
+      );
+
+      expect(find.byKey(masterKey), findsOneWidget);
+      expect(find.byKey(detailKey), findsOneWidget);
+      expect(find.byKey(emptyKey), findsNothing);
+    },
+  );
+
+  // ── off ─────────────────────────────────────────────────────────────────--
+  testWidgets(
+    'off + expanded → master only; pane/detail not in tree',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      setWidth(tester, 1280);
+      await tester.pumpWidget(
+        harness(detail: detailWidget(), mode: ReadingPaneMode.off),
       );
 
       expect(find.byKey(masterKey), findsOneWidget);
@@ -92,13 +121,14 @@ void main() {
     },
   );
 
+  // ── width degradation ─────────────────────────────────────────────────────
   testWidgets(
-    'compact width + Right → master only; pane not in tree',
+    'compact width + always → master only; pane not in tree',
     (tester) async {
       addTearDown(tester.view.reset);
       setWidth(tester, 400);
       await tester.pumpWidget(
-        harness(detail: detailWidget(), pane: ReadingPanePosition.right),
+        harness(detail: detailWidget(), mode: ReadingPaneMode.always),
       );
 
       expect(find.byKey(masterKey), findsOneWidget);
@@ -107,8 +137,10 @@ void main() {
     },
   );
 
+  // ── selectsOnTap matrix ───────────────────────────────────────────────────
   testWidgets(
-    'showsPane returns true only for Right + expanded',
+    'selectsOnTap: true for always/onClick at expanded, false for off; '
+    'false at compact for every mode',
     (tester) async {
       addTearDown(tester.view.reset);
       late BuildContext expandedCtx;
@@ -127,11 +159,15 @@ void main() {
         ),
       );
       expect(
-        MasterDetailScaffold.showsPane(expandedCtx, ReadingPanePosition.right),
+        MasterDetailScaffold.selectsOnTap(expandedCtx, ReadingPaneMode.always),
         isTrue,
       );
       expect(
-        MasterDetailScaffold.showsPane(expandedCtx, ReadingPanePosition.off),
+        MasterDetailScaffold.selectsOnTap(expandedCtx, ReadingPaneMode.onClick),
+        isTrue,
+      );
+      expect(
+        MasterDetailScaffold.selectsOnTap(expandedCtx, ReadingPaneMode.off),
         isFalse,
       );
 
@@ -148,7 +184,15 @@ void main() {
         ),
       );
       expect(
-        MasterDetailScaffold.showsPane(compactCtx, ReadingPanePosition.right),
+        MasterDetailScaffold.selectsOnTap(compactCtx, ReadingPaneMode.always),
+        isFalse,
+      );
+      expect(
+        MasterDetailScaffold.selectsOnTap(compactCtx, ReadingPaneMode.onClick),
+        isFalse,
+      );
+      expect(
+        MasterDetailScaffold.selectsOnTap(compactCtx, ReadingPaneMode.off),
         isFalse,
       );
     },

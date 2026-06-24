@@ -25,7 +25,7 @@ import 'spaces_controller.dart';
 /// of navigating, so the spaces list stays visible beside the
 /// [_SpacePaneDetail] reading pane (the selected space's matomes). Narrower
 /// widths (and the flag-OFF reality) ignore it and route to `/spaces/:id` as
-/// before — the [MasterDetailScaffold.showsPane] predicate in
+/// before — the [MasterDetailScaffold.selectsOnTap] predicate in
 /// [SpacesScreen._openSpace] is the single source of truth.
 final spacesSelectionProvider = StateProvider<String?>((ref) => null);
 
@@ -74,13 +74,13 @@ class SpacesScreen extends ConsumerWidget {
   }
 
   /// Open a space. W4 (#1543): the unified [MasterDetailScaffold] owns the
-  /// layout decision; its [showsPane] predicate is the single source of truth
+  /// layout decision; its [selectsOnTap] predicate is the single source of truth
   /// for whether a tap selects in-pane (pane visible) or navigates full-screen.
   void _openSpace(BuildContext context, WidgetRef ref, SpaceCard space) {
     if (FeatureFlags.masterDetailLayout &&
-        MasterDetailScaffold.showsPane(
+        MasterDetailScaffold.selectsOnTap(
           context,
-          ref.read(readingPaneProvider),
+          ref.read(readingPaneModeProvider(ReadingPaneSurface.spaces)),
         )) {
       ref.read(spacesSelectionProvider.notifier).state = space.id;
       return;
@@ -97,10 +97,16 @@ class SpacesScreen extends ConsumerWidget {
     // When the unified scaffold shows the reading pane the master only gets a
     // fraction of the window, so the wide multi-column grid (sized for the full
     // window) would overflow its narrow column. Reflow the master to the list
-    // in that case. OFF and pane-hidden paths keep the window-width decision, so
-    // the shipped reality is byte-for-byte unchanged.
+    // in that case. The split is actually rendered when a tap would select
+    // in-pane AND there's something to show (always-mode shows the empty pane;
+    // onClick only splits once a space is selected). OFF and pane-hidden paths
+    // keep the window-width decision, so the shipped reality is byte-for-byte
+    // unchanged.
+    final mode = ref.watch(readingPaneModeProvider(ReadingPaneSurface.spaces));
     final paneShown = FeatureFlags.masterDetailLayout &&
-        MasterDetailScaffold.showsPane(context, ref.watch(readingPaneProvider));
+        MasterDetailScaffold.selectsOnTap(context, mode) &&
+        (mode == ReadingPaneMode.always ||
+            ref.watch(spacesSelectionProvider) != null);
     final masterIsWide = paneShown ? false : isWide;
 
     // W4 (#1543): never point the reading pane at a space that has left the
@@ -155,10 +161,10 @@ class SpacesScreen extends ConsumerWidget {
     if (FeatureFlags.masterDetailLayout) {
       // W4 (#1543): the Spaces surface renders through the unified
       // [MasterDetailScaffold]. The scaffold owns the layout decision (master
-      // full-width vs master + reading pane) from the GLOBAL
-      // [readingPaneProvider] and the current width class; tap-vs-navigate is
-      // decided by the same [showsPane] predicate in [_openSpace], so the two
-      // can never drift. The pane is the selected space's matomes.
+      // full-width vs master + reading pane) from the per-surface
+      // [readingPaneModeProvider] and the current width class; tap-vs-navigate
+      // is decided by the same [selectsOnTap] predicate in [_openSpace], so the
+      // two can never drift. The pane is the selected space's matomes.
       final selectedId = ref.watch(spacesSelectionProvider);
       body = MasterDetailScaffold(
         master: listColumn,
@@ -166,7 +172,7 @@ class SpacesScreen extends ConsumerWidget {
             ? _SpacePaneDetail(key: ValueKey(selectedId), spaceId: selectedId)
             : null,
         emptyState: const _SpacePaneEmptyState(),
-        pane: ref.watch(readingPaneProvider),
+        mode: mode,
       );
     } else {
       // Shipped behaviour (flag OFF): the list, byte-for-byte unchanged.

@@ -138,11 +138,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _openMatome(MatomeItem item) {
     if (FeatureFlags.masterDetailLayout) {
       // W2 (#1541): the unified [MasterDetailScaffold] owns the layout decision;
-      // its [showsPane] predicate is the single source of truth for whether a
-      // tap selects in-pane (pane visible) or navigates full-screen.
-      if (MasterDetailScaffold.showsPane(
+      // its [selectsOnTap] predicate is the single source of truth for whether a
+      // tap selects in-pane (pane reality) or navigates full-screen.
+      if (MasterDetailScaffold.selectsOnTap(
         context,
-        ref.read(readingPaneProvider),
+        ref.read(readingPaneModeProvider(ReadingPaneSurface.inbox)),
       )) {
         ref.read(inboxSelectionProvider.notifier).state = item.id;
       } else {
@@ -302,9 +302,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (FeatureFlags.masterDetailLayout) {
       // W2 (#1541): the inbox renders through the unified [MasterDetailScaffold].
       // The scaffold owns the layout decision (master full-width vs master +
-      // reading pane) from the GLOBAL [readingPaneProvider] and the current
-      // width class; tap-vs-navigate is decided by the same [showsPane]
-      // predicate in [_openMatome], so the two can never drift.
+      // reading pane) from the per-surface [readingPaneModeProvider] and the
+      // current width class; tap-vs-navigate is decided by the same
+      // [selectsOnTap] predicate in [_openMatome], so the two can never drift.
       final selectedId = ref.watch(inboxSelectionProvider);
       body = MasterDetailScaffold(
         master: listColumn,
@@ -316,7 +316,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               )
             : null,
         emptyState: const _InboxPaneEmptyState(),
-        pane: ref.watch(readingPaneProvider),
+        mode: ref.watch(readingPaneModeProvider(ReadingPaneSurface.inbox)),
       );
     } else {
       // Shipped behaviour (flag OFF): the `_wideBreakpoint`=1000 two-pane Row.

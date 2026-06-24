@@ -32,18 +32,18 @@ const _flagOn = bool.fromEnvironment(
 
 const String _owner = '1';
 
-/// A reading-pane controller pinned to a fixed position (in-memory store, the
-/// position set synchronously so the pumped tree sees it on the first frame).
-class _StubReadingPane extends ReadingPaneController {
-  _StubReadingPane(ReadingPanePosition position)
-      : super(InMemorySettingsStore()) {
-    state = position;
+/// A reading-pane controller pinned to a fixed mode (in-memory store, the mode
+/// set synchronously so the pumped tree sees it on the first frame).
+class _StubReadingPane extends ReadingPaneModeController {
+  _StubReadingPane(ReadingPaneMode mode)
+      : super(InMemorySettingsStore(), ReadingPaneSurface.files) {
+    state = mode;
   }
 }
 
 ProviderContainer _container(
   AppDatabase db, {
-  ReadingPanePosition? pane,
+  ReadingPaneMode? mode,
   String view = 'table',
 }) {
   final c = ProviderContainer(overrides: [
@@ -51,8 +51,9 @@ ProviderContainer _container(
     currentOwnerIdProvider.overrideWithValue(_owner),
     settingsStoreProvider
         .overrideWithValue(InMemorySettingsStore({'matome.files_view': view})),
-    if (pane != null)
-      readingPaneProvider.overrideWith((ref) => _StubReadingPane(pane)),
+    if (mode != null)
+      readingPaneModeProvider(ReadingPaneSurface.files)
+          .overrideWith((ref) => _StubReadingPane(mode)),
   ]);
   addTearDown(c.dispose);
   return c;
@@ -182,7 +183,7 @@ void main() {
         await _seedFile(db, id: 'r1', title: 'Alpha');
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         container.read(filesSelectionProvider.notifier).state = 'r1';
         final spy = _RouteSpy();
 
@@ -201,21 +202,24 @@ void main() {
     );
 
     testWidgets(
-      'tap-to-select: tapping a file at expanded width opens it in the pane '
-      '(no navigation)',
+      'onClick tap-to-select: nothing selected → no pane (no empty hint); '
+      'tapping a file at expanded width opens it in the pane (no navigation)',
       (tester) async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
         addTearDown(db.close);
         await _seedFile(db, id: 'r1', title: 'Alpha');
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.onClick);
         final spy = _RouteSpy();
 
         await tester.pumpWidget(_app(container, spy));
         await tester.pumpAndSettle();
 
+        // onClick + nothing selected → full-width master: no pane, no hint.
         expect(find.byType(FileView), findsNothing);
+        expect(find.text(t.files.selectHint), findsNothing);
+
         await tester.tap(find.text('Alpha'));
         await tester.pumpAndSettle();
 
@@ -234,7 +238,7 @@ void main() {
         await _seedFile(db, id: 'r1', title: 'Alpha');
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.off);
+        final container = _container(db, mode: ReadingPaneMode.off);
         container.read(filesSelectionProvider.notifier).state = 'r1';
         final spy = _RouteSpy();
 
@@ -256,7 +260,7 @@ void main() {
         await _seedFile(db, id: 'r1', title: 'Alpha');
 
         _setSize(tester, const Size(400, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         final spy = _RouteSpy();
 
         await tester.pumpWidget(_app(container, spy));
@@ -279,7 +283,7 @@ void main() {
         await _seedFile(db, id: 'r1', title: 'Alpha');
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         container.read(filesSelectionProvider.notifier).state = 'r1';
         final spy = _RouteSpy();
 

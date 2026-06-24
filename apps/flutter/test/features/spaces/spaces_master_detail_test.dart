@@ -30,23 +30,24 @@ const _flagOn = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// A reading-pane controller pinned to a fixed position (in-memory store, the
-/// position set synchronously so the pumped tree sees it on the first frame).
-class _StubReadingPane extends ReadingPaneController {
-  _StubReadingPane(ReadingPanePosition position)
-      : super(InMemorySettingsStore()) {
-    state = position;
+/// A reading-pane controller pinned to a fixed mode (in-memory store, the mode
+/// set synchronously so the pumped tree sees it on the first frame).
+class _StubReadingPane extends ReadingPaneModeController {
+  _StubReadingPane(ReadingPaneMode mode)
+      : super(InMemorySettingsStore(), ReadingPaneSurface.spaces) {
+    state = mode;
   }
 }
 
 ProviderContainer _container(
   AppDatabase db, {
-  ReadingPanePosition? pane,
+  ReadingPaneMode? mode,
 }) {
   final c = ProviderContainer(overrides: [
     appDatabaseProvider.overrideWithValue(db),
-    if (pane != null)
-      readingPaneProvider.overrideWith((ref) => _StubReadingPane(pane)),
+    if (mode != null)
+      readingPaneModeProvider(ReadingPaneSurface.spaces)
+          .overrideWith((ref) => _StubReadingPane(mode)),
   ]);
   addTearDown(c.dispose);
   return c;
@@ -172,7 +173,7 @@ void main() {
         await _seedMatome(db, id: 'm1', title: 'InSpace', spaceId: work.id);
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         container.read(spacesSelectionProvider.notifier).state = work.id;
         final spy = _RouteSpy();
 
@@ -188,8 +189,8 @@ void main() {
     );
 
     testWidgets(
-      'tap-to-select: tapping a space at expanded width opens it in the pane '
-      '(no navigation)',
+      'onClick tap-to-select: nothing selected → no pane; tapping a space at '
+      'expanded width opens it in the pane (no navigation)',
       (tester) async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
         addTearDown(db.close);
@@ -197,14 +198,16 @@ void main() {
         await _seedMatome(db, id: 'm1', title: 'InSpace', spaceId: work.id);
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.onClick);
         final spy = _RouteSpy();
 
         await tester.pumpWidget(_app(container, spy));
         await tester.pumpAndSettle();
 
-        // Nothing selected → the empty-state hint shows, not the matome.
+        // onClick + nothing selected → no pane, so neither the matome nor the
+        // teaching hint is rendered.
         expect(find.text('InSpace'), findsNothing);
+        expect(find.text(t.spaces.selectHint), findsNothing);
 
         await tester.tap(find.byKey(ValueKey('space-tile-${work.id}')));
         await tester.pumpAndSettle();
@@ -225,7 +228,7 @@ void main() {
         await _seedMatome(db, id: 'm1', title: 'InSpace', spaceId: work.id);
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.off);
+        final container = _container(db, mode: ReadingPaneMode.off);
         container.read(spacesSelectionProvider.notifier).state = work.id;
         final spy = _RouteSpy();
 
@@ -248,7 +251,7 @@ void main() {
         final work = await db.workspacesDao.createWorkspace('Work');
 
         _setSize(tester, const Size(400, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         final spy = _RouteSpy();
 
         await tester.pumpWidget(_app(container, spy));
@@ -272,7 +275,7 @@ void main() {
         await _seedMatome(db, id: 'm1', title: 'InSpace', spaceId: work.id);
 
         _setSize(tester, const Size(1280, 900));
-        final container = _container(db, pane: ReadingPanePosition.right);
+        final container = _container(db, mode: ReadingPaneMode.always);
         container.read(spacesSelectionProvider.notifier).state = work.id;
         final spy = _RouteSpy();
 
