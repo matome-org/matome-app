@@ -278,6 +278,10 @@ The historical decisions, kept here as the durable record:
 - **D4 — Identity, permissions, triage.** Contacts are owner-owned with an optional `linkedUserId`. Spaces carry `type` (personal/shared/org) + `owner_id`; `space_members` carry RBAC roles; `organizations` may own spaces. **Schema is reserved; behaviour is deferred and unenforced** (sharing, ACLs, multi-user sync, org management). A linked contact's profile is viewable without consent — a recorded, revisitable privacy risk.
 - **D5 — Matome detail = letter + responsive panel.** One route renders a stacked "letter" on narrow viewports and letter + persistent side panel at ≥ 900 px via a `LayoutBuilder` (no nested navigator).
 - **D6 — Item organization decoupled from sync** (plan #102, the §5 model). Supersedes D3's forced-Matome rule; amends D4's "filing ⟹ sync". Effective-space resolver + one operation-keyed sync gate + two-axis (`is_local` ⟂ `space_type`) model + one-way promotion. **Accepted risk:** local-default means an unsynced item lives only on the device; a device wipe loses it (owner-accepted trade-off of the local-first default).
+- **D7 — Master–detail layout (email-style), Settings-controlled** (plan #102, W1). Graduated from the approved Widgetbook proposal `[Proposals]/Master–detail layout`.
+  - **Decision:** every collection surface (Inbox, Files, Spaces, Contacts) renders through **one** reusable `MasterDetailScaffold` (`apps/flutter/lib/ui/master_detail_scaffold.dart`) — a master list plus an optional right-hand **reading pane**. Pane visibility is a single GLOBAL persisted setting, `readingPaneProvider` (`ReadingPanePosition { right, off }`), switchable **only** from Settings (no in-screen toggle). Layout uses unified breakpoints (`apps/flutter/lib/core/layout/breakpoints.dart`: `compact < 600` / `medium 600–1024` / `expanded ≥ 1024`); the pane shows only at `expanded` **and** `right`, while `compact` navigates full-screen. The Files reading-pane content is `FileView` (the shared body), **not** the full `FileDetailScreen`. The whole behaviour is gated behind `FeatureFlags.masterDetailLayout` (default **OFF** — a single flag flip is the rollback).
+  - **Rejected alternatives:** a left-hand pane (right-hand chosen, email-style); per-surface pane settings (gold-plating — the global setting widens to per-surface additively later if ever needed); an in-screen pane toggle (Settings-only chosen, so the choice is global and stable); embedding the 33 KB multi-`Scaffold` `FileDetailScreen` in the pane (nested-`Scaffold` breakage — use `FileView`, the shared body).
+  - **Accepted note:** unifying the legacy `1000` breakpoint onto `1024` is an intentional behaviour change for viewports in the half-open range `[1000, 1024)` (formerly two-pane, now single-pane until `1024`).
 
 ### Forward-compat seams (deferred org / admin / data-policy / SSO / RBAC)
 
@@ -301,3 +305,8 @@ Plan #102 leaves **seams, not features**, so the deferred work plugs in without 
 - **Local / Cloud space** — `is_local` true/false; sync ⟺ effective space is a cloud space.
 - **Capture** — recording audio or picking a file on the client.
 - **SoR** — system of record (Core Postgres).
+- **Master–detail** — the email-style layout (D7) where a collection surface is a master list plus an optional reading pane; implemented by `MasterDetailScaffold`.
+- **Reading pane** — the optional right-hand detail pane of a master–detail surface; visible only at `expanded` + `right`. (Code: the `right` arm of `MasterDetailScaffold`.)
+- **`MasterDetailScaffold`** — the one reusable widget every collection surface renders through (`apps/flutter/lib/ui/master_detail_scaffold.dart`).
+- **`readingPaneProvider`** — the single GLOBAL persisted Riverpod provider holding the reading-pane setting (`apps/flutter/lib/core/settings/reading_pane.dart`); Settings-only.
+- **`ReadingPanePosition`** — the pane-position enum, `{ right, off }` (defined in `master_detail_scaffold.dart`).
