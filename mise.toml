@@ -327,7 +327,7 @@ flutter test --dart-define=ff.localFirstSpaces=true $LFS_SUITE
 # and forced ON (scaffold-driven reading pane) — so neither rots as later waves
 # (W3–W4) route more surfaces through the scaffold. The lane file self-skips the
 # wrong-build group, so each invocation proves exactly its reality.
-MD_SUITE="test/home/inbox_master_detail_test.dart test/features/files/files_master_detail_test.dart"
+MD_SUITE="test/home/inbox_master_detail_test.dart test/features/files/files_master_detail_test.dart test/features/spaces/spaces_master_detail_test.dart"
 echo "── master-detail lane: ff.masterDetailLayout=false (OFF / shipped two-pane) ──"
 flutter test --dart-define=ff.masterDetailLayout=false $MD_SUITE
 echo "── master-detail lane: ff.masterDetailLayout=true (ON / scaffold-driven) ──"
