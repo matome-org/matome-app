@@ -46,7 +46,11 @@ import 'matome_detail_controller.dart';
 ///
 /// Reachable as `/matome/:id`.
 class MatomeDetailScreen extends ConsumerStatefulWidget {
-  const MatomeDetailScreen({super.key, required this.id, this.embedded = false});
+  const MatomeDetailScreen({
+    super.key,
+    required this.id,
+    this.embedded = false,
+  });
 
   final String id;
 
@@ -191,22 +195,6 @@ class _MatomeDetailScreenState extends ConsumerState<MatomeDetailScreen> {
 /// Details screen).
 const double _matomeReadingMaxWidth = 720;
 
-/// W8 (#1414 / .docs/internal/architecture.md §11 (D5)) responsive breakpoint. At or above this available
-/// width the management surface is presented as a PERSISTENT side panel beside
-/// the letter (the "drawer"); below it the letter keeps its mobile "Show more"
-/// reveal (the "sheet"). This is a layout swap on the SAME `/matome/:id` route
-/// — no nested navigator, no deep-link change — per .docs/internal/architecture.md §11 (D5)'s fixed nav model.
-///
-/// 900 is chosen as a desktop/large-tablet-landscape threshold: above it there
-/// is room for a ~720px reading letter AND a ~360px panel side by side; below
-/// it (phones, tablet portrait) the proven single-column sheet stays. It sits
-/// safely above the 800px default widget-test viewport, so the existing detail
-/// suites keep exercising the sheet presentation unchanged.
-const double _matomeWidePanelBreakpoint = 900;
-
-/// Fixed width of the persistent side panel on wide layouts.
-const double _matomePanelWidth = 360;
-
 /// The matome detail body, reshaped into the approved LETTER format (W7, #1413 /
 /// Widgetbook `MatomeLetterCard`). The card reads top-to-bottom like a letter:
 ///
@@ -251,175 +239,29 @@ class _MatomeDetailBody extends ConsumerWidget {
 
     final matome = state.matome!;
 
-    // W8 SEAM resolved (.docs/internal/architecture.md §11 (D5)): a breakpoint-driven layout swap on the same
-    // route. Wide → the letter narrows and the management surface sits in a
-    // persistent panel beside it; narrow → the letter keeps its "Show more"
-    // sheet reveal.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= _matomeWidePanelBreakpoint;
-        if (isWide) {
-          return _WideDetailLayout(
-            id: id,
-            matome: matome,
-            spaces: state.spaces,
-            notesDirty: notesDirty,
-          );
-        }
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _matomeReadingMaxWidth),
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                spacing.md,
-                spacing.md,
-                spacing.md,
-                spacing.xxl + spacing.xxl,
-              ),
-              children: [
-                _MatomeLetterCard(
-                  id: id,
-                  matome: matome,
-                  spaces: state.spaces,
-                  notesDirty: notesDirty,
-                ),
-              ],
+    // Single-column "letter" presentation, ALWAYS (owner decision 2026-06-24):
+    // the mobile layout is the standard on every width — the wide two-pane
+    // (letter + persistent side panel) split is retired. The letter's
+    // "Show more" reveal hosts the Items/People/Space/Notes sections inline.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _matomeReadingMaxWidth),
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            spacing.md,
+            spacing.md,
+            spacing.md,
+            spacing.xxl + spacing.xxl,
+          ),
+          children: [
+            _MatomeLetterCard(
+              id: id,
+              matome: matome,
+              spaces: state.spaces,
+              notesDirty: notesDirty,
             ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// The wide (>= [_matomeWidePanelBreakpoint]) presentation: the letter on the
-/// left as the reading column (no "Show more"), and the same [_MatomeDetails]
-/// composition the sheet reveals, hosted in a PERSISTENT side panel on the
-/// right. Both columns scroll independently. This is the W8 "drawer" — the
-/// management surface is always visible beside the letter, never behind a tap.
-class _WideDetailLayout extends ConsumerWidget {
-  const _WideDetailLayout({
-    required this.id,
-    required this.matome,
-    required this.spaces,
-    required this.notesDirty,
-  });
-
-  final String id;
-  final MatomeItem matome;
-  final List<WorkspaceRow> spaces;
-  final ValueNotifier<bool> notesDirty;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final spacing = context.spacing;
-    final controller =
-        ref.read(matomeDetailControllerProvider(id).notifier);
-    final pad = EdgeInsets.fromLTRB(
-      spacing.md,
-      spacing.md,
-      spacing.md,
-      spacing.xxl + spacing.xxl,
-    );
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // The letter, clamped to its reading width and centred in the left pane.
-        Expanded(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(maxWidth: _matomeReadingMaxWidth),
-              child: ListView(
-                padding: pad,
-                children: [
-                  _MatomeLetterCard(
-                    id: id,
-                    matome: matome,
-                    spaces: spaces,
-                    notesDirty: notesDirty,
-                    // No "Show more" on wide: the detail lives in the panel.
-                    showDetailToggle: false,
-                  ),
-                ],
-              ),
-            ),
-          ),
+          ],
         ),
-        // The persistent side panel.
-        SizedBox(
-          width: _matomePanelWidth,
-          child: _DetailSidePanel(
-            id: id,
-            matome: matome,
-            controller: controller,
-            notesDirty: notesDirty,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// The persistent side panel host (wide layout): a bordered surface column that
-/// scrolls the shared [_MatomeDetails] management surface. Mirrors the approved
-/// Widgetbook `MatomeDetailPanel` framing — a titled, bordered panel beside the
-/// letter — while reusing the live detail sections so per-item sync/actions,
-/// contacts, filing, notes and Share all keep working unchanged.
-class _DetailSidePanel extends StatelessWidget {
-  const _DetailSidePanel({
-    required this.id,
-    required this.matome,
-    required this.controller,
-    required this.notesDirty,
-  });
-
-  final String id;
-  final MatomeItem matome;
-  final MatomeDetailController controller;
-  final ValueNotifier<bool> notesDirty;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final radius = context.radius;
-    final typography = context.typography;
-
-    return Container(
-      key: const ValueKey('matome-detail-panel'),
-      margin: EdgeInsets.only(
-        top: spacing.md,
-        right: spacing.md,
-        bottom: spacing.md,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(radius.lg),
-        border: Border.all(color: colors.border),
-      ),
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          spacing.lg,
-          spacing.lg,
-          spacing.lg,
-          spacing.xxl,
-        ),
-        children: [
-          Text(
-            t.matome.detailPanelTitle,
-            style: typography.title.copyWith(color: colors.textPrimary),
-          ),
-          SizedBox(height: spacing.md),
-          _MatomeDetails(
-            id: id,
-            matome: matome,
-            controller: controller,
-            notesDirty: notesDirty,
-          ),
-        ],
       ),
     );
   }
@@ -433,18 +275,12 @@ class _MatomeLetterCard extends ConsumerStatefulWidget {
     required this.matome,
     required this.spaces,
     required this.notesDirty,
-    this.showDetailToggle = true,
   });
 
   final String id;
   final MatomeItem matome;
   final List<WorkspaceRow> spaces;
   final ValueNotifier<bool> notesDirty;
-
-  /// Whether the letter hosts its own "Show more" reveal of [_MatomeDetails].
-  /// True on narrow (the sheet presentation); false on wide, where the detail
-  /// lives in the persistent side panel instead (W8 / .docs/internal/architecture.md §11 (D5)).
-  final bool showDetailToggle;
 
   @override
   ConsumerState<_MatomeLetterCard> createState() => _MatomeLetterCardState();
@@ -453,9 +289,7 @@ class _MatomeLetterCard extends ConsumerStatefulWidget {
 class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
   /// Whether the detailed management sections are revealed. Mobile-first: closed
   /// by default so the card reads as a calm letter; "Show more" expands the
-  /// detail in place. Only consulted in the narrow/sheet presentation — on wide
-  /// (`showDetailToggle == false`) the toggle is not built and the detail lives
-  /// in the persistent side panel instead (W8 / #1414, .docs/internal/architecture.md §11 (D5)).
+  /// detail in place.
   bool _expanded = false;
 
   @override
@@ -464,8 +298,9 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
     final spacing = context.spacing;
     final radius = context.radius;
     final matome = widget.matome;
-    final controller =
-        ref.read(matomeDetailControllerProvider(widget.id).notifier);
+    final controller = ref.read(
+      matomeDetailControllerProvider(widget.id).notifier,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -499,33 +334,29 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
           _PeopleMetaRow(matomeId: widget.id),
           SizedBox(height: spacing.sm),
           _StatusMetaRow(rollup: matome.syncRollup),
-          // "Show more" affordance — the narrow/sheet presentation. On wide
-          // (W8 / .docs/internal/architecture.md §11 (D5)) the detail lives in the persistent side panel
-          // instead, so the toggle and its inline reveal are suppressed.
-          if (widget.showDetailToggle) ...[
-            SizedBox(height: spacing.md),
-            Align(
-              alignment: Alignment.centerRight,
-              child: AppTextButton.icon(
-                key: const ValueKey('matome-show-more'),
-                onPressed: () => setState(() => _expanded = !_expanded),
-                icon: Icon(
-                  _expanded ? Icons.expand_less : Icons.chevron_right,
-                  size: spacing.md,
-                ),
-                label: Text(_expanded ? t.matome.showLess : t.matome.showMore),
+          // "Show more" affordance — reveals the detail sections inline.
+          SizedBox(height: spacing.md),
+          Align(
+            alignment: Alignment.centerRight,
+            child: AppTextButton.icon(
+              key: const ValueKey('matome-show-more'),
+              onPressed: () => setState(() => _expanded = !_expanded),
+              icon: Icon(
+                _expanded ? Icons.expand_less : Icons.chevron_right,
+                size: spacing.md,
               ),
+              label: Text(_expanded ? t.matome.showLess : t.matome.showMore),
             ),
-            // Detailed management sections, revealed inline.
-            if (_expanded) ...[
-              SizedBox(height: spacing.sm),
-              _MatomeDetails(
-                id: widget.id,
-                matome: matome,
-                controller: controller,
-                notesDirty: widget.notesDirty,
-              ),
-            ],
+          ),
+          // Detailed management sections, revealed inline.
+          if (_expanded) ...[
+            SizedBox(height: spacing.sm),
+            _MatomeDetails(
+              id: widget.id,
+              matome: matome,
+              controller: controller,
+              notesDirty: widget.notesDirty,
+            ),
           ],
         ],
       ),
@@ -539,9 +370,8 @@ class _MatomeLetterCardState extends ConsumerState<_MatomeLetterCard> {
 /// compact item rows carrying a per-item sync chip, both Add affordances styled
 /// as accent rows, and the inline Notes "Edit" trailing.
 ///
-/// This is the SINGLE composition point reused by BOTH the wide desktop side
-/// panel ([_DetailSidePanel]) AND the narrow "Show more" sheet — fixing it
-/// fixes both. The presentational scaffolding (section framing, compact rows,
+/// This is the SINGLE composition point the letter's "Show more" sheet reveals.
+/// The presentational scaffolding (section framing, compact rows,
 /// add rows, the per-item sync chip) lives in the PUBLIC
 /// `lib/ui/matome_detail_panel.dart` so the Widgetbook "Detail panel" use case
 /// renders the very same widgets (convergence — no mock to drift).
@@ -578,8 +408,10 @@ class _MatomeDetails extends StatelessWidget {
         // Items · N — compact rows (leading media icon · title · time/duration ·
         // trailing per-item sync chip) + the anchored "Add item" menu (photo /
         // file, #1449 flag-gated).
-        itemsSection:
-            _RecordingsSection(recordings: matome.recordings, matomeId: id),
+        itemsSection: _RecordingsSection(
+          recordings: matome.recordings,
+          matomeId: id,
+        ),
         // People · N — real contacts as compact rows (avatar · name · role ·
         // detach) + the "Add person" picker.
         peopleSection: _ContactChipsSlot(matomeId: id),
@@ -634,7 +466,9 @@ class _FilesMetaRow extends StatelessWidget {
     final preview = count == 0
         ? t.matome.noFiles
         : recordings.take(2).map((r) => r.title).join(' · ') +
-            (count > 2 ? ' · ${t.matome.filesPreviewMore(n: count - 2)}' : '');
+              (count > 2
+                  ? ' · ${t.matome.filesPreviewMore(n: count - 2)}'
+                  : '');
     return _MetaRow(
       key: const ValueKey('matome-meta-files'),
       icon: Icons.attach_file,
@@ -654,8 +488,9 @@ class _PeopleMetaRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final contacts =
-        ref.watch(matomeDetailControllerProvider(matomeId)).contacts;
+    final contacts = ref
+        .watch(matomeDetailControllerProvider(matomeId))
+        .contacts;
     final count = contacts.length;
     final preview = count == 0
         ? t.matome.noPeople
@@ -690,10 +525,7 @@ class _StatusMetaRow extends StatelessWidget {
             style: typography.label.copyWith(color: colors.textMuted),
           ),
         ),
-        MatomeSyncChip(
-          key: const ValueKey('matome-on-device'),
-          rollup: rollup,
-        ),
+        MatomeSyncChip(key: const ValueKey('matome-on-device'), rollup: rollup),
       ],
     );
   }
@@ -735,8 +567,7 @@ class _MetaRow extends StatelessWidget {
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
-                  style: typography.label
-                      .copyWith(color: colors.textSecondary),
+                  style: typography.label.copyWith(color: colors.textSecondary),
                 ),
               ),
             ],
@@ -885,8 +716,9 @@ class _MatomeHeader extends ConsumerWidget {
   Future<void> _rename(BuildContext context, WidgetRef ref) async {
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
-    final controller =
-        container.read(matomeDetailControllerProvider(matome.id).notifier);
+    final controller = container.read(
+      matomeDetailControllerProvider(matome.id).notifier,
+    );
 
     final newTitle = await showDialog<String>(
       context: context,
@@ -903,9 +735,7 @@ class _MatomeHeader extends ConsumerWidget {
       );
       return;
     }
-    messenger.showSnackBar(
-      SnackBar(content: Text(t.matome.actions.renamed)),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(t.matome.actions.renamed)));
   }
 
   /// Edit date & time flow (#1411 / W5): a date picker then a time picker
@@ -915,8 +745,9 @@ class _MatomeHeader extends ConsumerWidget {
   Future<void> _editDateTime(BuildContext context, WidgetRef ref) async {
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
-    final controller =
-        container.read(matomeDetailControllerProvider(matome.id).notifier);
+    final controller = container.read(
+      matomeDetailControllerProvider(matome.id).notifier,
+    );
 
     final current = DateTime.fromMillisecondsSinceEpoch(matome.happenedAt);
     final pickedDate = await showDatePicker(
@@ -970,8 +801,9 @@ class _MatomeHeader extends ConsumerWidget {
     // still need to drive restore / show the Undo SnackBar afterwards.
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
-    final controller =
-        container.read(matomeDetailControllerProvider(matome.id).notifier);
+    final controller = container.read(
+      matomeDetailControllerProvider(matome.id).notifier,
+    );
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1048,11 +880,7 @@ class _MatomeHeader extends ConsumerWidget {
         SizedBox(height: spacing.xs),
         Row(
           children: [
-            Icon(
-              Icons.schedule,
-              size: spacing.md,
-              color: colors.textMuted,
-            ),
+            Icon(Icons.schedule, size: spacing.md, color: colors.textMuted),
             SizedBox(width: spacing.xs),
             Text(
               when,
@@ -1085,8 +913,9 @@ class _RenameDialogState extends State<_RenameDialog> {
   /// Mirrors the server changeset's `validate_length(:title, max: 255)`.
   static const int _maxTitleLength = 255;
 
-  late final TextEditingController _field =
-      TextEditingController(text: widget.initial);
+  late final TextEditingController _field = TextEditingController(
+    text: widget.initial,
+  );
 
   bool get _isValid => _field.text.trim().isNotEmpty;
 
@@ -1147,10 +976,12 @@ class _ContactChipsSlot extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
-    final contacts =
-        ref.watch(matomeDetailControllerProvider(matomeId)).contacts;
-    final controller =
-        ref.read(matomeDetailControllerProvider(matomeId).notifier);
+    final contacts = ref
+        .watch(matomeDetailControllerProvider(matomeId))
+        .contacts;
+    final controller = ref.read(
+      matomeDetailControllerProvider(matomeId).notifier,
+    );
 
     // People · N — attached contacts as compact rows + an "Add person" accent
     // row, framed by the approved [MatomePanelSection]. The `matome-contacts`
@@ -1223,18 +1054,13 @@ class _ContactRow extends StatelessWidget {
           child: Semantics(
             button: true,
             label: t.matome.removeContact,
-            child: Icon(
-              Icons.close,
-              size: spacing.md,
-              color: colors.textMuted,
-            ),
+            child: Icon(Icons.close, size: spacing.md, color: colors.textMuted),
           ),
         ),
       ),
     );
   }
 }
-
 
 String _roleLabel(String role) {
   switch (role) {
@@ -1257,10 +1083,7 @@ String _roleLabel(String role) {
 /// [MatomeDetailController.fileIntoSpace], which sets `matome.spaceId`. Keys
 /// preserved: `matome-file-cta` / `matome-filed` / `matome-refile`.
 class _FilingSection extends ConsumerWidget {
-  const _FilingSection({
-    required this.matome,
-    required this.spaces,
-  });
+  const _FilingSection({required this.matome, required this.spaces});
 
   final MatomeItem matome;
   final List<WorkspaceRow> spaces;
@@ -1396,10 +1219,7 @@ class _FileIntoSpaceSheet extends StatelessWidget {
 // ─── Recordings (child Items) + add photo ────────────────────────────────────
 
 class _RecordingsSection extends ConsumerWidget {
-  const _RecordingsSection({
-    required this.recordings,
-    required this.matomeId,
-  });
+  const _RecordingsSection({required this.recordings, required this.matomeId});
 
   final List<RecordingItem> recordings;
   final String matomeId;
@@ -1451,8 +1271,22 @@ class _RecordingsSection extends ConsumerWidget {
 /// The document extension allowlist for "Add file" (#1449). Broad by design —
 /// v1 only STORES + stub-summarizes. Lower-case, no leading dot.
 const List<String> _kDocExtensions = [
-  'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
-  'html', 'htm', 'md', 'markdown', 'txt', 'rtf', 'csv', 'tsv', 'json',
+  'pdf',
+  'doc',
+  'docx',
+  'ppt',
+  'pptx',
+  'xls',
+  'xlsx',
+  'html',
+  'htm',
+  'md',
+  'markdown',
+  'txt',
+  'rtf',
+  'csv',
+  'tsv',
+  'json',
 ];
 
 /// The leading glyph for a candidate file row, by media kind.
@@ -1480,8 +1314,9 @@ Future<void> _openMatomeAddAnything(
   String matomeId, {
   String? initialTypeId,
 }) async {
-  final controller =
-      ref.read(matomeDetailControllerProvider(matomeId).notifier);
+  final controller = ref.read(
+    matomeDetailControllerProvider(matomeId).notifier,
+  );
   final stateNow = ref.read(matomeDetailControllerProvider(matomeId));
   final matome = stateNow.matome;
   if (matome == null) return;
@@ -1589,22 +1424,35 @@ Future<void> _openMatomeAddAnything(
   if (result.isAction) {
     switch (result.actionId) {
       case 'photo':
-        await _importFileIntoMatome(context, matomeId,
-            type: FileType.image, label: 'addPhoto');
+        await _importFileIntoMatome(
+          context,
+          matomeId,
+          type: FileType.image,
+          label: 'addPhoto',
+        );
       case 'file':
-        await _importFileIntoMatome(context, matomeId,
-            type: FileType.custom,
-            allowedExtensions: _kDocExtensions,
-            label: 'addFile');
+        await _importFileIntoMatome(
+          context,
+          matomeId,
+          type: FileType.custom,
+          allowedExtensions: _kDocExtensions,
+          label: 'addFile',
+        );
       case 'create-contact':
-        final name = await _promptRelationshipName(context,
-            title: tp.createContactTitle, hint: tp.createContactHint);
+        final name = await _promptRelationshipName(
+          context,
+          title: tp.createContactTitle,
+          hint: tp.createContactHint,
+        );
         if (name != null && name.isNotEmpty) {
           await controller.createContactAndAttach(name);
         }
       case 'new-space':
-        final name = await _promptRelationshipName(context,
-            title: tp.newSpaceTitle, hint: tp.newSpaceHint);
+        final name = await _promptRelationshipName(
+          context,
+          title: tp.newSpaceTitle,
+          hint: tp.newSpaceHint,
+        );
         if (name != null && name.isNotEmpty) {
           await controller.createSpaceAndFile(name);
         }
@@ -1829,8 +1677,9 @@ class _RecordingTile extends ConsumerWidget {
               leading: Icon(Icons.delete_outline, color: colors.failed),
               title: Text(
                 t.details.delete,
-                style: sheetContext.typography.bodySmall
-                    .copyWith(color: colors.failed),
+                style: sheetContext.typography.bodySmall.copyWith(
+                  color: colors.failed,
+                ),
               ),
               onTap: () {
                 Navigator.of(sheetContext).pop();
@@ -1955,8 +1804,7 @@ class _AggregatedSummary extends StatelessWidget {
     final hasItems = matome.recordings.isNotEmpty;
     // Offer regeneration when explicitly stale, or when nothing is stored yet
     // but there are Items to roll up (the first compose).
-    final canRegenerate =
-        matome.summaryStale || (!hasSummary && hasItems);
+    final canRegenerate = matome.summaryStale || (!hasSummary && hasItems);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1974,8 +1822,7 @@ class _AggregatedSummary extends StatelessWidget {
               ? MarkdownBody(data: summary)
               : Text(
                   t.matome.noSummary,
-                  style:
-                      typography.bodySmall.copyWith(color: colors.textMuted),
+                  style: typography.bodySmall.copyWith(color: colors.textMuted),
                 ),
         ),
         if (canRegenerate) ...[
@@ -2031,8 +1878,9 @@ class _NotesSection extends StatefulWidget {
 
 class _NotesSectionState extends State<_NotesSection> {
   bool _editing = false;
-  late final TextEditingController _field =
-      TextEditingController(text: widget.description ?? '');
+  late final TextEditingController _field = TextEditingController(
+    text: widget.description ?? '',
+  );
 
   @override
   void initState() {
@@ -2140,8 +1988,9 @@ class _NotesSectionState extends State<_NotesSection> {
                   ? MarkdownBody(data: widget.description!)
                   : Text(
                       t.matome.noNotes,
-                      style: typography.bodySmall
-                          .copyWith(color: colors.textMuted),
+                      style: typography.bodySmall.copyWith(
+                        color: colors.textMuted,
+                      ),
                     ),
             ),
     );
@@ -2180,7 +2029,11 @@ class _DeferredActions extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.ios_share, size: spacing.md, color: colors.textPrimary),
+              Icon(
+                Icons.ios_share,
+                size: spacing.md,
+                color: colors.textPrimary,
+              ),
               SizedBox(width: spacing.xs),
               Text(
                 t.matome.share,

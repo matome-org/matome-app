@@ -10,14 +10,10 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
-/// W8 (#1414) — the detail panel presentation is RESPONSIVE on the SAME
-/// `/matome/:id` route (.docs/internal/architecture.md §11 (D5)): a breakpoint-driven layout swap, not a route
-/// change. Below the breakpoint the letter keeps its mobile "Show more" reveal
-/// (the sheet presentation); above it the management surface is a PERSISTENT
-/// side panel beside the letter, visible without tapping anything.
-///
-/// "Responsive" must be a VERIFIED behaviour: we pump the SAME screen at a
-/// narrow and a wide viewport and assert the two presentations differ.
+/// The matome detail is ALWAYS the single-column "letter" presentation (owner
+/// decision 2026-06-24): the wide two-pane (letter + persistent side panel)
+/// split is retired. These tests pin that the SAME single-column layout — the
+/// "Show more" sheet, no side panel — renders at every width.
 Future<void> _seedMatome(
   AppDatabase db, {
   required String id,
@@ -114,8 +110,10 @@ void main() {
     expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);
   });
 
-  testWidgets('WIDE (above breakpoint): the detail surface is a PERSISTENT '
-      'panel beside the letter, with no "Show more" needed', (tester) async {
+  testWidgets('WIDE: still single-column — the wide two-pane split is retired, '
+      'so the "Show more" sheet stays and there is NO persistent side panel', (
+    tester,
+  ) async {
     await sizeTo(tester, const Size(1200, 900));
     await _seedMatome(
       db,
@@ -127,29 +125,26 @@ void main() {
     await tester.pumpWidget(_app(container(), id: 'm_wide'));
     await tester.pumpAndSettle();
 
-    // Drawer presentation: the management surface is visible beside the letter
-    // WITHOUT tapping anything.
-    expect(find.byKey(const ValueKey('matome-detail-panel')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matome-details')), findsOneWidget);
-    // Detail keys are reachable up front (no reveal).
-    expect(find.byKey(const ValueKey('matome-add-contact')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matome-share')), findsOneWidget);
-    // "Show more" is not needed (and not built) above the breakpoint.
-    expect(find.byKey(const ValueKey('matome-show-more')), findsNothing);
+    // Always single-column: the "Show more" trigger is present even wide; the
+    // management surface stays hidden until revealed.
+    expect(find.byKey(const ValueKey('matome-show-more')), findsOneWidget);
+    expect(find.byKey(const ValueKey('matome-details')), findsNothing);
+    // The retired wide side panel never appears.
+    expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);
   });
 
-  testWidgets('the SAME route renders both presentations — flips with width '
-      'alone (no navigation)', (tester) async {
+  testWidgets('the SAME single-column letter renders at every width — no layout '
+      'swap with width', (tester) async {
     await _seedMatome(db, id: 'm_flip', aggregatedSummary: 'x');
 
-    // Start wide → persistent panel.
+    // Wide → single-column letter with "Show more", no side panel.
     await sizeTo(tester, const Size(1200, 900));
     await tester.pumpWidget(_app(container(), id: 'm_flip'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('matome-detail-panel')), findsOneWidget);
-    expect(find.byKey(const ValueKey('matome-show-more')), findsNothing);
+    expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);
+    expect(find.byKey(const ValueKey('matome-show-more')), findsOneWidget);
 
-    // Shrink below the breakpoint → back to the sheet presentation, same route.
+    // Narrow → identical single-column presentation, same route.
     tester.view.physicalSize = const Size(420, 900);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);

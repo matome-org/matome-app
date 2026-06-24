@@ -122,6 +122,20 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
+  // The matome detail is now ALWAYS single-column: the management sections live
+  // behind the letter's "Show more" reveal (the wide two-pane side panel is
+  // retired). Pump the screen and reveal the detail so the panel-composition
+  // assertions below see the sections.
+  Future<void> pumpRevealed(WidgetTester tester, String id) async {
+    await tester.pumpWidget(_wideRouterApp(container(), id: id));
+    await tester.pumpAndSettle();
+    final showMore = find.byKey(const ValueKey('matome-show-more'));
+    if (showMore.evaluate().isNotEmpty) {
+      await tester.tap(showMore);
+      await tester.pumpAndSettle();
+    }
+  }
+
   testWidgets(
     'the panel renders the approved sections (framed [MatomePanelSection]s) '
     'with divider framing',
@@ -136,8 +150,7 @@ void main() {
         title: 'Meeting audio',
       );
 
-      await tester.pumpWidget(_wideRouterApp(container(), id: 'm1'));
-      await tester.pumpAndSettle();
+      await pumpRevealed(tester, 'm1');
 
       // The shared composition point + the persistent panel host are present.
       expect(find.byKey(const ValueKey('matome-details')), findsOneWidget);
@@ -161,8 +174,7 @@ void main() {
       await sizeWide(tester);
       await _seedMatome(db, id: 'm_add', aggregatedSummary: 'x');
 
-      await tester.pumpWidget(_wideRouterApp(container(), id: 'm_add'));
-      await tester.pumpAndSettle();
+      await pumpRevealed(tester, 'm_add');
 
       // Exactly ONE "Add item" affordance, styled as the approved accent
       // MatomePanelAddRow — matching the proposal, not the old split
@@ -216,8 +228,7 @@ void main() {
         originalExtension: 'pdf',
       );
 
-      await tester.pumpWidget(_wideRouterApp(container(), id: 'm_doc'));
-      await tester.pumpAndSettle();
+      await pumpRevealed(tester, 'm_doc');
 
       final tile = find.byKey(const ValueKey('matome-item-rec_doc'));
       expect(tile, findsOneWidget);
@@ -276,8 +287,7 @@ void main() {
         order: 1,
       );
 
-      await tester.pumpWidget(_wideRouterApp(container(), id: 'm_many'));
-      await tester.pumpAndSettle();
+      await pumpRevealed(tester, 'm_many');
 
       expect(find.byKey(const ValueKey('matome-item-sync-a')), findsOneWidget);
       expect(find.byKey(const ValueKey('matome-item-sync-b')), findsOneWidget);
@@ -293,8 +303,7 @@ void main() {
       await sizeWide(tester);
       await _seedMatome(db, id: 'm_inbox');
 
-      await tester.pumpWidget(_wideRouterApp(container(), id: 'm_inbox'));
-      await tester.pumpAndSettle();
+      await pumpRevealed(tester, 'm_inbox');
 
       // Space section present; an inbox matome surfaces the File CTA inside it.
       expect(find.text(t.matome.spaceLabel), findsOneWidget);
@@ -309,8 +318,7 @@ void main() {
       await sizeWide(tester);
       await _seedMatome(db, id: 'm_notes');
 
-      await tester.pumpWidget(_wideRouterApp(container(), id: 'm_notes'));
-      await tester.pumpAndSettle();
+      await pumpRevealed(tester, 'm_notes');
 
       // Notes trailing is the slang "Edit" (not "Edit notes"). The key rides on
       // the Text itself, so assert the keyed widget's data is "Edit".
