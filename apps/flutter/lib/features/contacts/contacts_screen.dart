@@ -11,6 +11,7 @@ import '../../ui/app_text_field.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
 import 'contacts_controller.dart';
+import 'widgets/contact_tile.dart';
 
 /// Opens the shared create/edit contact modal, returning the entered
 /// [ContactDraft] (or null if dismissed). Shared by the list screen and the
@@ -226,8 +227,10 @@ class _Body extends StatelessWidget {
 
     Widget tile(int index) {
       final contact = contacts[index];
-      return _ContactTile(
-        contact: contact,
+      return ContactTile(
+        key: ValueKey('contact-tile-${contact.id}'),
+        name: contact.displayName,
+        notes: contactNotes(contact),
         color: colors.spaceColor(index),
         onTap: () => onTap(contact),
         onLongPress: () => onLongPress(contact),
@@ -257,102 +260,6 @@ class _Body extends StatelessWidget {
               separatorBuilder: (_, _) => SizedBox(height: spacing.xs),
               itemBuilder: (context, index) => tile(index),
             ),
-    );
-  }
-}
-
-class _ContactTile extends StatelessWidget {
-  const _ContactTile({
-    required this.contact,
-    required this.color,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  final ContactRow contact;
-  final Color color;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final spacing = context.spacing;
-    final radius = context.radius;
-    final typography = context.typography;
-    final notes = contactNotes(contact);
-
-    return Semantics(
-      button: true,
-      label: 'Contact: ${contact.displayName}',
-      child: Material(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(radius.lg),
-        child: InkWell(
-          key: ValueKey('contact-tile-${contact.id}'),
-          onTap: onTap,
-          onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(radius.lg),
-          child: Container(
-            padding: EdgeInsets.all(spacing.sm),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(radius.lg),
-              border: Border.all(color: colors.border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: spacing.xl + spacing.xs,
-                  height: spacing.xl + spacing.xs,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.13),
-                    borderRadius: BorderRadius.circular(radius.md),
-                  ),
-                  child: Icon(
-                    Icons.person_outline,
-                    size: typography.title.fontSize,
-                    color: color,
-                  ),
-                ),
-                SizedBox(width: spacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        contact.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: typography.bodySmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                      if (notes.isNotEmpty) ...[
-                        SizedBox(height: spacing.xxs),
-                        Text(
-                          notes,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: typography.label.copyWith(
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  size: spacing.md + spacing.xxs,
-                  color: colors.textMuted,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
