@@ -459,6 +459,7 @@ class _ImageDetailHost extends StatelessWidget {
         context,
         child: FileView(
           key: const ValueKey('file-detail-view'),
+          shrinkWrap: true,
           data: _viewData(context),
         ),
       ),
@@ -696,6 +697,7 @@ class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
     return fileReadingCard(
       context,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (state.processingFailed || state.pendingUpload)
             _RetryBanner(
@@ -704,13 +706,12 @@ class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
                   : t.recording.transcriptionFailed,
               onRetry: _onRetry,
             ),
-          Expanded(
-            child: FileView(
-              key: const ValueKey('file-detail-view'),
-              data: _viewData(state),
-              notesController: _notesController,
-              onNotesChanged: (_) {},
-            ),
+          FileView(
+            key: const ValueKey('file-detail-view'),
+            shrinkWrap: true,
+            data: _viewData(state),
+            notesController: _notesController,
+            onNotesChanged: (_) {},
           ),
         ],
       ),

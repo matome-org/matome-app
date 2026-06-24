@@ -171,13 +171,17 @@ Widget fileReadingCard(
     ),
     child: child,
   );
-  if (fill) return card;
-  return Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: _kFileReadingMaxWidth),
-      child: card,
-    ),
-  );
+  // The card hugs its content (its [FileView] child shrink-wraps); the PAGE
+  // scrolls, so the card no longer stretches to fill the pane height.
+  final framed = fill
+      ? card
+      : Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _kFileReadingMaxWidth),
+            child: card,
+          ),
+        );
+  return SingleChildScrollView(child: framed);
 }
 
 class FileView extends StatefulWidget {
@@ -187,6 +191,7 @@ class FileView extends StatefulWidget {
     this.notesController,
     this.onNotesChanged,
     this.notesReadOnly = false,
+    this.shrinkWrap = false,
   });
 
   final FileViewData data;
@@ -200,6 +205,10 @@ class FileView extends StatefulWidget {
 
   /// Renders the Notes field as read-only (host can toggle edit mode).
   final bool notesReadOnly;
+
+  /// When true the inner list shrink-wraps (and stops scrolling) so a hosting
+  /// card hugs the content height instead of filling the viewport.
+  final bool shrinkWrap;
 
   @override
   State<FileView> createState() => _FileViewState();
@@ -229,6 +238,10 @@ class _FileViewState extends State<FileView> {
     final data = widget.data;
 
     return ListView(
+      shrinkWrap: widget.shrinkWrap,
+      physics: widget.shrinkWrap
+          ? const NeverScrollableScrollPhysics()
+          : null,
       padding: EdgeInsets.all(spacing.md),
       children: [
         _Header(title: data.title),

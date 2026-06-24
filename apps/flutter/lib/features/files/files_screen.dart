@@ -454,6 +454,7 @@ class _FilesPaneDetail extends ConsumerWidget {
         fill: true,
         child: FileView(
           key: const ValueKey('files-pane-view'),
+          shrinkWrap: true,
           data: FileViewData(
             title: state.title.isEmpty ? t.recording.title : state.title,
             mediaKind: mediaKind,
