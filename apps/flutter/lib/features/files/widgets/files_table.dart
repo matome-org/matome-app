@@ -54,6 +54,7 @@ class FilesTable extends StatefulWidget {
     super.key,
     required this.files,
     this.initialSelection = const {},
+    this.activeId,
     this.onOpen,
     this.onSort,
     this.onSelectionChanged,
@@ -62,6 +63,10 @@ class FilesTable extends StatefulWidget {
 
   /// Rows in master order; sort is display-only so undo reinserts in place.
   final List<FileRow> files;
+
+  /// The file currently OPEN in the master-detail reading pane — rendered with
+  /// a slightly darker background. Distinct from checkbox selection.
+  final String? activeId;
 
   /// Files selected when the table first mounts.
   final Set<String> initialSelection;
@@ -254,12 +259,14 @@ class _FilesTableState extends State<FilesTable> {
                     ? _CompactRow(
                         file: rows[i],
                         selected: _selected.contains(rows[i].id),
+                        active: rows[i].id == widget.activeId,
                         onSelect: (on) => _toggleRow(rows[i].id, on),
                         onAction: (a) => _fileAction(rows[i], a),
                       )
                     : _DataRow(
                         file: rows[i],
                         selected: _selected.contains(rows[i].id),
+                        active: rows[i].id == widget.activeId,
                         onSelect: (on) => _toggleRow(rows[i].id, on),
                         onAction: (a) => _fileAction(rows[i], a),
                       ),
@@ -340,37 +347,70 @@ class _HeaderRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: _SortHeader(
-              label: t.files.colName,
-              active: sortKey == FileSortKey.name,
-              ascending: ascending,
-              onTap: () => onSort(FileSortKey.name),
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _SortHeader(
+                label: t.files.colName,
+                active: sortKey == FileSortKey.name,
+                ascending: ascending,
+                onTap: () => onSort(FileSortKey.name),
+              ),
             ),
           ),
-          SizedBox(width: _wMatome, child: _ColLabel(t.files.colMatome)),
-          SizedBox(width: _wSpace, child: _ColLabel(t.files.colSpace)),
-          SizedBox(width: _wPeople, child: _ColLabel(t.files.colPeople)),
+          SizedBox(
+            width: _wMatome,
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _ColLabel(t.files.colMatome),
+            ),
+          ),
+          SizedBox(
+            width: _wSpace,
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _ColLabel(t.files.colSpace),
+            ),
+          ),
+          SizedBox(
+            width: _wPeople,
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _ColLabel(t.files.colPeople),
+            ),
+          ),
           SizedBox(
             width: _wWhen,
-            child: _SortHeader(
-              label: t.files.colWhen,
-              active: sortKey == FileSortKey.when,
-              ascending: ascending,
-              alignEnd: true,
-              onTap: () => onSort(FileSortKey.when),
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _SortHeader(
+                label: t.files.colWhen,
+                active: sortKey == FileSortKey.when,
+                ascending: ascending,
+                alignEnd: true,
+                onTap: () => onSort(FileSortKey.when),
+              ),
             ),
           ),
           SizedBox(
             width: _wSize,
-            child: _SortHeader(
-              label: t.files.colSize,
-              active: sortKey == FileSortKey.size,
-              ascending: ascending,
-              alignEnd: true,
-              onTap: () => onSort(FileSortKey.size),
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _SortHeader(
+                label: t.files.colSize,
+                active: sortKey == FileSortKey.size,
+                ascending: ascending,
+                alignEnd: true,
+                onTap: () => onSort(FileSortKey.size),
+              ),
             ),
           ),
-          SizedBox(width: _wSync, child: _ColLabel(t.files.colSync)),
+          SizedBox(
+            width: _wSync,
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _ColLabel(t.files.colSync),
+            ),
+          ),
           const SizedBox(width: _wActions),
         ],
       ),
@@ -484,12 +524,14 @@ class _DataRow extends StatefulWidget {
   const _DataRow({
     required this.file,
     required this.selected,
+    required this.active,
     required this.onSelect,
     required this.onAction,
   });
 
   final FileRow file;
   final bool selected;
+  final bool active;
   final ValueChanged<bool> onSelect;
   final ValueChanged<FileAction> onAction;
 
@@ -511,7 +553,9 @@ class _DataRowState extends State<_DataRow> {
 
     final bg = widget.selected
         ? colors.accentSoft.withValues(alpha: 0.5)
-        : (_hovered ? colors.subtleFill : colors.surface);
+        : (widget.active
+            ? colors.subtleFillStrong
+            : (_hovered ? colors.subtleFill : colors.surface));
 
     return _RowFocus(
       focused: _focused,
@@ -539,78 +583,99 @@ class _DataRowState extends State<_DataRow> {
                   ),
                 ),
                 Expanded(
-                  child: Row(
-                    children: [
-                      Icon(vis.icon,
-                          size: context.typography.body.fontSize,
-                          color: vis.color),
-                      SizedBox(width: spacing.sm),
-                      Expanded(
-                        child: Text(
-                          f.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: typography.bodySmall.copyWith(
-                            color: colors.textPrimary,
-                            fontWeight: FontWeight.w600,
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Row(
+                      children: [
+                        Icon(vis.icon,
+                            size: context.typography.body.fontSize,
+                            color: vis.color),
+                        SizedBox(width: spacing.sm),
+                        Expanded(
+                          child: Text(
+                            f.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: typography.bodySmall.copyWith(
+                              color: colors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wMatome,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: MatomeChip(matome: f.matome),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: MatomeChip(matome: f.matome),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wSpace,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SpaceChip(space: f.space),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SpaceChip(space: f.space),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wPeople,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: f.contacts.isEmpty
-                        ? const FilesMutedDash()
-                        : PeopleCluster(
-                            names: f.contacts, size: context.spacing.lg),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: f.contacts.isEmpty
+                          ? const FilesMutedDash()
+                          : PeopleCluster(
+                              names: f.contacts, size: context.spacing.lg),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wWhen,
-                  child: Text(
-                    f.when,
-                    textAlign: TextAlign.right,
-                    style:
-                        typography.label.copyWith(color: colors.textSecondary),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Text(
+                      f.when,
+                      textAlign: TextAlign.right,
+                      style: typography.label
+                          .copyWith(color: colors.textSecondary),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wSize,
-                  child: Text(
-                    f.sizeLabel ?? t.files.noSize,
-                    textAlign: TextAlign.right,
-                    style:
-                        typography.label.copyWith(color: colors.textSecondary),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Text(
+                      f.sizeLabel ?? t.files.noSize,
+                      textAlign: TextAlign.right,
+                      style: typography.label
+                          .copyWith(color: colors.textSecondary),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wSync,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Align(
                       alignment: Alignment.centerLeft,
-                      child: f.localOnly
-                          ? const SpaceSyncChip(state: SpaceSyncState.local)
-                          : MatomeSyncChip(rollup: f.rollup),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: f.localOnly
+                            ? const SpaceSyncChip(state: SpaceSyncState.local)
+                            : MatomeSyncChip(rollup: f.rollup),
+                      ),
                     ),
                   ),
                 ),
@@ -823,12 +888,14 @@ class _CompactRow extends StatefulWidget {
   const _CompactRow({
     required this.file,
     required this.selected,
+    required this.active,
     required this.onSelect,
     required this.onAction,
   });
 
   final FileRow file;
   final bool selected;
+  final bool active;
   final ValueChanged<bool> onSelect;
   final ValueChanged<FileAction> onAction;
 
@@ -857,7 +924,7 @@ class _CompactRowState extends State<_CompactRow> {
         child: Container(
           color: widget.selected
               ? colors.accentSoft.withValues(alpha: 0.5)
-              : colors.surface,
+              : (widget.active ? colors.subtleFillStrong : colors.surface),
           padding: EdgeInsets.symmetric(
             horizontal: spacing.sm,
             vertical: spacing.sm,

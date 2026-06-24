@@ -390,6 +390,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
               )
             : FilesTable(
                 files: scoped,
+                activeId: ref.watch(filesSelectionProvider),
                 onOpen: _openFile,
                 onBulk: _onBulk,
               ),

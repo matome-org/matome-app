@@ -114,6 +114,7 @@ class MatomeTable extends StatefulWidget {
     super.key,
     required this.rows,
     this.initialSelection = const {},
+    this.activeId,
     this.onOpen,
     this.onSort,
     this.onSelectionChanged,
@@ -123,6 +124,11 @@ class MatomeTable extends StatefulWidget {
   /// The rows to render, in master order. Sort is applied for display only; the
   /// master order is preserved so an Undo can reinsert removed rows in place.
   final List<MatomeTableRow> rows;
+
+  /// The row currently OPEN in the master-detail reading pane — rendered with a
+  /// slightly darker background so the open item is obvious. Distinct from
+  /// checkbox selection (which drives the bulk bar).
+  final String? activeId;
 
   /// Rows selected when the table first mounts (e.g. a restored selection).
   final Set<String> initialSelection;
@@ -375,12 +381,14 @@ class _MatomeTableState extends State<MatomeTable> {
                     ? _CompactRow(
                         row: rows[i],
                         selected: _selected.contains(rows[i].id),
+                        active: rows[i].id == widget.activeId,
                         onSelect: (on) => _toggleRow(rows[i].id, on),
                         onAction: (a) => _rowAction(rows[i], a),
                       )
                     : _DataRow(
                         row: rows[i],
                         selected: _selected.contains(rows[i].id),
+                        active: rows[i].id == widget.activeId,
                         onSelect: (on) => _toggleRow(rows[i].id, on),
                         onAction: (a) => _rowAction(rows[i], a),
                       ),
@@ -464,48 +472,69 @@ class _HeaderRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: _SortHeader(
-              label: t.matome.table.colTitle,
-              active: sortKey == MatomeTableSort.title,
-              ascending: ascending,
-              onTap: () => onSort(MatomeTableSort.title),
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _SortHeader(
+                label: t.matome.table.colTitle,
+                active: sortKey == MatomeTableSort.title,
+                ascending: ascending,
+                onTap: () => onSort(MatomeTableSort.title),
+              ),
             ),
           ),
           SizedBox(
             width: _wWhen,
-            child: _SortHeader(
-              label: t.matome.table.colWhen,
-              active: sortKey == MatomeTableSort.when,
-              ascending: ascending,
-              alignEnd: true,
-              onTap: () => onSort(MatomeTableSort.when),
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _SortHeader(
+                label: t.matome.table.colWhen,
+                active: sortKey == MatomeTableSort.when,
+                ascending: ascending,
+                alignEnd: true,
+                onTap: () => onSort(MatomeTableSort.when),
+              ),
             ),
           ),
           SizedBox(
             width: _wItems,
-            child: _SortHeader(
-              label: t.matome.table.colItems,
-              active: sortKey == MatomeTableSort.items,
-              ascending: ascending,
-              alignEnd: true,
-              onTap: () => onSort(MatomeTableSort.items),
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _SortHeader(
+                label: t.matome.table.colItems,
+                active: sortKey == MatomeTableSort.items,
+                ascending: ascending,
+                alignEnd: true,
+                onTap: () => onSort(MatomeTableSort.items),
+              ),
             ),
           ),
           SizedBox(
             width: _wPeople,
-            child: _SortHeader(
-              label: t.matome.table.colPeople,
-              active: sortKey == MatomeTableSort.people,
-              ascending: ascending,
-              alignEnd: true,
-              onTap: () => onSort(MatomeTableSort.people),
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _SortHeader(
+                label: t.matome.table.colPeople,
+                active: sortKey == MatomeTableSort.people,
+                ascending: ascending,
+                alignEnd: true,
+                onTap: () => onSort(MatomeTableSort.people),
+              ),
             ),
           ),
           SizedBox(
             width: _wSpace,
-            child: _ColLabel(t.matome.table.colSpace),
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _ColLabel(t.matome.table.colSpace),
+            ),
           ),
-          SizedBox(width: _wSync, child: _ColLabel(t.matome.table.colSync)),
+          SizedBox(
+            width: _wSync,
+            child: Padding(
+              padding: EdgeInsets.only(right: spacing.sm),
+              child: _ColLabel(t.matome.table.colSync),
+            ),
+          ),
           const SizedBox(width: _wActions),
         ],
       ),
@@ -619,12 +648,14 @@ class _DataRow extends StatefulWidget {
   const _DataRow({
     required this.row,
     required this.selected,
+    required this.active,
     required this.onSelect,
     required this.onAction,
   });
 
   final MatomeTableRow row;
   final bool selected;
+  final bool active;
   final ValueChanged<bool> onSelect;
   final ValueChanged<MatomeTableAction> onAction;
 
@@ -645,7 +676,9 @@ class _DataRowState extends State<_DataRow> {
 
     final bg = widget.selected
         ? colors.accentSoft.withValues(alpha: 0.5)
-        : (_hovered ? colors.subtleFill : colors.surface);
+        : (widget.active
+            ? colors.subtleFillStrong
+            : (_hovered ? colors.subtleFill : colors.surface));
 
     return _RowFocus(
       focused: _focused,
@@ -674,88 +707,106 @@ class _DataRowState extends State<_DataRow> {
                   ),
                 ),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        row.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: typography.bodySmall.copyWith(
-                          color: colors.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          row.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: typography.bodySmall.copyWith(
+                            color: colors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: spacing.xxs),
-                      Text(
-                        row.summary.isEmpty
-                            ? t.matome.table.noSummary
-                            : row.summary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: typography.bodySmall.copyWith(
-                          color: row.summary.isEmpty
-                              ? colors.textMuted
-                              : colors.textSecondary,
-                          fontStyle: row.summary.isEmpty
-                              ? FontStyle.italic
-                              : FontStyle.normal,
+                        SizedBox(height: spacing.xxs),
+                        Text(
+                          row.summary.isEmpty
+                              ? t.matome.table.noSummary
+                              : row.summary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: typography.bodySmall.copyWith(
+                            color: row.summary.isEmpty
+                                ? colors.textMuted
+                                : colors.textSecondary,
+                            fontStyle: row.summary.isEmpty
+                                ? FontStyle.italic
+                                : FontStyle.normal,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wWhen,
-                  child: Text(
-                    row.when,
-                    textAlign: TextAlign.right,
-                    style: typography.label
-                        .copyWith(color: colors.textSecondary),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Text(
+                      row.when,
+                      textAlign: TextAlign.right,
+                      style: typography.label
+                          .copyWith(color: colors.textSecondary),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wItems,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: _ItemMix(row: row),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _ItemMix(row: row),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wPeople,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: row.people > 0
-                        ? _IconCount(
-                            icon: Icons.people_outline,
-                            count: row.people,
-                            tooltip: _itemTooltip(
-                              row.people,
-                              t.matome.table.peopleUnit,
-                            ),
-                          )
-                        : const _MutedDash(),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: row.people > 0
+                          ? _IconCount(
+                              icon: Icons.people_outline,
+                              count: row.people,
+                              tooltip: _itemTooltip(
+                                row.people,
+                                t.matome.table.peopleUnit,
+                              ),
+                            )
+                          : const _MutedDash(),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wSpace,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SpaceChip(space: row.space),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SpaceChip(space: row.space),
+                    ),
                   ),
                 ),
                 SizedBox(
                   width: _wSync,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    // The reused MatomeSyncChip sizes to its label (no internal
-                    // ellipsis); scale it down so a long sync label can't
-                    // overflow the fixed Sync column.
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
+                  child: Padding(
+                    padding: EdgeInsets.only(right: spacing.sm),
+                    child: Align(
                       alignment: Alignment.centerLeft,
-                      child: MatomeSyncChip(rollup: row.rollup),
+                      // The reused MatomeSyncChip sizes to its label (no internal
+                      // ellipsis); scale it down so a long sync label can't
+                      // overflow the fixed Sync column.
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: MatomeSyncChip(rollup: row.rollup),
+                      ),
                     ),
                   ),
                 ),
@@ -1153,12 +1204,14 @@ class _CompactRow extends StatefulWidget {
   const _CompactRow({
     required this.row,
     required this.selected,
+    required this.active,
     required this.onSelect,
     required this.onAction,
   });
 
   final MatomeTableRow row;
   final bool selected;
+  final bool active;
   final ValueChanged<bool> onSelect;
   final ValueChanged<MatomeTableAction> onAction;
 
@@ -1186,7 +1239,7 @@ class _CompactRowState extends State<_CompactRow> {
         child: Container(
           color: widget.selected
               ? colors.accentSoft.withValues(alpha: 0.5)
-              : colors.surface,
+              : (widget.active ? colors.subtleFillStrong : colors.surface),
           padding: EdgeInsets.symmetric(
             horizontal: spacing.sm,
             vertical: spacing.sm,

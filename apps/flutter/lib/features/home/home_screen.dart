@@ -584,6 +584,7 @@ class _Body extends ConsumerWidget {
             looseSection,
             MatomeTable(
               rows: rows,
+              activeId: ref.watch(inboxSelectionProvider),
               onOpen: (id) {
                 final item = byId[id];
                 if (item != null) onTap(item);
