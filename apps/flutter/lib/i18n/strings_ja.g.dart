@@ -407,6 +407,7 @@ class _Translations$spaces$ja extends Translations$spaces$en {
 	@override String get detailEmpty => 'このスペースにはまだ録音がありません';
 	@override String get detailEmptyMatomes => 'このスペースにはまだマトメがありません';
 	@override String matomeCount({required Object n}) => '${n} 件のマトメ';
+	@override String get selectHint => 'スペースを選択するとマトメが表示されます';
 }
 
 // Path: calendar
@@ -1061,6 +1062,7 @@ extension on TranslationsJa {
 			'spaces.detailEmpty' => 'このスペースにはまだ録音がありません',
 			'spaces.detailEmptyMatomes' => 'このスペースにはまだマトメがありません',
 			'spaces.matomeCount' => ({required Object n}) => '${n} 件のマトメ',
+			'spaces.selectHint' => 'スペースを選択するとマトメが表示されます',
 			'calendar.title' => 'カレンダー',
 			'calendar.noRecordings' => 'この日の録音はありません',
 			'calendar.noMatomes' => 'この日のマトメはありません',

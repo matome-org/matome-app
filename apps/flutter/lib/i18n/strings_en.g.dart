@@ -884,6 +884,9 @@ class Translations$spaces$en {
 
 	/// en: '$n matomes'
 	String matomeCount({required Object n}) => '${n} matomes';
+
+	/// en: 'Select a space to preview its matomes'
+	String get selectHint => 'Select a space to preview its matomes';
 }
 
 // Path: calendar
@@ -1893,6 +1896,7 @@ extension on Translations {
 			'spaces.detailEmpty' => 'No recordings in this space yet',
 			'spaces.detailEmptyMatomes' => 'No matomes in this space yet',
 			'spaces.matomeCount' => ({required Object n}) => '${n} matomes',
+			'spaces.selectHint' => 'Select a space to preview its matomes',
 			'calendar.title' => 'Calendar',
 			'calendar.noRecordings' => 'No recordings for this day',
 			'calendar.noMatomes' => 'No matomes for this day',

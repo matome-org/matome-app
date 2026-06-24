@@ -367,7 +367,8 @@
     "delete": "削除",
     "detailEmpty": "このスペースにはまだ録音がありません",
     "detailEmptyMatomes": "このスペースにはまだマトメがありません",
-    "matomeCount": "$n 件のマトメ"
+    "matomeCount": "$n 件のマトメ",
+    "selectHint": "スペースを選択するとマトメが表示されます"
   },
   "calendar": {
     "title": "カレンダー",

@@ -367,7 +367,8 @@
     "delete": "Delete",
     "detailEmpty": "No recordings in this space yet",
     "detailEmptyMatomes": "No matomes in this space yet",
-    "matomeCount": "$n matomes"
+    "matomeCount": "$n matomes",
+    "selectHint": "Select a space to preview its matomes"
   },
   "calendar": {
     "title": "Calendar",
