@@ -97,4 +97,17 @@ class FeatureFlags {
     'ff.localFirstSpaces',
     defaultValue: false,
   );
+
+  /// Master-detail layout (plan W1, #1537). Default OFF — single-flip rollback
+  /// switch for the responsive master-detail surfaces. This flag gates the
+  /// per-surface migration onto the unified breakpoints
+  /// (`lib/core/layout/breakpoints.dart`): the scaffold (#1538) and the
+  /// scattered 900/1000/720 literals route through it in later waves (W2–W4)
+  /// behind a `const` gate. When OFF every surface renders exactly as shipped;
+  /// flipping is a ONE-LINE change (set `defaultValue: true` here, or ship
+  /// `--dart-define=ff.masterDetailLayout=true`).
+  static const bool masterDetailLayout = bool.fromEnvironment(
+    'ff.masterDetailLayout',
+    defaultValue: false,
+  );
 }
