@@ -23,7 +23,7 @@ Token values are code-canonical in `apps/flutter/lib/core/theme/app_theme.dart`.
 | `primary` | `0xFFE1B346` | `0xFFB98A1F` | 1.91:1 | 5.71:1 | 5.13:1 |
 | `accent` | `0xFFE1B346` | `0xFFE1B346` | 1.91:1 | 9.13:1 | 8.20:1 |
 | `accentDark` | `0xFFB98A1F` | `0xFFB98A1F` | 3.05:1 | 5.71:1 | 5.13:1 |
-| `accentSoft` | `0xFFF6E8C0` | `0xFFF6E8C0` | 1.19:1 | 14.64:1 | 13.14:1 |
+| `accentSoft` | `0xFFF6E8C0` | `0xFF3A2D10` | 1.19:1 | 1.33:1 | 1.19:1 |
 | `onAccent` | `0xFF221E16` | `0xFF221E16` | 16.18:1 | 1.08:1 | 1.04:1 |
 | `onTextPrimary` | `0xFFFDFCF9` | `0xFF1A1714` | 1.00:1 | 1.00:1 | 1.11:1 |
 | `background` | `0xFFF6F4EF` | `0xFF1A1714` | 1.07:1 | 1.00:1 | 1.11:1 |
