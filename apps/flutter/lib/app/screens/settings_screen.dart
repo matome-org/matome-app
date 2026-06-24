@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/i18n/locale_controller.dart';
+import '../../core/settings/reading_pane.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_controller.dart';
 import '../../features/auth/auth_controller.dart';
 import '../../features/files/files_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../i18n/strings.g.dart';
+import '../../ui/master_detail_scaffold.dart';
 import '../auth_state.dart';
 
 /// Settings screen (route `/inbox/settings`). Surfaces the live theme-mode and
@@ -22,6 +24,7 @@ class SettingsScreen extends ConsumerWidget {
     final locale = ref.watch(localeControllerProvider);
     final inboxView = ref.watch(inboxViewProvider);
     final filesView = ref.watch(filesViewProvider);
+    final readingPane = ref.watch(readingPaneProvider);
     final user = ref.watch(authStateProvider).user;
 
     return Scaffold(
@@ -115,6 +118,29 @@ class SettingsScreen extends ConsumerWidget {
                 RadioListTile<FilesView>(
                   value: FilesView.table,
                   title: Text(t.settings.viewTableFiles),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+          _SectionHeader(t.settings.layout),
+          _SubHeader(t.settings.readingPane),
+          RadioGroup<ReadingPanePosition>(
+            groupValue: readingPane,
+            onChanged: (p) {
+              if (p != null) {
+                ref.read(readingPaneProvider.notifier).setPosition(p);
+              }
+            },
+            child: Column(
+              children: [
+                RadioListTile<ReadingPanePosition>(
+                  value: ReadingPanePosition.right,
+                  title: Text(t.settings.readingPaneRight),
+                ),
+                RadioListTile<ReadingPanePosition>(
+                  value: ReadingPanePosition.off,
+                  title: Text(t.settings.readingPaneOff),
                 ),
               ],
             ),
