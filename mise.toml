@@ -360,6 +360,7 @@ if ! cmp -s "$generated_before" lib/widgetbook.directories.g.dart; then
   echo '✗ apps/flutter_widgetbook/lib/widgetbook.directories.g.dart is stale. Regenerate it before running the gate.'
   exit 1
 fi
+flutter test test/catalog_provenance_test.dart
 flutter test -d chrome test/widgetbook_smoke_test.dart
 flutter build web -t lib/widgetbook.dart
 """

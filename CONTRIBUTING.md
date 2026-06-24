@@ -45,8 +45,8 @@ cd services/api && mix test
 - The catalog imports app widgets via `package:matome_flutter/...` and writes
   only Widgetbook use-cases/stories. The only widget classes allowed to live in
   the catalog package are the `MatomeWidgetbook` entry point and private
-  fixtures/scenes that wrap real app widgets (enforced by a catalog provenance
-  check).
+  fixtures/scenes that wrap real app widgets (enforced by the design-system gate,
+  `mise run flutter-design-system-check`).
 - Author proposals **app-first**: build the real widget in `apps/flutter/lib`
   (under a `proposals/` area or behind a disabled build-time feature flag, which
   tree-shakes it out of release builds), then add a catalog use-case that

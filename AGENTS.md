@@ -68,7 +68,8 @@ i18n/      -> slang translations (en/ja JSON → generated strings)
   source of truth — the catalog imports it via `package:matome_flutter/...` and
   writes only use-cases/stories (the sole local widgets are the
   `MatomeWidgetbook` entry point and fixtures/scenes wrapping real app widgets;
-  enforced by a catalog provenance check). Author proposals app-first (real
+  enforced by the design-system gate, `mise run flutter-design-system-check`).
+  Author proposals app-first (real
   widget under `proposals/` or behind a disabled flag, plus a catalog use-case
   that imports it); graduate by moving the file or flipping the flag — never
   reimplement.
