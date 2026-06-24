@@ -76,3 +76,6 @@ figma-mcp.config.local.json
 
 # Local dev stack runtime (pidfiles + logs from `mise run up`)
 .dev/
+
+
+.temp/
