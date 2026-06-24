@@ -99,7 +99,7 @@ class _ToggleSelectIntent extends Intent {
 const double _wCheck = 44;
 const double _wWhen = 64;
 const double _wItems = 128;
-const double _wPeople = 64;
+const double _wPeople = 78;
 const double _wSpace = 132;
 const double _wSync = 116;
 const double _wActions = 40;
@@ -484,41 +484,32 @@ class _HeaderRow extends StatelessWidget {
           ),
           SizedBox(
             width: _wWhen,
-            child: Padding(
-              padding: EdgeInsets.only(right: spacing.sm),
-              child: _SortHeader(
-                label: t.matome.table.colWhen,
-                active: sortKey == MatomeTableSort.when,
-                ascending: ascending,
-                alignEnd: true,
-                onTap: () => onSort(MatomeTableSort.when),
-              ),
+            child: _SortHeader(
+              label: t.matome.table.colWhen,
+              active: sortKey == MatomeTableSort.when,
+              ascending: ascending,
+              centered: true,
+              onTap: () => onSort(MatomeTableSort.when),
             ),
           ),
           SizedBox(
             width: _wItems,
-            child: Padding(
-              padding: EdgeInsets.only(right: spacing.sm),
-              child: _SortHeader(
-                label: t.matome.table.colItems,
-                active: sortKey == MatomeTableSort.items,
-                ascending: ascending,
-                alignEnd: true,
-                onTap: () => onSort(MatomeTableSort.items),
-              ),
+            child: _SortHeader(
+              label: t.matome.table.colItems,
+              active: sortKey == MatomeTableSort.items,
+              ascending: ascending,
+              centered: true,
+              onTap: () => onSort(MatomeTableSort.items),
             ),
           ),
           SizedBox(
             width: _wPeople,
-            child: Padding(
-              padding: EdgeInsets.only(right: spacing.sm),
-              child: _SortHeader(
-                label: t.matome.table.colPeople,
-                active: sortKey == MatomeTableSort.people,
-                ascending: ascending,
-                alignEnd: true,
-                onTap: () => onSort(MatomeTableSort.people),
-              ),
+            child: _SortHeader(
+              label: t.matome.table.colPeople,
+              active: sortKey == MatomeTableSort.people,
+              ascending: ascending,
+              centered: true,
+              onTap: () => onSort(MatomeTableSort.people),
             ),
           ),
           SizedBox(
@@ -567,14 +558,14 @@ class _SortHeader extends StatelessWidget {
     required this.active,
     required this.ascending,
     required this.onTap,
-    this.alignEnd = false,
+    this.centered = false,
   });
 
   final String label;
   final bool active;
   final bool ascending;
   final VoidCallback onTap;
-  final bool alignEnd;
+  final bool centered;
 
   @override
   Widget build(BuildContext context) {
@@ -590,8 +581,9 @@ class _SortHeader extends StatelessWidget {
           padding: EdgeInsets.symmetric(vertical: context.spacing.xxs),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment:
-                alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: centered
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
               Flexible(
                 child: Text(
@@ -744,43 +736,34 @@ class _DataRowState extends State<_DataRow> {
                 ),
                 SizedBox(
                   width: _wWhen,
-                  child: Padding(
-                    padding: EdgeInsets.only(right: spacing.sm),
-                    child: Text(
-                      row.when,
-                      textAlign: TextAlign.right,
-                      style: typography.label
-                          .copyWith(color: colors.textSecondary),
-                    ),
+                  child: Text(
+                    row.when,
+                    textAlign: TextAlign.center,
+                    style: typography.label
+                        .copyWith(color: colors.textSecondary),
                   ),
                 ),
                 SizedBox(
                   width: _wItems,
-                  child: Padding(
-                    padding: EdgeInsets.only(right: spacing.sm),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _ItemMix(row: row),
-                    ),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: _ItemMix(row: row),
                   ),
                 ),
                 SizedBox(
                   width: _wPeople,
-                  child: Padding(
-                    padding: EdgeInsets.only(right: spacing.sm),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: row.people > 0
-                          ? _IconCount(
-                              icon: Icons.people_outline,
-                              count: row.people,
-                              tooltip: _itemTooltip(
-                                row.people,
-                                t.matome.table.peopleUnit,
-                              ),
-                            )
-                          : const _MutedDash(),
-                    ),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: row.people > 0
+                        ? _IconCount(
+                            icon: Icons.people_outline,
+                            count: row.people,
+                            tooltip: _itemTooltip(
+                              row.people,
+                              t.matome.table.peopleUnit,
+                            ),
+                          )
+                        : const _MutedDash(),
                   ),
                 ),
                 SizedBox(

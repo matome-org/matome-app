@@ -373,35 +373,26 @@ class _HeaderRow extends StatelessWidget {
           ),
           SizedBox(
             width: _wPeople,
-            child: Padding(
-              padding: EdgeInsets.only(right: spacing.sm),
-              child: _ColLabel(t.files.colPeople),
-            ),
+            child: Center(child: _ColLabel(t.files.colPeople)),
           ),
           SizedBox(
             width: _wWhen,
-            child: Padding(
-              padding: EdgeInsets.only(right: spacing.sm),
-              child: _SortHeader(
-                label: t.files.colWhen,
-                active: sortKey == FileSortKey.when,
-                ascending: ascending,
-                alignEnd: true,
-                onTap: () => onSort(FileSortKey.when),
-              ),
+            child: _SortHeader(
+              label: t.files.colWhen,
+              active: sortKey == FileSortKey.when,
+              ascending: ascending,
+              centered: true,
+              onTap: () => onSort(FileSortKey.when),
             ),
           ),
           SizedBox(
             width: _wSize,
-            child: Padding(
-              padding: EdgeInsets.only(right: spacing.sm),
-              child: _SortHeader(
-                label: t.files.colSize,
-                active: sortKey == FileSortKey.size,
-                ascending: ascending,
-                alignEnd: true,
-                onTap: () => onSort(FileSortKey.size),
-              ),
+            child: _SortHeader(
+              label: t.files.colSize,
+              active: sortKey == FileSortKey.size,
+              ascending: ascending,
+              centered: true,
+              onTap: () => onSort(FileSortKey.size),
             ),
           ),
           SizedBox(
@@ -443,14 +434,14 @@ class _SortHeader extends StatelessWidget {
     required this.active,
     required this.ascending,
     required this.onTap,
-    this.alignEnd = false,
+    this.centered = false,
   });
 
   final String label;
   final bool active;
   final bool ascending;
   final VoidCallback onTap;
-  final bool alignEnd;
+  final bool centered;
 
   @override
   Widget build(BuildContext context) {
@@ -466,8 +457,9 @@ class _SortHeader extends StatelessWidget {
           padding: EdgeInsets.symmetric(vertical: context.spacing.xxs),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment:
-                alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: centered
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
               Flexible(
                 child: Text(
@@ -628,39 +620,30 @@ class _DataRowState extends State<_DataRow> {
                 ),
                 SizedBox(
                   width: _wPeople,
-                  child: Padding(
-                    padding: EdgeInsets.only(right: spacing.sm),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: f.contacts.isEmpty
-                          ? const FilesMutedDash()
-                          : PeopleCluster(
-                              names: f.contacts, size: context.spacing.lg),
-                    ),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: f.contacts.isEmpty
+                        ? const FilesMutedDash()
+                        : PeopleCluster(
+                            names: f.contacts, size: context.spacing.lg),
                   ),
                 ),
                 SizedBox(
                   width: _wWhen,
-                  child: Padding(
-                    padding: EdgeInsets.only(right: spacing.sm),
-                    child: Text(
-                      f.when,
-                      textAlign: TextAlign.right,
-                      style: typography.label
-                          .copyWith(color: colors.textSecondary),
-                    ),
+                  child: Text(
+                    f.when,
+                    textAlign: TextAlign.center,
+                    style:
+                        typography.label.copyWith(color: colors.textSecondary),
                   ),
                 ),
                 SizedBox(
                   width: _wSize,
-                  child: Padding(
-                    padding: EdgeInsets.only(right: spacing.sm),
-                    child: Text(
-                      f.sizeLabel ?? t.files.noSize,
-                      textAlign: TextAlign.right,
-                      style: typography.label
-                          .copyWith(color: colors.textSecondary),
-                    ),
+                  child: Text(
+                    f.sizeLabel ?? t.files.noSize,
+                    textAlign: TextAlign.center,
+                    style:
+                        typography.label.copyWith(color: colors.textSecondary),
                   ),
                 ),
                 SizedBox(
