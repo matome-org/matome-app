@@ -26,6 +26,7 @@ Items compose freely: they can be loose, inside a Matome, or filed directly into
 - Filing into a local space organizes the content without any sync.
 - Leaving a Matome makes the shadowed `workspaceId` authoritative again, with no data loss.
 - The whole behaviour sits behind `FeatureFlags.localFirstSpaces`.
+- **Reading pane (master–detail).** On expanded widths, the collection surfaces used to triage — Inbox, Files, Spaces, and now **Contacts** — render through the shared `MasterDetailScaffold` behind `FeatureFlags.masterDetailLayout`: the directory stays as a full-width master beside a reading pane that previews the selected row in place (for Contacts, the real `ContactDetail`), so the user can scan and inspect without leaving the list. Tapping selects in-pane only when the pane is visible (`MasterDetailScaffold.showsPane`); on narrow widths, with the pane off, or with the flag OFF it degrades to navigating to the full-screen detail (`/contacts/:id`), exactly as shipped. The pane selection is reconciled after every list re-read so it never points at a row that has left the list (deleted / out of scope).
 
 ## Sequence
 ```mermaid
@@ -67,3 +68,5 @@ sequenceDiagram
 - `apps/flutter/lib/core/db/daos/matomes_dao.dart` — `MatomesDao.fileIntoSpace`: sets the space on the row.
 - `apps/flutter/lib/features/home/inbox_controller.dart` — `InboxController.moveToSpace`, `InboxController.fileIntoSpace`: triage from the Inbox.
 - `apps/flutter/lib/features/matome/matome_sync_service.dart` — `MatomeSyncService.pushFiled`: pushes filed items when eligible.
+- `apps/flutter/lib/ui/master_detail_scaffold.dart` — `MasterDetailScaffold`, `MasterDetailScaffold.showsPane`: the shared master–detail shell + the single pane-visibility predicate (behind `FeatureFlags.masterDetailLayout`).
+- `apps/flutter/lib/features/contacts/contacts_screen.dart` — `contactsSelectionProvider`, `ContactsScreen._open`, `_ContactsPaneDetail`: the Contacts master–detail wiring (tap = select-in-pane vs navigate, real `ContactDetail` pane, post-frame selection reconcile).

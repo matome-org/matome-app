@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
+import '../../core/providers.dart';
+import '../../core/settings/reading_pane.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_button.dart';
@@ -10,7 +13,10 @@ import '../../ui/app_dialog.dart';
 import '../../ui/app_text_field.dart';
 import '../../ui/empty_state.dart';
 import '../../ui/loading_indicator.dart';
+import '../../ui/master_detail_scaffold.dart';
+import 'contact_detail_screen.dart';
 import 'contacts_controller.dart';
+import 'widgets/contact_detail.dart';
 import 'widgets/contact_tile.dart';
 
 /// Opens the shared create/edit contact modal, returning the entered
@@ -34,6 +40,15 @@ Future<bool?> showContactDeleteDialog(BuildContext context, String name) {
   );
 }
 
+/// Selected contact for the master-detail reading pane (W4, #1544). On expanded
+/// widths with the reading pane on the right, tapping a contact sets this instead
+/// of navigating, so the directory stays visible beside the [_ContactsPaneDetail]
+/// reading pane (the selected contact's real [ContactDetail]). Narrower widths
+/// (and the flag-OFF reality) ignore it and route to `/contacts/:id` as before —
+/// the [MasterDetailScaffold.showsPane] predicate in [ContactsScreen._open] is
+/// the single source of truth.
+final contactsSelectionProvider = StateProvider<String?>((ref) => null);
+
 /// Width past which the contact list reflows into a multi-column grid (desktop /
 /// web), mirroring the Spaces tab.
 const double _wideBreakpoint = 1000;
@@ -55,10 +70,32 @@ class ContactsScreen extends ConsumerWidget {
         );
   }
 
-  /// Tapping a contact opens its detail screen at `/contacts/:id` (DR-004,
-  /// #1464) — editing now lives behind the detail's Edit affordance.
-  void _open(BuildContext context, ContactRow contact) {
+  /// Open a contact. W4 (#1544): the unified [MasterDetailScaffold] owns the
+  /// layout decision; its [showsPane] predicate is the single source of truth
+  /// for whether a tap selects in-pane (pane visible) or navigates full-screen.
+  /// When the pane is hidden (flag OFF, narrow width, or pane = off) it opens
+  /// the contact's detail screen at `/contacts/:id` (DR-004, #1464) — editing
+  /// lives behind the detail's Edit affordance there.
+  void _open(BuildContext context, WidgetRef ref, ContactRow contact) {
+    if (FeatureFlags.masterDetailLayout &&
+        MasterDetailScaffold.showsPane(
+          context,
+          ref.read(readingPaneProvider),
+        )) {
+      ref.read(contactsSelectionProvider.notifier).state = contact.id;
+      return;
+    }
     context.push('/contacts/${contact.id}');
+  }
+
+  /// Clear the reading-pane selection so it never points at a contact that is no
+  /// longer in the loaded list (deleted, or absent after a reload). Only
+  /// meaningful behind the master-detail layout (where the pane is driven by
+  /// [contactsSelectionProvider]); a no-op cost otherwise.
+  void _clearSelection(WidgetRef ref) {
+    if (ref.read(contactsSelectionProvider) != null) {
+      ref.read(contactsSelectionProvider.notifier).state = null;
+    }
   }
 
   Future<void> _confirmDelete(
@@ -79,6 +116,84 @@ class ContactsScreen extends ConsumerWidget {
     final colors = context.colors;
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
 
+    // When the unified scaffold shows the reading pane the master only gets a
+    // fraction of the window, so the wide multi-column grid (sized for the full
+    // window) would overflow its narrow column. Reflow the master to the list in
+    // that case. OFF and pane-hidden paths keep the window-width decision, so the
+    // shipped reality is byte-for-byte unchanged.
+    final paneShown = FeatureFlags.masterDetailLayout &&
+        MasterDetailScaffold.showsPane(context, ref.watch(readingPaneProvider));
+    final masterIsWide = paneShown ? false : isWide;
+
+    // W4 (#1544): never point the reading pane at a contact that has left the
+    // loaded list (deleted, or absent after a reload). Reconcile after the frame
+    // so we don't mutate a provider mid-build. Only meaningful behind the flag.
+    if (FeatureFlags.masterDetailLayout) {
+      final selectedId = ref.watch(contactsSelectionProvider);
+      final contacts = state.valueOrNull;
+      if (selectedId != null &&
+          contacts != null &&
+          !contacts.any((c) => c.id == selectedId)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _clearSelection(ref);
+        });
+      }
+    }
+
+    final listColumn = Column(
+      children: [
+        _Header(total: state.valueOrNull?.length ?? 0),
+        Expanded(
+          child: state.when(
+            loading: () =>
+                Center(child: LoadingIndicator(color: colors.primary)),
+            error: (err, _) => Center(
+              child: Padding(
+                padding: EdgeInsets.all(context.spacing.lg),
+                child: Text(
+                  err.toString(),
+                  textAlign: TextAlign.center,
+                  style: context.typography.bodySmall.copyWith(
+                    color: colors.textMuted,
+                  ),
+                ),
+              ),
+            ),
+            data: (contacts) => _Body(
+              contacts: contacts,
+              isWide: masterIsWide,
+              onRefresh: () =>
+                  ref.read(contactsControllerProvider.notifier).load(),
+              onTap: (c) => _open(context, ref, c),
+              onLongPress: (c) => _confirmDelete(context, ref, c),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final Widget body;
+    if (FeatureFlags.masterDetailLayout) {
+      // W4 (#1544): the Contacts surface renders through the unified
+      // [MasterDetailScaffold]. The scaffold owns the layout decision (master
+      // full-width vs master + reading pane) from the GLOBAL
+      // [readingPaneProvider] and the current width class; tap-vs-navigate is
+      // decided by the same [showsPane] predicate in [_open], so the two can
+      // never drift. The pane is the selected contact's real [ContactDetail].
+      final selectedId = ref.watch(contactsSelectionProvider);
+      body = MasterDetailScaffold(
+        master: listColumn,
+        detail: selectedId != null
+            ? _ContactsPaneDetail(key: ValueKey(selectedId), contactId: selectedId)
+            : null,
+        emptyState: const _ContactPaneEmptyState(),
+        pane: ref.watch(readingPaneProvider),
+      );
+    } else {
+      // Shipped behaviour (flag OFF): the directory, byte-for-byte unchanged.
+      body = listColumn;
+    }
+
     return Scaffold(
       backgroundColor: colors.background,
       floatingActionButton: FloatingActionButton(
@@ -92,36 +207,133 @@ class ContactsScreen extends ConsumerWidget {
         tooltip: t.contacts.createTitle,
         child: Icon(Icons.add, color: colors.onAccent),
       ),
-      body: SafeArea(
-        bottom: false,
+      body: SafeArea(bottom: false, child: body),
+    );
+  }
+}
+
+/// The reading-pane detail for a selected contact (W4, #1544). Renders the SAME
+/// presentational [ContactDetail] the routed [ContactDetailScreen] uses, fed off
+/// the SAME data source ([contactDetailProvider]) — NOT the routed Scaffold.
+/// There is no Scaffold/AppBar here: the pane is embedded beside the master, so
+/// it owns no chrome. Tapping a matome/file routes the same as the routed detail;
+/// the ⋯ overflow menu hosts Edit / delete (delete pops back to the empty pane).
+class _ContactsPaneDetail extends ConsumerWidget {
+  const _ContactsPaneDetail({super.key, required this.contactId});
+
+  final String contactId;
+
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final row = await ref.read(contactsDaoProvider).getById(contactId);
+    if (row == null || !context.mounted) return;
+    final draft = await showContactEditDialog(context, existing: row);
+    if (draft == null || draft.name.trim().isEmpty) return;
+    await ref.read(contactsControllerProvider.notifier).updateContact(
+          id: contactId,
+          displayName: draft.name,
+          notes: draft.notes,
+        );
+    ref.invalidate(contactDetailProvider(contactId));
+  }
+
+  Future<void> _onAction(
+    BuildContext context,
+    WidgetRef ref,
+    ContactDetailData data,
+    ContactDetailAction action,
+  ) async {
+    switch (action) {
+      case ContactDetailAction.delete:
+        final confirmed = await showContactDeleteDialog(context, data.name);
+        if (confirmed != true) return;
+        await ref
+            .read(contactsControllerProvider.notifier)
+            .deleteContact(data.id);
+        // The list re-reads from Drift; the build's post-frame reconcile clears
+        // the now-stale selection so the pane falls back to its empty state.
+      case ContactDetailAction.merge:
+        // Merge is reserved (DR-004) — no destructive default.
+        break;
+    }
+  }
+
+  Future<void> _openFile(BuildContext context, WidgetRef ref, String fileId) async {
+    final row = await ref.read(recordingsDaoProvider).getRecordingById(fileId);
+    if (!context.mounted) return;
+    final mediaType = row?.mediaType ?? 'audio';
+    final path = switch (mediaType) {
+      'image' => '/recording/image/$fileId',
+      'document' => '/recording/document/$fileId',
+      _ => '/recording/detail/$fileId',
+    };
+    context.push(path);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final async = ref.watch(contactDetailProvider(contactId));
+
+    return ColoredBox(
+      color: colors.background,
+      child: async.when(
+        loading: () => Center(child: LoadingIndicator(color: colors.primary)),
+        error: (err, _) => Center(
+          child: Padding(
+            padding: EdgeInsets.all(spacing.lg),
+            child: Text(
+              err.toString(),
+              textAlign: TextAlign.center,
+              style: typography.bodySmall.copyWith(color: colors.textMuted),
+            ),
+          ),
+        ),
+        data: (data) {
+          if (data == null) return const _ContactPaneEmptyState();
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(spacing.lg),
+            child: ContactDetail(
+              contact: data,
+              onEdit: () => _edit(context, ref),
+              onAction: (action) => _onAction(context, ref, data, action),
+              onOpenMatome: (matomeId) => context.push('/matome/$matomeId'),
+              onOpenFile: (fileId) => _openFile(context, ref, fileId),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The "select a contact to preview" teaching placeholder shown in the reading
+/// pane when nothing is selected.
+class _ContactPaneEmptyState extends StatelessWidget {
+  const _ContactPaneEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return ColoredBox(
+      color: colors.background,
+      child: Center(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _Header(total: state.valueOrNull?.length ?? 0),
-            Expanded(
-              child: state.when(
-                loading: () =>
-                    Center(child: LoadingIndicator(color: colors.primary)),
-                error: (err, _) => Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(context.spacing.lg),
-                    child: Text(
-                      err.toString(),
-                      textAlign: TextAlign.center,
-                      style: context.typography.bodySmall.copyWith(
-                        color: colors.textMuted,
-                      ),
-                    ),
-                  ),
-                ),
-                data: (contacts) => _Body(
-                  contacts: contacts,
-                  isWide: isWide,
-                  onRefresh: () =>
-                      ref.read(contactsControllerProvider.notifier).load(),
-                  onTap: (c) => _open(context, c),
-                  onLongPress: (c) => _confirmDelete(context, ref, c),
-                ),
-              ),
+            Icon(
+              Icons.touch_app_outlined,
+              size: spacing.xxl,
+              color: colors.textMuted,
+            ),
+            SizedBox(height: spacing.sm),
+            Text(
+              t.contacts.selectHint,
+              style: typography.bodySmall.copyWith(color: colors.textMuted),
             ),
           ],
         ),
