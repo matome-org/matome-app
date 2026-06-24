@@ -44,6 +44,7 @@ class MasterDetailScaffold extends StatelessWidget {
     this.detail,
     required this.emptyState,
     required this.mode,
+    this.onClosePane,
   });
 
   /// The master column (list/table). Always rendered.
@@ -61,6 +62,13 @@ class MasterDetailScaffold extends StatelessWidget {
   /// (and, for [ReadingPaneMode.onClick], whether something is selected) to
   /// decide whether the pane is actually shown.
   final ReadingPaneMode mode;
+
+  /// Clears the current selection (closing the pane). Wired by the surface to
+  /// reset its selection provider. A close affordance is rendered ONLY in
+  /// [ReadingPaneMode.onClick] (a transient pane) — [always] is a persistent
+  /// pane with no close. Without it an `onClick` pane could never be dismissed
+  /// (the embedded detail has no back/close of its own).
+  final VoidCallback? onClosePane;
 
   /// The single source of truth for "does a tap select-in-pane right now?".
   ///
@@ -93,13 +101,56 @@ class MasterDetailScaffold extends StatelessWidget {
     // always (expanded) → split with the selection or the empty state.
     // onClick (expanded, with a selection) → split with the selection.
     final colors = context.colors;
+
+    // onClick is a TRANSIENT pane: give it a close affordance so the user can
+    // dismiss it back to the full-width master (the embedded detail has none of
+    // its own). `always` is persistent → no close bar.
+    final showCloseBar = mode == ReadingPaneMode.onClick &&
+        hasSelection &&
+        onClosePane != null;
+    final Widget pane = showCloseBar
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PaneCloseBar(onClose: onClosePane!),
+              Expanded(child: detail ?? emptyState),
+            ],
+          )
+        : (detail ?? emptyState);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(flex: 2, child: master),
         Container(width: 1, color: colors.border),
-        Expanded(flex: 3, child: detail ?? emptyState),
+        Expanded(flex: 3, child: pane),
       ],
+    );
+  }
+}
+
+/// A thin bar atop the [ReadingPaneMode.onClick] reading pane carrying the
+/// close affordance that dismisses the selection.
+class _PaneCloseBar extends StatelessWidget {
+  const _PaneCloseBar({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      height: 44,
+      alignment: Alignment.centerRight,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: IconButton(
+        key: const ValueKey('master-detail-close-pane'),
+        icon: Icon(Icons.close, color: colors.textSecondary),
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+        onPressed: onClose,
+      ),
     );
   }
 }

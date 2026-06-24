@@ -342,6 +342,8 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
                 mode: ref.watch(
                   readingPaneModeProvider(ReadingPaneSurface.files),
                 ),
+                onClosePane: () =>
+                    ref.read(filesSelectionProvider.notifier).state = null,
               );
             }
 

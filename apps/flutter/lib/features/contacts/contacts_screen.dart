@@ -195,6 +195,8 @@ class ContactsScreen extends ConsumerWidget {
             : null,
         emptyState: const _ContactPaneEmptyState(),
         mode: mode,
+        onClosePane: () =>
+            ref.read(contactsSelectionProvider.notifier).state = null,
       );
     } else {
       // Shipped behaviour (flag OFF): the directory, byte-for-byte unchanged.

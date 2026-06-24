@@ -199,6 +199,8 @@ class SpacesScreen extends ConsumerWidget {
             : null,
         emptyState: const _SpacePaneEmptyState(),
         mode: mode,
+        onClosePane: () =>
+            ref.read(spacesSelectionProvider.notifier).state = null,
       );
     } else {
       // Shipped behaviour (flag OFF): the list, byte-for-byte unchanged.

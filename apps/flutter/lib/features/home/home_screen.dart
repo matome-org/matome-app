@@ -317,6 +317,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             : null,
         emptyState: const _InboxPaneEmptyState(),
         mode: ref.watch(readingPaneModeProvider(ReadingPaneSurface.inbox)),
+        onClosePane: () =>
+            ref.read(inboxSelectionProvider.notifier).state = null,
       );
     } else {
       // Shipped behaviour (flag OFF): the `_wideBreakpoint`=1000 two-pane Row.

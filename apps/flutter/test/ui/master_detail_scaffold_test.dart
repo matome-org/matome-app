@@ -9,7 +9,11 @@ void main() {
   const detailKey = Key('test-detail');
   const emptyKey = Key('test-empty');
 
-  Widget harness({Widget? detail, required ReadingPaneMode mode}) {
+  Widget harness({
+    Widget? detail,
+    required ReadingPaneMode mode,
+    VoidCallback? onClose,
+  }) {
     return MaterialApp(
       theme: buildLightTheme(),
       home: Scaffold(
@@ -26,10 +30,13 @@ void main() {
             child: SizedBox.expand(),
           ),
           mode: mode,
+          onClosePane: onClose,
         ),
       ),
     );
   }
+
+  const closeKey = ValueKey('master-detail-close-pane');
 
   Widget detailWidget() => const ColoredBox(
         key: detailKey,
@@ -102,6 +109,43 @@ void main() {
       expect(find.byKey(masterKey), findsOneWidget);
       expect(find.byKey(detailKey), findsOneWidget);
       expect(find.byKey(emptyKey), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'onClick + selection + onClosePane → close button present, tap clears it',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      setWidth(tester, 1280);
+      var closed = 0;
+      await tester.pumpWidget(
+        harness(
+          detail: detailWidget(),
+          mode: ReadingPaneMode.onClick,
+          onClose: () => closed++,
+        ),
+      );
+
+      expect(find.byKey(closeKey), findsOneWidget);
+      await tester.tap(find.byKey(closeKey));
+      expect(closed, 1);
+    },
+  );
+
+  testWidgets(
+    'always + selection → NO close button (the pane is persistent)',
+    (tester) async {
+      addTearDown(tester.view.reset);
+      setWidth(tester, 1280);
+      await tester.pumpWidget(
+        harness(
+          detail: detailWidget(),
+          mode: ReadingPaneMode.always,
+          onClose: () {},
+        ),
+      );
+
+      expect(find.byKey(closeKey), findsNothing);
     },
   );
 
