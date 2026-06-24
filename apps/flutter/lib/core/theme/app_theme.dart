@@ -39,6 +39,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
   static const Color _accent = Color(0xFFE1B346); // ACCENT
   static const Color _accentDark = Color(0xFFB98A1F); // ACCENT_DARK
   static const Color _accentSoft = Color(0xFFF6E8C0); // ACCENT_SOFT
+  static const Color _accentSoftDark = Color(0xFF3A2D10); // ACCENT_SOFT (dark)
   static const Color _onAccent = _textPrimary;
 
   // Light surfaces — warm off-whites tinted toward the gold hue so the accent
@@ -168,7 +169,7 @@ final class MatomeColors extends ThemeExtension<MatomeColors> {
     primary: _accentDark,
     accent: _accent,
     accentDark: _accentDark,
-    accentSoft: _accentSoft,
+    accentSoft: _accentSoftDark,
     onAccent: _onAccent,
     onTextPrimary: _onTextPrimaryDark,
     background: _backgroundDark,
