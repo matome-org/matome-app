@@ -9,6 +9,7 @@ import 'package:matome_flutter/features/auth/auth_widgets.dart';
 import 'package:matome_flutter/core/audio/audio_playback.dart';
 import 'package:matome_flutter/core/db/file_row.dart';
 import 'package:matome_flutter/features/contacts/widgets/contact_detail.dart';
+import 'package:matome_flutter/features/contacts/widgets/contact_tile.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/details_controller.dart'
     show AudioSource, AudioSourceKind;
@@ -2044,6 +2045,818 @@ class _PromoteConsentScene extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── PROPOSAL: master–detail (email-style) layout (/critique gate) ───────────
+//
+// Owner decisions (2026-06-23, locked): the reading pane sits ON THE RIGHT; it
+// is controlled ONLY from Settings (no in-screen toggle — the top-bar chip just
+// REFLECTS the setting); the SAME shell applies to every collection surface
+// (Inbox, Files, Spaces, Contacts, Calendar day-list).
+//
+// These are an APPROVAL GATE — pure mockups assembled from the REAL,
+// presentational widgets (MatomeTable, FilesGrid/FilesTable, MatomeDetailPanel,
+// FileView, InboxItemCard) + the existing catalog fixtures. NOTHING here is
+// wired into the app; graduation happens after sign-off.
+//
+// The scenario matrix: {list, table} × {with pane, no pane} on each surface,
+// plus the empty-pane state and the mobile (full-screen) fallbacks.
+
+enum _MdSurface { inbox, files, spaces, contacts }
+
+enum _MdDensity { list, table }
+
+enum _MdPanel { right, off }
+
+const double _mdDesktopW = 1280;
+const double _mdDesktopH = 720;
+const double _mdMobileW = 390;
+const double _mdMobileH = 760;
+
+/// The proposed master–detail shell: nav rail · master list · reading pane.
+/// Marker type so all proposal scenes group under one catalog node.
+class MasterDetailLayout extends StatelessWidget {
+  const MasterDetailLayout({
+    super.key,
+    required this.surface,
+    required this.density,
+    required this.panel,
+    this.emptyPane = false,
+  });
+
+  final _MdSurface surface;
+  final _MdDensity density;
+  final _MdPanel panel;
+
+  /// When the pane is on the right but nothing is selected.
+  final bool emptyPane;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MdSidebar(surface: surface),
+        Expanded(
+          child: Column(
+            children: [
+              _MdTopBar(surface: surface, panel: panel),
+              Expanded(
+                child: panel == _MdPanel.right
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: _MdMaster(surface: surface, density: density),
+                          ),
+                          Container(width: 1, color: colors.border),
+                          Expanded(
+                            flex: 3,
+                            child: emptyPane
+                                ? const _MdEmptyPane()
+                                : _MdReadingPane(surface: surface),
+                          ),
+                        ],
+                      )
+                    : _MdMaster(surface: surface, density: density),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shared nav destinations — the real shell tabs (satori excluded by the host,
+/// as in the app).
+const _mdNavDestinations = <NavDestinationSpec>[
+  NavDestinationSpec(
+    id: 'inbox',
+    icon: Icons.inbox_outlined,
+    selectedIcon: Icons.inbox_rounded,
+    label: 'Inbox',
+  ),
+  NavDestinationSpec(
+    id: 'calendar',
+    icon: Icons.calendar_today_outlined,
+    selectedIcon: Icons.calendar_today_rounded,
+    label: 'Calendar',
+  ),
+  NavDestinationSpec(
+    id: 'files',
+    icon: Icons.folder_outlined,
+    selectedIcon: Icons.folder_rounded,
+    label: 'Files',
+  ),
+  NavDestinationSpec(
+    id: 'contacts',
+    icon: Icons.people_alt_outlined,
+    selectedIcon: Icons.people_alt_rounded,
+    label: 'Contacts',
+  ),
+  NavDestinationSpec(
+    id: 'spaces',
+    icon: Icons.workspaces_outline,
+    selectedIcon: Icons.workspaces,
+    label: 'Spaces',
+  ),
+];
+
+/// Maps a surface to its nav id (for the active sidebar destination).
+String _mdSelectedId(_MdSurface surface) => switch (surface) {
+      _MdSurface.inbox => 'inbox',
+      _MdSurface.files => 'files',
+      _MdSurface.spaces => 'spaces',
+      _MdSurface.contacts => 'contacts',
+    };
+
+/// Maps a surface to its top-bar title.
+String _mdTitle(_MdSurface surface) => switch (surface) {
+      _MdSurface.inbox => 'Inbox',
+      _MdSurface.files => 'Files',
+      _MdSurface.spaces => 'Spaces',
+      _MdSurface.contacts => 'Contacts',
+    };
+
+/// The REAL desktop nav — [MatomeSidebar] from the shell, the same widget the
+/// app renders. Stateful so the collapse/expand toggle actually works in the
+/// catalog (the sidebar is CONTROLLED — the host owns `expanded`; in the app
+/// that's a provider, here it's local state).
+class _MdSidebar extends StatefulWidget {
+  const _MdSidebar({required this.surface});
+
+  final _MdSurface surface;
+
+  @override
+  State<_MdSidebar> createState() => _MdSidebarState();
+}
+
+class _MdSidebarState extends State<_MdSidebar> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return MatomeSidebar(
+      destinations: _mdNavDestinations,
+      selectedId: _mdSelectedId(widget.surface),
+      expanded: _expanded,
+      onSelect: (_) {},
+      onToggle: () => setState(() => _expanded = !_expanded),
+      onAddOption: (_) {},
+      onSettings: () {},
+      accountName: 'You',
+    );
+  }
+}
+
+/// The REAL mobile nav — [MatomeBottomDock] from the shell (the rail collapses
+/// to this floating dock on compact widths).
+class _MdMobileDock extends StatelessWidget {
+  const _MdMobileDock();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: context.spacing.sm),
+      child: MatomeBottomDock(
+        destinations: _mdNavDestinations,
+        selectedId: 'inbox',
+        onSelect: (_) {},
+        onSettings: () {},
+      ),
+    );
+  }
+}
+
+/// Surface title + a READ-ONLY reading-pane chip. The chip reflects the global
+/// Settings choice (decision: control lives ONLY in Settings); it is not a
+/// toggle here.
+class _MdTopBar extends StatelessWidget {
+  const _MdTopBar({required this.surface, required this.panel});
+
+  final _MdSurface surface;
+  final _MdPanel panel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+    final title = _mdTitle(surface);
+    final paneState =
+        panel == _MdPanel.right ? 'Reading pane: Right' : 'Reading pane: Off';
+    return Container(
+      height: 52,
+      padding: EdgeInsets.symmetric(horizontal: spacing.lg),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: typography.title.copyWith(color: colors.textPrimary),
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.sm,
+              vertical: spacing.xxs,
+            ),
+            decoration: BoxDecoration(
+              color: colors.subtleFill,
+              borderRadius: BorderRadius.circular(radius.pill),
+              border: Border.all(color: colors.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.settings_outlined,
+                    size: 14, color: colors.textSecondary),
+                SizedBox(width: spacing.xxs),
+                Text(
+                  paneState,
+                  style:
+                      typography.label.copyWith(color: colors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The master column: the list/table, scrolled, themed. Reuses the REAL
+/// graduated widgets so the proposal can't drift from shipping reality.
+class _MdMaster extends StatelessWidget {
+  const _MdMaster({required this.surface, required this.density});
+
+  final _MdSurface surface;
+  final _MdDensity density;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final Widget content = switch (surface) {
+      _MdSurface.inbox => density == _MdDensity.table
+          ? const MatomeTable(rows: _matomeTableRows)
+          : _mdInboxList(context),
+      _MdSurface.files => density == _MdDensity.table
+          ? const FilesTable(files: _filesSample)
+          : const FilesGrid(files: _filesSample),
+      _MdSurface.spaces => _mdSpacesList(context),
+      _MdSurface.contacts => _mdContactsList(context),
+    };
+    return ColoredBox(
+      color: colors.background,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(spacing.lg),
+        child: content,
+      ),
+    );
+  }
+}
+
+/// The reading pane: the matome hub (Inbox surface) or the file viewer (Files
+/// surface) — both the real presentational widgets.
+class _MdReadingPane extends StatelessWidget {
+  const _MdReadingPane({required this.surface});
+
+  final _MdSurface surface;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    // Files: [FileView] is itself a ListView (scrolls internally) — hand it the
+    // pane's BOUNDED height directly. Wrapping it in another scroll view gave an
+    // unbounded-height viewport and crashed the scene.
+    if (surface == _MdSurface.files) {
+      return ColoredBox(
+        color: colors.surface,
+        child: FileView(data: fileViewSampleData(_FileViewSample.audioReady)),
+      );
+    }
+    // Inbox (matome hub panel), Contacts (real ContactDetail), Spaces (the
+    // space's matomes) are intrinsic-height, so they scroll inside the pane.
+    final Widget content = switch (surface) {
+      _MdSurface.inbox => const MatomeDetailPanel(data: _filedPanel),
+      _MdSurface.contacts => ContactDetail(contact: _contactDetailFull),
+      _MdSurface.spaces => _mdSpaceDetail(context),
+      _MdSurface.files => const SizedBox.shrink(), // handled above
+    };
+    return ColoredBox(
+      color: colors.surface,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(spacing.lg),
+        child: content,
+      ),
+    );
+  }
+}
+
+/// The reading pane with nothing selected (the gap in today's Inbox).
+class _MdEmptyPane extends StatelessWidget {
+  const _MdEmptyPane();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final typography = context.typography;
+    return ColoredBox(
+      color: colors.surface,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.touch_app_outlined, size: 40, color: colors.textMuted),
+            const SizedBox(height: 12),
+            Text(
+              'Select an item to read it here',
+              style: typography.body.copyWith(color: colors.textMuted),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A short, on-brand list for the "list" (comfortable) density, built from the
+/// real [InboxItemCard].
+Widget _mdInboxList(BuildContext context) {
+  final spacing = context.spacing;
+  return Column(
+    children: [
+      const InboxItemCard(
+        kind: InboxEntryKind.looseItem,
+        icon: Icons.mic_none_rounded,
+        title: 'Standup audio',
+        meta: '2h · 12:04',
+        tagLabel: 'Loose',
+        fileLabel: 'File',
+      ),
+      SizedBox(height: spacing.sm),
+      const InboxItemCard(
+        kind: InboxEntryKind.draftMatome,
+        title: 'Client X — notes',
+        meta: '3 items · 2h',
+        tagLabel: 'Draft',
+        fileLabel: 'Organize',
+      ),
+      SizedBox(height: spacing.sm),
+      const InboxItemCard(
+        kind: InboxEntryKind.looseItem,
+        icon: Icons.photo_camera_outlined,
+        title: 'Whiteboard photo',
+        meta: '4h',
+        tagLabel: 'Loose',
+        fileLabel: 'File',
+      ),
+      SizedBox(height: spacing.sm),
+      const InboxItemCard(
+        kind: InboxEntryKind.draftMatome,
+        title: 'Sales call — Acme',
+        meta: '5 items · 1d',
+        tagLabel: 'Draft',
+        fileLabel: 'Organize',
+      ),
+    ],
+  );
+}
+
+/// Spaces master — the real [SpaceSyncTile]s the Spaces screen lists.
+Widget _mdSpacesList(BuildContext context) {
+  final spacing = context.spacing;
+  return Column(
+    children: [
+      SpaceSyncTile(
+        name: 'Marketing',
+        meta: '8 matomes',
+        state: SpaceSyncState.cloud,
+        promoteLabel: 'Turn on sync',
+      ),
+      SizedBox(height: spacing.sm),
+      SpaceSyncTile(
+        name: 'Personal',
+        meta: '4 matomes',
+        state: SpaceSyncState.local,
+        promoteLabel: 'Turn on sync',
+        onPromote: () {},
+      ),
+      SizedBox(height: spacing.sm),
+      const SpaceSyncTile(
+        name: 'Sales',
+        meta: '6 matomes',
+        state: SpaceSyncState.cloud,
+        promoteLabel: 'Turn on sync',
+      ),
+    ],
+  );
+}
+
+/// Spaces reading pane — a space header + its matomes (the real [MatomeTable]).
+Widget _mdSpaceDetail(BuildContext context) {
+  final spacing = context.spacing;
+  final colors = context.colors;
+  final typography = context.typography;
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'Marketing',
+        style: typography.title.copyWith(color: colors.textPrimary),
+      ),
+      Text(
+        '8 matomes · Cloud',
+        style: typography.label.copyWith(color: colors.textMuted),
+      ),
+      SizedBox(height: spacing.md),
+      const MatomeTable(rows: _matomeTableRows),
+    ],
+  );
+}
+
+/// Contacts master — the directory list, now the REAL [ContactTile] extracted
+/// from the screen (DR-000 convergence; no second implementation to drift from).
+Widget _mdContactsList(BuildContext context) {
+  final colors = context.colors;
+  final spacing = context.spacing;
+  return Column(
+    children: [
+      ContactTile(
+        name: 'Ana Ribeiro',
+        notes: 'Acme Inc. · Product Lead',
+        color: colors.spaceColor(0),
+      ),
+      SizedBox(height: spacing.xs),
+      ContactTile(
+        name: 'Ken Watari',
+        notes: 'Acme Inc.',
+        color: colors.spaceColor(1),
+      ),
+      SizedBox(height: spacing.xs),
+      ContactTile(
+        name: 'Leo',
+        notes: 'Sales call — Acme',
+        color: colors.spaceColor(2),
+      ),
+    ],
+  );
+}
+
+/// A fixed-size "window" so the two-pane shell is fully visible in the catalog.
+class _MdFrame extends StatelessWidget {
+  const _MdFrame({
+    required this.width,
+    required this.height,
+    required this.child,
+  });
+
+  final double width;
+  final double height;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          width: width,
+          height: height,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: colors.background,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colors.border),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Mobile detail top bar (compact: a tap opens the reading pane FULL SCREEN,
+/// never a side pane).
+class _MdMobileDetailBar extends StatelessWidget {
+  const _MdMobileDetailBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    return Container(
+      height: 52,
+      padding: EdgeInsets.symmetric(horizontal: spacing.sm),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.arrow_back, color: colors.textPrimary),
+          SizedBox(width: spacing.sm),
+          Expanded(
+            child: Text(
+              'Client X — weekly sync',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: typography.body.copyWith(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Proposal scenes — desktop, Inbox surface ────────────────────────────────
+
+@widgetbook.UseCase(
+  name: 'List · desktop · with side panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdInboxListPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.inbox,
+      density: _MdDensity.list,
+      panel: _MdPanel.right,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'List · desktop · no panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdInboxListNoPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.inbox,
+      density: _MdDensity.list,
+      panel: _MdPanel.off,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Table · desktop · with side panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdInboxTablePanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.inbox,
+      density: _MdDensity.table,
+      panel: _MdPanel.right,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Table · desktop · no panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdInboxTableNoPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.inbox,
+      density: _MdDensity.table,
+      panel: _MdPanel.off,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'With side panel · empty (nothing selected)',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdInboxEmptyPaneUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.inbox,
+      density: _MdDensity.list,
+      panel: _MdPanel.right,
+      emptyPane: true,
+    ),
+  );
+}
+
+// ─── Proposal scenes — desktop, Files surface ────────────────────────────────
+
+@widgetbook.UseCase(
+  name: 'Files grid · desktop · with side panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdFilesGridPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.files,
+      density: _MdDensity.list,
+      panel: _MdPanel.right,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Files grid · desktop · no panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdFilesGridNoPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.files,
+      density: _MdDensity.list,
+      panel: _MdPanel.off,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Files table · desktop · with side panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdFilesTablePanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.files,
+      density: _MdDensity.table,
+      panel: _MdPanel.right,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Files table · desktop · no panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdFilesTableNoPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.files,
+      density: _MdDensity.table,
+      panel: _MdPanel.off,
+    ),
+  );
+}
+
+// ─── Proposal scenes — desktop, Spaces & Contacts surfaces ───────────────────
+
+@widgetbook.UseCase(
+  name: 'Spaces · desktop · with side panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdSpacesPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.spaces,
+      density: _MdDensity.list,
+      panel: _MdPanel.right,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Spaces · desktop · no panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdSpacesNoPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.spaces,
+      density: _MdDensity.list,
+      panel: _MdPanel.off,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Contacts · desktop · with side panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdContactsPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.contacts,
+      density: _MdDensity.list,
+      panel: _MdPanel.right,
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Contacts · desktop · no panel',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdContactsNoPanelUseCase(BuildContext context) {
+  return const _MdFrame(
+    width: _mdDesktopW,
+    height: _mdDesktopH,
+    child: MasterDetailLayout(
+      surface: _MdSurface.contacts,
+      density: _MdDensity.list,
+      panel: _MdPanel.off,
+    ),
+  );
+}
+
+// ─── Proposal scenes — mobile (compact: full-screen, no side pane) ───────────
+
+@widgetbook.UseCase(
+  name: 'Mobile · list (full screen)',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdMobileListUseCase(BuildContext context) {
+  return _MdFrame(
+    width: _mdMobileW,
+    height: _mdMobileH,
+    child: Column(
+      children: const [
+        _MdTopBar(surface: _MdSurface.inbox, panel: _MdPanel.off),
+        Expanded(
+          child: _MdMaster(surface: _MdSurface.inbox, density: _MdDensity.list),
+        ),
+        _MdMobileDock(),
+      ],
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Mobile · detail (full screen)',
+  type: MasterDetailLayout,
+  path: '[Proposals]/Master–detail layout',
+)
+Widget mdMobileDetailUseCase(BuildContext context) {
+  return _MdFrame(
+    width: _mdMobileW,
+    height: _mdMobileH,
+    child: Column(
+      children: const [
+        _MdMobileDetailBar(),
+        Expanded(child: _MdReadingPane(surface: _MdSurface.inbox)),
+      ],
+    ),
+  );
 }
 
 class _UseCaseSurface extends StatelessWidget {

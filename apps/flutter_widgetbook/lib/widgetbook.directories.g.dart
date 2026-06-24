@@ -50,6 +50,85 @@ final directories = <_widgetbook.WidgetbookNode>[
     ],
   ),
   _widgetbook.WidgetbookCategory(
+    name: 'Proposals',
+    children: [
+      _widgetbook.WidgetbookFolder(
+        name: 'Master–detail layout',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MasterDetailLayout',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Contacts · desktop · no panel',
+                builder: _matome_widgetbook_widgetbook.mdContactsNoPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Contacts · desktop · with side panel',
+                builder: _matome_widgetbook_widgetbook.mdContactsPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Files grid · desktop · no panel',
+                builder:
+                    _matome_widgetbook_widgetbook.mdFilesGridNoPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Files grid · desktop · with side panel',
+                builder: _matome_widgetbook_widgetbook.mdFilesGridPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Files table · desktop · no panel',
+                builder:
+                    _matome_widgetbook_widgetbook.mdFilesTableNoPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Files table · desktop · with side panel',
+                builder: _matome_widgetbook_widgetbook.mdFilesTablePanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'List · desktop · no panel',
+                builder:
+                    _matome_widgetbook_widgetbook.mdInboxListNoPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'List · desktop · with side panel',
+                builder: _matome_widgetbook_widgetbook.mdInboxListPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile · detail (full screen)',
+                builder: _matome_widgetbook_widgetbook.mdMobileDetailUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile · list (full screen)',
+                builder: _matome_widgetbook_widgetbook.mdMobileListUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Spaces · desktop · no panel',
+                builder: _matome_widgetbook_widgetbook.mdSpacesNoPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Spaces · desktop · with side panel',
+                builder: _matome_widgetbook_widgetbook.mdSpacesPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table · desktop · no panel',
+                builder:
+                    _matome_widgetbook_widgetbook.mdInboxTableNoPanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Table · desktop · with side panel',
+                builder: _matome_widgetbook_widgetbook.mdInboxTablePanelUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'With side panel · empty (nothing selected)',
+                builder: _matome_widgetbook_widgetbook.mdInboxEmptyPaneUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  ),
+  _widgetbook.WidgetbookCategory(
     name: 'Widgets',
     children: [
       _widgetbook.WidgetbookFolder(
