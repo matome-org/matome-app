@@ -29,7 +29,11 @@
     "viewCards": "Cards",
     "viewTableMatome": "Table",
     "viewGrid": "Grid",
-    "viewTableFiles": "Table"
+    "viewTableFiles": "Table",
+    "layout": "Layout",
+    "readingPane": "Reading pane",
+    "readingPaneRight": "Right",
+    "readingPaneOff": "Off"
   },
   "nav": {
     "createNew": "New",

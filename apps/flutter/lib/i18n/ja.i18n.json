@@ -29,7 +29,11 @@
     "viewCards": "カード",
     "viewTableMatome": "テーブル",
     "viewGrid": "グリッド",
-    "viewTableFiles": "テーブル"
+    "viewTableFiles": "テーブル",
+    "layout": "レイアウト",
+    "readingPane": "読み取りペイン",
+    "readingPaneRight": "右",
+    "readingPaneOff": "オフ"
   },
   "nav": {
     "createNew": "新規",

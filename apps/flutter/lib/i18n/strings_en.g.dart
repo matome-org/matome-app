@@ -162,6 +162,18 @@ class Translations$settings$en {
 
 	/// en: 'Table'
 	String get viewTableFiles => 'Table';
+
+	/// en: 'Layout'
+	String get layout => 'Layout';
+
+	/// en: 'Reading pane'
+	String get readingPane => 'Reading pane';
+
+	/// en: 'Right'
+	String get readingPaneRight => 'Right';
+
+	/// en: 'Off'
+	String get readingPaneOff => 'Off';
 }
 
 // Path: nav
@@ -1576,6 +1588,10 @@ extension on Translations {
 			'settings.viewTableMatome' => 'Table',
 			'settings.viewGrid' => 'Grid',
 			'settings.viewTableFiles' => 'Table',
+			'settings.layout' => 'Layout',
+			'settings.readingPane' => 'Reading pane',
+			'settings.readingPaneRight' => 'Right',
+			'settings.readingPaneOff' => 'Off',
 			'nav.createNew' => 'New',
 			'nav.add' => 'Add',
 			'nav.recordAudio' => 'Record audio',

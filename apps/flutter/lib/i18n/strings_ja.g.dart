@@ -109,6 +109,10 @@ class _Translations$settings$ja extends Translations$settings$en {
 	@override String get viewTableMatome => 'テーブル';
 	@override String get viewGrid => 'グリッド';
 	@override String get viewTableFiles => 'テーブル';
+	@override String get layout => 'レイアウト';
+	@override String get readingPane => '読み取りペイン';
+	@override String get readingPaneRight => '右';
+	@override String get readingPaneOff => 'オフ';
 }
 
 // Path: nav
@@ -754,6 +758,10 @@ extension on TranslationsJa {
 			'settings.viewTableMatome' => 'テーブル',
 			'settings.viewGrid' => 'グリッド',
 			'settings.viewTableFiles' => 'テーブル',
+			'settings.layout' => 'レイアウト',
+			'settings.readingPane' => '読み取りペイン',
+			'settings.readingPaneRight' => '右',
+			'settings.readingPaneOff' => 'オフ',
 			'nav.createNew' => '新規',
 			'nav.add' => '追加',
 			'nav.recordAudio' => '音声を録音',
