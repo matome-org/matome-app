@@ -455,9 +455,12 @@ class _ImageDetailHost extends StatelessWidget {
         ),
         actions: [?trailing],
       ),
-      body: FileView(
-        key: const ValueKey('file-detail-view'),
-        data: _viewData(context),
+      body: fileReadingCard(
+        context,
+        child: FileView(
+          key: const ValueKey('file-detail-view'),
+          data: _viewData(context),
+        ),
       ),
     );
   }
@@ -690,24 +693,27 @@ class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
 
     // Failed / pending-upload rows surface the retry CTA inline above the
     // unified composition rather than the old per-tab Notes affordance.
-    return Column(
-      children: [
-        if (state.processingFailed || state.pendingUpload)
-          _RetryBanner(
-            label: state.pendingUpload
-                ? t.cardStatus.pendingUpload
-                : t.recording.transcriptionFailed,
-            onRetry: _onRetry,
+    return fileReadingCard(
+      context,
+      child: Column(
+        children: [
+          if (state.processingFailed || state.pendingUpload)
+            _RetryBanner(
+              label: state.pendingUpload
+                  ? t.cardStatus.pendingUpload
+                  : t.recording.transcriptionFailed,
+              onRetry: _onRetry,
+            ),
+          Expanded(
+            child: FileView(
+              key: const ValueKey('file-detail-view'),
+              data: _viewData(state),
+              notesController: _notesController,
+              onNotesChanged: (_) {},
+            ),
           ),
-        Expanded(
-          child: FileView(
-            key: const ValueKey('file-detail-view'),
-            data: _viewData(state),
-            notesController: _notesController,
-            onNotesChanged: (_) {},
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

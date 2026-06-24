@@ -445,44 +445,30 @@ class _FilesPaneDetail extends ConsumerWidget {
     }
 
     final mediaKind = mediaKindForType(row.mediaType);
-    final spacing = context.spacing;
-    final radius = context.radius;
-    // Framed as a centred reading CARD — consistent with the matome letter card
-    // and the ContactDetail card the other two panes show (not a bare,
-    // edge-to-edge full-bleed view).
+    // The shared reading CARD — consistent with the matome letter card and the
+    // ContactDetail card the other two panes show (not a bare full-bleed view).
     return ColoredBox(
       color: colors.background,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: Container(
-            margin: EdgeInsets.all(spacing.md),
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: colors.surface,
-              borderRadius: BorderRadius.circular(radius.lg),
-              border: Border.all(color: colors.border),
-            ),
-            child: FileView(
-              key: const ValueKey('files-pane-view'),
-              data: FileViewData(
-                title: state.title.isEmpty ? t.recording.title : state.title,
-                mediaKind: mediaKind,
-                place: row.badge,
-                syncCoreId: state.coreId,
-                processingStatus: row.processingStatus,
-                // The machine-owned Contents (audio → transcript, doc → stub
-                // summary; image keeps it null). Read-only, from the row's OWN
-                // fields.
-                contentsText:
-                    mediaKind == FileMediaKind.image ? null : row.transcript,
-                notesText: row.notes,
-              ),
-              // The pane is a read surface — the editable Notes lifecycle stays
-              // on the routed detail screen.
-              notesReadOnly: true,
-            ),
+      child: fileReadingCard(
+        context,
+        child: FileView(
+          key: const ValueKey('files-pane-view'),
+          data: FileViewData(
+            title: state.title.isEmpty ? t.recording.title : state.title,
+            mediaKind: mediaKind,
+            place: row.badge,
+            syncCoreId: state.coreId,
+            processingStatus: row.processingStatus,
+            // The machine-owned Contents (audio → transcript, doc → stub
+            // summary; image keeps it null). Read-only, from the row's OWN
+            // fields.
+            contentsText:
+                mediaKind == FileMediaKind.image ? null : row.transcript,
+            notesText: row.notes,
           ),
+          // The pane is a read surface — the editable Notes lifecycle stays on
+          // the routed detail screen.
+          notesReadOnly: true,
         ),
       ),
     );

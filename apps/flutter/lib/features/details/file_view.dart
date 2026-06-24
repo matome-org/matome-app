@@ -140,6 +140,36 @@ class FileViewData {
 ///   * #1440 (Contents state machine): swap [FileViewData.contentsText] for a
 ///     richer contents slot / state — the read-only Contents body is isolated
 ///     in [_ContentsSection] so a state-driven body can replace the Text.
+/// Reading-width clamp for the file card (mirrors the matome letter's reading
+/// width). A named primitive so it is a reviewed design-system size, not an
+/// ad-hoc inline literal.
+const double _kFileReadingMaxWidth = 720;
+
+/// Frames file-detail content as a centred, bordered reading CARD — the shared
+/// presentation used by BOTH the reading pane and the full-screen file detail,
+/// so a file reads as a card (max ~720px, surface, border) consistent with the
+/// matome letter card and the ContactDetail card — not an edge-to-edge view.
+Widget fileReadingCard(BuildContext context, {required Widget child}) {
+  final colors = context.colors;
+  final spacing = context.spacing;
+  final radius = context.radius;
+  return Center(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _kFileReadingMaxWidth),
+      child: Container(
+        margin: EdgeInsets.all(spacing.md),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(radius.lg),
+          border: Border.all(color: colors.border),
+        ),
+        child: child,
+      ),
+    ),
+  );
+}
+
 class FileView extends StatefulWidget {
   const FileView({
     super.key,
