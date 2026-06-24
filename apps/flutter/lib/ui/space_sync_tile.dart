@@ -42,7 +42,8 @@ class SpaceSyncTile extends StatelessWidget {
   /// Promote local→cloud. Shown only when [state] is [SpaceSyncState.local].
   final VoidCallback? onPromote;
 
-  /// When true, renders the master-detail OPEN state: accent left bar + tint.
+  /// When true, renders the master-detail OPEN state: a slightly darker
+  /// background so the open item is obvious.
   final bool selected;
 
   @override
@@ -57,16 +58,11 @@ class SpaceSyncTile extends StatelessWidget {
     final card = Container(
       padding: EdgeInsets.all(spacing.md),
       decoration: BoxDecoration(
-        color: selected ? colors.accentSoft : colors.surface,
+        color: selected
+            ? Color.alphaBlend(colors.subtleFillStrong, colors.surface)
+            : colors.surface,
         borderRadius: BorderRadius.circular(radius.lg),
-        border: selected
-            ? Border(
-                left: BorderSide(color: colors.accent, width: 3),
-                top: BorderSide(color: colors.border),
-                right: BorderSide(color: colors.border),
-                bottom: BorderSide(color: colors.border),
-              )
-            : Border.all(color: colors.border),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         children: [

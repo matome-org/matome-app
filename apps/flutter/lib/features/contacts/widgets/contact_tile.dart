@@ -27,7 +27,8 @@ class ContactTile extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  /// When true, renders the master-detail OPEN state: accent left bar + tint.
+  /// When true, renders the master-detail OPEN state: a slightly darker
+  /// background so the open item is obvious.
   final bool selected;
 
   @override
@@ -41,7 +42,7 @@ class ContactTile extends StatelessWidget {
       button: true,
       label: 'Contact: $name',
       child: Material(
-        color: selected ? colors.accentSoft : colors.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(radius.lg),
         child: InkWell(
           onTap: onTap,
@@ -50,15 +51,9 @@ class ContactTile extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.all(spacing.sm),
             decoration: BoxDecoration(
+              color: selected ? colors.subtleFillStrong : null,
               borderRadius: BorderRadius.circular(radius.lg),
-              border: selected
-                  ? Border(
-                      left: BorderSide(color: colors.accent, width: 3),
-                      top: BorderSide(color: colors.border),
-                      right: BorderSide(color: colors.border),
-                      bottom: BorderSide(color: colors.border),
-                    )
-                  : Border.all(color: colors.border),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               children: [

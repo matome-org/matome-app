@@ -85,8 +85,8 @@ class AppCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  /// When true, renders the master-detail OPEN state: an accent left bar +
-  /// accent tint, marking the row currently shown in the reading pane.
+  /// When true, renders the master-detail OPEN state: a slightly darker
+  /// background, marking the row currently shown in the reading pane.
   final bool selected;
 
   final VoidCallback? onRetry;
@@ -154,7 +154,7 @@ class AppCard extends StatelessWidget {
       button: true,
       label: 'Matome: ${m.title}',
       child: Material(
-        color: selected ? colors.accentSoft : colors.surface,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(radius.lg),
         child: InkWell(
           key: ValueKey('matome-card-${m.id}'),
@@ -165,15 +165,10 @@ class AppCard extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 64),
             padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
             decoration: BoxDecoration(
+              // OPEN-in-pane indicator: just a slightly different fill.
+              color: selected ? colors.subtleFillStrong : null,
               borderRadius: BorderRadius.circular(radius.lg),
-              border: selected
-                  ? Border(
-                      left: BorderSide(color: colors.accent, width: 3),
-                      top: BorderSide(color: colors.border),
-                      right: BorderSide(color: colors.border),
-                      bottom: BorderSide(color: colors.border),
-                    )
-                  : Border.all(color: colors.border),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
