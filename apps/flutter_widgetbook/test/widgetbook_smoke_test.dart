@@ -15,7 +15,7 @@ void main() {
     await tester.pumpWidget(
       const MatomeWidgetbook(
         initialRoute:
-            '/?path=widgets%2Fdesign-system%2Favatars%2Favatar%2Ficon-%2B-initials',
+            '/?path=global%2Favatars%2Favatar%2Ficon-%2B-initials',
       ),
     );
     await tester.pump();

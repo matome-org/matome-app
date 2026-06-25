@@ -2,12 +2,16 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
 import 'package:matome_flutter/core/audio/audio_playback.dart';
 import 'package:matome_flutter/core/db/file_row.dart';
+import 'package:matome_flutter/core/providers.dart' show settingsStoreProvider;
+import 'package:matome_flutter/core/settings/settings_store.dart'
+    show InMemorySettingsStore;
 import 'package:matome_flutter/features/contacts/widgets/contact_detail.dart';
 import 'package:matome_flutter/features/contacts/widgets/contact_tile.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
@@ -16,6 +20,10 @@ import 'package:matome_flutter/features/details/details_controller.dart'
 import 'package:matome_flutter/features/details/file_actions_menu.dart'
     as details_actions;
 import 'package:matome_flutter/features/details/file_view.dart';
+import 'package:matome_flutter/features/files/files_providers.dart'
+    show filesForCurrentOwnerProvider;
+import 'package:matome_flutter/features/files/files_screen.dart'
+    show FilesScreen;
 import 'package:matome_flutter/features/files/widgets/files_grid.dart';
 import 'package:matome_flutter/features/files/widgets/files_table.dart';
 import 'package:matome_flutter/features/files/widgets/files_view_shared.dart';
@@ -118,7 +126,7 @@ Widget _matomeAppBuilder(BuildContext context, Widget child) {
 @widgetbook.UseCase(
   name: 'Fields + submit',
   type: AppTextField,
-  path: '[Widgets]/Design system/Auth',
+  path: '[Global]/Auth',
 )
 Widget authFieldsUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _AuthControlsSample());
@@ -127,7 +135,7 @@ Widget authFieldsUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Error + loading',
   type: AuthErrorBanner,
-  path: '[Widgets]/Design system/Auth',
+  path: '[Global]/Auth',
 )
 Widget authFeedbackUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _AuthFeedbackSample());
@@ -136,7 +144,7 @@ Widget authFeedbackUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Primary states',
   type: PrimaryButton,
-  path: '[Widgets]/Design system/Buttons',
+  path: '[Global]/Buttons',
 )
 Widget primaryButtonsUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 360, child: _PrimaryButtonsSample());
@@ -145,7 +153,7 @@ Widget primaryButtonsUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Text actions',
   type: AppTextButton,
-  path: '[Widgets]/Design system/Buttons',
+  path: '[Global]/Buttons',
 )
 Widget appTextButtonsUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 360, child: _TextButtonsSample());
@@ -154,7 +162,7 @@ Widget appTextButtonsUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Labeled states',
   type: AppTextField,
-  path: '[Widgets]/Design system/Inputs',
+  path: '[Global]/Inputs',
 )
 Widget appTextFieldsUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _TextFieldsSample());
@@ -163,13 +171,13 @@ Widget appTextFieldsUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Icon + initials',
   type: Avatar,
-  path: '[Widgets]/Design system/Avatars',
+  path: '[Global]/Avatars',
 )
 Widget avatarsUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 320, child: _AvatarsSample());
 }
 
-@widgetbook.UseCase(name: 'Done', type: AppCard, path: '[Widgets]/Design system/Cards')
+@widgetbook.UseCase(name: 'Done', type: AppCard, path: '[Global]/Cards')
 Widget appCardDoneUseCase(BuildContext context) {
   return const _UseCaseSurface(
     child: _AppCardSample(state: _CardSampleState.done),
@@ -179,7 +187,7 @@ Widget appCardDoneUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Pending upload',
   type: AppCard,
-  path: '[Widgets]/Design system/Cards',
+  path: '[Global]/Cards',
 )
 Widget appCardPendingUploadUseCase(BuildContext context) {
   return const _UseCaseSurface(
@@ -187,14 +195,14 @@ Widget appCardPendingUploadUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(name: 'Processing', type: AppCard, path: '[Widgets]/Design system/Cards')
+@widgetbook.UseCase(name: 'Processing', type: AppCard, path: '[Global]/Cards')
 Widget appCardProcessingUseCase(BuildContext context) {
   return const _UseCaseSurface(
     child: _AppCardSample(state: _CardSampleState.processing),
   );
 }
 
-@widgetbook.UseCase(name: 'Failed', type: AppCard, path: '[Widgets]/Design system/Cards')
+@widgetbook.UseCase(name: 'Failed', type: AppCard, path: '[Global]/Cards')
 Widget appCardFailedUseCase(BuildContext context) {
   return const _UseCaseSurface(
     child: _AppCardSample(state: _CardSampleState.failed),
@@ -204,7 +212,7 @@ Widget appCardFailedUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Calendar row',
   type: AppCard,
-  path: '[Widgets]/Design system/Cards',
+  path: '[Global]/Cards',
 )
 Widget appCardCalendarUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _CalendarAppCardSample());
@@ -213,7 +221,7 @@ Widget appCardCalendarUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Sync states',
   type: StatusBadge,
-  path: '[Widgets]/Design system/Status',
+  path: '[Global]/Status',
 )
 Widget statusBadgesUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 320, child: _StatusBadgesSample());
@@ -222,7 +230,7 @@ Widget statusBadgesUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Sync chip',
   type: MatomeSyncChip,
-  path: '[Widgets]/Design system/Status',
+  path: '[Global]/Status',
 )
 Widget matomeSyncChipUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 320, child: _MatomeSyncChipSample());
@@ -237,7 +245,7 @@ Widget matomeSyncChipUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Section (label + divider)',
   type: MatomePanelSection,
-  path: '[Widgets]/Design system/Panel atoms',
+  path: '[Global]/Panel atoms',
 )
 Widget matomePanelSectionUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 360, child: _MatomePanelSectionSample());
@@ -246,7 +254,7 @@ Widget matomePanelSectionUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Item row (icon + meta + sync chip)',
   type: MatomePanelRow,
-  path: '[Widgets]/Design system/Panel atoms',
+  path: '[Global]/Panel atoms',
 )
 Widget matomePanelRowUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 360, child: _MatomePanelRowSample());
@@ -255,7 +263,7 @@ Widget matomePanelRowUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Add row (accent affordance)',
   type: MatomePanelAddRow,
-  path: '[Widgets]/Design system/Panel atoms',
+  path: '[Global]/Panel atoms',
 )
 Widget matomePanelAddRowUseCase(BuildContext context) {
   return const _UseCaseSurface(
@@ -273,14 +281,14 @@ Widget matomePanelAddRowUseCase(BuildContext context) {
 // presentational `MatomeDetailPanel` (Items · People · Space · Notes · Share),
 // from `package:matome_flutter/ui/matome_detail_panel.dart` with static sample
 // data. The `type:` is `MatomeDetailPanel` so the tree reads "MatomeDetailPanel"
-// under [Widgets]/Matome detail — not the atom "MatomePanelSection". The live
+// under [Screens]/Matome detail — not the atom "MatomePanelSection". The live
 // `_MatomeDetails` still composes the section atoms against its providers;
 // converging that screen onto this widget is tracked as a follow-up.
 
 @widgetbook.UseCase(
   name: 'Detail panel — filed',
   type: MatomeDetailPanel,
-  path: '[Widgets]/Matome detail',
+  path: '[Screens]/Matome detail',
 )
 Widget detailPanelFiledUseCase(BuildContext context) {
   return const _DetailPanelSurface(child: MatomeDetailPanel(data: _filedPanel));
@@ -289,7 +297,7 @@ Widget detailPanelFiledUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Detail panel — inbox',
   type: MatomeDetailPanel,
-  path: '[Widgets]/Matome detail',
+  path: '[Screens]/Matome detail',
 )
 Widget detailPanelInboxUseCase(BuildContext context) {
   return const _DetailPanelSurface(child: MatomeDetailPanel(data: _inboxPanel));
@@ -388,7 +396,7 @@ class _DetailPanelSurface extends StatelessWidget {
 @widgetbook.UseCase(
   name: 'Add people (multi · search)',
   type: RelationshipPicker,
-  path: '[Widgets]/Relationship picker',
+  path: '[Screens]/Relationship picker',
 )
 Widget relationshipPickerPeopleUseCase(BuildContext context) {
   return _RelationshipPickerSurface(
@@ -442,7 +450,7 @@ Widget relationshipPickerPeopleUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'File into a space (single)',
   type: RelationshipPicker,
-  path: '[Widgets]/Relationship picker',
+  path: '[Screens]/Relationship picker',
 )
 Widget relationshipPickerSpaceUseCase(BuildContext context) {
   return _RelationshipPickerSurface(
@@ -484,7 +492,7 @@ Widget relationshipPickerSpaceUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Pre-filtered (opened from Add person)',
   type: RelationshipPicker,
-  path: '[Widgets]/Relationship picker',
+  path: '[Screens]/Relationship picker',
 )
 Widget relationshipPickerPrefilteredUseCase(BuildContext context) {
   // What "Add person" opens: the SAME unified picker, but pre-filtered to
@@ -557,7 +565,7 @@ Widget relationshipPickerPrefilteredUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Add to a matome (Files page · reuse)',
   type: RelationshipPicker,
-  path: '[Widgets]/Relationship picker',
+  path: '[Screens]/Relationship picker',
 )
 Widget relationshipPickerMatomeUseCase(BuildContext context) {
   // The SAME widget on the future Files page: link a file to matome(s). Proves
@@ -605,7 +613,7 @@ Widget relationshipPickerMatomeUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Add files (multi · search)',
   type: RelationshipPicker,
-  path: '[Widgets]/Relationship picker',
+  path: '[Screens]/Relationship picker',
 )
 Widget relationshipPickerFilesUseCase(BuildContext context) {
   // Link existing files to a matome / contact — the file analogue of "Add
@@ -660,7 +668,7 @@ Widget relationshipPickerFilesUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Add anything (mixed · type filter)',
   type: RelationshipPicker,
-  path: '[Widgets]/Relationship picker',
+  path: '[Screens]/Relationship picker',
 )
 Widget relationshipPickerMixedUseCase(BuildContext context) {
   // The UNIFIED picker, opened from a matome: search across Contacts + Files +
@@ -762,7 +770,7 @@ Widget relationshipPickerMixedUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Empty (no candidates yet)',
   type: RelationshipPicker,
-  path: '[Widgets]/Relationship picker',
+  path: '[Screens]/Relationship picker',
 )
 Widget relationshipPickerEmptyUseCase(BuildContext context) {
   return _RelationshipPickerSurface(
@@ -821,7 +829,7 @@ class _RelationshipPickerSurface extends StatelessWidget {
 @widgetbook.UseCase(
   name: 'Action list',
   type: AppBottomSheet,
-  path: '[Widgets]/Design system/Overlays',
+  path: '[Global]/Overlays',
 )
 Widget appBottomSheetUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _BottomSheetSample());
@@ -830,7 +838,7 @@ Widget appBottomSheetUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Confirmation',
   type: AppDialog,
-  path: '[Widgets]/Design system/Overlays',
+  path: '[Global]/Overlays',
 )
 Widget appDialogUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _DialogSample());
@@ -839,7 +847,7 @@ Widget appDialogUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Spinner sizes',
   type: LoadingIndicator,
-  path: '[Widgets]/Design system/Feedback',
+  path: '[Global]/Feedback',
 )
 Widget loadingIndicatorUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 300, child: _LoadingIndicatorSample());
@@ -848,7 +856,7 @@ Widget loadingIndicatorUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Centered message',
   type: EmptyState,
-  path: '[Widgets]/Design system/Feedback',
+  path: '[Global]/Feedback',
 )
 Widget emptyStateUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _EmptyStateSample());
@@ -857,7 +865,7 @@ Widget emptyStateUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Document media header',
   type: FileTypeChip,
-  path: '[Widgets]/Design system/File view',
+  path: '[Global]/File view',
 )
 Widget fileTypeChipUseCase(BuildContext context) {
   // The doc media header across its icon families plus a missing-size row, each
@@ -888,7 +896,7 @@ Widget fileTypeChipUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Matome chip (filled · Unfiled)',
   type: MatomeChip,
-  path: '[Widgets]/Design system/Relations',
+  path: '[Global]/Relations',
 )
 Widget matomeChipUseCase(BuildContext context) {
   // Filled pill carrying a matome title, plus the italic muted "Unfiled" state
@@ -910,7 +918,7 @@ Widget matomeChipUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Space chip (outlined · Inbox)',
   type: SpaceChip,
-  path: '[Widgets]/Design system/Relations',
+  path: '[Global]/Relations',
 )
 Widget spaceChipUseCase(BuildContext context) {
   // Outlined pill carrying a space (folder) name, plus the italic muted "Inbox"
@@ -931,7 +939,7 @@ Widget spaceChipUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Role chip (organizer · speaker · attendee)',
   type: RoleChip,
-  path: '[Widgets]/Design system/Relations',
+  path: '[Global]/Relations',
 )
 Widget roleChipUseCase(BuildContext context) {
   // A contact's matome_contacts role, tinted by role.
@@ -952,7 +960,7 @@ Widget roleChipUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'People cluster (overlap · +N overflow)',
   type: PeopleCluster,
-  path: '[Widgets]/Design system/Relations',
+  path: '[Global]/Relations',
 )
 Widget peopleClusterUseCase(BuildContext context) {
   // Overlapping initials with a "+N" overflow chip + a names tooltip. An empty
@@ -979,7 +987,7 @@ Widget peopleClusterUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Table — desktop (sortable)',
   type: MatomeTable,
-  path: '[Widgets]/Matome table',
+  path: '[Screens]/Matome table',
 )
 Widget matomeTableDesktopUseCase(BuildContext context) {
   return _UseCaseSurface(width: 920, child: MatomeTable(rows: _matomeTableRows));
@@ -988,7 +996,7 @@ Widget matomeTableDesktopUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Table — selection + bulk bar',
   type: MatomeTable,
-  path: '[Widgets]/Matome table',
+  path: '[Screens]/Matome table',
 )
 Widget matomeTableSelectionUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1003,7 +1011,7 @@ Widget matomeTableSelectionUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Table — compact (mobile)',
   type: MatomeTable,
-  path: '[Widgets]/Matome table',
+  path: '[Screens]/Matome table',
 )
 Widget matomeTableCompactUseCase(BuildContext context) {
   return _UseCaseSurface(width: 380, child: MatomeTable(rows: _matomeTableRows));
@@ -1012,7 +1020,7 @@ Widget matomeTableCompactUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Table — empty',
   type: MatomeTable,
-  path: '[Widgets]/Matome table',
+  path: '[Screens]/Matome table',
 )
 Widget matomeTableEmptyUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 920, child: MatomeTable(rows: []));
@@ -1030,7 +1038,7 @@ Widget matomeTableEmptyUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Detail — desktop',
   type: ContactDetail,
-  path: '[Widgets]/Contact detail',
+  path: '[Screens]/Contact detail',
 )
 Widget contactDetailDesktopUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1042,7 +1050,7 @@ Widget contactDetailDesktopUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Detail — mobile',
   type: ContactDetail,
-  path: '[Widgets]/Contact detail',
+  path: '[Screens]/Contact detail',
 )
 Widget contactDetailMobileUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1054,7 +1062,7 @@ Widget contactDetailMobileUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Detail — sparse (minimal info)',
   type: ContactDetail,
-  path: '[Widgets]/Contact detail',
+  path: '[Screens]/Contact detail',
 )
 Widget contactDetailSparseUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1133,7 +1141,7 @@ const _contactDetailSparse = ContactDetailData(
 @widgetbook.UseCase(
   name: 'Default',
   type: ContactTile,
-  path: '[Widgets]/Contact tile',
+  path: '[Screens]/Contact tile',
 )
 Widget contactTileUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1168,7 +1176,7 @@ Widget contactTileUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Always (split pane)',
   type: MasterDetailScaffold,
-  path: '[Widgets]/Master-detail scaffold',
+  path: '[Screens]/Master-detail scaffold',
 )
 Widget masterDetailScaffoldUseCase(BuildContext context) {
   return const SizedBox(
@@ -1186,7 +1194,7 @@ Widget masterDetailScaffoldUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'On click (split appears once selected)',
   type: MasterDetailScaffold,
-  path: '[Widgets]/Master-detail scaffold',
+  path: '[Screens]/Master-detail scaffold',
 )
 Widget masterDetailScaffoldOnClickUseCase(BuildContext context) {
   return const SizedBox(
@@ -1297,7 +1305,7 @@ class _MasterDetailEmptySample extends StatelessWidget {
 @widgetbook.UseCase(
   name: 'Grid — desktop',
   type: FilesGrid,
-  path: '[Widgets]/Files',
+  path: '[Screens]/Files',
 )
 Widget filesGridDesktopUseCase(BuildContext context) {
   return _UseCaseSurface(width: 960, child: FilesGrid(files: _filesSample));
@@ -1306,7 +1314,7 @@ Widget filesGridDesktopUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Grid — mobile',
   type: FilesGrid,
-  path: '[Widgets]/Files',
+  path: '[Screens]/Files',
 )
 Widget filesGridMobileUseCase(BuildContext context) {
   return _UseCaseSurface(width: 380, child: FilesGrid(files: _filesSample));
@@ -1315,7 +1323,7 @@ Widget filesGridMobileUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Table — desktop',
   type: FilesTable,
-  path: '[Widgets]/Files',
+  path: '[Screens]/Files',
 )
 Widget filesTableDesktopUseCase(BuildContext context) {
   return _UseCaseSurface(width: 960, child: FilesTable(files: _filesSample));
@@ -1324,7 +1332,7 @@ Widget filesTableDesktopUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Table — mobile (compact)',
   type: FilesTable,
-  path: '[Widgets]/Files',
+  path: '[Screens]/Files',
 )
 Widget filesTableMobileUseCase(BuildContext context) {
   return _UseCaseSurface(width: 380, child: FilesTable(files: _filesSample));
@@ -1400,6 +1408,78 @@ const _filesSample = <FileRow>[
   ),
 ];
 
+// ─── [Screens]/Files — screen-level catalog (Storybook-parity demo) ─────────────
+//
+// Proof the catalog can host SCREEN-level nodes the same way Storybook's APPS
+// root does: `[Screens]` is a WidgetbookCategory (root), `FilesScreen` the
+// WidgetbookComponent (the screen), and each state below is a WidgetbookUseCase
+// (one Storybook "story"). It renders the REAL, shipped `FilesScreen` — app-
+// first, never a catalog-only reimplementation — and drives its four states
+// purely by OVERRIDING the one provider the screen reads,
+// `filesForCurrentOwnerProvider`. `settingsStoreProvider` is stubbed in-memory
+// so `filesViewProvider` hydrates without touching platform secure storage.
+//
+// NOTE: `FeatureFlags.masterDetailLayout` is a `bool.fromEnvironment` const →
+// false in the catalog (no --dart-define), so these render the shipped flag-OFF
+// centred column. The open / overflow-menu callbacks use go_router + Navigator
+// and fire only on interaction; the four static states render standalone.
+
+/// Wrap the real [FilesScreen] in a [ProviderScope] that stubs settings storage
+/// and applies one per-state override of [filesForCurrentOwnerProvider].
+Widget _filesScreenScene(Override filesOverride) {
+  return ProviderScope(
+    overrides: [
+      settingsStoreProvider.overrideWithValue(
+        InMemorySettingsStore({'matome.files_view': 'grid'}),
+      ),
+      filesOverride,
+    ],
+    child: const FilesScreen(),
+  );
+}
+
+/// Loaded — the owner has files; the grid renders every relation combination
+/// (the DR-003 fixtures). The default state a returning user sees.
+@widgetbook.UseCase(name: 'Loaded', type: FilesScreen, path: '[Screens]/Files')
+Widget filesScreenLoadedUseCase(BuildContext context) {
+  return _filesScreenScene(
+    filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample),
+  );
+}
+
+/// Empty — signed in but no files yet (or none in the active scope); the screen
+/// shows the centred empty state, not a spinner or an error row.
+@widgetbook.UseCase(name: 'Empty', type: FilesScreen, path: '[Screens]/Files')
+Widget filesScreenEmptyUseCase(BuildContext context) {
+  return _filesScreenScene(
+    filesForCurrentOwnerProvider.overrideWith(
+      (ref) async => const <FileRow>[],
+    ),
+  );
+}
+
+/// Loading — the owner's files are still resolving; the screen shows the centred
+/// spinner. Modelled with a never-completing fetch.
+@widgetbook.UseCase(name: 'Loading', type: FilesScreen, path: '[Screens]/Files')
+Widget filesScreenLoadingUseCase(BuildContext context) {
+  return _filesScreenScene(
+    filesForCurrentOwnerProvider.overrideWith(
+      (ref) => Future<List<FileRow>>.delayed(const Duration(days: 365)),
+    ),
+  );
+}
+
+/// Error — the files fetch threw; the screen shows the centred error message
+/// instead of the grid. Where the user lands on a failed read.
+@widgetbook.UseCase(name: 'Error', type: FilesScreen, path: '[Screens]/Files')
+Widget filesScreenErrorUseCase(BuildContext context) {
+  return _filesScreenScene(
+    filesForCurrentOwnerProvider.overrideWith(
+      (ref) => Future<List<FileRow>>.error('Failed to load files'),
+    ),
+  );
+}
+
 // ─── Files chrome (selection / undo / empty / menu, #1477) ───────────────────
 //
 // The presentational chrome shipped in
@@ -1411,7 +1491,7 @@ const _filesSample = <FileRow>[
 @widgetbook.UseCase(
   name: 'Bulk bar (selection active)',
   type: FilesBulkBar,
-  path: '[Widgets]/Design system/Files chrome',
+  path: '[Global]/Files chrome',
 )
 Widget filesBulkBarUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1429,7 +1509,7 @@ Widget filesBulkBarUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Undo bar (after delete)',
   type: FilesUndoBar,
-  path: '[Widgets]/Design system/Files chrome',
+  path: '[Global]/Files chrome',
 )
 Widget filesUndoBarUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1445,7 +1525,7 @@ Widget filesUndoBarUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Empty state (no files)',
   type: FilesEmptyState,
-  path: '[Widgets]/Design system/Files chrome',
+  path: '[Global]/Files chrome',
 )
 Widget filesEmptyStateUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 480, child: FilesEmptyState());
@@ -1454,7 +1534,7 @@ Widget filesEmptyStateUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Muted dash (absent value)',
   type: FilesMutedDash,
-  path: '[Widgets]/Design system/Files chrome',
+  path: '[Global]/Files chrome',
 )
 Widget filesMutedDashUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 240, child: FilesMutedDash());
@@ -1463,7 +1543,7 @@ Widget filesMutedDashUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Per-file overflow menu',
   type: FileActionsMenu,
-  path: '[Widgets]/Design system/Files chrome',
+  path: '[Global]/Files chrome',
 )
 Widget filesFileActionsMenuUseCase(BuildContext context) {
   // The shared files overflow menu (open · move · download · delete). Rendered
@@ -1482,7 +1562,7 @@ Widget filesFileActionsMenuUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'File overflow menu (delete-only)',
   type: FileActionsMenu,
-  path: '[Widgets]/Design system/Details',
+  path: '[Global]/Details',
 )
 Widget detailsFileActionsMenuUseCase(BuildContext context) {
   // The Details-screen file overflow ("…") — a single destructive Delete,
@@ -1503,7 +1583,7 @@ Widget detailsFileActionsMenuUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Matome overflow menu',
   type: MatomeActionsMenu,
-  path: '[Widgets]/Design system/Matome',
+  path: '[Global]/Matome',
 )
 Widget matomeActionsMenuUseCase(BuildContext context) {
   // Matome-level secondary actions (rename · edit · regenerate · move · share
@@ -1523,11 +1603,11 @@ Widget matomeActionsMenuUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Add FAB',
   type: MatomeAddFab,
-  path: '[Widgets]/Design system/Matome',
+  path: '[Global]/Matome',
 )
 Widget matomeAddFabUseCase(BuildContext context) {
   // The mobile-shell "add" FAB in isolation (also shown in context under
-  // [Widgets]/Navigation › Mobile dock).
+  // [Screens]/Navigation › Mobile dock).
   return const _UseCaseSurface(width: 200, child: Center(child: MatomeAddFab()));
 }
 
@@ -1536,13 +1616,13 @@ Widget matomeAddFabUseCase(BuildContext context) {
 // The shared auth primitives shipped in
 // `package:matome_flutter/features/auth/auth_widgets.dart`: the responsive
 // [AuthScaffold], the labeled [AuthField], and the loading-aware
-// [AuthSubmitButton]. (AuthErrorBanner already has a story under [Widgets]/
+// [AuthSubmitButton]. (AuthErrorBanner already has a story under [Screens]/
 // Design system/Auth.)
 
 @widgetbook.UseCase(
   name: 'Scaffold (form column + back)',
   type: AuthScaffold,
-  path: '[Widgets]/Auth',
+  path: '[Screens]/Auth',
 )
 Widget authScaffoldUseCase(BuildContext context) {
   return SizedBox(
@@ -1558,7 +1638,7 @@ Widget authScaffoldUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Field (labeled + obscured)',
   type: AuthField,
-  path: '[Widgets]/Design system/Auth',
+  path: '[Global]/Auth',
 )
 Widget authFieldUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _AuthFieldSample());
@@ -1567,7 +1647,7 @@ Widget authFieldUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Submit button (idle · loading · disabled)',
   type: AuthSubmitButton,
-  path: '[Widgets]/Design system/Auth',
+  path: '[Global]/Auth',
 )
 Widget authSubmitButtonUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1609,7 +1689,7 @@ Widget authSubmitButtonUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Player — playing (12:04)',
   type: AudioPlayerBar,
-  path: '[Widgets]/Design system/Details',
+  path: '[Global]/Details',
 )
 Widget audioPlayerBarPlayingUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1627,7 +1707,7 @@ Widget audioPlayerBarPlayingUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Player — unavailable',
   type: AudioPlayerBar,
-  path: '[Widgets]/Design system/Details',
+  path: '[Global]/Details',
 )
 Widget audioPlayerBarUnavailableUseCase(BuildContext context) {
   // No playable source resolved → the graceful "audio unavailable" surface.
@@ -1639,7 +1719,7 @@ Widget audioPlayerBarUnavailableUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Audio — ready (transcript)',
   type: FileView,
-  path: '[Widgets]/File view',
+  path: '[Screens]/File view',
 )
 Widget fileViewAudioReadyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.audioReady);
@@ -1648,7 +1728,7 @@ Widget fileViewAudioReadyUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Audio — processing',
   type: FileView,
-  path: '[Widgets]/File view',
+  path: '[Screens]/File view',
 )
 Widget fileViewAudioProcessingUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.audioProcessing);
@@ -1657,7 +1737,7 @@ Widget fileViewAudioProcessingUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Audio — failed',
   type: FileView,
-  path: '[Widgets]/File view',
+  path: '[Screens]/File view',
 )
 Widget fileViewAudioFailedUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.audioFailed);
@@ -1666,7 +1746,7 @@ Widget fileViewAudioFailedUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Audio — empty',
   type: FileView,
-  path: '[Widgets]/File view',
+  path: '[Screens]/File view',
 )
 Widget fileViewAudioEmptyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.audioEmpty);
@@ -1675,7 +1755,7 @@ Widget fileViewAudioEmptyUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Image — ready (description)',
   type: FileView,
-  path: '[Widgets]/File view',
+  path: '[Screens]/File view',
 )
 Widget fileViewImageReadyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.imageReady);
@@ -1684,7 +1764,7 @@ Widget fileViewImageReadyUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Image — empty',
   type: FileView,
-  path: '[Widgets]/File view',
+  path: '[Screens]/File view',
 )
 Widget fileViewImageEmptyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.imageEmpty);
@@ -1693,7 +1773,7 @@ Widget fileViewImageEmptyUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Notes — filled',
   type: FileView,
-  path: '[Widgets]/File view',
+  path: '[Screens]/File view',
 )
 Widget fileViewNotesFilledUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.notesFilled);
@@ -1702,7 +1782,7 @@ Widget fileViewNotesFilledUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Notes — empty',
   type: FileView,
-  path: '[Widgets]/File view',
+  path: '[Screens]/File view',
 )
 Widget fileViewNotesEmptyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.notesEmpty);
@@ -1718,7 +1798,7 @@ Widget fileViewNotesEmptyUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Sync chip (local · promoting · cloud)',
   type: SpaceSyncChip,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget spaceSyncChipUseCase(BuildContext context) {
   return const _UseCaseSurface(
@@ -1738,7 +1818,7 @@ Widget spaceSyncChipUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Inbox entry (loose item · draft matome)',
   type: InboxItemCard,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget inboxItemCardUseCase(BuildContext context) {
   return const _UseCaseSurface(
@@ -1770,7 +1850,7 @@ Widget inboxItemCardUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Space tile (local + promote · cloud)',
   type: SpaceSyncTile,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget spaceSyncTileUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1800,7 +1880,7 @@ Widget spaceSyncTileUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Create sync choice (local default)',
   type: SpaceSyncChoice,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget spaceSyncChoiceUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1817,7 +1897,7 @@ Widget spaceSyncChoiceUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Files scope filter (All · Loose · In a space)',
   type: FilesScopeFilter,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget filesScopeFilterUseCase(BuildContext context) {
   return _UseCaseSurface(
@@ -1841,7 +1921,7 @@ Widget filesScopeFilterUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — Inbox (loose items + draft matomes)',
   type: InboxItemCard,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget sceneInboxUseCase(BuildContext context) {
   return const _SceneSurface(child: _InboxScene());
@@ -1850,7 +1930,7 @@ Widget sceneInboxUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — Spaces (local / cloud + promote)',
   type: SpaceSyncTile,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget sceneSpacesUseCase(BuildContext context) {
   return const _SceneSurface(child: _SpacesScene());
@@ -1859,7 +1939,7 @@ Widget sceneSpacesUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — Files (scope filter)',
   type: FilesScopeFilter,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget sceneFilesUseCase(BuildContext context) {
   return const _SceneSurface(child: _FilesScene());
@@ -1868,7 +1948,7 @@ Widget sceneFilesUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — New space sheet (local default)',
   type: SpaceSyncChoice,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget sceneNewSpaceSheetUseCase(BuildContext context) {
   return const _SceneSurface(child: _NewSpaceSheetScene());
@@ -1877,7 +1957,7 @@ Widget sceneNewSpaceSheetUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Scene — Promote to cloud consent',
   type: SpaceSyncChip,
-  path: '[Widgets]/Local-first spaces',
+  path: '[Screens]/Local-first spaces',
 )
 Widget scenePromoteConsentUseCase(BuildContext context) {
   return const _SceneSurface(child: _PromoteConsentScene());
@@ -3179,7 +3259,7 @@ List<NavDestinationSpec> _navDestinations(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Mobile dock — in context',
   type: MatomeBottomDock,
-  path: '[Widgets]/Navigation',
+  path: '[Screens]/Navigation',
 )
 Widget mobileDockInContextUseCase(BuildContext context) {
   return const _PhoneFrame(child: _MobileNavDemo());
@@ -3188,7 +3268,7 @@ Widget mobileDockInContextUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Mobile dock — bare',
   type: MatomeBottomDock,
-  path: '[Widgets]/Navigation',
+  path: '[Screens]/Navigation',
 )
 Widget mobileDockBareUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 400, child: _BareDock());
@@ -3197,7 +3277,7 @@ Widget mobileDockBareUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Desktop sidebar — expanded',
   type: MatomeSidebar,
-  path: '[Widgets]/Navigation',
+  path: '[Screens]/Navigation',
 )
 Widget desktopSidebarExpandedUseCase(BuildContext context) {
   return const _WindowFrame(expanded: true);
@@ -3206,7 +3286,7 @@ Widget desktopSidebarExpandedUseCase(BuildContext context) {
 @widgetbook.UseCase(
   name: 'Desktop sidebar — collapsed (rail)',
   type: MatomeSidebar,
-  path: '[Widgets]/Navigation',
+  path: '[Screens]/Navigation',
 )
 Widget desktopSidebarCollapsedUseCase(BuildContext context) {
   return const _WindowFrame(expanded: false);
