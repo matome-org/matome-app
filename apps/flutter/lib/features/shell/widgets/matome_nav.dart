@@ -99,8 +99,8 @@ const double kSidebarExpandedWidth = 248;
 /// Collapsed icon-only rail width.
 const double kSidebarRailWidth = 76;
 
-const Duration _kAnim = Duration(milliseconds: 220);
-const Curve _kCurve = Curves.easeOutCubic;
+const Duration _kAnim = Duration(milliseconds: 160);
+const Curve _kCurve = Curves.fastOutSlowIn;
 
 // ─── Shared add-menu plumbing ────────────────────────────────────────────────
 
@@ -444,7 +444,19 @@ class MatomeSidebar extends StatelessWidget {
         color: colors.surface,
         border: Border(right: BorderSide(color: colors.border)),
       ),
-      child: Column(
+      // The width animates but `expanded` flips instantly: mid-expand the
+      // container is still narrow while items already render their labels. Lay
+      // the content out at its TARGET width (via OverflowBox, so it ignores the
+      // animating container width) and clip the overflow — a clean reveal wipe
+      // with no transient RenderFlex overflow.
+      child: ClipRect(
+        child: OverflowBox(
+          alignment: Alignment.centerLeft,
+          minWidth: 0,
+          maxWidth: kSidebarExpandedWidth,
+          child: SizedBox(
+            width: expanded ? kSidebarExpandedWidth : kSidebarRailWidth,
+            child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _SidebarHeader(expanded: expanded, onToggle: onToggle),
@@ -485,6 +497,9 @@ class MatomeSidebar extends StatelessWidget {
             onSettings: onSettings,
           ),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }

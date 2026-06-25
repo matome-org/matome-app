@@ -291,14 +291,20 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
 
     return Scaffold(
       backgroundColor: colors.background,
-      appBar: AppBar(
-        backgroundColor: colors.background,
-        surfaceTintColor: colors.background,
-        title: Text(
-          t.files.title,
-          style: context.typography.title.copyWith(color: colors.textPrimary),
-        ),
-      ),
+      // Flag ON: the title lives in a [_FilesHeader] at the top of the master
+      // column (like Inbox/Contacts/Spaces) so the master-detail divider runs
+      // full height. Flag OFF keeps the shipped AppBar, byte-for-byte.
+      appBar: FeatureFlags.masterDetailLayout
+          ? null
+          : AppBar(
+              backgroundColor: colors.background,
+              surfaceTintColor: colors.background,
+              title: Text(
+                t.files.title,
+                style: context.typography.title
+                    .copyWith(color: colors.textPrimary),
+              ),
+            ),
       body: SafeArea(
         child: async.when(
           loading: () => Center(child: LoadingIndicator(color: colors.primary)),
@@ -398,9 +404,19 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     );
 
     if (!centered) {
-      return SingleChildScrollView(
-        padding: EdgeInsets.all(context.spacing.lg),
-        child: column,
+      // Header pinned at the top of the master column (matching the other
+      // surfaces) so the master-detail vertical divider runs the full height.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _FilesHeader(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(context.spacing.lg),
+              child: column,
+            ),
+          ),
+        ],
       );
     }
 
@@ -621,6 +637,45 @@ class _FileIntoSpaceSheet extends StatelessWidget {
             onTap: () => Navigator.of(context).pop(_FileSpaceTarget(w.id)),
           ),
       ],
+    );
+  }
+}
+
+/// The Files page header: the `マトメ` eyebrow + display title with a bottom
+/// border, pinned at the top of the master column. Mirrors the Inbox/Contacts/
+/// Spaces `_Header` so the master-detail divider runs the full height.
+class _FilesHeader extends StatelessWidget {
+  const _FilesHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(spacing.md, spacing.sm, spacing.md, spacing.sm),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'マトメ',
+            style: typography.label.copyWith(
+              letterSpacing: 2,
+              color: colors.textSecondary,
+            ),
+          ),
+          Text(
+            t.files.title,
+            style: typography.display.copyWith(color: colors.textPrimary),
+          ),
+        ],
+      ),
     );
   }
 }
