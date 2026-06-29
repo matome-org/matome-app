@@ -290,6 +290,7 @@ flutter test test/core/theme/design_system_docs_test.dart
 flutter test test/core/theme/app_theme_contrast_test.dart
 flutter test test/goldens/shared_widgets_golden_test.dart
 flutter test test/core/theme/ui_component_coverage_guard_test.dart
+flutter test test/app/route_page_contract_guard_test.dart
 
 # Dual-flag navigation grading (DR-002, #1474). `ff.newNavShell` now DEFAULTS
 # ON, so a plain `flutter test` only exercises the NEW shell — the legacy (OFF)

@@ -5,19 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../core/config/feature_flags.dart';
 import '../core/providers.dart';
 import '../ui/file_detail_page.dart';
-import '../features/auth/login_screen.dart';
-import '../features/auth/signup_screen.dart';
-import '../features/auth/welcome_screen.dart';
-import '../features/calendar/calendar_screen.dart';
-import '../features/contacts/contact_detail_screen.dart';
-import '../features/details/file_detail_screen.dart';
-import '../features/files/files_screen.dart';
-import '../features/home/home_screen.dart';
-import '../features/matome/matome_detail_screen.dart';
 import 'auth_state.dart';
 import 'navigation_guard.dart';
-import 'screens/recording_screen.dart';
-import 'screens/settings_screen.dart';
+import 'pages/auth_pages.dart';
+import 'pages/primary_pages.dart';
+import 'pages/secondary_pages.dart';
 import 'screens/tab_screens.dart';
 import 'shell_scaffold.dart';
 import 'shell_tabs.dart';
@@ -58,8 +50,9 @@ class _AuthListenable extends ChangeNotifier {
 /// the legacy single-recording view rather than dead-ending.
 Future<String?> _redirectRecordingToMatome(Ref ref, String? recordingId) async {
   if (recordingId == null) return null;
-  final matomeId =
-      await ref.read(matomesDaoProvider).matomeIdForRecording(recordingId);
+  final matomeId = await ref
+      .read(matomesDaoProvider)
+      .matomeIdForRecording(recordingId);
   if (matomeId == null) return null;
   return '/matome/$matomeId';
 }
@@ -124,25 +117,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
     },
     routes: [
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const WelcomeScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/signup',
-        builder: (context, state) => const SignupScreen(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const WelcomePage()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(path: '/signup', builder: (context, state) => const SignupPage()),
       GoRoute(
         path: '/recording',
         parentNavigatorKey: _rootKey,
-        pageBuilder: (context, state) => MaterialPage(
-          fullscreenDialog: true,
-          child: RecordingScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            MaterialPage(fullscreenDialog: true, child: RecordingPage()),
       ),
       // Matome detail hub (#1371/#1378): the primary detail "page" for a Matome
       // and its Items. Reached from every list surface (inbox / calendar /
@@ -150,9 +132,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/matome/:id',
         parentNavigatorKey: _rootKey,
-        builder: (context, state) => MatomeDetailScreen(
-          id: state.pathParameters['id']!,
-        ),
+        builder: (context, state) =>
+            MatomeDetailPage(id: state.pathParameters['id']!),
       ),
       // Files section (DR-003 / #1465): the cross-matome, owner-scoped Files
       // view (grid + table). Under the LEGACY shell it lives on the root
@@ -165,7 +146,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: '/files',
           parentNavigatorKey: _rootKey,
-          builder: (context, state) => const FilesScreen(),
+          builder: (context, state) => const FilesPage(),
         ),
       // Single-recording details (#1378): the drill-DOWN route used from inside
       // the Matome hub to open ONE Item. Distinct from the legacy recording
@@ -176,7 +157,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootKey,
         pageBuilder: (context, state) => fileDetailPage(
           context,
-          FileDetailScreen.byId(id: state.pathParameters['id']!),
+          FileDetailPage.audio(id: state.pathParameters['id']!),
         ),
       ),
       // Image drill-down (#97). Images carry their full [RecordingItem] from the
@@ -197,7 +178,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootKey,
         pageBuilder: (context, state) => fileDetailPage(
           context,
-          FileDetailScreen.imageById(id: state.pathParameters['id']!),
+          FileDetailPage.image(id: state.pathParameters['id']!),
         ),
       ),
       // Document drill-down by id (#1450). A document must NEVER hit
@@ -213,7 +194,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootKey,
         pageBuilder: (context, state) => fileDetailPage(
           context,
-          FileDetailScreen.documentById(id: state.pathParameters['id']!),
+          FileDetailPage.document(id: state.pathParameters['id']!),
         ),
       ),
       // Desktop meeting recorder (loopback + mic, MVP Linux). Same fullscreen
@@ -221,10 +202,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/meeting',
         parentNavigatorKey: _rootKey,
-        pageBuilder: (context, state) => MaterialPage(
-          fullscreenDialog: true,
-          child: RecordingScreen(binding: RecorderBinding.meeting),
-        ),
+        pageBuilder: (context, state) =>
+            MaterialPage(fullscreenDialog: true, child: MeetingRecordingPage()),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
@@ -237,9 +216,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         // not enabled (e.g. Satori under [FeatureFlags.newNavShell], whose route
         // is therefore COMPILED OUT and unreachable) never reaches this list.
         // Inbox is the fixed home and is always present.
-        branches: [
-          for (final tab in shellBranches) _branchFor(ref, tab),
-        ],
+        branches: [for (final tab in shellBranches) _branchFor(ref, tab)],
       ),
     ],
   );
@@ -252,120 +229,106 @@ final routerProvider = Provider<GoRouter>((ref) {
 StatefulShellBranch _branchFor(Ref ref, ShellTab tab) {
   return switch (tab) {
     ShellTab.inbox => StatefulShellBranch(
-        navigatorKey: _inboxKey,
-        routes: [
-          GoRoute(
-            path: '/inbox',
-            builder: (context, state) => const HomeScreen(),
-            routes: [
-              GoRoute(
-                path: 'settings',
-                builder: (context, state) => const SettingsScreen(),
-              ),
-              GoRoute(
-                // LEGACY recording deep-link → parent matome (#1378).
-                path: ':id',
-                redirect: (context, state) => _redirectRecordingToMatome(
-                  ref,
-                  state.pathParameters['id'],
-                ),
-                builder: (context, state) => RecordingDetailScreen(
-                  id: state.pathParameters['id']!,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      navigatorKey: _inboxKey,
+      routes: [
+        GoRoute(
+          path: '/inbox',
+          builder: (context, state) => const InboxPage(),
+          routes: [
+            GoRoute(
+              path: 'settings',
+              builder: (context, state) => const SettingsPage(),
+            ),
+            GoRoute(
+              // LEGACY recording deep-link → parent matome (#1378).
+              path: ':id',
+              redirect: (context, state) =>
+                  _redirectRecordingToMatome(ref, state.pathParameters['id']),
+              builder: (context, state) =>
+                  RecordingDetailScreen(id: state.pathParameters['id']!),
+            ),
+          ],
+        ),
+      ],
+    ),
     ShellTab.calendar => StatefulShellBranch(
-        navigatorKey: _calendarKey,
-        routes: [
-          GoRoute(
-            path: '/calendar',
-            builder: (context, state) => const CalendarScreen(),
-            routes: [
-              GoRoute(
-                // LEGACY recording deep-link → parent matome (#1378).
-                path: ':id',
-                redirect: (context, state) => _redirectRecordingToMatome(
-                  ref,
-                  state.pathParameters['id'],
-                ),
-                builder: (context, state) => RecordingDetailScreen(
-                  id: state.pathParameters['id']!,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      navigatorKey: _calendarKey,
+      routes: [
+        GoRoute(
+          path: '/calendar',
+          builder: (context, state) => const CalendarPage(),
+          routes: [
+            GoRoute(
+              // LEGACY recording deep-link → parent matome (#1378).
+              path: ':id',
+              redirect: (context, state) =>
+                  _redirectRecordingToMatome(ref, state.pathParameters['id']),
+              builder: (context, state) =>
+                  RecordingDetailScreen(id: state.pathParameters['id']!),
+            ),
+          ],
+        ),
+      ],
+    ),
     ShellTab.spaces => StatefulShellBranch(
-        navigatorKey: _spacesKey,
-        routes: [
-          GoRoute(
-            path: '/spaces',
-            builder: (context, state) => const SpacesScreen(),
-            routes: [
-              GoRoute(
-                // LEGACY recording-in-a-space deep-link → parent matome.
-                path: 'recording/:id',
-                redirect: (context, state) => _redirectRecordingToMatome(
-                  ref,
-                  state.pathParameters['id'],
-                ),
-                builder: (context, state) => SpaceRecordingScreen(
-                  id: state.pathParameters['id']!,
-                ),
-              ),
-              GoRoute(
-                path: ':spaceId',
-                builder: (context, state) => SpaceDetailScreen(
-                  spaceId: state.pathParameters['spaceId']!,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      navigatorKey: _spacesKey,
+      routes: [
+        GoRoute(
+          path: '/spaces',
+          builder: (context, state) => const SpacesPage(),
+          routes: [
+            GoRoute(
+              // LEGACY recording-in-a-space deep-link → parent matome.
+              path: 'recording/:id',
+              redirect: (context, state) =>
+                  _redirectRecordingToMatome(ref, state.pathParameters['id']),
+              builder: (context, state) =>
+                  SpaceRecordingScreen(id: state.pathParameters['id']!),
+            ),
+            GoRoute(
+              path: ':spaceId',
+              builder: (context, state) =>
+                  SpaceDetailPage(spaceId: state.pathParameters['spaceId']!),
+            ),
+          ],
+        ),
+      ],
+    ),
     ShellTab.satori => StatefulShellBranch(
-        navigatorKey: _satoriKey,
-        routes: [
-          GoRoute(
-            path: '/satori',
-            builder: (context, state) => const SatoriScreen(),
-          ),
-        ],
-      ),
+      navigatorKey: _satoriKey,
+      routes: [
+        GoRoute(
+          path: '/satori',
+          builder: (context, state) => const SatoriScreen(),
+        ),
+      ],
+    ),
     ShellTab.contacts => StatefulShellBranch(
-        navigatorKey: _contactsKey,
-        routes: [
-          GoRoute(
-            path: '/contacts',
-            builder: (context, state) => const ContactsScreen(),
-            routes: [
-              // Contact detail (DR-004, #1464): the graduated ContactDetail
-              // hosted at `/contacts/:id`, pushed from the list.
-              GoRoute(
-                path: ':id',
-                builder: (context, state) => ContactDetailScreen(
-                  id: state.pathParameters['id']!,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      navigatorKey: _contactsKey,
+      routes: [
+        GoRoute(
+          path: '/contacts',
+          builder: (context, state) => const ContactsPage(),
+          routes: [
+            // Contact detail (DR-004, #1464): the graduated ContactDetail
+            // hosted at `/contacts/:id`, pushed from the list.
+            GoRoute(
+              path: ':id',
+              builder: (context, state) =>
+                  ContactDetailPage(id: state.pathParameters['id']!),
+            ),
+          ],
+        ),
+      ],
+    ),
     // Files (DR-002/#1467): a shell branch only under newNavShell. Under the
     // legacy shell `files` is never in [shellBranches], so this arm is unused
     // and `/files` stays the root deep-link route above.
     ShellTab.files => StatefulShellBranch(
-        navigatorKey: _filesKey,
-        routes: [
-          GoRoute(
-            path: '/files',
-            builder: (context, state) => const FilesScreen(),
-          ),
-        ],
-      ),
+      navigatorKey: _filesKey,
+      routes: [
+        GoRoute(path: '/files', builder: (context, state) => const FilesPage()),
+      ],
+    ),
   };
 }

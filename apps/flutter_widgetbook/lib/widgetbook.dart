@@ -3,20 +3,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:matome_flutter/app/pages/auth_pages.dart';
+import 'package:matome_flutter/app/pages/primary_pages.dart';
+import 'package:matome_flutter/app/pages/secondary_pages.dart';
+import 'package:matome_flutter/app/screens/recording_screen.dart'
+    show RecorderBinding;
+import 'package:matome_flutter/core/db/app_database.dart'
+    show RecordingRow, WorkspaceRow;
 import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
 import 'package:matome_flutter/core/audio/audio_playback.dart';
 import 'package:matome_flutter/core/db/file_row.dart';
-import 'package:matome_flutter/core/providers.dart' show settingsStoreProvider;
+import 'package:matome_flutter/core/providers.dart'
+    show recordingDraftsDaoProvider, settingsStoreProvider, tokenStoreProvider;
 import 'package:matome_flutter/core/settings/settings_store.dart'
     show InMemorySettingsStore;
 import 'package:matome_flutter/features/contacts/widgets/contact_detail.dart';
 import 'package:matome_flutter/features/contacts/widgets/contact_tile.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/details_controller.dart'
-    show AudioSource, AudioSourceKind;
+    show
+        AudioSource,
+        AudioSourceKind,
+        DetailsController,
+        DetailsState,
+        detailsControllerProvider;
 import 'package:matome_flutter/features/details/file_actions_menu.dart'
     as details_actions;
 import 'package:matome_flutter/features/details/file_view.dart';
@@ -27,10 +41,24 @@ import 'package:matome_flutter/features/files/files_screen.dart'
 import 'package:matome_flutter/features/files/widgets/files_grid.dart';
 import 'package:matome_flutter/features/files/widgets/files_table.dart';
 import 'package:matome_flutter/features/files/widgets/files_view_shared.dart';
+import 'package:matome_flutter/features/home/inbox_controller.dart';
+import 'package:matome_flutter/features/home/inbox_item.dart';
+import 'package:matome_flutter/features/home/loose_inbox_controller.dart';
+import 'package:matome_flutter/features/home/matome_inbox_controller.dart';
 import 'package:matome_flutter/features/matome/matome_actions_menu.dart';
+import 'package:matome_flutter/features/matome/matome_detail_controller.dart'
+    show
+        MatomeDetailController,
+        MatomeDetailState,
+        matomeDetailControllerProvider;
 import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
+import 'package:matome_flutter/features/recording/audio_recording_service.dart';
+import 'package:matome_flutter/features/recording/recording_controller.dart';
+import 'package:matome_flutter/features/recording/recording_finish.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
+import 'package:matome_flutter/features/recordings/upload_retry_service.dart';
 import 'package:matome_flutter/features/shell/widgets/matome_nav.dart';
+import 'package:matome_flutter/features/spaces/filing_spaces_provider.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_bottom_sheet.dart';
 import 'package:matome_flutter/ui/app_button.dart';
@@ -123,6 +151,956 @@ Widget _matomeAppBuilder(BuildContext context, Widget child) {
   );
 }
 
+@widgetbook.UseCase(name: 'Mobile', type: WelcomePage, path: '[Pages]/Auth')
+Widget welcomePageMobileUseCase(BuildContext context) {
+  return _authPageScene(const WelcomePage(), viewport: _AuthViewport.mobile);
+}
+
+@widgetbook.UseCase(name: 'Desktop', type: WelcomePage, path: '[Pages]/Auth')
+Widget welcomePageDesktopUseCase(BuildContext context) {
+  return _authPageScene(const WelcomePage(), viewport: _AuthViewport.desktop);
+}
+
+@widgetbook.UseCase(name: 'Mobile', type: LoginPage, path: '[Pages]/Auth')
+Widget loginPageMobileUseCase(BuildContext context) {
+  return _authPageScene(const LoginPage(), viewport: _AuthViewport.mobile);
+}
+
+@widgetbook.UseCase(name: 'Desktop', type: LoginPage, path: '[Pages]/Auth')
+Widget loginPageDesktopUseCase(BuildContext context) {
+  return _authPageScene(const LoginPage(), viewport: _AuthViewport.desktop);
+}
+
+@widgetbook.UseCase(name: 'Mobile', type: SignupPage, path: '[Pages]/Auth')
+Widget signupPageMobileUseCase(BuildContext context) {
+  return _authPageScene(const SignupPage(), viewport: _AuthViewport.mobile);
+}
+
+@widgetbook.UseCase(name: 'Desktop', type: SignupPage, path: '[Pages]/Auth')
+Widget signupPageDesktopUseCase(BuildContext context) {
+  return _authPageScene(const SignupPage(), viewport: _AuthViewport.desktop);
+}
+
+@widgetbook.UseCase(
+  name: 'Welcome -> Login -> Signup',
+  type: WelcomePage,
+  path: '[Journeys]/Auth',
+)
+Widget authJourneyUseCase(BuildContext context) {
+  return const _UseCaseSurface(width: 1160, child: _AuthFlowScene());
+}
+
+@widgetbook.UseCase(
+  name: 'Capture -> Inbox -> Matome',
+  type: RecordingPage,
+  path: '[Journeys]/Capture',
+)
+Widget captureJourneyUseCase(BuildContext context) {
+  return _PageFlowScene(
+    width: 1440,
+    steps: [
+      _PageFlowStepSpec(
+        title: '1. Capture',
+        route: '/recording',
+        note: 'Real RecordingPage with the Widgetbook-safe recorder binding.',
+        width: 390,
+        height: 760,
+        child: ProviderScope(
+          child: RecordingPage(binding: _widgetbookMicRecorderBinding),
+        ),
+      ),
+      _PageFlowStepSpec(
+        title: '2. Inbox triage',
+        route: '/inbox',
+        note:
+            'Seeded inbox controllers show the captured happening waiting to file.',
+        width: 390,
+        height: 760,
+        child: _inboxPageScene(
+          matomes: _journeyInboxMatomes,
+          inboxItems: _journeyLooseInboxItems,
+          looseItems: _journeyLooseInboxItems,
+        ),
+      ),
+      _PageFlowStepSpec(
+        title: '3. Matome hub',
+        route: '/matome/:id',
+        note: 'Seeded MatomeDetailPage keeps the route target real.',
+        width: 680,
+        height: 760,
+        child: _matomeDetailPageScene(_journeyMatome.id),
+      ),
+    ],
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Inbox -> Matome -> Space',
+  type: InboxPage,
+  path: '[Journeys]/Organize',
+)
+Widget organizeJourneyUseCase(BuildContext context) {
+  return _PageFlowScene(
+    width: 1680,
+    steps: [
+      _PageFlowStepSpec(
+        title: '1. Choose happening',
+        route: '/inbox',
+        note: 'The inbox is seeded with one Matome and one loose recording.',
+        width: 430,
+        height: 760,
+        child: _inboxPageScene(
+          matomes: _journeyInboxMatomes,
+          inboxItems: _journeyLooseInboxItems,
+          looseItems: _journeyLooseInboxItems,
+        ),
+      ),
+      _PageFlowStepSpec(
+        title: '2. Review Matome',
+        route: '/matome/:id',
+        note:
+            'The app Page renders its real summary, files, notes, and filing CTA.',
+        width: 680,
+        height: 760,
+        child: _matomeDetailPageScene(_journeyMatome.id),
+      ),
+      const _PageFlowStepSpec(
+        title: '3. Filed Space',
+        route: '/spaces/:spaceId',
+        note: 'SpaceDetailPage stays the canonical post-filing destination.',
+        width: 430,
+        height: 760,
+        child: ProviderScope(
+          child: SpaceDetailPage(spaceId: 'widgetbook-space-work'),
+        ),
+      ),
+    ],
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Files -> Audio detail',
+  type: FilesPage,
+  path: '[Journeys]/Review',
+)
+Widget reviewJourneyUseCase(BuildContext context) {
+  return _PageFlowScene(
+    width: 1500,
+    steps: [
+      _PageFlowStepSpec(
+        title: '1. Files library',
+        route: '/files',
+        note: 'FilesPage uses explicit sample rows from the catalog fixture.',
+        width: 760,
+        height: 760,
+        child: _filesPageScene(
+          filesForCurrentOwnerProvider.overrideWith(
+            (ref) async => _filesSample,
+          ),
+        ),
+      ),
+      _PageFlowStepSpec(
+        title: '2. Audio review',
+        route: '/recording/detail/:id',
+        note:
+            'FileDetailPage.audio is seeded through its app DetailsController.',
+        width: 560,
+        height: 760,
+        child: _fileDetailPageScene(_journeyAudioRow.id),
+      ),
+    ],
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Settings -> Retry -> Files',
+  type: SettingsPage,
+  path: '[Journeys]/Recovery',
+)
+Widget recoveryJourneyUseCase(BuildContext context) {
+  return _PageFlowScene(
+    width: 1420,
+    steps: [
+      _PageFlowStepSpec(
+        title: '1. Defaults',
+        route: '/inbox/settings',
+        note:
+            'SettingsPage is the real default-view and account control surface.',
+        width: 430,
+        height: 760,
+        child: _settingsPageScene(),
+      ),
+      _PageFlowStepSpec(
+        title: '2. Retry queue',
+        route: '/inbox',
+        note: 'InboxPage shows an explicit failed local item fixture.',
+        width: 390,
+        height: 760,
+        child: _inboxPageScene(
+          matomes: _journeyInboxMatomes,
+          inboxItems: _journeyLooseInboxItems,
+          looseItems: _journeyLooseInboxItems,
+        ),
+      ),
+      _PageFlowStepSpec(
+        title: '3. Back to files',
+        route: '/files',
+        note:
+            'FilesPage confirms the same canonical review surface after recovery.',
+        width: 520,
+        height: 760,
+        child: _filesPageScene(
+          filesForCurrentOwnerProvider.overrideWith(
+            (ref) async => _filesSample,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+@widgetbook.UseCase(name: 'Loaded', type: FilesPage, path: '[Pages]/Files')
+Widget filesPageLoadedUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 1100,
+    height: 760,
+    child: _filesPageScene(
+      filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample),
+    ),
+  );
+}
+
+@widgetbook.UseCase(name: 'Empty', type: InboxPage, path: '[Pages]/Home')
+Widget inboxPageEmptyUseCase(BuildContext context) {
+  return _routeSurface(width: 390, height: 760, child: _inboxPageScene());
+}
+
+@widgetbook.UseCase(
+  name: 'Not found',
+  type: MatomeDetailPage,
+  path: '[Pages]/Matome',
+)
+Widget matomeDetailPageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 900,
+    height: 760,
+    child: const ProviderScope(
+      child: MatomeDetailPage(id: 'widgetbook-matome'),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Audio route',
+  type: FileDetailPage,
+  path: '[Pages]/Recording Details',
+)
+Widget fileDetailPageAudioUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 680,
+    height: 760,
+    child: const ProviderScope(
+      child: FileDetailPage.audio(id: 'widgetbook-audio'),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Image route',
+  type: FileDetailPage,
+  path: '[Pages]/Recording Details',
+)
+Widget fileDetailPageImageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 680,
+    height: 760,
+    child: const ProviderScope(
+      child: FileDetailPage.image(id: 'widgetbook-image'),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Document route',
+  type: FileDetailPage,
+  path: '[Pages]/Recording Details',
+)
+Widget fileDetailPageDocumentUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 680,
+    height: 760,
+    child: const ProviderScope(
+      child: FileDetailPage.document(id: 'widgetbook-document'),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Mic unsupported',
+  type: RecordingPage,
+  path: '[Pages]/Recording',
+)
+Widget recordingPageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: ProviderScope(
+      child: RecordingPage(binding: _widgetbookMicRecorderBinding),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Meeting unsupported',
+  type: MeetingRecordingPage,
+  path: '[Pages]/Recording',
+)
+Widget meetingRecordingPageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: ProviderScope(
+      child: MeetingRecordingPage(binding: _widgetbookMeetingRecorderBinding),
+    ),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Default',
+  type: SettingsPage,
+  path: '[Pages]/Settings',
+)
+Widget settingsPageUseCase(BuildContext context) {
+  return _routeSurface(width: 680, height: 760, child: _settingsPageScene());
+}
+
+@widgetbook.UseCase(name: 'Empty', type: CalendarPage, path: '[Pages]/Calendar')
+Widget calendarPageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 900,
+    height: 760,
+    child: const ProviderScope(child: CalendarPage()),
+  );
+}
+
+@widgetbook.UseCase(name: 'Empty', type: SpacesPage, path: '[Pages]/Spaces')
+Widget spacesPageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 900,
+    height: 760,
+    child: const ProviderScope(child: SpacesPage()),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Not found',
+  type: SpaceDetailPage,
+  path: '[Pages]/Spaces',
+)
+Widget spaceDetailPageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 680,
+    height: 760,
+    child: const ProviderScope(
+      child: SpaceDetailPage(spaceId: 'widgetbook-space'),
+    ),
+  );
+}
+
+@widgetbook.UseCase(name: 'Empty', type: ContactsPage, path: '[Pages]/Contacts')
+Widget contactsPageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 900,
+    height: 760,
+    child: const ProviderScope(child: ContactsPage()),
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Not found',
+  type: ContactDetailPage,
+  path: '[Pages]/Contacts',
+)
+Widget contactDetailPageUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 680,
+    height: 760,
+    child: const ProviderScope(
+      child: ContactDetailPage(id: 'widgetbook-contact'),
+    ),
+  );
+}
+
+Widget _routeSurface({
+  required double width,
+  required double height,
+  required Widget child,
+}) {
+  return _UseCaseSurface(
+    width: width + 48,
+    child: _RouteFrame(width: width, height: height, child: child),
+  );
+}
+
+Widget _filesPageScene(Override filesOverride) {
+  return ProviderScope(
+    overrides: [
+      settingsStoreProvider.overrideWithValue(
+        InMemorySettingsStore({'matome.files_view': 'grid'}),
+      ),
+      filesOverride,
+    ],
+    child: const FilesPage(),
+  );
+}
+
+Widget _inboxPageScene({
+  List<MatomeItem> matomes = const <MatomeItem>[],
+  List<InboxItem> inboxItems = const <InboxItem>[],
+  List<InboxItem> looseItems = const <InboxItem>[],
+}) {
+  return ProviderScope(
+    overrides: [
+      settingsStoreProvider.overrideWithValue(
+        InMemorySettingsStore({'matome.inbox_view': 'cards'}),
+      ),
+      matomeInboxControllerProvider.overrideWith(
+        (ref) =>
+            _WidgetbookMatomeInboxController(ref, AsyncValue.data(matomes)),
+      ),
+      inboxControllerProvider.overrideWith(
+        (ref) => _WidgetbookInboxController(ref, AsyncValue.data(inboxItems)),
+      ),
+      looseInboxControllerProvider.overrideWith(
+        (ref) =>
+            _WidgetbookLooseInboxController(ref, AsyncValue.data(looseItems)),
+      ),
+      filingSpacesProvider.overrideWith((ref) async => const []),
+      uploadRetryServiceProvider.overrideWith(
+        _WidgetbookUploadRetryService.new,
+      ),
+    ],
+    child: const InboxPage(),
+  );
+}
+
+Widget _settingsPageScene() {
+  return ProviderScope(
+    overrides: [
+      settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
+      tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
+    ],
+    child: const SettingsPage(),
+  );
+}
+
+Widget _matomeDetailPageScene(String id) {
+  return ProviderScope(
+    overrides: [
+      matomeDetailControllerProvider.overrideWith(
+        (ref, id) => _WidgetbookMatomeDetailController(ref, id),
+      ),
+    ],
+    child: MatomeDetailPage(id: id),
+  );
+}
+
+Widget _fileDetailPageScene(String id) {
+  return ProviderScope(
+    overrides: [
+      detailsControllerProvider.overrideWith(
+        (ref, id) => _WidgetbookDetailsController(ref, id),
+      ),
+    ],
+    child: FileDetailPage.audio(id: id),
+  );
+}
+
+class _RouteFrame extends StatelessWidget {
+  const _RouteFrame({
+    required this.width,
+    required this.height,
+    required this.child,
+  });
+
+  final double width;
+  final double height;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(radius.lg),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius.lg),
+        child: SizedBox(width: width, height: height, child: child),
+      ),
+    );
+  }
+}
+
+class _PageFlowScene extends StatelessWidget {
+  const _PageFlowScene({required this.steps, required this.width});
+
+  final List<_PageFlowStepSpec> steps;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return _UseCaseSurface(
+      width: width,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < steps.length; i++) ...[
+              _PageFlowStep(spec: steps[i]),
+              if (i != steps.length - 1) SizedBox(width: spacing.md),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PageFlowStepSpec {
+  const _PageFlowStepSpec({
+    required this.title,
+    required this.route,
+    required this.note,
+    required this.width,
+    required this.height,
+    required this.child,
+  });
+
+  final String title;
+  final String route;
+  final String note;
+  final double width;
+  final double height;
+  final Widget child;
+}
+
+class _PageFlowStep extends StatelessWidget {
+  const _PageFlowStep({required this.spec});
+
+  final _PageFlowStepSpec spec;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final colors = context.colors;
+    return SizedBox(
+      width: spec.width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            spec.title,
+            style: typography.label.copyWith(color: colors.textMuted),
+          ),
+          SizedBox(height: spacing.xxs),
+          Text(
+            spec.route,
+            style: typography.bodySmall.copyWith(color: colors.textPrimary),
+          ),
+          SizedBox(height: spacing.xs),
+          _RouteFrame(
+            width: spec.width,
+            height: spec.height,
+            child: spec.child,
+          ),
+          SizedBox(height: spacing.xs),
+          Text(
+            spec.note,
+            style: typography.label.copyWith(color: colors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WidgetbookMatomeDetailController extends MatomeDetailController {
+  _WidgetbookMatomeDetailController(Ref ref, String id) : super(ref, id) {
+    state = _widgetbookMatomeDetailState(state.id);
+  }
+
+  @override
+  Future<void> load() async {
+    state = _widgetbookMatomeDetailState(state.id);
+  }
+
+  @override
+  Future<void> fileIntoSpace(String spaceId) async {}
+
+  @override
+  Future<void> saveNotes(String notes) async {}
+
+  @override
+  Future<WorkspaceRow> defaultPersonalSpace() async => _journeySpaces.first;
+}
+
+class _WidgetbookDetailsController extends DetailsController {
+  _WidgetbookDetailsController(Ref ref, String id) : super(ref, id) {
+    state = _widgetbookDetailsState(state.id);
+  }
+
+  @override
+  Future<void> load() async {
+    state = _widgetbookDetailsState(state.id);
+  }
+
+  @override
+  Future<void> save(String text) async {}
+
+  @override
+  Future<void> retry() async {
+    state = state.copyWith(
+      isLoading: false,
+      isProcessing: false,
+      processingFailed: false,
+      pendingUpload: false,
+    );
+  }
+
+  @override
+  Future<void> delete() async {}
+
+  @override
+  Future<List<WorkspaceRow>> spaces() async => _journeySpaces;
+
+  @override
+  Future<void> moveToSpace(String workspaceId) async {}
+}
+
+MatomeDetailState _widgetbookMatomeDetailState(String id) {
+  return MatomeDetailState(
+    id: id,
+    matome: _journeyMatome,
+    spaces: _journeySpaces,
+    isLoading: false,
+  );
+}
+
+DetailsState _widgetbookDetailsState(String id) {
+  return DetailsState(
+    id: id,
+    row: _journeyAudioRow,
+    audioSource: const AudioSource.none(),
+    isLoading: false,
+    notFound: false,
+    isProcessing: false,
+    processingFailed: false,
+    pendingUpload: false,
+  );
+}
+
+const _journeyTimestamp = 1782691200000;
+
+const _journeyAudioRecording = RecordingItem(
+  id: 'widgetbook-audio-review',
+  title: 'Weekly product review',
+  summary: 'Decision log, launch risks, and owners captured from the review.',
+  timestamp: 'Today 09:24',
+  duration: '12:04',
+  badge: 'Product',
+  notes: 'Follow up with design on empty states before Friday.',
+  isProcessing: false,
+  mediaType: 'audio',
+  processingStatus: 'done',
+  coreId: 501,
+  workspaceName: 'Product',
+);
+
+const _journeyFailedRecording = RecordingItem(
+  id: 'widgetbook-retry-local',
+  title: 'Parking-lot voice note',
+  summary: 'Upload failed while offline; retry is available from the card.',
+  timestamp: 'Today 08:10',
+  duration: '01:42',
+  badge: 'Inbox',
+  notes: 'Re-capture the action items if retry keeps failing.',
+  isProcessing: false,
+  mediaType: 'audio',
+  processingStatus: 'failed',
+);
+
+const _journeyMatome = MatomeItem(
+  id: 'widgetbook-matome-review',
+  spaceId: null,
+  title: 'Launch readiness review',
+  happenedAt: _journeyTimestamp,
+  createdAt: _journeyTimestamp,
+  description: 'Collected notes from the launch readiness review.',
+  aggregatedSummary:
+      'The team confirmed the release checklist, kept analytics as the highest '
+      'risk, and assigned follow-ups before the Friday go/no-go.',
+  summaryStale: false,
+  recordingCount: 1,
+  recordings: [_journeyAudioRecording],
+  audioCount: 1,
+  peopleCount: 3,
+);
+
+const _journeyInboxMatomes = <MatomeItem>[_journeyMatome];
+
+const _journeyLooseInboxItems = <InboxItem>[
+  InboxItem(card: _journeyFailedRecording, createdAt: _journeyTimestamp),
+];
+
+const _journeySpaces = <WorkspaceRow>[
+  WorkspaceRow(
+    id: 'widgetbook-space-personal',
+    name: 'Personal',
+    isDefault: 1,
+    createdAt: _journeyTimestamp,
+    spaceType: 'personal',
+    isLocal: 1,
+  ),
+  WorkspaceRow(
+    id: 'widgetbook-space-work',
+    name: 'Product',
+    isDefault: 0,
+    createdAt: _journeyTimestamp,
+    spaceType: 'workspace',
+    isLocal: 0,
+  ),
+];
+
+const _journeyAudioRow = RecordingRow(
+  id: 'widgetbook-audio-review',
+  title: 'Weekly product review',
+  summary: 'Decision log, launch risks, and owners captured from the review.',
+  timestamp: 'Today 09:24',
+  duration: '12:04',
+  badge: 'Product',
+  isProcessing: 0,
+  audioFilePath: '',
+  createdAt: _journeyTimestamp,
+  notes: 'Follow up with design on empty states before Friday.',
+  workspaceId: 'widgetbook-space-work',
+  mediaType: 'audio',
+  processingStatus: 'done',
+  coreId: 501,
+  matomeId: 'widgetbook-matome-review',
+  transcript:
+      'We confirmed the launch checklist, kept analytics instrumentation as the '
+      'highest risk, and assigned owners for support docs, billing copy, and the '
+      'Friday go/no-go review.',
+  ownerId: 'widgetbook-owner',
+  byteSize: 2480000,
+);
+
+class _WidgetbookInboxController extends InboxController {
+  _WidgetbookInboxController(super.ref, this._seed) {
+    state = _seed;
+  }
+
+  final AsyncValue<List<InboxItem>> _seed;
+
+  @override
+  Future<void> refresh() async {
+    state = _seed;
+  }
+
+  @override
+  Future<void> reloadFromLocal() async {
+    state = _seed;
+  }
+}
+
+class _WidgetbookMatomeInboxController extends MatomeInboxController {
+  _WidgetbookMatomeInboxController(super.ref, this._seed) {
+    state = _seed;
+  }
+
+  final AsyncValue<List<MatomeItem>> _seed;
+
+  @override
+  Future<void> refresh() async {
+    state = _seed;
+  }
+
+  @override
+  Future<void> reloadFromLocal() async {
+    state = _seed;
+  }
+}
+
+class _WidgetbookLooseInboxController extends LooseInboxController {
+  _WidgetbookLooseInboxController(super.ref, this._seed) {
+    state = _seed;
+  }
+
+  final AsyncValue<List<InboxItem>> _seed;
+
+  @override
+  Future<void> reloadFromLocal() async {
+    state = _seed;
+  }
+}
+
+class _WidgetbookUploadRetryService extends UploadRetryService {
+  _WidgetbookUploadRetryService(super.ref);
+
+  @override
+  Future<void> start() async {}
+}
+
+final _widgetbookAudioRecordingServiceProvider =
+    Provider<AudioRecordingService>((ref) {
+      final service = AudioRecordingService(
+        draftsDao: ref.watch(recordingDraftsDaoProvider),
+        captureSupportedProbe: () async => false,
+      );
+      ref.onDispose(service.dispose);
+      return service;
+    });
+
+final _widgetbookRecordingControllerProvider =
+    StateNotifierProvider<RecordingController, RecordingState>(
+      (ref) => RecordingController(
+        ref.watch(_widgetbookAudioRecordingServiceProvider),
+      ),
+    );
+
+final _widgetbookRecordingFinisherProvider = Provider<RecordingFinisher>(
+  (ref) => RecordingFinisher(
+    ref,
+    controllerProvider: _widgetbookRecordingControllerProvider,
+    serviceProvider: _widgetbookAudioRecordingServiceProvider,
+  ),
+);
+
+Future<String?> _widgetbookUnsupportedCaptureReason(WidgetRef ref) async {
+  return 'Audio capture is disabled in Widgetbook fixtures.';
+}
+
+final _widgetbookMicRecorderBinding = RecorderBinding(
+  serviceProvider: _widgetbookAudioRecordingServiceProvider,
+  controllerProvider: _widgetbookRecordingControllerProvider,
+  finisherProvider: _widgetbookRecordingFinisherProvider,
+  unsupportedReason: _widgetbookUnsupportedCaptureReason,
+);
+
+final _widgetbookMeetingRecorderBinding = RecorderBinding(
+  serviceProvider: _widgetbookAudioRecordingServiceProvider,
+  controllerProvider: _widgetbookRecordingControllerProvider,
+  finisherProvider: _widgetbookRecordingFinisherProvider,
+  titleLabel: 'Record meeting',
+  unsupportedReason: _widgetbookUnsupportedCaptureReason,
+  supportsPause: false,
+);
+
+enum _AuthViewport { mobile, desktop }
+
+Widget _authPageScene(Widget page, {required _AuthViewport viewport}) {
+  final size = switch (viewport) {
+    _AuthViewport.mobile => const Size(390, 760),
+    _AuthViewport.desktop => const Size(900, 760),
+  };
+
+  return _UseCaseSurface(
+    width: size.width + 48,
+    child: _AuthPageFrame(size: size, child: page),
+  );
+}
+
+class _AuthFlowScene extends StatelessWidget {
+  const _AuthFlowScene();
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _AuthFlowStep(title: '1. Welcome', child: WelcomePage()),
+          SizedBox(width: spacing.md),
+          const _AuthFlowStep(title: '2. Login', child: LoginPage()),
+          SizedBox(width: spacing.md),
+          const _AuthFlowStep(title: '3. Signup', child: SignupPage()),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthFlowStep extends StatelessWidget {
+  const _AuthFlowStep({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final colors = context.colors;
+
+    return SizedBox(
+      width: 340,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: typography.label.copyWith(color: colors.textMuted),
+          ),
+          SizedBox(height: spacing.xs),
+          _AuthPageFrame(size: const Size(340, 640), child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthPageFrame extends StatelessWidget {
+  const _AuthPageFrame({required this.size, required this.child});
+
+  final Size size;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(radius.lg),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius.lg),
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: ProviderScope(
+            overrides: [
+              tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
+            ],
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 @widgetbook.UseCase(
   name: 'Fields + submit',
   type: AppTextField,
@@ -209,11 +1187,7 @@ Widget appCardFailedUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Calendar row',
-  type: AppCard,
-  path: '[Global]/Cards',
-)
+@widgetbook.UseCase(name: 'Calendar row', type: AppCard, path: '[Global]/Cards')
 Widget appCardCalendarUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _CalendarAppCardSample());
 }
@@ -990,7 +1964,10 @@ Widget peopleClusterUseCase(BuildContext context) {
   path: '[Screens]/Matome table',
 )
 Widget matomeTableDesktopUseCase(BuildContext context) {
-  return _UseCaseSurface(width: 920, child: MatomeTable(rows: _matomeTableRows));
+  return _UseCaseSurface(
+    width: 920,
+    child: MatomeTable(rows: _matomeTableRows),
+  );
 }
 
 @widgetbook.UseCase(
@@ -1014,7 +1991,10 @@ Widget matomeTableSelectionUseCase(BuildContext context) {
   path: '[Screens]/Matome table',
 )
 Widget matomeTableCompactUseCase(BuildContext context) {
-  return _UseCaseSurface(width: 380, child: MatomeTable(rows: _matomeTableRows));
+  return _UseCaseSurface(
+    width: 380,
+    child: MatomeTable(rows: _matomeTableRows),
+  );
 }
 
 @widgetbook.UseCase(
@@ -1082,7 +2062,8 @@ const _contactDetailFull = ContactDetailData(
   title: 'Product Lead',
   email: 'ana.ribeiro@acme.com',
   phone: '+55 11 99876-5432',
-  notes: 'Met at the Q2 offsite. Owns the billing roadmap; loops in Ken for '
+  notes:
+      'Met at the Q2 offsite. Owns the billing roadmap; loops in Ken for '
       'anything pricing-related. Prefers async updates.',
   matomes: [
     ContactMatomeRef(
@@ -1107,11 +2088,20 @@ const _contactDetailFull = ContactDetailData(
   spaces: ['Marketing', 'Sales'],
   files: [
     ContactFileRef(
-        id: 'f1', name: 'Q3 roadmap.pdf', kind: ContactFileKind.document),
+      id: 'f1',
+      name: 'Q3 roadmap.pdf',
+      kind: ContactFileKind.document,
+    ),
     ContactFileRef(
-        id: 'f2', name: 'Design sync.m4a', kind: ContactFileKind.audio),
+      id: 'f2',
+      name: 'Design sync.m4a',
+      kind: ContactFileKind.audio,
+    ),
     ContactFileRef(
-        id: 'f3', name: 'whiteboard.jpg', kind: ContactFileKind.image),
+      id: 'f3',
+      name: 'whiteboard.jpg',
+      kind: ContactFileKind.image,
+    ),
   ],
 );
 
@@ -1452,9 +2442,7 @@ Widget filesScreenLoadedUseCase(BuildContext context) {
 @widgetbook.UseCase(name: 'Empty', type: FilesScreen, path: '[Screens]/Files')
 Widget filesScreenEmptyUseCase(BuildContext context) {
   return _filesScreenScene(
-    filesForCurrentOwnerProvider.overrideWith(
-      (ref) async => const <FileRow>[],
-    ),
+    filesForCurrentOwnerProvider.overrideWith((ref) async => const <FileRow>[]),
   );
 }
 
@@ -1608,7 +2596,10 @@ Widget matomeActionsMenuUseCase(BuildContext context) {
 Widget matomeAddFabUseCase(BuildContext context) {
   // The mobile-shell "add" FAB in isolation (also shown in context under
   // [Screens]/Navigation › Mobile dock).
-  return const _UseCaseSurface(width: 200, child: Center(child: MatomeAddFab()));
+  return const _UseCaseSurface(
+    width: 200,
+    child: Center(child: MatomeAddFab()),
+  );
 }
 
 // ─── Auth widgets (#1477) ────────────────────────────────────────────────────
@@ -2010,15 +3001,24 @@ class _SceneHeader extends StatelessWidget {
     final spacing = context.spacing;
     final typography = context.typography;
     return Padding(
-      padding: EdgeInsets.fromLTRB(spacing.md, spacing.lg, spacing.md, spacing.sm),
+      padding: EdgeInsets.fromLTRB(
+        spacing.md,
+        spacing.lg,
+        spacing.md,
+        spacing.sm,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: typography.display.copyWith(color: colors.textPrimary)),
+          Text(
+            title,
+            style: typography.display.copyWith(color: colors.textPrimary),
+          ),
           if (subtitle != null)
-            Text(subtitle!,
-                style: typography.label.copyWith(color: colors.textSecondary)),
+            Text(
+              subtitle!,
+              style: typography.label.copyWith(color: colors.textSecondary),
+            ),
         ],
       ),
     );
@@ -2184,25 +3184,32 @@ class _NewSpaceSheetScene extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('New space',
-              style: typography.title.copyWith(color: colors.textPrimary)),
+          Text(
+            'New space',
+            style: typography.title.copyWith(color: colors.textPrimary),
+          ),
           SizedBox(height: spacing.md),
           // Name field mock.
           Container(
             padding: EdgeInsets.symmetric(
-                horizontal: spacing.md, vertical: spacing.sm),
+              horizontal: spacing.md,
+              vertical: spacing.sm,
+            ),
             decoration: BoxDecoration(
               color: colors.subtleFill,
               borderRadius: BorderRadius.circular(radius.md),
               border: Border.all(color: colors.border),
             ),
-            child: Text('Q4 planning',
-                style:
-                    typography.bodySmall.copyWith(color: colors.textPrimary)),
+            child: Text(
+              'Q4 planning',
+              style: typography.bodySmall.copyWith(color: colors.textPrimary),
+            ),
           ),
           SizedBox(height: spacing.md),
-          Text('Sync',
-              style: typography.label.copyWith(color: colors.textMuted)),
+          Text(
+            'Sync',
+            style: typography.label.copyWith(color: colors.textMuted),
+          ),
           SizedBox(height: spacing.xs),
           SpaceSyncChoice(
             isLocal: true,
@@ -2211,8 +3218,10 @@ class _NewSpaceSheetScene extends StatelessWidget {
             onChanged: (_) {},
           ),
           SizedBox(height: spacing.xs),
-          Text('Local stays on this device until you turn on sync.',
-              style: typography.label.copyWith(color: colors.textMuted)),
+          Text(
+            'Local stays on this device until you turn on sync.',
+            style: typography.label.copyWith(color: colors.textMuted),
+          ),
           SizedBox(height: spacing.lg),
           PrimaryButton(
             onPressed: () {},
@@ -2245,13 +3254,17 @@ class _PromoteConsentScene extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.cloud_upload_outlined,
-                  size: spacing.lg, color: colors.accent),
+              Icon(
+                Icons.cloud_upload_outlined,
+                size: spacing.lg,
+                color: colors.accent,
+              ),
               SizedBox(width: spacing.sm),
               Expanded(
-                child: Text('Turn on sync for “Personal”?',
-                    style:
-                        typography.title.copyWith(color: colors.textPrimary)),
+                child: Text(
+                  'Turn on sync for “Personal”?',
+                  style: typography.title.copyWith(color: colors.textPrimary),
+                ),
               ),
             ],
           ),
@@ -2265,7 +3278,11 @@ class _PromoteConsentScene extends StatelessWidget {
           Row(
             children: [
               const SpaceSyncChip(state: SpaceSyncState.local),
-              Icon(Icons.arrow_forward, size: spacing.md, color: colors.textMuted),
+              Icon(
+                Icons.arrow_forward,
+                size: spacing.md,
+                color: colors.textMuted,
+              ),
               const SpaceSyncChip(state: SpaceSyncState.cloud),
             ],
           ),
@@ -2390,7 +3407,8 @@ FileViewData fileViewSampleData(_FileViewSample sample) {
       syncCoreId: 7,
       processingStatus: 'done',
       contentsState: ContentsState.ready,
-      contentsText: 'Decisions, owners, and next steps from the product review.',
+      contentsText:
+          'Decisions, owners, and next steps from the product review.',
       notesText:
           'My own follow-ups: ping infra about the staging quota, draft the '
           'rollout note, and book the retro for Friday.',
@@ -2633,8 +3651,8 @@ class _FakeAudioPlayback implements AudioPlayback {
     required Duration duration,
     required Duration position,
     required this.playing,
-  })  : _duration = duration,
-        _position = position;
+  }) : _duration = duration,
+       _position = position;
 
   final Duration _duration;
   final Duration _position;
@@ -3458,7 +4476,10 @@ class _NavFauxContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(height: spacing.sm),
-          Text(title, style: typography.title.copyWith(color: colors.textPrimary)),
+          Text(
+            title,
+            style: typography.title.copyWith(color: colors.textPrimary),
+          ),
           SizedBox(height: spacing.lg),
           for (var i = 0; i < 4; i++)
             Padding(

@@ -30,9 +30,19 @@ const Set<String> kWidgetBases = {
 /// The only PUBLIC widget class allowed to be defined in the catalog package.
 const Set<String> kAllowedPublicWidgets = {'MatomeWidgetbook'};
 
+/// Private fixtures are allowed, but not when they masquerade as app-owned
+/// route or journey surfaces. Use `_FooScene` / `_FooFixture` in the catalog, or
+/// move the real `*Page` / `*Journey` into apps/flutter and import it.
+const Set<String> kForbiddenPrivateScenarioSuffixes = {
+  'Page',
+  'Screen',
+  'Journey',
+};
+
 /// Matches `class <Name> extends <Base>` at the start of a line.
-final RegExp _classDecl =
-    RegExp(r'^class\s+([A-Za-z_][A-Za-z0-9_]*)\s+extends\s+([A-Za-z_][A-Za-z0-9_]*)');
+final RegExp _classDecl = RegExp(
+  r'^class\s+([A-Za-z_][A-Za-z0-9_]*)\s+extends\s+([A-Za-z_][A-Za-z0-9_]*)',
+);
 
 /// Pure, deterministic scanner: returns a human-readable violation per PUBLIC
 /// class (identifier starts with an uppercase letter, i.e. not `_`-prefixed)
@@ -70,6 +80,83 @@ List<String> catalogWidgetViolations(Map<String, String> sourcesByPath) {
   return violations;
 }
 
+/// Stronger provenance for the route/Page/Journey contract: Widgetbook may use
+/// private fixtures, but it must not define local `*Page`, `*Screen`, or
+/// `*Journey` widgets, and `[Pages]` / `[Journeys]` use-cases must not be typed
+/// against a catalog-defined class.
+List<String> catalogScenarioViolations(Map<String, String> sourcesByPath) {
+  final violations = <String>[];
+  final localWidgetClasses = <String, String>{};
+  final paths = sourcesByPath.keys.toList()..sort();
+
+  for (final path in paths) {
+    if (path.endsWith('.g.dart')) continue;
+    final source = sourcesByPath[path]!;
+    final lines = source.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      final match = _classDecl.firstMatch(lines[i]);
+      if (match == null) continue;
+      final name = match.group(1)!;
+      final base = match.group(2)!;
+      if (!kWidgetBases.contains(base)) continue;
+      localWidgetClasses[name] = '$path:${i + 1}';
+
+      if (!name.startsWith('_')) continue;
+      final publicShape = name.replaceFirst(RegExp(r'^_+'), '');
+      final forbidden = kForbiddenPrivateScenarioSuffixes.any(
+        publicShape.endsWith,
+      );
+      if (forbidden) {
+        violations.add(
+          '$path:${i + 1}: private catalog widget `$name extends $base` looks '
+          'like a shippable route/journey surface. Widgetbook may define '
+          'private scenes/fixtures, but `*Page`, `*Screen`, and `*Journey` '
+          'widgets must be app-owned and imported from package:matome_flutter.',
+        );
+      }
+    }
+  }
+
+  final useCasePattern = RegExp(
+    r'@widgetbook\.UseCase\(([\s\S]*?)\)\s*Widget\s+([A-Za-z0-9_]+)\s*\(',
+    multiLine: true,
+  );
+  final pathPattern = RegExp(r'''path:\s*['"]([^'"]+)''');
+  final typePattern = RegExp(r'type:\s*([A-Za-z_][A-Za-z0-9_]*)\b');
+
+  for (final path in paths) {
+    if (path.endsWith('.g.dart')) continue;
+    final source = sourcesByPath[path]!;
+    for (final match in useCasePattern.allMatches(source)) {
+      final args = match.group(1)!;
+      final storyPath = pathPattern.firstMatch(args)?.group(1) ?? '';
+      final isScenarioPath =
+          storyPath.startsWith('[Pages]') || storyPath.startsWith('[Journeys]');
+      if (!isScenarioPath) continue;
+
+      final typeName = typePattern.firstMatch(args)?.group(1);
+      if (typeName == null) continue;
+      final localAt = localWidgetClasses[typeName];
+      if (localAt == null) continue;
+      violations.add(
+        '$path: Widgetbook use-case `${match.group(2)}` at `$storyPath` uses '
+        'catalog-defined type `$typeName` ($localAt). `[Pages]` and '
+        '`[Journeys]` must render app-owned Pages imported from '
+        'package:matome_flutter, not local catalog UI.',
+      );
+    }
+  }
+
+  return violations;
+}
+
+List<String> catalogProvenanceViolations(Map<String, String> sourcesByPath) {
+  return [
+    ...catalogWidgetViolations(sourcesByPath),
+    ...catalogScenarioViolations(sourcesByPath),
+  ];
+}
+
 Future<void> main() async {
   final libDir = Directory('lib');
   if (!libDir.existsSync()) {
@@ -87,9 +174,9 @@ Future<void> main() async {
     sources[entity.path] = entity.readAsStringSync();
   }
 
-  final violations = catalogWidgetViolations(sources);
+  final violations = catalogProvenanceViolations(sources);
   if (violations.isEmpty) {
-    stdout.writeln('catalog provenance: OK (no public widget classes defined).');
+    stdout.writeln('catalog provenance: OK (no catalog-defined shippable UI).');
     exit(0);
   }
 

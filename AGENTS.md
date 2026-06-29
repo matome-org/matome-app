@@ -56,6 +56,11 @@ i18n/      -> slang translations (en/ja JSON → generated strings)
 - **Routing**: go_router with a `StatefulShellRoute.indexedStack`. The shell
   tabs are a single ordered registry (`lib/app/shell_tabs.dart`) gated by
   build-time feature flags (see below).
+- **Route Pages**: user-visible routes should target app-owned canonical
+  `*Page` widgets under `apps/flutter/lib/app/pages` (or another app-owned
+  location when warranted). New or changed routes must update the route/Page
+  contract, the route/Page guard, and Widgetbook `[Pages]` coverage in the same
+  change, unless a route-specific Deferred/Exempt row documents why not.
 - **i18n**: slang. Edit `lib/i18n/{en,ja}.i18n.json`, then run `dart run slang`.
 - **Auth**: Guardian-issued JWTs from the Core API. Never log credentials —
   only a non-sensitive email domain.
@@ -73,6 +78,11 @@ i18n/      -> slang translations (en/ja JSON → generated strings)
   widget under `proposals/` or behind a disabled flag, plus a catalog use-case
   that imports it); graduate by moving the file or flipping the flag — never
   reimplement.
+- **Widgetbook Journeys**: `[Journeys]` are catalog-only review glue that
+  sequences real app Pages with explicit private fixtures/provider overrides.
+  Do not define public shippable UI, local `*Page`, local `*Screen`, or local
+  `*Journey` widgets in `apps/flutter_widgetbook`; the provenance gate rejects
+  those patterns.
 
 ### Core API (`services/api`)
 

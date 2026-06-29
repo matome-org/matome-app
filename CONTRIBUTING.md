@@ -35,7 +35,22 @@ cd services/api && mix test
 - Respect the design-system gate (`mise run flutter-design-system-check`).
 - Never log credentials — only a non-sensitive email domain.
 - Author UI in the app, render it in the catalog — see
-  [Widgetbook design catalog](#widgetbook-design-catalog).
+  [Widgetbook design catalog](#widgetbook-design-catalog) and the
+  [route/Page contract](.docs/internal/design-system-route-contract.md).
+
+### New routes and Pages
+
+- New or changed user-visible routes must target an app-owned canonical `*Page`
+  under `apps/flutter/lib`.
+- Update `router.dart`, `.docs/internal/design-system-route-contract.md`, and
+  `apps/flutter/test/app/route_page_contract_guard_test.dart` in the same
+  change.
+- Add Widgetbook `[Pages]` coverage typed against the imported app Page and
+  regenerate `apps/flutter_widgetbook/lib/widgetbook.directories.g.dart`.
+- If a route cannot be covered yet, add a route-specific Deferred or Exempt row
+  with the reason and re-review trigger; do not hide route debt in broad
+  exemptions.
+- Run `mise run flutter-design-system-check` before review.
 
 ### Widgetbook design catalog (`apps/flutter_widgetbook`)
 
@@ -55,6 +70,16 @@ cd services/api && mix test
   never reimplement. One widget, 100% fidelity, zero re-port.
 - Mocking a widget in the catalog and then re-implementing it in the app is the
   failure mode this rule forbids: two implementations of one widget that drift.
+- `[Journeys]` must sequence real app Pages with private fixtures/provider
+  overrides only. Do not define public shippable UI, local `*Page`, local
+  `*Screen`, or local `*Journey` widgets in `apps/flutter_widgetbook`.
+- Page/Journey visual confidence is intentionally bounded. Shared widget
+  goldens own pixel baselines; Widgetbook smoke owns representative routed
+  Page/Journey rendering across a small theme/locale matrix. When a new routed
+  surface adds layout risk, add the smallest useful smoke case, regenerate
+  `widgetbook.directories.g.dart`, and run `mise run flutter-design-system-check`.
+  If a smoke flakes, fix the fixture dependency first; do not skip or delay it
+  without documenting the trigger and re-add condition in the route/Page contract.
 
 ### Core API (`services/api`)
 

@@ -31,6 +31,7 @@ Stop everything with `mise run down`; wipe the local stack with `mise run nuke`.
 
 - Architecture and data flow: [.docs/internal/architecture.md](.docs/internal/architecture.md)
 - Matome lifecycle (cradle-to-grave): [.docs/internal/architecture.md §9](.docs/internal/architecture.md)
+- Design-system route/Page contract: [.docs/internal/design-system-route-contract.md](.docs/internal/design-system-route-contract.md)
 - Local build details: see the build/run steps above
 - Design decisions: [.docs/internal/architecture.md §11 (D1..D6)](.docs/internal/architecture.md)
 - Domain glossary: [.docs/internal/architecture.md §12 (Glossary)](.docs/internal/architecture.md)

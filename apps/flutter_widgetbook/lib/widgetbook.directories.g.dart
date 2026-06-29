@@ -439,6 +439,296 @@ final directories = <_widgetbook.WidgetbookNode>[
     ],
   ),
   _widgetbook.WidgetbookCategory(
+    name: 'Journeys',
+    children: [
+      _widgetbook.WidgetbookFolder(
+        name: 'Auth',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'WelcomePage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Welcome -> Login -> Signup',
+                builder: _matome_widgetbook_widgetbook.authJourneyUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Capture',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'RecordingPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Capture -> Inbox -> Matome',
+                builder: _matome_widgetbook_widgetbook.captureJourneyUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Organize',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'InboxPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Inbox -> Matome -> Space',
+                builder: _matome_widgetbook_widgetbook.organizeJourneyUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Recovery',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'SettingsPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Settings -> Retry -> Files',
+                builder: _matome_widgetbook_widgetbook.recoveryJourneyUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Review',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Files -> Audio detail',
+                builder: _matome_widgetbook_widgetbook.reviewJourneyUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  ),
+  _widgetbook.WidgetbookCategory(
+    name: 'Pages',
+    children: [
+      _widgetbook.WidgetbookFolder(
+        name: 'Auth',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'LoginPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Desktop',
+                builder: _matome_widgetbook_widgetbook.loginPageDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile',
+                builder: _matome_widgetbook_widgetbook.loginPageMobileUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'SignupPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Desktop',
+                builder: _matome_widgetbook_widgetbook.signupPageDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile',
+                builder: _matome_widgetbook_widgetbook.signupPageMobileUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'WelcomePage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Desktop',
+                builder:
+                    _matome_widgetbook_widgetbook.welcomePageDesktopUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mobile',
+                builder: _matome_widgetbook_widgetbook.welcomePageMobileUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Calendar',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'CalendarPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Empty',
+                builder: _matome_widgetbook_widgetbook.calendarPageUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Contacts',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'ContactDetailPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Not found',
+                builder: _matome_widgetbook_widgetbook.contactDetailPageUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'ContactsPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Empty',
+                builder: _matome_widgetbook_widgetbook.contactsPageUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Files',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'FilesPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Loaded',
+                builder: _matome_widgetbook_widgetbook.filesPageLoadedUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Home',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'InboxPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Empty',
+                builder: _matome_widgetbook_widgetbook.inboxPageEmptyUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Matome',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MatomeDetailPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Not found',
+                builder: _matome_widgetbook_widgetbook.matomeDetailPageUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Recording',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'MeetingRecordingPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Meeting unsupported',
+                builder:
+                    _matome_widgetbook_widgetbook.meetingRecordingPageUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'RecordingPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Mic unsupported',
+                builder: _matome_widgetbook_widgetbook.recordingPageUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Recording Details',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'FileDetailPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Audio route',
+                builder:
+                    _matome_widgetbook_widgetbook.fileDetailPageAudioUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Document route',
+                builder:
+                    _matome_widgetbook_widgetbook.fileDetailPageDocumentUseCase,
+              ),
+              _widgetbook.WidgetbookUseCase(
+                name: 'Image route',
+                builder:
+                    _matome_widgetbook_widgetbook.fileDetailPageImageUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Settings',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'SettingsPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Default',
+                builder: _matome_widgetbook_widgetbook.settingsPageUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookFolder(
+        name: 'Spaces',
+        children: [
+          _widgetbook.WidgetbookComponent(
+            name: 'SpaceDetailPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Not found',
+                builder: _matome_widgetbook_widgetbook.spaceDetailPageUseCase,
+              ),
+            ],
+          ),
+          _widgetbook.WidgetbookComponent(
+            name: 'SpacesPage',
+            useCases: [
+              _widgetbook.WidgetbookUseCase(
+                name: 'Empty',
+                builder: _matome_widgetbook_widgetbook.spacesPageUseCase,
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  ),
+  _widgetbook.WidgetbookCategory(
     name: 'Screens',
     children: [
       _widgetbook.WidgetbookFolder(
