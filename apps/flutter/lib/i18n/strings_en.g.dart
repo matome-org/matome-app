@@ -1151,6 +1151,45 @@ class Translations$auth$en {
 	/// en: 'Already have an account? Sign in'
 	String get alreadyHaveAccount => 'Already have an account? Sign in';
 
+	/// en: 'Forgot password?'
+	String get forgotPassword => 'Forgot password?';
+
+	/// en: 'Reset your password'
+	String get forgotPasswordTitle => 'Reset your password';
+
+	/// en: 'Enter your email and we'll send you a reset link.'
+	String get forgotPasswordSubtitle => 'Enter your email and we\'ll send you a reset link.';
+
+	/// en: 'Send reset link'
+	String get forgotPasswordSubmit => 'Send reset link';
+
+	/// en: 'If an account exists for that email, a reset link is on its way. Check your inbox.'
+	String get forgotPasswordSent => 'If an account exists for that email, a reset link is on its way. Check your inbox.';
+
+	/// en: 'Back to sign in'
+	String get backToSignIn => 'Back to sign in';
+
+	/// en: 'Choose a new password'
+	String get resetPasswordTitle => 'Choose a new password';
+
+	/// en: 'Paste the code from your email and pick a new password.'
+	String get resetPasswordSubtitle => 'Paste the code from your email and pick a new password.';
+
+	/// en: 'Reset code'
+	String get resetToken => 'Reset code';
+
+	/// en: 'Paste the code from your email'
+	String get resetTokenPlaceholder => 'Paste the code from your email';
+
+	/// en: 'New password'
+	String get newPassword => 'New password';
+
+	/// en: 'Update password'
+	String get resetPasswordSubmit => 'Update password';
+
+	/// en: 'Your password has been updated. You can sign in now.'
+	String get resetPasswordSuccess => 'Your password has been updated. You can sign in now.';
+
 	/// en: 'Invalid email or password.'
 	String get errorInvalidCredentials => 'Invalid email or password.';
 
@@ -1162,6 +1201,9 @@ class Translations$auth$en {
 
 	/// en: 'That email is already registered.'
 	String get errorEmailTaken => 'That email is already registered.';
+
+	/// en: 'That reset code is invalid or has expired.'
+	String get errorResetTokenInvalid => 'That reset code is invalid or has expired.';
 
 	/// en: 'Something went wrong. Please try again.'
 	String get errorGeneric => 'Something went wrong. Please try again.';
@@ -2014,10 +2056,24 @@ extension on Translations {
 			'auth.confirmPasswordPlaceholder' => 'Confirm your password',
 			'auth.createAccount' => 'Create account',
 			'auth.alreadyHaveAccount' => 'Already have an account? Sign in',
+			'auth.forgotPassword' => 'Forgot password?',
+			'auth.forgotPasswordTitle' => 'Reset your password',
+			'auth.forgotPasswordSubtitle' => 'Enter your email and we\'ll send you a reset link.',
+			'auth.forgotPasswordSubmit' => 'Send reset link',
+			'auth.forgotPasswordSent' => 'If an account exists for that email, a reset link is on its way. Check your inbox.',
+			'auth.backToSignIn' => 'Back to sign in',
+			'auth.resetPasswordTitle' => 'Choose a new password',
+			'auth.resetPasswordSubtitle' => 'Paste the code from your email and pick a new password.',
+			'auth.resetToken' => 'Reset code',
+			'auth.resetTokenPlaceholder' => 'Paste the code from your email',
+			'auth.newPassword' => 'New password',
+			'auth.resetPasswordSubmit' => 'Update password',
+			'auth.resetPasswordSuccess' => 'Your password has been updated. You can sign in now.',
 			'auth.errorInvalidCredentials' => 'Invalid email or password.',
 			'auth.errorRequiredFields' => 'Email and password are required.',
 			'auth.errorPasswordMismatch' => 'Passwords do not match.',
 			'auth.errorEmailTaken' => 'That email is already registered.',
+			'auth.errorResetTokenInvalid' => 'That reset code is invalid or has expired.',
 			'auth.errorGeneric' => 'Something went wrong. Please try again.',
 			_ => null,
 		};

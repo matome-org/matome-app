@@ -526,10 +526,24 @@ class _Translations$auth$ja extends Translations$auth$en {
 	@override String get confirmPasswordPlaceholder => 'パスワードを再入力してください';
 	@override String get createAccount => 'アカウント作成';
 	@override String get alreadyHaveAccount => 'すでにアカウントをお持ちですか？サインイン';
+	@override String get forgotPassword => 'パスワードをお忘れですか？';
+	@override String get forgotPasswordTitle => 'パスワードをリセット';
+	@override String get forgotPasswordSubtitle => 'メールアドレスを入力すると、リセット用のリンクをお送りします。';
+	@override String get forgotPasswordSubmit => 'リセットリンクを送信';
+	@override String get forgotPasswordSent => 'そのメールアドレスのアカウントが存在する場合、リセットリンクを送信しました。受信トレイをご確認ください。';
+	@override String get backToSignIn => 'サインインに戻る';
+	@override String get resetPasswordTitle => '新しいパスワードを設定';
+	@override String get resetPasswordSubtitle => 'メールに記載されたコードを貼り付け、新しいパスワードを設定してください。';
+	@override String get resetToken => 'リセットコード';
+	@override String get resetTokenPlaceholder => 'メールのコードを貼り付けてください';
+	@override String get newPassword => '新しいパスワード';
+	@override String get resetPasswordSubmit => 'パスワードを更新';
+	@override String get resetPasswordSuccess => 'パスワードを更新しました。サインインできます。';
 	@override String get errorInvalidCredentials => 'メールアドレスまたはパスワードが正しくありません。';
 	@override String get errorRequiredFields => 'メールアドレスとパスワードを入力してください。';
 	@override String get errorPasswordMismatch => 'パスワードが一致しません。';
 	@override String get errorEmailTaken => 'そのメールアドレスは既に登録されています。';
+	@override String get errorResetTokenInvalid => 'そのリセットコードは無効か、有効期限が切れています。';
 	@override String get errorGeneric => '問題が発生しました。もう一度お試しください。';
 }
 
@@ -1162,10 +1176,24 @@ extension on TranslationsJa {
 			'auth.confirmPasswordPlaceholder' => 'パスワードを再入力してください',
 			'auth.createAccount' => 'アカウント作成',
 			'auth.alreadyHaveAccount' => 'すでにアカウントをお持ちですか？サインイン',
+			'auth.forgotPassword' => 'パスワードをお忘れですか？',
+			'auth.forgotPasswordTitle' => 'パスワードをリセット',
+			'auth.forgotPasswordSubtitle' => 'メールアドレスを入力すると、リセット用のリンクをお送りします。',
+			'auth.forgotPasswordSubmit' => 'リセットリンクを送信',
+			'auth.forgotPasswordSent' => 'そのメールアドレスのアカウントが存在する場合、リセットリンクを送信しました。受信トレイをご確認ください。',
+			'auth.backToSignIn' => 'サインインに戻る',
+			'auth.resetPasswordTitle' => '新しいパスワードを設定',
+			'auth.resetPasswordSubtitle' => 'メールに記載されたコードを貼り付け、新しいパスワードを設定してください。',
+			'auth.resetToken' => 'リセットコード',
+			'auth.resetTokenPlaceholder' => 'メールのコードを貼り付けてください',
+			'auth.newPassword' => '新しいパスワード',
+			'auth.resetPasswordSubmit' => 'パスワードを更新',
+			'auth.resetPasswordSuccess' => 'パスワードを更新しました。サインインできます。',
 			'auth.errorInvalidCredentials' => 'メールアドレスまたはパスワードが正しくありません。',
 			'auth.errorRequiredFields' => 'メールアドレスとパスワードを入力してください。',
 			'auth.errorPasswordMismatch' => 'パスワードが一致しません。',
 			'auth.errorEmailTaken' => 'そのメールアドレスは既に登録されています。',
+			'auth.errorResetTokenInvalid' => 'そのリセットコードは無効か、有効期限が切れています。',
 			'auth.errorGeneric' => '問題が発生しました。もう一度お試しください。',
 			_ => null,
 		};

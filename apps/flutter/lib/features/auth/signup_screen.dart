@@ -77,7 +77,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final loading = ref.watch(authControllerProvider).isLoading;
+    final authState = ref.watch(authControllerProvider);
+    final loading = authState.isLoading;
+    final error =
+        _error ?? authState.whenOrNull(error: (err, _) => _messageFor(err));
     final spacing = context.spacing;
 
     return AuthScaffold(
@@ -122,9 +125,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           enabled: !loading,
           onSubmitted: (_) => _submit(),
         ),
-        if (_error != null) ...[
+        if (error != null) ...[
           SizedBox(height: spacing.md),
-          AuthErrorBanner(message: _error!),
+          AuthErrorBanner(message: error),
         ],
         SizedBox(height: spacing.lg),
         AuthSubmitButton(

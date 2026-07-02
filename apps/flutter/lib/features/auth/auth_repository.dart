@@ -51,6 +51,47 @@ class AuthRepository {
     }
   }
 
+  /// `POST /api/auth/forgot-password`. Starts the reset flow. The backend always
+  /// responds 200 (no account enumeration); only transport errors surface here.
+  Future<void> requestPasswordReset({required String email}) async {
+    try {
+      await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/auth/forgot-password',
+        data: {'email': email},
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  /// `POST /api/auth/reset-password`. Sets a new password from the emailed reset
+  /// code. Throws [ApiException] (`invalid_reset_token` or a validation code) on
+  /// failure. Does not sign the user in — they return to the login screen.
+  Future<void> resetPassword({
+    required String token,
+    required String password,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/auth/reset-password',
+        data: {'token': token, 'password': password},
+      );
+      final status = response.statusCode ?? 0;
+      if (status == 200 || status == 201) return;
+      final code =
+          errorCodeFromBody(response.data) ?? changesetErrorCode(response.data);
+      throw ApiException(
+        code == 'invalid_reset_token'
+            ? 'That reset code is invalid or has expired.'
+            : 'Could not reset your password.',
+        statusCode: status,
+        code: code ?? 'reset_failed',
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   /// `GET /api/auth/me`. Used on startup to validate the persisted session.
   /// Returns the authenticated [AuthUser]; throws [ApiException] (401) when the
   /// access token is missing/expired so the caller can attempt a refresh.

@@ -190,6 +190,51 @@ class AuthErrorBanner extends StatelessWidget {
   }
 }
 
+/// Full-width neutral/positive notice banner (e.g. "reset link sent"). Mirrors
+/// [AuthErrorBanner] but in the brand/accent palette instead of the error one.
+class AuthNoticeBanner extends StatelessWidget {
+  const AuthNoticeBanner({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: colors.accentSoft,
+        borderRadius: BorderRadius.circular(radius.md),
+        border: Border.all(color: colors.accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: spacing.md + spacing.xs / spacing.xxs,
+            color: colors.accent,
+          ),
+          SizedBox(width: spacing.xs),
+          Expanded(
+            child: Text(
+              message,
+              style: typography.label.copyWith(color: colors.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Full-width primary submit button with a loading state.
 class AuthSubmitButton extends StatelessWidget {
   const AuthSubmitButton({
