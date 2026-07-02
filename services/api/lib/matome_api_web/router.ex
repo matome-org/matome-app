@@ -23,6 +23,8 @@ defmodule MatomeApiWeb.Router do
     post "/auth/login", AuthController, :login
     post "/auth/refresh", AuthController, :refresh
     post "/auth/logout", AuthController, :logout
+    post "/auth/forgot-password", AuthController, :forgot_password
+    post "/auth/reset-password", AuthController, :reset_password
 
     scope "/auth" do
       pipe_through :auth

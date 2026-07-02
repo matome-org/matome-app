@@ -41,3 +41,6 @@ config :logger, level: :warning
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
+
+# Capture outgoing email in-memory so tests can assert on deliveries.
+config :matome_api, MatomeApi.Mailer, adapter: Swoosh.Adapters.Test

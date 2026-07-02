@@ -46,6 +46,33 @@ defmodule MatomeApiWeb.AuthController do
     send_resp(conn, :no_content, "")
   end
 
+  def forgot_password(conn, %{"email" => email}) do
+    # Always 200 with the same body — never reveal whether the email exists.
+    Auth.request_password_reset(email)
+    json(conn, %{status: "ok"})
+  end
+
+  def forgot_password(conn, _params) do
+    conn |> put_status(:unprocessable_entity) |> json(%{error: "email_required"})
+  end
+
+  def reset_password(conn, %{"token" => token, "password" => password}) do
+    case Auth.reset_password(token, password) do
+      {:ok, auth} ->
+        json(conn, auth_response(auth))
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: errors_on(changeset)})
+
+      {:error, :invalid_reset_token} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "invalid_reset_token"})
+    end
+  end
+
+  def reset_password(conn, _params) do
+    conn |> put_status(:unprocessable_entity) |> json(%{error: "token_and_password_required"})
+  end
+
   def me(conn, _params) do
     json(conn, %{user: user_response(conn.assigns.current_user)})
   end

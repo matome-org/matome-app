@@ -43,6 +43,7 @@ defmodule MatomeApi.MixProject do
       {:open_api_spex, "~> 3.22"},
       {:guardian, "~> 2.3"},
       {:argon2_elixir, "~> 4.1"},
+      {:swoosh, "~> 1.17"},
       {:dns_cluster, "~> 0.1.1"},
       {:cors_plug, "~> 3.0"},
       {:bandit, "~> 1.5"}

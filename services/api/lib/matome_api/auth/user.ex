@@ -22,6 +22,18 @@ defmodule MatomeApi.Auth.User do
     |> hash_password()
   end
 
+  @doc """
+  Changeset for setting a new password (password-reset flow). Only touches the
+  password; email and other fields are untouched.
+  """
+  def password_update_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:password])
+    |> validate_required([:password])
+    |> validate_length(:password, min: 8, max: 72)
+    |> hash_password()
+  end
+
   defp hash_password(changeset) do
     case get_change(changeset, :password) do
       nil -> changeset

@@ -70,4 +70,12 @@ config :phoenix, :filter_parameters, ["password", "email", "phone"]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
+# Transactional email (Swoosh). Default/dev uses the Local adapter (preview at
+# /dev/mailbox); swap `adapter:` per environment (config/runtime.exs for prod) to
+# plug a real provider (Mailgun/SES/SMTP/...) without touching call sites.
+config :matome_api, MatomeApi.Mailer, adapter: Swoosh.Adapters.Local
+
+# Swoosh only needs an HTTP api_client for API-based adapters; disable it here.
+config :swoosh, :api_client, false
+
 import_config "#{config_env()}.exs"
