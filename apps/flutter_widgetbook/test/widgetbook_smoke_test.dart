@@ -49,23 +49,68 @@ final _pageJourneyMatrix = <_SmokeCase>[
     variant: _darkJapanese,
   ),
   _SmokeCase(
+    label: 'login invalid credentials',
+    builder: loginPageInvalidMobileUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'signup email taken locale stress',
+    builder: signupPageEmailTakenDesktopUseCase,
+    variant: _darkJapanese,
+  ),
+  _SmokeCase(
     label: 'files desktop',
-    builder: filesPageLoadedUseCase,
+    builder: filesPageDesktopUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'files empty mobile',
+    builder: filesPageEmptyMobileUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'files error desktop',
+    builder: filesPageErrorDesktopUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'inbox loading mobile',
+    builder: inboxPageLoadingMobileUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'inbox populated desktop',
+    builder: inboxPagePopulatedDesktopUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'matome detail loaded mobile',
+    builder: matomeDetailLoadedMobileUseCase,
     variant: _lightEnglish,
   ),
   _SmokeCase(
     label: 'settings locale stress',
-    builder: settingsPageUseCase,
+    builder: settingsPageDesktopUseCase,
     variant: _darkJapanese,
   ),
   _SmokeCase(
-    label: 'capture journey',
-    builder: captureJourneyUseCase,
+    label: 'capture mobile journey step',
+    builder: captureJourneyInboxStepUseCase,
     variant: _lightEnglish,
   ),
   _SmokeCase(
-    label: 'recovery journey locale stress',
-    builder: recoveryJourneyUseCase,
+    label: 'capture desktop journey step',
+    builder: captureJourneyInboxDesktopStepUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'recovery mobile journey locale stress',
+    builder: recoveryJourneyFilesStepUseCase,
+    variant: _darkJapanese,
+  ),
+  _SmokeCase(
+    label: 'recovery desktop journey locale stress',
+    builder: recoveryJourneyFilesDesktopStepUseCase,
     variant: _darkJapanese,
   ),
 ];
@@ -94,6 +139,10 @@ class _SmokeCase {
   final _SmokeVariant variant;
 }
 
+String _docsRouteFor(String path, String componentName) {
+  return '/?path=${Uri.encodeComponent('$path/$componentName/Docs')}';
+}
+
 void main() {
   testWidgets('Widgetbook shell renders without runtime errors', (
     tester,
@@ -108,7 +157,8 @@ void main() {
   testWidgets('Avatar use case renders without runtime errors', (tester) async {
     await tester.pumpWidget(
       const MatomeWidgetbook(
-        initialRoute: '/?path=global%2Favatars%2Favatar%2Ficon-%2B-initials',
+        initialRoute:
+            '/?path=Components%2FAtoms%2FAvatars%2FAvatar%2FIcon%20%2B%20initials',
       ),
     );
     await tester.pump();
@@ -118,13 +168,139 @@ void main() {
     expect(find.byType(Avatar), findsNWidgets(4));
   });
 
+  testWidgets('component docs render visible story previews', (tester) async {
+    await tester.pumpWidget(
+      const MatomeWidgetbook(
+        initialRoute: '/?path=Components%2FComposite%2FCards%2FAppCard%2FDocs',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Calendar row'), findsWidgets);
+    expect(find.text('Roadmap review'), findsWidgets);
+  });
+
+  test('journeys are components with ordered step stories', () {
+    final mobileJourneyComponents = matomeWidgetbookComponents
+        .where((component) => component.path == 'Journeys/Mobile')
+        .toList();
+    final desktopJourneyComponents = matomeWidgetbookComponents
+        .where((component) => component.path == 'Journeys/Desktop')
+        .toList();
+    final oldStepComponents = matomeWidgetbookComponents.where(
+      (component) =>
+          component.path == 'Journey' ||
+          component.path.startsWith('Journey/') ||
+          component.path.startsWith('Journeys/Mobile/') ||
+          component.path.startsWith('Journeys/Desktop/'),
+    );
+
+    expect(oldStepComponents, isEmpty);
+    expect(
+      mobileJourneyComponents.map((component) => component.name),
+      containsAll(['Auth', 'Capture', 'Organize', 'Review', 'Recovery']),
+    );
+    expect(
+      desktopJourneyComponents.map((component) => component.name),
+      containsAll(['Auth', 'Capture', 'Organize', 'Review', 'Recovery']),
+    );
+    expect(
+      mobileJourneyComponents
+          .singleWhere((component) => component.name == 'Auth')
+          .stories
+          .map((story) => story.name),
+      ['01 WelcomePage', '02 LoginPage', '03 SignupPage'],
+    );
+    expect(
+      desktopJourneyComponents
+          .singleWhere((component) => component.name == 'Auth')
+          .stories
+          .map((story) => story.name),
+      ['01 WelcomePage', '02 LoginPage', '03 SignupPage'],
+    );
+  });
+
+  testWidgets('journey docs render all step previews under one docs node', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MatomeWidgetbook(
+        initialRoute: '/?path=Journeys%2FMobile%2FAuth%2FDocs',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('01 WelcomePage'), findsWidgets);
+    expect(find.text('02 LoginPage'), findsWidgets);
+    expect(find.text('03 SignupPage'), findsWidgets);
+    expect(find.text('Create account'), findsWidgets);
+
+    await tester.pumpWidget(
+      const MatomeWidgetbook(
+        initialRoute: '/?path=Journeys%2FDesktop%2FAuth%2FDocs',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('01 WelcomePage'), findsWidgets);
+    expect(find.text('02 LoginPage'), findsWidgets);
+    expect(find.text('03 SignupPage'), findsWidgets);
+    expect(find.text('Create account'), findsWidgets);
+  });
+
+  testWidgets('all journey docs render without provider or viewport errors', (
+    tester,
+  ) async {
+    final journeyComponents = matomeWidgetbookComponents
+        .where(
+          (component) =>
+              component.path == 'Journeys/Mobile' ||
+              component.path == 'Journeys/Desktop',
+        )
+        .toList();
+
+    expect(journeyComponents, hasLength(10));
+
+    for (final component in journeyComponents) {
+      final route = _docsRouteFor(component.path, component.name);
+
+      await tester.pumpWidget(MatomeWidgetbook(initialRoute: route));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(tester.takeException(), isNull, reason: route);
+      expect(find.byType(ErrorWidget, skipOffstage: false), findsNothing);
+      for (final story in component.stories) {
+        expect(find.text(story.name), findsWidgets, reason: route);
+      }
+
+      if (component.path == 'Journeys/Mobile' &&
+          (component.name == 'Capture' || component.name == 'Organize')) {
+        expect(
+          find.text('Select a matome to preview'),
+          findsNothing,
+          reason: '$route should stay in compact mobile layout',
+        );
+      }
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
+  });
+
   testWidgets('critical Page use cases render without runtime errors', (
     tester,
   ) async {
     for (final builder in <WidgetBuilder>[
-      filesPageLoadedUseCase,
-      inboxPageEmptyUseCase,
-      recordingPageUseCase,
+      filesPageDesktopUseCase,
+      inboxPageMobileUseCase,
+      recordingPageMobileUseCase,
     ]) {
       await tester.pumpWidget(_useCaseHost(builder));
       await tester.pump();
@@ -140,10 +316,10 @@ void main() {
     tester,
   ) async {
     for (final builder in <WidgetBuilder>[
-      settingsPageUseCase,
-      calendarPageUseCase,
-      spacesPageUseCase,
-      contactsPageUseCase,
+      settingsPageMobileUseCase,
+      calendarPageMobileUseCase,
+      spacesPageMobileUseCase,
+      contactsPageMobileUseCase,
     ]) {
       await tester.pumpWidget(_useCaseHost(builder));
       await tester.pump();
@@ -159,11 +335,30 @@ void main() {
     tester,
   ) async {
     for (final builder in <WidgetBuilder>[
-      authJourneyUseCase,
-      captureJourneyUseCase,
-      organizeJourneyUseCase,
-      reviewJourneyUseCase,
-      recoveryJourneyUseCase,
+      authJourneyWelcomeStepUseCase,
+      authJourneyWelcomeDesktopStepUseCase,
+      captureJourneyCaptureStepUseCase,
+      captureJourneyCaptureDesktopStepUseCase,
+      captureJourneyInboxStepUseCase,
+      captureJourneyInboxDesktopStepUseCase,
+      captureJourneyMatomeStepUseCase,
+      captureJourneyMatomeDesktopStepUseCase,
+      organizeJourneyInboxStepUseCase,
+      organizeJourneyInboxDesktopStepUseCase,
+      organizeJourneyMatomeStepUseCase,
+      organizeJourneyMatomeDesktopStepUseCase,
+      organizeJourneySpaceStepUseCase,
+      organizeJourneySpaceDesktopStepUseCase,
+      reviewJourneyFilesStepUseCase,
+      reviewJourneyFilesDesktopStepUseCase,
+      reviewJourneyAudioStepUseCase,
+      reviewJourneyAudioDesktopStepUseCase,
+      recoveryJourneySettingsStepUseCase,
+      recoveryJourneySettingsDesktopStepUseCase,
+      recoveryJourneyInboxStepUseCase,
+      recoveryJourneyInboxDesktopStepUseCase,
+      recoveryJourneyFilesStepUseCase,
+      recoveryJourneyFilesDesktopStepUseCase,
     ]) {
       await tester.pumpWidget(_useCaseHost(builder));
       await tester.pump();

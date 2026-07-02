@@ -336,31 +336,13 @@ flutter test --dart-define=ff.masterDetailLayout=true $MD_SUITE
 
 cd ../flutter_widgetbook
 export CHROME_EXECUTABLE=/usr/bin/chromium
-generated_before=""
 cleanup_widgetbook_artifacts() {
   rm -rf .dart_tool/chrome-device build
-  if [ -n "$generated_before" ]; then
-    rm -f "$generated_before"
-  fi
 }
 cleanup_widgetbook_artifacts
 trap cleanup_widgetbook_artifacts EXIT
 
-generated_before="$(mktemp)"
-cp lib/widgetbook.directories.g.dart "$generated_before"
-set +e
 dart run build_runner build
-build_status=$?
-set -e
-if [ "$build_status" -ne 0 ]; then
-  cp "$generated_before" lib/widgetbook.directories.g.dart
-  exit "$build_status"
-fi
-if ! cmp -s "$generated_before" lib/widgetbook.directories.g.dart; then
-  cp "$generated_before" lib/widgetbook.directories.g.dart
-  echo '✗ apps/flutter_widgetbook/lib/widgetbook.directories.g.dart is stale. Regenerate it before running the gate.'
-  exit 1
-fi
 flutter test test/catalog_provenance_test.dart
 flutter test -d chrome test/widgetbook_smoke_test.dart
 flutter build web -t lib/widgetbook.dart

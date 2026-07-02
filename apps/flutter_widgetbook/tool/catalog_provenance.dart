@@ -150,10 +150,181 @@ List<String> catalogScenarioViolations(Map<String, String> sourcesByPath) {
   return violations;
 }
 
+/// Taxonomy guard for the Widgetbook 4 manual component registry.
+///
+/// The catalog registry must expose `Components/Atoms`, `Components/Composite`,
+/// `Frames`, and journey-level `Journeys/Mobile` + `Journeys/Desktop` components
+/// whose stories are the ordered steps. Every component must provide native
+/// Widgetbook docs via the required `_component(docs: ...)` argument.
+///
+/// It also enforces the design-system dependency lattice on the tree shape:
+/// `Pages`, `Screens`, and `Frames` stories must use exactly one device group
+/// (`Mobile` or `Desktop`) with no intermediate feature folder.
+List<String> catalogTaxonomyViolations(Map<String, String> sourcesByPath) {
+  final violations = <String>[];
+  final componentCalls =
+      <({String path, String name, String body, String at})>[];
+  final paths = sourcesByPath.keys.toList()..sort();
+
+  for (final sourcePath in paths) {
+    if (sourcePath.endsWith('.g.dart')) continue;
+    final source = sourcesByPath[sourcePath]!;
+    final lines = source.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (!lines[i].startsWith('  _component(')) continue;
+
+      final start = i;
+      final buffer = StringBuffer(lines[i]);
+      i++;
+      while (i < lines.length && !lines[i].startsWith('  ),')) {
+        buffer.writeln(lines[i]);
+        i++;
+      }
+      if (i < lines.length) buffer.writeln(lines[i]);
+
+      final body = buffer.toString();
+      final path = RegExp(r"path:\s*'([^']+)'").firstMatch(body)?.group(1);
+      final name = RegExp(r"name:\s*'([^']+)'").firstMatch(body)?.group(1);
+      if (path == null || name == null) {
+        violations.add(
+          '$sourcePath:${start + 1}: `_component` must declare literal `name` '
+          'and `path` fields so the catalog taxonomy remains guardable.',
+        );
+        continue;
+      }
+      componentCalls.add((
+        path: path,
+        name: name,
+        body: body,
+        at: '$sourcePath:${start + 1}',
+      ));
+    }
+  }
+
+  if (componentCalls.isEmpty) {
+    return ['No Widgetbook `_component(...)` registry entries were found.'];
+  }
+
+  var hasComponentsAtoms = false;
+  var hasComponentsComposite = false;
+  var hasFrames = false;
+  var hasMobileJourney = false;
+  var hasDesktopJourney = false;
+
+  for (final component in componentCalls) {
+    final path = component.path;
+    if (!component.body.contains('docs:')) {
+      violations.add(
+        '${component.at}: component `${component.name}` at `$path` has no '
+        'native docs. Pass a non-empty `_component(docs: ...)` body.',
+      );
+    }
+
+    if (path.startsWith('Components/') || path.startsWith('Global/')) {
+      final isAtoms = path.startsWith('Components/Atoms/');
+      final isComposite = path.startsWith('Components/Composite/');
+      hasComponentsAtoms = hasComponentsAtoms || isAtoms;
+      hasComponentsComposite = hasComponentsComposite || isComposite;
+      if (!isAtoms && !isComposite) {
+        violations.add(
+          '${component.at}: component `${component.name}` uses `$path`. '
+          'Reusable components must live under `Components/Atoms/...` or '
+          '`Components/Composite/...` (legacy `Global/*` is retired).',
+        );
+      }
+    }
+
+    hasFrames = hasFrames || path == 'Frames' || path.startsWith('Frames/');
+
+    // Device-group lattice: Pages/Screens/Frames derive from lower layers and
+    // are browsed by viewport. Each must be exactly `<Section>/Mobile` or
+    // `<Section>/Desktop` — no intermediate feature folder (fold it into the
+    // component/story name).
+    if (path.startsWith('Pages/') ||
+        path.startsWith('Screens/') ||
+        path.startsWith('Frames/')) {
+      final section = path.split('/').first;
+      if (!RegExp('^$section/(Mobile|Desktop)\$').hasMatch(path)) {
+        violations.add(
+          '${component.at}: `${component.name}` uses `$path`. `$section` stories '
+          'must use exactly one device group: `$section/Mobile` or '
+          '`$section/Desktop`, with no intermediate feature folder. Fold the '
+          'feature into the component or story name.',
+        );
+      }
+    }
+
+    if (path == 'Journey' || path.startsWith('Journey/')) {
+      violations.add(
+        '${component.at}: journey component `${component.name}` uses legacy '
+        'singular `$path`. Use `Journeys/Mobile` or `Journeys/Desktop`.',
+      );
+    }
+
+    if (path == 'Journeys' || path.startsWith('Journeys/')) {
+      final isMobile = path == 'Journeys/Mobile';
+      final isDesktop = path == 'Journeys/Desktop';
+      hasMobileJourney = hasMobileJourney || isMobile;
+      hasDesktopJourney = hasDesktopJourney || isDesktop;
+      if (!isMobile && !isDesktop) {
+        violations.add(
+          '${component.at}: journey component `${component.name}` uses `$path`. '
+          'Journey components must live directly under `Journeys/Mobile` or '
+          '`Journeys/Desktop`; put ordered step screens in that component\'s '
+          '`_StorySpec(...)` list.',
+        );
+      }
+      if (RegExp(r'^\d{2}\s').hasMatch(component.name)) {
+        violations.add(
+          '${component.at}: journey step `${component.name}` is registered as a '
+          'component. Register the journey flow as the component and make this '
+          'screen an ordered `_StorySpec(...)` story instead.',
+        );
+      }
+      if (!component.body.contains('Journey order:')) {
+        violations.add(
+          '${component.at}: journey component `${component.name}` at `$path` '
+          'must document the sequence in its docs body.',
+        );
+      }
+      if (RegExp(r'\b\w+JourneyUseCase\b').hasMatch(component.body)) {
+        violations.add(
+          '${component.at}: journey component `${component.name}` references an '
+          'aggregate `*JourneyUseCase`. Split the flow into per-screen step '
+          'stories instead.',
+        );
+      }
+    }
+  }
+
+  if (!hasComponentsAtoms) {
+    violations.add(
+      'Widgetbook taxonomy is missing `Components/Atoms/...` entries.',
+    );
+  }
+  if (!hasComponentsComposite) {
+    violations.add(
+      'Widgetbook taxonomy is missing `Components/Composite/...` entries.',
+    );
+  }
+  if (!hasFrames) {
+    violations.add('Widgetbook taxonomy is missing the `Frames` section.');
+  }
+  if (!hasMobileJourney) {
+    violations.add('Widgetbook taxonomy is missing `Journeys/Mobile` entries.');
+  }
+  if (!hasDesktopJourney) {
+    violations.add('Widgetbook taxonomy is missing `Journeys/Desktop` entries.');
+  }
+
+  return violations;
+}
+
 List<String> catalogProvenanceViolations(Map<String, String> sourcesByPath) {
   return [
     ...catalogWidgetViolations(sourcesByPath),
     ...catalogScenarioViolations(sourcesByPath),
+    ...catalogTaxonomyViolations(sourcesByPath),
   ];
 }
 

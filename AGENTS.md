@@ -78,11 +78,22 @@ i18n/      -> slang translations (en/ja JSON → generated strings)
   widget under `proposals/` or behind a disabled flag, plus a catalog use-case
   that imports it); graduate by moving the file or flipping the flag — never
   reimplement.
-- **Widgetbook Journeys**: `[Journeys]` are catalog-only review glue that
-  sequences real app Pages with explicit private fixtures/provider overrides.
-  Do not define public shippable UI, local `*Page`, local `*Screen`, or local
-  `*Journey` widgets in `apps/flutter_widgetbook`; the provenance gate rejects
-  those patterns.
+- **Widgetbook taxonomy**: catalog entries use Widgetbook 4 `Component` stories
+  in `apps/flutter_widgetbook/lib/widgetbook.dart`. Shared primitives live under
+  `Components/Atoms`, shared assemblies under `Components/Composite`,
+  viewport/chrome wrappers under `Frames/Mobile|Desktop`, route targets under
+  `Pages/Mobile|Desktop`, and scenario journeys under `Journeys/Mobile` and
+  `Journeys/Desktop`. `Pages`, `Screens`, and `Frames` use exactly one device
+  group with no intermediate feature folder. Every component must include
+  native Widgetbook docs via the `_component(docs: ...)` helper.
+- **Widgetbook Journeys**: `Journeys/Mobile` and `Journeys/Desktop` are
+  catalog-only review glue that sequences real app Pages with explicit private
+  fixtures/provider overrides. Represent each journey flow as one component per
+  viewport, put each screen in that flow as an ordered story, document the
+  sequence in the journey docs, and do not reintroduce one aggregate journey
+  story. Do not define public shippable UI, local `*Page`, local `*Screen`, or
+  local `*Journey` widgets in `apps/flutter_widgetbook`; the provenance gate
+  rejects those patterns.
 
 ### Core API (`services/api`)
 

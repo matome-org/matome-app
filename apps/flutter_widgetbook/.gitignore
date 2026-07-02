@@ -3,3 +3,4 @@
 .pub/
 build/
 coverage/
+lib/components.g.dart

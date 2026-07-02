@@ -23,7 +23,7 @@ void main() {
         'lib/widgetbook.dart':
             'class MatomeWidgetbook extends StatelessWidget {}',
         // Generated code is ignored even when it declares a public widget.
-        'lib/widgetbook.directories.g.dart':
+        'lib/generated_catalog.g.dart':
             'class GeneratedThing extends StatelessWidget {}',
       });
       expect(violations, isEmpty);
@@ -65,6 +65,161 @@ class _LoginScene extends StatelessWidget {}
 
 @widgetbook.UseCase(name: 'Login scene', type: AuthScaffold, path: '[Components]/Auth')
 Widget loginSceneUseCase(BuildContext context) => const _LoginScene();
+''',
+      });
+
+      expect(violations, isEmpty);
+    });
+  });
+
+  group('catalogTaxonomyViolations (unit)', () {
+    test('flags flat Global paths and docs-less components', () {
+      final violations = catalogTaxonomyViolations({
+        'lib/widgetbook.dart': '''
+final matomeWidgetbookComponents = [
+  _component(
+    name: 'PrimaryButton',
+    path: 'Global/Buttons',
+    stories: [const _StorySpec('Primary states', primaryButtonsUseCase)],
+  ),
+  _component(
+    name: 'RouteFrame',
+    path: 'Frames',
+    docs: 'Frame docs.',
+    stories: [const _StorySpec('Route surface', routeFrameUseCase)],
+  ),
+  _component(
+    name: 'Auth',
+    path: 'Journeys/Mobile',
+    docs: 'Journey order: 1 WelcomePage -> 2 LoginPage.',
+    stories: [const _StorySpec('Welcome', authJourneyWelcomeStepUseCase)],
+  ),
+  _component(
+    name: 'Auth',
+    path: 'Journeys/Desktop',
+    docs: 'Journey order: 1 WelcomePage -> 2 LoginPage.',
+    stories: [const _StorySpec('Welcome', authJourneyWelcomeStepUseCase)],
+  ),
+];
+''',
+      });
+
+      expect(violations.join('\n'), contains('Global/Buttons'));
+      expect(violations.join('\n'), contains('has no native docs'));
+    });
+
+    test('flags aggregate journey stories', () {
+      final violations = catalogTaxonomyViolations({
+        'lib/widgetbook.dart': '''
+final matomeWidgetbookComponents = [
+  _component(
+    name: 'PrimaryButton',
+    path: 'Components/Atoms/Buttons',
+    docs: 'Button docs.',
+    stories: [const _StorySpec('Primary states', primaryButtonsUseCase)],
+  ),
+  _component(
+    name: 'AppCard',
+    path: 'Components/Composite/Cards',
+    docs: 'Card docs.',
+    stories: [const _StorySpec('Done', appCardDoneUseCase)],
+  ),
+  _component(
+    name: 'RouteFrame',
+    path: 'Frames',
+    docs: 'Frame docs.',
+    stories: [const _StorySpec('Route surface', routeFrameUseCase)],
+  ),
+  _component(
+    name: 'Auth',
+    path: 'Journeys/Mobile',
+    docs: 'Journey order: 1 WelcomePage -> 2 LoginPage.',
+    stories: [const _StorySpec('Welcome -> Login', authJourneyUseCase)],
+  ),
+];
+''',
+      });
+
+      expect(violations.join('\n'), contains('aggregate `*JourneyUseCase`'));
+    });
+
+    test('flags journey step components instead of step stories', () {
+      final violations = catalogTaxonomyViolations({
+        'lib/widgetbook.dart': '''
+final matomeWidgetbookComponents = [
+  _component(
+    name: 'PrimaryButton',
+    path: 'Components/Atoms/Buttons',
+    docs: 'Button docs.',
+    stories: [const _StorySpec('Primary states', primaryButtonsUseCase)],
+  ),
+  _component(
+    name: 'AppCard',
+    path: 'Components/Composite/Cards',
+    docs: 'Card docs.',
+    stories: [const _StorySpec('Done', appCardDoneUseCase)],
+  ),
+  _component(
+    name: 'RouteFrame',
+    path: 'Frames',
+    docs: 'Frame docs.',
+    stories: [const _StorySpec('Route surface', routeFrameUseCase)],
+  ),
+  _component(
+    name: '01 WelcomePage',
+    path: 'Journeys/Mobile/Auth',
+    docs: 'Journey order: 1 WelcomePage -> 2 LoginPage.',
+    stories: [const _StorySpec('Welcome', authJourneyWelcomeStepUseCase)],
+  ),
+];
+''',
+      });
+
+      expect(violations.join('\n'), contains('directly under'));
+      expect(violations.join('\n'), contains('registered as a component'));
+    });
+
+    test('allows the required Widgetbook 4 taxonomy shape', () {
+      final violations = catalogTaxonomyViolations({
+        'lib/widgetbook.dart': '''
+final matomeWidgetbookComponents = [
+  _component(
+    name: 'PrimaryButton',
+    path: 'Components/Atoms/Buttons',
+    docs: 'Button docs.',
+    stories: [const _StorySpec('Primary states', primaryButtonsUseCase)],
+  ),
+  _component(
+    name: 'AppCard',
+    path: 'Components/Composite/Cards',
+    docs: 'Card docs.',
+    stories: [const _StorySpec('Done', appCardDoneUseCase)],
+  ),
+  _component(
+    name: 'RouteFrame',
+    path: 'Frames',
+    docs: 'Frame docs.',
+    stories: [const _StorySpec('Route surface', routeFrameUseCase)],
+  ),
+  _component(
+    name: 'Auth',
+    path: 'Journeys/Mobile',
+    docs: 'Journey order: 1 WelcomePage -> 2 LoginPage.',
+    stories: const [
+      _StorySpec('01 WelcomePage', authJourneyWelcomeStepUseCase),
+      _StorySpec('02 LoginPage', authJourneyLoginStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Auth',
+    path: 'Journeys/Desktop',
+    docs: 'Journey order: 1 WelcomePage -> 2 LoginPage.',
+    stories: const [
+      _StorySpec('01 WelcomePage', authJourneyWelcomeDesktopStepUseCase),
+      _StorySpec('02 LoginPage', authJourneyLoginDesktopStepUseCase),
+    ],
+  ),
+];
 ''',
       });
 

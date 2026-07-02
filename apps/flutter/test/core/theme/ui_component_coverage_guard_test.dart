@@ -16,10 +16,9 @@ const _goldenExemptions = <String, String>{};
 const _featureWidgetbookExemptions = <String, String>{};
 
 void main() {
-  test('Widgetbook coverage requires generated runtime directories', () {
+  test('Widgetbook coverage requires a registry component entry', () {
     const coverage = _WidgetbookCoverage(
-      annotationSource: '@widgetbook.UseCase(type: AppCard)',
-      generatedSource: "_widgetbook.WidgetbookComponent(name: 'OtherWidget')",
+      source: "_component(name: 'OtherWidget', path: 'Components/Atoms/Test')",
     );
 
     expect(_hasWidgetbookCoverage(coverage, 'AppCard'), isFalse);
@@ -60,11 +59,10 @@ void main() {
         title: 'Missing Widgetbook coverage for lib/ui widgets.',
         components: missingWidgetbook,
         remediation:
-            'Add a @widgetbook.UseCase(type: ComponentName, ...) in '
-            '../flutter_widgetbook/lib/widgetbook.dart, regenerate '
-            'widgetbook.directories.g.dart, and keep the generated '
-            'WidgetbookComponent(name: ComponentName) entry, or add a '
-            'reviewed reason to _widgetbookExemptions.',
+            'Add a Widgetbook 4 `_component(name: ComponentName, ...)` entry '
+            'in ../flutter_widgetbook/lib/widgetbook.dart, including native '
+            'docs and a representative story, or add a reviewed reason to '
+            '_widgetbookExemptions.',
       ),
     );
 
@@ -97,10 +95,10 @@ void main() {
     () {
       // OWNER DIRECTIVE (#1477): ALL presentational feature widgets must live in
       // Widgetbook, enforced here. This test was added RED — before the matching
-      // use-cases landed it failed listing AudioPlayerBar, AuthField,
+      // component stories landed it failed listing AudioPlayerBar, AuthField,
       // AuthScaffold, AuthSubmitButton, FileActionsMenu, FilesBulkBar,
       // FilesEmptyState, FilesMutedDash, FilesUndoBar, MatomeActionsMenu — and
-      // turns GREEN once each has a real @widgetbook.UseCase rendering the REAL
+      // turns GREEN once each has a real Widgetbook component rendering the REAL
       // widget. (Widgets already covered before #1477 — e.g. ContactDetail,
       // FileView, FilesGrid/Table, MatomeTable, the nav trio — keep passing.)
       //
@@ -145,8 +143,13 @@ void main() {
       final missingWidgetbook = components
           .where(
             (component) =>
-                !_featureWidgetbookExemptions.containsKey(component.className) &&
-                !_hasWidgetbookCoverage(widgetbookCoverage, component.className),
+                !_featureWidgetbookExemptions.containsKey(
+                  component.className,
+                ) &&
+                !_hasWidgetbookCoverage(
+                  widgetbookCoverage,
+                  component.className,
+                ),
           )
           .toList();
 
@@ -158,11 +161,9 @@ void main() {
               'Missing Widgetbook coverage for presentational feature widgets.',
           components: missingWidgetbook,
           remediation:
-              'Add a @widgetbook.UseCase(type: ComponentName, ...) rendering the '
-              'REAL widget with representative sample data in '
-              '../flutter_widgetbook/lib/widgetbook.dart, regenerate '
-              'widgetbook.directories.g.dart (keep the generated '
-              'WidgetbookComponent(name: ComponentName) entry), or — only for a '
+              'Add a Widgetbook 4 `_component(name: ComponentName, ...)` story '
+              'rendering the REAL widget with representative sample data in '
+              '../flutter_widgetbook/lib/widgetbook.dart, or — only for a '
               'genuine exception — add a reviewed reason to '
               '_featureWidgetbookExemptions. Provider-bound (Consumer*) widgets '
               'and *Screen classes are out of scope and should be left as such, '
@@ -256,34 +257,41 @@ List<_UiComponent> _discoverFeatureComponents() {
 
 _WidgetbookCoverage _readWidgetbookCoverage() {
   final widgetbookSource = File('../flutter_widgetbook/lib/widgetbook.dart');
-  final generatedSource = File(
-    '../flutter_widgetbook/lib/widgetbook.directories.g.dart',
-  );
 
-  if (!widgetbookSource.existsSync() || !generatedSource.existsSync()) {
+  if (!widgetbookSource.existsSync()) {
     fail(
-      'Missing apps/flutter_widgetbook/lib/widgetbook.dart or '
-      'widgetbook.directories.g.dart; Widgetbook coverage cannot run.',
+      'Missing apps/flutter_widgetbook/lib/widgetbook.dart; Widgetbook coverage '
+      'cannot run.',
     );
   }
 
-  return _WidgetbookCoverage(
-    annotationSource: widgetbookSource.readAsStringSync(),
-    generatedSource: generatedSource.readAsStringSync(),
-  );
+  return _WidgetbookCoverage(source: widgetbookSource.readAsStringSync());
 }
 
 bool _hasWidgetbookCoverage(_WidgetbookCoverage coverage, String className) {
   final typeUseCase = RegExp(
-    'type:\\s*$className\\b',
+    "name:\\s*'${RegExp.escape(className)}'",
     multiLine: true,
-  ).hasMatch(coverage.annotationSource);
-  final generatedComponent = RegExp(
-    "name:\\s*'$className'",
-    multiLine: true,
-  ).hasMatch(coverage.generatedSource);
+  );
 
-  return typeUseCase && generatedComponent;
+  return _componentBlocks(coverage.source).any(typeUseCase.hasMatch);
+}
+
+List<String> _componentBlocks(String source) {
+  final lines = source.split('\n');
+  final blocks = <String>[];
+  for (var i = 0; i < lines.length; i++) {
+    if (!lines[i].startsWith('  _component(')) continue;
+    final buffer = StringBuffer(lines[i]);
+    i++;
+    while (i < lines.length && !lines[i].startsWith('  ),')) {
+      buffer.writeln(lines[i]);
+      i++;
+    }
+    if (i < lines.length) buffer.writeln(lines[i]);
+    blocks.add(buffer.toString());
+  }
+  return blocks;
 }
 
 bool _hasGoldenCoverage(String source, String className) {
@@ -345,11 +353,7 @@ class _UiComponent {
 }
 
 class _WidgetbookCoverage {
-  const _WidgetbookCoverage({
-    required this.annotationSource,
-    required this.generatedSource,
-  });
+  const _WidgetbookCoverage({required this.source});
 
-  final String annotationSource;
-  final String generatedSource;
+  final String source;
 }

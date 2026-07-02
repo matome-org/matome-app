@@ -6,15 +6,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
-import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
-@widgetbook.UseCase(
-  name: 'Colors',
-  type: MatomeColors,
-  path: '[Foundations]',
-)
 Widget colorsUseCase(BuildContext context) {
   return const _FoundationsSurface(child: _ColorTokens());
 }
@@ -64,7 +58,8 @@ class _ColorTokens extends StatelessWidget {
 
     return _FoundationsHeader(
       title: 'Colors',
-      subtitle: 'MatomeColors ThemeExtension · ${tokens.length} tokens · '
+      subtitle:
+          'MatomeColors ThemeExtension · ${tokens.length} tokens · '
           'switch the theme addon to see Light / Dark',
       child: Wrap(
         spacing: spacing.md,
@@ -172,11 +167,6 @@ class _CheckerPainter extends CustomPainter {
 
 // ─── Typography ──────────────────────────────────────────────────────────────
 
-@widgetbook.UseCase(
-  name: 'Typography',
-  type: AppTypography,
-  path: '[Foundations]',
-)
 Widget typographyUseCase(BuildContext context) {
   return const _FoundationsSurface(child: _TypographyTokens());
 }
@@ -246,11 +236,6 @@ String _describe(TextStyle style) {
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
-@widgetbook.UseCase(
-  name: 'Icons',
-  type: Icons,
-  path: '[Foundations]',
-)
 Widget iconsUseCase(BuildContext context) {
   return const _FoundationsSurface(child: _IconTokens());
 }
@@ -273,7 +258,8 @@ class _IconTokens extends StatelessWidget {
         spacing: spacing.md,
         runSpacing: spacing.md,
         children: [
-          for (final (name, icon) in _appIcons) _IconTile(name: name, icon: icon),
+          for (final (name, icon) in _appIcons)
+            _IconTile(name: name, icon: icon),
         ],
       ),
     );
@@ -446,7 +432,10 @@ class _FoundationsHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: typography.title.copyWith(color: colors.textPrimary)),
+        Text(
+          title,
+          style: typography.title.copyWith(color: colors.textPrimary),
+        ),
         SizedBox(height: spacing.xxs),
         Text(
           subtitle,

@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, implementation_imports, invalid_use_of_internal_member
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -9,18 +9,29 @@ import 'package:matome_flutter/app/pages/secondary_pages.dart';
 import 'package:matome_flutter/app/screens/recording_screen.dart'
     show RecorderBinding;
 import 'package:matome_flutter/core/db/app_database.dart'
-    show RecordingRow, WorkspaceRow;
+    show ContactRow, RecordingRow, WorkspaceRow;
 import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/auth/auth_widgets.dart';
+import 'package:matome_flutter/core/http/api_exception.dart' show ApiException;
+import 'package:matome_flutter/features/auth/auth_controller.dart'
+    show AuthController, authControllerProvider;
+import 'package:matome_flutter/features/auth/auth_models.dart' show AuthSession;
 import 'package:matome_flutter/core/audio/audio_playback.dart';
 import 'package:matome_flutter/core/db/file_row.dart';
 import 'package:matome_flutter/core/providers.dart'
-    show recordingDraftsDaoProvider, settingsStoreProvider, tokenStoreProvider;
+    show settingsStoreProvider, tokenStoreProvider;
 import 'package:matome_flutter/core/settings/settings_store.dart'
     show InMemorySettingsStore;
+import 'package:matome_flutter/features/contacts/contact_detail_screen.dart'
+    show contactDetailProvider;
+import 'package:matome_flutter/features/contacts/contacts_controller.dart'
+    show
+        ContactsController,
+        contactsControllerProvider,
+        kPlaceholderContactOwnerId;
 import 'package:matome_flutter/features/contacts/widgets/contact_detail.dart';
 import 'package:matome_flutter/features/contacts/widgets/contact_tile.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
@@ -59,6 +70,11 @@ import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/upload_retry_service.dart';
 import 'package:matome_flutter/features/shell/widgets/matome_nav.dart';
 import 'package:matome_flutter/features/spaces/filing_spaces_provider.dart';
+import 'package:matome_flutter/features/spaces/space_card.dart' show SpaceCard;
+import 'package:matome_flutter/features/spaces/space_detail_controller.dart'
+    show SpaceDetailController, SpaceDetailState, spaceDetailControllerProvider;
+import 'package:matome_flutter/features/spaces/spaces_controller.dart'
+    show SpacesController, spacesControllerProvider;
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_bottom_sheet.dart';
 import 'package:matome_flutter/ui/app_button.dart';
@@ -81,10 +97,10 @@ import 'package:matome_flutter/ui/space_chip.dart';
 import 'package:matome_flutter/ui/space_sync_chip.dart';
 import 'package:matome_flutter/ui/space_sync_tile.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
-import 'package:widgetbook/widgetbook.dart';
-import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
+import 'package:widgetbook/src/core/widgetbook_app.dart';
+import 'package:widgetbook/widgetbook.dart' hide ThemeMode;
 
-import 'widgetbook.directories.g.dart';
+import 'foundations_stories.dart';
 
 const _localizationsDelegates = <LocalizationsDelegate<dynamic>>[
   GlobalMaterialLocalizations.delegate,
@@ -98,7 +114,6 @@ void main() {
   runApp(const MatomeWidgetbook());
 }
 
-@widgetbook.App()
 class MatomeWidgetbook extends StatelessWidget {
   const MatomeWidgetbook({super.key, this.initialRoute = '/'});
 
@@ -106,28 +121,1220 @@ class MatomeWidgetbook extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Widgetbook.material(
-      initialRoute: initialRoute,
-      directories: directories,
-      appBuilder: _matomeAppBuilder,
-      lightTheme: buildLightTheme(),
-      darkTheme: buildDarkTheme(),
-      addons: [
-        MaterialThemeAddon(
-          themes: [
-            WidgetbookTheme(name: 'Light', data: buildLightTheme()),
-            WidgetbookTheme(name: 'Dark', data: buildDarkTheme()),
+    return WidgetbookApp(config: matomeWidgetbookConfig(initialRoute));
+  }
+}
+
+Config matomeWidgetbookConfig([String initialRoute = '/']) {
+  return Config(
+    initialRoute: initialRoute,
+    components: matomeWidgetbookComponents,
+    appBuilder: _matomeAppBuilder,
+    lightTheme: buildLightTheme(),
+    darkTheme: buildDarkTheme(),
+    themeMode: ThemeMode.light,
+    addons: [
+      MaterialThemeAddon({
+        'Light': buildLightTheme(),
+        'Dark': buildDarkTheme(),
+      }),
+      LocaleAddon(const [Locale('en'), Locale('ja')], _localizationsDelegates),
+    ],
+    docsBuilder: () => const [ComponentNameDocBlock()],
+  );
+}
+
+class _StaticStoryArgs extends StoryArgs<Widget> {
+  const _StaticStoryArgs();
+
+  @override
+  List<Arg?> get list => const [];
+}
+
+class _StaticStory extends Story<Widget, _StaticStoryArgs> {
+  _StaticStory({required String name, required WidgetBuilder builder})
+    : super(
+        name: name,
+        args: const _StaticStoryArgs(),
+        builder: (context, args) => builder(context),
+      );
+}
+
+class _StorySpec {
+  const _StorySpec(this.name, this.builder);
+
+  final String name;
+  final WidgetBuilder builder;
+}
+
+Component<Widget, _StaticStoryArgs> _component({
+  required String name,
+  required String path,
+  required String docs,
+  required List<_StorySpec> stories,
+  double docsStoryHeight = 760,
+}) {
+  return Component<Widget, _StaticStoryArgs>(
+    name: name,
+    path: path,
+    docsBuilder: (_) => [
+      const ComponentNameDocBlock(),
+      TextDocBlock(docs),
+      _MatomeStoriesDocBlock(
+        componentName: name,
+        componentPath: path,
+        stories: stories,
+        height: docsStoryHeight,
+      ),
+    ],
+    stories: [
+      for (final story in stories)
+        _StaticStory(name: story.name, builder: story.builder),
+    ],
+  );
+}
+
+class _MatomeStoriesDocBlock extends DocBlock {
+  const _MatomeStoriesDocBlock({
+    required this.componentName,
+    required this.componentPath,
+    required this.stories,
+    required this.height,
+  });
+
+  final String componentName;
+  final String componentPath;
+  final List<_StorySpec> stories;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return TranslationProvider(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final story in stories) ...[
+            Text(story.name, style: textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            _MatomeDocsPreviewFrame(
+              key: ValueKey('$componentPath/$componentName/Docs/${story.name}'),
+              previewId: '$componentPath/$componentName/${story.name}',
+              height: height,
+              builder: story.builder,
+            ),
+            const SizedBox(height: 28),
           ],
-        ),
-        LocalizationAddon(
-          locales: const [Locale('en'), Locale('ja')],
-          localizationsDelegates: _localizationsDelegates,
-          initialLocale: const Locale('en'),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
+
+class _MatomeDocsPreviewFrame extends StatelessWidget {
+  const _MatomeDocsPreviewFrame({
+    super.key,
+    required this.previewId,
+    required this.height,
+    required this.builder,
+  });
+
+  final String previewId;
+  final double height;
+  final WidgetBuilder builder;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewTheme = Theme.of(context).brightness == Brightness.dark
+        ? buildDarkTheme()
+        : buildLightTheme();
+
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: ClipRect(
+        child: Theme(
+          data: previewTheme,
+          child: Material(
+            color: previewTheme.scaffoldBackgroundColor,
+            child: KeyedSubtree(
+              key: ValueKey('$previewId/child'),
+              child: Builder(builder: builder),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
+  _component(
+    name: 'AppTypography',
+    path: 'Foundations',
+    docs: 'Type scale, font weights, and text rhythm used by Matome UI.',
+    stories: [const _StorySpec('Typography', typographyUseCase)],
+  ),
+  _component(
+    name: 'Icons',
+    path: 'Foundations',
+    docs: 'Icon families and semantic usage checks for the shared catalog.',
+    stories: [const _StorySpec('Icons', iconsUseCase)],
+  ),
+  _component(
+    name: 'MatomeColors',
+    path: 'Foundations',
+    docs: 'Color roles for light and dark themes.',
+    stories: [const _StorySpec('Colors', colorsUseCase)],
+  ),
+
+  _component(
+    name: 'AppTextField',
+    path: 'Components/Atoms/Auth',
+    docs: 'Auth field primitives and submit controls used by sign-in flows.',
+    stories: [const _StorySpec('Fields + submit', authFieldsUseCase)],
+  ),
+  _component(
+    name: 'AuthErrorBanner',
+    path: 'Components/Atoms/Auth',
+    docs: 'Authentication feedback primitive for errors and loading states.',
+    stories: [const _StorySpec('Error + loading', authFeedbackUseCase)],
+  ),
+  _component(
+    name: 'AuthNoticeBanner',
+    path: 'Components/Atoms/Auth',
+    docs: 'Authentication positive/notice primitive (e.g. reset link sent).',
+    stories: [const _StorySpec('Notice', authNoticeUseCase)],
+  ),
+  _component(
+    name: 'AuthField',
+    path: 'Components/Atoms/Auth',
+    docs: 'Labeled auth field primitive including obscured text handling.',
+    stories: [const _StorySpec('Field (labeled + obscured)', authFieldUseCase)],
+  ),
+  _component(
+    name: 'AuthSubmitButton',
+    path: 'Components/Atoms/Auth',
+    docs: 'Submit button states for auth forms.',
+    stories: [
+      const _StorySpec(
+        'Submit button (idle / loading / disabled)',
+        authSubmitButtonUseCase,
+      ),
+    ],
+  ),
+  _component(
+    name: 'Avatar',
+    path: 'Components/Atoms/Avatars',
+    docs: 'Reusable avatar primitive for initials and icon-backed identities.',
+    stories: [const _StorySpec('Icon + initials', avatarsUseCase)],
+  ),
+  _component(
+    name: 'AppTextButton',
+    path: 'Components/Atoms/Buttons',
+    docs: 'Low-emphasis text actions used across app surfaces.',
+    stories: [const _StorySpec('Text actions', appTextButtonsUseCase)],
+  ),
+  _component(
+    name: 'PrimaryButton',
+    path: 'Components/Atoms/Buttons',
+    docs: 'Primary action button states.',
+    stories: [const _StorySpec('Primary states', primaryButtonsUseCase)],
+  ),
+  _component(
+    name: 'EmptyState',
+    path: 'Components/Atoms/Feedback',
+    docs: 'Centered empty-state message primitive.',
+    stories: [const _StorySpec('Centered message', emptyStateUseCase)],
+  ),
+  _component(
+    name: 'LoadingIndicator',
+    path: 'Components/Atoms/Feedback',
+    docs: 'Spinner sizing and loading affordance primitive.',
+    stories: [const _StorySpec('Spinner sizes', loadingIndicatorUseCase)],
+  ),
+  _component(
+    name: 'FileTypeChip',
+    path: 'Components/Atoms/File view',
+    docs: 'Document media header chip for file identity and size metadata.',
+    stories: [const _StorySpec('Document media header', fileTypeChipUseCase)],
+  ),
+  _component(
+    name: 'AppTextField',
+    path: 'Components/Atoms/Inputs',
+    docs: 'General text input states outside the auth-specific form context.',
+    stories: [const _StorySpec('Labeled states', appTextFieldsUseCase)],
+  ),
+  _component(
+    name: 'MatomePanelAddRow',
+    path: 'Components/Atoms/Panel atoms',
+    docs: 'Detail panel add-row atom with accent affordance.',
+    stories: [
+      const _StorySpec('Add row (accent affordance)', matomePanelAddRowUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomePanelRow',
+    path: 'Components/Atoms/Panel atoms',
+    docs: 'Detail panel item row atom with icon, meta, and sync chip slots.',
+    stories: [
+      const _StorySpec(
+        'Item row (icon + meta + sync chip)',
+        matomePanelRowUseCase,
+      ),
+    ],
+  ),
+  _component(
+    name: 'MatomePanelSection',
+    path: 'Components/Atoms/Panel atoms',
+    docs: 'Detail panel section label and divider atom.',
+    stories: [
+      const _StorySpec('Section (label + divider)', matomePanelSectionUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeChip',
+    path: 'Components/Atoms/Relations',
+    docs: 'Matome relation chip including the unfiled fallback.',
+    stories: [
+      const _StorySpec('Matome chip (filled / Unfiled)', matomeChipUseCase),
+    ],
+  ),
+  _component(
+    name: 'PeopleCluster',
+    path: 'Components/Atoms/Relations',
+    docs: 'Overlapping people initials with overflow count.',
+    stories: [
+      const _StorySpec(
+        'People cluster (overlap / +N overflow)',
+        peopleClusterUseCase,
+      ),
+    ],
+  ),
+  _component(
+    name: 'RoleChip',
+    path: 'Components/Atoms/Relations',
+    docs: 'Contact role chip color states.',
+    stories: [
+      const _StorySpec(
+        'Role chip (organizer / speaker / attendee)',
+        roleChipUseCase,
+      ),
+    ],
+  ),
+  _component(
+    name: 'SpaceChip',
+    path: 'Components/Atoms/Relations',
+    docs: 'Space relation chip including the inbox fallback.',
+    stories: [
+      const _StorySpec('Space chip (outlined / Inbox)', spaceChipUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeSyncChip',
+    path: 'Components/Atoms/Status',
+    docs: 'Compact sync status chip for Matome rows and panels.',
+    stories: [const _StorySpec('Sync chip', matomeSyncChipUseCase)],
+  ),
+  _component(
+    name: 'StatusBadge',
+    path: 'Components/Atoms/Status',
+    docs: 'Reusable sync status badge states.',
+    stories: [const _StorySpec('Sync states', statusBadgesUseCase)],
+  ),
+
+  _component(
+    name: 'AppCard',
+    path: 'Components/Composite/Cards',
+    docs:
+        'Composite capture card states used by inbox, calendar, and review lists.',
+    stories: const [
+      _StorySpec('Calendar row', appCardCalendarUseCase),
+      _StorySpec('Done', appCardDoneUseCase),
+      _StorySpec('Failed', appCardFailedUseCase),
+      _StorySpec('Pending upload', appCardPendingUploadUseCase),
+      _StorySpec('Processing', appCardProcessingUseCase),
+    ],
+  ),
+  _component(
+    name: 'AudioPlayerBar',
+    path: 'Components/Composite/Details',
+    docs: 'Audio playback composite used in recording detail surfaces.',
+    stories: [
+      const _StorySpec(
+        'Player - playing (12:04)',
+        audioPlayerBarPlayingUseCase,
+      ),
+      const _StorySpec(
+        'Player - unavailable',
+        audioPlayerBarUnavailableUseCase,
+      ),
+    ],
+  ),
+  _component(
+    name: 'FileActionsMenu',
+    path: 'Components/Composite/Details',
+    docs: 'Details-screen file overflow menu in default and dense variants.',
+    stories: [
+      const _StorySpec(
+        'File overflow menu (delete-only)',
+        detailsFileActionsMenuUseCase,
+      ),
+    ],
+  ),
+  _component(
+    name: 'FileActionsMenu',
+    path: 'Components/Composite/Files chrome',
+    docs: 'Files-list per-row overflow actions.',
+    stories: [
+      const _StorySpec('Per-file overflow menu', filesFileActionsMenuUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesBulkBar',
+    path: 'Components/Composite/Files chrome',
+    docs: 'Bulk-selection action bar for files views.',
+    stories: [
+      const _StorySpec('Bulk bar (selection active)', filesBulkBarUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesEmptyState',
+    path: 'Components/Composite/Files chrome',
+    docs: 'Files empty-state composite.',
+    stories: [
+      const _StorySpec('Empty state (no files)', filesEmptyStateUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesMutedDash',
+    path: 'Components/Composite/Files chrome',
+    docs: 'Muted dash used when file metadata is absent.',
+    stories: [
+      const _StorySpec('Muted dash (absent value)', filesMutedDashUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesUndoBar',
+    path: 'Components/Composite/Files chrome',
+    docs: 'Undo affordance shown after file deletion.',
+    stories: [const _StorySpec('Undo bar (after delete)', filesUndoBarUseCase)],
+  ),
+  _component(
+    name: 'MatomeActionsMenu',
+    path: 'Components/Composite/Matome',
+    docs: 'Matome-level overflow menu actions.',
+    stories: [
+      const _StorySpec('Matome overflow menu', matomeActionsMenuUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeAddFab',
+    path: 'Components/Composite/Matome',
+    docs: 'Floating add action used by mobile Matome navigation.',
+    stories: [const _StorySpec('Add FAB', matomeAddFabUseCase)],
+  ),
+  _component(
+    name: 'AppBottomSheet',
+    path: 'Components/Composite/Overlays',
+    docs: 'Action-list bottom sheet overlay composite.',
+    stories: [const _StorySpec('Action list', appBottomSheetUseCase)],
+  ),
+  _component(
+    name: 'AppDialog',
+    path: 'Components/Composite/Overlays',
+    docs: 'Confirmation dialog overlay composite.',
+    stories: [const _StorySpec('Confirmation', appDialogUseCase)],
+  ),
+
+  // Frames — Mobile viewport chrome.
+  _component(
+    name: 'PhoneFrame',
+    path: 'Frames/Mobile',
+    docs: 'Mobile shell frame used by dock and journey previews.',
+    stories: [const _StorySpec('Phone shell', phoneFrameUseCase)],
+  ),
+  _component(
+    name: 'AuthPageFrame',
+    path: 'Frames/Mobile',
+    docs:
+        'Catalog-only auth viewport frame used for welcome/login/signup Pages.',
+    stories: [const _StorySpec('Auth viewport', authPageFrameUseCase)],
+  ),
+
+  // Frames — Desktop viewport chrome.
+  _component(
+    name: 'WindowFrame',
+    path: 'Frames/Desktop',
+    docs: 'Desktop shell frame used by sidebar and responsive previews.',
+    stories: [const _StorySpec('Desktop shell', windowFrameUseCase)],
+  ),
+  _component(
+    name: 'RouteFrame',
+    path: 'Frames/Desktop',
+    docs: 'Catalog-only route review frame used to bound canonical Pages.',
+    stories: [const _StorySpec('Route surface', routeFrameUseCase)],
+  ),
+
+  // Pages — Mobile viewport (compact phone layout). Same app-owned Pages as the
+  // Desktop group; only the rendered viewport width differs.
+  _component(
+    name: 'WelcomePage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical unauthenticated landing Page in the mobile auth frame.',
+    stories: const [_StorySpec('Default', welcomePageMobileUseCase)],
+  ),
+  _component(
+    name: 'LoginPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical app-owned login route Page in the mobile auth frame.',
+    stories: const [
+      _StorySpec('Default', loginPageMobileUseCase),
+      _StorySpec('Invalid credentials', loginPageInvalidMobileUseCase),
+      _StorySpec('Loading', loginPageLoadingMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'SignupPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical app-owned signup route Page in the mobile auth frame.',
+    stories: const [
+      _StorySpec('Default', signupPageMobileUseCase),
+      _StorySpec('Email taken', signupPageEmailTakenMobileUseCase),
+      _StorySpec('Loading', signupPageLoadingMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'ForgotPasswordPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical password-reset request route Page (mobile).',
+    stories: const [
+      _StorySpec('Default', forgotPasswordPageMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'ResetPasswordPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical reset-code + new-password route Page (mobile).',
+    stories: const [
+      _StorySpec('Default', resetPasswordPageMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'InboxPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical home/inbox route Page in compact mobile layout.',
+    stories: const [
+      _StorySpec('Empty', inboxPageMobileUseCase),
+      _StorySpec('Populated', inboxPagePopulatedMobileUseCase),
+      _StorySpec('Loading', inboxPageLoadingMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeDetailPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical Matome detail route Page in compact mobile layout.',
+    stories: const [
+      _StorySpec('Not found', matomeDetailPageMobileUseCase),
+      _StorySpec('Loaded', matomeDetailLoadedMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesPage',
+    path: 'Pages/Mobile',
+    docs:
+        'Canonical files route Page with seeded rows in compact mobile layout.',
+    stories: const [
+      _StorySpec('Loaded', filesPageMobileUseCase),
+      _StorySpec('Empty', filesPageEmptyMobileUseCase),
+      _StorySpec('Loading', filesPageLoadingMobileUseCase),
+      _StorySpec('Error', filesPageErrorMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'RecordingPage',
+    path: 'Pages/Mobile',
+    docs:
+        'Canonical recording route Page with Widgetbook-safe recorder binding (mobile).',
+    stories: const [_StorySpec('Mic unsupported', recordingPageMobileUseCase)],
+  ),
+  _component(
+    name: 'MeetingRecordingPage',
+    path: 'Pages/Mobile',
+    docs:
+        'Canonical meeting recording route Page with Widgetbook-safe recorder binding (mobile).',
+    stories: const [
+      _StorySpec('Meeting unsupported', meetingRecordingPageMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'FileDetailPage',
+    path: 'Pages/Mobile',
+    docs:
+        'Canonical recording detail route Page variants for audio, image, and document items (mobile).',
+    stories: const [
+      _StorySpec('Audio route', fileDetailPageAudioMobileUseCase),
+      _StorySpec('Document route', fileDetailPageDocumentMobileUseCase),
+      _StorySpec('Image route', fileDetailPageImageMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'CalendarPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical calendar route Page in compact mobile layout.',
+    stories: const [_StorySpec('Empty', calendarPageMobileUseCase)],
+  ),
+  _component(
+    name: 'ContactsPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical contacts route Page in compact mobile layout.',
+    stories: const [_StorySpec('Empty', contactsPageMobileUseCase)],
+  ),
+  _component(
+    name: 'ContactDetailPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical contact detail route Page in compact mobile layout.',
+    stories: const [_StorySpec('Not found', contactDetailPageMobileUseCase)],
+  ),
+  _component(
+    name: 'SpacesPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical spaces route Page in compact mobile layout.',
+    stories: const [_StorySpec('Empty', spacesPageMobileUseCase)],
+  ),
+  _component(
+    name: 'SpaceDetailPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical space detail route Page in compact mobile layout.',
+    stories: const [_StorySpec('Not found', spaceDetailPageMobileUseCase)],
+  ),
+  _component(
+    name: 'SettingsPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical settings route Page in compact mobile layout.',
+    stories: const [_StorySpec('Default', settingsPageMobileUseCase)],
+  ),
+
+  // Pages — Desktop viewport (expanded master-detail layout). Same app-owned
+  // Pages as the Mobile group; only the rendered viewport width differs.
+  _component(
+    name: 'WelcomePage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical unauthenticated landing Page in the desktop auth frame.',
+    stories: const [_StorySpec('Default', welcomePageDesktopUseCase)],
+  ),
+  _component(
+    name: 'LoginPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical app-owned login route Page in the desktop auth frame.',
+    stories: const [
+      _StorySpec('Default', loginPageDesktopUseCase),
+      _StorySpec('Invalid credentials', loginPageInvalidDesktopUseCase),
+      _StorySpec('Loading', loginPageLoadingDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'SignupPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical app-owned signup route Page in the desktop auth frame.',
+    stories: const [
+      _StorySpec('Default', signupPageDesktopUseCase),
+      _StorySpec('Email taken', signupPageEmailTakenDesktopUseCase),
+      _StorySpec('Loading', signupPageLoadingDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'ForgotPasswordPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical password-reset request route Page (desktop).',
+    stories: const [
+      _StorySpec('Default', forgotPasswordPageDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'ResetPasswordPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical reset-code + new-password route Page (desktop).',
+    stories: const [
+      _StorySpec('Default', resetPasswordPageDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'InboxPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical home/inbox route Page in expanded desktop layout.',
+    stories: const [
+      _StorySpec('Empty', inboxPageDesktopUseCase),
+      _StorySpec('Populated', inboxPagePopulatedDesktopUseCase),
+      _StorySpec('Loading', inboxPageLoadingDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeDetailPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical Matome detail route Page in expanded desktop layout.',
+    stories: const [
+      _StorySpec('Not found', matomeDetailPageDesktopUseCase),
+      _StorySpec('Loaded', matomeDetailLoadedDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesPage',
+    path: 'Pages/Desktop',
+    docs:
+        'Canonical files route Page with seeded rows in expanded desktop layout.',
+    stories: const [
+      _StorySpec('Loaded', filesPageDesktopUseCase),
+      _StorySpec('Empty', filesPageEmptyDesktopUseCase),
+      _StorySpec('Loading', filesPageLoadingDesktopUseCase),
+      _StorySpec('Error', filesPageErrorDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'RecordingPage',
+    path: 'Pages/Desktop',
+    docs:
+        'Canonical recording route Page with Widgetbook-safe recorder binding (desktop).',
+    stories: const [_StorySpec('Mic unsupported', recordingPageDesktopUseCase)],
+  ),
+  _component(
+    name: 'MeetingRecordingPage',
+    path: 'Pages/Desktop',
+    docs:
+        'Canonical meeting recording route Page with Widgetbook-safe recorder binding (desktop).',
+    stories: const [
+      _StorySpec('Meeting unsupported', meetingRecordingPageDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'FileDetailPage',
+    path: 'Pages/Desktop',
+    docs:
+        'Canonical recording detail route Page variants for audio, image, and document items (desktop).',
+    stories: const [
+      _StorySpec('Audio route', fileDetailPageAudioDesktopUseCase),
+      _StorySpec('Document route', fileDetailPageDocumentDesktopUseCase),
+      _StorySpec('Image route', fileDetailPageImageDesktopUseCase),
+    ],
+  ),
+  _component(
+    name: 'CalendarPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical calendar route Page in expanded desktop layout.',
+    stories: const [_StorySpec('Empty', calendarPageDesktopUseCase)],
+  ),
+  _component(
+    name: 'ContactsPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical contacts route Page in expanded desktop layout.',
+    stories: const [_StorySpec('Empty', contactsPageDesktopUseCase)],
+  ),
+  _component(
+    name: 'ContactDetailPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical contact detail route Page in expanded desktop layout.',
+    stories: const [_StorySpec('Not found', contactDetailPageDesktopUseCase)],
+  ),
+  _component(
+    name: 'SpacesPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical spaces route Page in expanded desktop layout.',
+    stories: const [_StorySpec('Empty', spacesPageDesktopUseCase)],
+  ),
+  _component(
+    name: 'SpaceDetailPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical space detail route Page in expanded desktop layout.',
+    stories: const [_StorySpec('Not found', spaceDetailPageDesktopUseCase)],
+  ),
+  _component(
+    name: 'SettingsPage',
+    path: 'Pages/Desktop',
+    docs: 'Canonical settings route Page in expanded desktop layout.',
+    stories: const [_StorySpec('Default', settingsPageDesktopUseCase)],
+  ),
+
+  _component(
+    name: 'Auth',
+    path: 'Journeys/Mobile',
+    docs:
+        'Journey order: 01 WelcomePage -> 02 LoginPage -> 03 SignupPage. Mobile auth documents the unauthenticated entry flow in phone layout.',
+    stories: const [
+      _StorySpec('01 WelcomePage', authJourneyWelcomeStepUseCase),
+      _StorySpec('02 LoginPage', authJourneyLoginStepUseCase),
+      _StorySpec('03 SignupPage', authJourneySignupStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Capture',
+    path: 'Journeys/Mobile',
+    docs:
+        'Journey order: 01 RecordingPage -> 02 InboxPage -> 03 MatomeDetailPage. Mobile capture follows a new recording into inbox triage and the resulting Matome hub.',
+    stories: const [
+      _StorySpec('01 RecordingPage', captureJourneyCaptureStepUseCase),
+      _StorySpec('02 InboxPage', captureJourneyInboxStepUseCase),
+      _StorySpec('03 MatomeDetailPage', captureJourneyMatomeStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Organize',
+    path: 'Journeys/Mobile',
+    docs:
+        'Journey order: 01 InboxPage -> 02 MatomeDetailPage -> 03 SpaceDetailPage. Mobile organize documents filing a happening into its destination space.',
+    stories: const [
+      _StorySpec('01 InboxPage', organizeJourneyInboxStepUseCase),
+      _StorySpec('02 MatomeDetailPage', organizeJourneyMatomeStepUseCase),
+      _StorySpec('03 SpaceDetailPage', organizeJourneySpaceStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Review',
+    path: 'Journeys/Mobile',
+    docs:
+        'Journey order: 01 FilesPage -> 02 FileDetailPage. Mobile review documents opening the files library and inspecting an audio detail.',
+    stories: const [
+      _StorySpec('01 FilesPage', reviewJourneyFilesStepUseCase),
+      _StorySpec('02 FileDetailPage', reviewJourneyAudioStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Recovery',
+    path: 'Journeys/Mobile',
+    docs:
+        'Journey order: 01 SettingsPage -> 02 InboxPage -> 03 FilesPage. Mobile recovery documents settings defaults, retry queue review, and returning to files.',
+    stories: const [
+      _StorySpec('01 SettingsPage', recoveryJourneySettingsStepUseCase),
+      _StorySpec('02 InboxPage', recoveryJourneyInboxStepUseCase),
+      _StorySpec('03 FilesPage', recoveryJourneyFilesStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Auth',
+    path: 'Journeys/Desktop',
+    docs:
+        'Journey order: 01 WelcomePage -> 02 LoginPage -> 03 SignupPage. Desktop auth documents the unauthenticated entry flow in wide layout.',
+    stories: const [
+      _StorySpec('01 WelcomePage', authJourneyWelcomeDesktopStepUseCase),
+      _StorySpec('02 LoginPage', authJourneyLoginDesktopStepUseCase),
+      _StorySpec('03 SignupPage', authJourneySignupDesktopStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Capture',
+    path: 'Journeys/Desktop',
+    docs:
+        'Journey order: 01 RecordingPage -> 02 InboxPage -> 03 MatomeDetailPage. Desktop capture follows a new recording into inbox triage and the resulting Matome hub.',
+    stories: const [
+      _StorySpec('01 RecordingPage', captureJourneyCaptureDesktopStepUseCase),
+      _StorySpec('02 InboxPage', captureJourneyInboxDesktopStepUseCase),
+      _StorySpec('03 MatomeDetailPage', captureJourneyMatomeDesktopStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Organize',
+    path: 'Journeys/Desktop',
+    docs:
+        'Journey order: 01 InboxPage -> 02 MatomeDetailPage -> 03 SpaceDetailPage. Desktop organize documents filing a happening into its destination space.',
+    stories: const [
+      _StorySpec('01 InboxPage', organizeJourneyInboxDesktopStepUseCase),
+      _StorySpec(
+        '02 MatomeDetailPage',
+        organizeJourneyMatomeDesktopStepUseCase,
+      ),
+      _StorySpec('03 SpaceDetailPage', organizeJourneySpaceDesktopStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Review',
+    path: 'Journeys/Desktop',
+    docs:
+        'Journey order: 01 FilesPage -> 02 FileDetailPage. Desktop review documents opening the files library and inspecting an audio detail.',
+    stories: const [
+      _StorySpec('01 FilesPage', reviewJourneyFilesDesktopStepUseCase),
+      _StorySpec('02 FileDetailPage', reviewJourneyAudioDesktopStepUseCase),
+    ],
+  ),
+  _component(
+    name: 'Recovery',
+    path: 'Journeys/Desktop',
+    docs:
+        'Journey order: 01 SettingsPage -> 02 InboxPage -> 03 FilesPage. Desktop recovery documents settings defaults, retry queue review, and returning to files.',
+    stories: const [
+      _StorySpec('01 SettingsPage', recoveryJourneySettingsDesktopStepUseCase),
+      _StorySpec('02 InboxPage', recoveryJourneyInboxDesktopStepUseCase),
+      _StorySpec('03 FilesPage', recoveryJourneyFilesDesktopStepUseCase),
+    ],
+  ),
+
+  // Screens — Mobile viewport (compact width). Same app-owned screen bodies as
+  // the Desktop group; the surface width drives the responsive layout.
+  _component(
+    name: 'AuthScaffold',
+    path: 'Screens/Mobile',
+    docs: 'Auth screen scaffold with form column and back affordance (mobile).',
+    stories: [
+      _mobileScreen('Scaffold (form column + back)', authScaffoldUseCase),
+    ],
+  ),
+  _component(
+    name: 'ContactDetail',
+    path: 'Screens/Mobile',
+    docs: 'Contact detail screen body in mobile width across data states.',
+    stories: [
+      _mobileScreen('Detail - desktop', contactDetailDesktopUseCase),
+      _mobileScreen('Detail - mobile', contactDetailMobileUseCase),
+      _mobileScreen('Detail - sparse (minimal info)', contactDetailSparseUseCase),
+    ],
+  ),
+  _component(
+    name: 'ContactTile',
+    path: 'Screens/Mobile',
+    docs: 'Contact tile row used by contact lists (mobile).',
+    stories: [_mobileScreen('Default', contactTileUseCase)],
+  ),
+  _component(
+    name: 'FileView',
+    path: 'Screens/Mobile',
+    docs: 'File view body states for audio, image, and notes content (mobile).',
+    stories: [
+      _mobileScreen('Audio - empty', fileViewAudioEmptyUseCase),
+      _mobileScreen('Audio - failed', fileViewAudioFailedUseCase),
+      _mobileScreen('Audio - processing', fileViewAudioProcessingUseCase),
+      _mobileScreen('Audio - ready (transcript)', fileViewAudioReadyUseCase),
+      _mobileScreen('Image - empty', fileViewImageEmptyUseCase),
+      _mobileScreen('Image - ready (description)', fileViewImageReadyUseCase),
+      _mobileScreen('Notes - empty', fileViewNotesEmptyUseCase),
+      _mobileScreen('Notes - filled', fileViewNotesFilledUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesGrid',
+    path: 'Screens/Mobile',
+    docs: 'Files grid screen body at compact mobile width.',
+    stories: [
+      _mobileScreen('Grid - desktop', filesGridDesktopUseCase),
+      _mobileScreen('Grid - mobile', filesGridMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesScreen',
+    path: 'Screens/Mobile',
+    docs: 'Files screen states backed by provider fixtures (mobile).',
+    stories: [
+      _mobileScreen('Empty', filesScreenEmptyUseCase),
+      _mobileScreen('Error', filesScreenErrorUseCase),
+      _mobileScreen('Loaded', filesScreenLoadedUseCase),
+      _mobileScreen('Loading', filesScreenLoadingUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesTable',
+    path: 'Screens/Mobile',
+    docs: 'Files table screen body at compact mobile width.',
+    stories: [
+      _mobileScreen('Table - desktop', filesTableDesktopUseCase),
+      _mobileScreen('Table - mobile (compact)', filesTableMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesScopeFilter',
+    path: 'Screens/Mobile',
+    docs: 'Local-first files scope filter and its page-level scene (mobile).',
+    stories: [
+      _mobileScreen(
+        'Files scope filter (All / Loose / In a space)',
+        filesScopeFilterUseCase,
+      ),
+      _mobileScreen('Scene - Files (scope filter)', sceneFilesUseCase),
+    ],
+  ),
+  _component(
+    name: 'InboxItemCard',
+    path: 'Screens/Mobile',
+    docs: 'Local-first inbox entry card and inbox scene (mobile).',
+    stories: [
+      _mobileScreen('Inbox entry (loose item / draft matome)', inboxItemCardUseCase),
+      _mobileScreen('Scene - Inbox (loose items + draft matomes)', sceneInboxUseCase),
+    ],
+  ),
+  _component(
+    name: 'SpaceSyncChip',
+    path: 'Screens/Mobile',
+    docs: 'Local/cloud sync chip and promote-to-cloud consent scene (mobile).',
+    stories: [
+      _mobileScreen('Scene - Promote to cloud consent', scenePromoteConsentUseCase),
+      _mobileScreen('Sync chip (local / promoting / cloud)', spaceSyncChipUseCase),
+    ],
+  ),
+  _component(
+    name: 'SpaceSyncChoice',
+    path: 'Screens/Mobile',
+    docs: 'New-space sync choice and sheet scene (mobile).',
+    stories: [
+      _mobileScreen('Create sync choice (local default)', spaceSyncChoiceUseCase),
+      _mobileScreen('Scene - New space sheet (local default)', sceneNewSpaceSheetUseCase),
+    ],
+  ),
+  _component(
+    name: 'SpaceSyncTile',
+    path: 'Screens/Mobile',
+    docs: 'Local/cloud space tile and spaces scene (mobile).',
+    stories: [
+      _mobileScreen('Scene - Spaces (local / cloud + promote)', sceneSpacesUseCase),
+      _mobileScreen('Space tile (local + promote / cloud)', spaceSyncTileUseCase),
+    ],
+  ),
+  _component(
+    name: 'MasterDetailScaffold',
+    path: 'Screens/Mobile',
+    docs: 'Responsive master-detail scaffold modes (mobile).',
+    stories: [
+      _mobileScreen('Always (split pane)', masterDetailScaffoldUseCase),
+      _mobileScreen(
+        'On click (split appears once selected)',
+        masterDetailScaffoldOnClickUseCase,
+      ),
+    ],
+  ),
+  _component(
+    name: 'MatomeDetailPanel',
+    path: 'Screens/Mobile',
+    docs: 'Complete Matome detail side panel in filed and inbox states (mobile).',
+    stories: [
+      _mobileScreen('Detail panel - filed', detailPanelFiledUseCase),
+      _mobileScreen('Detail panel - inbox', detailPanelInboxUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeTable',
+    path: 'Screens/Mobile',
+    docs: 'Matome table states at compact mobile width.',
+    stories: [
+      _mobileScreen('Table - compact (mobile)', matomeTableCompactUseCase),
+      _mobileScreen('Table - desktop (sortable)', matomeTableDesktopUseCase),
+      _mobileScreen('Table - empty', matomeTableEmptyUseCase),
+      _mobileScreen('Table - selection + bulk bar', matomeTableSelectionUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeBottomDock',
+    path: 'Screens/Mobile',
+    docs: 'Mobile bottom dock in isolation and in phone context.',
+    stories: [
+      _mobileScreen('Mobile dock - bare', mobileDockBareUseCase),
+      _mobileScreen('Mobile dock - in context', mobileDockInContextUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeSidebar',
+    path: 'Screens/Mobile',
+    docs: 'Desktop sidebar expanded and collapsed states (mobile width).',
+    stories: [
+      _mobileScreen('Desktop sidebar - collapsed (rail)', desktopSidebarCollapsedUseCase),
+      _mobileScreen('Desktop sidebar - expanded', desktopSidebarExpandedUseCase),
+    ],
+  ),
+  _component(
+    name: 'RelationshipPicker',
+    path: 'Screens/Mobile',
+    docs:
+        'Relationship picker overlay variants for files, people, matomes, spaces, filters, and empty states (mobile).',
+    stories: [
+      _mobileScreen('Add anything (mixed / type filter)', relationshipPickerMixedUseCase),
+      _mobileScreen('Add files (multi / search)', relationshipPickerFilesUseCase),
+      _mobileScreen('Add people (multi / search)', relationshipPickerPeopleUseCase),
+      _mobileScreen('Add to a matome (Files page / reuse)', relationshipPickerMatomeUseCase),
+      _mobileScreen('Empty (no candidates yet)', relationshipPickerEmptyUseCase),
+      _mobileScreen('File into a space (single)', relationshipPickerSpaceUseCase),
+      _mobileScreen('Pre-filtered (opened from Add person)', relationshipPickerPrefilteredUseCase),
+    ],
+  ),
+
+  // Screens — Desktop viewport (expanded width). Same app-owned screen bodies as
+  // the Mobile group; the surface width drives the responsive layout.
+  _component(
+    name: 'AuthScaffold',
+    path: 'Screens/Desktop',
+    docs: 'Auth screen scaffold with form column and back affordance (desktop).',
+    stories: [
+      _desktopScreen('Scaffold (form column + back)', authScaffoldUseCase),
+    ],
+  ),
+  _component(
+    name: 'ContactDetail',
+    path: 'Screens/Desktop',
+    docs: 'Contact detail screen body in desktop width across data states.',
+    stories: [
+      _desktopScreen('Detail - desktop', contactDetailDesktopUseCase),
+      _desktopScreen('Detail - mobile', contactDetailMobileUseCase),
+      _desktopScreen('Detail - sparse (minimal info)', contactDetailSparseUseCase),
+    ],
+  ),
+  _component(
+    name: 'ContactTile',
+    path: 'Screens/Desktop',
+    docs: 'Contact tile row used by contact lists (desktop).',
+    stories: [_desktopScreen('Default', contactTileUseCase)],
+  ),
+  _component(
+    name: 'FileView',
+    path: 'Screens/Desktop',
+    docs: 'File view body states for audio, image, and notes content (desktop).',
+    stories: [
+      _desktopScreen('Audio - empty', fileViewAudioEmptyUseCase),
+      _desktopScreen('Audio - failed', fileViewAudioFailedUseCase),
+      _desktopScreen('Audio - processing', fileViewAudioProcessingUseCase),
+      _desktopScreen('Audio - ready (transcript)', fileViewAudioReadyUseCase),
+      _desktopScreen('Image - empty', fileViewImageEmptyUseCase),
+      _desktopScreen('Image - ready (description)', fileViewImageReadyUseCase),
+      _desktopScreen('Notes - empty', fileViewNotesEmptyUseCase),
+      _desktopScreen('Notes - filled', fileViewNotesFilledUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesGrid',
+    path: 'Screens/Desktop',
+    docs: 'Files grid screen body at expanded desktop width.',
+    stories: [
+      _desktopScreen('Grid - desktop', filesGridDesktopUseCase),
+      _desktopScreen('Grid - mobile', filesGridMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesScreen',
+    path: 'Screens/Desktop',
+    docs: 'Files screen states backed by provider fixtures (desktop).',
+    stories: [
+      _desktopScreen('Empty', filesScreenEmptyUseCase),
+      _desktopScreen('Error', filesScreenErrorUseCase),
+      _desktopScreen('Loaded', filesScreenLoadedUseCase),
+      _desktopScreen('Loading', filesScreenLoadingUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesTable',
+    path: 'Screens/Desktop',
+    docs: 'Files table screen body at expanded desktop width.',
+    stories: [
+      _desktopScreen('Table - desktop', filesTableDesktopUseCase),
+      _desktopScreen('Table - mobile (compact)', filesTableMobileUseCase),
+    ],
+  ),
+  _component(
+    name: 'FilesScopeFilter',
+    path: 'Screens/Desktop',
+    docs: 'Local-first files scope filter and its page-level scene (desktop).',
+    stories: [
+      _desktopScreen(
+        'Files scope filter (All / Loose / In a space)',
+        filesScopeFilterUseCase,
+      ),
+      _desktopScreen('Scene - Files (scope filter)', sceneFilesUseCase),
+    ],
+  ),
+  _component(
+    name: 'InboxItemCard',
+    path: 'Screens/Desktop',
+    docs: 'Local-first inbox entry card and inbox scene (desktop).',
+    stories: [
+      _desktopScreen('Inbox entry (loose item / draft matome)', inboxItemCardUseCase),
+      _desktopScreen('Scene - Inbox (loose items + draft matomes)', sceneInboxUseCase),
+    ],
+  ),
+  _component(
+    name: 'SpaceSyncChip',
+    path: 'Screens/Desktop',
+    docs: 'Local/cloud sync chip and promote-to-cloud consent scene (desktop).',
+    stories: [
+      _desktopScreen('Scene - Promote to cloud consent', scenePromoteConsentUseCase),
+      _desktopScreen('Sync chip (local / promoting / cloud)', spaceSyncChipUseCase),
+    ],
+  ),
+  _component(
+    name: 'SpaceSyncChoice',
+    path: 'Screens/Desktop',
+    docs: 'New-space sync choice and sheet scene (desktop).',
+    stories: [
+      _desktopScreen('Create sync choice (local default)', spaceSyncChoiceUseCase),
+      _desktopScreen('Scene - New space sheet (local default)', sceneNewSpaceSheetUseCase),
+    ],
+  ),
+  _component(
+    name: 'SpaceSyncTile',
+    path: 'Screens/Desktop',
+    docs: 'Local/cloud space tile and spaces scene (desktop).',
+    stories: [
+      _desktopScreen('Scene - Spaces (local / cloud + promote)', sceneSpacesUseCase),
+      _desktopScreen('Space tile (local + promote / cloud)', spaceSyncTileUseCase),
+    ],
+  ),
+  _component(
+    name: 'MasterDetailScaffold',
+    path: 'Screens/Desktop',
+    docs: 'Responsive master-detail scaffold modes (desktop).',
+    stories: [
+      _desktopScreen('Always (split pane)', masterDetailScaffoldUseCase),
+      _desktopScreen(
+        'On click (split appears once selected)',
+        masterDetailScaffoldOnClickUseCase,
+      ),
+    ],
+  ),
+  _component(
+    name: 'MatomeDetailPanel',
+    path: 'Screens/Desktop',
+    docs: 'Complete Matome detail side panel in filed and inbox states (desktop).',
+    stories: [
+      _desktopScreen('Detail panel - filed', detailPanelFiledUseCase),
+      _desktopScreen('Detail panel - inbox', detailPanelInboxUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeTable',
+    path: 'Screens/Desktop',
+    docs: 'Matome table states at expanded desktop width.',
+    stories: [
+      _desktopScreen('Table - compact (mobile)', matomeTableCompactUseCase),
+      _desktopScreen('Table - desktop (sortable)', matomeTableDesktopUseCase),
+      _desktopScreen('Table - empty', matomeTableEmptyUseCase),
+      _desktopScreen('Table - selection + bulk bar', matomeTableSelectionUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeBottomDock',
+    path: 'Screens/Desktop',
+    docs: 'Mobile bottom dock in isolation and in phone context (desktop width).',
+    stories: [
+      _desktopScreen('Mobile dock - bare', mobileDockBareUseCase),
+      _desktopScreen('Mobile dock - in context', mobileDockInContextUseCase),
+    ],
+  ),
+  _component(
+    name: 'MatomeSidebar',
+    path: 'Screens/Desktop',
+    docs: 'Desktop sidebar expanded and collapsed states (desktop).',
+    stories: [
+      _desktopScreen('Desktop sidebar - collapsed (rail)', desktopSidebarCollapsedUseCase),
+      _desktopScreen('Desktop sidebar - expanded', desktopSidebarExpandedUseCase),
+    ],
+  ),
+  _component(
+    name: 'RelationshipPicker',
+    path: 'Screens/Desktop',
+    docs:
+        'Relationship picker overlay variants for files, people, matomes, spaces, filters, and empty states (desktop).',
+    stories: [
+      _desktopScreen('Add anything (mixed / type filter)', relationshipPickerMixedUseCase),
+      _desktopScreen('Add files (multi / search)', relationshipPickerFilesUseCase),
+      _desktopScreen('Add people (multi / search)', relationshipPickerPeopleUseCase),
+      _desktopScreen('Add to a matome (Files page / reuse)', relationshipPickerMatomeUseCase),
+      _desktopScreen('Empty (no candidates yet)', relationshipPickerEmptyUseCase),
+      _desktopScreen('File into a space (single)', relationshipPickerSpaceUseCase),
+      _desktopScreen('Pre-filtered (opened from Add person)', relationshipPickerPrefilteredUseCase),
+    ],
+  ),
+];
 
 Widget _matomeAppBuilder(BuildContext context, Widget child) {
   return TranslationProvider(
@@ -151,50 +1358,107 @@ Widget _matomeAppBuilder(BuildContext context, Widget child) {
   );
 }
 
-@widgetbook.UseCase(name: 'Mobile', type: WelcomePage, path: '[Pages]/Auth')
 Widget welcomePageMobileUseCase(BuildContext context) {
   return _authPageScene(const WelcomePage(), viewport: _AuthViewport.mobile);
 }
 
-@widgetbook.UseCase(name: 'Desktop', type: WelcomePage, path: '[Pages]/Auth')
 Widget welcomePageDesktopUseCase(BuildContext context) {
   return _authPageScene(const WelcomePage(), viewport: _AuthViewport.desktop);
 }
 
-@widgetbook.UseCase(name: 'Mobile', type: LoginPage, path: '[Pages]/Auth')
 Widget loginPageMobileUseCase(BuildContext context) {
   return _authPageScene(const LoginPage(), viewport: _AuthViewport.mobile);
 }
 
-@widgetbook.UseCase(name: 'Desktop', type: LoginPage, path: '[Pages]/Auth')
 Widget loginPageDesktopUseCase(BuildContext context) {
   return _authPageScene(const LoginPage(), viewport: _AuthViewport.desktop);
 }
 
-@widgetbook.UseCase(name: 'Mobile', type: SignupPage, path: '[Pages]/Auth')
 Widget signupPageMobileUseCase(BuildContext context) {
   return _authPageScene(const SignupPage(), viewport: _AuthViewport.mobile);
 }
 
-@widgetbook.UseCase(name: 'Desktop', type: SignupPage, path: '[Pages]/Auth')
 Widget signupPageDesktopUseCase(BuildContext context) {
   return _authPageScene(const SignupPage(), viewport: _AuthViewport.desktop);
 }
 
-@widgetbook.UseCase(
-  name: 'Welcome -> Login -> Signup',
-  type: WelcomePage,
-  path: '[Journeys]/Auth',
-)
+Widget forgotPasswordPageMobileUseCase(BuildContext context) =>
+    _authPageScene(const ForgotPasswordPage(), viewport: _AuthViewport.mobile);
+
+Widget forgotPasswordPageDesktopUseCase(BuildContext context) =>
+    _authPageScene(const ForgotPasswordPage(), viewport: _AuthViewport.desktop);
+
+Widget resetPasswordPageMobileUseCase(BuildContext context) =>
+    _authPageScene(const ResetPasswordPage(), viewport: _AuthViewport.mobile);
+
+Widget resetPasswordPageDesktopUseCase(BuildContext context) =>
+    _authPageScene(const ResetPasswordPage(), viewport: _AuthViewport.desktop);
+
+// Auth state fixtures for the login/signup error and loading Page variants.
+final _authInvalidCredentials = AsyncValue<AuthSession?>.error(
+  const ApiException('Invalid credentials', statusCode: 401),
+  StackTrace.empty,
+);
+final _authEmailTaken = AsyncValue<AuthSession?>.error(
+  const ApiException('Email already registered', statusCode: 409),
+  StackTrace.empty,
+);
+const _authLoading = AsyncValue<AuthSession?>.loading();
+
+Widget loginPageInvalidMobileUseCase(BuildContext context) => _authPageScene(
+  const LoginPage(),
+  viewport: _AuthViewport.mobile,
+  authState: _authInvalidCredentials,
+);
+
+Widget loginPageInvalidDesktopUseCase(BuildContext context) => _authPageScene(
+  const LoginPage(),
+  viewport: _AuthViewport.desktop,
+  authState: _authInvalidCredentials,
+);
+
+Widget loginPageLoadingMobileUseCase(BuildContext context) => _authPageScene(
+  const LoginPage(),
+  viewport: _AuthViewport.mobile,
+  authState: _authLoading,
+);
+
+Widget loginPageLoadingDesktopUseCase(BuildContext context) => _authPageScene(
+  const LoginPage(),
+  viewport: _AuthViewport.desktop,
+  authState: _authLoading,
+);
+
+Widget signupPageEmailTakenMobileUseCase(BuildContext context) =>
+    _authPageScene(
+      const SignupPage(),
+      viewport: _AuthViewport.mobile,
+      authState: _authEmailTaken,
+    );
+
+Widget signupPageEmailTakenDesktopUseCase(BuildContext context) =>
+    _authPageScene(
+      const SignupPage(),
+      viewport: _AuthViewport.desktop,
+      authState: _authEmailTaken,
+    );
+
+Widget signupPageLoadingMobileUseCase(BuildContext context) => _authPageScene(
+  const SignupPage(),
+  viewport: _AuthViewport.mobile,
+  authState: _authLoading,
+);
+
+Widget signupPageLoadingDesktopUseCase(BuildContext context) => _authPageScene(
+  const SignupPage(),
+  viewport: _AuthViewport.desktop,
+  authState: _authLoading,
+);
+
 Widget authJourneyUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 1160, child: _AuthFlowScene());
 }
 
-@widgetbook.UseCase(
-  name: 'Capture -> Inbox -> Matome',
-  type: RecordingPage,
-  path: '[Journeys]/Capture',
-)
 Widget captureJourneyUseCase(BuildContext context) {
   return _PageFlowScene(
     width: 1440,
@@ -234,11 +1498,6 @@ Widget captureJourneyUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Inbox -> Matome -> Space',
-  type: InboxPage,
-  path: '[Journeys]/Organize',
-)
 Widget organizeJourneyUseCase(BuildContext context) {
   return _PageFlowScene(
     width: 1680,
@@ -264,25 +1523,18 @@ Widget organizeJourneyUseCase(BuildContext context) {
         height: 760,
         child: _matomeDetailPageScene(_journeyMatome.id),
       ),
-      const _PageFlowStepSpec(
+      _PageFlowStepSpec(
         title: '3. Filed Space',
         route: '/spaces/:spaceId',
         note: 'SpaceDetailPage stays the canonical post-filing destination.',
         width: 430,
         height: 760,
-        child: ProviderScope(
-          child: SpaceDetailPage(spaceId: 'widgetbook-space-work'),
-        ),
+        child: _spaceDetailPageScene('widgetbook-space-work'),
       ),
     ],
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Files -> Audio detail',
-  type: FilesPage,
-  path: '[Journeys]/Review',
-)
 Widget reviewJourneyUseCase(BuildContext context) {
   return _PageFlowScene(
     width: 1500,
@@ -312,11 +1564,6 @@ Widget reviewJourneyUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Settings -> Retry -> Files',
-  type: SettingsPage,
-  path: '[Journeys]/Recovery',
-)
 Widget recoveryJourneyUseCase(BuildContext context) {
   return _PageFlowScene(
     width: 1420,
@@ -359,88 +1606,19 @@ Widget recoveryJourneyUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(name: 'Loaded', type: FilesPage, path: '[Pages]/Files')
-Widget filesPageLoadedUseCase(BuildContext context) {
-  return _routeSurface(
-    width: 1100,
-    height: 760,
-    child: _filesPageScene(
-      filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample),
-    ),
-  );
+Widget authJourneyWelcomeStepUseCase(BuildContext context) {
+  return _authPageScene(const WelcomePage(), viewport: _AuthViewport.mobile);
 }
 
-@widgetbook.UseCase(name: 'Empty', type: InboxPage, path: '[Pages]/Home')
-Widget inboxPageEmptyUseCase(BuildContext context) {
-  return _routeSurface(width: 390, height: 760, child: _inboxPageScene());
+Widget authJourneyLoginStepUseCase(BuildContext context) {
+  return _authPageScene(const LoginPage(), viewport: _AuthViewport.mobile);
 }
 
-@widgetbook.UseCase(
-  name: 'Not found',
-  type: MatomeDetailPage,
-  path: '[Pages]/Matome',
-)
-Widget matomeDetailPageUseCase(BuildContext context) {
-  return _routeSurface(
-    width: 900,
-    height: 760,
-    child: const ProviderScope(
-      child: MatomeDetailPage(id: 'widgetbook-matome'),
-    ),
-  );
+Widget authJourneySignupStepUseCase(BuildContext context) {
+  return _authPageScene(const SignupPage(), viewport: _AuthViewport.mobile);
 }
 
-@widgetbook.UseCase(
-  name: 'Audio route',
-  type: FileDetailPage,
-  path: '[Pages]/Recording Details',
-)
-Widget fileDetailPageAudioUseCase(BuildContext context) {
-  return _routeSurface(
-    width: 680,
-    height: 760,
-    child: const ProviderScope(
-      child: FileDetailPage.audio(id: 'widgetbook-audio'),
-    ),
-  );
-}
-
-@widgetbook.UseCase(
-  name: 'Image route',
-  type: FileDetailPage,
-  path: '[Pages]/Recording Details',
-)
-Widget fileDetailPageImageUseCase(BuildContext context) {
-  return _routeSurface(
-    width: 680,
-    height: 760,
-    child: const ProviderScope(
-      child: FileDetailPage.image(id: 'widgetbook-image'),
-    ),
-  );
-}
-
-@widgetbook.UseCase(
-  name: 'Document route',
-  type: FileDetailPage,
-  path: '[Pages]/Recording Details',
-)
-Widget fileDetailPageDocumentUseCase(BuildContext context) {
-  return _routeSurface(
-    width: 680,
-    height: 760,
-    child: const ProviderScope(
-      child: FileDetailPage.document(id: 'widgetbook-document'),
-    ),
-  );
-}
-
-@widgetbook.UseCase(
-  name: 'Mic unsupported',
-  type: RecordingPage,
-  path: '[Pages]/Recording',
-)
-Widget recordingPageUseCase(BuildContext context) {
+Widget captureJourneyCaptureStepUseCase(BuildContext context) {
   return _routeSurface(
     width: 390,
     height: 760,
@@ -450,86 +1628,450 @@ Widget recordingPageUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Meeting unsupported',
-  type: MeetingRecordingPage,
-  path: '[Pages]/Recording',
-)
-Widget meetingRecordingPageUseCase(BuildContext context) {
+Widget captureJourneyInboxStepUseCase(BuildContext context) {
   return _routeSurface(
     width: 390,
     height: 760,
+    child: _inboxPageScene(
+      matomes: _journeyInboxMatomes,
+      inboxItems: _journeyLooseInboxItems,
+      looseItems: _journeyLooseInboxItems,
+    ),
+  );
+}
+
+Widget captureJourneyMatomeStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: _matomeDetailPageScene(_journeyMatome.id),
+  );
+}
+
+Widget organizeJourneyInboxStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: _inboxPageScene(
+      matomes: _journeyInboxMatomes,
+      inboxItems: _journeyLooseInboxItems,
+      looseItems: _journeyLooseInboxItems,
+    ),
+  );
+}
+
+Widget organizeJourneyMatomeStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: _matomeDetailPageScene(_journeyMatome.id),
+  );
+}
+
+Widget organizeJourneySpaceStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: _spaceDetailPageScene('widgetbook-space-work'),
+  );
+}
+
+Widget reviewJourneyFilesStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: _filesPageScene(
+      filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample),
+    ),
+  );
+}
+
+Widget reviewJourneyAudioStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: _fileDetailPageScene(_journeyAudioRow.id),
+  );
+}
+
+Widget recoveryJourneySettingsStepUseCase(BuildContext context) {
+  return _routeSurface(width: 390, height: 760, child: _settingsPageScene());
+}
+
+Widget recoveryJourneyInboxStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: _inboxPageScene(
+      matomes: _journeyInboxMatomes,
+      inboxItems: _journeyLooseInboxItems,
+      looseItems: _journeyLooseInboxItems,
+    ),
+  );
+}
+
+Widget recoveryJourneyFilesStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 390,
+    height: 760,
+    child: _filesPageScene(
+      filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample),
+    ),
+  );
+}
+
+Widget authJourneyWelcomeDesktopStepUseCase(BuildContext context) {
+  return _authPageScene(const WelcomePage(), viewport: _AuthViewport.desktop);
+}
+
+Widget authJourneyLoginDesktopStepUseCase(BuildContext context) {
+  return _authPageScene(const LoginPage(), viewport: _AuthViewport.desktop);
+}
+
+Widget authJourneySignupDesktopStepUseCase(BuildContext context) {
+  return _authPageScene(const SignupPage(), viewport: _AuthViewport.desktop);
+}
+
+Widget captureJourneyCaptureDesktopStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 900,
+    height: 760,
     child: ProviderScope(
-      child: MeetingRecordingPage(binding: _widgetbookMeetingRecorderBinding),
+      child: RecordingPage(binding: _widgetbookMicRecorderBinding),
     ),
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Default',
-  type: SettingsPage,
-  path: '[Pages]/Settings',
-)
-Widget settingsPageUseCase(BuildContext context) {
-  return _routeSurface(width: 680, height: 760, child: _settingsPageScene());
-}
-
-@widgetbook.UseCase(name: 'Empty', type: CalendarPage, path: '[Pages]/Calendar')
-Widget calendarPageUseCase(BuildContext context) {
+Widget captureJourneyInboxDesktopStepUseCase(BuildContext context) {
   return _routeSurface(
-    width: 900,
+    width: 1100,
     height: 760,
-    child: const ProviderScope(child: CalendarPage()),
-  );
-}
-
-@widgetbook.UseCase(name: 'Empty', type: SpacesPage, path: '[Pages]/Spaces')
-Widget spacesPageUseCase(BuildContext context) {
-  return _routeSurface(
-    width: 900,
-    height: 760,
-    child: const ProviderScope(child: SpacesPage()),
-  );
-}
-
-@widgetbook.UseCase(
-  name: 'Not found',
-  type: SpaceDetailPage,
-  path: '[Pages]/Spaces',
-)
-Widget spaceDetailPageUseCase(BuildContext context) {
-  return _routeSurface(
-    width: 680,
-    height: 760,
-    child: const ProviderScope(
-      child: SpaceDetailPage(spaceId: 'widgetbook-space'),
+    child: _inboxPageScene(
+      matomes: _journeyInboxMatomes,
+      inboxItems: _journeyLooseInboxItems,
+      looseItems: _journeyLooseInboxItems,
     ),
   );
 }
 
-@widgetbook.UseCase(name: 'Empty', type: ContactsPage, path: '[Pages]/Contacts')
-Widget contactsPageUseCase(BuildContext context) {
+Widget captureJourneyMatomeDesktopStepUseCase(BuildContext context) {
   return _routeSurface(
     width: 900,
     height: 760,
-    child: const ProviderScope(child: ContactsPage()),
+    child: _matomeDetailPageScene(_journeyMatome.id),
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Not found',
-  type: ContactDetailPage,
-  path: '[Pages]/Contacts',
-)
-Widget contactDetailPageUseCase(BuildContext context) {
+Widget organizeJourneyInboxDesktopStepUseCase(BuildContext context) {
   return _routeSurface(
-    width: 680,
+    width: 1100,
     height: 760,
-    child: const ProviderScope(
-      child: ContactDetailPage(id: 'widgetbook-contact'),
+    child: _inboxPageScene(
+      matomes: _journeyInboxMatomes,
+      inboxItems: _journeyLooseInboxItems,
+      looseItems: _journeyLooseInboxItems,
     ),
   );
 }
+
+Widget organizeJourneyMatomeDesktopStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 900,
+    height: 760,
+    child: _matomeDetailPageScene(_journeyMatome.id),
+  );
+}
+
+Widget organizeJourneySpaceDesktopStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 900,
+    height: 760,
+    child: _spaceDetailPageScene('widgetbook-space-work'),
+  );
+}
+
+Widget reviewJourneyFilesDesktopStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 1100,
+    height: 760,
+    child: _filesPageScene(
+      filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample),
+    ),
+  );
+}
+
+Widget reviewJourneyAudioDesktopStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 900,
+    height: 760,
+    child: _fileDetailPageScene(_journeyAudioRow.id),
+  );
+}
+
+Widget recoveryJourneySettingsDesktopStepUseCase(BuildContext context) {
+  return _routeSurface(width: 900, height: 760, child: _settingsPageScene());
+}
+
+Widget recoveryJourneyInboxDesktopStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 1100,
+    height: 760,
+    child: _inboxPageScene(
+      matomes: _journeyInboxMatomes,
+      inboxItems: _journeyLooseInboxItems,
+      looseItems: _journeyLooseInboxItems,
+    ),
+  );
+}
+
+Widget recoveryJourneyFilesDesktopStepUseCase(BuildContext context) {
+  return _routeSurface(
+    width: 1100,
+    height: 760,
+    child: _filesPageScene(
+      filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample),
+    ),
+  );
+}
+
+Widget routeFrameUseCase(BuildContext context) {
+  return const _UseCaseSurface(
+    width: 438,
+    child: _RouteFrame(
+      width: 390,
+      height: 640,
+      child: _FramePreviewBody(title: 'Route frame'),
+    ),
+  );
+}
+
+Widget authPageFrameUseCase(BuildContext context) {
+  return const _UseCaseSurface(
+    width: 388,
+    child: _AuthPageFrame(
+      size: Size(340, 640),
+      child: _FramePreviewBody(title: 'Auth frame'),
+    ),
+  );
+}
+
+Widget phoneFrameUseCase(BuildContext context) {
+  return const _UseCaseSurface(
+    width: 408,
+    child: _PhoneFrame(child: _FramePreviewBody(title: 'Phone frame')),
+  );
+}
+
+Widget windowFrameUseCase(BuildContext context) {
+  return const _UseCaseSurface(
+    width: 1040,
+    child: _WindowFrame(expanded: true),
+  );
+}
+
+// Route Pages render responsively: the surface width drives the app's mobile vs
+// desktop (master-detail) layout. Each Page therefore ships a Mobile and a
+// Desktop use case that reuse the SAME viewport-agnostic scene, varying only the
+// rendered width. These back the `Pages/Mobile/...` and `Pages/Desktop/...`
+// catalog groups.
+Widget _mobilePage(Widget child) =>
+    _routeSurface(width: 390, height: 760, child: child);
+
+Widget _desktopPage(Widget child) =>
+    _routeSurface(width: 1280, height: 800, child: child);
+
+// Screen stories are grouped under `Screens/Mobile/...` and `Screens/Desktop/...`
+// by rendering the SAME use case inside a viewport of the matching width, so
+// responsive screen bodies pick their compact vs expanded layout via MediaQuery.
+_StorySpec _mobileScreen(String name, WidgetBuilder inner) =>
+    _StorySpec(name, (context) => _screenViewport(width: 390, inner: inner));
+
+_StorySpec _desktopScreen(String name, WidgetBuilder inner) =>
+    _StorySpec(name, (context) => _screenViewport(width: 1280, inner: inner));
+
+Widget _screenViewport({required double width, required WidgetBuilder inner}) {
+  return Align(
+    alignment: Alignment.topCenter,
+    child: SizedBox(
+      width: width,
+      child: Builder(
+        builder: (context) {
+          final base = MediaQuery.maybeOf(context) ?? const MediaQueryData();
+          return MediaQuery(
+            data: base.copyWith(size: Size(width, base.size.height)),
+            child: Builder(builder: inner),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+Override _filesSampleOverride() =>
+    filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample);
+
+Widget filesPageMobileUseCase(BuildContext context) =>
+    _mobilePage(_filesPageScene(_filesSampleOverride()));
+
+Widget filesPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(_filesPageScene(_filesSampleOverride()));
+
+Widget inboxPageMobileUseCase(BuildContext context) =>
+    _mobilePage(_inboxPageScene());
+
+Widget inboxPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(_inboxPageScene());
+
+Widget matomeDetailPageMobileUseCase(BuildContext context) => _mobilePage(
+  const ProviderScope(child: MatomeDetailPage(id: 'widgetbook-matome')),
+);
+
+Widget matomeDetailPageDesktopUseCase(BuildContext context) => _desktopPage(
+  const ProviderScope(child: MatomeDetailPage(id: 'widgetbook-matome')),
+);
+
+// Files page states: loaded (above), empty, perpetual loading, and load error.
+Override _filesEmptyOverride() =>
+    filesForCurrentOwnerProvider.overrideWith((ref) async => const <FileRow>[]);
+
+Override _filesLoadingOverride() => filesForCurrentOwnerProvider.overrideWith(
+  (ref) => Future<List<FileRow>>.delayed(const Duration(days: 1)),
+);
+
+Override _filesErrorOverride() => filesForCurrentOwnerProvider.overrideWith(
+  (ref) async => throw const ApiException('Failed to load files'),
+);
+
+Widget filesPageEmptyMobileUseCase(BuildContext context) =>
+    _mobilePage(_filesPageScene(_filesEmptyOverride()));
+
+Widget filesPageEmptyDesktopUseCase(BuildContext context) =>
+    _desktopPage(_filesPageScene(_filesEmptyOverride()));
+
+Widget filesPageLoadingMobileUseCase(BuildContext context) =>
+    _mobilePage(_filesPageScene(_filesLoadingOverride()));
+
+Widget filesPageLoadingDesktopUseCase(BuildContext context) =>
+    _desktopPage(_filesPageScene(_filesLoadingOverride()));
+
+Widget filesPageErrorMobileUseCase(BuildContext context) =>
+    _mobilePage(_filesPageScene(_filesErrorOverride()));
+
+Widget filesPageErrorDesktopUseCase(BuildContext context) =>
+    _desktopPage(_filesPageScene(_filesErrorOverride()));
+
+// Inbox page states: empty (above), populated, and loading.
+Widget inboxPagePopulatedMobileUseCase(BuildContext context) => _mobilePage(
+  _inboxPageScene(
+    matomes: _journeyInboxMatomes,
+    inboxItems: _journeyLooseInboxItems,
+    looseItems: _journeyLooseInboxItems,
+  ),
+);
+
+Widget inboxPagePopulatedDesktopUseCase(BuildContext context) => _desktopPage(
+  _inboxPageScene(
+    matomes: _journeyInboxMatomes,
+    inboxItems: _journeyLooseInboxItems,
+    looseItems: _journeyLooseInboxItems,
+  ),
+);
+
+Widget inboxPageLoadingMobileUseCase(BuildContext context) =>
+    _mobilePage(_inboxPageScene(loading: true));
+
+Widget inboxPageLoadingDesktopUseCase(BuildContext context) =>
+    _desktopPage(_inboxPageScene(loading: true));
+
+// Matome detail page states: not found (above) and loaded (seeded controller).
+Widget matomeDetailLoadedMobileUseCase(BuildContext context) =>
+    _mobilePage(_matomeDetailPageScene('widgetbook-matome'));
+
+Widget matomeDetailLoadedDesktopUseCase(BuildContext context) =>
+    _desktopPage(_matomeDetailPageScene('widgetbook-matome'));
+
+Widget fileDetailPageAudioMobileUseCase(BuildContext context) => _mobilePage(
+  const ProviderScope(child: FileDetailPage.audio(id: 'widgetbook-audio')),
+);
+
+Widget fileDetailPageAudioDesktopUseCase(BuildContext context) => _desktopPage(
+  const ProviderScope(child: FileDetailPage.audio(id: 'widgetbook-audio')),
+);
+
+Widget fileDetailPageImageMobileUseCase(BuildContext context) => _mobilePage(
+  const ProviderScope(child: FileDetailPage.image(id: 'widgetbook-image')),
+);
+
+Widget fileDetailPageImageDesktopUseCase(BuildContext context) => _desktopPage(
+  const ProviderScope(child: FileDetailPage.image(id: 'widgetbook-image')),
+);
+
+Widget fileDetailPageDocumentMobileUseCase(BuildContext context) => _mobilePage(
+  const ProviderScope(child: FileDetailPage.document(id: 'widgetbook-document')),
+);
+
+Widget fileDetailPageDocumentDesktopUseCase(BuildContext context) =>
+    _desktopPage(
+      const ProviderScope(
+        child: FileDetailPage.document(id: 'widgetbook-document'),
+      ),
+    );
+
+Widget recordingPageMobileUseCase(BuildContext context) => _mobilePage(
+  ProviderScope(child: RecordingPage(binding: _widgetbookMicRecorderBinding)),
+);
+
+Widget recordingPageDesktopUseCase(BuildContext context) => _desktopPage(
+  ProviderScope(child: RecordingPage(binding: _widgetbookMicRecorderBinding)),
+);
+
+Widget meetingRecordingPageMobileUseCase(BuildContext context) => _mobilePage(
+  ProviderScope(
+    child: MeetingRecordingPage(binding: _widgetbookMeetingRecorderBinding),
+  ),
+);
+
+Widget meetingRecordingPageDesktopUseCase(BuildContext context) => _desktopPage(
+  ProviderScope(
+    child: MeetingRecordingPage(binding: _widgetbookMeetingRecorderBinding),
+  ),
+);
+
+Widget settingsPageMobileUseCase(BuildContext context) =>
+    _mobilePage(_settingsPageScene());
+
+Widget settingsPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(_settingsPageScene());
+
+Widget calendarPageMobileUseCase(BuildContext context) =>
+    _mobilePage(const ProviderScope(child: CalendarPage()));
+
+Widget calendarPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(const ProviderScope(child: CalendarPage()));
+
+Widget spacesPageMobileUseCase(BuildContext context) =>
+    _mobilePage(_spacesPageScene());
+
+Widget spacesPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(_spacesPageScene());
+
+Widget spaceDetailPageMobileUseCase(BuildContext context) =>
+    _mobilePage(_spaceDetailPageScene('widgetbook-space'));
+
+Widget spaceDetailPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(_spaceDetailPageScene('widgetbook-space'));
+
+Widget contactsPageMobileUseCase(BuildContext context) =>
+    _mobilePage(_contactsPageScene());
+
+Widget contactsPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(_contactsPageScene());
+
+Widget contactDetailPageMobileUseCase(BuildContext context) =>
+    _mobilePage(_contactDetailPageScene('widgetbook-contact'));
+
+Widget contactDetailPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(_contactDetailPageScene('widgetbook-contact'));
 
 Widget _routeSurface({
   required double width,
@@ -558,22 +2100,23 @@ Widget _inboxPageScene({
   List<MatomeItem> matomes = const <MatomeItem>[],
   List<InboxItem> inboxItems = const <InboxItem>[],
   List<InboxItem> looseItems = const <InboxItem>[],
+  bool loading = false,
 }) {
+  AsyncValue<List<T>> av<T>(List<T> data) =>
+      loading ? AsyncValue<List<T>>.loading() : AsyncValue.data(data);
   return ProviderScope(
     overrides: [
       settingsStoreProvider.overrideWithValue(
         InMemorySettingsStore({'matome.inbox_view': 'cards'}),
       ),
       matomeInboxControllerProvider.overrideWith(
-        (ref) =>
-            _WidgetbookMatomeInboxController(ref, AsyncValue.data(matomes)),
+        (ref) => _WidgetbookMatomeInboxController(ref, av(matomes)),
       ),
       inboxControllerProvider.overrideWith(
-        (ref) => _WidgetbookInboxController(ref, AsyncValue.data(inboxItems)),
+        (ref) => _WidgetbookInboxController(ref, av(inboxItems)),
       ),
       looseInboxControllerProvider.overrideWith(
-        (ref) =>
-            _WidgetbookLooseInboxController(ref, AsyncValue.data(looseItems)),
+        (ref) => _WidgetbookLooseInboxController(ref, av(looseItems)),
       ),
       filingSpacesProvider.overrideWith((ref) async => const []),
       uploadRetryServiceProvider.overrideWith(
@@ -616,6 +2159,80 @@ Widget _fileDetailPageScene(String id) {
   );
 }
 
+Widget _spaceDetailPageScene(String spaceId) {
+  return ProviderScope(
+    overrides: [
+      spaceDetailControllerProvider.overrideWith(
+        (ref, id) => _WidgetbookSpaceDetailController(ref, id),
+      ),
+      filingSpacesProvider.overrideWith((ref) async => _journeySpaces),
+    ],
+    child: SpaceDetailPage(spaceId: spaceId),
+  );
+}
+
+Widget _spacesPageScene() {
+  return ProviderScope(
+    overrides: [
+      spacesControllerProvider.overrideWith(
+        (ref) => _WidgetbookSpacesController(ref),
+      ),
+    ],
+    child: const SpacesPage(),
+  );
+}
+
+Widget _contactsPageScene() {
+  return ProviderScope(
+    overrides: [
+      contactsControllerProvider.overrideWith(
+        (ref) => _WidgetbookContactsController(ref),
+      ),
+    ],
+    child: const ContactsPage(),
+  );
+}
+
+Widget _contactDetailPageScene(String id) {
+  return ProviderScope(
+    overrides: [contactDetailProvider.overrideWith((ref, id) async => null)],
+    child: ContactDetailPage(id: id),
+  );
+}
+
+class _FramePreviewBody extends StatelessWidget {
+  const _FramePreviewBody({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return ColoredBox(
+      color: colors.background,
+      child: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(context.radius.md),
+            border: Border.all(color: colors.border),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(spacing.lg),
+            child: Text(
+              title,
+              style: typography.title.copyWith(color: colors.textPrimary),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RouteFrame extends StatelessWidget {
   const _RouteFrame({
     required this.width,
@@ -639,8 +2256,34 @@ class _RouteFrame extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius.lg),
-        child: SizedBox(width: width, height: height, child: child),
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: _PreviewViewport(size: Size(width, height), child: child),
+        ),
       ),
+    );
+  }
+}
+
+class _PreviewViewport extends StatelessWidget {
+  const _PreviewViewport({required this.size, required this.child});
+
+  final Size size;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = MediaQuery.maybeOf(context) ?? MediaQueryData(size: size);
+    return MediaQuery(
+      data: base.copyWith(
+        size: size,
+        padding: EdgeInsets.zero,
+        viewPadding: EdgeInsets.zero,
+        viewInsets: EdgeInsets.zero,
+        systemGestureInsets: EdgeInsets.zero,
+      ),
+      child: child,
     );
   }
 }
@@ -784,12 +2427,74 @@ class _WidgetbookDetailsController extends DetailsController {
   Future<void> moveToSpace(String workspaceId) async {}
 }
 
+class _WidgetbookSpaceDetailController extends SpaceDetailController {
+  _WidgetbookSpaceDetailController(Ref ref, String spaceId)
+    : super(ref, spaceId);
+
+  @override
+  Future<void> load() async {
+    state = AsyncValue.data(_widgetbookSpaceDetailState(spaceId));
+  }
+}
+
+class _WidgetbookSpacesController extends SpacesController {
+  _WidgetbookSpacesController(Ref ref) : super(ref);
+
+  @override
+  Future<void> load() async {
+    state = const AsyncValue.data(_widgetbookSpaceCards);
+  }
+
+  @override
+  Future<void> createSpace(String name) async {}
+
+  @override
+  Future<void> deleteSpace(String id) async {}
+}
+
+class _WidgetbookContactsController extends ContactsController {
+  _WidgetbookContactsController(Ref ref) : super(ref);
+
+  @override
+  Future<void> load() async {
+    state = const AsyncValue.data(_widgetbookContactRows);
+  }
+
+  @override
+  Future<void> createContact({
+    required String displayName,
+    String notes = '',
+  }) async {}
+
+  @override
+  Future<void> updateContact({
+    required String id,
+    required String displayName,
+    String notes = '',
+  }) async {}
+
+  @override
+  Future<void> deleteContact(String id) async {}
+}
+
 MatomeDetailState _widgetbookMatomeDetailState(String id) {
   return MatomeDetailState(
     id: id,
     matome: _journeyMatome,
     spaces: _journeySpaces,
     isLoading: false,
+  );
+}
+
+SpaceDetailState _widgetbookSpaceDetailState(String spaceId) {
+  final space = _journeySpaces.firstWhere(
+    (space) => space.id == spaceId,
+    orElse: () => _journeySpaces.first,
+  );
+  return SpaceDetailState(
+    name: space.name,
+    items: const [_journeyMatome],
+    isLocal: space.isLocal == 1,
   );
 }
 
@@ -878,6 +2583,38 @@ const _journeySpaces = <WorkspaceRow>[
   ),
 ];
 
+const _widgetbookSpaceCards = <SpaceCard>[
+  SpaceCard(
+    id: 'widgetbook-space-personal',
+    name: 'Personal',
+    count: 2,
+    isLocal: true,
+  ),
+  SpaceCard(id: 'widgetbook-space-work', name: 'Product', count: 5),
+];
+
+const _widgetbookContactRows = <ContactRow>[
+  ContactRow(
+    id: 'widgetbook-contact-mika',
+    ownerId: kPlaceholderContactOwnerId,
+    displayName: 'Mika Tanaka',
+    email: 'mika@example.com',
+    company: 'Matome Labs',
+    title: 'Product Lead',
+    metadata: '{"notes":"Launch review owner."}',
+    createdAt: _journeyTimestamp,
+  ),
+  ContactRow(
+    id: 'widgetbook-contact-ren',
+    ownerId: kPlaceholderContactOwnerId,
+    displayName: 'Ren Ito',
+    company: 'Design Studio',
+    title: 'Designer',
+    metadata: '{}',
+    createdAt: _journeyTimestamp,
+  ),
+];
+
 const _journeyAudioRow = RecordingRow(
   id: 'widgetbook-audio-review',
   title: 'Weekly product review',
@@ -958,12 +2695,22 @@ class _WidgetbookUploadRetryService extends UploadRetryService {
   Future<void> start() async {}
 }
 
+class _WidgetbookAudioRecordingService implements AudioRecordingService {
+  const _WidgetbookAudioRecordingService();
+
+  @override
+  Future<bool> isCaptureSupported() async => false;
+
+  @override
+  Future<void> dispose() async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 final _widgetbookAudioRecordingServiceProvider =
     Provider<AudioRecordingService>((ref) {
-      final service = AudioRecordingService(
-        draftsDao: ref.watch(recordingDraftsDaoProvider),
-        captureSupportedProbe: () async => false,
-      );
+      const service = _WidgetbookAudioRecordingService();
       ref.onDispose(service.dispose);
       return service;
     });
@@ -1005,16 +2752,59 @@ final _widgetbookMeetingRecorderBinding = RecorderBinding(
 
 enum _AuthViewport { mobile, desktop }
 
-Widget _authPageScene(Widget page, {required _AuthViewport viewport}) {
+Widget _authPageScene(
+  Widget page, {
+  required _AuthViewport viewport,
+  AsyncValue<AuthSession?>? authState,
+}) {
   final size = switch (viewport) {
     _AuthViewport.mobile => const Size(390, 760),
     _AuthViewport.desktop => const Size(900, 760),
   };
 
-  return _UseCaseSurface(
+  final framed = _UseCaseSurface(
     width: size.width + 48,
     child: _AuthPageFrame(size: size, child: page),
   );
+
+  if (authState == null) return framed;
+  return ProviderScope(
+    overrides: [
+      authControllerProvider.overrideWith(
+        (ref) => _WidgetbookAuthController(ref, authState),
+      ),
+    ],
+    child: framed,
+  );
+}
+
+/// Auth controller stub for the catalog: holds a fixed [AsyncValue] state so the
+/// login/signup Pages can render their error and loading variants without any
+/// network. Overrides the network entry points to keep the injected state.
+class _WidgetbookAuthController extends AuthController {
+  _WidgetbookAuthController(Ref ref, this._fixed) : super(ref) {
+    state = _fixed;
+  }
+
+  final AsyncValue<AuthSession?> _fixed;
+
+  @override
+  Future<void> restoreSession() async {
+    state = _fixed;
+  }
+
+  @override
+  Future<void> login({required String email, required String password}) async {
+    state = _fixed;
+  }
+
+  @override
+  Future<void> register({
+    required String email,
+    required String password,
+  }) async {
+    state = _fixed;
+  }
 }
 
 class _AuthFlowScene extends StatelessWidget {
@@ -1089,11 +2879,14 @@ class _AuthPageFrame extends StatelessWidget {
         child: SizedBox(
           width: size.width,
           height: size.height,
-          child: ProviderScope(
-            overrides: [
-              tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
-            ],
-            child: child,
+          child: _PreviewViewport(
+            size: size,
+            child: ProviderScope(
+              overrides: [
+                tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
+              ],
+              child: child,
+            ),
           ),
         ),
       ),
@@ -1101,111 +2894,62 @@ class _AuthPageFrame extends StatelessWidget {
   }
 }
 
-@widgetbook.UseCase(
-  name: 'Fields + submit',
-  type: AppTextField,
-  path: '[Global]/Auth',
-)
 Widget authFieldsUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _AuthControlsSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Error + loading',
-  type: AuthErrorBanner,
-  path: '[Global]/Auth',
-)
 Widget authFeedbackUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _AuthFeedbackSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Primary states',
-  type: PrimaryButton,
-  path: '[Global]/Buttons',
-)
 Widget primaryButtonsUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 360, child: _PrimaryButtonsSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Text actions',
-  type: AppTextButton,
-  path: '[Global]/Buttons',
-)
 Widget appTextButtonsUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 360, child: _TextButtonsSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Labeled states',
-  type: AppTextField,
-  path: '[Global]/Inputs',
-)
 Widget appTextFieldsUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _TextFieldsSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Icon + initials',
-  type: Avatar,
-  path: '[Global]/Avatars',
-)
 Widget avatarsUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 320, child: _AvatarsSample());
 }
 
-@widgetbook.UseCase(name: 'Done', type: AppCard, path: '[Global]/Cards')
 Widget appCardDoneUseCase(BuildContext context) {
   return const _UseCaseSurface(
     child: _AppCardSample(state: _CardSampleState.done),
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Pending upload',
-  type: AppCard,
-  path: '[Global]/Cards',
-)
 Widget appCardPendingUploadUseCase(BuildContext context) {
   return const _UseCaseSurface(
     child: _AppCardSample(state: _CardSampleState.pendingUpload),
   );
 }
 
-@widgetbook.UseCase(name: 'Processing', type: AppCard, path: '[Global]/Cards')
 Widget appCardProcessingUseCase(BuildContext context) {
   return const _UseCaseSurface(
     child: _AppCardSample(state: _CardSampleState.processing),
   );
 }
 
-@widgetbook.UseCase(name: 'Failed', type: AppCard, path: '[Global]/Cards')
 Widget appCardFailedUseCase(BuildContext context) {
   return const _UseCaseSurface(
     child: _AppCardSample(state: _CardSampleState.failed),
   );
 }
 
-@widgetbook.UseCase(name: 'Calendar row', type: AppCard, path: '[Global]/Cards')
 Widget appCardCalendarUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _CalendarAppCardSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Sync states',
-  type: StatusBadge,
-  path: '[Global]/Status',
-)
 Widget statusBadgesUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 320, child: _StatusBadgesSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Sync chip',
-  type: MatomeSyncChip,
-  path: '[Global]/Status',
-)
 Widget matomeSyncChipUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 320, child: _MatomeSyncChipSample());
 }
@@ -1216,29 +2960,14 @@ Widget matomeSyncChipUseCase(BuildContext context) {
 // `package:matome_flutter/ui/matome_detail_panel.dart` — the SAME widgets the
 // live `_MatomeDetails` composes. There is no private mock to drift from.
 
-@widgetbook.UseCase(
-  name: 'Section (label + divider)',
-  type: MatomePanelSection,
-  path: '[Global]/Panel atoms',
-)
 Widget matomePanelSectionUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 360, child: _MatomePanelSectionSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Item row (icon + meta + sync chip)',
-  type: MatomePanelRow,
-  path: '[Global]/Panel atoms',
-)
 Widget matomePanelRowUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 360, child: _MatomePanelRowSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Add row (accent affordance)',
-  type: MatomePanelAddRow,
-  path: '[Global]/Panel atoms',
-)
 Widget matomePanelAddRowUseCase(BuildContext context) {
   return const _UseCaseSurface(
     width: 360,
@@ -1259,20 +2988,10 @@ Widget matomePanelAddRowUseCase(BuildContext context) {
 // `_MatomeDetails` still composes the section atoms against its providers;
 // converging that screen onto this widget is tracked as a follow-up.
 
-@widgetbook.UseCase(
-  name: 'Detail panel — filed',
-  type: MatomeDetailPanel,
-  path: '[Screens]/Matome detail',
-)
 Widget detailPanelFiledUseCase(BuildContext context) {
   return const _DetailPanelSurface(child: MatomeDetailPanel(data: _filedPanel));
 }
 
-@widgetbook.UseCase(
-  name: 'Detail panel — inbox',
-  type: MatomeDetailPanel,
-  path: '[Screens]/Matome detail',
-)
 Widget detailPanelInboxUseCase(BuildContext context) {
   return const _DetailPanelSurface(child: MatomeDetailPanel(data: _inboxPanel));
 }
@@ -1367,11 +3086,6 @@ class _DetailPanelSurface extends StatelessWidget {
 // widget will back the Matome panel AND the future Files / Contacts pages, so
 // these use cases double as the design review surface before any wiring.
 
-@widgetbook.UseCase(
-  name: 'Add people (multi · search)',
-  type: RelationshipPicker,
-  path: '[Screens]/Relationship picker',
-)
 Widget relationshipPickerPeopleUseCase(BuildContext context) {
   return _RelationshipPickerSurface(
     child: RelationshipPicker(
@@ -1421,11 +3135,6 @@ Widget relationshipPickerPeopleUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'File into a space (single)',
-  type: RelationshipPicker,
-  path: '[Screens]/Relationship picker',
-)
 Widget relationshipPickerSpaceUseCase(BuildContext context) {
   return _RelationshipPickerSurface(
     child: RelationshipPicker(
@@ -1463,11 +3172,6 @@ Widget relationshipPickerSpaceUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Pre-filtered (opened from Add person)',
-  type: RelationshipPicker,
-  path: '[Screens]/Relationship picker',
-)
 Widget relationshipPickerPrefilteredUseCase(BuildContext context) {
   // What "Add person" opens: the SAME unified picker, but pre-filtered to
   // Contacts via initialTypeId. Create actions live behind the header "+".
@@ -1536,11 +3240,6 @@ Widget relationshipPickerPrefilteredUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Add to a matome (Files page · reuse)',
-  type: RelationshipPicker,
-  path: '[Screens]/Relationship picker',
-)
 Widget relationshipPickerMatomeUseCase(BuildContext context) {
   // The SAME widget on the future Files page: link a file to matome(s). Proves
   // the component is entity-agnostic — only the data changes.
@@ -1584,11 +3283,6 @@ Widget relationshipPickerMatomeUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Add files (multi · search)',
-  type: RelationshipPicker,
-  path: '[Screens]/Relationship picker',
-)
 Widget relationshipPickerFilesUseCase(BuildContext context) {
   // Link existing files to a matome / contact — the file analogue of "Add
   // people". Per-type leading glyph; subtitle carries kind · size. Same widget,
@@ -1639,11 +3333,6 @@ Widget relationshipPickerFilesUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Add anything (mixed · type filter)',
-  type: RelationshipPicker,
-  path: '[Screens]/Relationship picker',
-)
 Widget relationshipPickerMixedUseCase(BuildContext context) {
   // The UNIFIED picker, opened from a matome: search across Contacts + Files +
   // Spaces in one list, with type-filter chips. The host's OWN type (Matomes)
@@ -1741,11 +3430,6 @@ Widget relationshipPickerMixedUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Empty (no candidates yet)',
-  type: RelationshipPicker,
-  path: '[Screens]/Relationship picker',
-)
 Widget relationshipPickerEmptyUseCase(BuildContext context) {
   return _RelationshipPickerSurface(
     child: RelationshipPicker(
@@ -1800,47 +3484,22 @@ class _RelationshipPickerSurface extends StatelessWidget {
   }
 }
 
-@widgetbook.UseCase(
-  name: 'Action list',
-  type: AppBottomSheet,
-  path: '[Global]/Overlays',
-)
 Widget appBottomSheetUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _BottomSheetSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Confirmation',
-  type: AppDialog,
-  path: '[Global]/Overlays',
-)
 Widget appDialogUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _DialogSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Spinner sizes',
-  type: LoadingIndicator,
-  path: '[Global]/Feedback',
-)
 Widget loadingIndicatorUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 300, child: _LoadingIndicatorSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Centered message',
-  type: EmptyState,
-  path: '[Global]/Feedback',
-)
 Widget emptyStateUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _EmptyStateSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Document media header',
-  type: FileTypeChip,
-  path: '[Global]/File view',
-)
 Widget fileTypeChipUseCase(BuildContext context) {
   // The doc media header across its icon families plus a missing-size row, each
   // with the DISABLED "Open" / "soon" affordance (preview is deferred, #1455).
@@ -1867,11 +3526,6 @@ Widget fileTypeChipUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Matome chip (filled · Unfiled)',
-  type: MatomeChip,
-  path: '[Global]/Relations',
-)
 Widget matomeChipUseCase(BuildContext context) {
   // Filled pill carrying a matome title, plus the italic muted "Unfiled" state
   // (no matome relation). The filled treatment is the deliberate opposite of
@@ -1889,11 +3543,6 @@ Widget matomeChipUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Space chip (outlined · Inbox)',
-  type: SpaceChip,
-  path: '[Global]/Relations',
-)
 Widget spaceChipUseCase(BuildContext context) {
   // Outlined pill carrying a space (folder) name, plus the italic muted "Inbox"
   // state (no space relation) — INDEPENDENT of the matome relation above.
@@ -1910,11 +3559,6 @@ Widget spaceChipUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Role chip (organizer · speaker · attendee)',
-  type: RoleChip,
-  path: '[Global]/Relations',
-)
 Widget roleChipUseCase(BuildContext context) {
   // A contact's matome_contacts role, tinted by role.
   return const _UseCaseSurface(
@@ -1931,11 +3575,6 @@ Widget roleChipUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'People cluster (overlap · +N overflow)',
-  type: PeopleCluster,
-  path: '[Global]/Relations',
-)
 Widget peopleClusterUseCase(BuildContext context) {
   // Overlapping initials with a "+N" overflow chip + a names tooltip. An empty
   // list renders nothing (callers add their own placeholder).
@@ -1958,11 +3597,6 @@ Widget peopleClusterUseCase(BuildContext context) {
 // `package:matome_flutter/features/matome/widgets/matome_table.dart` — the same
 // widget the live inbox renders. There is no proposal mock to drift from.
 
-@widgetbook.UseCase(
-  name: 'Table — desktop (sortable)',
-  type: MatomeTable,
-  path: '[Screens]/Matome table',
-)
 Widget matomeTableDesktopUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 920,
@@ -1970,11 +3604,6 @@ Widget matomeTableDesktopUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Table — selection + bulk bar',
-  type: MatomeTable,
-  path: '[Screens]/Matome table',
-)
 Widget matomeTableSelectionUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 920,
@@ -1985,11 +3614,6 @@ Widget matomeTableSelectionUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Table — compact (mobile)',
-  type: MatomeTable,
-  path: '[Screens]/Matome table',
-)
 Widget matomeTableCompactUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 380,
@@ -1997,11 +3621,6 @@ Widget matomeTableCompactUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Table — empty',
-  type: MatomeTable,
-  path: '[Screens]/Matome table',
-)
 Widget matomeTableEmptyUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 920, child: MatomeTable(rows: []));
 }
@@ -2015,11 +3634,6 @@ Widget matomeTableEmptyUseCase(BuildContext context) {
 // deleted; there is no second implementation to drift from. Copy reads
 // `t.contacts.detail.*`, so the Localization addon swaps it between en / ja.
 
-@widgetbook.UseCase(
-  name: 'Detail — desktop',
-  type: ContactDetail,
-  path: '[Screens]/Contact detail',
-)
 Widget contactDetailDesktopUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 920,
@@ -2027,11 +3641,6 @@ Widget contactDetailDesktopUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Detail — mobile',
-  type: ContactDetail,
-  path: '[Screens]/Contact detail',
-)
 Widget contactDetailMobileUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 380,
@@ -2039,11 +3648,6 @@ Widget contactDetailMobileUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Detail — sparse (minimal info)',
-  type: ContactDetail,
-  path: '[Screens]/Contact detail',
-)
 Widget contactDetailSparseUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 920,
@@ -2128,11 +3732,6 @@ const _contactDetailSparse = ContactDetailData(
 // chevron). PRESENTATIONAL: the caller owns the accent [color]
 // (`context.colors.spaceColor(index)`).
 
-@widgetbook.UseCase(
-  name: 'Default',
-  type: ContactTile,
-  path: '[Screens]/Contact tile',
-)
 Widget contactTileUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 380,
@@ -2163,11 +3762,6 @@ Widget contactTileUseCase(BuildContext context) {
 // with the pane on the right it renders master + reading pane side-by-side; this
 // case is sized at 1280×720 so the pane is shown.
 
-@widgetbook.UseCase(
-  name: 'Always (split pane)',
-  type: MasterDetailScaffold,
-  path: '[Screens]/Master-detail scaffold',
-)
 Widget masterDetailScaffoldUseCase(BuildContext context) {
   return const SizedBox(
     width: 1280,
@@ -2181,11 +3775,6 @@ Widget masterDetailScaffoldUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'On click (split appears once selected)',
-  type: MasterDetailScaffold,
-  path: '[Screens]/Master-detail scaffold',
-)
 Widget masterDetailScaffoldOnClickUseCase(BuildContext context) {
   return const SizedBox(
     width: 1280,
@@ -2292,38 +3881,18 @@ class _MasterDetailEmptySample extends StatelessWidget {
 // second implementation to drift from. Copy reads `t.files.*`, so the
 // Localization addon swaps it between en / ja.
 
-@widgetbook.UseCase(
-  name: 'Grid — desktop',
-  type: FilesGrid,
-  path: '[Screens]/Files',
-)
 Widget filesGridDesktopUseCase(BuildContext context) {
   return _UseCaseSurface(width: 960, child: FilesGrid(files: _filesSample));
 }
 
-@widgetbook.UseCase(
-  name: 'Grid — mobile',
-  type: FilesGrid,
-  path: '[Screens]/Files',
-)
 Widget filesGridMobileUseCase(BuildContext context) {
   return _UseCaseSurface(width: 380, child: FilesGrid(files: _filesSample));
 }
 
-@widgetbook.UseCase(
-  name: 'Table — desktop',
-  type: FilesTable,
-  path: '[Screens]/Files',
-)
 Widget filesTableDesktopUseCase(BuildContext context) {
   return _UseCaseSurface(width: 960, child: FilesTable(files: _filesSample));
 }
 
-@widgetbook.UseCase(
-  name: 'Table — mobile (compact)',
-  type: FilesTable,
-  path: '[Screens]/Files',
-)
 Widget filesTableMobileUseCase(BuildContext context) {
   return _UseCaseSurface(width: 380, child: FilesTable(files: _filesSample));
 }
@@ -2430,7 +3999,6 @@ Widget _filesScreenScene(Override filesOverride) {
 
 /// Loaded — the owner has files; the grid renders every relation combination
 /// (the DR-003 fixtures). The default state a returning user sees.
-@widgetbook.UseCase(name: 'Loaded', type: FilesScreen, path: '[Screens]/Files')
 Widget filesScreenLoadedUseCase(BuildContext context) {
   return _filesScreenScene(
     filesForCurrentOwnerProvider.overrideWith((ref) async => _filesSample),
@@ -2439,7 +4007,6 @@ Widget filesScreenLoadedUseCase(BuildContext context) {
 
 /// Empty — signed in but no files yet (or none in the active scope); the screen
 /// shows the centred empty state, not a spinner or an error row.
-@widgetbook.UseCase(name: 'Empty', type: FilesScreen, path: '[Screens]/Files')
 Widget filesScreenEmptyUseCase(BuildContext context) {
   return _filesScreenScene(
     filesForCurrentOwnerProvider.overrideWith((ref) async => const <FileRow>[]),
@@ -2448,7 +4015,6 @@ Widget filesScreenEmptyUseCase(BuildContext context) {
 
 /// Loading — the owner's files are still resolving; the screen shows the centred
 /// spinner. Modelled with a never-completing fetch.
-@widgetbook.UseCase(name: 'Loading', type: FilesScreen, path: '[Screens]/Files')
 Widget filesScreenLoadingUseCase(BuildContext context) {
   return _filesScreenScene(
     filesForCurrentOwnerProvider.overrideWith(
@@ -2459,7 +4025,6 @@ Widget filesScreenLoadingUseCase(BuildContext context) {
 
 /// Error — the files fetch threw; the screen shows the centred error message
 /// instead of the grid. Where the user lands on a failed read.
-@widgetbook.UseCase(name: 'Error', type: FilesScreen, path: '[Screens]/Files')
 Widget filesScreenErrorUseCase(BuildContext context) {
   return _filesScreenScene(
     filesForCurrentOwnerProvider.overrideWith(
@@ -2476,11 +4041,6 @@ Widget filesScreenErrorUseCase(BuildContext context) {
 // bar, the empty state, the per-file overflow menu, and the muted "no size"
 // dash. Strictly props-in / callbacks-out, so each renders standalone here.
 
-@widgetbook.UseCase(
-  name: 'Bulk bar (selection active)',
-  type: FilesBulkBar,
-  path: '[Global]/Files chrome',
-)
 Widget filesBulkBarUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 720,
@@ -2494,11 +4054,6 @@ Widget filesBulkBarUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Undo bar (after delete)',
-  type: FilesUndoBar,
-  path: '[Global]/Files chrome',
-)
 Widget filesUndoBarUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 720,
@@ -2510,29 +4065,14 @@ Widget filesUndoBarUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Empty state (no files)',
-  type: FilesEmptyState,
-  path: '[Global]/Files chrome',
-)
 Widget filesEmptyStateUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 480, child: FilesEmptyState());
 }
 
-@widgetbook.UseCase(
-  name: 'Muted dash (absent value)',
-  type: FilesMutedDash,
-  path: '[Global]/Files chrome',
-)
 Widget filesMutedDashUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 240, child: FilesMutedDash());
 }
 
-@widgetbook.UseCase(
-  name: 'Per-file overflow menu',
-  type: FileActionsMenu,
-  path: '[Global]/Files chrome',
-)
 Widget filesFileActionsMenuUseCase(BuildContext context) {
   // The shared files overflow menu (open · move · download · delete). Rendered
   // top-aligned so the popup has room to expand when opened.
@@ -2547,11 +4087,6 @@ Widget filesFileActionsMenuUseCase(BuildContext context) {
 
 // ─── Details / overflow + auth + audio (#1477) ───────────────────────────────
 
-@widgetbook.UseCase(
-  name: 'File overflow menu (delete-only)',
-  type: FileActionsMenu,
-  path: '[Global]/Details',
-)
 Widget detailsFileActionsMenuUseCase(BuildContext context) {
   // The Details-screen file overflow ("…") — a single destructive Delete,
   // anchored like the matome actions menu. Both the default and the [dense]
@@ -2568,11 +4103,6 @@ Widget detailsFileActionsMenuUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Matome overflow menu',
-  type: MatomeActionsMenu,
-  path: '[Global]/Matome',
-)
 Widget matomeActionsMenuUseCase(BuildContext context) {
   // Matome-level secondary actions (rename · edit · regenerate · move · share
   // (soon) · copy · archive), default and [dense] triggers.
@@ -2588,11 +4118,6 @@ Widget matomeActionsMenuUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Add FAB',
-  type: MatomeAddFab,
-  path: '[Global]/Matome',
-)
 Widget matomeAddFabUseCase(BuildContext context) {
   // The mobile-shell "add" FAB in isolation (also shown in context under
   // [Screens]/Navigation › Mobile dock).
@@ -2610,11 +4135,6 @@ Widget matomeAddFabUseCase(BuildContext context) {
 // [AuthSubmitButton]. (AuthErrorBanner already has a story under [Screens]/
 // Design system/Auth.)
 
-@widgetbook.UseCase(
-  name: 'Scaffold (form column + back)',
-  type: AuthScaffold,
-  path: '[Screens]/Auth',
-)
 Widget authScaffoldUseCase(BuildContext context) {
   return SizedBox(
     height: 560,
@@ -2626,20 +4146,10 @@ Widget authScaffoldUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Field (labeled + obscured)',
-  type: AuthField,
-  path: '[Global]/Auth',
-)
 Widget authFieldUseCase(BuildContext context) {
   return const _UseCaseSurface(child: _AuthFieldSample());
 }
 
-@widgetbook.UseCase(
-  name: 'Submit button (idle · loading · disabled)',
-  type: AuthSubmitButton,
-  path: '[Global]/Auth',
-)
 Widget authSubmitButtonUseCase(BuildContext context) {
   return _UseCaseSurface(
     child: Column(
@@ -2677,11 +4187,6 @@ Widget authSubmitButtonUseCase(BuildContext context) {
 // playback so the "playing" surface renders deterministically with no engine,
 // and renders the graceful "unavailable" state from `AudioSource.none()`.
 
-@widgetbook.UseCase(
-  name: 'Player — playing (12:04)',
-  type: AudioPlayerBar,
-  path: '[Global]/Details',
-)
 Widget audioPlayerBarPlayingUseCase(BuildContext context) {
   return _UseCaseSurface(
     child: AudioPlayerBar(
@@ -2695,11 +4200,6 @@ Widget audioPlayerBarPlayingUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Player — unavailable',
-  type: AudioPlayerBar,
-  path: '[Global]/Details',
-)
 Widget audioPlayerBarUnavailableUseCase(BuildContext context) {
   // No playable source resolved → the graceful "audio unavailable" surface.
   return const _UseCaseSurface(
@@ -2707,74 +4207,34 @@ Widget audioPlayerBarUnavailableUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Audio — ready (transcript)',
-  type: FileView,
-  path: '[Screens]/File view',
-)
 Widget fileViewAudioReadyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.audioReady);
 }
 
-@widgetbook.UseCase(
-  name: 'Audio — processing',
-  type: FileView,
-  path: '[Screens]/File view',
-)
 Widget fileViewAudioProcessingUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.audioProcessing);
 }
 
-@widgetbook.UseCase(
-  name: 'Audio — failed',
-  type: FileView,
-  path: '[Screens]/File view',
-)
 Widget fileViewAudioFailedUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.audioFailed);
 }
 
-@widgetbook.UseCase(
-  name: 'Audio — empty',
-  type: FileView,
-  path: '[Screens]/File view',
-)
 Widget fileViewAudioEmptyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.audioEmpty);
 }
 
-@widgetbook.UseCase(
-  name: 'Image — ready (description)',
-  type: FileView,
-  path: '[Screens]/File view',
-)
 Widget fileViewImageReadyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.imageReady);
 }
 
-@widgetbook.UseCase(
-  name: 'Image — empty',
-  type: FileView,
-  path: '[Screens]/File view',
-)
 Widget fileViewImageEmptyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.imageEmpty);
 }
 
-@widgetbook.UseCase(
-  name: 'Notes — filled',
-  type: FileView,
-  path: '[Screens]/File view',
-)
 Widget fileViewNotesFilledUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.notesFilled);
 }
 
-@widgetbook.UseCase(
-  name: 'Notes — empty',
-  type: FileView,
-  path: '[Screens]/File view',
-)
 Widget fileViewNotesEmptyUseCase(BuildContext context) {
   return const _FileViewSurface(sample: _FileViewSample.notesEmpty);
 }
@@ -2786,11 +4246,6 @@ Widget fileViewNotesEmptyUseCase(BuildContext context) {
 // space tile with promote affordance + the create sync choice, and the files
 // scope filter. Presentational, not wired — this is the W0 approval gate.
 
-@widgetbook.UseCase(
-  name: 'Sync chip (local · promoting · cloud)',
-  type: SpaceSyncChip,
-  path: '[Screens]/Local-first spaces',
-)
 Widget spaceSyncChipUseCase(BuildContext context) {
   return const _UseCaseSurface(
     width: 320,
@@ -2806,11 +4261,6 @@ Widget spaceSyncChipUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Inbox entry (loose item · draft matome)',
-  type: InboxItemCard,
-  path: '[Screens]/Local-first spaces',
-)
 Widget inboxItemCardUseCase(BuildContext context) {
   return const _UseCaseSurface(
     width: 380,
@@ -2838,11 +4288,6 @@ Widget inboxItemCardUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Space tile (local + promote · cloud)',
-  type: SpaceSyncTile,
-  path: '[Screens]/Local-first spaces',
-)
 Widget spaceSyncTileUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 380,
@@ -2868,11 +4313,6 @@ Widget spaceSyncTileUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Create sync choice (local default)',
-  type: SpaceSyncChoice,
-  path: '[Screens]/Local-first spaces',
-)
 Widget spaceSyncChoiceUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 360,
@@ -2885,11 +4325,6 @@ Widget spaceSyncChoiceUseCase(BuildContext context) {
   );
 }
 
-@widgetbook.UseCase(
-  name: 'Files scope filter (All · Loose · In a space)',
-  type: FilesScopeFilter,
-  path: '[Screens]/Local-first spaces',
-)
 Widget filesScopeFilterUseCase(BuildContext context) {
   return _UseCaseSurface(
     width: 360,
@@ -2909,47 +4344,22 @@ Widget filesScopeFilterUseCase(BuildContext context) {
 // screen-like mockups so the model reads as a real UI. Still presentational /
 // not wired — the live screens map onto these in later waves.
 
-@widgetbook.UseCase(
-  name: 'Scene — Inbox (loose items + draft matomes)',
-  type: InboxItemCard,
-  path: '[Screens]/Local-first spaces',
-)
 Widget sceneInboxUseCase(BuildContext context) {
   return const _SceneSurface(child: _InboxScene());
 }
 
-@widgetbook.UseCase(
-  name: 'Scene — Spaces (local / cloud + promote)',
-  type: SpaceSyncTile,
-  path: '[Screens]/Local-first spaces',
-)
 Widget sceneSpacesUseCase(BuildContext context) {
   return const _SceneSurface(child: _SpacesScene());
 }
 
-@widgetbook.UseCase(
-  name: 'Scene — Files (scope filter)',
-  type: FilesScopeFilter,
-  path: '[Screens]/Local-first spaces',
-)
 Widget sceneFilesUseCase(BuildContext context) {
   return const _SceneSurface(child: _FilesScene());
 }
 
-@widgetbook.UseCase(
-  name: 'Scene — New space sheet (local default)',
-  type: SpaceSyncChoice,
-  path: '[Screens]/Local-first spaces',
-)
 Widget sceneNewSpaceSheetUseCase(BuildContext context) {
   return const _SceneSurface(child: _NewSpaceSheetScene());
 }
 
-@widgetbook.UseCase(
-  name: 'Scene — Promote to cloud consent',
-  type: SpaceSyncChip,
-  path: '[Screens]/Local-first spaces',
-)
 Widget scenePromoteConsentUseCase(BuildContext context) {
   return const _SceneSurface(child: _PromoteConsentScene());
 }
@@ -3860,6 +5270,13 @@ class _AvatarsSample extends StatelessWidget {
   }
 }
 
+Widget authNoticeUseCase(BuildContext context) {
+  return _UseCaseSurface(
+    width: 420,
+    child: AuthNoticeBanner(message: t.auth.forgotPasswordSent),
+  );
+}
+
 class _AuthFeedbackSample extends StatelessWidget {
   const _AuthFeedbackSample();
 
@@ -4274,38 +5691,18 @@ List<NavDestinationSpec> _navDestinations(BuildContext context) {
   ];
 }
 
-@widgetbook.UseCase(
-  name: 'Mobile dock — in context',
-  type: MatomeBottomDock,
-  path: '[Screens]/Navigation',
-)
 Widget mobileDockInContextUseCase(BuildContext context) {
   return const _PhoneFrame(child: _MobileNavDemo());
 }
 
-@widgetbook.UseCase(
-  name: 'Mobile dock — bare',
-  type: MatomeBottomDock,
-  path: '[Screens]/Navigation',
-)
 Widget mobileDockBareUseCase(BuildContext context) {
   return const _UseCaseSurface(width: 400, child: _BareDock());
 }
 
-@widgetbook.UseCase(
-  name: 'Desktop sidebar — expanded',
-  type: MatomeSidebar,
-  path: '[Screens]/Navigation',
-)
 Widget desktopSidebarExpandedUseCase(BuildContext context) {
   return const _WindowFrame(expanded: true);
 }
 
-@widgetbook.UseCase(
-  name: 'Desktop sidebar — collapsed (rail)',
-  type: MatomeSidebar,
-  path: '[Screens]/Navigation',
-)
 Widget desktopSidebarCollapsedUseCase(BuildContext context) {
   return const _WindowFrame(expanded: false);
 }
@@ -4523,7 +5920,7 @@ class _PhoneFrame extends StatelessWidget {
               borderRadius: BorderRadius.circular(36),
               border: Border.all(color: colors.border, width: 1.5),
             ),
-            child: child,
+            child: _PreviewViewport(size: const Size(360, 720), child: child),
           ),
         ),
       ),

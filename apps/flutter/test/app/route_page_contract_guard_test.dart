@@ -5,8 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 const _contractPath = '../../.docs/internal/design-system-route-contract.md';
 const _routerPath = 'lib/app/router.dart';
 const _widgetbookPath = '../flutter_widgetbook/lib/widgetbook.dart';
-const _widgetbookGeneratedPath =
-    '../flutter_widgetbook/lib/widgetbook.directories.g.dart';
+const _pagesDir = 'lib/app/pages';
 
 /// Routes still allowed to miss canonical Page + Widgetbook `[Pages]` coverage.
 ///
@@ -18,6 +17,8 @@ const _routerPathLiterals = <String>{
   '/',
   '/login',
   '/signup',
+  '/forgot-password',
+  '/reset-password',
   '/recording',
   '/matome/:id',
   '/files',
@@ -40,6 +41,11 @@ const _routerEvidence = <String, List<String>>{
   '/': ["path: '/'", 'WelcomePage()'],
   '/login': ["path: '/login'", 'LoginPage()'],
   '/signup': ["path: '/signup'", 'SignupPage()'],
+  '/forgot-password': [
+    "path: '/forgot-password'",
+    'ForgotPasswordPage()',
+  ],
+  '/reset-password': ["path: '/reset-password'", 'ResetPasswordPage('],
   '/recording': ["path: '/recording'", 'RecordingPage()'],
   '/meeting': ["path: '/meeting'", 'MeetingRecordingPage()'],
   '/matome/:id': ["path: '/matome/:id'", 'MatomeDetailPage('],
@@ -97,10 +103,7 @@ void main() {
           routerSource:
               "GoRoute(path: '/demo', builder: (_, _) => const DemoScreen())",
           appPageClasses: const {},
-          coverage: const WidgetbookPageCoverage(
-            annotationSource: '',
-            generatedSource: '',
-          ),
+          coverage: const WidgetbookPageCoverage(source: ''),
           pendingRoutes: const {},
         );
 
@@ -125,10 +128,8 @@ void main() {
               "GoRoute(path: '/demo', builder: (_, _) => const DemoPage())",
           appPageClasses: const {'DemoPage'},
           coverage: const WidgetbookPageCoverage(
-            annotationSource:
-                '@widgetbook.UseCase(type: DemoPage, path: \'[Screens]/Demo\')',
-            generatedSource:
-                "_widgetbook.WidgetbookComponent(name: 'DemoPage')",
+            source:
+                "_component(name: 'DemoPage', path: 'Screens/Demo', docs: 'Docs', stories: [])",
           ),
           pendingRoutes: const {},
         );
@@ -210,6 +211,39 @@ void main() {
         );
       },
     );
+
+    test('Pages depend only on Frames and Screens (no lower-layer imports)', () {
+      final dir = Directory(_pagesDir);
+      expect(dir.existsSync(), isTrue, reason: 'expected $_pagesDir to exist');
+      final sources = <String, String>{};
+      for (final entity in dir.listSync(recursive: true)) {
+        if (entity is! File) continue;
+        if (!entity.path.endsWith('.dart')) continue;
+        sources[entity.path] = entity.readAsStringSync();
+      }
+
+      final violations = pageLatticeViolations(sources);
+      expect(
+        violations,
+        isEmpty,
+        reason: [
+          'Page lattice guard failed. Pages may depend only on Frames and '
+              'Screens; reach components (lib/ui) and foundations '
+              '(lib/core/theme) through a Screen or Frame, never directly.',
+          ...violations,
+        ].join('\n'),
+      );
+    });
+
+    test('negative self-test: a Page importing lower layers is flagged', () {
+      final violations = pageLatticeViolations({
+        'lib/app/pages/demo_page.dart':
+            "import 'package:matome_flutter/ui/app_button.dart';\n"
+            "import '../../ui/avatar.dart';\n"
+            "import 'package:matome_flutter/core/theme/app_theme.dart';",
+      });
+      expect(violations, hasLength(3));
+    });
   });
 }
 
@@ -258,17 +292,48 @@ Set<String> discoverAppPageClasses() {
   return classes;
 }
 
+/// Layers a Page module must not import directly. Pages compose Screens inside
+/// Frames; they reach components (`lib/ui`) and foundations (`lib/core/theme`)
+/// only through those, matching the dependency lattice in the route contract.
+/// Matches both `package:matome_flutter/<layer>/` and relative `../ui/` forms.
+final _forbiddenPageImportLayers = <String, RegExp>{
+  'components (lib/ui)': RegExp(
+    r'''import\s+['"](?:package:matome_flutter/|(?:\.\./)+)ui/''',
+  ),
+  'foundations (lib/core/theme)': RegExp(
+    r'''import\s+['"](?:package:matome_flutter/|(?:\.\./)+)core/theme/''',
+  ),
+};
+
+/// Pure scanner: returns one violation per Page source line that imports a
+/// forbidden lower layer directly.
+List<String> pageLatticeViolations(Map<String, String> sourcesByPath) {
+  final violations = <String>[];
+  final paths = sourcesByPath.keys.toList()..sort();
+  for (final path in paths) {
+    if (path.endsWith('.g.dart')) continue;
+    for (final line in sourcesByPath[path]!.split('\n')) {
+      for (final entry in _forbiddenPageImportLayers.entries) {
+        if (entry.value.hasMatch(line)) {
+          violations.add(
+            '$path: Page imports ${entry.key} directly: `${line.trim()}`. '
+            'Pages may depend only on Frames and Screens; reach lower layers '
+            'through a Screen or Frame.',
+          );
+        }
+      }
+    }
+  }
+  return violations;
+}
+
 WidgetbookPageCoverage readWidgetbookPageCoverage() {
   final widgetbookSource = File(_widgetbookPath);
-  final generatedSource = File(_widgetbookGeneratedPath);
-  if (!widgetbookSource.existsSync() || !generatedSource.existsSync()) {
+  if (!widgetbookSource.existsSync()) {
     fail('Widgetbook sources are missing; Page coverage cannot run.');
   }
 
-  return WidgetbookPageCoverage(
-    annotationSource: widgetbookSource.readAsStringSync(),
-    generatedSource: generatedSource.readAsStringSync(),
-  );
+  return WidgetbookPageCoverage(source: widgetbookSource.readAsStringSync());
 }
 
 List<String> routePageParityFailures({
@@ -400,31 +465,32 @@ class RouteContractRow {
 }
 
 class WidgetbookPageCoverage {
-  const WidgetbookPageCoverage({
-    required this.annotationSource,
-    required this.generatedSource,
-  });
+  const WidgetbookPageCoverage({required this.source});
 
-  final String annotationSource;
-  final String generatedSource;
+  final String source;
 
   bool hasPagesCoverage(String className) {
     final escapedClassName = RegExp.escape(className);
-    final useCasePattern = RegExp(
-      r'@widgetbook\.UseCase\(([\s\S]*?)\)\s*Widget',
-      multiLine: true,
-    );
-    final typePattern = RegExp('type:\\s*$escapedClassName\\b');
-    final pagesPathPattern = RegExp(r'''path:\s*['"]\[Pages\]''');
-    final annotation = useCasePattern.allMatches(annotationSource).any((match) {
-      final args = match.group(1)!;
-      return typePattern.hasMatch(args) && pagesPathPattern.hasMatch(args);
+    return _componentBlocks(source).any((block) {
+      return RegExp("name:\\s*'$escapedClassName'").hasMatch(block) &&
+          RegExp(r"path:\s*'Pages/").hasMatch(block);
     });
-    final generated = RegExp(
-      "name:\\s*'$escapedClassName'",
-      multiLine: true,
-    ).hasMatch(generatedSource);
+  }
 
-    return annotation && generated;
+  static List<String> _componentBlocks(String source) {
+    final lines = source.split('\n');
+    final blocks = <String>[];
+    for (var i = 0; i < lines.length; i++) {
+      if (!lines[i].startsWith('  _component(')) continue;
+      final buffer = StringBuffer(lines[i]);
+      i++;
+      while (i < lines.length && !lines[i].startsWith('  ),')) {
+        buffer.writeln(lines[i]);
+        i++;
+      }
+      if (i < lines.length) buffer.writeln(lines[i]);
+      blocks.add(buffer.toString());
+    }
+    return blocks;
   }
 }
