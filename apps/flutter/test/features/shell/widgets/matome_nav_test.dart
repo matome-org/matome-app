@@ -147,9 +147,10 @@ void main() {
       await tester.tap(find.byType(MatomeAddFab));
       await tester.pumpAndSettle();
 
-      // All four options are surfaced.
+      // All add options are surfaced.
       expect(find.text(t.nav.recordAudio), findsOneWidget);
       expect(find.text(t.nav.addPhoto), findsOneWidget);
+      expect(find.text(t.nav.addVideo), findsOneWidget);
       expect(find.text(t.nav.addFile), findsOneWidget);
       expect(find.text(t.nav.recordMeeting), findsOneWidget);
 

@@ -125,8 +125,15 @@ void main() {
     return spaceId;
   }
 
-  /// Insert a matome filed into [spaceId] (or draft when null). Returns its id.
-  Future<String> seedMatome(AppDatabase db, {String? spaceId}) async {
+  /// Insert a matome filed into [spaceId] (or draft when null). A [coreId] marks
+  /// the matome as reconciled to Core — required for a child row to actually
+  /// drain, since the two-phase create leg POSTs to /api/matomes/{coreId}/items.
+  /// Returns its id.
+  Future<String> seedMatome(
+    AppDatabase db, {
+    String? spaceId,
+    int? coreId,
+  }) async {
     final matomeId = mintLocalMatomeId();
     await db.into(db.matomes).insert(MatomesCompanion.insert(
           id: matomeId,
@@ -134,6 +141,7 @@ void main() {
           happenedAt: DateTime.now().millisecondsSinceEpoch,
           createdAt: DateTime.now().millisecondsSinceEpoch,
           spaceId: Value(spaceId),
+          coreId: Value(coreId),
         ));
     return matomeId;
   }
@@ -216,16 +224,22 @@ void main() {
 
       final cloudSpace = await seedSpace(db, isLocal: false);
       final localSpace = await seedSpace(db, isLocal: true);
-      final cloudMatome = await seedMatome(db, spaceId: cloudSpace);
+      // Every drainable row rides a matome that has reconciled a coreId (the
+      // two-phase create leg POSTs under the matome). The EFFECTIVE space — and
+      // thus the gate decision — is the matome's space (matome wins).
+      final cloudMatome = await seedMatome(db, spaceId: cloudSpace, coreId: 61);
+      final draftMatome = await seedMatome(db, spaceId: null, coreId: 62);
+      final localMatome = await seedMatome(db, spaceId: localSpace, coreId: 63);
 
-      // CLOUD set (MUST all drain):
-      final cloudFiled = await seedRow(db, tmp, workspaceId: cloudSpace);
+      // CLOUD set (MUST all drain): both ride a cloud-space matome.
+      final cloudFiled = await seedRow(db, tmp, matomeId: cloudMatome);
       final cloudViaMatome = await seedRow(db, tmp, matomeId: cloudMatome);
       final cloudIds = {cloudFiled, cloudViaMatome};
 
-      // NON-CLOUD set (MUST NOT drain):
-      final loose = await seedRow(db, tmp);
-      final localFiled = await seedRow(db, tmp, workspaceId: localSpace);
+      // NON-CLOUD set (MUST NOT drain): held by the GATE, not by a missing
+      // matome — an inbox (NULL space) matome and a LOCAL-space matome.
+      final loose = await seedRow(db, tmp, matomeId: draftMatome);
+      final localFiled = await seedRow(db, tmp, matomeId: localMatome);
       final nonCloudIds = {loose, localFiled};
 
       await container.read(uploadQueueProvider).drain();
@@ -369,11 +383,17 @@ void main() {
       addTearDown(container.dispose);
 
       final localSpace = await seedSpace(db, isLocal: true);
+      // Both rows ride a matome that has reconciled a coreId (drainable under
+      // the two-phase create leg). Their effective spaces differ — inbox (NULL)
+      // vs LOCAL — the two the gate WOULD hold under ON. Under OFF the gate is
+      // compiled out, so BOTH drain regardless.
+      final draftMatome = await seedMatome(db, spaceId: null, coreId: 55);
+      final localMatome = await seedMatome(db, spaceId: localSpace, coreId: 56);
 
-      // A loose row AND a local-space row — under OFF, BOTH drain (the gate
+      // An inbox row AND a local-space row — under OFF, BOTH drain (the gate
       // does not exist; the legacy behaviour is drain-on-pending_upload).
-      final loose = await seedRow(db, tmp);
-      final localFiled = await seedRow(db, tmp, workspaceId: localSpace);
+      final loose = await seedRow(db, tmp, matomeId: draftMatome);
+      final localFiled = await seedRow(db, tmp, matomeId: localMatome);
 
       await container.read(uploadQueueProvider).drain();
 
@@ -411,8 +431,9 @@ class _CountingRepository extends RecordingsRepository {
   }
 
   @override
-  Future<RecordingCreateResult> createRecording({
+  Future<RecordingCreateResult> createItemRecording({
     required String title,
+    required int matomeId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',

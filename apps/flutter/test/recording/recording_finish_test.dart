@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,6 +56,10 @@ void main() {
     );
   }
 
+  // Modern items contract (recordings→items migration): the create leg POSTs to
+  // /api/matomes/{coreMatomeId}/items and returns an ITEM (+presign); processing
+  // is POST /api/items/{id}/process; the poll-fallback source is GET
+  // /api/items/{id}. The minted-matome coreId is 42; the created item id is 321.
   Dio stubbedDio() {
     final dio = Dio(BaseOptions(
       baseUrl: 'http://localhost:4000',
@@ -62,15 +67,17 @@ void main() {
     ));
     final adapter = DioAdapter(dio: dio);
     adapter.onPost(
-      '/api/recordings',
+      '/api/matomes/42/items',
       (server) => server.reply(201, {
-        'recording': {
-          'id': 777,
+        'item': {
+          'id': 321,
           'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'pending',
+          'matome_id': 42,
+          'item_type': 'file',
+          'metadata': {'title': 'New Recording', 'status': 'pending'},
+          'file': {'media_type': 'audio'},
         },
-        'upload': {
+        'presign': {
           'method': 'PUT',
           'url': 'http://127.0.0.1:9/upload',
           'storage_key': 'k',
@@ -80,35 +87,36 @@ void main() {
       data: Matchers.any,
     );
     adapter.onPost(
-      '/api/recordings/777/process',
+      '/api/items/321/process',
       (server) => server.reply(202, {
-        'recording': {
-          'id': 777,
+        'item': {
+          'id': 321,
           'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'processing',
+          'matome_id': 42,
+          'item_type': 'file',
+          'metadata': {'title': 'New Recording', 'status': 'processing'},
         },
         'processing': {'queued': true},
       }),
     );
     adapter.onGet(
-      '/api/recordings/777',
+      '/api/items/321',
       (server) => server.reply(200, {
-        'recording': {
-          'id': 777,
+        'item': {
+          'id': 321,
           'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'done',
-          'summary': 'A memo',
-          'transcript': 'hello',
+          'matome_id': 42,
+          'item_type': 'file',
+          'metadata': {'title': 'New Recording', 'status': 'done'},
+          'file': {'summary': 'A memo', 'transcript': 'hello'},
         },
       }),
     );
     return dio;
   }
 
-  // GET /api/recordings/777 that never reports terminal — so ONLY the injected
-  // socket awaiter can flip processing→done (proves the realtime path is wired).
+  // GET /api/items/321 that never reports terminal — so ONLY the injected socket
+  // awaiter can flip processing→done (proves the realtime path is wired).
   Dio stubbedDioProcessing() {
     final dio = Dio(BaseOptions(
       baseUrl: 'http://localhost:4000',
@@ -116,15 +124,17 @@ void main() {
     ));
     final adapter = DioAdapter(dio: dio);
     adapter.onPost(
-      '/api/recordings',
+      '/api/matomes/42/items',
       (server) => server.reply(201, {
-        'recording': {
-          'id': 777,
+        'item': {
+          'id': 321,
           'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'pending',
+          'matome_id': 42,
+          'item_type': 'file',
+          'metadata': {'title': 'New Recording', 'status': 'pending'},
+          'file': {'media_type': 'audio'},
         },
-        'upload': {
+        'presign': {
           'method': 'PUT',
           'url': 'http://127.0.0.1:9/upload',
           'storage_key': 'k',
@@ -134,19 +144,38 @@ void main() {
       data: Matchers.any,
     );
     adapter.onPost(
-      '/api/recordings/777/process',
+      '/api/items/321/process',
       (server) => server.reply(202, {
-        'recording': {'id': 777, 'owner_id': 1, 'status': 'processing'},
+        'item': {'id': 321, 'owner_id': 1, 'metadata': {'status': 'processing'}},
         'processing': {'queued': true},
       }),
     );
     adapter.onGet(
-      '/api/recordings/777',
+      '/api/items/321',
       (server) => server.reply(200, {
-        'recording': {'id': 777, 'owner_id': 1, 'status': 'processing'},
+        'item': {'id': 321, 'owner_id': 1, 'metadata': {'status': 'processing'}},
       }),
     );
     return dio;
+  }
+
+  /// Simulate the matome→Core sync (matome_sync) reconciling the just-minted
+  /// LOCAL matome's Core id, then re-drain the row. The finish flow (flag OFF)
+  /// mints a coreId-less local matome, so the inline drain HOLDS the row (an item
+  /// can only be created under a reconciled matome — POST
+  /// /api/matomes/{coreMatomeId}/items). This is the two-phase contract after the
+  /// recordings→items migration; matome sync supplies the coreId out-of-band.
+  Future<void> reconcileMatomeAndRedrain(
+    ProviderContainer container,
+    AppDatabase db,
+    String localId,
+  ) async {
+    final held = await db.recordingsDao.getRecordingById(localId);
+    await db.matomesDao.updateMatome(
+      held!.matomeId!,
+      const MatomesCompanion(coreId: Value(42)),
+    );
+    await container.read(uploadQueueProvider).drainRow(localId);
   }
 
   /// Overrides [uploadQueueProvider] with a queue carrying an injected
@@ -212,10 +241,13 @@ void main() {
     // W2: local-first id (rec_local_<uuid>), NOT the Core id.
     expect(isLocalRecordingId(localId), isTrue);
 
-    // Inbox row keeps its local PK; coreId reconciled to 777, status done.
+    // Two-phase: reconcile the minted matome's coreId, then re-drain to done.
+    await reconcileMatomeAndRedrain(container, db, localId);
+
+    // Inbox row keeps its local PK; coreId reconciled to the item id 321, done.
     final row = await db.recordingsDao.getRecordingById(localId);
     expect(row, isNotNull);
-    expect(row!.coreId, 777);
+    expect(row!.coreId, 321);
     expect(row.processingStatus, 'done');
     expect(row.isProcessing, 0);
     expect(row.summary, 'A memo');
@@ -272,6 +304,9 @@ void main() {
     final localId = await container
         .read(recordingFinisherProvider)
         .finish(title: 'Retained memo');
+
+    // Two-phase: reconcile the minted matome's coreId, then re-drain to done.
+    await reconcileMatomeAndRedrain(container, db, localId);
 
     final row = await db.recordingsDao.getRecordingById(localId);
     expect(row, isNotNull);
@@ -331,6 +366,9 @@ void main() {
     final localId = await container
         .read(recordingFinisherProvider)
         .finish(title: 'Saved memo');
+
+    // Two-phase: reconcile the minted matome's coreId, then re-drain to done.
+    await reconcileMatomeAndRedrain(container, db, localId);
 
     // The recording is saved + uploaded done.
     final row = await db.recordingsDao.getRecordingById(localId);
@@ -460,12 +498,17 @@ void main() {
     final localId =
         await container.read(recordingFinisherProvider).finish(title: 'Live');
 
-    expect(awaiterCalled, isTrue, reason: 'finish must use the realtime waiter');
     expect(isLocalRecordingId(localId), isTrue);
+
+    // Two-phase: reconcile the minted matome's coreId, then re-drain — this is
+    // the drain that actually creates the item and runs the realtime waiter.
+    await reconcileMatomeAndRedrain(container, db, localId);
+
+    expect(awaiterCalled, isTrue, reason: 'finish must use the realtime waiter');
 
     final row = await db.recordingsDao.getRecordingById(localId);
     expect(row, isNotNull);
-    expect(row!.coreId, 777);
+    expect(row!.coreId, 321);
     expect(row.processingStatus, 'done',
         reason: 'socket event must drive processing→done');
     expect(row.isProcessing, 0);

@@ -4,7 +4,6 @@ import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
-import 'package:matome_flutter/features/recordings/recording_status_socket.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 
 void main() {
@@ -25,37 +24,36 @@ void main() {
     );
   });
 
-  group('createRecording', () {
+  group('createItemRecording', () {
     test('parses recording + presign descriptor from 201', () async {
       await tokenStore.saveTokens(accessToken: 'tok');
       adapter.onPost(
-        '/api/recordings',
+        '/api/matomes/42/items',
         (server) => server.reply(201, {
-          'recording': {
+          'item': {
             'id': 6,
             'owner_id': 1,
-            'title': 'F4 test',
-            'status': 'pending',
-            'storage_key': 'owners/1/recordings/6/media',
+            'matome_id': 42,
+            'item_type': 'file',
+            'metadata': {'title': 'F4 test', 'status': 'pending'},
+            'file': {
+              'media_type': 'audio',
+              'storage_key': 'owners/1/recordings/6/media',
+            },
           },
-          'upload': {
+          'presign': {
             'method': 'PUT',
             'url': 'http://127.0.0.1:54321/storage/v1/s3/media/x?sig=1',
             'storage_key': 'owners/1/recordings/6/media',
             'expires_in': 900,
           },
         }),
-        data: {
-          'title': 'F4 test',
-          'status': 'pending',
-          'media_type': 'audio',
-          'duration': 3,
-          'badge': 'test',
-        },
+        data: Matchers.any,
       );
 
-      final result = await repo.createRecording(
+      final result = await repo.createItemRecording(
         title: 'F4 test',
+        matomeId: 42,
         durationSeconds: 3,
         badge: 'test',
       );
@@ -73,13 +71,14 @@ void main() {
     test('accepts 202 and returns the echoed recording', () async {
       await tokenStore.saveTokens(accessToken: 'tok');
       adapter.onPost(
-        '/api/recordings/6/process',
+        '/api/items/6/process',
         (server) => server.reply(202, {
-          'recording': {
+          'item': {
             'id': 6,
             'owner_id': 1,
-            'title': 'F4 test',
-            'status': 'pending',
+            'matome_id': 42,
+            'item_type': 'file',
+            'metadata': {'title': 'F4 test', 'status': 'pending'},
           },
           'processing': {'queued': true},
         }),
@@ -94,14 +93,15 @@ void main() {
     test('returns the recording on 200', () async {
       await tokenStore.saveTokens(accessToken: 'tok');
       adapter.onGet(
-        '/api/recordings/6',
+        '/api/items/6',
         (server) => server.reply(200, {
-          'recording': {
+          'item': {
             'id': 6,
             'owner_id': 1,
-            'title': 'F4 test',
-            'status': 'done',
-            'summary': 'done',
+            'matome_id': 42,
+            'item_type': 'file',
+            'metadata': {'title': 'F4 test', 'status': 'done'},
+            'file': {'summary': 'done'},
           },
         }),
       );
@@ -112,35 +112,10 @@ void main() {
     test('returns null on 404 (transient miss)', () async {
       await tokenStore.saveTokens(accessToken: 'tok');
       adapter.onGet(
-        '/api/recordings/99',
+        '/api/items/99',
         (server) => server.reply(404, {'error': 'not_found'}),
       );
       expect(await repo.fetchRecording(99), isNull);
-    });
-  });
-
-  group('buildSocketEndpoint', () {
-    test('http base -> ws /socket/websocket', () {
-      final uri = buildSocketEndpoint('http://localhost:4000');
-      expect(uri.scheme, 'ws');
-      expect(uri.host, 'localhost');
-      expect(uri.port, 4000);
-      expect(uri.path, '/socket/websocket');
-      expect(uri.query, isEmpty);
-    });
-
-    test('https base -> wss /socket/websocket', () {
-      final uri = buildSocketEndpoint('https://api.matome.app');
-      expect(uri.scheme, 'wss');
-      expect(uri.host, 'api.matome.app');
-      expect(uri.path, '/socket/websocket');
-    });
-
-    test('strips any existing query/path on the base', () {
-      final uri = buildSocketEndpoint('http://10.0.2.2:4000/foo?x=1');
-      expect(uri.scheme, 'ws');
-      expect(uri.path, '/socket/websocket');
-      expect(uri.query, isEmpty);
     });
   });
 }

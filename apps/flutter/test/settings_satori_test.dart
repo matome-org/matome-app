@@ -70,6 +70,13 @@ class _FakeAuthRepository implements AuthRepository {
   }) => throw UnimplementedError();
   @override
   Future<AuthSession> refresh() => throw UnimplementedError();
+  @override
+  Future<void> requestPasswordReset({required String email}) async {}
+  @override
+  Future<void> resetPassword({
+    required String token,
+    required String password,
+  }) async {}
 }
 
 MatomeItem _seedItem() => MatomeItem(

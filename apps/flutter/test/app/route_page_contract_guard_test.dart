@@ -22,9 +22,11 @@ const _routerPathLiterals = <String>{
   '/recording',
   '/matome/:id',
   '/files',
-  '/recording/detail/:id',
-  '/recording/image/:id',
-  '/recording/document/:id',
+  '/items/audio/:id',
+  '/items/image/:id',
+  '/items/document/:id',
+  '/items/video/:id',
+  '/items/text/:id',
   '/meeting',
   '/inbox',
   'settings',
@@ -41,27 +43,20 @@ const _routerEvidence = <String, List<String>>{
   '/': ["path: '/'", 'WelcomePage()'],
   '/login': ["path: '/login'", 'LoginPage()'],
   '/signup': ["path: '/signup'", 'SignupPage()'],
-  '/forgot-password': [
-    "path: '/forgot-password'",
-    'ForgotPasswordPage()',
-  ],
+  '/forgot-password': ["path: '/forgot-password'", 'ForgotPasswordPage()'],
   '/reset-password': ["path: '/reset-password'", 'ResetPasswordPage('],
   '/recording': ["path: '/recording'", 'RecordingPage()'],
   '/meeting': ["path: '/meeting'", 'MeetingRecordingPage()'],
   '/matome/:id': ["path: '/matome/:id'", 'MatomeDetailPage('],
   '/files': ["path: '/files'", 'FilesPage()'],
-  '/recording/detail/:id': [
-    "path: '/recording/detail/:id'",
-    'FileDetailPage.audio',
-  ],
-  '/recording/image/:id': [
-    "path: '/recording/image/:id'",
-    'FileDetailPage.image',
-  ],
-  '/recording/document/:id': [
-    "path: '/recording/document/:id'",
+  '/items/audio/:id': ["path: '/items/audio/:id'", 'FileDetailPage.audio'],
+  '/items/image/:id': ["path: '/items/image/:id'", 'FileDetailPage.image'],
+  '/items/document/:id': [
+    "path: '/items/document/:id'",
     'FileDetailPage.document',
   ],
+  '/items/video/:id': ["path: '/items/video/:id'", 'FileDetailPage.video'],
+  '/items/text/:id': ["path: '/items/text/:id'", 'TextItemPage('],
   '/inbox': ["path: '/inbox'", 'InboxPage()'],
   '/inbox/settings': ["path: '/inbox'", "path: 'settings'", 'SettingsPage()'],
   '/inbox/:id': ["path: '/inbox'", "path: ':id'", 'RecordingDetailScreen('],
@@ -212,28 +207,35 @@ void main() {
       },
     );
 
-    test('Pages depend only on Frames and Screens (no lower-layer imports)', () {
-      final dir = Directory(_pagesDir);
-      expect(dir.existsSync(), isTrue, reason: 'expected $_pagesDir to exist');
-      final sources = <String, String>{};
-      for (final entity in dir.listSync(recursive: true)) {
-        if (entity is! File) continue;
-        if (!entity.path.endsWith('.dart')) continue;
-        sources[entity.path] = entity.readAsStringSync();
-      }
+    test(
+      'Pages depend only on Frames and Screens (no lower-layer imports)',
+      () {
+        final dir = Directory(_pagesDir);
+        expect(
+          dir.existsSync(),
+          isTrue,
+          reason: 'expected $_pagesDir to exist',
+        );
+        final sources = <String, String>{};
+        for (final entity in dir.listSync(recursive: true)) {
+          if (entity is! File) continue;
+          if (!entity.path.endsWith('.dart')) continue;
+          sources[entity.path] = entity.readAsStringSync();
+        }
 
-      final violations = pageLatticeViolations(sources);
-      expect(
-        violations,
-        isEmpty,
-        reason: [
-          'Page lattice guard failed. Pages may depend only on Frames and '
-              'Screens; reach components (lib/ui) and foundations '
-              '(lib/core/theme) through a Screen or Frame, never directly.',
-          ...violations,
-        ].join('\n'),
-      );
-    });
+        final violations = pageLatticeViolations(sources);
+        expect(
+          violations,
+          isEmpty,
+          reason: [
+            'Page lattice guard failed. Pages may depend only on Frames and '
+                'Screens; reach components (lib/ui) and foundations '
+                '(lib/core/theme) through a Screen or Frame, never directly.',
+            ...violations,
+          ].join('\n'),
+        );
+      },
+    );
 
     test('negative self-test: a Page importing lower layers is flagged', () {
       final violations = pageLatticeViolations({

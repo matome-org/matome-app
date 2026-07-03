@@ -75,6 +75,61 @@ void main() {
     expect(created.workspaceId, 42);
   });
 
+  test('createTextItem POSTs {item_type:text, body} and returns the item id '
+      '(W1)', () async {
+    await tokenStore.saveTokens(accessToken: 'access-123');
+    Map<String, dynamic>? sentBody;
+    adapter.onPost(
+      '/api/matomes/7/items',
+      (server) => server.reply(201, {
+        'item': {
+          'id': 555,
+          'matome_id': 7,
+          'item_type': 'text',
+          'position': 1,
+          'text': {'id': 900, 'body': 'A durable note'},
+        },
+      }),
+      data: Matchers.any,
+    );
+
+    // Capture the request body via an interceptor so we assert the wire shape.
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (options.path == '/api/matomes/7/items') {
+            sentBody = Map<String, dynamic>.from(options.data as Map);
+          }
+          handler.next(options);
+        },
+      ),
+    );
+
+    final id = await matomesRepo.createTextItem(matomeId: 7, body: 'A durable note');
+    expect(id, 555);
+    expect(sentBody?['item_type'], 'text');
+    expect(sentBody?['body'], 'A durable note');
+  });
+
+  test('createTextItem surfaces a 422 validation error as an ApiException',
+      () async {
+    await tokenStore.saveTokens(accessToken: 'access-123');
+    adapter.onPost(
+      '/api/matomes/7/items',
+      (server) => server.reply(422, {
+        'errors': {
+          'body': ["can't be blank"],
+        },
+      }),
+      data: Matchers.any,
+    );
+    expect(
+      matomesRepo.createTextItem(matomeId: 7, body: ''),
+      throwsA(isA<ApiException>()
+          .having((e) => e.statusCode, 'statusCode', 422)),
+    );
+  });
+
   test('updateMatome PATCHes title + happenedAt and parses the result',
       () async {
     final happenedAt = DateTime.utc(2026, 1, 15, 10, 30);

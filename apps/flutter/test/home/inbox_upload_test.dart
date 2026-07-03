@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,17 +46,20 @@ void main() {
     ));
     final adapter = DioAdapter(dio: dio);
 
-    // 1. create -> id 321 + presign to a stub URL.
+    // 1. create item under the reconciled matome (coreId 42) -> item id 321 +
+    //    presign to a stub URL.
     adapter.onPost(
-      '/api/recordings',
+      '/api/matomes/42/items',
       (server) => server.reply(201, {
-        'recording': {
+        'item': {
           'id': 321,
           'owner_id': 1,
-          'title': 'Voice memo',
-          'status': 'pending',
+          'matome_id': 42,
+          'item_type': 'file',
+          'metadata': {'title': 'Voice memo', 'status': 'pending'},
+          'file': {'media_type': 'audio'},
         },
-        'upload': {
+        'presign': {
           'method': 'PUT',
           'url': 'http://127.0.0.1:9/upload',
           'storage_key': 'k',
@@ -66,28 +70,29 @@ void main() {
     );
     // 3. enqueue process -> 202.
     adapter.onPost(
-      '/api/recordings/321/process',
+      '/api/items/321/process',
       (server) => server.reply(202, {
-        'recording': {
+        'item': {
           'id': 321,
           'owner_id': 1,
-          'title': 'Voice memo',
-          'status': 'processing',
+          'matome_id': 42,
+          'item_type': 'file',
+          'metadata': {'title': 'Voice memo', 'status': 'processing'},
         },
         'processing': {'queued': true},
       }),
     );
     // 4. poll -> done.
     adapter.onGet(
-      '/api/recordings/321',
+      '/api/items/321',
       (server) => server.reply(200, {
-        'recording': {
+        'item': {
           'id': 321,
           'owner_id': 1,
-          'title': 'Voice memo',
-          'status': 'done',
-          'summary': 'A short memo',
-          'transcript': 'hello world',
+          'matome_id': 42,
+          'item_type': 'file',
+          'metadata': {'title': 'Voice memo', 'status': 'done'},
+          'file': {'summary': 'A short memo', 'transcript': 'hello world'},
         },
       }),
     );
@@ -143,6 +148,18 @@ void main() {
 
     // W2: local-first id (rec_local_<uuid>), NOT the Core id.
     expect(isLocalRecordingId(localId), isTrue);
+
+    // The import minted a LOCAL matome with no Core id yet, so the inline drain
+    // HOLDS the row (an item can only be created under a reconciled matome —
+    // POST /api/matomes/{coreMatomeId}/items). Simulate the matome→Core sync
+    // (matome_sync) reconciling that matome's Core id, then re-drain: this is the
+    // two-phase contract after the recordings→items migration.
+    final held = await db.recordingsDao.getRecordingById(localId);
+    await db.matomesDao.updateMatome(
+      held!.matomeId!,
+      const MatomesCompanion(coreId: Value(42)),
+    );
+    await container.read(uploadQueueProvider).drainRow(localId);
 
     // Pipeline drove (local row) -> create -> reconcile coreId -> upload ->
     // process -> done. The row keeps its local PK; coreId is reconciled to 321.

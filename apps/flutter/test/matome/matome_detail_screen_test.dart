@@ -77,7 +77,7 @@ Widget _app(ProviderContainer container, {required String id}) {
 }
 
 /// A go_router-backed app mirroring the production routes the file-detail
-/// drill-down uses: `/matome/:id` and the UNIFIED `/recording/detail/:id` that
+/// drill-down uses: `/matome/:id` and the UNIFIED `/items/audio/:id` that
 /// loads the row and dispatches images → the image host (#97). Needed because
 /// the matome image/audio tiles now navigate via `context.push` — a plain
 /// MaterialApp has no Router, so the old imperative-push test gap is closed by
@@ -92,19 +92,19 @@ Widget _routerApp(ProviderContainer container, {required String id}) {
             MatomeDetailScreen(id: state.pathParameters['id']!),
       ),
       GoRoute(
-        path: '/recording/detail/:id',
+        path: '/items/audio/:id',
         builder: (context, state) =>
             FileDetailScreen.byId(id: state.pathParameters['id']!),
       ),
       // Images drill down by id (row-only load, no audio source).
       GoRoute(
-        path: '/recording/image/:id',
+        path: '/items/image/:id',
         builder: (context, state) =>
             FileDetailScreen.imageById(id: state.pathParameters['id']!),
       ),
       // Documents drill down by id (row-only load, no audio source) — #1450.
       GoRoute(
-        path: '/recording/document/:id',
+        path: '/items/document/:id',
         builder: (context, state) =>
             FileDetailScreen.documentById(id: state.pathParameters['id']!),
       ),
@@ -113,10 +113,7 @@ Widget _routerApp(ProviderContainer container, {required String id}) {
   return UncontrolledProviderScope(
     container: container,
     child: TranslationProvider(
-      child: MaterialApp.router(
-        theme: buildLightTheme(),
-        routerConfig: router,
-      ),
+      child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
   );
 }
@@ -166,10 +163,7 @@ void main() {
     // The aggregated summary is the read-first hero (W7) — visible up front, no
     // reveal, no scroll.
     expect(find.byKey(const ValueKey('matome-summary')), findsOneWidget);
-    expect(
-      find.text('Discussed the roadmap and blockers.'),
-      findsOneWidget,
-    );
+    expect(find.text('Discussed the roadmap and blockers.'), findsOneWidget);
 
     // The child-Item tiles live in the "Show more" detail in the letter format.
     await _revealDetails(tester);
@@ -254,8 +248,7 @@ void main() {
 
     // The summary (and its Regenerate affordance) is the hero — visible up
     // front, no reveal needed.
-    final regenButton =
-        find.byKey(const ValueKey('matome-regenerate-summary'));
+    final regenButton = find.byKey(const ValueKey('matome-regenerate-summary'));
     expect(regenButton, findsOneWidget);
     expect(find.text(t.matome.summaryStale), findsOneWidget);
 
@@ -309,14 +302,15 @@ void main() {
     // A real 1x1 PNG so Image.file actually decodes and pumpAndSettle settles
     // (a non-existent path would route through errorBuilder, which we also
     // tolerate, but a valid file keeps the test deterministic).
-    final tmp = File(
-      '${Directory.systemTemp.path}/matome_tile_${DateTime.now().microsecondsSinceEpoch}.png',
-    )..writeAsBytesSync(
-        base64Decode(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
-          '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
-        ),
-      );
+    final tmp =
+        File(
+          '${Directory.systemTemp.path}/matome_tile_${DateTime.now().microsecondsSinceEpoch}.png',
+        )..writeAsBytesSync(
+          base64Decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+            '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+          ),
+        );
     addTearDown(() {
       if (tmp.existsSync()) tmp.deleteSync();
     });
@@ -376,14 +370,15 @@ void main() {
     (tester) async {
       await _seedMatome(db, id: 'm_dispatch', recordingCount: 0);
 
-      final tmp = File(
-        '${Directory.systemTemp.path}/matome_dispatch_${DateTime.now().microsecondsSinceEpoch}.png',
-      )..writeAsBytesSync(
-          base64Decode(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
-            '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
-          ),
-        );
+      final tmp =
+          File(
+            '${Directory.systemTemp.path}/matome_dispatch_${DateTime.now().microsecondsSinceEpoch}.png',
+          )..writeAsBytesSync(
+            base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+              '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+            ),
+          );
       addTearDown(() {
         if (tmp.existsSync()) tmp.deleteSync();
       });
@@ -405,7 +400,7 @@ void main() {
       );
 
       // Drive the REAL go_router routes (not a plain MaterialApp): the image
-      // tile now `context.push`es `/recording/detail/:id`, which loads the row
+      // tile now `context.push`es `/items/audio/:id`, which loads the row
       // and dispatches to the image host by media type (#97).
       await tester.pumpWidget(_routerApp(container(), id: 'm_dispatch'));
       await tester.pumpAndSettle();

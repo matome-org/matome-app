@@ -73,7 +73,7 @@ Future<void> _seedItem(
 
 /// A wide router app: above the panel breakpoint the management surface is the
 /// persistent side panel, so `_MatomeDetails` is visible up front. Real
-/// `/recording/document/:id` route wired so the doc-host routing can be pinned.
+/// `/items/document/:id` route wired so the doc-host routing can be pinned.
 Widget _wideRouterApp(ProviderContainer container, {required String id}) {
   final router = GoRouter(
     initialLocation: '/matome/$id',
@@ -84,7 +84,7 @@ Widget _wideRouterApp(ProviderContainer container, {required String id}) {
             MatomeDetailScreen(id: state.pathParameters['id']!),
       ),
       GoRoute(
-        path: '/recording/document/:id',
+        path: '/items/document/:id',
         builder: (context, state) =>
             FileDetailScreen.documentById(id: state.pathParameters['id']!),
       ),
@@ -93,10 +93,7 @@ Widget _wideRouterApp(ProviderContainer container, {required String id}) {
   return UncontrolledProviderScope(
     container: container,
     child: TranslationProvider(
-      child: MaterialApp.router(
-        theme: buildLightTheme(),
-        routerConfig: router,
-      ),
+      child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
   );
 }
@@ -156,10 +153,7 @@ void main() {
       expect(find.byKey(const ValueKey('matome-details')), findsOneWidget);
       // The approved layout is built from framed sections (not the old big
       // thumbnail cards / split add header). Items + People + Space + Notes.
-      expect(
-        find.byType(MatomePanelSection),
-        findsAtLeastNWidgets(4),
-      );
+      expect(find.byType(MatomePanelSection), findsAtLeastNWidgets(4));
       // Dividers frame the sections.
       expect(find.byType(Divider), findsAtLeastNWidgets(3));
       // Section headings carry the live counts.
@@ -187,7 +181,9 @@ void main() {
       // The create actions are NOT rendered up front — they live behind the
       // unified picker's header "+", which only exists once the picker is open.
       expect(
-          find.byKey(const ValueKey('relationship-action-photo')), findsNothing);
+        find.byKey(const ValueKey('relationship-action-photo')),
+        findsNothing,
+      );
 
       // Tapping "Add item" opens the unified "Add anything" picker → the
       // cross-entity type filter (Contacts/Files/Spaces) + the "+" create
@@ -197,19 +193,27 @@ void main() {
       expect(find.text(t.matome.relationPicker.typeContacts), findsOneWidget);
       expect(find.text(t.matome.relationPicker.typeFiles), findsOneWidget);
       expect(find.text(t.matome.relationPicker.typeSpaces), findsOneWidget);
-      expect(find.byKey(const ValueKey('relationship-create-menu')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('relationship-create-menu')),
+        findsOneWidget,
+      );
 
       // Opening the "+" surfaces the create actions (Add photo, create-contact,
       // new-space). "Add file" is flag-gated — pinned by the add-file suite.
       await tester.tap(find.byKey(const ValueKey('relationship-create-menu')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('relationship-action-photo')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('relationship-action-create-contact')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('relationship-action-new-space')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('relationship-action-photo')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('relationship-action-create-contact')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('relationship-action-new-space')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -248,10 +252,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: tile,
-          matching: find.byType(MatomeSyncChip),
-        ),
+        find.descendant(of: tile, matching: find.byType(MatomeSyncChip)),
         findsOneWidget,
       );
 

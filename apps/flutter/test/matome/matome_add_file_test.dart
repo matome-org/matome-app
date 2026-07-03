@@ -55,13 +55,23 @@ void main() {
   }
 
   Future<void> seedMatome(String id) => db.matomesDao.create(
-        MatomesCompanion(
-          id: Value(id),
-          title: const Value('Standup'),
-          happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-          createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-        ),
-      );
+    MatomesCompanion(
+      id: Value(id),
+      title: const Value('Standup'),
+      happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+    ),
+  );
+
+  Future<void> seedSyncedMatome(String id, int coreId) => db.matomesDao.create(
+    MatomesCompanion(
+      id: Value(id),
+      coreId: Value(coreId),
+      title: const Value('Synced standup'),
+      happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+    ),
+  );
 
   /// A real temp file with the given extension and a tiny payload.
   File tempFile(String name, {int bytes = 8}) {
@@ -97,6 +107,68 @@ void main() {
     expect(row.coreId, isNull);
   });
 
+  test(
+    'W5: adding then removing a file leaves NO orphaned items/file_blobs rows '
+    '(the dead file-item mirror was dropped)',
+    () async {
+      await seedSyncedMatome('m_items', 77);
+      final c = containerFor('m_items');
+      final controller = c.read(
+        matomeDetailControllerProvider('m_items').notifier,
+      );
+      await controller.load();
+
+      await controller.addFile(
+        file: tempFile('report.pdf'),
+        name: 'report.pdf',
+      );
+
+      // The file import is represented by its `recordings` row only — the
+      // former `_insertFileItemMirror` write is gone, so no items/file_blobs
+      // rows are created (they were never read and leaked on removeItem).
+      expect(
+        await db.itemsDao.listForMatome(77),
+        isEmpty,
+        reason: 'a file import must not write an items mirror row',
+      );
+      expect(
+        await db.select(db.fileBlobs).get(),
+        isEmpty,
+        reason: 'a file import must not write a file_blobs mirror row',
+      );
+
+      // Remove the file and confirm nothing is left behind anywhere.
+      final rec = (await db.matomesDao.getMatomeWithRecordings(
+        'm_items',
+      ))!.recordings.single;
+      await controller.removeItem(rec.id);
+
+      expect(
+        (await db.matomesDao.getMatomeWithRecordings('m_items'))!.recordings,
+        isEmpty,
+      );
+      expect(await db.itemsDao.listForMatome(77), isEmpty);
+      expect(await db.select(db.fileBlobs).get(), isEmpty);
+    },
+  );
+
+  test('W1: addTextNote on an UNRECONCILED (local-only) Matome stays '
+      'local-only — it is gated off and never reaches a Core POST', () async {
+    await seedMatome('m_local'); // no coreId
+    final c = containerFor('m_local');
+    final controller = c.read(
+      matomeDetailControllerProvider('m_local').notifier,
+    );
+    await controller.load();
+
+    // The reconcile guard throws BEFORE any Core POST could be issued — the
+    // items schema is Core-id-keyed, so a local-only note has nowhere to land.
+    await expectLater(
+      controller.addTextNote('a note with no home yet'),
+      throwsStateError,
+    );
+  });
+
   test('addFile of a .png still stores mediaType=image (derivation, not a doc '
       'override) with the extension persisted', () async {
     await seedMatome('m_png');
@@ -106,28 +178,32 @@ void main() {
 
     await controller.addFile(file: tempFile('shot.png'), name: 'shot.png');
 
-    final item =
-        (await db.matomesDao.getMatomeWithRecordings('m_png'))!.recordings.single;
+    final item = (await db.matomesDao.getMatomeWithRecordings(
+      'm_png',
+    ))!.recordings.single;
     expect(item.mediaType, 'image');
     final row = await db.recordingsDao.getRecordingById(item.id);
     expect(row!.originalExtension, 'png');
   });
 
-  test('addPhoto still works and routes through addFile (a .jpg → image)',
-      () async {
-    await seedMatome('m_photo');
-    final c = containerFor('m_photo');
-    final controller =
-        c.read(matomeDetailControllerProvider('m_photo').notifier);
-    await controller.load();
+  test(
+    'addPhoto still works and routes through addFile (a .jpg → image)',
+    () async {
+      await seedMatome('m_photo');
+      final c = containerFor('m_photo');
+      final controller = c.read(
+        matomeDetailControllerProvider('m_photo').notifier,
+      );
+      await controller.load();
 
-    await controller.addPhoto(file: tempFile('pic.jpg'), name: 'pic.jpg');
+      await controller.addPhoto(file: tempFile('pic.jpg'), name: 'pic.jpg');
 
-    final item = (await db.matomesDao.getMatomeWithRecordings('m_photo'))!
-        .recordings
-        .single;
-    expect(item.mediaType, 'image');
-  });
+      final item = (await db.matomesDao.getMatomeWithRecordings(
+        'm_photo',
+      ))!.recordings.single;
+      expect(item.mediaType, 'image');
+    },
+  );
 
   test('the size guard rejects a file over the 25 MB ceiling and persists '
       'NOTHING', () async {
@@ -145,15 +221,19 @@ void main() {
     );
 
     final matome = await db.matomesDao.getMatomeWithRecordings('m_big');
-    expect(matome!.recordings, isEmpty,
-        reason: 'an oversize file must not create a row');
+    expect(
+      matome!.recordings,
+      isEmpty,
+      reason: 'an oversize file must not create a row',
+    );
   });
 
   test('a file exactly AT the ceiling is accepted (boundary)', () async {
     await seedMatome('m_edge');
     final c = containerFor('m_edge');
-    final controller =
-        c.read(matomeDetailControllerProvider('m_edge').notifier);
+    final controller = c.read(
+      matomeDetailControllerProvider('m_edge').notifier,
+    );
     await controller.load();
 
     final atCap = tempFile('cap.pdf', bytes: kMaxImportFileBytes);
@@ -165,34 +245,44 @@ void main() {
     );
   });
 
-  test('the list mix counts a document Item in documentCount (not absorbed)',
-      () async {
-    await seedMatome('m_mix');
-    final c = containerFor('m_mix');
-    final controller = c.read(matomeDetailControllerProvider('m_mix').notifier);
-    await controller.load();
-    await controller.addFile(file: tempFile('a.pdf'), name: 'a.pdf');
+  test(
+    'the list mix counts a document Item in documentCount (not absorbed)',
+    () async {
+      await seedMatome('m_mix');
+      final c = containerFor('m_mix');
+      final controller = c.read(
+        matomeDetailControllerProvider('m_mix').notifier,
+      );
+      await controller.load();
+      await controller.addFile(file: tempFile('a.pdf'), name: 'a.pdf');
 
-    final inboxCards = await db.matomesDao.listInboxMatomeItems();
-    final card = inboxCards.firstWhere((m) => m.id == 'm_mix');
-    expect(card.documentCount, 1);
-    expect(card.imageCount, 0);
-    expect(card.audioCount, 0);
-  });
+      final inboxCards = await db.matomesDao.listInboxMatomeItems();
+      final card = inboxCards.firstWhere((m) => m.id == 'm_mix');
+      expect(card.documentCount, 1);
+      expect(card.imageCount, 0);
+      expect(card.audioCount, 0);
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // Flag-off path: the documents feature flag defaults OFF (no dart-define in
   // tests). The "Add file" affordance is the ONLY thing gated — Add photo stays.
   // ---------------------------------------------------------------------------
   testWidgets('with the documents flag OFF (test default) the Add-file entry '
-      'is absent from the Add-item menu while Add-photo is present', (tester) async {
+      'is absent from the Add-item menu while Add-photo is present', (
+    tester,
+  ) async {
     // Guard the premise: if someone builds the test suite with the flag ON this
     // assertion would be inverted, so pin the expectation to the actual const.
-    expect(FeatureFlags.documents, isFalse,
-        reason: 'tests run without --dart-define, so the flag is its OFF '
-            'default; the gated affordance must not render');
+    expect(
+      FeatureFlags.documents,
+      isFalse,
+      reason:
+          'tests run without --dart-define, so the flag is its OFF '
+          'default; the gated affordance must not render',
+    );
 
-    await seedMatome('m_flag');
+    await seedSyncedMatome('m_flag', 7001);
     final c = ProviderContainer(
       overrides: [appDatabaseProvider.overrideWithValue(db)],
     );
@@ -229,7 +319,59 @@ void main() {
     // Add photo is unconditional; Add file is dropped when the documents flag
     // is OFF.
     expect(
-        find.byKey(const ValueKey('relationship-action-photo')), findsOneWidget);
-    expect(find.byKey(const ValueKey('relationship-action-file')), findsNothing);
+      find.byKey(const ValueKey('relationship-action-photo')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('relationship-action-file')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('relationship-action-text-note')),
+      findsOneWidget,
+      reason: 'text notes are available once the Matome has a Core id',
+    );
+  });
+
+  testWidgets('Text note action is hidden for local-only matomes', (
+    tester,
+  ) async {
+    await seedMatome('m_local_text');
+    final c = ProviderContainer(
+      overrides: [appDatabaseProvider.overrideWithValue(db)],
+    );
+    addTearDown(c.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: TranslationProvider(
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const MatomeDetailScreen(id: 'm_local_text'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final toggle = find.byKey(const ValueKey('matome-show-more'));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    final addItem = find.byKey(const ValueKey('matome-add-item'));
+    await tester.ensureVisible(addItem);
+    await tester.tap(addItem);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('relationship-create-menu')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('relationship-action-text-note')),
+      findsNothing,
+      reason:
+          'items.matome_id is Core-shaped today, so local-only Matomes must not '
+          'show an action that would throw before local item reconciliation exists',
+    );
   });
 }

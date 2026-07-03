@@ -12,6 +12,7 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
+import 'package:matome_flutter/features/items/matome_item_type.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
 
@@ -166,6 +167,35 @@ void main() {
       processingStatus: 'done',
     );
     expect(FileDetailScreen.mediaKindOf(audio), FileMediaKind.audio);
+
+    final video = RecordingItem(
+      id: 'rec_v',
+      title: 'Demo clip',
+      timestamp: '9:00 AM',
+      duration: '0:30',
+      badge: 'Inbox',
+      isProcessing: false,
+      mediaType: 'video/mp4',
+      processingStatus: 'done',
+    );
+    expect(FileDetailScreen.mediaKindOf(video), FileMediaKind.video);
+  });
+
+  test('item-driven file detail dispatch is pinned to MatomeItemType.file', () {
+    final item = RecordingItem(
+      id: 'file-1',
+      title: 'Photo',
+      timestamp: 'Now',
+      duration: '',
+      badge: 'Inbox',
+      isProcessing: false,
+      mediaType: 'image',
+      processingStatus: 'done',
+      itemType: MatomeItemType.file,
+    );
+
+    expect(item.itemType, MatomeItemType.file);
+    expect(FileDetailScreen.mediaKindOf(item), FileMediaKind.image);
   });
 
   // ── Document host (#1450): row-only load, NEVER the audio host ──────────────
@@ -186,31 +216,31 @@ void main() {
     });
 
     Future<void> seedDoc(String id) => db.recordingsDao.insertRecording(
-          RecordingsCompanion(
-            id: Value(id),
-            title: const Value('Quarterly report'),
-            timestamp: const Value('9:00 AM'),
-            duration: const Value(''),
-            badge: const Value('Inbox'),
-            isProcessing: const Value(0),
-            audioFilePath: const Value('/tmp/report.pdf'),
-            createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-            // The picker (#1449) stores documents as mediaType='document'.
-            mediaType: const Value('document'),
-            originalExtension: const Value('pdf'),
-            processingStatus: const Value('done'),
-          ),
-        );
+      RecordingsCompanion(
+        id: Value(id),
+        title: const Value('Quarterly report'),
+        timestamp: const Value('9:00 AM'),
+        duration: const Value(''),
+        badge: const Value('Inbox'),
+        isProcessing: const Value(0),
+        audioFilePath: const Value('/tmp/report.pdf'),
+        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+        // The picker (#1449) stores documents as mediaType='document'.
+        mediaType: const Value('document'),
+        originalExtension: const Value('pdf'),
+        processingStatus: const Value('done'),
+      ),
+    );
 
     Widget app(String id) => UncontrolledProviderScope(
-          container: container,
-          child: TranslationProvider(
-            child: MaterialApp(
-              theme: buildLightTheme(),
-              home: FileDetailScreen.documentById(id: id),
-            ),
-          ),
-        );
+      container: container,
+      child: TranslationProvider(
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: FileDetailScreen.documentById(id: id),
+        ),
+      ),
+    );
 
     testWidgets(
       'loads the row and renders the FileView document host (NOT the audio '
@@ -302,6 +332,66 @@ void main() {
     });
   });
 
+  group('FileDetailScreen.videoById (video host)', () {
+    late AppDatabase db;
+    late ProviderContainer container;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      container = ProviderContainer(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+      );
+    });
+
+    tearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+
+    Future<void> seedVideo(String id) => db.recordingsDao.insertRecording(
+      RecordingsCompanion(
+        id: Value(id),
+        title: const Value('Launch clip'),
+        timestamp: const Value('9:00 AM'),
+        duration: const Value('0:05'),
+        badge: const Value('Inbox'),
+        isProcessing: const Value(0),
+        audioFilePath: const Value('/tmp/launch.mp4'),
+        createdAt: Value(DateTime(2026, 7, 2).millisecondsSinceEpoch),
+        mediaType: const Value('video'),
+        originalExtension: const Value('mp4'),
+        processingStatus: const Value('done'),
+      ),
+    );
+
+    Widget app(String id) => UncontrolledProviderScope(
+      container: container,
+      child: TranslationProvider(
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: FileDetailScreen.videoById(id: id),
+        ),
+      ),
+    );
+
+    testWidgets('loads the row and renders video without the audio host', (
+      tester,
+    ) async {
+      await seedVideo('rec_video');
+      await tester.pumpWidget(app('rec_video'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FileView), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('file-detail-video-header')),
+        findsOneWidget,
+      );
+      expect(find.text('Video', skipOffstage: false), findsWidgets);
+      expect(find.byType(AudioPlayerBar), findsNothing);
+      expect(find.text('Launch clip'), findsWidgets);
+    });
+  });
+
   // ── Document Contents: the LIVE state machine (#1454) ───────────────────────
   // The doc host must derive Contents from the row's OWN fields — NOT a hardcoded
   // empty. Before #1454 it forced `ContentsState.empty`, so the stub summary
@@ -334,43 +424,43 @@ void main() {
       String? transcript,
       bool isProcessing = false,
       String processingStatus = 'done',
-    }) =>
-        db.recordingsDao.insertRecording(
-          RecordingsCompanion(
-            id: Value(id),
-            title: const Value('Quarterly report'),
-            timestamp: const Value('9:00 AM'),
-            duration: const Value(''),
-            badge: const Value('Inbox'),
-            isProcessing: Value(isProcessing ? 1 : 0),
-            audioFilePath: const Value('/tmp/report.pdf'),
-            createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-            mediaType: const Value('document'),
-            originalExtension: const Value('pdf'),
-            transcript: Value(transcript),
-            processingStatus: Value(processingStatus),
-          ),
-        );
+    }) => db.recordingsDao.insertRecording(
+      RecordingsCompanion(
+        id: Value(id),
+        title: const Value('Quarterly report'),
+        timestamp: const Value('9:00 AM'),
+        duration: const Value(''),
+        badge: const Value('Inbox'),
+        isProcessing: Value(isProcessing ? 1 : 0),
+        audioFilePath: const Value('/tmp/report.pdf'),
+        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+        mediaType: const Value('document'),
+        originalExtension: const Value('pdf'),
+        transcript: Value(transcript),
+        processingStatus: Value(processingStatus),
+      ),
+    );
 
     Widget app(String id) => UncontrolledProviderScope(
-          container: container,
-          child: TranslationProvider(
-            child: MaterialApp(
-              locale: LocaleSettings.currentLocale.flutterLocale,
-              supportedLocales: AppLocaleUtils.supportedLocales,
-              localizationsDelegates: GlobalMaterialLocalizations.delegates,
-              theme: buildLightTheme(),
-              home: FileDetailScreen.documentById(id: id),
-            ),
-          ),
-        );
+      container: container,
+      child: TranslationProvider(
+        child: MaterialApp(
+          locale: LocaleSettings.currentLocale.flutterLocale,
+          supportedLocales: AppLocaleUtils.supportedLocales,
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          theme: buildLightTheme(),
+          home: FileDetailScreen.documentById(id: id),
+        ),
+      ),
+    );
 
     for (final locale in [AppLocale.en, AppLocale.ja]) {
       final lc = locale.languageCode;
       final docStrings = locale.translations.fileView.contentsStatus.doc;
 
-      testWidgets('READY: the stub summary renders as the contents — $lc',
-          (tester) async {
+      testWidgets('READY: the stub summary renders as the contents — $lc', (
+        tester,
+      ) async {
         LocaleSettings.setLocaleSync(locale);
         await seedDocState(
           'rec_doc',
@@ -379,17 +469,25 @@ void main() {
         await tester.pumpWidget(app('rec_doc'));
         await tester.pumpAndSettle();
 
-        expect(find.byKey(const ValueKey('file-view-contents-ready')),
-            findsOneWidget,
-            reason: 'a document with a machine summary is in the READY state');
-        expect(find.text('AI stub summary for the document.'), findsOneWidget,
-            reason: 'the doc Contents renders the machine summary text');
-        expect(find.byKey(const ValueKey('file-view-contents-empty')),
-            findsNothing);
+        expect(
+          find.byKey(const ValueKey('file-view-contents-ready')),
+          findsOneWidget,
+          reason: 'a document with a machine summary is in the READY state',
+        );
+        expect(
+          find.text('AI stub summary for the document.'),
+          findsOneWidget,
+          reason: 'the doc Contents renders the machine summary text',
+        );
+        expect(
+          find.byKey(const ValueKey('file-view-contents-empty')),
+          findsNothing,
+        );
       });
 
-      testWidgets('PROCESSING: doc.processing string shows — $lc',
-          (tester) async {
+      testWidgets('PROCESSING: doc.processing string shows — $lc', (
+        tester,
+      ) async {
         LocaleSettings.setLocaleSync(locale);
         await seedDocState(
           'rec_doc',
@@ -403,10 +501,15 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 50));
 
-        expect(find.byKey(const ValueKey('file-view-contents-processing')),
-            findsOneWidget);
-        expect(find.text(docStrings.processing), findsOneWidget,
-            reason: 'the $lc doc processing string is wired to the live state');
+        expect(
+          find.byKey(const ValueKey('file-view-contents-processing')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(docStrings.processing),
+          findsOneWidget,
+          reason: 'the $lc doc processing string is wired to the live state',
+        );
       });
 
       testWidgets('FAILED: doc.failed string shows — $lc', (tester) async {
@@ -415,24 +518,35 @@ void main() {
         await tester.pumpWidget(app('rec_doc'));
         await tester.pumpAndSettle();
 
-        expect(find.byKey(const ValueKey('file-view-contents-failed')),
-            findsOneWidget);
-        expect(find.text(docStrings.failed), findsOneWidget,
-            reason: 'the $lc doc failed string is wired to the live state');
+        expect(
+          find.byKey(const ValueKey('file-view-contents-failed')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(docStrings.failed),
+          findsOneWidget,
+          reason: 'the $lc doc failed string is wired to the live state',
+        );
       });
 
-      testWidgets('EMPTY: doc.empty string shows when no summary yet — $lc',
-          (tester) async {
+      testWidgets('EMPTY: doc.empty string shows when no summary yet — $lc', (
+        tester,
+      ) async {
         LocaleSettings.setLocaleSync(locale);
         // done, no transcript → honest empty terminal.
         await seedDocState('rec_doc');
         await tester.pumpWidget(app('rec_doc'));
         await tester.pumpAndSettle();
 
-        expect(find.byKey(const ValueKey('file-view-contents-empty')),
-            findsOneWidget);
-        expect(find.text(docStrings.empty), findsOneWidget,
-            reason: 'the $lc doc empty string is wired to the live state');
+        expect(
+          find.byKey(const ValueKey('file-view-contents-empty')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(docStrings.empty),
+          findsOneWidget,
+          reason: 'the $lc doc empty string is wired to the live state',
+        );
       });
     }
   });

@@ -80,6 +80,15 @@ class FakeE2EAuthRepository implements AuthRepository {
 
   @override
   Future<AuthSession> refresh() => throw UnimplementedError();
+
+  @override
+  Future<void> requestPasswordReset({required String email}) async {}
+
+  @override
+  Future<void> resetPassword({
+    required String token,
+    required String password,
+  }) async {}
 }
 
 /// Builds the app root for an E2E test. Pass the IO provider [overrides]

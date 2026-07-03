@@ -32,8 +32,8 @@ Provider<DetailsController> _controllerProvider(RecordingResultAwaiter awaiter) 
 }
 
 /// Wires an in-memory Drift DB + a mock-adapter dio (no live backend). The
-/// `POST /api/recordings/5/process` endpoint returns 202 so
-/// [DetailsController.retry] can run; `GET /api/recordings/5` 404s (the poll
+/// `POST /api/items/5/process` endpoint returns 202 so
+/// [DetailsController.retry] can run; `GET /api/items/5` 404s (the poll
 /// fallback never wins — the injected awaiter resolves the race instead).
 ProviderContainer _container(AppDatabase db) {
   final dio = Dio(BaseOptions(
@@ -43,19 +43,19 @@ ProviderContainer _container(AppDatabase db) {
   final adapter = DioAdapter(dio: dio);
   adapter
     ..onPost(
-      '/api/recordings/5/process',
+      '/api/items/5/process',
       (s) => s.reply(202, {
-        'recording': {
+        'item': {
           'id': 5,
           'owner_id': 1,
-          'title': 'Rec',
-          'status': 'processing',
+          'item_type': 'file',
+          'metadata': {'title': 'Rec', 'status': 'processing'},
         },
         'processing': {'queued': true},
       }),
     )
     ..onGet(
-      '/api/recordings/5',
+      '/api/items/5',
       (s) => s.reply(404, {'error': 'not found'}),
     );
   final repo = RecordingsRepository(
@@ -175,7 +175,7 @@ void main() {
     Map<String, dynamic>? patchBody;
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
-        if (options.method == 'PATCH' && options.path == '/api/recordings/5') {
+        if (options.method == 'PATCH' && options.path == '/api/items/5') {
           patchBody = options.data as Map<String, dynamic>;
         }
         handler.next(options);
@@ -183,13 +183,13 @@ void main() {
     ));
     final adapter = DioAdapter(dio: dio);
     adapter.onPatch(
-      '/api/recordings/5',
+      '/api/items/5',
       (s) => s.reply(200, {
-        'recording': {
+        'item': {
           'id': 5,
           'owner_id': 1,
-          'title': 'Rec',
-          'status': 'done',
+          'item_type': 'file',
+          'metadata': {'title': 'Rec', 'status': 'done'},
         },
       }),
       data: Matchers.any,

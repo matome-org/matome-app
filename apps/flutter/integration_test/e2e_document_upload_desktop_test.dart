@@ -42,7 +42,7 @@ import 'support/e2e_harness.dart';
 //     durable copy + `upsertRecordingWithMatome` local-first insert), the
 //     `UploadQueue.drainRow` pipeline, `RecordingsRepository.uploadFile` /
 //     `_uploadStream` PUTting to a real loopback server, the go_router doc route
-//     (`/recording/document/:id`), the `_RowOnlyDetailById` host, and the whole
+//     (`/items/document/:id`), the `_RowOnlyDetailById` host, and the whole
 //     `FileView` render (FileTypeChip media header + Contents state machine +
 //     Notes field).
 //   * FAKED: only Core's own create/enqueue/fetch API (a fake repo) — those are
@@ -234,7 +234,7 @@ void main() {
 
     // ── STEP 3 — DRILL IN + RENDER assertions ──────────────────────────────
     // Open the matome hub, then tap the document card to drill into the doc
-    // host through the REAL go_router `/recording/document/:id` route.
+    // host through the REAL go_router `/items/document/:id` route.
     container.read(routerProvider).go('/matome/m1');
     await tester.pumpAndSettle();
 
@@ -252,7 +252,7 @@ void main() {
     // The document Item shows as a doc CARD (the shared recording card, not the
     // image media tile). The card title text lives inside the card's tappable
     // InkWell; find that InkWell (the recording card wraps its title in one) and
-    // tap it to drill into the doc host via `/recording/document/:id`.
+    // tap it to drill into the doc host via `/items/document/:id`.
     final docCardInk = find.ancestor(
       of: find.text('Report'),
       matching: find.byType(InkWell),

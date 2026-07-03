@@ -70,13 +70,10 @@ void main() {
   // (a) Schema + migration version (mirrors migrations.unit.test.ts)
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
-    test(
-      'schemaVersion is 18 '
-      '(…m016 recording_contacts + m017 is_local + m018 W5 backfill)',
-      () {
-        expect(db.schemaVersion, 18);
-      },
-    );
+    test('schemaVersion is 19 '
+        '(…m018 W5 backfill + m019 items rebuild-clean foundation)', () {
+      expect(db.schemaVersion, 19);
+    });
 
     test(
       'onCreate builds recordings/workspaces/recording_drafts + m006 tables',
@@ -101,6 +98,9 @@ void main() {
             'matome_contacts', // m008
             'space_contacts', // m008
             'matome_shares', // m008
+            'file_blobs', // m019
+            'text_contents', // m019
+            'items', // m019
           ]),
         );
       },
@@ -278,23 +278,25 @@ void main() {
       expect(await dao.getAllRecordings(), hasLength(1));
     });
 
-    test('recordingByCoreId tolerates duplicate coreId rows (returns newest)',
-        () async {
-      final dao = db.recordingsDao;
-      await dao.insertRecording(_recording(id: 'dup-old', createdAt: 10));
-      await dao.insertRecording(_recording(id: 'dup-new', createdAt: 20));
-      // Reproduce the legacy corruption: two local rows sharing one coreId.
-      await (db.update(db.recordings)..where((r) => r.id.equals('dup-old')))
-          .write(const RecordingsCompanion(coreId: Value(42)));
-      await (db.update(db.recordings)..where((r) => r.id.equals('dup-new')))
-          .write(const RecordingsCompanion(coreId: Value(42)));
+    test(
+      'recordingByCoreId tolerates duplicate coreId rows (returns newest)',
+      () async {
+        final dao = db.recordingsDao;
+        await dao.insertRecording(_recording(id: 'dup-old', createdAt: 10));
+        await dao.insertRecording(_recording(id: 'dup-new', createdAt: 20));
+        // Reproduce the legacy corruption: two local rows sharing one coreId.
+        await (db.update(db.recordings)..where((r) => r.id.equals('dup-old')))
+            .write(const RecordingsCompanion(coreId: Value(42)));
+        await (db.update(db.recordings)..where((r) => r.id.equals('dup-new')))
+            .write(const RecordingsCompanion(coreId: Value(42)));
 
-      // Must NOT throw 'Too many elements' (which aborted every inbox refresh);
-      // returns the most-recent match as the canonical row.
-      final row = await dao.recordingByCoreId(42);
-      expect(row, isNotNull);
-      expect(row!.id, 'dup-new');
-    });
+        // Must NOT throw 'Too many elements' (which aborted every inbox refresh);
+        // returns the most-recent match as the canonical row.
+        final row = await dao.recordingByCoreId(42);
+        expect(row, isNotNull);
+        expect(row!.id, 'dup-new');
+      },
+    );
 
     test('recordingsByDateRange is inclusive of both bounds, DESC', () async {
       final dao = db.recordingsDao;
@@ -567,7 +569,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 18);
+      expect(upgraded.schemaVersion, 19);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -683,45 +685,52 @@ void main() {
     });
     tearDown(() => dir.deleteSync(recursive: true));
 
-    test('opening a v5 db migrates to v6 (columns, tables, backfill)', () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'opening a v5 db migrates to v6 (columns, tables, backfill)',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+        expect(upgraded.schemaVersion, 19);
 
-      // m006 columns now exist on workspaces.
-      final wsCols = await upgraded
-          .customSelect('PRAGMA table_info(workspaces)')
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(wsCols, containsAll(<String>['space_type', 'owner_id']));
+        // m006 columns now exist on workspaces.
+        final wsCols = await upgraded
+            .customSelect('PRAGMA table_info(workspaces)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(wsCols, containsAll(<String>['space_type', 'owner_id']));
 
-      // Both reserved tables exist.
-      final tables = await upgraded
-          .customSelect(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%'",
-          )
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(tables, containsAll(<String>['space_members', 'organizations']));
+        // Both reserved tables exist.
+        final tables = await upgraded
+            .customSelect(
+              "SELECT name FROM sqlite_master WHERE type='table' "
+              "AND name NOT LIKE 'sqlite_%'",
+            )
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(tables, containsAll(<String>['space_members', 'organizations']));
 
-      // Existing rows backfilled to space_type='personal', owner_id NULL.
-      final all = await upgraded.workspacesDao.getWorkspaces();
-      expect(all.map((w) => w.id), containsAll(<String>['ws_default_personal', 'ws_work']));
-      for (final w in all) {
-        expect(w.spaceType, 'personal');
-        expect(w.ownerId, isNull);
-      }
+        // Existing rows backfilled to space_type='personal', owner_id NULL.
+        final all = await upgraded.workspacesDao.getWorkspaces();
+        expect(
+          all.map((w) => w.id),
+          containsAll(<String>['ws_default_personal', 'ws_work']),
+        );
+        for (final w in all) {
+          expect(w.spaceType, 'personal');
+          expect(w.ownerId, isNull);
+        }
 
-      // The default Space is the personal triage destination.
-      final def =
-          await upgraded.workspacesDao.getWorkspaceById('ws_default_personal');
-      expect(def, isNotNull);
-      expect(def!.spaceType, 'personal');
-      expect(def.isDefault, 1);
-      expect(def.name, 'Pessoal'); // data intact
-    });
+        // The default Space is the personal triage destination.
+        final def = await upgraded.workspacesDao.getWorkspaceById(
+          'ws_default_personal',
+        );
+        expect(def, isNotNull);
+        expect(def!.spaceType, 'personal');
+        expect(def.isDefault, 1);
+        expect(def.name, 'Pessoal'); // data intact
+      },
+    );
 
     test('m006 upgrade is idempotent across re-open', () async {
       final first = AppDatabase.forTesting(NativeDatabase(file));
@@ -837,7 +846,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+      expect(upgraded.schemaVersion, 19);
 
       final tables = await upgraded
           .customSelect(
@@ -855,87 +864,86 @@ void main() {
       expect(recCols, contains('matome_id'));
     });
 
-    test(
-      'backfill: one Matome per recording, every matome_id FK-resolvable, '
-      'space_id == old workspaceId',
-      () async {
-        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-        addTearDown(upgraded.close);
+    test('backfill: one Matome per recording, every matome_id FK-resolvable, '
+        'space_id == old workspaceId', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
 
-        // count(matomes) == count(distinct recordings).
-        final recCount = await upgraded
-            .customSelect('SELECT COUNT(DISTINCT id) AS c FROM recordings')
-            .map((r) => r.read<int>('c'))
+      // count(matomes) == count(distinct recordings).
+      final recCount = await upgraded
+          .customSelect('SELECT COUNT(DISTINCT id) AS c FROM recordings')
+          .map((r) => r.read<int>('c'))
+          .getSingle();
+      final matCount = await upgraded
+          .customSelect('SELECT COUNT(*) AS c FROM matomes')
+          .map((r) => r.read<int>('c'))
+          .getSingle();
+      expect(recCount, 2);
+      expect(matCount, recCount);
+
+      // EVERY recording.matome_id is non-null AND resolves to a matomes row.
+      final orphans = await upgraded
+          .customSelect(
+            'SELECT r.id AS rid FROM recordings r '
+            'LEFT JOIN matomes m ON m.id = r.matome_id '
+            'WHERE r.matome_id IS NULL OR m.id IS NULL',
+          )
+          .get();
+      expect(orphans, isEmpty);
+
+      // The backfilled matome.space_id == the recording's old workspace_id.
+      Future<String?> spaceOf(String recId) async {
+        final row = await upgraded
+            .customSelect(
+              'SELECT m.space_id AS sid FROM recordings r '
+              'JOIN matomes m ON m.id = r.matome_id WHERE r.id = ?',
+              variables: [Variable<String>(recId)],
+            )
             .getSingle();
-        final matCount = await upgraded
+        return row.read<String?>('sid');
+      }
+
+      expect(await spaceOf('rec_inbox'), isNull); // Inbox → Inbox Matome
+      expect(await spaceOf('rec_filed'), 'ws_work'); // filed → filed Matome
+
+      // Backfilled Matome is local-only (mat_local_ prefix, core_id NULL) and
+      // carries the recording's title + happened_at.
+      final filed = await upgraded
+          .customSelect(
+            'SELECT m.* FROM recordings r '
+            'JOIN matomes m ON m.id = r.matome_id WHERE r.id = ?',
+            variables: [Variable<String>('rec_filed')],
+          )
+          .getSingle();
+      expect(isLocalMatomeId(filed.read<String>('id')), isTrue);
+      expect(filed.read<int?>('core_id'), isNull);
+      expect(filed.read<String>('title'), 'Work Meeting');
+      expect(filed.read<int>('happened_at'), 200);
+    });
+
+    test(
+      'm007 backfill is idempotent across re-open (no duplicate Matomes)',
+      () async {
+        final first = AppDatabase.forTesting(NativeDatabase(file));
+        await first.recordingsDao.getAllRecordings();
+        final firstCount = await first
             .customSelect('SELECT COUNT(*) AS c FROM matomes')
             .map((r) => r.read<int>('c'))
             .getSingle();
-        expect(recCount, 2);
-        expect(matCount, recCount);
+        await first.close();
 
-        // EVERY recording.matome_id is non-null AND resolves to a matomes row.
-        final orphans = await upgraded
-            .customSelect(
-              'SELECT r.id AS rid FROM recordings r '
-              'LEFT JOIN matomes m ON m.id = r.matome_id '
-              'WHERE r.matome_id IS NULL OR m.id IS NULL',
-            )
-            .get();
-        expect(orphans, isEmpty);
-
-        // The backfilled matome.space_id == the recording's old workspace_id.
-        Future<String?> spaceOf(String recId) async {
-          final row = await upgraded
-              .customSelect(
-                'SELECT m.space_id AS sid FROM recordings r '
-                'JOIN matomes m ON m.id = r.matome_id WHERE r.id = ?',
-                variables: [Variable<String>(recId)],
-              )
-              .getSingle();
-          return row.read<String?>('sid');
-        }
-
-        expect(await spaceOf('rec_inbox'), isNull); // Inbox → Inbox Matome
-        expect(await spaceOf('rec_filed'), 'ws_work'); // filed → filed Matome
-
-        // Backfilled Matome is local-only (mat_local_ prefix, core_id NULL) and
-        // carries the recording's title + happened_at.
-        final filed = await upgraded
-            .customSelect(
-              'SELECT m.* FROM recordings r '
-              'JOIN matomes m ON m.id = r.matome_id WHERE r.id = ?',
-              variables: [Variable<String>('rec_filed')],
-            )
+        // Re-open: m007 must NOT re-run (already at v7) and the backfill guard
+        // (matome_id IS NULL) means even a forced re-run mints no duplicates.
+        final second = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(second.close);
+        final secondCount = await second
+            .customSelect('SELECT COUNT(*) AS c FROM matomes')
+            .map((r) => r.read<int>('c'))
             .getSingle();
-        expect(isLocalMatomeId(filed.read<String>('id')), isTrue);
-        expect(filed.read<int?>('core_id'), isNull);
-        expect(filed.read<String>('title'), 'Work Meeting');
-        expect(filed.read<int>('happened_at'), 200);
+        expect(secondCount, firstCount);
+        expect(secondCount, 2);
       },
     );
-
-    test('m007 backfill is idempotent across re-open (no duplicate Matomes)',
-        () async {
-      final first = AppDatabase.forTesting(NativeDatabase(file));
-      await first.recordingsDao.getAllRecordings();
-      final firstCount = await first
-          .customSelect('SELECT COUNT(*) AS c FROM matomes')
-          .map((r) => r.read<int>('c'))
-          .getSingle();
-      await first.close();
-
-      // Re-open: m007 must NOT re-run (already at v7) and the backfill guard
-      // (matome_id IS NULL) means even a forced re-run mints no duplicates.
-      final second = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(second.close);
-      final secondCount = await second
-          .customSelect('SELECT COUNT(*) AS c FROM matomes')
-          .map((r) => r.read<int>('c'))
-          .getSingle();
-      expect(secondCount, firstCount);
-      expect(secondCount, 2);
-    });
   });
 
   // -------------------------------------------------------------------------
@@ -952,22 +960,25 @@ void main() {
       expect(await dao.getOwnerId('nope'), isNull);
     });
 
-    test('ensureDefaultPersonalSpace is idempotent + normalises type', () async {
-      final dao = db.spacesDao;
-      // Force a non-personal type, then ensure it is normalised back.
-      await (db.update(db.workspaces)
-            ..where((w) => w.id.equals('ws_default_personal')))
-          .write(const WorkspacesCompanion(spaceType: Value('shared')));
+    test(
+      'ensureDefaultPersonalSpace is idempotent + normalises type',
+      () async {
+        final dao = db.spacesDao;
+        // Force a non-personal type, then ensure it is normalised back.
+        await (db.update(db.workspaces)
+              ..where((w) => w.id.equals('ws_default_personal')))
+            .write(const WorkspacesCompanion(spaceType: Value('shared')));
 
-      final row = await dao.ensureDefaultPersonalSpace();
-      expect(row.id, 'ws_default_personal');
-      expect(row.spaceType, 'personal');
-      expect(row.isDefault, 1);
+        final row = await dao.ensureDefaultPersonalSpace();
+        expect(row.id, 'ws_default_personal');
+        expect(row.spaceType, 'personal');
+        expect(row.isDefault, 1);
 
-      // Still exactly one default Space row.
-      final all = await db.workspacesDao.getWorkspaces();
-      expect(all.where((w) => w.id == 'ws_default_personal'), hasLength(1));
-    });
+        // Still exactly one default Space row.
+        final all = await db.workspacesDao.getWorkspaces();
+        expect(all.where((w) => w.id == 'ws_default_personal'), hasLength(1));
+      },
+    );
 
     test('space_members CRUD stub round-trips (no enforcement)', () async {
       final dao = db.spacesDao;
@@ -1154,57 +1165,59 @@ void main() {
     });
     tearDown(() => dir.deleteSync(recursive: true));
 
-    test('opening a v7 db migrates to v8: the four Contacts tables exist',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'opening a v7 db migrates to v8: the four Contacts tables exist',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+        expect(upgraded.schemaVersion, 19);
 
-      final tables = await upgraded
-          .customSelect(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name NOT LIKE 'sqlite_%'",
-          )
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(
-        tables,
-        containsAll(<String>[
-          'contacts',
-          'matome_contacts',
-          'space_contacts',
-          'matome_shares',
-        ]),
-      );
+        final tables = await upgraded
+            .customSelect(
+              "SELECT name FROM sqlite_master WHERE type='table' "
+              "AND name NOT LIKE 'sqlite_%'",
+            )
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(
+          tables,
+          containsAll(<String>[
+            'contacts',
+            'matome_contacts',
+            'space_contacts',
+            'matome_shares',
+          ]),
+        );
 
-      // contacts column contract.
-      final cols = await upgraded
-          .customSelect('PRAGMA table_info(contacts)')
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(
-        cols,
-        containsAll(<String>[
-          'id',
-          'owner_id',
-          'display_name',
-          'email', // m014
-          'phone', // m014
-          'company', // m014
-          'title', // m014
-          'metadata',
-          'linked_user_id',
-          'created_at',
-          'core_id',
-        ]),
-      );
+        // contacts column contract.
+        final cols = await upgraded
+            .customSelect('PRAGMA table_info(contacts)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(
+          cols,
+          containsAll(<String>[
+            'id',
+            'owner_id',
+            'display_name',
+            'email', // m014
+            'phone', // m014
+            'company', // m014
+            'title', // m014
+            'metadata',
+            'linked_user_id',
+            'created_at',
+            'core_id',
+          ]),
+        );
 
-      // Pre-existing Matome row survived the migration.
-      final pre = await upgraded.matomesDao.getById('mat_local_pre');
-      expect(pre, isNotNull);
-      expect(pre!.title, 'Pre-existing');
-    });
+        // Pre-existing Matome row survived the migration.
+        final pre = await upgraded.matomesDao.getById('mat_local_pre');
+        expect(pre, isNotNull);
+        expect(pre!.title, 'Pre-existing');
+      },
+    );
 
     test('m008 upgrade is idempotent across re-open', () async {
       final first = AppDatabase.forTesting(NativeDatabase(file));
@@ -1214,7 +1227,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1361,41 +1374,45 @@ void main() {
     });
     tearDown(() => dir.deleteSync(recursive: true));
 
-    test('opening a v8 db migrates to v9: matomes.archived_at is added',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'opening a v8 db migrates to v9: matomes.archived_at is added',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+        expect(upgraded.schemaVersion, 19);
 
-      final cols = await upgraded
-          .customSelect('PRAGMA table_info(matomes)')
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(cols, contains('archived_at'));
+        final cols = await upgraded
+            .customSelect('PRAGMA table_info(matomes)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(cols, contains('archived_at'));
 
-      // Pre-existing row survived and is active (archived_at backfilled to NULL).
-      final pre = await upgraded.matomesDao.getById('mat_local_pre9');
-      expect(pre, isNotNull);
-      expect(pre!.title, 'Pre-existing v8');
-      expect(pre.archivedAt, isNull);
-      // An active pre-existing Matome is still visible in the lists.
-      final listed = await upgraded.matomesDao.listMatomes();
-      expect(listed.map((m) => m.id), contains('mat_local_pre9'));
-    });
+        // Pre-existing row survived and is active (archived_at backfilled to NULL).
+        final pre = await upgraded.matomesDao.getById('mat_local_pre9');
+        expect(pre, isNotNull);
+        expect(pre!.title, 'Pre-existing v8');
+        expect(pre.archivedAt, isNull);
+        // An active pre-existing Matome is still visible in the lists.
+        final listed = await upgraded.matomesDao.listMatomes();
+        expect(listed.map((m) => m.id), contains('mat_local_pre9'));
+      },
+    );
 
-    test('after migration, archive hides the row and restore brings it back',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'after migration, archive hides the row and restore brings it back',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      await upgraded.matomesDao.archive('mat_local_pre9');
-      expect(await upgraded.matomesDao.listMatomes(), isEmpty);
+        await upgraded.matomesDao.archive('mat_local_pre9');
+        expect(await upgraded.matomesDao.listMatomes(), isEmpty);
 
-      await upgraded.matomesDao.restore('mat_local_pre9');
-      final back = await upgraded.matomesDao.listMatomes();
-      expect(back.map((m) => m.id), contains('mat_local_pre9'));
-    });
+        await upgraded.matomesDao.restore('mat_local_pre9');
+        final back = await upgraded.matomesDao.listMatomes();
+        expect(back.map((m) => m.id), contains('mat_local_pre9'));
+      },
+    );
 
     test('m009 upgrade is idempotent across re-open', () async {
       final first = AppDatabase.forTesting(NativeDatabase(file));
@@ -1405,7 +1422,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1560,31 +1577,36 @@ void main() {
     });
     tearDown(() => dir.deleteSync(recursive: true));
 
-    test('opening a v9 db migrates to v10: recordings.transcript is added',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'opening a v9 db migrates to v10: recordings.transcript is added',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+        expect(upgraded.schemaVersion, 19);
 
-      final cols = await upgraded
-          .customSelect('PRAGMA table_info(recordings)')
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(cols, contains('transcript'));
+        final cols = await upgraded
+            .customSelect('PRAGMA table_info(recordings)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(cols, contains('transcript'));
 
-      // Pre-existing row survived the column add. NB: this seeds at v9 and
-      // replays through HEAD (v11), so m010 adds `transcript` (NULL) and then
-      // m011 (#1436) copy-forwards `notes` → the empty transcript of this audio
-      // row. The m010-specific invariant under test — `transcript` exists and
-      // `notes` is UNTOUCHED — holds; the transcript is no longer NULL because
-      // m011 filled it (notes is preserved, copied not moved).
-      final pre = await upgraded.recordingsDao.getRecordingById('rec_pre10');
-      expect(pre, isNotNull);
-      expect(pre!.title, 'Pre-existing v9');
-      expect(pre.transcript, 'my hand-typed note'); // m011 copy-forward
-      expect(pre.notes, 'my hand-typed note'); // notes preserved (copy, not move)
-    });
+        // Pre-existing row survived the column add. NB: this seeds at v9 and
+        // replays through HEAD (v11), so m010 adds `transcript` (NULL) and then
+        // m011 (#1436) copy-forwards `notes` → the empty transcript of this audio
+        // row. The m010-specific invariant under test — `transcript` exists and
+        // `notes` is UNTOUCHED — holds; the transcript is no longer NULL because
+        // m011 filled it (notes is preserved, copied not moved).
+        final pre = await upgraded.recordingsDao.getRecordingById('rec_pre10');
+        expect(pre, isNotNull);
+        expect(pre!.title, 'Pre-existing v9');
+        expect(pre.transcript, 'my hand-typed note'); // m011 copy-forward
+        expect(
+          pre.notes,
+          'my hand-typed note',
+        ); // notes preserved (copy, not move)
+      },
+    );
 
     test('transcript round-trips a write after migration', () async {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
@@ -1608,7 +1630,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1620,21 +1642,24 @@ void main() {
     // has the EXACT same column set as a legacy DB replayed m001→m010. We
     // already seeded + upgraded the legacy DB above; compare its recordings
     // columns to a fresh in-memory AppDatabase's.
-    test('fresh-install recordings schema == replayed legacy schema (head)',
-        () async {
-      final replayed = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(replayed.close);
-      final fresh = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(fresh.close);
+    test(
+      'fresh-install recordings schema == replayed legacy schema (head)',
+      () async {
+        final replayed = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(replayed.close);
+        final fresh = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(fresh.close);
 
-      Future<Set<String>> recCols(AppDatabase d) async => (await d
-              .customSelect('PRAGMA table_info(recordings)')
-              .map((r) => r.read<String>('name'))
-              .get())
-          .toSet();
+        Future<Set<String>> recCols(AppDatabase d) async =>
+            (await d
+                    .customSelect('PRAGMA table_info(recordings)')
+                    .map((r) => r.read<String>('name'))
+                    .get())
+                .toSet();
 
-      expect(await recCols(replayed), await recCols(fresh));
-    });
+        expect(await recCols(replayed), await recCols(fresh));
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -1802,8 +1827,7 @@ void main() {
         );
       }
 
-      insertRec(
-          id: 'rec_audio_empty', mediaType: 'audio', notes: notesAudio);
+      insertRec(id: 'rec_audio_empty', mediaType: 'audio', notes: notesAudio);
       insertRec(
         id: 'rec_audio_has_tx',
         mediaType: 'audio',
@@ -1811,7 +1835,10 @@ void main() {
         transcript: existingTranscript,
       );
       insertRec(
-          id: 'rec_audio_unicode', mediaType: 'audio', notes: notesUnicode);
+        id: 'rec_audio_unicode',
+        mediaType: 'audio',
+        notes: notesUnicode,
+      );
       insertRec(id: 'rec_image', mediaType: 'image', notes: notesImage);
       insertRec(id: 'rec_no_notes', mediaType: 'audio');
 
@@ -1826,84 +1853,99 @@ void main() {
     });
     tearDown(() => dir.deleteSync(recursive: true));
 
-    test('opening a v10 db migrates to v11: notes_legacy_raw column is added',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'opening a v10 db migrates to v11: notes_legacy_raw column is added',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+        expect(upgraded.schemaVersion, 19);
 
-      final cols = await upgraded
-          .customSelect('PRAGMA table_info(recordings)')
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(cols, contains('notes_legacy_raw'));
-      expect(cols, contains('transcript'));
-    });
-
-    test('SNAPSHOT: notes_legacy_raw == pre-migration notes for every row',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
-
-      Future<String?> snap(String id) async => (await upgraded
-              .customSelect(
-            'SELECT notes_legacy_raw AS v FROM recordings WHERE id = ?',
-            variables: [Variable<String>(id)],
-          ).getSingle())
-          .read<String?>('v');
-
-      expect(await snap('rec_audio_empty'), notesAudio);
-      expect(await snap('rec_audio_has_tx'), notesAlready);
-      expect(await snap('rec_audio_unicode'), notesUnicode);
-      expect(await snap('rec_image'), notesImage);
-      expect(await snap('rec_no_notes'), isNull); // NULL notes → NULL snapshot
-    });
+        final cols = await upgraded
+            .customSelect('PRAGMA table_info(recordings)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(cols, contains('notes_legacy_raw'));
+        expect(cols, contains('transcript'));
+      },
+    );
 
     test(
-        'BYTE-CONSERVATION: notes is byte-identical before and after migration',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+      'SNAPSHOT: notes_legacy_raw == pre-migration notes for every row',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      Future<String?> notesOf(String id) async =>
-          (await upgraded.recordingsDao.getRecordingById(id))!.notes;
+        Future<String?> snap(String id) async =>
+            (await upgraded
+                    .customSelect(
+                      'SELECT notes_legacy_raw AS v FROM recordings WHERE id = ?',
+                      variables: [Variable<String>(id)],
+                    )
+                    .getSingle())
+                .read<String?>('v');
 
-      // notes unchanged for every seeded row (never blanked, never modified).
-      expect(await notesOf('rec_audio_empty'), notesAudio);
-      expect(await notesOf('rec_audio_has_tx'), notesAlready);
-      expect(await notesOf('rec_audio_unicode'), notesUnicode);
-      expect(await notesOf('rec_image'), notesImage);
-      expect(await notesOf('rec_no_notes'), isNull);
-    });
+        expect(await snap('rec_audio_empty'), notesAudio);
+        expect(await snap('rec_audio_has_tx'), notesAlready);
+        expect(await snap('rec_audio_unicode'), notesUnicode);
+        expect(await snap('rec_image'), notesImage);
+        expect(
+          await snap('rec_no_notes'),
+          isNull,
+        ); // NULL notes → NULL snapshot
+      },
+    );
 
     test(
-        'COPY-FORWARD: audio row with empty transcript + notes gets '
+      'BYTE-CONSERVATION: notes is byte-identical before and after migration',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
+
+        Future<String?> notesOf(String id) async =>
+            (await upgraded.recordingsDao.getRecordingById(id))!.notes;
+
+        // notes unchanged for every seeded row (never blanked, never modified).
+        expect(await notesOf('rec_audio_empty'), notesAudio);
+        expect(await notesOf('rec_audio_has_tx'), notesAlready);
+        expect(await notesOf('rec_audio_unicode'), notesUnicode);
+        expect(await notesOf('rec_image'), notesImage);
+        expect(await notesOf('rec_no_notes'), isNull);
+      },
+    );
+
+    test('COPY-FORWARD: audio row with empty transcript + notes gets '
         'transcript == notes', () async {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      final r = await upgraded.recordingsDao.getRecordingById('rec_audio_empty');
+      final r = await upgraded.recordingsDao.getRecordingById(
+        'rec_audio_empty',
+      );
       expect(r!.transcript, notesAudio);
       expect(r.notes, notesAudio); // notes preserved (copy, not move)
 
       // Multibyte payload conserved byte-for-byte through the copy.
-      final u =
-          await upgraded.recordingsDao.getRecordingById('rec_audio_unicode');
+      final u = await upgraded.recordingsDao.getRecordingById(
+        'rec_audio_unicode',
+      );
       expect(u!.transcript, notesUnicode);
       expect(u.notes, notesUnicode);
     });
 
-    test('COPY-FORWARD does not clobber a row that already has a transcript',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'COPY-FORWARD does not clobber a row that already has a transcript',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      final r =
-          await upgraded.recordingsDao.getRecordingById('rec_audio_has_tx');
-      expect(r!.transcript, existingTranscript); // NOT overwritten by notes
-      expect(r.notes, notesAlready);
-    });
+        final r = await upgraded.recordingsDao.getRecordingById(
+          'rec_audio_has_tx',
+        );
+        expect(r!.transcript, existingTranscript); // NOT overwritten by notes
+        expect(r.notes, notesAlready);
+      },
+    );
 
     test('COPY-FORWARD skips non-audio (image) rows', () async {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
@@ -1914,43 +1956,50 @@ void main() {
       expect(r.notes, notesImage);
     });
 
-    test('COPY-FORWARD leaves a notes-less audio row with NULL transcript',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'COPY-FORWARD leaves a notes-less audio row with NULL transcript',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      final r = await upgraded.recordingsDao.getRecordingById('rec_no_notes');
-      expect(r!.transcript, isNull);
-      expect(r.notes, isNull);
-    });
+        final r = await upgraded.recordingsDao.getRecordingById('rec_no_notes');
+        expect(r!.transcript, isNull);
+        expect(r.notes, isNull);
+      },
+    );
 
-    test('IDEMPOTENT: re-opening at v11 is a no-op (snapshot + copy stable)',
-        () async {
-      final first = AppDatabase.forTesting(NativeDatabase(file));
-      await first.recordingsDao.getAllRecordings();
-      await first.close();
+    test(
+      'IDEMPOTENT: re-opening at v11 is a no-op (snapshot + copy stable)',
+      () async {
+        final first = AppDatabase.forTesting(NativeDatabase(file));
+        await first.recordingsDao.getAllRecordings();
+        await first.close();
 
-      // Re-open at v11 must not re-run m011 (no duplicate-column crash) and
-      // must not re-snapshot or re-copy (values already settled stay settled).
-      final second = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+        // Re-open at v11 must not re-run m011 (no duplicate-column crash) and
+        // must not re-snapshot or re-copy (values already settled stay settled).
+        final second = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(second.close);
+        expect(second.schemaVersion, 19);
 
-      final r =
-          await second.recordingsDao.getRecordingById('rec_audio_has_tx');
-      // Snapshot still the ORIGINAL notes; transcript still the pre-existing
-      // one (a second pass must not copy notes over it).
-      expect(r!.transcript, existingTranscript);
-      expect(r.notes, notesAlready);
+        final r = await second.recordingsDao.getRecordingById(
+          'rec_audio_has_tx',
+        );
+        // Snapshot still the ORIGINAL notes; transcript still the pre-existing
+        // one (a second pass must not copy notes over it).
+        expect(r!.transcript, existingTranscript);
+        expect(r.notes, notesAlready);
 
-      final snap = (await second
-              .customSelect(
-        'SELECT notes_legacy_raw AS v FROM recordings WHERE id = ?',
-        variables: [Variable<String>('rec_audio_empty')],
-      ).getSingle())
-          .read<String?>('v');
-      expect(snap, notesAudio);
-    });
+        final snap =
+            (await second
+                    .customSelect(
+                      'SELECT notes_legacy_raw AS v FROM recordings WHERE id = ?',
+                      variables: [Variable<String>('rec_audio_empty')],
+                    )
+                    .getSingle())
+                .read<String?>('v');
+        expect(snap, notesAudio);
+      },
+    );
 
     test('RESTORE procedure recovers notes from the snapshot column', () async {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
@@ -1964,28 +2013,32 @@ void main() {
       await upgraded.customStatement(
         'UPDATE recordings SET notes = notes_legacy_raw',
       );
-      final r =
-          await upgraded.recordingsDao.getRecordingById('rec_audio_empty');
+      final r = await upgraded.recordingsDao.getRecordingById(
+        'rec_audio_empty',
+      );
       expect(r!.notes, notesAudio); // recovered verbatim from snapshot
     });
 
     // Replay-equivalence: a fresh-install (onCreate) recordings schema at head
     // (v11) has the EXACT same column set as a legacy DB replayed m001→m011.
-    test('fresh-install recordings schema == replayed legacy schema (v11 head)',
-        () async {
-      final replayed = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(replayed.close);
-      final fresh = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(fresh.close);
+    test(
+      'fresh-install recordings schema == replayed legacy schema (v11 head)',
+      () async {
+        final replayed = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(replayed.close);
+        final fresh = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(fresh.close);
 
-      Future<Set<String>> recCols(AppDatabase d) async => (await d
-              .customSelect('PRAGMA table_info(recordings)')
-              .map((r) => r.read<String>('name'))
-              .get())
-          .toSet();
+        Future<Set<String>> recCols(AppDatabase d) async =>
+            (await d
+                    .customSelect('PRAGMA table_info(recordings)')
+                    .map((r) => r.read<String>('name'))
+                    .get())
+                .toSet();
 
-      expect(await recCols(replayed), await recCols(fresh));
-    });
+        expect(await recCols(replayed), await recCols(fresh));
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -2135,21 +2188,23 @@ void main() {
     });
     tearDown(() => dir.deleteSync(recursive: true));
 
-    test('opening a v11 db migrates to v12: recordings.original_extension added',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'opening a v11 db migrates to v12: recordings.original_extension added',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+        expect(upgraded.schemaVersion, 19);
 
-      final cols = await upgraded
-          .customSelect('PRAGMA table_info(recordings)')
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(cols, contains('original_extension'));
-      // m013 — owner_id added on the same upgrade path to head.
-      expect(cols, contains('owner_id'));
-    });
+        final cols = await upgraded
+            .customSelect('PRAGMA table_info(recordings)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(cols, contains('original_extension'));
+        // m013 — owner_id added on the same upgrade path to head.
+        expect(cols, contains('owner_id'));
+      },
+    );
 
     test('pre-existing row survives; original_extension backfills to NULL; '
         'all other columns byte-conserved', () async {
@@ -2187,7 +2242,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2208,21 +2263,24 @@ void main() {
       expect(await upgraded.recordingsDao.filesForOwner('1'), isEmpty);
     });
 
-    test('fresh-install recordings schema == replayed legacy schema (v12 head)',
-        () async {
-      final replayed = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(replayed.close);
-      final fresh = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(fresh.close);
+    test(
+      'fresh-install recordings schema == replayed legacy schema (v12 head)',
+      () async {
+        final replayed = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(replayed.close);
+        final fresh = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(fresh.close);
 
-      Future<Set<String>> recCols(AppDatabase d) async => (await d
-              .customSelect('PRAGMA table_info(recordings)')
-              .map((r) => r.read<String>('name'))
-              .get())
-          .toSet();
+        Future<Set<String>> recCols(AppDatabase d) async =>
+            (await d
+                    .customSelect('PRAGMA table_info(recordings)')
+                    .map((r) => r.read<String>('name'))
+                    .get())
+                .toSet();
 
-      expect(await recCols(replayed), await recCols(fresh));
-    });
+        expect(await recCols(replayed), await recCols(fresh));
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -2350,16 +2408,13 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+      expect(upgraded.schemaVersion, 19);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(contacts)')
           .map((r) => r.read<String>('name'))
           .get();
-      expect(
-        cols,
-        containsAll(<String>['email', 'phone', 'company', 'title']),
-      );
+      expect(cols, containsAll(<String>['email', 'phone', 'company', 'title']));
 
       // Pre-existing row survived; new fields backfilled to NULL.
       final pre = await upgraded.contactsDao.getById('contact_pre13');
@@ -2402,7 +2457,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
       final cols = await second
           .customSelect('PRAGMA table_info(contacts)')
           .map((r) => r.read<String>('name'))
@@ -2496,7 +2551,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+      expect(upgraded.schemaVersion, 19);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2537,7 +2592,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2646,34 +2701,40 @@ void main() {
     });
     tearDown(() => dir.deleteSync(recursive: true));
 
-    test('opening a v15 db migrates to v16: recording_contacts table is created '
-        'and a direct link round-trips', () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'opening a v15 db migrates to v16: recording_contacts table is created '
+      'and a direct link round-trips',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 18);
+        expect(upgraded.schemaVersion, 19);
 
-      final tables = await upgraded
-          .customSelect(
-              "SELECT name FROM sqlite_master WHERE type='table'")
-          .map((r) => r.read<String>('name'))
-          .get();
-      expect(tables, contains('recording_contacts'));
+        final tables = await upgraded
+            .customSelect("SELECT name FROM sqlite_master WHERE type='table'")
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(tables, contains('recording_contacts'));
 
-      // a direct link between the pre-existing rows round-trips both ways.
-      await upgraded.contactsDao.linkContactToRecording(
-          recordingId: 'rec_pre15', contactId: 'c_pre15');
-      expect(
-        (await upgraded.contactsDao.listContactsForFile('rec_pre15'))
-            .map((c) => c.id),
-        ['c_pre15'],
-      );
-      expect(
-        (await upgraded.contactsDao.listFilesForContact('c_pre15'))
-            .map((r) => r.id),
-        ['rec_pre15'],
-      );
-    });
+        // a direct link between the pre-existing rows round-trips both ways.
+        await upgraded.contactsDao.linkContactToRecording(
+          recordingId: 'rec_pre15',
+          contactId: 'c_pre15',
+        );
+        expect(
+          (await upgraded.contactsDao.listContactsForFile(
+            'rec_pre15',
+          )).map((c) => c.id),
+          ['c_pre15'],
+        );
+        expect(
+          (await upgraded.contactsDao.listFilesForContact(
+            'c_pre15',
+          )).map((r) => r.id),
+          ['rec_pre15'],
+        );
+      },
+    );
 
     test('m016 upgrade is idempotent across re-open', () async {
       final first = AppDatabase.forTesting(NativeDatabase(file));
@@ -2682,10 +2743,9 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
       final tables = await second
-          .customSelect(
-              "SELECT name FROM sqlite_master WHERE type='table'")
+          .customSelect("SELECT name FROM sqlite_master WHERE type='table'")
           .map((r) => r.read<String>('name'))
           .get();
       expect(tables, contains('recording_contacts'));
@@ -2826,7 +2886,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 18);
+        expect(upgraded.schemaVersion, 19);
 
         // is_local column now exists on workspaces.
         final cols = await upgraded
@@ -2848,44 +2908,43 @@ void main() {
       },
     );
 
-    test(
-      'm017 does NOT regress the m006 columns (Axis A ⟂ Axis B); '
-      'invariant local ⟹ personal holds',
-      () async {
-        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-        addTearDown(upgraded.close);
+    test('m017 does NOT regress the m006 columns (Axis A ⟂ Axis B); '
+        'invariant local ⟹ personal holds', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
 
-        // The two m006 columns survive untouched alongside the new is_local.
-        final cols = await upgraded
-            .customSelect('PRAGMA table_info(workspaces)')
-            .map((r) => r.read<String>('name'))
-            .get();
-        expect(cols, containsAll(<String>['space_type', 'owner_id', 'is_local']));
+      // The two m006 columns survive untouched alongside the new is_local.
+      final cols = await upgraded
+          .customSelect('PRAGMA table_info(workspaces)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, containsAll(<String>['space_type', 'owner_id', 'is_local']));
 
-        // space_type / owner_id are byte-for-byte preserved; and every row that
-        // is local (is_local=1) is personal — the local ⟹ personal invariant.
-        final rows = await upgraded
-            .customSelect(
-              'SELECT id, space_type, owner_id, is_local FROM workspaces',
-            )
-            .get();
-        final byId = {for (final r in rows) r.read<String>('id'): r};
-        // Default Space: type preserved 'personal', owner still NULL.
-        expect(byId['ws_default_personal']!.read<String>('space_type'),
-            'personal');
-        expect(byId['ws_default_personal']!.read<String?>('owner_id'), isNull);
-        // Work Space: type preserved 'personal', owner still 'u_owner' (a
-        // stable user id, SSO-ready) — m006 not regressed.
-        expect(byId['ws_work']!.read<String>('space_type'), 'personal');
-        expect(byId['ws_work']!.read<String?>('owner_id'), 'u_owner');
-        // local ⟹ personal: every local row is personal.
-        for (final r in rows) {
-          if (r.read<int>('is_local') == 1) {
-            expect(r.read<String>('space_type'), 'personal');
-          }
+      // space_type / owner_id are byte-for-byte preserved; and every row that
+      // is local (is_local=1) is personal — the local ⟹ personal invariant.
+      final rows = await upgraded
+          .customSelect(
+            'SELECT id, space_type, owner_id, is_local FROM workspaces',
+          )
+          .get();
+      final byId = {for (final r in rows) r.read<String>('id'): r};
+      // Default Space: type preserved 'personal', owner still NULL.
+      expect(
+        byId['ws_default_personal']!.read<String>('space_type'),
+        'personal',
+      );
+      expect(byId['ws_default_personal']!.read<String?>('owner_id'), isNull);
+      // Work Space: type preserved 'personal', owner still 'u_owner' (a
+      // stable user id, SSO-ready) — m006 not regressed.
+      expect(byId['ws_work']!.read<String>('space_type'), 'personal');
+      expect(byId['ws_work']!.read<String?>('owner_id'), 'u_owner');
+      // local ⟹ personal: every local row is personal.
+      for (final r in rows) {
+        if (r.read<int>('is_local') == 1) {
+          expect(r.read<String>('space_type'), 'personal');
         }
-      },
-    );
+      }
+    });
 
     test('m017 upgrade is idempotent across re-open', () async {
       final first = AppDatabase.forTesting(NativeDatabase(file));
@@ -2895,7 +2954,7 @@ void main() {
       // Re-opening at v17 must not re-run m017 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
       final all = await second
           .customSelect('SELECT id, is_local FROM workspaces')
           .map((r) => r.read<int>('is_local'))
@@ -3078,78 +3137,86 @@ void main() {
     }
 
     // FIXTURE-IN / FIXTURE-OUT — the §4 table, one assertion per pre-state.
+    test('v17→v18 flips ONLY the synced spaces to CLOUD; unused stay LOCAL '
+        '(§4 M1/M3/M6 per-space labels)', () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+      expect(upgraded.schemaVersion, 19);
+
+      final byId = await isLocalById(upgraded);
+      // M1 — filed-matome space syncs today ⇒ CLOUD (0).
+      expect(
+        byId['ws_synced_matome'],
+        0,
+        reason: 'filed-matome space syncs today ⇒ cloud',
+      );
+      // Bare-recording-only space does NOT sync today ⇒ stays LOCAL (1) — the
+      // direct-file seam is not a "syncs today" signal.
+      expect(
+        byId['ws_direct_no_matome'],
+        1,
+        reason: 'bare recording does not sync today ⇒ stays local',
+      );
+      // No items ⇒ syncs nothing ⇒ stays LOCAL (1) — no darkening, no
+      // exposure.
+      expect(byId['ws_empty'], 1, reason: 'empty space stays local');
+      expect(
+        byId['ws_default_personal'],
+        1,
+        reason: 'unused default space stays local',
+      );
+
+      // M2 — the draft matome is untouched and stays Inbox (space NULL).
+      final draftSpace = await upgraded
+          .customSelect("SELECT space_id FROM matomes WHERE id = 'mat_draft'")
+          .map((r) => r.read<String?>('space_id'))
+          .getSingle();
+      expect(draftSpace, isNull, reason: 'draft matome stays Inbox');
+
+      // NON-DESTRUCTIVE: no Core data moved — every seeded row still present,
+      // recordings keep their matome wiring.
+      final recCount = await upgraded
+          .customSelect('SELECT COUNT(*) AS c FROM recordings')
+          .map((r) => r.read<int>('c'))
+          .getSingle();
+      expect(recCount, 2);
+    });
+
+    // FORCED-MINT invariant — no loose recordings exist today (m007).
     test(
-      'v17→v18 flips ONLY the synced spaces to CLOUD; unused stay LOCAL '
-      '(§4 M1/M3/M6 per-space labels)',
+      'no loose recordings exist pre/post backfill (m007 forced-mint)',
       () async {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
-        expect(upgraded.schemaVersion, 18);
-
-        final byId = await isLocalById(upgraded);
-        // M1 — filed-matome space syncs today ⇒ CLOUD (0).
-        expect(byId['ws_synced_matome'], 0,
-            reason: 'filed-matome space syncs today ⇒ cloud');
-        // Bare-recording-only space does NOT sync today ⇒ stays LOCAL (1) — the
-        // direct-file seam is not a "syncs today" signal.
-        expect(byId['ws_direct_no_matome'], 1,
-            reason: 'bare recording does not sync today ⇒ stays local');
-        // No items ⇒ syncs nothing ⇒ stays LOCAL (1) — no darkening, no
-        // exposure.
-        expect(byId['ws_empty'], 1, reason: 'empty space stays local');
-        expect(byId['ws_default_personal'], 1,
-            reason: 'unused default space stays local');
-
-        // M2 — the draft matome is untouched and stays Inbox (space NULL).
-        final draftSpace = await upgraded
-            .customSelect(
-              "SELECT space_id FROM matomes WHERE id = 'mat_draft'",
-            )
-            .map((r) => r.read<String?>('space_id'))
-            .getSingle();
-        expect(draftSpace, isNull, reason: 'draft matome stays Inbox');
-
-        // NON-DESTRUCTIVE: no Core data moved — every seeded row still present,
-        // recordings keep their matome wiring.
-        final recCount = await upgraded
-            .customSelect('SELECT COUNT(*) AS c FROM recordings')
-            .map((r) => r.read<int>('c'))
-            .getSingle();
-        expect(recCount, 2);
+        final audit = await upgraded.dryRunW5Backfill();
+        expect(audit.looseRecordings, 0);
       },
     );
 
-    // FORCED-MINT invariant — no loose recordings exist today (m007).
-    test('no loose recordings exist pre/post backfill (m007 forced-mint)',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
-      final audit = await upgraded.dryRunW5Backfill();
-      expect(audit.looseRecordings, 0);
-    });
-
     // NO ILLEGAL AXIS COMBO — after backfill, no row is local+org / org+local;
     // every flipped row stays personal (Axis B untouched).
-    test('no illegal Axis-A×B combo after backfill; local ⟹ personal holds',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'no illegal Axis-A×B combo after backfill; local ⟹ personal holds',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      final audit = await upgraded.dryRunW5Backfill();
-      expect(audit.illegalLocalOrg, 0);
+        final audit = await upgraded.dryRunW5Backfill();
+        expect(audit.illegalLocalOrg, 0);
 
-      final rows = await upgraded
-          .customSelect('SELECT space_type, is_local FROM workspaces')
-          .get();
-      for (final r in rows) {
-        final type = r.read<String>('space_type');
-        final isLocal = r.read<int>('is_local');
-        // Axis B untouched: every row is still 'personal'.
-        expect(type, 'personal');
-        // local ⟹ personal (trivially true here) and org ⟹ cloud (no org).
-        if (isLocal == 1) expect(type, 'personal');
-      }
-    });
+        final rows = await upgraded
+            .customSelect('SELECT space_type, is_local FROM workspaces')
+            .get();
+        for (final r in rows) {
+          final type = r.read<String>('space_type');
+          final isLocal = r.read<int>('is_local');
+          // Axis B untouched: every row is still 'personal'.
+          expect(type, 'personal');
+          // local ⟹ personal (trivially true here) and org ⟹ cloud (no org).
+          if (isLocal == 1) expect(type, 'personal');
+        }
+      },
+    );
 
     // DRY-RUN AUDIT — before/after bucket + tenancy counts.
     test('dry-run audit: before vs after bucket + tenancy split', () async {
@@ -3192,7 +3259,7 @@ void main() {
       // identical.
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 18);
+      expect(second.schemaVersion, 19);
 
       // Explicit re-run of the corrective backfill is a no-op too (the CLOUD
       // set is re-derived; already-cloud rows are skipped by the WHERE guard).
@@ -3210,32 +3277,40 @@ void main() {
 
     // ROLLBACK PROVEN — forward then compensating restores the prior (m017
     // default) state; then forward again re-derives the cloud set.
-    test('rollback restores the m017-default state, forward re-derives it',
-        () async {
-      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(upgraded.close);
+    test(
+      'rollback restores the m017-default state, forward re-derives it',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
 
-      // Forward already ran: 1 cloud (the filed-matome space).
-      final forward = await isLocalById(upgraded);
-      expect(forward.values.where((v) => v == 0).length, 1);
+        // Forward already ran: 1 cloud (the filed-matome space).
+        final forward = await isLocalById(upgraded);
+        expect(forward.values.where((v) => v == 0).length, 1);
 
-      // COMPENSATING / DOWN: restore the prior label state (all local).
-      await upgraded.reverseW5Backfill();
-      final reversed = await isLocalById(upgraded);
-      expect(reversed.values.every((v) => v == 1), isTrue,
-          reason: 'rollback ⇒ every row back to m017 default local (1)');
+        // COMPENSATING / DOWN: restore the prior label state (all local).
+        await upgraded.reverseW5Backfill();
+        final reversed = await isLocalById(upgraded);
+        expect(
+          reversed.values.every((v) => v == 1),
+          isTrue,
+          reason: 'rollback ⇒ every row back to m017 default local (1)',
+        );
 
-      // Re-running forward re-derives the identical cloud set (proves the
-      // forward is a pure function of live membership).
-      await upgraded.customStatement(
-        'UPDATE workspaces AS w SET is_local = 0 '
-        'WHERE EXISTS (SELECT 1 FROM matomes m WHERE m.space_id = w.id) '
-        'AND w.is_local != 0',
-      );
-      final reforward = await isLocalById(upgraded);
-      expect(reforward, forward,
-          reason: 'forward is a pure function of live membership');
-    });
+        // Re-running forward re-derives the identical cloud set (proves the
+        // forward is a pure function of live membership).
+        await upgraded.customStatement(
+          'UPDATE workspaces AS w SET is_local = 0 '
+          'WHERE EXISTS (SELECT 1 FROM matomes m WHERE m.space_id = w.id) '
+          'AND w.is_local != 0',
+        );
+        final reforward = await isLocalById(upgraded);
+        expect(
+          reforward,
+          forward,
+          reason: 'forward is a pure function of live membership',
+        );
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -3317,7 +3392,7 @@ void main() {
 
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
-      expect(upgraded.schemaVersion, 18);
+      expect(upgraded.schemaVersion, 19);
 
       final audit = await upgraded.dryRunW5Backfill();
       expect(audit.looseRecordings, 0);
@@ -3364,49 +3439,54 @@ void main() {
       return id;
     }
 
-    test('contacts CRUD round-trips (defaults metadata + nullable link)',
-        () async {
-      final dao = db.contactsDao;
-      await dao.create(makeContact(id: 'c1', displayName: 'Zoe'));
-      await dao.create(
-        makeContact(
-          id: 'c2',
-          displayName: 'Alice',
-          metadata: '{"email":"a@x.com"}',
-          linkedUserId: 'u_real',
-        ),
-      );
+    test(
+      'contacts CRUD round-trips (defaults metadata + nullable link)',
+      () async {
+        final dao = db.contactsDao;
+        await dao.create(makeContact(id: 'c1', displayName: 'Zoe'));
+        await dao.create(
+          makeContact(
+            id: 'c2',
+            displayName: 'Alice',
+            metadata: '{"email":"a@x.com"}',
+            linkedUserId: 'u_real',
+          ),
+        );
 
-      final c1 = await dao.getById('c1');
-      expect(c1, isNotNull);
-      expect(c1!.metadata, '{}'); // default
-      expect(c1.linkedUserId, isNull); // reserved, unset
+        final c1 = await dao.getById('c1');
+        expect(c1, isNotNull);
+        expect(c1!.metadata, '{}'); // default
+        expect(c1.linkedUserId, isNull); // reserved, unset
 
-      final c2 = await dao.getById('c2');
-      expect(c2!.metadata, '{"email":"a@x.com"}');
-      expect(c2.linkedUserId, 'u_real');
+        final c2 = await dao.getById('c2');
+        expect(c2!.metadata, '{"email":"a@x.com"}');
+        expect(c2.linkedUserId, 'u_real');
 
-      // listContacts is display-name ascending → Alice before Zoe.
-      final all = await dao.listContacts();
-      expect(all.map((c) => c.id), ['c2', 'c1']);
+        // listContacts is display-name ascending → Alice before Zoe.
+        final all = await dao.listContacts();
+        expect(all.map((c) => c.id), ['c2', 'c1']);
 
-      // listContactsForOwner filters by owner.
-      await dao.create(makeContact(id: 'c3', ownerId: 'other'));
-      final mine = await dao.listContactsForOwner('owner1');
-      expect(mine.map((c) => c.id), containsAll(<String>['c1', 'c2']));
-      expect(mine.map((c) => c.id), isNot(contains('c3')));
+        // listContactsForOwner filters by owner.
+        await dao.create(makeContact(id: 'c3', ownerId: 'other'));
+        final mine = await dao.listContactsForOwner('owner1');
+        expect(mine.map((c) => c.id), containsAll(<String>['c1', 'c2']));
+        expect(mine.map((c) => c.id), isNot(contains('c3')));
 
-      // update writes only patched fields.
-      await dao.updateContact(
-        'c1',
-        const ContactsCompanion(displayName: Value('Zoe Renamed')),
-      );
-      expect((await dao.getById('c1'))!.displayName, 'Zoe Renamed');
+        // update writes only patched fields.
+        await dao.updateContact(
+          'c1',
+          const ContactsCompanion(displayName: Value('Zoe Renamed')),
+        );
+        expect((await dao.getById('c1'))!.displayName, 'Zoe Renamed');
 
-      // coreId reconcile lookup.
-      await dao.updateContact('c1', const ContactsCompanion(coreId: Value(99)));
-      expect((await dao.contactByCoreId(99))!.id, 'c1');
-    });
+        // coreId reconcile lookup.
+        await dao.updateContact(
+          'c1',
+          const ContactsCompanion(coreId: Value(99)),
+        );
+        expect((await dao.contactByCoreId(99))!.id, 'c1');
+      },
+    );
 
     test(
       'matome_contacts add/list/remove with role + idempotent re-add',
@@ -3443,10 +3523,7 @@ void main() {
           contactId: 'c1',
           role: 'organizer',
         );
-        expect(
-          (await dao.listContactsForMatome(m)).single.role,
-          'organizer',
-        );
+        expect((await dao.listContactsForMatome(m)).single.role, 'organizer');
 
         // Explicit removal.
         await dao.removeContactFromMatome(matomeId: m, contactId: 'c1');
@@ -3502,30 +3579,33 @@ void main() {
     // The join-table MERGE-SURVIVAL test (set-merge rule): adding contact A then
     // a stale "re-sync" that re-adds the PRE-EXISTING set (B, C) WITHOUT A must
     // NOT drop A — removal is explicit-only, never implied by a partial set.
-    test('partial re-sync of an edge set never drops an absent member',
-        () async {
-      final dao = db.contactsDao;
-      final m = await seedMatome(db, 'mat_local_merge');
-      for (final id in ['A', 'B', 'C']) {
-        await dao.create(makeContact(id: id, displayName: id));
-      }
+    test(
+      'partial re-sync of an edge set never drops an absent member',
+      () async {
+        final dao = db.contactsDao;
+        final m = await seedMatome(db, 'mat_local_merge');
+        for (final id in ['A', 'B', 'C']) {
+          await dao.create(makeContact(id: id, displayName: id));
+        }
 
-      // Initial set: B, C are tagged.
-      await dao.addContactToMatome(matomeId: m, contactId: 'B');
-      await dao.addContactToMatome(matomeId: m, contactId: 'C');
-      // Then A is added.
-      await dao.addContactToMatome(matomeId: m, contactId: 'A');
+        // Initial set: B, C are tagged.
+        await dao.addContactToMatome(matomeId: m, contactId: 'B');
+        await dao.addContactToMatome(matomeId: m, contactId: 'C');
+        // Then A is added.
+        await dao.addContactToMatome(matomeId: m, contactId: 'A');
 
-      // A stale re-sync re-adds the OLD set (B, C) — A is absent from it.
-      // Because add is a union (idempotent) and removal is explicit-only, A's
-      // edge MUST survive.
-      await dao.addContactToMatome(matomeId: m, contactId: 'B');
-      await dao.addContactToMatome(matomeId: m, contactId: 'C');
+        // A stale re-sync re-adds the OLD set (B, C) — A is absent from it.
+        // Because add is a union (idempotent) and removal is explicit-only, A's
+        // edge MUST survive.
+        await dao.addContactToMatome(matomeId: m, contactId: 'B');
+        await dao.addContactToMatome(matomeId: m, contactId: 'C');
 
-      final ids =
-          (await dao.listContactsForMatome(m)).map((e) => e.contact.id).toSet();
-      expect(ids, {'A', 'B', 'C'}); // A survived the partial re-sync.
-    });
+        final ids = (await dao.listContactsForMatome(
+          m,
+        )).map((e) => e.contact.id).toSet();
+        expect(ids, {'A', 'B', 'C'}); // A survived the partial re-sync.
+      },
+    );
 
     test(
       'deletion-cascade: delete contact removes its edges, Matome survives',
@@ -3546,13 +3626,11 @@ void main() {
 
         // c1 gone, its edges gone; c2's edge survives; Matome + Space survive.
         expect(await dao.getById('c1'), isNull);
-        final tagged =
-            (await dao.listContactsForMatome(m)).map((e) => e.contact.id);
+        final tagged = (await dao.listContactsForMatome(
+          m,
+        )).map((e) => e.contact.id);
         expect(tagged, ['c2']);
-        expect(
-          await dao.listContactsForSpace('ws_default_personal'),
-          isEmpty,
-        );
+        expect(await dao.listContactsForSpace('ws_default_personal'), isEmpty);
         expect(await db.matomesDao.getById(m), isNotNull);
         expect(await dao.getById('c2'), isNotNull);
       },

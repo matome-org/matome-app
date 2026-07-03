@@ -26,7 +26,7 @@ import 'support/e2e_harness.dart';
 /// and reasserts its DECLARATIVE page stack, popping the untracked imperative
 /// route. The image detail screen vanishes — exactly the "tapping an image does
 /// nothing / flashes away" the user saw. Audio survives because it is pushed
-/// DECLARATIVELY via `context.push('/recording/detail/:id')`, so go_router owns
+/// DECLARATIVELY via `context.push('/items/audio/:id')`, so go_router owns
 /// it and keeps it across rebuilds.
 
 Future<void> _seedMatome(AppDatabase db, {required String id}) async {

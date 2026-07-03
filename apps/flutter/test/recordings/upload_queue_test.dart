@@ -52,9 +52,24 @@ void main() {
     final audio = File('${tmp.path}/$localId.m4a');
     await audio.writeAsBytes(List<int>.filled(16, 0));
     final now = DateTime.now();
+    // Two-phase upload contract: the create leg (createItemRecording) POSTs to
+    // /api/matomes/{coreMatomeId}/items, so a pending_upload row must be
+    // parented to a matome that has already reconciled a Core id. Seed one — the
+    // queue holds the row until reconcile, then creates the item under it.
+    final matomeId = 'mat_local_$localId';
+    await db.into(db.matomes).insert(
+      MatomesCompanion.insert(
+        id: matomeId,
+        title: 'Memo',
+        happenedAt: now.millisecondsSinceEpoch,
+        createdAt: now.millisecondsSinceEpoch,
+        coreId: const Value(42),
+      ),
+    );
     await db.recordingsDao.upsertRecording(RecordingsCompanion(
       id: Value(localId),
       coreId: Value(coreId),
+      matomeId: Value(matomeId),
       title: const Value('Memo'),
       timestamp: const Value('1:00 PM'),
       duration: const Value('34s'),
@@ -342,8 +357,9 @@ class _ToggleRepository extends RecordingsRepository {
   }
 
   @override
-  Future<RecordingCreateResult> createRecording({
+  Future<RecordingCreateResult> createItemRecording({
     required String title,
+    required int matomeId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',

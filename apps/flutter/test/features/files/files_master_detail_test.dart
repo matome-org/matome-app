@@ -36,7 +36,7 @@ const String _owner = '1';
 /// set synchronously so the pumped tree sees it on the first frame).
 class _StubReadingPane extends ReadingPaneModeController {
   _StubReadingPane(ReadingPaneMode mode)
-      : super(InMemorySettingsStore(), ReadingPaneSurface.files) {
+    : super(InMemorySettingsStore(), ReadingPaneSurface.files) {
     state = mode;
   }
 }
@@ -46,15 +46,19 @@ ProviderContainer _container(
   ReadingPaneMode? mode,
   String view = 'table',
 }) {
-  final c = ProviderContainer(overrides: [
-    appDatabaseProvider.overrideWithValue(db),
-    currentOwnerIdProvider.overrideWithValue(_owner),
-    settingsStoreProvider
-        .overrideWithValue(InMemorySettingsStore({'matome.files_view': view})),
-    if (mode != null)
-      readingPaneModeProvider(ReadingPaneSurface.files)
-          .overrideWith((ref) => _StubReadingPane(mode)),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue(_owner),
+      settingsStoreProvider.overrideWithValue(
+        InMemorySettingsStore({'matome.files_view': view}),
+      ),
+      if (mode != null)
+        readingPaneModeProvider(
+          ReadingPaneSurface.files,
+        ).overrideWith((ref) => _StubReadingPane(mode)),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -71,10 +75,10 @@ Widget _app(ProviderContainer container, _RouteSpy spy) {
     routes: [
       GoRoute(path: '/files', builder: (_, _) => const FilesScreen()),
       GoRoute(
-        path: '/recording/:kind/:id',
+        path: '/items/:kind/:id',
         builder: (_, state) {
           spy.last =
-              '/recording/${state.pathParameters['kind']}/${state.pathParameters['id']}';
+              '/items/${state.pathParameters['kind']}/${state.pathParameters['id']}';
           return const Scaffold(body: Text('detail'));
         },
       ),
@@ -83,10 +87,7 @@ Widget _app(ProviderContainer container, _RouteSpy spy) {
   return UncontrolledProviderScope(
     container: container,
     child: TranslationProvider(
-      child: MaterialApp.router(
-        theme: buildLightTheme(),
-        routerConfig: router,
-      ),
+      child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
   );
 }
@@ -141,35 +142,33 @@ void main() {
         // Shipped reality: the 1080-cap ConstrainedBox is present and the
         // unified scaffold is NOT in the tree.
         expect(find.byType(MasterDetailScaffold), findsNothing);
-        final cap = tester.widgetList<ConstrainedBox>(find.byType(ConstrainedBox)).where(
-              (b) => b.constraints.maxWidth == 1080,
-            );
+        final cap = tester
+            .widgetList<ConstrainedBox>(find.byType(ConstrainedBox))
+            .where((b) => b.constraints.maxWidth == 1080);
         expect(cap, isNotEmpty);
       },
       skip: _flagOn,
     );
 
-    testWidgets(
-      'tapping a file routes to its detail (no in-pane selection)',
-      (tester) async {
-        final db = AppDatabase.forTesting(NativeDatabase.memory());
-        addTearDown(db.close);
-        await _seedFile(db, id: 'r1', title: 'Alpha');
+    testWidgets('tapping a file routes to its detail (no in-pane selection)', (
+      tester,
+    ) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedFile(db, id: 'r1', title: 'Alpha');
 
-        _setSize(tester, const Size(1280, 900));
-        final container = _container(db);
-        final spy = _RouteSpy();
-        await tester.pumpWidget(_app(container, spy));
-        await tester.pumpAndSettle();
+      _setSize(tester, const Size(1280, 900));
+      final container = _container(db);
+      final spy = _RouteSpy();
+      await tester.pumpWidget(_app(container, spy));
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Alpha'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Alpha'));
+      await tester.pumpAndSettle();
 
-        expect(spy.last, '/recording/detail/r1');
-        expect(container.read(filesSelectionProvider), isNull);
-      },
-      skip: _flagOn,
-    );
+      expect(spy.last, '/items/audio/r1');
+      expect(container.read(filesSelectionProvider), isNull);
+    }, skip: _flagOn);
   });
 
   // ── ON lane: scaffold-driven reading pane ─────────────────────────────────
@@ -193,9 +192,9 @@ void main() {
         expect(find.byType(MasterDetailScaffold), findsOneWidget);
         expect(find.byType(FileView), findsOneWidget);
         // Full-width master: the shipped 1080 cap is gone.
-        final cap = tester.widgetList<ConstrainedBox>(find.byType(ConstrainedBox)).where(
-              (b) => b.constraints.maxWidth == 1080,
-            );
+        final cap = tester
+            .widgetList<ConstrainedBox>(find.byType(ConstrainedBox))
+            .where((b) => b.constraints.maxWidth == 1080);
         expect(cap, isEmpty);
       },
       skip: !_flagOn,
@@ -269,7 +268,7 @@ void main() {
         await tester.tap(find.text('Alpha'));
         await tester.pumpAndSettle();
 
-        expect(spy.last, '/recording/detail/r1');
+        expect(spy.last, '/items/audio/r1');
         expect(container.read(filesSelectionProvider), isNull);
       },
       skip: !_flagOn,

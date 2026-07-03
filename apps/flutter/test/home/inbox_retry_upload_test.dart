@@ -58,6 +58,7 @@ void main() {
     AppDatabase db, {
     int? coreId,
     String? notes,
+    String? matomeId,
   }) async {
     final localId = mintLocalRecordingId();
     final audio = File('${tmp.path}/$localId.m4a');
@@ -65,6 +66,10 @@ void main() {
     await db.recordingsDao.upsertRecording(RecordingsCompanion(
       id: Value(localId),
       coreId: Value(coreId),
+      // A coreId-less retry re-runs the CREATE leg, which now targets the
+      // recording's parent matome (POST /api/matomes/{coreMatomeId}/items), so
+      // the row must be parented to a Core-reconciled matome to egress.
+      matomeId: Value(matomeId),
       title: const Value('Memo'),
       timestamp: const Value('1:00 PM'),
       duration: const Value('34s'),
@@ -77,6 +82,20 @@ void main() {
       notes: Value(notes),
     ));
     return (localId, audio);
+  }
+
+  /// Seeds a Core-reconciled local matome (coreId set) the retry can create an
+  /// item under, returning its local id.
+  Future<String> seedReconciledMatome(AppDatabase db, {required int coreId}) async {
+    final matomeId = 'mat_local_$coreId';
+    await db.into(db.matomes).insert(MatomesCompanion.insert(
+          id: matomeId,
+          title: 'M',
+          happenedAt: DateTime.now().millisecondsSinceEpoch,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          coreId: Value(coreId),
+        ));
+    return matomeId;
   }
 
   ProviderContainer containerFor(AppDatabase db, RecordingsRepository repo) {
@@ -141,8 +160,10 @@ void main() {
     final container = containerFor(db, repo);
     addTearDown(container.dispose);
 
-    // A failure with NO coreId (the create/upload itself failed).
-    final (localId, _) = await seedFailedRow(db);
+    // A failure with NO coreId (the create/upload itself failed), parented to a
+    // Core-reconciled matome so the retry's create leg can egress.
+    final matomeId = await seedReconciledMatome(db, coreId: 42);
+    final (localId, _) = await seedFailedRow(db, matomeId: matomeId);
 
     await container
         .read(inboxControllerProvider.notifier)
@@ -174,8 +195,9 @@ class _ToggleRepository extends RecordingsRepository {
   }
 
   @override
-  Future<RecordingCreateResult> createRecording({
+  Future<RecordingCreateResult> createItemRecording({
     required String title,
+    required int matomeId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -122,6 +123,10 @@ void main() {
     );
   }
 
+  // Modern items contract (recordings→items migration): the create leg POSTs to
+  // /api/matomes/{coreMatomeId}/items and returns an ITEM (+presign); processing
+  // is POST /api/items/{id}/process; the poll-fallback source is GET
+  // /api/items/{id}. The minted-matome coreId is 900; the created item id is 42.
   RecordingsRepository stubRepo() {
     final dio = Dio(
       BaseOptions(
@@ -131,15 +136,17 @@ void main() {
     );
     final adapter = DioAdapter(dio: dio);
     adapter.onPost(
-      '/api/recordings',
+      '/api/matomes/900/items',
       (server) => server.reply(201, {
-        'recording': {
+        'item': {
           'id': 42,
           'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'pending',
+          'matome_id': 900,
+          'item_type': 'file',
+          'metadata': {'title': 'New Recording', 'status': 'pending'},
+          'file': {'media_type': 'audio'},
         },
-        'upload': {
+        'presign': {
           'method': 'PUT',
           'url': 'http://127.0.0.1:9/upload',
           'storage_key': 'k',
@@ -149,31 +156,54 @@ void main() {
       data: Matchers.any,
     );
     adapter.onPost(
-      '/api/recordings/42/process',
+      '/api/items/42/process',
       (server) => server.reply(202, {
-        'recording': {
+        'item': {
           'id': 42,
           'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'processing',
+          'matome_id': 900,
+          'item_type': 'file',
+          'metadata': {'title': 'New Recording', 'status': 'processing'},
         },
         'processing': {'queued': true},
       }),
     );
     adapter.onGet(
-      '/api/recordings/42',
+      '/api/items/42',
       (server) => server.reply(200, {
-        'recording': {
+        'item': {
           'id': 42,
           'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'done',
+          'matome_id': 900,
+          'item_type': 'file',
+          'metadata': {'title': 'New Recording', 'status': 'done'},
         },
       }),
     );
     return _StubUploadRepository(
       apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
     );
+  }
+
+  // Simulate the matome→Core sync (matome_sync) reconciling the just-minted LOCAL
+  // matome's Core id (900), then re-drain the held row. The finish flow (flag OFF)
+  // mints a coreId-less local matome, so the inline drain HOLDS the row (an item
+  // can only be created under a reconciled matome — POST
+  // /api/matomes/{coreMatomeId}/items). This is the two-phase contract after the
+  // recordings→items migration; matome sync supplies the coreId out-of-band.
+  // Reconciles the single held (minted) matome's coreId to 900 and returns the
+  // held row's local id so the caller can re-drain it (the caller decides whether
+  // to await that drain — a gated terminal awaiter keeps it pending on purpose).
+  Future<String> reconcileMintedMatome(
+    ProviderContainer container,
+    AppDatabase db,
+  ) async {
+    final held = (await db.recordingsDao.getPendingUploadRecordings()).single;
+    await db.matomesDao.updateMatome(
+      held.matomeId!,
+      const MatomesCompanion(coreId: Value(900)),
+    );
+    return held.id;
   }
 
   // Pumps the widget, letting the post-frame bootstrap (mic-support probe +
@@ -287,8 +317,16 @@ void main() {
     }
     expect(find.text('inbox'), findsOneWidget);
 
+    // Two-phase: the finish minted a coreId-less local matome, so the in-modal
+    // drain HELD the row. Simulate matome sync reconciling the matome's coreId,
+    // then re-drain to done (the poll-fallback GET resolves the terminal state).
+    await tester.runAsync(() async {
+      final id = await reconcileMintedMatome(container, db);
+      await container.read(uploadQueueProvider).drainRow(id);
+    });
+
     // The new recording landed in the Inbox (Drift), done. W2: local-first PK,
-    // so look it up by the reconciled coreId (42), not by a Core-id PK.
+    // so look it up by the reconciled coreId (item id 42), not by a Core-id PK.
     final row = await db.recordingsDao.recordingByCoreId(42);
     expect(row, isNotNull);
     expect(isLocalRecordingId(row!.id), isTrue);
@@ -523,13 +561,13 @@ void main() {
         find.byKey(const Key('processing-background-button')),
         findsOneWidget,
       );
-      // Row is already in the Inbox; Core create succeeded so coreId reconciled
-      // to 42 and the local-first row flipped pending_upload → processing while
-      // the terminal await is still gated.
-      final pending = await db.recordingsDao.recordingByCoreId(42);
-      expect(pending, isNotNull);
-      expect(isLocalRecordingId(pending!.id), isTrue);
-      expect(pending.processingStatus, 'processing');
+      // Two-phase: the finish minted a coreId-less local matome, so the in-modal
+      // drain HELD the row — it's already in the Inbox as pending_upload with no
+      // coreId yet (an item is created only under a reconciled matome).
+      final held = (await db.recordingsDao.getPendingUploadRecordings()).single;
+      expect(isLocalRecordingId(held.id), isTrue);
+      expect(held.coreId, isNull);
+      expect(held.processingStatus, 'pending_upload');
 
       // Background to the Inbox: the modal is dismissed even though the upload
       // hasn't resolved.
@@ -539,11 +577,25 @@ void main() {
       );
       expect(find.text('inbox'), findsOneWidget);
 
+      // matome sync reconciles the matome's coreId out-of-band; re-drain so the
+      // create leg runs (item id 42), reconciling coreId and flipping
+      // pending_upload → processing while the terminal await is still gated.
+      late Future<void> draining;
+      await tester.runAsync(() async {
+        final id = await reconcileMintedMatome(container, db);
+        draining = container.read(uploadQueueProvider).drainRow(id);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      final pending = await db.recordingsDao.recordingByCoreId(42);
+      expect(pending, isNotNull);
+      expect(isLocalRecordingId(pending!.id), isTrue);
+      expect(pending.processingStatus, 'processing');
+
       // The pipeline keeps running off the (still-alive) provider; release it and
       // the row flips to done.
       await tester.runAsync(() async {
         release.complete();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await draining;
       });
       final row = await db.recordingsDao.recordingByCoreId(42);
       expect(row!.processingStatus, 'done');

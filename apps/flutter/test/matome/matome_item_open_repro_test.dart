@@ -20,7 +20,7 @@ import 'package:matome_flutter/i18n/strings.g.dart';
 ///
 /// Unlike the original 1438 dispatch test (a plain MaterialApp), this drives the
 /// REAL go_router routes the shipping app uses: `/matome/:id` PLUS the real
-/// `/recording/detail/:id` → [FileDetailScreen.byId]. That is the gap — the
+/// `/items/audio/:id` → [FileDetailScreen.byId]. That is the gap — the
 /// imperative-root-push path the image tile uses was never exercised under the
 /// real router.
 
@@ -73,7 +73,7 @@ void main() {
   }
 
   /// A router faithful to production: the real `/matome/:id` and the real
-  /// `/recording/detail/:id` (→ [FileDetailScreen.byId]) routes, both on the
+  /// `/items/audio/:id` (→ [FileDetailScreen.byId]) routes, both on the
   /// root navigator — exactly the shape `lib/app/router.dart` uses for these
   /// two routes.
   GoRouter buildRouter() {
@@ -90,16 +90,16 @@ void main() {
               MatomeDetailScreen(id: state.pathParameters['id']!),
         ),
         GoRoute(
-          path: '/recording/detail/:id',
+          path: '/items/audio/:id',
           builder: (context, state) =>
               FileDetailScreen.byId(id: state.pathParameters['id']!),
         ),
         // Image Items drill into the unified image host (#1438/#1450), a
         // SEPARATE route from the audio host — the live `lib/app/router.dart`
         // registers it, so a faithful repro router must too. Without it the
-        // imperative `/recording/image/:id` push has no match and nothing opens.
+        // imperative `/items/image/:id` push has no match and nothing opens.
         GoRoute(
-          path: '/recording/image/:id',
+          path: '/items/image/:id',
           builder: (context, state) =>
               FileDetailScreen.imageById(id: state.pathParameters['id']!),
         ),
@@ -129,118 +129,123 @@ void main() {
   }
 
   testWidgets(
-      'BUG #1: tapping an image Item opens the file-detail screen and it STAYS',
-      (tester) async {
-    await _seedMatome(db, id: 'm1');
-    await _seedItem(
-      db,
-      id: 'img1',
-      matomeId: 'm1',
-      mediaType: 'image',
-      title: 'A photo',
-    );
+    'BUG #1: tapping an image Item opens the file-detail screen and it STAYS',
+    (tester) async {
+      await _seedMatome(db, id: 'm1');
+      await _seedItem(
+        db,
+        id: 'img1',
+        matomeId: 'm1',
+        mediaType: 'image',
+        title: 'A photo',
+      );
 
-    await tester.pumpWidget(buildApp(container(), buildRouter()));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(buildApp(container(), buildRouter()));
+      await tester.pumpAndSettle();
 
-    await revealItems(tester, const ValueKey('matome-image-img1'));
+      await revealItems(tester, const ValueKey('matome-image-img1'));
 
-    // The image tile is present in the hub.
-    expect(find.byKey(const ValueKey('matome-image-img1')), findsOneWidget);
+      // The image tile is present in the hub.
+      expect(find.byKey(const ValueKey('matome-image-img1')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('matome-image-img1')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('matome-image-img1')));
+      await tester.pumpAndSettle();
 
-    // A file-detail screen must appear AND survive a settle (a go_router
-    // refreshListenable rebuild must not drop an imperatively-pushed route).
-    expect(
-      find.byKey(const ValueKey('file-detail-view')),
-      findsOneWidget,
-      reason: 'tapping an image Item must open its file-detail screen',
-    );
-    // And it must be the IMAGE host (its framed media header).
-    expect(
-      find.byKey(const ValueKey('file-detail-image-header')),
-      findsOneWidget,
-      reason: 'the image host (not the audio host) must render',
-    );
-  });
+      // A file-detail screen must appear AND survive a settle (a go_router
+      // refreshListenable rebuild must not drop an imperatively-pushed route).
+      expect(
+        find.byKey(const ValueKey('file-detail-view')),
+        findsOneWidget,
+        reason: 'tapping an image Item must open its file-detail screen',
+      );
+      // And it must be the IMAGE host (its framed media header).
+      expect(
+        find.byKey(const ValueKey('file-detail-image-header')),
+        findsOneWidget,
+        reason: 'the image host (not the audio host) must render',
+      );
+    },
+  );
 
   testWidgets(
-      'CONTROL: tapping an audio Item opens its file-detail screen (works today)',
-      (tester) async {
-    await _seedMatome(db, id: 'm1');
-    await _seedItem(
-      db,
-      id: 'aud1',
-      matomeId: 'm1',
-      mediaType: 'audio',
-      title: 'A memo',
-    );
+    'CONTROL: tapping an audio Item opens its file-detail screen (works today)',
+    (tester) async {
+      await _seedMatome(db, id: 'm1');
+      await _seedItem(
+        db,
+        id: 'aud1',
+        matomeId: 'm1',
+        mediaType: 'audio',
+        title: 'A memo',
+      );
 
-    await tester.pumpWidget(buildApp(container(), buildRouter()));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(buildApp(container(), buildRouter()));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('matome-show-more')));
-    await tester.pumpAndSettle();
-    // The recording (audio) card has no per-id key, so reach it via its tile
-    // wrapper key, then tap the card by title within it.
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('matome-item-aud1')),
-      200,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('matome-item-aud1')),
-        matching: find.text('A memo'),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('matome-show-more')));
+      await tester.pumpAndSettle();
+      // The recording (audio) card has no per-id key, so reach it via its tile
+      // wrapper key, then tap the card by title within it.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('matome-item-aud1')),
+        200,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('matome-item-aud1')),
+          matching: find.text('A memo'),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('file-detail-view')), findsOneWidget);
-  });
+      expect(find.byKey(const ValueKey('file-detail-view')), findsOneWidget);
+    },
+  );
 
-  testWidgets('BUG #2: the row long-press opens the actions sheet and Delete is '
-      'reachable (no inline "…" — #1475)', (tester) async {
-    await _seedMatome(db, id: 'm1');
-    await _seedItem(
-      db,
-      id: 'img1',
-      matomeId: 'm1',
-      mediaType: 'image',
-      title: 'A photo',
-    );
+  testWidgets(
+    'BUG #2: the row long-press opens the actions sheet and Delete is '
+    'reachable (no inline "…" — #1475)',
+    (tester) async {
+      await _seedMatome(db, id: 'm1');
+      await _seedItem(
+        db,
+        id: 'img1',
+        matomeId: 'm1',
+        mediaType: 'image',
+        title: 'A photo',
+      );
 
-    await tester.pumpWidget(buildApp(container(), buildRouter()));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(buildApp(container(), buildRouter()));
+      await tester.pumpAndSettle();
 
-    await revealItems(tester, const ValueKey('matome-item-img1'));
+      await revealItems(tester, const ValueKey('matome-item-img1'));
 
-    // The clean approved row carries NO inline overflow trigger (#1475).
-    expect(
-      find.byKey(const ValueKey('matome-item-overflow-img1')),
-      findsNothing,
-    );
+      // The clean approved row carries NO inline overflow trigger (#1475).
+      expect(
+        find.byKey(const ValueKey('matome-item-overflow-img1')),
+        findsNothing,
+      );
 
-    // Long-press the row → the actions sheet opens with the Delete entry.
-    await tester.longPress(find.byKey(const ValueKey('matome-item-img1')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('matome-item-overflow-img1')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('matome-item-delete-img1')),
-      findsOneWidget,
-      reason: 'the long-press actions sheet must open with a Delete entry',
-    );
-    // And long-pressing must NOT also open the image detail (the gesture must
-    // not leak through to the row's tap handler).
-    expect(
-      find.byKey(const ValueKey('file-detail-view')),
-      findsNothing,
-      reason: 'long-pressing must not also open the file detail',
-    );
-  });
+      // Long-press the row → the actions sheet opens with the Delete entry.
+      await tester.longPress(find.byKey(const ValueKey('matome-item-img1')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('matome-item-overflow-img1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('matome-item-delete-img1')),
+        findsOneWidget,
+        reason: 'the long-press actions sheet must open with a Delete entry',
+      );
+      // And long-pressing must NOT also open the image detail (the gesture must
+      // not leak through to the row's tap handler).
+      expect(
+        find.byKey(const ValueKey('file-detail-view')),
+        findsNothing,
+        reason: 'long-pressing must not also open the file detail',
+      );
+    },
+  );
 }

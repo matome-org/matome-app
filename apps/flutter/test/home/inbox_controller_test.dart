@@ -33,12 +33,12 @@ ProviderContainer _container(
   final adapter = DioAdapter(dio: dio);
   if (recordings != null) {
     adapter.onGet(
-      '/api/recordings',
-      (server) => server.reply(200, {'recordings': recordings}),
+      '/api/items',
+      (server) => server.reply(200, {'items': recordings}),
     );
   } else {
     adapter.onGet(
-      '/api/recordings',
+      '/api/items',
       (server) => server.reply(500, {'error': 'offline'}),
     );
   }
@@ -53,6 +53,9 @@ ProviderContainer _container(
   ]);
 }
 
+/// Builds a Core `item` payload (item_type=file) as `GET /api/items` now
+/// returns it: file-owned fields (`summary`/`transcript`) under `file`,
+/// user-owned fields (`title`/`status`/`notes`/`workspace_id`) under `metadata`.
 Map<String, dynamic> _remote({
   required int id,
   String title = 'Remote',
@@ -66,12 +69,17 @@ Map<String, dynamic> _remote({
   return {
     'id': id,
     'owner_id': 1,
-    'title': title,
-    'status': status,
-    'summary': summary,
-    'transcript': transcript,
-    'notes': notes,
-    'workspace_id': workspaceId,
+    'item_type': 'file',
+    'metadata': {
+      'title': title,
+      'status': status,
+      'notes': notes,
+      'workspace_id': workspaceId,
+    },
+    'file': {
+      'summary': summary,
+      'transcript': transcript,
+    },
     'inserted_at': insertedAt ?? '2026-06-08T12:00:00Z',
   };
 }
@@ -283,13 +291,13 @@ void main() {
     final adapter = DioAdapter(dio: dio);
     var patched = false;
     adapter
-      ..onGet('/api/recordings', (s) => s.reply(200, {'recordings': []}))
+      ..onGet('/api/items', (s) => s.reply(200, {'items': []}))
       ..onPatch(
-        '/api/recordings/5',
+        '/api/items/5',
         (s) {
           patched = true;
           return s.reply(200, {
-            'recording': _remote(id: 5, title: 'Move me', workspaceId: 42),
+            'item': _remote(id: 5, title: 'Move me', workspaceId: 42),
           });
         },
         data: Matchers.any,
@@ -385,7 +393,7 @@ void main() {
     ));
     final adapter = DioAdapter(dio: dio);
     adapter.onGet(
-      '/api/recordings',
+      '/api/items',
       (server) => server.reply(401, {'error': 'unauthorized'}),
     );
     final repo = RecordingsRepository(

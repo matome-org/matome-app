@@ -67,6 +67,15 @@ class _FakeAuthRepository implements AuthRepository {
     logoutCalls++;
     await _tokenStore.clear();
   }
+
+  @override
+  Future<void> requestPasswordReset({required String email}) async {}
+
+  @override
+  Future<void> resetPassword({
+    required String token,
+    required String password,
+  }) async {}
 }
 
 ProviderContainer _container(InMemoryTokenStore store, _FakeAuthRepository repo) {
