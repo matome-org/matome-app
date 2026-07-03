@@ -155,6 +155,17 @@ dependencies:
   # any host, which this layer's zero-platform-deps constraint requires). Used
   # by lib/core/crypto/ only; not yet wired into live storage.
   cryptography: ^2.9.0
+  # Incremental (streaming) SHA-256 for the re-encrypt migration's
+  # backup/verify checksums (task #1856, plan #131 W4) — `sha256
+  # .startChunkedConversion` hashes a file chunk-by-chunk with O(1) memory,
+  # matching `media_cipher.dart`'s own never-buffer-the-whole-file discipline.
+  # Already pulled in transitively (via other deps); pinned here to make the
+  # direct dependency explicit.
+  crypto: ^3.0.7
+  # `AccumulatorSink` — the `Sink<Digest>` that collects
+  # `sha256.startChunkedConversion`'s output above. Already pulled in
+  # transitively; pinned here to make the direct dependency explicit.
+  convert: ^3.1.2
 
 dev_dependencies:
   flutter_test:
