@@ -77,6 +77,19 @@ dependencies:
   # Already pulled transitively by
   # drift; pinned here to make the direct import explicit.
   sqlite3: ^2.4.0
+  # Direct dependency (task #1860, plan #131 web wave): the OPFS-encrypted
+  # web store (core/db/web_opfs_blob_store.dart) talks to the File System
+  # Access API (navigator.storage.getDirectory / createWritable) directly via
+  # package:web's typed JS interop bindings. Already pulled transitively by
+  # sqlite3/drift's own wasm support; pinned here for the same reason sqlite3
+  # is pinned above — to make the direct import explicit rather than relying
+  # on an undeclared transitive dependency.
+  web: ^1.1.0
+  # `Uint8Buffer` used directly to pre-seed/read back the in-memory sqlite3
+  # VFS's file bytes for the OPFS-encrypted web store (task #1860). Already
+  # pulled transitively by sqlite3's own `InMemoryFileSystem`; pinned here for
+  # the same reason sqlite3/web are pinned above.
+  typed_data: ^1.3.0
   path_provider: ^2.1.4
   # Bundles the native sqlite3 shared lib for Android/iOS/desktop.
   sqlite3_flutter_libs: ^0.5.24
