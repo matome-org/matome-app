@@ -1,5 +1,13 @@
 # Cross-platform + interop Definition-of-Done matrix — task #1857
 
+> Related: design doc [`at-rest-key-flow.md`](at-rest-key-flow.md) · decision record
+> [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md) ·
+> architecture summary [`architecture.md`](architecture.md) §11 D8 and its
+> "Known gaps / next" table (this matrix's carry-forward ledger, restated there
+> for durability) · forward rollout + recovery posture
+> [`runbook-at-rest-migration.md`](runbook-at-rest-migration.md) · native-connection
+> spike **#815** (`apps/flutter/tool/spike_815_sqlcipher/DECISION.md`).
+
 Plan #131 ("unified login + at-rest encryption"), Wave 5 — **verify-only**.
 This is the honest state of the world as actually exercised in this
 session, on this host, on `migration/flutter-lab`. A cell says

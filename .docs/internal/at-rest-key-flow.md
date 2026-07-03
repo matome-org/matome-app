@@ -1,5 +1,13 @@
 # Matome — Unified E2E + Offline-First Key Flow
 
+> Related: decision record [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md) ·
+> architecture summary [`architecture.md`](architecture.md) §11 D8 (implemented vs
+> dark/deferred) and its item-organization model (§5, D6/D7, plan #102) which this
+> design's client sits on top of · honest cross-platform verification state
+> [`dod-matrix-1857.md`](dod-matrix-1857.md) · forward rollout + recovery posture
+> [`runbook-at-rest-migration.md`](runbook-at-rest-migration.md) · native-connection
+> spike **#815** (`apps/flutter/tool/spike_815_sqlcipher/DECISION.md`).
+
 **Goal.** One decryption process shared by web, mobile, and desktop, so every
 client opens its at-rest store the same way. The design gives:
 

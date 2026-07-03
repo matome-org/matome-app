@@ -4,6 +4,10 @@
 **Blocks:** `.docs/internal/at-rest-key-flow.md` §7 ("flip Native connection to
 SQLCipher keyed by DEK once the `sqlcipher_flutter_libs` build conflict is
 resolved").
+**Related:** decision record [ADR-0002](../../../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md)
+(the DEK/KEK hierarchy this spike keys) · architecture status
+`.docs/internal/architecture.md` §11 D8 · forward packaging steps (P1/P2 in
+the preconditions table) `.docs/internal/runbook-at-rest-migration.md`.
 
 ## Verdict: GO — with the hand-rolled connection, not the stock plugin
 

@@ -4,6 +4,22 @@
 
 Accepted.
 
+**Related docs (cross-links):**
+- Design doc (full protocol, sequence diagrams, frozen wire format):
+  `.docs/internal/at-rest-key-flow.md`
+- Architecture record — what of this is implemented+tested vs dark/deferred
+  in the shipped client, plus the carry-forward ledger P2 planning inherits:
+  `.docs/internal/architecture.md` §11 D8 (this ADR's client sits on top of
+  the local-first item-organization model in the same doc's §5 / D6 / D7,
+  plan #102).
+- Honest cross-platform verification state (what was actually run vs. read
+  from source): `.docs/internal/dod-matrix-1857.md`.
+- Forward rollout steps + recovery posture (rollback vs wipe-and-resync per
+  failure mode): `.docs/internal/runbook-at-rest-migration.md`.
+- Native-connection spike **#815** — go/no-go on the hand-rolled SQLCipher
+  connection this ADR's `KeyUnwrapper`/DEK machinery keys:
+  `apps/flutter/tool/spike_815_sqlcipher/DECISION.md`.
+
 ## Context
 
 Plan #131 ("Parte 1 — Login + encriptação padronizados") requires every Matome

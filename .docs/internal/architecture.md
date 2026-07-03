@@ -1,6 +1,6 @@
 # Matome — Architecture
 
-> Status: agreed · Last updated: 2026-06-23
+> Status: agreed · Last updated: 2026-07-03
 > One Flutter client, one Elixir Core API, one external Python AI Engine, one
 > ingestion contract. This is the single architecture record: the decisions that
 > used to live in separate ADRs are folded into §11 (Decision log) so nothing is
@@ -8,6 +8,10 @@
 >
 > Companions: product framing in [`prd.md`](prd.md), requirements in
 > [`requirements.md`](requirements.md), behaviour in [`../use-cases.md`](../use-cases.md).
+> At-rest encryption (D8, plan #131): design in [`at-rest-key-flow.md`](at-rest-key-flow.md),
+> decision record in [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md),
+> honest verification state in [`dod-matrix-1857.md`](dod-matrix-1857.md), forward rollout
+> in [`runbook-at-rest-migration.md`](runbook-at-rest-migration.md).
 
 ---
 
@@ -63,7 +67,7 @@ Owns everything except AI.
 |---|---|
 | Framework / language | **Phoenix** / **Elixir** (BEAM) |
 | DB | **Supabase Postgres** (managed) via **Ecto** — system of record |
-| Auth | **Guardian** (JWT access + refresh), **Argon2** hashing; users in Postgres. App-level authz (no Supabase Auth/RLS) |
+| Auth | **Guardian** (JWT access + refresh), **Argon2** hashing; users in Postgres. App-level authz (no Supabase Auth/RLS). Session auth is layered under a separate **at-rest key envelope** (plan #131 / [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md)): `POST/GET /keybundle` (+ `/keybundle/recovery`) stores only opaque `wrapped_dek_*` blobs + salts/KDF params — the server never receives the password, the KEK, or the DEK. `auth_secret` (login) and the password-KEK (data-key unwrap) are independent Argon2id derivations of the same password under distinct salts, so a credential the server legitimately sees can never unwrap client data. See §11 D8 below for what of this is implemented+tested vs dark/deferred. |
 | Authorization | scoping by `owner_id` (Ecto query scopes) |
 | Job queue | **Oban** (Postgres-backed) — dispatch + retry of AI jobs |
 | Realtime | **Phoenix Channels** + PubSub (`RecordingStatusChannel` on `user:*`) |
@@ -206,7 +210,7 @@ A single Flutter codebase (`apps/flutter`) targets mobile, Linux desktop, and we
 | Record meeting (loopback) | ❌ | ✅ Linux (ffmpeg) | ❌ |
 | Import file (audio/image/doc) | ✅ | ✅ | ✅ |
 | Read / search / organize | ✅ | ✅ | ✅ |
-| Offline mirror (Drift) | ✅ | ✅ | ⚠️ online-first (in-memory) |
+| Offline mirror (Drift) | ✅ | ✅ | ⚠️ online-first (in-memory) by default; an encrypted-OPFS-image opt-in path exists (§11 D8) but is not wired into the app's boot provider |
 
 ---
 
@@ -272,7 +276,7 @@ Toolchain via [mise](https://mise.jdx.dev/) (`mise run up`, `mise run flutter-*`
 
 The historical decisions, kept here as the durable record:
 
-- **D1 — Consolidate to Flutter.** The client tier was three JS/TS apps (Expo RN, Next.js, Tauri) over a generated TS API client; they were consolidated into one Flutter codebase. Backend topology unchanged. Web is online-only (no at-rest local store).
+- **D1 — Consolidate to Flutter.** The client tier was three JS/TS apps (Expo RN, Next.js, Tauri) over a generated TS API client; they were consolidated into one Flutter codebase. Backend topology unchanged. ~~Web is online-only (no at-rest local store).~~ **Superseded by D8 below (plan #131):** web now has an opt-in encrypted-at-rest local store (chunked AES-256-GCM DB image in OPFS); it defaults OFF and is not wired into the app's boot path, so "online-only, in-memory" remains today's *actual default behaviour*, but it is no longer true that no at-rest local store exists at all. See D8 for the honest implemented-vs-dark split.
 - **D2 — Design-system foundation.** Canonical tokens in Figma, bound as Flutter `ThemeExtension`s, governed by Widgetbook + the DS-check gate. The app-owned route/Page layer contract and current route inventory live in [`design-system-route-contract.md`](design-system-route-contract.md).
 - **D3 — Matome is the central entity.** A Matome is a per-happening, fixed-structure aggregate of items + contacts + summaries + notes. *(Its original forced-Matome invariant — every recording in exactly one Matome — was later repealed by D6.)*
 - **D4 — Identity, permissions, triage.** Contacts are owner-owned with an optional `linkedUserId`. Spaces carry `type` (personal/shared/org) + `owner_id`; `space_members` carry RBAC roles; `organizations` may own spaces. **Schema is reserved; behaviour is deferred and unenforced** (sharing, ACLs, multi-user sync, org management). A linked contact's profile is viewable without consent — a recorded, revisitable privacy risk.
@@ -282,6 +286,43 @@ The historical decisions, kept here as the durable record:
   - **Decision:** every collection surface (Inbox, Files, Spaces, Contacts) renders through **one** reusable `MasterDetailScaffold` (`apps/flutter/lib/ui/master_detail_scaffold.dart`) — a master list plus an optional right-hand **reading pane**. Pane visibility is a single GLOBAL persisted setting, `readingPaneProvider` (`ReadingPanePosition { right, off }`), switchable **only** from Settings (no in-screen toggle). Layout uses unified breakpoints (`apps/flutter/lib/core/layout/breakpoints.dart`: `compact < 600` / `medium 600–1024` / `expanded ≥ 1024`); the pane shows only at `expanded` **and** `right`, while `compact` navigates full-screen. The Files reading-pane content is `FileView` (the shared body), **not** the full `FileDetailScreen`. The whole behaviour is gated behind `FeatureFlags.masterDetailLayout` (default **OFF** — a single flag flip is the rollback).
   - **Rejected alternatives:** a left-hand pane (right-hand chosen, email-style); per-surface pane settings (gold-plating — the global setting widens to per-surface additively later if ever needed); an in-screen pane toggle (Settings-only chosen, so the choice is global and stable); embedding the 33 KB multi-`Scaffold` `FileDetailScreen` in the pane (nested-`Scaffold` breakage — use `FileView`, the shared body).
   - **Accepted note:** unifying the legacy `1000` breakpoint onto `1024` is an intentional behaviour change for viewports in the half-open range `[1000, 1024)` (formerly two-pane, now single-pane until `1024`).
+
+- **D8 — Envelope encryption at-rest, client-side** (plan #131 "Parte 1 — unified login + at-rest encryption"). Adopts a three-tier **DEK/KEK/FEK** hierarchy — one random 256-bit DEK per user wrapped independently under a password-KEK, a recovery-KEK, and (native only) a device-keystore KEK; media is encrypted per-file under its own FEK, itself wrapped by the DEK. Full rationale, rejected alternatives, and the frozen wire format: [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md) + [`at-rest-key-flow.md`](at-rest-key-flow.md) Appendix A. Auth-secret (`Argon2id(password, salt_auth)`, sent to the server) and the password-KEK (`Argon2id(password, salt_enc)`, never leaves the client) are deliberately independent derivations of the same password — see §3's Auth row. The honest cross-platform verification state (what was actually run, on what host, vs. read-from-source) is [`dod-matrix-1857.md`](dod-matrix-1857.md); forward rollout steps and the recovery-posture matrix are [`runbook-at-rest-migration.md`](runbook-at-rest-migration.md).
+
+  **Implemented + tested (this repo, this session, real code path):**
+  - Crypto core (`envelope.dart`, `key_material.dart`, `key_unwrapper.dart`) — wrap/unwrap, AEAD framing, tamper detection — one shared `KeyUnwrapper.unwrapDek` core for every backend (password / recovery / device-keystore).
+  - Core API `/keybundle` (+ `/keybundle/recovery`) — stores/returns only opaque blobs; verified the server never persists anything but ciphertext + salts/KDF params.
+  - Recovery-code enrollment, round-trip, and single-use rotation (Elixir + Flutter).
+  - Linux desktop: real SQLCipher build, encrypted DB open, wrong-key fails-closed, offline cold-start — all exercised against a real (throwaway) SQLCipher `.so`, not a mock (spike **#815**, `apps/flutter/tool/spike_815_sqlcipher/DECISION.md` — GO on a **hand-rolled** native connection, not the stock `sqlcipher_flutter_libs` plugin).
+  - Media crash-safe re-encrypt migration engine (`media_migration.dart`, task #1856) — per-file state machine with fsync'd atomic swap, verify-before-unlink, resumable crash-replay, and an explicit `rollback()` restoring the plaintext original from a backup + SHA-256 check.
+  - Web: an MVP encrypted-DB-image-in-OPFS path (`connection_web.dart`'s `openEncryptedWebConnection`, task #1860/#1861) — whole-image AES-256-GCM codec, offline keybundle cache, hardened CSP + partial SRI as XSS-durability mitigations.
+
+  **Dark / deferred (flag exists, mechanism proven, NOT production-live):**
+  - `kSqlCipherEnabled` (native DB) and the media-encryption flag both default **OFF** — no per-platform SQLCipher library is packaged into the real build (Android Gradle / Linux CMake step), and the Android/iOS round-trip has never run on a device or emulator (no hardware available in this environment).
+  - No plaintext→encrypted **DB** migration exists yet (media migration does; the DB does not) — flipping `kSqlCipherEnabled` against an existing plaintext `matome.sqlite` fails closed today rather than migrating it.
+  - Normal-login `salt_auth` pre-auth bootstrap is unwired — the crypto primitives are proven, the end-to-end *login* flow that would drive them in production is not.
+  - Web's `openEncryptedWebConnection` is not called from the app's boot provider (`appDatabaseProvider`) — there is no reachable click-path in the shipped app today; it is unit- and codec-level tested, not exercised in a real browser session in this environment.
+  - Mobile (Android/iOS) is entirely unverified end-to-end for at-rest encryption — the Dart-level mechanism is platform-agnostic, which lowers but does not eliminate the risk.
+  - `passkey-KEK` and `space-KEK` (multi-user encrypted spaces) are reserved wire-format slots, unimplemented.
+
+  **Accepted, disclosed limits (not gaps — permanent scope boundaries, ADR-0002 "Honest limits"):** Core API still stores recordings/transcripts in plaintext (server-side transcription needs it); the zero-knowledge guarantee is strongest on native and weaker on web (JS is served fresh every load); an active in-session compromise (XSS, malware) can still read the live DEK and decrypted plaintext — envelope encryption defends **at rest**, not a live session.
+
+### Known gaps / next (carry-forward ledger — inherited by P2 planning)
+
+Restated here, not just in a single task's comments, so it survives past the task that raised it. Source: `dod-matrix-1857.md`'s carry-forward ledger (same numbering).
+
+| # | Gap | State |
+|---|---|---|
+| CF-1 | Normal-login `salt_auth` pre-auth bootstrap unresolved — `AuthRepository.login` can't fetch `salt_auth` before authenticating (the recovery/reset path solved its own version of this; the *normal* login flow did not). | OPEN |
+| CF-3 | `kSqlCipherEnabled` stays dark — no production per-platform SQLCipher library packaged for Android/iOS; device/emulator round-trip never run. | OPEN — **ship blocker** for native at-rest GO-LIVE |
+| CF-4 | Plaintext-DB → encrypted-DB migration does not exist (media migration does). Flipping the native flag on an existing plaintext `matome.sqlite` fails closed instead of migrating. | OPEN — **ship blocker** |
+| CF-6 | Media-encryption flag dark end-to-end — the Core ingestion pipeline is not yet ciphertext-aware. | OPEN |
+| CF-7 | The live-recording segment path is still plaintext. | OPEN |
+| CF-8 | Web page-level VFS deferred — shipped MVP is whole-image encrypt/decrypt, not per-page (needs a dedicated Worker + SharedArrayBuffer + COOP/COEP). | OPEN |
+| CF-9 | `WebOpfsBlobStore` end-to-end has not been independently re-proven in a real browser this session; the only real-Chromium confirmation on record is from task #1860's own session. | OPEN |
+| CF-10 | `FeatureFlags.godMode` weakens the web CSP; unchanged by plan #131. | OPEN |
+
+P2 planning starts from this table, not from a clean slate — closing CF-3/CF-4 is the prerequisite for any native at-rest GO-LIVE; the rest are sequencing decisions, not unknowns.
 
 ### Forward-compat seams (deferred org / admin / data-policy / SSO / RBAC)
 
@@ -310,3 +351,5 @@ Plan #102 leaves **seams, not features**, so the deferred work plugs in without 
 - **`MasterDetailScaffold`** — the one reusable widget every collection surface renders through (`apps/flutter/lib/ui/master_detail_scaffold.dart`).
 - **`readingPaneProvider`** — the single GLOBAL persisted Riverpod provider holding the reading-pane setting (`apps/flutter/lib/core/settings/reading_pane.dart`); Settings-only.
 - **`ReadingPanePosition`** — the pane-position enum, `{ right, off }` (defined in `master_detail_scaffold.dart`).
+- **DEK / KEK / FEK** (D8) — the envelope-encryption key hierarchy: one **D**ata **E**ncryption **K**ey per user (decrypts the local DB + media); a set of independent **K**ey **E**ncryption **K**eys (password / recovery / device-keystore) that each wrap the same DEK; a per-file **F**ile **E**ncryption **K**ey wrapped by the DEK. Full detail: [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md), [`at-rest-key-flow.md`](at-rest-key-flow.md).
+- **`/keybundle`** — the Core API endpoint pair storing/returning only opaque `wrapped_dek_*` blobs + salts/KDF params for a user; the server cannot unwrap a DEK from it (D8).

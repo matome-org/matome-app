@@ -1,3 +1,17 @@
+/// This file implements the device-keystore branch of the envelope-encryption
+/// key hierarchy (DEK / KEK / FEK) decided in **ADR-0002**
+/// (`services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md`) and
+/// specified byte-for-byte (wire format, KDF params) in
+/// `.docs/internal/at-rest-key-flow.md` Appendix A. [DeviceKeystoreKeyUnwrapper]
+/// is the "device keystore key" leaf of that hierarchy; [NativeDekProvisioner]
+/// is the bootstrap that mints/persists the local half of it ahead of the
+/// cross-device `/keybundle` sync this ADR also describes (see this class's
+/// own KNOWN GAP note below). The native-connection consumer of the DEK this
+/// file produces is `connection_native.dart`; the go/no-go for keying a real
+/// SQLCipher connection with it is spike **#815**
+/// (`apps/flutter/tool/spike_815_sqlcipher/DECISION.md`).
+library;
+
 import 'dart:math';
 import 'dart:typed_data';
 

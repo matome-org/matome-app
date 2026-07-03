@@ -17,6 +17,16 @@ Future<String> _matomeDbDirectory() async {
 
 /// Whether to apply SQLCipher at-rest encryption on native platforms.
 ///
+/// This flag and the [NativeDekProvisioner]/[KeyUnwrapper] chain below key
+/// into the envelope-encryption hierarchy (DEK wrapped by a password-KEK,
+/// recovery-KEK, or — the branch this file uses — a device-keystore KEK)
+/// decided in **ADR-0002**
+/// (`services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md`) and
+/// specified byte-for-byte in `.docs/internal/at-rest-key-flow.md`. Read
+/// those first if this flag's *purpose* (not just its current `false`
+/// value) is unclear — this doc comment only covers what is or isn't wired
+/// on the native platform specifically.
+///
 /// **Currently `false`** by default. The KEYING MECHANISM below
 /// ([openEncryptedNativeConnection]) is real and tested (task #1853, plan
 /// #131 W3) — it is not a stub. What is still missing is the PRODUCTION
