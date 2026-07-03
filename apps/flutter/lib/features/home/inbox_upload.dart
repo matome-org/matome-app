@@ -2,10 +2,15 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:drift/drift.dart' show Value;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/audio/audio_playback.dart';
+import '../../core/crypto/key_material.dart' show Dek;
+import '../../core/crypto/media_cipher.dart'
+    show encodeNoncePrefix, encryptFileToFile, kMediaEncryptionEnabled;
+import '../../core/db/db_encryption.dart'
+    show FlutterSecureKeyStore, NativeDekProvisioner;
 import '../../core/observability/app_log.dart';
 import '../../core/storage/app_storage.dart';
 import '../../core/db/app_database.dart';
@@ -39,6 +44,8 @@ class PickedUpload {
     required this.file,
     required this.title,
     required this.mediaType,
+    this.wrappedFekBase64,
+    this.fileNoncePrefixBase64,
   });
 
   final File file;
@@ -46,6 +53,15 @@ class PickedUpload {
 
   /// `audio` / `image` / `document`, derived from the picked file extension.
   final String mediaType;
+
+  /// Per-file media encryption metadata (task #1855, plan #131 W4) — set only
+  /// when [file] was written by [encryptedDurableImportCopy] (i.e.
+  /// [kMediaEncryptionEnabled] was on at import time). NULL means [file] is a
+  /// plaintext file, which is every import today (the flag is dark). Mirrors
+  /// `recordings.wrapped_fek` / `recordings.file_nonce_prefix` — see
+  /// `tables.dart` ([Recordings.wrappedFek]) for the exact contract.
+  final String? wrappedFekBase64;
+  final String? fileNoncePrefixBase64;
 }
 
 /// Copies a file-picker-imported [picked] file into durable app storage and
@@ -79,6 +95,24 @@ Future<PickedUpload> durableImportCopy(PickedUpload picked) async {
     // Take the last path segment first, then its last '.'-suffix.
     final basename = picked.file.path.split('/').last;
     final ext = basename.contains('.') ? basename.split('.').last : 'bin';
+
+    // Media-at-rest encryption (task #1855, plan #131 W4) — DARK by default
+    // (see [kMediaEncryptionEnabled] doc for why: Core's upload/transcription
+    // pipeline isn't ciphertext-aware yet). When flipped on, the durable copy
+    // is written as `<id>.enc` ciphertext instead of a plain byte copy.
+    if (kMediaEncryptionEnabled) {
+      final durable = await encryptedDurableImportCopy(
+        picked,
+        dir: dir,
+        dekSource: () => NativeDekProvisioner(FlutterSecureKeyStore()).obtainDek(),
+      );
+      AppLog.event(
+        LogCat.upload,
+        'durableImportCopy ok (encrypted) -> ${durable.file.path}',
+      );
+      return durable;
+    }
+
     final destPath =
         '${dir.path}/import_'
         '${DateTime.now().millisecondsSinceEpoch}_${_randSuffix(6)}.$ext';
@@ -101,6 +135,50 @@ Future<PickedUpload> durableImportCopy(PickedUpload picked) async {
     // happens and the queue can still try to upload the source while it exists.
     return picked;
   }
+}
+
+/// Encrypts [picked]'s bytes into a fresh `<id>.enc` file under [dir] (task
+/// #1855, plan #131 W4) — the real "write NEW media as ciphertext" path,
+/// streamed via `media_cipher.dart`'s [encryptFileToFile] so the source is
+/// never fully buffered in memory. [dekSource] is injectable so this is
+/// directly unit-testable without touching `flutter_secure_storage`;
+/// [durableImportCopy] wires it to [NativeDekProvisioner] for real use.
+///
+/// Returns a [PickedUpload] pointing at the ciphertext file, carrying the
+/// wrapped FEK + nonce prefix the caller must persist onto the media's DB row
+/// (`recordings.wrapped_fek` / `recordings.file_nonce_prefix` —
+/// [InboxUploader._pendingCompanion] does this).
+@visibleForTesting
+Future<PickedUpload> encryptedDurableImportCopy(
+  PickedUpload picked, {
+  required Directory dir,
+  required Future<Dek> Function() dekSource,
+}) async {
+  final destPath =
+      '${dir.path}/import_'
+      '${DateTime.now().millisecondsSinceEpoch}_${_randSuffix(6)}.enc';
+  final destination = File(destPath);
+  final dek = await dekSource();
+  final String wrappedFekBase64;
+  final String fileNoncePrefixBase64;
+  try {
+    final raw = await encryptFileToFile(
+      source: picked.file,
+      destination: destination,
+      dek: dek,
+    );
+    wrappedFekBase64 = raw.wrappedFek.toBase64();
+    fileNoncePrefixBase64 = encodeNoncePrefix(raw.noncePrefix);
+  } finally {
+    dek.wipe();
+  }
+  return PickedUpload(
+    file: destination,
+    title: picked.title,
+    mediaType: picked.mediaType,
+    wrappedFekBase64: wrappedFekBase64,
+    fileNoncePrefixBase64: fileNoncePrefixBase64,
+  );
 }
 
 /// Probes the real duration (whole seconds) of a durable audio file. Returns 0
@@ -320,6 +398,12 @@ class InboxUploader {
       createdAt: Value(now.millisecondsSinceEpoch),
       mediaType: Value(picked.mediaType),
       processingStatus: const Value(kProcessingStatusPendingUpload),
+      // Media encryption metadata (#1855, plan #131 W4) — NULL unless
+      // [durableImportCopy] ran the (dark by default) encrypted branch, in
+      // which case these mirror the ciphertext file's wrapped FEK + nonce
+      // prefix (see [PickedUpload.wrappedFekBase64] doc).
+      wrappedFek: Value(picked.wrappedFekBase64),
+      fileNoncePrefix: Value(picked.fileNoncePrefixBase64),
     );
   }
 }

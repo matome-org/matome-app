@@ -217,7 +217,18 @@ part 'app_database.g.dart';
 /// client-side FKs; sync/listing resolves payload arcs by `item_type`. This is
 /// the rebuild-clean seam for the post-recordings item model: existing offline
 /// cache can be reset and re-synced from Core rather than transformed in place.
-const int kSchemaVersion = 19;
+///
+/// v20 (m020, per-file media encryption metadata — #1855, plan #131 W4) adds
+/// the nullable `recordings.wrapped_fek` / `recordings.file_nonce_prefix`
+/// TEXT columns (see `tables.dart` doc on [Recordings.wrappedFek] for the
+/// exact contract). Additive + nullable: Drift's ALTER ADD COLUMN backfills
+/// every existing row to NULL (every row today names a PLAINTEXT
+/// `audio_file_path`; a NULL `wrapped_fek` is exactly that "plaintext" state),
+/// so there is no data migration and no existing column is touched. The
+/// `recordings` table predates this step, so no `from >=` floor is needed:
+/// any DB reaching here from < 20 lacks both columns, and they are added
+/// exactly once.
+const int kSchemaVersion = 20;
 
 /// The offline-first local store.
 ///
@@ -639,6 +650,16 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(fileBlobs);
         await m.createTable(textContents);
         await m.createTable(items);
+      }
+      // m020 — per-file media encryption metadata (#1855, plan #131 W4).
+      // Additive + nullable: every existing row backfills to NULL on both
+      // columns, which is exactly the "this row's audio_file_path names a
+      // PLAINTEXT file" state every row is in today. No data migration; no
+      // existing column is read or written. See `tables.dart`
+      // ([Recordings.wrappedFek]) for the exact contract.
+      if (from < 20) {
+        await m.addColumn(recordings, recordings.wrappedFek);
+        await m.addColumn(recordings, recordings.fileNoncePrefix);
       }
     },
     beforeOpen: (details) async {

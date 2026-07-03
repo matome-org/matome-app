@@ -70,9 +70,9 @@ void main() {
   // (a) Schema + migration version (mirrors migrations.unit.test.ts)
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
-    test('schemaVersion is 19 '
-        '(…m018 W5 backfill + m019 items rebuild-clean foundation)', () {
-      expect(db.schemaVersion, 19);
+    test('schemaVersion is 20 '
+        '(…m019 items rebuild-clean foundation + m020 media encryption columns)', () {
+      expect(db.schemaVersion, 20);
     });
 
     test(
@@ -569,7 +569,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 19);
+      expect(upgraded.schemaVersion, 20);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -691,7 +691,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 19);
+        expect(upgraded.schemaVersion, 20);
 
         // m006 columns now exist on workspaces.
         final wsCols = await upgraded
@@ -846,7 +846,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 19);
+      expect(upgraded.schemaVersion, 20);
 
       final tables = await upgraded
           .customSelect(
@@ -1171,7 +1171,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 19);
+        expect(upgraded.schemaVersion, 20);
 
         final tables = await upgraded
             .customSelect(
@@ -1227,7 +1227,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1380,7 +1380,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 19);
+        expect(upgraded.schemaVersion, 20);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(matomes)')
@@ -1422,7 +1422,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1583,7 +1583,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 19);
+        expect(upgraded.schemaVersion, 20);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(recordings)')
@@ -1630,7 +1630,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1859,7 +1859,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 19);
+        expect(upgraded.schemaVersion, 20);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(recordings)')
@@ -1979,7 +1979,7 @@ void main() {
         // must not re-snapshot or re-copy (values already settled stay settled).
         final second = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(second.close);
-        expect(second.schemaVersion, 19);
+        expect(second.schemaVersion, 20);
 
         final r = await second.recordingsDao.getRecordingById(
           'rec_audio_has_tx',
@@ -2194,7 +2194,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 19);
+        expect(upgraded.schemaVersion, 20);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(recordings)')
@@ -2242,7 +2242,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2408,7 +2408,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 19);
+      expect(upgraded.schemaVersion, 20);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(contacts)')
@@ -2457,7 +2457,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
       final cols = await second
           .customSelect('PRAGMA table_info(contacts)')
           .map((r) => r.read<String>('name'))
@@ -2551,7 +2551,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 19);
+      expect(upgraded.schemaVersion, 20);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2592,7 +2592,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2708,7 +2708,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 19);
+        expect(upgraded.schemaVersion, 20);
 
         final tables = await upgraded
             .customSelect("SELECT name FROM sqlite_master WHERE type='table'")
@@ -2743,7 +2743,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
       final tables = await second
           .customSelect("SELECT name FROM sqlite_master WHERE type='table'")
           .map((r) => r.read<String>('name'))
@@ -2886,7 +2886,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 19);
+        expect(upgraded.schemaVersion, 20);
 
         // is_local column now exists on workspaces.
         final cols = await upgraded
@@ -2954,7 +2954,7 @@ void main() {
       // Re-opening at v17 must not re-run m017 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
       final all = await second
           .customSelect('SELECT id, is_local FROM workspaces')
           .map((r) => r.read<int>('is_local'))
@@ -3141,7 +3141,7 @@ void main() {
         '(§4 M1/M3/M6 per-space labels)', () async {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
-      expect(upgraded.schemaVersion, 19);
+      expect(upgraded.schemaVersion, 20);
 
       final byId = await isLocalById(upgraded);
       // M1 — filed-matome space syncs today ⇒ CLOUD (0).
@@ -3259,7 +3259,7 @@ void main() {
       // identical.
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 19);
+      expect(second.schemaVersion, 20);
 
       // Explicit re-run of the corrective backfill is a no-op too (the CLOUD
       // set is re-derived; already-cloud rows are skipped by the WHERE guard).
@@ -3392,7 +3392,7 @@ void main() {
 
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
-      expect(upgraded.schemaVersion, 19);
+      expect(upgraded.schemaVersion, 20);
 
       final audit = await upgraded.dryRunW5Backfill();
       expect(audit.looseRecordings, 0);
@@ -3402,6 +3402,199 @@ void main() {
       expect(audit.syncsTodaySpaces, 0);
       expect(audit.tenancyPersonal, 0);
       expect(audit.illegalLocalOrg, 0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (j9) m020 v18→v20 migration (per-file media encryption metadata — #1855,
+  // plan #131 W4). Real-file migration exercising m019 (items rebuild-clean)
+  // and m020 (media encryption columns) together in one upgrade run.
+  // -------------------------------------------------------------------------
+  group('m020 v18→v20 migration (media encryption columns)', () {
+    late Directory dir;
+    late File file;
+
+    /// v18-shaped DB (post-W5 backfill, pre-items-rebuild): recordings WITHOUT
+    /// wrapped_fek/file_nonce_prefix, no items/file_blobs/text_contents tables
+    /// yet. user_version=18, so opening runs BOTH m019 (createTable ×3) and
+    /// m020 (the two new recordings columns) in the same upgrade.
+    void seedV18Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE workspaces (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          space_type TEXT NOT NULL DEFAULT 'personal',
+          owner_id TEXT,
+          is_local INTEGER NOT NULL DEFAULT 1
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE matomes (
+          id TEXT NOT NULL PRIMARY KEY,
+          space_id TEXT REFERENCES workspaces(id),
+          title TEXT NOT NULL,
+          happened_at INTEGER NOT NULL,
+          description TEXT,
+          aggregated_summary TEXT,
+          summary_stale INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER,
+          archived_at INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          summary TEXT,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          workspaceId TEXT REFERENCES workspaces(id),
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          coreId INTEGER,
+          matome_id TEXT REFERENCES matomes(id),
+          transcript TEXT,
+          notes_legacy_raw TEXT,
+          original_extension TEXT,
+          owner_id TEXT,
+          byte_size INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_drafts (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          created_at TEXT NOT NULL,
+          segments_json TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          email TEXT, phone TEXT, company TEXT, title TEXT,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          linked_user_id TEXT,
+          created_at INTEGER NOT NULL,
+          core_id INTEGER
+        );
+      ''');
+      sdb.execute('''
+        CREATE TABLE recording_contacts (
+          id TEXT NOT NULL PRIMARY KEY,
+          recording_id TEXT NOT NULL, contact_id TEXT NOT NULL,
+          UNIQUE(recording_id, contact_id)
+        );
+      ''');
+      sdb.execute(
+        "INSERT INTO workspaces (id, name, isDefault, createdAt) "
+        "VALUES ('ws_default_personal', 'Pessoal', 1, 100);",
+      );
+      sdb.execute(
+        "INSERT INTO matomes (id, space_id, title, happened_at, created_at) "
+        "VALUES ('mat_pre18', 'ws_default_personal', 'Pre-existing', 100, 100);",
+      );
+      sdb.execute(
+        "INSERT INTO recordings "
+        "(id, title, timestamp, duration, audioFilePath, createdAt, matome_id) "
+        "VALUES ('rec_pre18', 'Legacy plaintext file', '9:00 AM', '0:30', "
+        "'/docs/Matome/import_pre18.m4a', 100, 'mat_pre18');",
+      );
+      sdb.execute('PRAGMA user_version = 18;');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m020');
+      file = File('${dir.path}/matome.sqlite');
+      seedV18Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test(
+      'opening a v18 db migrates to v20: wrapped_fek/file_nonce_prefix are '
+      'added and the pre-existing (plaintext) row backfills to NULL on both',
+      () async {
+        final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(upgraded.close);
+
+        expect(upgraded.schemaVersion, 20);
+
+        final cols = await upgraded
+            .customSelect('PRAGMA table_info(recordings)')
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(cols, containsAll(<String>['wrapped_fek', 'file_nonce_prefix']));
+
+        // m019 also ran as part of this same 18->20 upgrade.
+        final tables = await upgraded
+            .customSelect(
+              "SELECT name FROM sqlite_master WHERE type='table'",
+            )
+            .map((r) => r.read<String>('name'))
+            .get();
+        expect(
+          tables,
+          containsAll(<String>['items', 'file_blobs', 'text_contents']),
+        );
+
+        final pre = await (upgraded.select(
+          upgraded.recordings,
+        )..where((r) => r.id.equals('rec_pre18'))).getSingle();
+        expect(pre.audioFilePath, '/docs/Matome/import_pre18.m4a');
+        expect(pre.wrappedFek, isNull);
+        expect(pre.fileNoncePrefix, isNull);
+      },
+    );
+
+    test('wrapped_fek / file_nonce_prefix round-trip a write after migration',
+        () async {
+      final upgraded = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(upgraded.close);
+
+      await upgraded.into(upgraded.recordings).insert(
+        RecordingsCompanion.insert(
+          id: 'rec_encrypted_20',
+          title: 'Encrypted import',
+          timestamp: '10:00 AM',
+          duration: '1:00',
+          audioFilePath: '/docs/Matome/import_new.enc',
+          createdAt: 200,
+          wrappedFek: const Value('d2Zla2Jhc2U2NA=='),
+          fileNoncePrefix: const Value('bm9uY2Vw'),
+        ),
+      );
+
+      final stored = await (upgraded.select(
+        upgraded.recordings,
+      )..where((r) => r.id.equals('rec_encrypted_20'))).getSingle();
+      expect(stored.wrappedFek, 'd2Zla2Jhc2U2NA==');
+      expect(stored.fileNoncePrefix, 'bm9uY2Vw');
+    });
+
+    test('m020 upgrade is idempotent across re-open', () async {
+      final first = AppDatabase.forTesting(NativeDatabase(file));
+      await first.recordingsDao.getRecordingById('rec_pre18');
+      await first.close();
+
+      final second = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(second.close);
+      expect(second.schemaVersion, 20);
+      final cols = await second
+          .customSelect('PRAGMA table_info(recordings)')
+          .map((r) => r.read<String>('name'))
+          .get();
+      expect(cols, containsAll(<String>['wrapped_fek', 'file_nonce_prefix']));
     });
   });
 

@@ -148,6 +148,29 @@ class Recordings extends Table {
   // 64-bit on native) matches the Core bigint.
   IntColumn get byteSize => integer().named('byte_size').nullable()();
 
+  // m020 (#1855, plan #131 W4) — per-file media encryption metadata. Media
+  // (`import_*`/`segment_*`) lives OUTSIDE the DB as files on disk; SQLCipher
+  // (#1853, W3) protects THIS row but not the file it points at. When a file
+  // is written encrypted (`<id>.enc`, dark behind `kMediaEncryptionEnabled` —
+  // see `core/crypto/media_cipher.dart`), these two columns carry what a
+  // reader needs alongside the ciphertext path: `wrapped_fek` is the 64-byte
+  // `WrappedEnvelope` (base64) — the file's random FEK wrapped under the DEK
+  // (`WrapperType.dekAsWrappingKey`) — and `file_nonce_prefix` is the 4-byte
+  // (base64) per-file nonce prefix, mirroring the SAME prefix embedded in the
+  // file's own on-disk header (redundant by design: the file is
+  // self-describing, and this column matches
+  // `.docs/internal/at-rest-key-flow.md` §8.3's
+  // `INSERT {id, path, wrapped_FEK, file_nonce_prefix, …}`). Both NULLABLE:
+  // every row today (and every row written while the encryption flag stays
+  // dark) has neither — a NULL `wrapped_fek` means `audio_file_path` names a
+  // PLAINTEXT file, exactly like every row before this migration. Additive:
+  // Drift's ALTER ADD COLUMN backfills existing rows to NULL, no data
+  // migration. Re-encrypting EXISTING plaintext media is task #1856 — out of
+  // scope here.
+  TextColumn get wrappedFek => text().named('wrapped_fek').nullable()();
+  TextColumn get fileNoncePrefix =>
+      text().named('file_nonce_prefix').nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

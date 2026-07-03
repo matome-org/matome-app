@@ -15,8 +15,8 @@ void main() {
   setUp(() => db = _memDb());
   tearDown(() => db.close());
 
-  test('schemaVersion is 19 for items rebuild-clean slice', () {
-    expect(db.schemaVersion, 19);
+  test('schemaVersion is 20 (items rebuild-clean + #1855 media encryption)', () {
+    expect(db.schemaVersion, 20);
   });
 
   test(
@@ -48,6 +48,24 @@ void main() {
     final file = File('${dir.path}/db.sqlite');
     final sdb = raw.sqlite3.open(file.path);
     try {
+      // Minimal v18-shaped `recordings` (no rows needed here — this test
+      // isolates the m019 item-table creation) so m020's `ALTER TABLE
+      // recordings ADD COLUMN wrapped_fek/file_nonce_prefix` (#1855) has a
+      // table to alter, same as any real v18 install would.
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done'
+        );
+      ''');
       sdb.execute('PRAGMA user_version = 18;');
     } finally {
       sdb.dispose();
@@ -56,7 +74,7 @@ void main() {
     final upgraded = AppDatabase.forTesting(NativeDatabase(file));
     addTearDown(upgraded.close);
 
-    expect(upgraded.schemaVersion, 19);
+    expect(upgraded.schemaVersion, 20);
     final names = await upgraded
         .customSelect(
           "SELECT name FROM sqlite_master WHERE type='table' "
