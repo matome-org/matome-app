@@ -3,8 +3,6 @@ defmodule MatomeApiWeb.UserSocket do
 
   alias MatomeApi.Auth
 
-  channel "user:*", MatomeApiWeb.RecordingStatusChannel
-
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) do
     case Auth.verify_access_token(token) do

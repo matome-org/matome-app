@@ -3,7 +3,7 @@ defmodule MatomeApi.Storage.Presigner do
   Issues S3-compatible presigned URLs for the Supabase Storage media bucket.
 
   Core owns the Storage credentials; clients receive only method-scoped URLs for
-  the server-generated recording object key.
+  the server-generated object key.
   """
 
   @algorithm "AWS4-HMAC-SHA256"
@@ -52,6 +52,13 @@ defmodule MatomeApi.Storage.Presigner do
     end
   end
 
+  def presign_delete(storage_key, opts \\ []) do
+    with :ok <- validate_storage_key(storage_key) do
+      {:ok,
+       presign(:delete, storage_key, Keyword.put_new(opts, :expires_in, download_expires_in()))}
+    end
+  end
+
   defp validate_storage_key(key) when is_binary(key) do
     if String.starts_with?(key, @owner_prefix) and not String.contains?(key, "..") do
       :ok
@@ -72,7 +79,7 @@ defmodule MatomeApi.Storage.Presigner do
   defp validate_content_length(_bytes), do: {:error, :invalid_content_length}
 
   defp presign(method, storage_key, opts)
-       when method in [:put, :get] and is_binary(storage_key) do
+       when method in [:put, :get, :delete] and is_binary(storage_key) do
     expires_in = opts[:expires_in]
     content_length = opts[:content_length]
     now = Keyword.get(opts, :now, DateTime.utc_now())

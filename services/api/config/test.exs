@@ -44,3 +44,5 @@ config :phoenix, :plug_init_mode, :runtime
 
 # Capture outgoing email in-memory so tests can assert on deliveries.
 config :matome_api, MatomeApi.Mailer, adapter: Swoosh.Adapters.Test
+
+config :matome_api, MatomeApi.Storage.ObjectStore, adapter: MatomeApi.Storage.ObjectStore.Noop

@@ -38,23 +38,22 @@ defmodule MatomeApiWeb.Router do
       get "/spaces/search", WorkspaceController, :search
       resources "/spaces", WorkspaceController, except: [:new, :edit]
 
-      get "/recordings/search", RecordingController, :search
-      get "/recordings/:id/download-url", RecordingController, :download_url
-      post "/recordings/:id/process", RecordingController, :process
-      post "/recordings/:recording_id/contacts", RecordingController, :link_contact
-
-      delete "/recordings/:recording_id/contacts/:contact_id",
-             RecordingController,
-             :unlink_contact
-
-      resources "/recordings", RecordingController, except: [:new, :edit]
-
       get "/matomes/search", MatomeController, :search
       post "/matomes/:id/archive", MatomeController, :archive
       post "/matomes/:id/restore", MatomeController, :restore
       post "/matomes/:matome_id/contacts", MatomeController, :attach_contact
       delete "/matomes/:matome_id/contacts/:contact_id", MatomeController, :detach_contact
+      get "/matomes/:matome_id/items", ItemController, :index
+      post "/matomes/:matome_id/items", ItemController, :create
       resources "/matomes", MatomeController, except: [:new, :edit]
+
+      get "/items", ItemController, :index
+      get "/items/:id", ItemController, :show
+      patch "/items/:id", ItemController, :update
+      post "/items/:id/presign", ItemController, :presign
+      get "/items/:id/download-url", ItemController, :download_url
+      post "/items/:id/process", ItemController, :process
+      delete "/items/:id", ItemController, :delete
 
       get "/contacts/search", ContactController, :search
       resources "/contacts", ContactController, except: [:new, :edit]

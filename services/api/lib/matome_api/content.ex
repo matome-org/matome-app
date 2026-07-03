@@ -2,19 +2,23 @@ defmodule MatomeApi.Content do
   import Ecto.Query
 
   alias Ecto.Changeset
-  alias MatomeApi.AIEngine.DispatchJob
   alias MatomeApi.Auth.User
 
   alias MatomeApi.Content.{
     Contact,
+    FileBlob,
+    Item,
     Matome,
     MatomeContact,
-    Recording,
-    RecordingContact,
+    TextContent,
     Workspace
   }
 
+  alias MatomeApi.AIEngine.DispatchJob
   alias MatomeApi.Repo
+  alias MatomeApi.Storage.{ObjectStore, Presigner}
+
+  @ai_media_types ~w(audio image)
 
   def list_workspaces(%User{id: owner_id}, params \\ %{}) do
     Workspace
@@ -45,115 +49,6 @@ defmodule MatomeApi.Content do
   def delete_workspace(%User{} = owner, id) do
     with %Workspace{} = workspace <- get_workspace(owner, id) do
       Repo.delete(workspace)
-    end
-  end
-
-  def list_recordings(%User{id: owner_id}, params \\ %{}) do
-    Recording
-    |> where([recording], recording.owner_id == ^owner_id)
-    |> maybe_filter_workspace(params["workspace_id"] || params[:workspace_id])
-    |> search_recordings(params["q"] || params[:q])
-    |> order_by([recording], desc: recording.inserted_at)
-    |> Repo.all()
-  end
-
-  def get_recording(%User{id: owner_id}, id) do
-    Repo.get_by(Recording, id: id, owner_id: owner_id)
-  end
-
-  def create_recording(%User{} = owner, attrs) do
-    %Recording{owner_id: owner.id}
-    |> Recording.changeset(attrs)
-    |> validate_workspace_owner(owner)
-    |> validate_matome_owner(owner)
-    |> Repo.insert()
-    |> put_recording_storage_key()
-  end
-
-  def update_recording(%User{} = owner, id, attrs) do
-    with %Recording{} = recording <- get_recording(owner, id) do
-      changeset =
-        recording
-        |> Recording.changeset(attrs)
-        |> validate_workspace_owner(owner)
-        |> validate_matome_owner(owner)
-
-      status_changed? = Changeset.get_change(changeset, :status) != nil
-
-      changeset
-      |> Repo.update()
-      |> broadcast_recording_status(status_changed?)
-    end
-  end
-
-  def enqueue_recording_processing(%User{} = owner, id) do
-    with %Recording{} = recording <- get_recording(owner, id),
-         {:ok, _job} <- %{recording_id: recording.id} |> DispatchJob.new() |> Oban.insert() do
-      {:ok, recording}
-    end
-  end
-
-  def mark_recording_processing(%Recording{} = recording) do
-    recording
-    |> Recording.changeset(%{status: "processing", error_reason: nil})
-    |> Repo.update()
-    |> broadcast_recording_status(true)
-  end
-
-  def apply_ai_result(job_id, %{"job_id" => body_job_id, "recording_id" => recording_id})
-      when job_id != body_job_id do
-    _ = recording_id
-    {:error, :recording_mismatch}
-  end
-
-  def apply_ai_result(_job_id, %{"recording_id" => recording_id, "status" => "done"} = attrs) do
-    with {:ok, id} <- parse_recording_id(recording_id),
-         %Recording{} = recording <- Repo.get(Recording, id) do
-      attrs =
-        %{
-          status: "done",
-          title: attrs["title"],
-          transcript: attrs["transcript"],
-          summary: attrs["summary"],
-          duration: attrs["duration"],
-          badge: attrs["badge"],
-          error_reason: nil
-        }
-        |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-        |> Map.new()
-
-      recording
-      |> Recording.changeset(attrs)
-      |> Repo.update()
-      |> broadcast_recording_status(recording.status != :done)
-    else
-      :error -> {:error, :recording_mismatch}
-      nil -> :not_found
-    end
-  end
-
-  def apply_ai_result(_job_id, %{"recording_id" => recording_id, "status" => "failed"} = attrs) do
-    with {:ok, id} <- parse_recording_id(recording_id),
-         %Recording{} = recording <- Repo.get(Recording, id) do
-      recording
-      |> Recording.changeset(%{
-        status: "failed",
-        error_reason:
-          get_in(attrs, ["error", "message"]) || attrs["error_reason"] || "ai_processing_failed"
-      })
-      |> Repo.update()
-      |> broadcast_recording_status(recording.status != :failed)
-    else
-      :error -> {:error, :recording_mismatch}
-      nil -> :not_found
-    end
-  end
-
-  def apply_ai_result(_job_id, _attrs), do: {:error, :recording_mismatch}
-
-  def delete_recording(%User{} = owner, id) do
-    with %Recording{} = recording <- get_recording(owner, id) do
-      Repo.delete(recording)
     end
   end
 
@@ -242,8 +137,287 @@ defmodule MatomeApi.Content do
 
   def delete_matome(%User{} = owner, id) do
     with %Matome{} = matome <- get_matome(owner, id) do
-      Repo.delete(matome)
+      {result, storage_keys} =
+        Ecto.Multi.new()
+        |> Ecto.Multi.run(:payloads, fn repo, _changes ->
+          delete_matome_payloads(repo, matome.id)
+        end)
+        |> Ecto.Multi.delete(:matome, matome)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{matome: matome, payloads: storage_keys}} -> {{:ok, matome}, storage_keys}
+          {:error, _step, reason, _changes} -> {{:error, reason}, []}
+        end
+
+      delete_storage_objects(storage_keys)
+      result
     end
+  end
+
+  ## Items
+
+  def list_items(%User{id: owner_id}) do
+    Item
+    |> join(:inner, [item], matome in Matome, on: matome.id == item.matome_id)
+    |> where([item, matome], matome.owner_id == ^owner_id)
+    |> order_by([item, _matome], desc: item.inserted_at)
+    |> Repo.all()
+    |> Repo.preload([:matome, :file_blob, :text_content])
+  end
+
+  def list_items(%User{} = owner, matome_id) do
+    with %Matome{} = matome <- get_matome(owner, matome_id) do
+      Item
+      |> where([item], item.matome_id == ^matome.id)
+      |> order_by([item], asc: item.position)
+      |> Repo.all()
+      |> Repo.preload([:matome, :file_blob, :text_content])
+    end
+  end
+
+  def get_item(%User{id: owner_id}, id) do
+    Item
+    |> join(:inner, [item], matome in Matome, on: matome.id == item.matome_id)
+    |> where([item, matome], item.id == ^id and matome.owner_id == ^owner_id)
+    |> Repo.one()
+    |> case do
+      nil -> nil
+      item -> Repo.preload(item, [:matome, :file_blob, :text_content])
+    end
+  end
+
+  def create_text_item(%User{} = owner, matome_id, attrs) do
+    with %Matome{} = matome <- get_matome(owner, matome_id) do
+      Ecto.Multi.new()
+      |> Ecto.Multi.insert(:text_content, TextContent.changeset(%TextContent{}, attrs))
+      |> Ecto.Multi.run(:position, fn repo, _changes ->
+        next_item_position(repo, matome.id, attrs)
+      end)
+      |> Ecto.Multi.insert(:item, fn %{text_content: text_content, position: position} ->
+        item_attrs = %{
+          matome_id: matome.id,
+          position: position,
+          item_type: :text,
+          metadata: Map.get(attrs, :metadata) || Map.get(attrs, "metadata") || %{},
+          text_content_id: text_content.id
+        }
+
+        Item.changeset(%Item{}, item_attrs)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{item: item}} -> {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
+        {:error, _step, changeset, _changes} -> {:error, changeset}
+      end
+    end
+  end
+
+  def create_file_item(%User{} = owner, matome_id, attrs) do
+    with %Matome{} = matome <- get_matome(owner, matome_id) do
+      attrs =
+        attrs
+        |> put_byte_size_from_content_length()
+        |> put_storage_key(storage_key(owner.id))
+
+      Ecto.Multi.new()
+      |> Ecto.Multi.insert(:file_blob, FileBlob.changeset(%FileBlob{}, attrs))
+      |> Ecto.Multi.run(:position, fn repo, _changes ->
+        next_item_position(repo, matome.id, attrs)
+      end)
+      |> Ecto.Multi.insert(:item, fn %{file_blob: file_blob, position: position} ->
+        item_attrs = %{
+          matome_id: matome.id,
+          position: position,
+          item_type: :file,
+          metadata: item_metadata(attrs),
+          file_blob_id: file_blob.id
+        }
+
+        Item.changeset(%Item{}, item_attrs)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{item: item}} -> {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
+        {:error, _step, changeset, _changes} -> {:error, changeset}
+      end
+    end
+  end
+
+  def presign_item_upload(%User{} = owner, id, attrs \\ %{}) do
+    with %Item{} = item <- get_item(owner, id),
+         %Item{item_type: :file, file_blob: %FileBlob{} = file_blob} <- item do
+      Presigner.presign_upload(file_blob.storage_key,
+        content_length:
+          Map.get(attrs, "byte_size") || Map.get(attrs, :byte_size) || file_blob.byte_size
+      )
+    else
+      %Item{item_type: :text} -> {:error, :text_item_not_presignable}
+      nil -> nil
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def presign_item_download(%User{} = owner, id) do
+    with %Item{} = item <- get_item(owner, id),
+         %Item{item_type: :file, file_blob: %FileBlob{} = file_blob} <- item do
+      Presigner.presign_download(file_blob.storage_key)
+    else
+      %Item{item_type: :text} -> {:error, :text_item_not_downloadable}
+      nil -> nil
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def update_item(%User{} = owner, id, attrs) do
+    with %Item{} = item <- get_item(owner, id) do
+      Ecto.Multi.new()
+      |> maybe_update_item_matome(owner, item, attrs)
+      |> Ecto.Multi.update(
+        :item,
+        Item.changeset(item, %{metadata: merge_item_metadata(item, attrs)})
+      )
+      |> maybe_update_file_blob(item, attrs)
+      |> Repo.transaction()
+      |> case do
+        {:ok, _changes} -> {:ok, get_item(owner, id)}
+        {:error, _step, reason, _changes} -> {:error, reason}
+      end
+    end
+  end
+
+  def enqueue_item_processing(%User{} = owner, id) do
+    with %Item{item_type: :file, file_blob: %FileBlob{} = file_blob} = item <-
+           get_item(owner, id),
+         true <- file_blob.media_type in @ai_media_types do
+      %{item_id: item.id, file_blob_id: file_blob.id}
+      |> DispatchJob.new(queue: :ai)
+      |> Oban.insert()
+      |> case do
+        {:ok, _job} -> {:ok, item}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      %Item{item_type: :text} -> {:error, :text_item_not_processable}
+      false -> {:error, :unsupported_media_type}
+      nil -> nil
+    end
+  end
+
+  def update_file_item_result(item_id, file_blob_id, attrs) do
+    with %Item{item_type: :file, file_blob: %FileBlob{id: ^file_blob_id} = file_blob} <-
+           Item
+           |> where([item], item.id == ^item_id and item.file_blob_id == ^file_blob_id)
+           |> Repo.one()
+           |> Repo.preload(:file_blob) do
+      file_blob
+      |> FileBlob.changeset(%{
+        transcript: Map.get(attrs, "transcript") || Map.get(attrs, :transcript),
+        summary: Map.get(attrs, "summary") || Map.get(attrs, :summary)
+      })
+      |> Repo.update()
+    else
+      nil -> nil
+    end
+  end
+
+  def ai_dispatch_payload(item_id, file_blob_id) do
+    with %Item{item_type: :file, file_blob: %FileBlob{id: ^file_blob_id} = file_blob} = item <-
+           Item
+           |> where([item], item.id == ^item_id and item.file_blob_id == ^file_blob_id)
+           |> Repo.one()
+           |> Repo.preload(:file_blob),
+         {:ok, media} <- Presigner.presign_download(file_blob.storage_key) do
+      job_id = item_job_id(item.id, file_blob.id)
+
+      {:ok,
+       %{
+         job_id: job_id,
+         recording_id: item.id,
+         item_id: item.id,
+         file_blob_id: file_blob.id,
+         media_type: file_blob.media_type,
+         storage_key: file_blob.storage_key,
+         media: %{method: "GET", url: media.url},
+         callback: %{
+           method: "POST",
+           url: "#{MatomeApi.AIEngine.callback_base_url()}/internal/jobs/#{job_id}/result"
+         }
+       }}
+    else
+      nil -> {:discard, :missing_item}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def item_job_id(item_id, file_blob_id), do: "item:#{item_id}:file_blob:#{file_blob_id}"
+
+  def persisted_ai_dispatch?(item_id, file_blob_id) do
+    Oban.Job
+    |> where([job], fragment("?->>'item_id' = ?", job.args, ^to_string(item_id)))
+    |> where([job], fragment("?->>'file_blob_id' = ?", job.args, ^to_string(file_blob_id)))
+    |> Repo.exists?()
+  end
+
+  def delete_item(%User{} = owner, id) do
+    with %Item{} = item <- get_item(owner, id) do
+      {result, storage_keys} = delete_item_transaction(item)
+      delete_storage_objects(storage_keys)
+      result
+    end
+  end
+
+  defp delete_item_transaction(item) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.delete(:item, item)
+    |> Ecto.Multi.run(:payload, fn repo, _changes -> delete_item_payload(repo, item) end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{item: item, payload: storage_keys}} -> {{:ok, item}, List.wrap(storage_keys)}
+      {:error, _step, reason, _changes} -> {{:error, reason}, []}
+    end
+  rescue
+    error in [Ecto.ConstraintError, Ecto.StaleEntryError] -> {{:error, error}, []}
+  end
+
+  @doc """
+  Reap payload rows (and their private storage objects) that no `item`
+  references. App-level deletes (`delete_matome`/`delete_item`) already clean up
+  their own payloads, but a cascade that bypasses them — e.g. a future
+  account/user deletion that drops matomes with `on_delete: :delete_all` — would
+  strand the `restrict`-scoped `file_blobs`/`text_contents` rows and leave their
+  storage objects orphaned. This sweep detects and removes those orphans.
+
+  Returns `{:ok, %{file_blob_ids: [...], text_content_ids: [...], storage_keys: [...]}}`.
+  """
+  def sweep_orphaned_payloads do
+    orphan_blobs =
+      FileBlob
+      |> join(:left, [blob], item in Item, on: item.file_blob_id == blob.id)
+      |> where([blob, item], is_nil(item.id))
+      |> select([blob], {blob.id, blob.storage_key})
+      |> Repo.all()
+
+    blob_ids = Enum.map(orphan_blobs, &elem(&1, 0))
+    storage_keys = orphan_blobs |> Enum.map(&elem(&1, 1)) |> Enum.reject(&is_nil/1)
+
+    orphan_text_ids =
+      TextContent
+      |> join(:left, [text], item in Item, on: item.text_content_id == text.id)
+      |> where([text, item], is_nil(item.id))
+      |> select([text], text.id)
+      |> Repo.all()
+
+    Repo.delete_all(from(blob in FileBlob, where: blob.id in ^blob_ids))
+    Repo.delete_all(from(text in TextContent, where: text.id in ^orphan_text_ids))
+
+    delete_storage_objects(storage_keys)
+
+    {:ok,
+     %{
+       file_blob_ids: blob_ids,
+       text_content_ids: orphan_text_ids,
+       storage_keys: storage_keys
+     }}
   end
 
   def attach_contact(%User{} = owner, matome_id, contact_id, attrs \\ %{}) do
@@ -266,91 +440,6 @@ defmodule MatomeApi.Content do
          %MatomeContact{} = join <-
            Repo.get_by(MatomeContact, matome_id: matome.id, contact_id: contact.id) do
       Repo.delete(join)
-    end
-  end
-
-  ## Recording ↔ Contact (direct file↔contact edge, #1472)
-
-  @doc """
-  Link an owner-scoped contact directly to an owner-scoped recording (file).
-
-  SECURITY (Olivier): owner-scopes BOTH endpoints — the recording AND the
-  contact must each belong to the actor BEFORE the join is written. An
-  out-of-scope `recording_id` OR `contact_id` short-circuits the `with` and
-  returns `nil` (the caller maps that to 404), so a user can never attach to —
-  or, via the cross-owner read returning nothing, enumerate — another user's
-  recordings or contacts. Idempotent: a re-link of an existing pair is a no-op
-  upsert (the UNIQUE(recording_id, contact_id) target), mirroring
-  `attach_contact`.
-  """
-  def link_contact_to_recording(%User{} = owner, recording_id, contact_id) do
-    with %Recording{} = recording <- get_recording(owner, recording_id),
-         %Contact{} = contact <- get_contact(owner, contact_id) do
-      %RecordingContact{}
-      |> RecordingContact.changeset(%{
-        "recording_id" => recording.id,
-        "contact_id" => contact.id
-      })
-      |> Repo.insert(
-        on_conflict: {:replace, [:updated_at]},
-        conflict_target: [:recording_id, :contact_id]
-      )
-    end
-  end
-
-  @doc """
-  Remove a direct recording↔contact link. Owner-scopes BOTH endpoints (same
-  proof as `link_contact_to_recording`): an out-of-scope id returns `nil`.
-  """
-  def unlink_contact_from_recording(%User{} = owner, recording_id, contact_id) do
-    with %Recording{} = recording <- get_recording(owner, recording_id),
-         %Contact{} = contact <- get_contact(owner, contact_id),
-         %RecordingContact{} = join <-
-           Repo.get_by(RecordingContact, recording_id: recording.id, contact_id: contact.id) do
-      Repo.delete(join)
-    end
-  end
-
-  @doc """
-  The contacts linked DIRECTLY (via `recording_contacts`) to an owner-scoped
-  recording, display-name ascending. Owner-scoped on the recording: a
-  cross-owner read returns `nil` (the security proof — another user's links are
-  invisible).
-  """
-  def list_contacts_for_recording(%User{} = owner, recording_id) do
-    with %Recording{} = recording <- get_recording(owner, recording_id) do
-      # Defense-in-depth: the recording is already owner-verified, and the link
-      # path owner-scopes both endpoints so no cross-owner row can exist — but
-      # filter the joined contact on owner too, so the read is provably scoped
-      # regardless of how a row got there (Olivier — no enumerating another
-      # user's contacts via a stray join row).
-      Contact
-      |> join(:inner, [contact], rc in RecordingContact,
-        on: rc.contact_id == contact.id and rc.recording_id == ^recording.id
-      )
-      |> where([contact], contact.owner_id == ^owner.id)
-      |> order_by([contact], asc: contact.display_name)
-      |> Repo.all()
-    end
-  end
-
-  @doc """
-  The recordings (files) linked DIRECTLY (via `recording_contacts`) to an
-  owner-scoped contact, newest first. Owner-scoped on the contact: a cross-owner
-  read returns `nil`.
-  """
-  def list_recordings_for_contact(%User{} = owner, contact_id) do
-    with %Contact{} = contact <- get_contact(owner, contact_id) do
-      # Defense-in-depth (see list_contacts_for_recording): filter the joined
-      # recording on owner too, so the read is provably owner-scoped on both
-      # endpoints regardless of how a row got there.
-      Recording
-      |> join(:inner, [recording], rc in RecordingContact,
-        on: rc.recording_id == recording.id and rc.contact_id == ^contact.id
-      )
-      |> where([recording], recording.owner_id == ^owner.id)
-      |> order_by([recording], desc: recording.inserted_at)
-      |> Repo.all()
     end
   end
 
@@ -393,34 +482,145 @@ defmodule MatomeApi.Content do
 
   defp preload_matome_contacts(result), do: result
 
-  defp put_recording_storage_key({:ok, %Recording{} = recording}) do
-    recording
-    |> Changeset.change(storage_key: recording_storage_key(recording))
-    |> Repo.update()
+  defp delete_item_payload(repo, %Item{item_type: :file, file_blob_id: file_blob_id}) do
+    file_blob_id
+    |> then(&repo.get(FileBlob, &1))
+    |> case do
+      nil ->
+        {:ok, nil}
+
+      file_blob ->
+        {:ok, _file_blob} = repo.delete(file_blob)
+        {:ok, file_blob.storage_key}
+    end
   end
 
-  defp put_recording_storage_key(result), do: result
-
-  defp broadcast_recording_status({:ok, %Recording{} = recording} = result, true) do
-    MatomeApiWeb.Endpoint.broadcast("user:#{recording.owner_id}", "recording:status", %{
-      recording_id: recording.id,
-      status: Atom.to_string(recording.status),
-      summary: recording.summary,
-      transcript: recording.transcript,
-      error_reason: recording.error_reason,
-      duration: recording.duration,
-      badge: recording.badge,
-      updated_at: recording.updated_at
-    })
-
-    result
+  defp delete_item_payload(repo, %Item{item_type: :text, text_content_id: text_content_id}) do
+    text_content_id
+    |> then(&repo.get(TextContent, &1))
+    |> case do
+      nil -> {:ok, nil}
+      text_content -> repo.delete(text_content)
+    end
   end
 
-  defp broadcast_recording_status(result, _status_changed?), do: result
+  defp delete_matome_payloads(repo, matome_id) do
+    items =
+      Item
+      |> where([item], item.matome_id == ^matome_id)
+      |> repo.all()
 
-  defp recording_storage_key(%Recording{id: id, owner_id: owner_id}) do
-    "owners/#{owner_id}/recordings/#{id}/media"
+    repo.delete_all(from(item in Item, where: item.matome_id == ^matome_id))
+
+    storage_keys =
+      Enum.flat_map(items, fn item ->
+        case delete_item_payload(repo, item) do
+          {:ok, nil} -> []
+          {:ok, %TextContent{}} -> []
+          {:ok, storage_key} when is_binary(storage_key) -> [storage_key]
+        end
+      end)
+
+    {:ok, storage_keys}
   end
+
+  defp delete_storage_objects(storage_keys) do
+    Enum.each(storage_keys, &ObjectStore.delete_object/1)
+  end
+
+  defp next_item_position(repo, matome_id, attrs) do
+    case Map.get(attrs, :position) || Map.get(attrs, "position") do
+      nil ->
+        Matome
+        |> where([matome], matome.id == ^matome_id)
+        |> lock("FOR UPDATE")
+        |> repo.one()
+
+        position =
+          Item
+          |> where([item], item.matome_id == ^matome_id)
+          |> select([item], coalesce(max(item.position), -1) + 1)
+          |> repo.one()
+
+        {:ok, position}
+
+      position ->
+        {:ok, position}
+    end
+  end
+
+  defp item_metadata(attrs) do
+    (Map.get(attrs, :metadata) || Map.get(attrs, "metadata") || %{})
+    |> Map.merge(present_metadata(attrs, ~w(title badge notes status workspace_id)a))
+  end
+
+  defp present_metadata(attrs, keys) do
+    Enum.reduce(keys, %{}, fn key, acc ->
+      string_key = Atom.to_string(key)
+
+      cond do
+        Map.has_key?(attrs, key) -> Map.put(acc, string_key, Map.fetch!(attrs, key))
+        Map.has_key?(attrs, string_key) -> Map.put(acc, string_key, Map.fetch!(attrs, string_key))
+        true -> acc
+      end
+    end)
+  end
+
+  defp merge_item_metadata(%Item{metadata: metadata}, attrs) do
+    Map.merge(metadata || %{}, item_metadata(attrs))
+  end
+
+  defp maybe_update_item_matome(multi, owner, item, attrs) do
+    case Map.get(attrs, :matome_id) || Map.get(attrs, "matome_id") do
+      nil ->
+        multi
+
+      matome_id ->
+        case get_matome(owner, matome_id) do
+          nil ->
+            Ecto.Multi.error(multi, :matome, :not_found)
+
+          %Matome{} ->
+            # A move keeps the item's stored position by default, which collides
+            # with the target matome's items_matome_id_position_index. Recompute
+            # position = MAX(position)+1 on the target so the move lands after the
+            # existing items instead of clashing with one of them.
+            Ecto.Multi.run(multi, :move_item, fn repo, _changes ->
+              position =
+                Item
+                |> where([item], item.matome_id == ^matome_id)
+                |> select([item], coalesce(max(item.position), -1) + 1)
+                |> repo.one()
+
+              item
+              |> Item.changeset(%{matome_id: matome_id, position: position})
+              |> repo.update()
+            end)
+        end
+    end
+  end
+
+  defp maybe_update_file_blob(
+         multi,
+         %Item{item_type: :file, file_blob: %FileBlob{} = file_blob},
+         attrs
+       ) do
+    patch =
+      %{
+        transcript: Map.get(attrs, :transcript) || Map.get(attrs, "transcript"),
+        summary: Map.get(attrs, :summary) || Map.get(attrs, "summary")
+      }
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+      |> Map.new()
+
+    if map_size(patch) == 0 do
+      multi
+    else
+      Ecto.Multi.update(multi, :file_blob, FileBlob.changeset(file_blob, patch))
+    end
+  end
+
+  defp maybe_update_file_blob(multi, _item, _attrs), do: multi
 
   defp validate_workspace_owner(changeset, owner) do
     workspace_id = Changeset.get_field(changeset, :workspace_id)
@@ -432,32 +632,46 @@ defmodule MatomeApi.Content do
     end
   end
 
-  defp validate_matome_owner(changeset, owner) do
-    matome_id = Changeset.get_field(changeset, :matome_id)
-
+  # Client uploaders (Flutter recordings_repository) send `content_length` — the
+  # HTTP body size — while the FileBlob changeset requires `byte_size`. Map the
+  # former onto the latter when byte_size was not supplied directly, preserving
+  # the caller's key style (atom vs string). Without this every real file-item
+  # create 422s with `byte_size can't be blank`.
+  defp put_byte_size_from_content_length(attrs) do
     cond do
-      is_nil(matome_id) -> changeset
-      get_matome(owner, matome_id) -> changeset
-      true -> Changeset.add_error(changeset, :matome_id, "is invalid")
+      Map.has_key?(attrs, :byte_size) or Map.has_key?(attrs, "byte_size") ->
+        attrs
+
+      Map.has_key?(attrs, :content_length) ->
+        Map.put(attrs, :byte_size, Map.get(attrs, :content_length))
+
+      Map.has_key?(attrs, "content_length") ->
+        Map.put(attrs, "byte_size", Map.get(attrs, "content_length"))
+
+      true ->
+        attrs
     end
   end
 
-  defp parse_recording_id(id) when is_integer(id), do: {:ok, id}
-
-  defp parse_recording_id(id) when is_binary(id) do
-    case Integer.parse(id) do
-      {parsed, ""} -> {:ok, parsed}
-      _ -> :error
-    end
+  defp storage_key(owner_id) do
+    "owners/#{owner_id}/items/#{Ecto.UUID.generate()}"
   end
 
-  defp parse_recording_id(_id), do: :error
+  defp put_storage_key(attrs, storage_key) do
+    attrs = attrs |> Map.delete(:storage_key) |> Map.delete("storage_key")
+
+    if Enum.any?(Map.keys(attrs), &is_atom/1) do
+      Map.put(attrs, :storage_key, storage_key)
+    else
+      Map.put(attrs, "storage_key", storage_key)
+    end
+  end
 
   defp maybe_filter_workspace(query, nil), do: query
   defp maybe_filter_workspace(query, ""), do: query
 
   defp maybe_filter_workspace(query, workspace_id),
-    do: where(query, [recording], recording.workspace_id == ^workspace_id)
+    do: where(query, [row], row.workspace_id == ^workspace_id)
 
   defp search_by(query, _field, nil), do: query
   defp search_by(query, _field, ""), do: query
@@ -465,19 +679,5 @@ defmodule MatomeApi.Content do
   defp search_by(query, field, term) do
     pattern = "%#{term}%"
     where(query, [row], ilike(field(row, ^field), ^pattern))
-  end
-
-  defp search_recordings(query, nil), do: query
-  defp search_recordings(query, ""), do: query
-
-  defp search_recordings(query, term) do
-    pattern = "%#{term}%"
-
-    where(
-      query,
-      [recording],
-      ilike(recording.title, ^pattern) or ilike(recording.summary, ^pattern) or
-        ilike(recording.transcript, ^pattern)
-    )
   end
 end

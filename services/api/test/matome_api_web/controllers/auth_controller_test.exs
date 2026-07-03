@@ -122,7 +122,10 @@ defmodule MatomeApiWeb.AuthControllerTest do
 
   test "reset-password rejects an invalid token", %{conn: conn} do
     assert %{"error" => "invalid_reset_token"} =
-             post(conn, ~p"/api/auth/reset-password", %{token: "not-a-token", password: @new_password})
+             post(conn, ~p"/api/auth/reset-password", %{
+               token: "not-a-token",
+               password: @new_password
+             })
              |> json_response(422)
   end
 

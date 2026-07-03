@@ -136,83 +136,6 @@ defmodule MatomeApiWeb.ApiSpec do
           }
         }
       },
-      "/api/recordings" => %PathItem{
-        get: %Operation{
-          operationId: "RecordingController.index",
-          tags: ["recordings"],
-          summary: "List authenticated user's recordings",
-          responses: resource_responses("Recordings")
-        },
-        post: %Operation{
-          operationId: "RecordingController.create",
-          tags: ["recordings"],
-          summary: "Create a recording for the authenticated user",
-          requestBody: recording_request_body(),
-          responses: resource_responses("Recording", 201)
-        }
-      },
-      "/api/recordings/search" => %PathItem{
-        get: %Operation{
-          operationId: "RecordingController.search",
-          tags: ["recordings"],
-          summary: "Search authenticated user's recordings by title, summary, or transcript",
-          parameters: [query_parameter()],
-          responses: resource_responses("Recordings")
-        }
-      },
-      "/api/recordings/{id}" => %PathItem{
-        get: %Operation{
-          operationId: "RecordingController.show",
-          tags: ["recordings"],
-          summary: "Get one authenticated-user-owned recording",
-          parameters: [id_parameter()],
-          responses: resource_responses("Recording")
-        },
-        put: %Operation{
-          operationId: "RecordingController.update",
-          tags: ["recordings"],
-          summary: "Update one authenticated-user-owned recording",
-          parameters: [id_parameter()],
-          requestBody: recording_request_body(),
-          responses: resource_responses("Recording")
-        },
-        patch: %Operation{
-          operationId: "RecordingController.updatePatch",
-          tags: ["recordings"],
-          summary: "Partially update one authenticated-user-owned recording",
-          parameters: [id_parameter()],
-          requestBody: recording_request_body(),
-          responses: resource_responses("Recording")
-        },
-        delete: %Operation{
-          operationId: "RecordingController.delete",
-          tags: ["recordings"],
-          summary: "Delete one authenticated-user-owned recording",
-          parameters: [id_parameter()],
-          responses: %{
-            204 => Operation.response("Deleted", "application/json", nil),
-            404 => Operation.response("Not found", "application/json", nil)
-          }
-        }
-      },
-      "/api/recordings/{id}/download-url" => %PathItem{
-        get: %Operation{
-          operationId: "RecordingController.downloadUrl",
-          tags: ["recordings"],
-          summary: "Issue a short-lived presigned GET URL for one owned recording's media",
-          parameters: [id_parameter()],
-          responses: resource_responses("Presigned download URL")
-        }
-      },
-      "/api/recordings/{id}/process" => %PathItem{
-        post: %Operation{
-          operationId: "RecordingController.process",
-          tags: ["recordings"],
-          summary: "Queue internal AI processing after media upload completes",
-          parameters: [id_parameter()],
-          responses: resource_responses("Recording processing queued", 202)
-        }
-      },
       "/api/matomes/{id}/archive" => %PathItem{
         post: %Operation{
           operationId: "MatomeController.archive",
@@ -230,6 +153,54 @@ defmodule MatomeApiWeb.ApiSpec do
           summary: "Restore (un-archive) one authenticated-user-owned matome",
           parameters: [id_parameter()],
           responses: resource_responses("Matome")
+        }
+      },
+      "/api/matomes/{matome_id}/items" => %PathItem{
+        get: %Operation{
+          operationId: "ItemController.index",
+          tags: ["items"],
+          summary: "List items for one authenticated-user-owned matome",
+          parameters: [matome_id_parameter()],
+          responses: resource_responses("Items")
+        },
+        post: %Operation{
+          operationId: "ItemController.create",
+          tags: ["items"],
+          summary: "Create a text or file item for one authenticated-user-owned matome",
+          parameters: [matome_id_parameter()],
+          requestBody: item_request_body(),
+          responses: resource_responses("Item", 201)
+        }
+      },
+      "/api/items/{id}" => %PathItem{
+        get: %Operation{
+          operationId: "ItemController.show",
+          tags: ["items"],
+          summary: "Get one authenticated-user-owned item",
+          parameters: [id_parameter()],
+          responses: resource_responses("Item")
+        },
+        delete: %Operation{
+          operationId: "ItemController.delete",
+          tags: ["items"],
+          summary: "Delete one authenticated-user-owned item and its payload",
+          parameters: [id_parameter()],
+          responses: %{
+            204 => Operation.response("Deleted", "application/json", nil),
+            401 => Operation.response("Unauthorized", "application/json", nil),
+            404 => Operation.response("Not found", "application/json", nil),
+            422 => Operation.response("Validation error", "application/json", nil)
+          }
+        }
+      },
+      "/api/items/{id}/presign" => %PathItem{
+        post: %Operation{
+          operationId: "ItemController.presign",
+          tags: ["items"],
+          summary: "Issue an upload presign for a file item; text items are rejected",
+          parameters: [id_parameter()],
+          requestBody: presign_request_body(),
+          responses: resource_responses("Presign")
         }
       }
     }
@@ -273,33 +244,35 @@ defmodule MatomeApiWeb.ApiSpec do
     })
   end
 
-  defp recording_request_body do
-    Operation.request_body("Recording", "application/json", %OpenApiSpex.Schema{
+  defp item_request_body do
+    Operation.request_body("Item", "application/json", %OpenApiSpex.Schema{
       type: :object,
-      required: [:title],
+      required: [:item_type, :position],
+      discriminator: %{propertyName: "item_type"},
       properties: %{
-        title: %OpenApiSpex.Schema{type: :string},
-        summary: %OpenApiSpex.Schema{type: :string},
-        transcript: %OpenApiSpex.Schema{type: :string},
+        item_type: %OpenApiSpex.Schema{type: :string, enum: ["file", "text"]},
+        position: %OpenApiSpex.Schema{type: :integer, minimum: 0},
+        metadata: %OpenApiSpex.Schema{type: :object},
+        body: %OpenApiSpex.Schema{type: :string, description: "Required when item_type is text"},
+        byte_size: %OpenApiSpex.Schema{
+          type: :integer,
+          minimum: 1,
+          description: "Required when item_type is file"
+        },
         media_type: %OpenApiSpex.Schema{
           type: :string,
-          enum: MatomeApi.Content.Recording.media_types()
+          enum: ["audio", "image", "document", "video"]
         },
-        content_length: %OpenApiSpex.Schema{
-          type: :integer,
-          description:
-            "Declared upload size in bytes; validated server-side against a 25 MB ceiling and signed into the presigned PUT URL.",
-          maximum: 25 * 1024 * 1024,
-          minimum: 1
-        },
-        status: %OpenApiSpex.Schema{
-          type: :string,
-          enum: ["pending", "processing", "done", "failed"]
-        },
-        error_reason: %OpenApiSpex.Schema{type: :string},
-        duration: %OpenApiSpex.Schema{type: :integer},
-        badge: %OpenApiSpex.Schema{type: :string},
-        workspace_id: %OpenApiSpex.Schema{type: :integer}
+        duration: %OpenApiSpex.Schema{type: :integer, minimum: 0}
+      }
+    })
+  end
+
+  defp presign_request_body do
+    Operation.request_body("Presign", "application/json", %OpenApiSpex.Schema{
+      type: :object,
+      properties: %{
+        byte_size: %OpenApiSpex.Schema{type: :integer, minimum: 1}
       }
     })
   end
@@ -315,6 +288,12 @@ defmodule MatomeApiWeb.ApiSpec do
 
   defp id_parameter do
     Operation.parameter(:id, :path, %OpenApiSpex.Schema{type: :integer}, "Resource id",
+      required: true
+    )
+  end
+
+  defp matome_id_parameter do
+    Operation.parameter(:matome_id, :path, %OpenApiSpex.Schema{type: :integer}, "Matome id",
       required: true
     )
   end

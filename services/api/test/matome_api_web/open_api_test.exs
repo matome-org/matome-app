@@ -16,10 +16,26 @@ defmodule MatomeApiWeb.OpenApiTest do
     assert Map.has_key?(body["paths"], "/api/spaces")
     assert Map.has_key?(body["paths"], "/api/spaces/search")
     assert Map.has_key?(body["paths"], "/api/spaces/{id}")
-    assert Map.has_key?(body["paths"], "/api/recordings")
-    assert Map.has_key?(body["paths"], "/api/recordings/search")
-    assert Map.has_key?(body["paths"], "/api/recordings/{id}")
-    assert Map.has_key?(body["paths"], "/api/recordings/{id}/download-url")
-    assert Map.has_key?(body["paths"], "/api/recordings/{id}/process")
+    assert Map.has_key?(body["paths"], "/api/matomes/{matome_id}/items")
+    assert Map.has_key?(body["paths"], "/api/items/{id}")
+    assert Map.has_key?(body["paths"], "/api/items/{id}/presign")
+
+    item_schema =
+      body
+      |> get_in([
+        "paths",
+        "/api/matomes/{matome_id}/items",
+        "post",
+        "requestBody",
+        "content",
+        "application/json",
+        "schema"
+      ])
+
+    assert item_schema["discriminator"] == %{"propertyName" => "item_type"}
+    assert item_schema["properties"]["item_type"]["enum"] == ["file", "text"]
+    refute Map.has_key?(body["paths"], "/api/recordings")
+    refute Map.has_key?(body["paths"], "/api/recordings/search")
+    refute Map.has_key?(body["paths"], "/api/recordings/{id}")
   end
 end

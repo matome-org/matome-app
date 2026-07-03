@@ -3,7 +3,7 @@ defmodule MatomeApi.Content.Contact do
   import Ecto.Changeset
 
   alias MatomeApi.Auth.User
-  alias MatomeApi.Content.{MatomeContact, RecordingContact}
+  alias MatomeApi.Content.MatomeContact
 
   # Bound every user-controlled string field (#1462, Olivier HIGH AC).
   @max_email 254
@@ -31,7 +31,6 @@ defmodule MatomeApi.Content.Contact do
     belongs_to :owner, User
     belongs_to :linked_user, User
     has_many :matome_contacts, MatomeContact
-    has_many :recording_contacts, RecordingContact
 
     timestamps(type: :utc_datetime)
   end

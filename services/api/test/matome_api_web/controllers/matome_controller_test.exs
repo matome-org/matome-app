@@ -175,33 +175,6 @@ defmodule MatomeApiWeb.MatomeControllerTest do
     assert refetched["matome"]["contacts"] == []
   end
 
-  test "recordings can be assigned to an owned matome but not another owner's", %{conn: conn} do
-    %{conn: owner_conn} = register_conn(conn)
-    %{conn: other_conn} = register_conn(build_conn())
-
-    matome =
-      post(owner_conn, ~p"/api/matomes", %{title: "Mine"})
-      |> json_response(201)
-      |> get_in(["matome"])
-
-    other_matome =
-      post(other_conn, ~p"/api/matomes", %{title: "Theirs"})
-      |> json_response(201)
-      |> get_in(["matome"])
-
-    ok =
-      post(owner_conn, ~p"/api/recordings", %{title: "Item", matome_id: matome["id"]})
-      |> json_response(201)
-      |> get_in(["recording"])
-
-    assert ok["matome_id"] == matome["id"]
-
-    invalid =
-      post(owner_conn, ~p"/api/recordings", %{title: "Bad", matome_id: other_matome["id"]})
-
-    assert %{"errors" => %{"matome_id" => ["is invalid"]}} = json_response(invalid, 422)
-  end
-
   test "archive sets archived_at and the matome drops out of the list", %{conn: conn} do
     %{conn: owner_conn} = register_conn(conn)
 

@@ -22,6 +22,14 @@ defmodule MatomeApi.Storage.PresignerTest do
     test "presign_download rejects a key outside the owners/ prefix" do
       assert {:error, :invalid_storage_key} = Presigner.presign_download("../../secret")
     end
+
+    test "presign_delete signs a DELETE URL for owner-scoped garbage collection" do
+      assert {:ok, delete} = Presigner.presign_delete(@owner_key)
+
+      assert delete.method == "DELETE"
+      assert delete.storage_key == @owner_key
+      assert delete.url =~ "/media/owners/42/recordings/7/media?"
+    end
   end
 
   describe "server-side upload size ceiling (25 MB)" do

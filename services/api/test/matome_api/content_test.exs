@@ -6,88 +6,115 @@ defmodule MatomeApi.ContentTest do
 
   @password "correct horse battery staple"
 
-  test "recordings default to pending and are scoped by owner" do
+  test "text items are scoped by matome owner and delete their payload" do
     owner = user_fixture()
     other_owner = user_fixture()
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Kickoff"})
 
-    assert {:ok, recording} = Content.create_recording(owner, %{title: "Daily standup"})
-
-    assert recording.status == :pending
-    assert recording.owner_id == owner.id
-    assert Content.get_recording(owner, recording.id).id == recording.id
-    assert Content.get_recording(other_owner, recording.id) == nil
-    assert Content.list_recordings(other_owner) == []
-  end
-
-  test "recording search only returns owned rows" do
-    owner = user_fixture()
-    other_owner = user_fixture()
-
-    assert {:ok, owned} =
-             Content.create_recording(owner, %{title: "Focus memo", transcript: "alpha beta"})
-
-    assert {:ok, _other} =
-             Content.create_recording(other_owner, %{
-               title: "Focus memo",
-               transcript: "alpha beta"
+    assert {:ok, item} =
+             Content.create_text_item(owner, matome.id, %{
+               position: 1,
+               body: "Meeting notes",
+               metadata: %{"display" => "note-card"}
              })
 
-    assert [recording] = Content.list_recordings(owner, %{"q" => "alpha"})
-    assert recording.id == owned.id
+    assert item.item_type == :text
+    assert item.position == 1
+    assert item.metadata == %{"display" => "note-card"}
+    assert item.matome_id == matome.id
+    assert item.text_content.body == "Meeting notes"
+    assert Content.get_item(owner, item.id).id == item.id
+    assert Content.get_item(other_owner, item.id) == nil
+    assert Content.list_items(owner, matome.id) |> Enum.map(& &1.id) == [item.id]
+    assert Content.list_items(other_owner, matome.id) == nil
+    assert Content.presign_item_upload(other_owner, item.id) == nil
+    assert Content.delete_item(other_owner, item.id) == nil
+    assert {:error, :text_item_not_presignable} = Content.presign_item_upload(owner, item.id)
+
+    text_content_id = item.text_content_id
+    assert {:ok, _} = Content.delete_item(owner, item.id)
+    assert MatomeApi.Repo.get(MatomeApi.Content.TextContent, text_content_id) == nil
   end
 
-  test "recordings accept each allowlisted media_type" do
+  test "file items are scoped by matome owner and delete their payload" do
     owner = user_fixture()
+    other_owner = user_fixture()
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Kickoff"})
 
-    for type <- ~w(audio meeting image document) do
-      assert {:ok, recording} =
-               Content.create_recording(owner, %{title: "Typed #{type}", media_type: type})
+    assert {:ok, item} =
+             Content.create_file_item(owner, matome.id, %{
+               position: 1,
+               storage_key: "owners/#{owner.id}/items/audio.wav",
+               byte_size: 42,
+               media_type: "audio",
+               duration: 10,
+               transcript: "hello",
+               summary: "short"
+             })
 
-      assert recording.media_type == type
+    assert item.item_type == :file
+    assert item.file_blob.media_type == "audio"
+    assert Content.get_item(other_owner, item.id) == nil
+    assert Content.presign_item_upload(other_owner, item.id) == nil
+    assert Content.delete_item(other_owner, item.id) == nil
+    assert {:ok, presign} = Content.presign_item_upload(owner, item.id)
+    assert presign.storage_key == item.file_blob.storage_key
+    file_blob_id = item.file_blob_id
+    assert {:ok, _} = Content.delete_item(owner, item.id)
+    assert MatomeApi.Repo.get(MatomeApi.Content.FileBlob, file_blob_id) == nil
+  end
+
+  test "video file items stay item_type=file and do not enqueue AI dispatch" do
+    owner = user_fixture()
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Screen share"})
+
+    assert {:ok, item} =
+             Content.create_file_item(owner, matome.id, %{
+               position: 1,
+               byte_size: 12_345,
+               media_type: "video",
+               duration: 42
+             })
+
+    assert item.item_type == :file
+    assert item.text_content_id == nil
+    assert item.file_blob.media_type == "video"
+    assert Repo.aggregate(Oban.Job, :count, :id) == 0
+  end
+
+  test "item metadata is render hints only and rejects payload identity keys" do
+    owner = user_fixture()
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Metadata"})
+
+    assert {:ok, item} =
+             Content.create_text_item(owner, matome.id, %{
+               position: 1,
+               body: "Visible body",
+               metadata: %{"display" => "note-card", "collapsed" => true}
+             })
+
+    assert item.metadata == %{"display" => "note-card", "collapsed" => true}
+
+    for forbidden <- [
+          "storage_key",
+          "storageKey",
+          "contact_id",
+          "contactIds",
+          "media_type",
+          "byte_size",
+          "transcript",
+          "summary",
+          "body"
+        ] do
+      assert {:error, changeset} =
+               Content.create_text_item(owner, matome.id, %{
+                 position: System.unique_integer([:positive]),
+                 body: "Bad metadata",
+                 metadata: %{forbidden => "not allowed"}
+               })
+
+      assert %{metadata: [_ | _]} = errors_on(changeset)
     end
-  end
-
-  test "recordings allow a nil media_type (optional)" do
-    owner = user_fixture()
-    assert {:ok, recording} = Content.create_recording(owner, %{title: "Untyped"})
-    assert recording.media_type == nil
-  end
-
-  test "recordings reject a media_type outside the allowlist" do
-    owner = user_fixture()
-
-    assert {:error, changeset} =
-             Content.create_recording(owner, %{title: "Bad", media_type: "video"})
-
-    assert %{media_type: ["is invalid"]} = errors_on(changeset)
-
-    assert {:error, changeset} =
-             Content.create_recording(owner, %{title: "Bad", media_type: "../../etc"})
-
-    assert %{media_type: ["is invalid"]} = errors_on(changeset)
-  end
-
-  test "recordings server-derive storage_key inside the owner prefix and ignore client values" do
-    owner = user_fixture()
-
-    assert {:ok, recording} =
-             Content.create_recording(owner, %{
-               title: "Scoped",
-               storage_key: "owners/9999/recordings/1/media"
-             })
-
-    assert recording.storage_key == "owners/#{owner.id}/recordings/#{recording.id}/media"
-  end
-
-  test "recordings reject workspaces owned by another user" do
-    owner = user_fixture()
-    other_owner = user_fixture()
-    assert {:ok, other_workspace} = Content.create_workspace(other_owner, %{name: "Other"})
-
-    assert {:error, changeset} =
-             Content.create_recording(owner, %{title: "Draft", workspace_id: other_workspace.id})
-
-    assert %{workspace_id: ["is invalid"]} = errors_on(changeset)
   end
 
   test "workspaces CRUD is scoped by owner" do
@@ -132,25 +159,12 @@ defmodule MatomeApi.ContentTest do
     assert %{workspace_id: ["is invalid"]} = errors_on(changeset)
   end
 
-  test "recordings reject matomes owned by another user" do
+  test "items reject matomes owned by another user" do
     owner = user_fixture()
     other_owner = user_fixture()
     assert {:ok, other_matome} = Content.create_matome(other_owner, %{title: "Other"})
 
-    assert {:error, changeset} =
-             Content.create_recording(owner, %{title: "Draft", matome_id: other_matome.id})
-
-    assert %{matome_id: ["is invalid"]} = errors_on(changeset)
-  end
-
-  test "recordings accept matomes owned by the same user" do
-    owner = user_fixture()
-    assert {:ok, matome} = Content.create_matome(owner, %{title: "Mine"})
-
-    assert {:ok, recording} =
-             Content.create_recording(owner, %{title: "Item", matome_id: matome.id})
-
-    assert recording.matome_id == matome.id
+    assert Content.create_text_item(owner, other_matome.id, %{position: 1, body: "Draft"}) == nil
   end
 
   test "contacts CRUD is scoped by owner" do
@@ -266,92 +280,57 @@ defmodule MatomeApi.ContentTest do
     assert Content.get_matome(owner, matome.id).matome_contacts == []
   end
 
-  test "link and unlink a contact directly to a recording, owner scoped both ways" do
+  test "create_file_item maps client content_length onto byte_size" do
     owner = user_fixture()
-    other_owner = user_fixture()
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Upload"})
 
-    assert {:ok, recording} = Content.create_recording(owner, %{title: "Kickoff"})
-    assert {:ok, contact} = Content.create_contact(owner, %{display_name: "Alice"})
-    assert {:ok, other_recording} = Content.create_recording(other_owner, %{title: "Theirs"})
-    assert {:ok, other_contact} = Content.create_contact(other_owner, %{display_name: "Mallory"})
+    assert {:ok, item} =
+             Content.create_file_item(owner, matome.id, %{
+               "item_type" => "file",
+               "media_type" => "audio",
+               "content_length" => 4096
+             })
 
-    assert {:ok, join} = Content.link_contact_to_recording(owner, recording.id, contact.id)
-    assert join.recording_id == recording.id
-    assert join.contact_id == contact.id
-
-    # the direct edge is readable both ways for the owner
-    assert [%{id: cid}] = Content.list_contacts_for_recording(owner, recording.id)
-    assert cid == contact.id
-    assert [%{id: rid}] = Content.list_recordings_for_contact(owner, contact.id)
-    assert rid == recording.id
-
-    # idempotent: re-linking the same pair does not duplicate
-    assert {:ok, _} = Content.link_contact_to_recording(owner, recording.id, contact.id)
-    assert length(Content.list_contacts_for_recording(owner, recording.id)) == 1
-
-    # SECURITY (Olivier): linking requires BOTH endpoints owned by the actor.
-    # another owner's contact cannot be attached to my recording
-    assert Content.link_contact_to_recording(owner, recording.id, other_contact.id) == nil
-    # my contact cannot be attached to another owner's recording
-    assert Content.link_contact_to_recording(owner, other_recording.id, contact.id) == nil
-    # a cross-owner actor cannot link to my recording at all
-    assert Content.link_contact_to_recording(other_owner, recording.id, other_contact.id) == nil
-
-    # SECURITY: a cross-owner read returns nothing (the data-leak proof) — the
-    # owner's link is invisible to another user.
-    assert Content.list_contacts_for_recording(other_owner, recording.id) == nil
-    assert Content.list_recordings_for_contact(other_owner, contact.id) == nil
-
-    # the owner's edge is untouched by the rejected cross-owner attempts
-    assert length(Content.list_contacts_for_recording(owner, recording.id)) == 1
-
-    assert {:ok, _} = Content.unlink_contact_from_recording(owner, recording.id, contact.id)
-    assert Content.list_contacts_for_recording(owner, recording.id) == []
-    # a cross-owner unlink is rejected, not silently applied
-    assert Content.unlink_contact_from_recording(other_owner, recording.id, contact.id) == nil
+    assert item.file_blob.byte_size == 4096
+    assert MatomeApi.Repo.get(MatomeApi.Content.FileBlob, item.file_blob_id).byte_size == 4096
   end
 
-  test "list reads are owner-scoped on the JOINED endpoint, not just the anchor" do
-    # Defense-in-depth proof: even a hand-forged cross-owner recording_contacts
-    # row (bypassing the owner-scoped link path) must NOT leak the other owner's
-    # contact/recording through the list reads — the join filters on owner too.
+  test "create_file_item rejects byte_size over the upload ceiling without orphaning rows" do
     owner = user_fixture()
-    other_owner = user_fixture()
+    assert {:ok, matome} = Content.create_matome(owner, %{title: "Big"})
+    oversize = MatomeApi.Storage.Presigner.max_upload_bytes() + 1
 
-    assert {:ok, recording} = Content.create_recording(owner, %{title: "Mine"})
-    assert {:ok, other_contact} = Content.create_contact(other_owner, %{display_name: "Mallory"})
-
-    # forge a link from the owner's recording to ANOTHER owner's contact
-    MatomeApi.Repo.insert!(%MatomeApi.Content.RecordingContact{
-      recording_id: recording.id,
-      contact_id: other_contact.id
-    })
-
-    # the owner must NOT see Mallory (she belongs to other_owner)
-    assert Content.list_contacts_for_recording(owner, recording.id) == []
-    # and other_owner must NOT see the owner's recording via that forged row
-    assert Content.list_recordings_for_contact(other_owner, other_contact.id) == []
-  end
-
-  test "the unique (recording, contact) index rejects a duplicate raw insert" do
-    owner = user_fixture()
-    assert {:ok, recording} = Content.create_recording(owner, %{title: "Sync"})
-    assert {:ok, contact} = Content.create_contact(owner, %{display_name: "Bob"})
-
-    attrs = %{"recording_id" => recording.id, "contact_id" => contact.id}
-
-    assert {:ok, _} =
-             %MatomeApi.Content.RecordingContact{}
-             |> MatomeApi.Content.RecordingContact.changeset(attrs)
-             |> MatomeApi.Repo.insert()
-
-    # a second raw insert of the same pair violates the UNIQUE index
     assert {:error, changeset} =
-             %MatomeApi.Content.RecordingContact{}
-             |> MatomeApi.Content.RecordingContact.changeset(attrs)
-             |> MatomeApi.Repo.insert()
+             Content.create_file_item(owner, matome.id, %{
+               media_type: "audio",
+               byte_size: oversize
+             })
 
-    assert %{recording_id: [_ | _]} = errors_on(changeset)
+    assert %{byte_size: [_ | _]} = errors_on(changeset)
+    assert MatomeApi.Repo.aggregate(MatomeApi.Content.FileBlob, :count, :id) == 0
+    assert MatomeApi.Repo.aggregate(MatomeApi.Content.Item, :count, :id) == 0
+  end
+
+  test "moving an item into a matome recomputes position and avoids collision" do
+    owner = user_fixture()
+    assert {:ok, source} = Content.create_matome(owner, %{title: "Source"})
+    assert {:ok, target} = Content.create_matome(owner, %{title: "Target"})
+
+    assert {:ok, moving} =
+             Content.create_text_item(owner, source.id, %{body: "Move me"})
+
+    # Target already holds an item at position 0 — the naive move would keep
+    # position 0 and collide with items_matome_id_position_index.
+    assert {:ok, sitting} =
+             Content.create_text_item(owner, target.id, %{body: "Already here"})
+
+    assert sitting.position == 0
+
+    assert {:ok, moved} = Content.update_item(owner, moving.id, %{matome_id: target.id})
+
+    assert moved.matome_id == target.id
+    assert moved.position == 1
+    assert Content.list_items(owner, target.id) |> Enum.map(& &1.id) == [sitting.id, moved.id]
   end
 
   defp user_fixture do
