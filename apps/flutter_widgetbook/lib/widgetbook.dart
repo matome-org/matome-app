@@ -3,13 +3,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:matome_flutter/app/pages/auth_pages.dart';
 import 'package:matome_flutter/app/pages/primary_pages.dart';
 import 'package:matome_flutter/app/pages/secondary_pages.dart';
 import 'package:matome_flutter/app/screens/recording_screen.dart'
     show RecorderBinding;
 import 'package:matome_flutter/core/db/app_database.dart'
-    show ContactRow, RecordingRow, WorkspaceRow;
+    show
+        AppDatabase,
+        ContactRow,
+        ItemsCompanion,
+        RecordingRow,
+        TextContentsCompanion,
+        WorkspaceRow;
 import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
@@ -22,7 +29,7 @@ import 'package:matome_flutter/features/auth/auth_models.dart' show AuthSession;
 import 'package:matome_flutter/core/audio/audio_playback.dart';
 import 'package:matome_flutter/core/db/file_row.dart';
 import 'package:matome_flutter/core/providers.dart'
-    show settingsStoreProvider, tokenStoreProvider;
+    show appDatabaseProvider, settingsStoreProvider, tokenStoreProvider;
 import 'package:matome_flutter/core/settings/settings_store.dart'
     show InMemorySettingsStore;
 import 'package:matome_flutter/features/contacts/contact_detail_screen.dart'
@@ -609,17 +616,13 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     name: 'ForgotPasswordPage',
     path: 'Pages/Mobile',
     docs: 'Canonical password-reset request route Page (mobile).',
-    stories: const [
-      _StorySpec('Default', forgotPasswordPageMobileUseCase),
-    ],
+    stories: const [_StorySpec('Default', forgotPasswordPageMobileUseCase)],
   ),
   _component(
     name: 'ResetPasswordPage',
     path: 'Pages/Mobile',
     docs: 'Canonical reset-code + new-password route Page (mobile).',
-    stories: const [
-      _StorySpec('Default', resetPasswordPageMobileUseCase),
-    ],
+    stories: const [_StorySpec('Default', resetPasswordPageMobileUseCase)],
   ),
   _component(
     name: 'InboxPage',
@@ -672,12 +675,20 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     name: 'FileDetailPage',
     path: 'Pages/Mobile',
     docs:
-        'Canonical recording detail route Page variants for audio, image, and document items (mobile).',
+        'Canonical recording detail route Page variants for audio, image, document, and video items (mobile).',
     stories: const [
       _StorySpec('Audio route', fileDetailPageAudioMobileUseCase),
       _StorySpec('Document route', fileDetailPageDocumentMobileUseCase),
       _StorySpec('Image route', fileDetailPageImageMobileUseCase),
+      _StorySpec('Video route', fileDetailPageVideoMobileUseCase),
     ],
+  ),
+  _component(
+    name: 'TextItemPage',
+    path: 'Pages/Mobile',
+    docs:
+        'Canonical plain-text item route Page (mobile). Fixture seeds text_contents/items only: no file payload, no upload queue, no presign.',
+    stories: const [_StorySpec('Plain text note', textItemPageMobileUseCase)],
   ),
   _component(
     name: 'CalendarPage',
@@ -748,17 +759,13 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     name: 'ForgotPasswordPage',
     path: 'Pages/Desktop',
     docs: 'Canonical password-reset request route Page (desktop).',
-    stories: const [
-      _StorySpec('Default', forgotPasswordPageDesktopUseCase),
-    ],
+    stories: const [_StorySpec('Default', forgotPasswordPageDesktopUseCase)],
   ),
   _component(
     name: 'ResetPasswordPage',
     path: 'Pages/Desktop',
     docs: 'Canonical reset-code + new-password route Page (desktop).',
-    stories: const [
-      _StorySpec('Default', resetPasswordPageDesktopUseCase),
-    ],
+    stories: const [_StorySpec('Default', resetPasswordPageDesktopUseCase)],
   ),
   _component(
     name: 'InboxPage',
@@ -811,12 +818,20 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     name: 'FileDetailPage',
     path: 'Pages/Desktop',
     docs:
-        'Canonical recording detail route Page variants for audio, image, and document items (desktop).',
+        'Canonical recording detail route Page variants for audio, image, document, and video items (desktop).',
     stories: const [
       _StorySpec('Audio route', fileDetailPageAudioDesktopUseCase),
       _StorySpec('Document route', fileDetailPageDocumentDesktopUseCase),
       _StorySpec('Image route', fileDetailPageImageDesktopUseCase),
+      _StorySpec('Video route', fileDetailPageVideoDesktopUseCase),
     ],
+  ),
+  _component(
+    name: 'TextItemPage',
+    path: 'Pages/Desktop',
+    docs:
+        'Canonical plain-text item route Page (desktop). Fixture seeds text_contents/items only: no file payload, no upload queue, no presign.',
+    stories: const [_StorySpec('Plain text note', textItemPageDesktopUseCase)],
   ),
   _component(
     name: 'CalendarPage',
@@ -984,7 +999,10 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     stories: [
       _mobileScreen('Detail - desktop', contactDetailDesktopUseCase),
       _mobileScreen('Detail - mobile', contactDetailMobileUseCase),
-      _mobileScreen('Detail - sparse (minimal info)', contactDetailSparseUseCase),
+      _mobileScreen(
+        'Detail - sparse (minimal info)',
+        contactDetailSparseUseCase,
+      ),
     ],
   ),
   _component(
@@ -1054,8 +1072,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Mobile',
     docs: 'Local-first inbox entry card and inbox scene (mobile).',
     stories: [
-      _mobileScreen('Inbox entry (loose item / draft matome)', inboxItemCardUseCase),
-      _mobileScreen('Scene - Inbox (loose items + draft matomes)', sceneInboxUseCase),
+      _mobileScreen(
+        'Inbox entry (loose item / draft matome)',
+        inboxItemCardUseCase,
+      ),
+      _mobileScreen(
+        'Scene - Inbox (loose items + draft matomes)',
+        sceneInboxUseCase,
+      ),
     ],
   ),
   _component(
@@ -1063,8 +1087,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Mobile',
     docs: 'Local/cloud sync chip and promote-to-cloud consent scene (mobile).',
     stories: [
-      _mobileScreen('Scene - Promote to cloud consent', scenePromoteConsentUseCase),
-      _mobileScreen('Sync chip (local / promoting / cloud)', spaceSyncChipUseCase),
+      _mobileScreen(
+        'Scene - Promote to cloud consent',
+        scenePromoteConsentUseCase,
+      ),
+      _mobileScreen(
+        'Sync chip (local / promoting / cloud)',
+        spaceSyncChipUseCase,
+      ),
     ],
   ),
   _component(
@@ -1072,8 +1102,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Mobile',
     docs: 'New-space sync choice and sheet scene (mobile).',
     stories: [
-      _mobileScreen('Create sync choice (local default)', spaceSyncChoiceUseCase),
-      _mobileScreen('Scene - New space sheet (local default)', sceneNewSpaceSheetUseCase),
+      _mobileScreen(
+        'Create sync choice (local default)',
+        spaceSyncChoiceUseCase,
+      ),
+      _mobileScreen(
+        'Scene - New space sheet (local default)',
+        sceneNewSpaceSheetUseCase,
+      ),
     ],
   ),
   _component(
@@ -1081,8 +1117,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Mobile',
     docs: 'Local/cloud space tile and spaces scene (mobile).',
     stories: [
-      _mobileScreen('Scene - Spaces (local / cloud + promote)', sceneSpacesUseCase),
-      _mobileScreen('Space tile (local + promote / cloud)', spaceSyncTileUseCase),
+      _mobileScreen(
+        'Scene - Spaces (local / cloud + promote)',
+        sceneSpacesUseCase,
+      ),
+      _mobileScreen(
+        'Space tile (local + promote / cloud)',
+        spaceSyncTileUseCase,
+      ),
     ],
   ),
   _component(
@@ -1100,7 +1142,8 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
   _component(
     name: 'MatomeDetailPanel',
     path: 'Screens/Mobile',
-    docs: 'Complete Matome detail side panel in filed and inbox states (mobile).',
+    docs:
+        'Complete Matome detail side panel in filed and inbox states (mobile).',
     stories: [
       _mobileScreen('Detail panel - filed', detailPanelFiledUseCase),
       _mobileScreen('Detail panel - inbox', detailPanelInboxUseCase),
@@ -1114,7 +1157,10 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
       _mobileScreen('Table - compact (mobile)', matomeTableCompactUseCase),
       _mobileScreen('Table - desktop (sortable)', matomeTableDesktopUseCase),
       _mobileScreen('Table - empty', matomeTableEmptyUseCase),
-      _mobileScreen('Table - selection + bulk bar', matomeTableSelectionUseCase),
+      _mobileScreen(
+        'Table - selection + bulk bar',
+        matomeTableSelectionUseCase,
+      ),
     ],
   ),
   _component(
@@ -1131,8 +1177,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Mobile',
     docs: 'Desktop sidebar expanded and collapsed states (mobile width).',
     stories: [
-      _mobileScreen('Desktop sidebar - collapsed (rail)', desktopSidebarCollapsedUseCase),
-      _mobileScreen('Desktop sidebar - expanded', desktopSidebarExpandedUseCase),
+      _mobileScreen(
+        'Desktop sidebar - collapsed (rail)',
+        desktopSidebarCollapsedUseCase,
+      ),
+      _mobileScreen(
+        'Desktop sidebar - expanded',
+        desktopSidebarExpandedUseCase,
+      ),
     ],
   ),
   _component(
@@ -1141,13 +1193,34 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     docs:
         'Relationship picker overlay variants for files, people, matomes, spaces, filters, and empty states (mobile).',
     stories: [
-      _mobileScreen('Add anything (mixed / type filter)', relationshipPickerMixedUseCase),
-      _mobileScreen('Add files (multi / search)', relationshipPickerFilesUseCase),
-      _mobileScreen('Add people (multi / search)', relationshipPickerPeopleUseCase),
-      _mobileScreen('Add to a matome (Files page / reuse)', relationshipPickerMatomeUseCase),
-      _mobileScreen('Empty (no candidates yet)', relationshipPickerEmptyUseCase),
-      _mobileScreen('File into a space (single)', relationshipPickerSpaceUseCase),
-      _mobileScreen('Pre-filtered (opened from Add person)', relationshipPickerPrefilteredUseCase),
+      _mobileScreen(
+        'Add anything (mixed / type filter)',
+        relationshipPickerMixedUseCase,
+      ),
+      _mobileScreen(
+        'Add files (multi / search)',
+        relationshipPickerFilesUseCase,
+      ),
+      _mobileScreen(
+        'Add people (multi / search)',
+        relationshipPickerPeopleUseCase,
+      ),
+      _mobileScreen(
+        'Add to a matome (Files page / reuse)',
+        relationshipPickerMatomeUseCase,
+      ),
+      _mobileScreen(
+        'Empty (no candidates yet)',
+        relationshipPickerEmptyUseCase,
+      ),
+      _mobileScreen(
+        'File into a space (single)',
+        relationshipPickerSpaceUseCase,
+      ),
+      _mobileScreen(
+        'Pre-filtered (opened from Add person)',
+        relationshipPickerPrefilteredUseCase,
+      ),
     ],
   ),
 
@@ -1156,7 +1229,8 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
   _component(
     name: 'AuthScaffold',
     path: 'Screens/Desktop',
-    docs: 'Auth screen scaffold with form column and back affordance (desktop).',
+    docs:
+        'Auth screen scaffold with form column and back affordance (desktop).',
     stories: [
       _desktopScreen('Scaffold (form column + back)', authScaffoldUseCase),
     ],
@@ -1168,7 +1242,10 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     stories: [
       _desktopScreen('Detail - desktop', contactDetailDesktopUseCase),
       _desktopScreen('Detail - mobile', contactDetailMobileUseCase),
-      _desktopScreen('Detail - sparse (minimal info)', contactDetailSparseUseCase),
+      _desktopScreen(
+        'Detail - sparse (minimal info)',
+        contactDetailSparseUseCase,
+      ),
     ],
   ),
   _component(
@@ -1180,7 +1257,8 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
   _component(
     name: 'FileView',
     path: 'Screens/Desktop',
-    docs: 'File view body states for audio, image, and notes content (desktop).',
+    docs:
+        'File view body states for audio, image, and notes content (desktop).',
     stories: [
       _desktopScreen('Audio - empty', fileViewAudioEmptyUseCase),
       _desktopScreen('Audio - failed', fileViewAudioFailedUseCase),
@@ -1238,8 +1316,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Desktop',
     docs: 'Local-first inbox entry card and inbox scene (desktop).',
     stories: [
-      _desktopScreen('Inbox entry (loose item / draft matome)', inboxItemCardUseCase),
-      _desktopScreen('Scene - Inbox (loose items + draft matomes)', sceneInboxUseCase),
+      _desktopScreen(
+        'Inbox entry (loose item / draft matome)',
+        inboxItemCardUseCase,
+      ),
+      _desktopScreen(
+        'Scene - Inbox (loose items + draft matomes)',
+        sceneInboxUseCase,
+      ),
     ],
   ),
   _component(
@@ -1247,8 +1331,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Desktop',
     docs: 'Local/cloud sync chip and promote-to-cloud consent scene (desktop).',
     stories: [
-      _desktopScreen('Scene - Promote to cloud consent', scenePromoteConsentUseCase),
-      _desktopScreen('Sync chip (local / promoting / cloud)', spaceSyncChipUseCase),
+      _desktopScreen(
+        'Scene - Promote to cloud consent',
+        scenePromoteConsentUseCase,
+      ),
+      _desktopScreen(
+        'Sync chip (local / promoting / cloud)',
+        spaceSyncChipUseCase,
+      ),
     ],
   ),
   _component(
@@ -1256,8 +1346,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Desktop',
     docs: 'New-space sync choice and sheet scene (desktop).',
     stories: [
-      _desktopScreen('Create sync choice (local default)', spaceSyncChoiceUseCase),
-      _desktopScreen('Scene - New space sheet (local default)', sceneNewSpaceSheetUseCase),
+      _desktopScreen(
+        'Create sync choice (local default)',
+        spaceSyncChoiceUseCase,
+      ),
+      _desktopScreen(
+        'Scene - New space sheet (local default)',
+        sceneNewSpaceSheetUseCase,
+      ),
     ],
   ),
   _component(
@@ -1265,8 +1361,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Desktop',
     docs: 'Local/cloud space tile and spaces scene (desktop).',
     stories: [
-      _desktopScreen('Scene - Spaces (local / cloud + promote)', sceneSpacesUseCase),
-      _desktopScreen('Space tile (local + promote / cloud)', spaceSyncTileUseCase),
+      _desktopScreen(
+        'Scene - Spaces (local / cloud + promote)',
+        sceneSpacesUseCase,
+      ),
+      _desktopScreen(
+        'Space tile (local + promote / cloud)',
+        spaceSyncTileUseCase,
+      ),
     ],
   ),
   _component(
@@ -1284,7 +1386,8 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
   _component(
     name: 'MatomeDetailPanel',
     path: 'Screens/Desktop',
-    docs: 'Complete Matome detail side panel in filed and inbox states (desktop).',
+    docs:
+        'Complete Matome detail side panel in filed and inbox states (desktop).',
     stories: [
       _desktopScreen('Detail panel - filed', detailPanelFiledUseCase),
       _desktopScreen('Detail panel - inbox', detailPanelInboxUseCase),
@@ -1298,13 +1401,17 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
       _desktopScreen('Table - compact (mobile)', matomeTableCompactUseCase),
       _desktopScreen('Table - desktop (sortable)', matomeTableDesktopUseCase),
       _desktopScreen('Table - empty', matomeTableEmptyUseCase),
-      _desktopScreen('Table - selection + bulk bar', matomeTableSelectionUseCase),
+      _desktopScreen(
+        'Table - selection + bulk bar',
+        matomeTableSelectionUseCase,
+      ),
     ],
   ),
   _component(
     name: 'MatomeBottomDock',
     path: 'Screens/Desktop',
-    docs: 'Mobile bottom dock in isolation and in phone context (desktop width).',
+    docs:
+        'Mobile bottom dock in isolation and in phone context (desktop width).',
     stories: [
       _desktopScreen('Mobile dock - bare', mobileDockBareUseCase),
       _desktopScreen('Mobile dock - in context', mobileDockInContextUseCase),
@@ -1315,8 +1422,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     path: 'Screens/Desktop',
     docs: 'Desktop sidebar expanded and collapsed states (desktop).',
     stories: [
-      _desktopScreen('Desktop sidebar - collapsed (rail)', desktopSidebarCollapsedUseCase),
-      _desktopScreen('Desktop sidebar - expanded', desktopSidebarExpandedUseCase),
+      _desktopScreen(
+        'Desktop sidebar - collapsed (rail)',
+        desktopSidebarCollapsedUseCase,
+      ),
+      _desktopScreen(
+        'Desktop sidebar - expanded',
+        desktopSidebarExpandedUseCase,
+      ),
     ],
   ),
   _component(
@@ -1325,13 +1438,34 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     docs:
         'Relationship picker overlay variants for files, people, matomes, spaces, filters, and empty states (desktop).',
     stories: [
-      _desktopScreen('Add anything (mixed / type filter)', relationshipPickerMixedUseCase),
-      _desktopScreen('Add files (multi / search)', relationshipPickerFilesUseCase),
-      _desktopScreen('Add people (multi / search)', relationshipPickerPeopleUseCase),
-      _desktopScreen('Add to a matome (Files page / reuse)', relationshipPickerMatomeUseCase),
-      _desktopScreen('Empty (no candidates yet)', relationshipPickerEmptyUseCase),
-      _desktopScreen('File into a space (single)', relationshipPickerSpaceUseCase),
-      _desktopScreen('Pre-filtered (opened from Add person)', relationshipPickerPrefilteredUseCase),
+      _desktopScreen(
+        'Add anything (mixed / type filter)',
+        relationshipPickerMixedUseCase,
+      ),
+      _desktopScreen(
+        'Add files (multi / search)',
+        relationshipPickerFilesUseCase,
+      ),
+      _desktopScreen(
+        'Add people (multi / search)',
+        relationshipPickerPeopleUseCase,
+      ),
+      _desktopScreen(
+        'Add to a matome (Files page / reuse)',
+        relationshipPickerMatomeUseCase,
+      ),
+      _desktopScreen(
+        'Empty (no candidates yet)',
+        relationshipPickerEmptyUseCase,
+      ),
+      _desktopScreen(
+        'File into a space (single)',
+        relationshipPickerSpaceUseCase,
+      ),
+      _desktopScreen(
+        'Pre-filtered (opened from Add person)',
+        relationshipPickerPrefilteredUseCase,
+      ),
     ],
   ),
 ];
@@ -1553,7 +1687,7 @@ Widget reviewJourneyUseCase(BuildContext context) {
       ),
       _PageFlowStepSpec(
         title: '2. Audio review',
-        route: '/recording/detail/:id',
+        route: '/items/audio/:id',
         note:
             'FileDetailPage.audio is seeded through its app DetailsController.',
         width: 560,
@@ -2007,7 +2141,9 @@ Widget fileDetailPageImageDesktopUseCase(BuildContext context) => _desktopPage(
 );
 
 Widget fileDetailPageDocumentMobileUseCase(BuildContext context) => _mobilePage(
-  const ProviderScope(child: FileDetailPage.document(id: 'widgetbook-document')),
+  const ProviderScope(
+    child: FileDetailPage.document(id: 'widgetbook-document'),
+  ),
 );
 
 Widget fileDetailPageDocumentDesktopUseCase(BuildContext context) =>
@@ -2016,6 +2152,20 @@ Widget fileDetailPageDocumentDesktopUseCase(BuildContext context) =>
         child: FileDetailPage.document(id: 'widgetbook-document'),
       ),
     );
+
+Widget fileDetailPageVideoMobileUseCase(BuildContext context) => _mobilePage(
+  const ProviderScope(child: FileDetailPage.video(id: 'widgetbook-video')),
+);
+
+Widget fileDetailPageVideoDesktopUseCase(BuildContext context) => _desktopPage(
+  const ProviderScope(child: FileDetailPage.video(id: 'widgetbook-video')),
+);
+
+Widget textItemPageMobileUseCase(BuildContext context) =>
+    _mobilePage(_textItemPageScene());
+
+Widget textItemPageDesktopUseCase(BuildContext context) =>
+    _desktopPage(_textItemPageScene());
 
 Widget recordingPageMobileUseCase(BuildContext context) => _mobilePage(
   ProviderScope(child: RecordingPage(binding: _widgetbookMicRecorderBinding)),
@@ -2157,6 +2307,49 @@ Widget _fileDetailPageScene(String id) {
     ],
     child: FileDetailPage.audio(id: id),
   );
+}
+
+Widget _textItemPageScene() {
+  return FutureBuilder<AppDatabase>(
+    future: _widgetbookTextItemDb,
+    builder: (context, snapshot) {
+      final db = snapshot.data;
+      if (db == null) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        child: const TextItemPage(id: -9001),
+      );
+    },
+  );
+}
+
+final Future<AppDatabase> _widgetbookTextItemDb = _seedTextItemDb();
+
+Future<AppDatabase> _seedTextItemDb() async {
+  final db = AppDatabase();
+  await db
+      .into(db.textContents)
+      .insert(
+        TextContentsCompanion.insert(
+          id: const Value(-9001),
+          body:
+              'Plain text note\n\nThis file-less item is stored in text_contents and joined through items by MatomeItemType.text.',
+        ),
+      );
+  await db
+      .into(db.items)
+      .insert(
+        ItemsCompanion.insert(
+          id: const Value(-9001),
+          matomeId: -7001,
+          position: 1,
+          itemType: 'text',
+          textContentId: const Value(-9001),
+        ),
+      );
+  return db;
 }
 
 Widget _spaceDetailPageScene(String spaceId) {

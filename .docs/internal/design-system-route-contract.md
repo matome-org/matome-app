@@ -99,7 +99,7 @@ not allowed.
 
 ## Route Inventory
 
-Source: `apps/flutter/lib/app/router.dart` as of 2026-06-29.
+Source: `apps/flutter/lib/app/router.dart` as of 2026-07-02.
 
 Status values:
 
@@ -120,9 +120,11 @@ Status values:
 | `/meeting` | `MeetingRecordingPage` in a fullscreen `MaterialPage` | Required | `MeetingRecordingPage` or `RecordingPage.meeting` | Same screen family as `/recording`, different binding. |
 | `/matome/:id` | `MatomeDetailPage(id)` | Required | `MatomeDetailPage` | Primary Matome hub. |
 | `/files` | `FilesPage`; root route when `!FeatureFlags.newNavShell`, shell branch when `FeatureFlags.newNavShell` | Required | `FilesPage` | One canonical Page serves both router placements. |
-| `/recording/detail/:id` | `fileDetailPage(context, FileDetailPage.audio(id))` | Required | `FileDetailPage.audio` | `fileDetailPage` is a Frame/transition wrapper. |
-| `/recording/image/:id` | `fileDetailPage(context, FileDetailPage.image(id))` | Required | `FileDetailPage.image` | Image item detail variant. |
-| `/recording/document/:id` | `fileDetailPage(context, FileDetailPage.document(id))` | Required | `FileDetailPage.document` | Document item detail variant. |
+| `/items/audio/:id` | `fileDetailPage(context, FileDetailPage.audio(id))` | Required | `FileDetailPage.audio` | Audio file item detail variant; `fileDetailPage` is a Frame/transition wrapper. |
+| `/items/image/:id` | `fileDetailPage(context, FileDetailPage.image(id))` | Required | `FileDetailPage.image` | Image file item detail variant. |
+| `/items/document/:id` | `fileDetailPage(context, FileDetailPage.document(id))` | Required | `FileDetailPage.document` | Document file item detail variant. |
+| `/items/video/:id` | `fileDetailPage(context, FileDetailPage.video(id))` | Required | `FileDetailPage.video` | Video file item detail variant. Video remains `item_type=file` with `media_type=video`; no separate payload table or AI DispatchJob leg. |
+| `/items/text/:id` | `TextItemPage(id)` | Required | `TextItemPage` | Plain-text item detail/edit host. Deliberately file-less: no durable-copy, no presign/upload queue, and no AI DispatchJob leg. This DispatchJob-skip asymmetry is intentional because text payloads are already user-authored content, not media awaiting transcription/summarization. |
 | `/inbox` | `InboxPage` inside the shell | Required | `InboxPage` | Fixed home tab. |
 | `/inbox/settings` | `SettingsPage` | Required | `SettingsPage` | Nested under the inbox branch today. |
 | `/inbox/:id` | Legacy redirect to `/matome/:matomeId` with `RecordingDetailScreen` fallback | Exempt | None while redirect-only | Re-review if legacy recording deep links stop redirecting. |
@@ -153,7 +155,9 @@ sequence is documented in the native docs for the journey component.
   `/matome/:id`, and `/spaces/:spaceId` with `InboxPage`, `MatomeDetailPage`,
   and `SpaceDetailPage`.
 - `Journeys/Mobile/Review` and `Journeys/Desktop/Review` cover `/files` and
-  `/recording/detail/:id` with `FilesPage` and `FileDetailPage.audio`.
+  `/items/audio/:id` with `FilesPage` and `FileDetailPage.audio`; text item
+  detail coverage is registered under Widgetbook `[Pages]` because its file-less
+  create path is deliberately not part of the file review journey.
 - `Journeys/Mobile/Recovery` and `Journeys/Desktop/Recovery` cover
   `/inbox/settings`, `/inbox`, and `/files` with `SettingsPage`, `InboxPage`,
   and `FilesPage`.
