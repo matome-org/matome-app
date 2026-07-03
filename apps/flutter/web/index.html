@@ -29,6 +29,81 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
+  <!--
+    Hardened CSP — task #1861, plan #131 (web wave). OPFS-persisted at-rest
+    encryption (#1860) turns a transient XSS into a DURABLE breach (the
+    decrypted DEK also lives in the JS heap for the session — see
+    `lib/core/crypto/dek_session_guard.dart` and
+    `.docs/internal/at-rest-key-flow.md` §6). This CSP is the honest
+    mitigation available on the web platform: it restricts where executable
+    JS can come from, which is the actual delivery vector for that XSS.
+
+    A <meta> CSP is BEST-EFFORT ONLY — per the CSP spec, `frame-ancestors`,
+    `report-uri`/`report-to`, and `sandbox` are NOT honored in a <meta> tag,
+    only in a real HTTP response header. The authoritative, fuller policy
+    (same script/style/connect rules PLUS frame-ancestors) is set as a
+    response header in `nginx.conf`, which is how this app is actually
+    served (see Dockerfile.web). This meta tag is a defense-in-depth copy for
+    any deployment that serves index.html without going through that nginx
+    config, and is kept in sync with it by hand — see nginx.conf's own
+    comment block before editing either.
+
+    Directive notes:
+      script-src 'self' 'wasm-unsafe-eval' — 'self' only for script origin
+        (blocks inline <script> injection and any 3rd-party script host —
+        the actual XSS-delivery mitigation). 'wasm-unsafe-eval' (NOT the
+        much broader 'unsafe-eval') is required for compiling the sqlite3
+        WebAssembly module (`sqlite3.wasm`) this app loads for the Drift/
+        Wasm database — Chrome's CSP model gates wasm instantiation behind
+        this specific token even though no plaintext `eval()` is ever used.
+      style-src 'self' 'unsafe-inline' — Flutter's web engine (text
+        measurement / glassmorphism helpers) injects inline <style> at
+        runtime; there is no nonce hook for this in the current Flutter web
+        build output. This is a known, documented residual gap — style
+        injection cannot execute arbitrary JS by itself, so it is a much
+        lower-severity relaxation than allowing inline/3rd-party SCRIPT would
+        be, which this policy does NOT allow.
+      connect-src 'self' http: https: ws: wss: — the app's XHR/fetch/
+        WebSocket target is NOT same-origin: the Core API is a separate host
+        (`AppConfig.apiBaseUrl`, e.g. http://localhost:4000) and, when the
+        `ff.godMode` build flag is on (this repo's Dockerfile.web bakes it on
+        for the lab/dev image — see `lib/features/dev/god_mode_host.dart`),
+        the user can point the client at ANY http(s) host at runtime. A CSP
+        cannot enumerate an unknown, user-chosen host in advance, so
+        connect-src is left open on scheme rather than pinned to one origin
+        here. THIS IS A REAL, DOCUMENTED TRADE-OFF (see the honest-limits
+        note in `.docs/internal/at-rest-key-flow.md` §6): a hardened
+        production deployment should build with `ff.godMode` OFF and pin
+        connect-src to the exact known Core API origin instead of this
+        broad form.
+      img-src 'self' data: blob: — data: for inlined icons, blob: for
+        locally-generated object URLs (e.g. media preview).
+      media-src 'self' blob: http: https: — audio/video playback; same
+        god-mode host caveat as connect-src applies to any direct
+        cross-origin media URL.
+      worker-src 'self' blob: — the Drift/sqlite3 Wasm worker
+        (`web/drift_worker.js`).
+      font-src 'self' data:; object-src 'none'; base-uri 'none';
+        form-action 'self' — standard hardening, no legitimate use of any of
+        these beyond 'self'/'none' in this app.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'wasm-unsafe-eval';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob:;
+    font-src 'self' data:;
+    connect-src 'self' http: https: ws: wss:;
+    media-src 'self' blob: http: https:;
+    worker-src 'self' blob:;
+    object-src 'none';
+    base-uri 'none';
+    form-action 'self';
+  ">
+  <!-- Classic (widely-supported) referrer-policy meta form; the
+       authoritative Referrer-Policy RESPONSE HEADER is set in nginx.conf. -->
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
   <title>matome_flutter</title>
   <link rel="manifest" href="manifest.json">
 </head>

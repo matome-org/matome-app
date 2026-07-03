@@ -244,6 +244,52 @@ persistence entirely).
    `true` in 10.x and **wipes** the value on a transient decrypt error. For the
    DEK a silent wipe = unrecoverable local store. Construct with
    `resetOnError: false`. (Already noted in `db_encryption.dart`.)
+5. **OPFS persistence (task #1860) turned a transient XSS into a durable
+   breach — task #1861 narrows, does not close, that window.** Before #1860,
+   the web store was in-memory only: a page reload wiped everything an XSS
+   payload might have touched. After #1860, the encrypted DB image (and,
+   once media is wired to OPFS, encrypted media) survives across reloads —
+   so does the vulnerability surface: a persisted-XSS payload (or a
+   malicious/compromised deploy of this app's own JS) that runs once can
+   keep reading OPFS on every future visit, not just the one session it
+   landed in. #1861's mitigations and their honest limits:
+   - **Hardened CSP** (`web/index.html` meta + the authoritative
+     `nginx.conf` response header) restricts script origins to `'self'` —
+     this is the actual delivery-vector defense (mitigates a malicious
+     3rd-party/injected script from running at all) but does **not**
+     defend against a compromise of the app's OWN first-party JS (a
+     supply-chain compromise of this repo's build, or a dependency).
+   - **Subresource Integrity is PARTIAL, not full**, for a structural
+     reason, not an oversight: Flutter's web build loads `main.dart.js` /
+     the CanvasKit or skwasm engine binary / `flutter_service_worker.js`
+     via its own JS loader (`_flutter.loader` inside `flutter_bootstrap.js`),
+     not via further static `<script src>`/`<link>` tags — and SRI only
+     applies to a resource named directly in a tag's `integrity` attribute.
+     `Dockerfile.web` computes and injects a real SHA-384 hash for the ONE
+     tag that IS static (`flutter_bootstrap.js` itself, hashed against the
+     actual built file post-`flutter build web`), so tampering with that
+     top-level entry point is caught — but a compromise reached through
+     `main.dart.js` or the engine binary it loads next is **not** covered by
+     any `integrity` attribute in this build.
+   - **DEK heap-lifetime minimization** (`lib/core/crypto/dek_session_guard.dart`)
+     wipes the live DEK (`Dek.wipe()` — zeroes the bytes in place) on
+     explicit lock, explicit logout, and an idle timeout, and requires a
+     fresh unlock (re-derive KEK, re-unwrap) before the store opens again.
+     This bounds *how long* a compromised live tab has a working key, it
+     does not prevent a compromise that happens WHILE the session is
+     unlocked and active from reading the DEK and everything it decrypts —
+     see item 3 above. There is no code-level defense against that; it is
+     the fundamental limit of running decryption in a browser tab that also
+     runs untrusted-adjacent JS in the same origin.
+   - **Bottom line, stated plainly:** the envelope + OPFS + CSP + SRI + DEK-
+     wipe stack together defend the data **at rest** (a stolen/inspected
+     OPFS file, or a browser profile copied off the disk, is ciphertext) and
+     narrow the **at-risk window** of a live compromise. Neither this task
+     nor any of its predecessors makes a currently-running, actively
+     compromised tab safe — a live XSS or malicious extension executing
+     WHILE the user is unlocked and using the app can still read plaintext
+     and the live DEK. Web's zero-knowledge posture is, and will remain,
+     weaker than native's (item 2) for exactly this reason.
 
 ---
 
