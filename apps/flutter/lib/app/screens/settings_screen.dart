@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/feature_flags.dart';
 import '../../core/i18n/locale_controller.dart';
 import '../../core/settings/reading_pane.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_controller.dart';
 import '../../features/auth/auth_controller.dart';
+import '../../features/dev/god_mode_host.dart';
 import '../../features/files/files_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../i18n/strings.g.dart';
@@ -151,6 +153,11 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(t.settings.signOut),
             onTap: () => ref.read(authControllerProvider.notifier).logout(),
           ),
+          if (FeatureFlags.godMode) ...[
+            const Divider(),
+            _SectionHeader('God Mode'),
+            const GodModeHostTile(),
+          ],
         ],
       ),
     );

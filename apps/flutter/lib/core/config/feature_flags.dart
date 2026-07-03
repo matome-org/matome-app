@@ -110,4 +110,18 @@ class FeatureFlags {
     'ff.masterDetailLayout',
     defaultValue: false,
   );
+
+  /// God mode (developer host switching). Default OFF (dark) — this is a
+  /// build-time gate whose ONLY job is to reveal the custom-host controls
+  /// (welcome screen "custom host" affordance + the Settings › God Mode
+  /// section). The gate is compile-time so a release build tree-shakes the
+  /// affordance out entirely; the *value* it edits (the backend base URL
+  /// override) is a RUNTIME setting persisted in the secure [SettingsStore]
+  /// and driven by [EndpointController] — the flag never carries a URL.
+  ///
+  /// Turn on for a dev build with `--dart-define=ff.godMode=true`.
+  static const bool godMode = bool.fromEnvironment(
+    'ff.godMode',
+    defaultValue: false,
+  );
 }

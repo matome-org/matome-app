@@ -6,6 +6,7 @@ import '../features/contacts/contacts_repository.dart';
 import '../features/matome/matomes_repository.dart';
 import '../features/recordings/recordings_repository.dart';
 import '../features/spaces/spaces_repository.dart';
+import 'config/endpoint_controller.dart';
 import 'db/app_database.dart';
 import 'http/api_client.dart';
 import 'http/api_exception.dart';
@@ -22,8 +23,14 @@ final settingsStoreProvider = Provider<SettingsStore>(
 );
 
 /// Configured dio-backed API client (with the Bearer interceptor).
+///
+/// Watches [endpointConfigProvider] so a god-mode host switch rebuilds the
+/// client (and every repo watching it) against the new base URL at runtime.
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(tokenStore: ref.watch(tokenStoreProvider));
+  return ApiClient(
+    tokenStore: ref.watch(tokenStoreProvider),
+    baseUrl: ref.watch(endpointConfigProvider),
+  );
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {

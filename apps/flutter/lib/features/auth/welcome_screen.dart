@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_button.dart';
+import '../dev/god_mode_host.dart';
 
 /// Max width of the content column on wide (web/desktop) viewports.
 const double _contentMaxWidth = 440;
@@ -78,6 +79,10 @@ class WelcomeScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                      const Spacer(),
+                      // God-mode custom-host affordance (renders nothing unless
+                      // FeatureFlags.godMode is on).
+                      const GodModeHostButton(),
                     ],
                   ),
                   SizedBox(height: spacing.xl + spacing.xs),
