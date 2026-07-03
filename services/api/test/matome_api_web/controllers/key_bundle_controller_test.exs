@@ -121,13 +121,39 @@ defmodule MatomeApiWeb.KeyBundleControllerTest do
 
   defp register_conn(conn) do
     email = "user-#{System.unique_integer([:positive])}@example.com"
-    register_conn = post(conn, ~p"/api/auth/register", %{email: email, password: @password})
+
+    register_conn =
+      post(with_unique_ip(conn), ~p"/api/auth/register", %{email: email, password: @password})
+
     %{"access_token" => access_token, "user" => user} = json_response(register_conn, 201)
 
     %{
-      conn: build_conn() |> put_req_header("authorization", "Bearer #{access_token}"),
+      conn:
+        with_unique_ip(build_conn())
+        |> put_req_header("authorization", "Bearer #{access_token}"),
       user: user
     }
+  end
+
+  # CF-2 (task #1857, plan #131 W5): `MatomeApi.RateLimiter` backs
+  # `:keybundle_get_rate_limit`'s `:ip` check with a single process-lifetime
+  # ETS table that is never reset between ExUnit tests, and
+  # `Phoenix.ConnTest.build_conn/0` always hardcodes `remote_ip: {127, 0, 0,
+  # 1}`. Left alone, EVERY GET /keybundle call across every test in this
+  # file (not just the dedicated rate-limit test below) accumulates against
+  # the SAME 127.0.0.1 IP bucket, so aggregate suite volume can trip a
+  # stray 429 on a test that only expects 200 — a real, previously observed
+  # flake, not hypothetical. Giving each test's conn a unique synthetic
+  # remote_ip isolates its own IP-bucket from every other test's, without
+  # touching `MatomeApi.RateLimiter`/`RateLimit` plug production code at
+  # all (test-infra-only fix; mirrors the identical pattern already used for
+  # the `:auth` scope in auth_controller_test.exs /
+  # key_bundle_recovery_controller_test.exs, just not yet applied to the
+  # returned *authenticated* conn that actually issues the GET/PUT
+  # /keybundle calls under test).
+  defp with_unique_ip(conn) do
+    n = System.unique_integer([:positive, :monotonic])
+    %{conn | remote_ip: {198, 51, rem(div(n, 256), 256), rem(n, 256)}}
   end
 
   defp bundle_params do

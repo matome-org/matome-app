@@ -41,7 +41,7 @@ defmodule MatomeApiWeb.KeyBundleRecoveryControllerTest do
     put(authed_conn, ~p"/api/keybundle", original) |> json_response(200)
 
     reset_token = request_reset_token(email)
-    recovery_conn = with_reset_token(build_conn(), reset_token)
+    recovery_conn = with_reset_token(with_unique_ip(build_conn()), reset_token)
 
     get_body = get(recovery_conn, ~p"/api/keybundle/recovery") |> json_response(200)
     assert get_body["key_bundle"]["salt_rec"] == original["salt_rec"]
@@ -76,9 +76,10 @@ defmodule MatomeApiWeb.KeyBundleRecoveryControllerTest do
     put(other_authed, ~p"/api/keybundle", other_params) |> json_response(200)
 
     owner_reset_token = request_reset_token(owner_email)
-    owner_recovery_conn = with_reset_token(build_conn(), owner_reset_token)
+    owner_recovery_conn = with_reset_token(with_unique_ip(build_conn()), owner_reset_token)
 
     owner_body = get(owner_recovery_conn, ~p"/api/keybundle/recovery") |> json_response(200)
+
     refute owner_body["key_bundle"]["wrapped_dek_recovery"] ==
              other_params["wrapped_dek_recovery"]
 
@@ -93,7 +94,7 @@ defmodule MatomeApiWeb.KeyBundleRecoveryControllerTest do
     put(authed_conn, ~p"/api/keybundle", bundle_params()) |> json_response(200)
 
     reset_token = request_reset_token(email)
-    recovery_conn = with_reset_token(build_conn(), reset_token)
+    recovery_conn = with_reset_token(with_unique_ip(build_conn()), reset_token)
 
     # Per-user limit is 5/min (see router.ex :keybundle_recovery_rate_limit).
     statuses = for _ <- 1..8, do: get(recovery_conn, ~p"/api/keybundle/recovery").status
@@ -136,6 +137,14 @@ defmodule MatomeApiWeb.KeyBundleRecoveryControllerTest do
   # bucket every other Phoenix.ConnTest conn in the suite uses (that limiter
   # is backed by a process-lifetime ETS table with no per-test reset — see
   # the identical helper + comment in auth_controller_test.exs).
+  #
+  # CF-2 (task #1857, plan #131 W5): also applied to the `recovery_conn` /
+  # `owner_recovery_conn` built for the actual GET/PUT /keybundle/recovery
+  # calls under test — those hit the SEPARATE `:keybundle_recovery` scope's
+  # `:ip` check (router.ex), which shares the exact same
+  # never-reset-between-tests ETS table. Without this, aggregate GET
+  # /keybundle/recovery volume across every test in this file could trip a
+  # stray 429 on a test expecting 200 (a real, previously observed flake).
   defp with_unique_ip(conn) do
     n = System.unique_integer([:positive, :monotonic])
     %{conn | remote_ip: {203, 0, rem(div(n, 256), 256), rem(n, 256)}}
