@@ -129,6 +129,60 @@ defmodule MatomeApiWeb.AuthControllerTest do
              |> json_response(422)
   end
 
+  test "additive rollout: legacy password shape and new auth_secret shape both authenticate (task #1852)",
+       %{conn: conn} do
+    # This test's conns get a synthetic, unique remote_ip so its extra
+    # register/login calls don't add to the shared 127.0.0.1 :ip rate-limit
+    # bucket every other Phoenix.ConnTest conn in the suite uses (router.ex
+    # :auth_rate_limit — 60/min per IP, backed by a process-lifetime ETS
+    # table with no per-test reset — see MatomeApi.RateLimiter). The
+    # per-email bucket (the actual credential-stuffing lockout) is untouched
+    # and still exercised normally via the unique emails below.
+    conn = with_unique_ip(conn)
+
+    # Legacy client: still sends the raw password under "password", exactly
+    # as before this task. Must keep working so an un-migrated client is
+    # never locked out mid-rollout.
+    legacy_email = unique_email()
+    post(conn, ~p"/api/auth/register", %{email: legacy_email, password: @password})
+
+    assert post(with_unique_ip(build_conn()), ~p"/api/auth/login", %{
+             email: legacy_email,
+             password: @password
+           })
+           |> json_response(200)
+
+    # New client: never sends the raw password at all. It derives
+    # auth_secret = Argon2id(password, salt_auth) client-side and sends
+    # only that as the credential, for both register and login.
+    new_email = unique_email()
+    auth_secret = Base.encode64(:crypto.strong_rand_bytes(32))
+
+    post(conn, ~p"/api/auth/register", %{email: new_email, auth_secret: auth_secret})
+
+    assert post(with_unique_ip(build_conn()), ~p"/api/auth/login", %{
+             email: new_email,
+             auth_secret: auth_secret
+           })
+           |> json_response(200)
+
+    # Wrong auth_secret still rejects — the new shape isn't a bypass.
+    assert %{"error" => "invalid_credentials"} =
+             post(with_unique_ip(build_conn()), ~p"/api/auth/login", %{
+               email: new_email,
+               auth_secret: Base.encode64(:crypto.strong_rand_bytes(32))
+             })
+             |> json_response(401)
+  end
+
+  # Gives a test conn a unique-per-call synthetic remote_ip so it doesn't
+  # contribute to the shared 127.0.0.1 :ip rate-limit bucket (see comment on
+  # the additive-rollout test above).
+  defp with_unique_ip(conn) do
+    n = System.unique_integer([:positive, :monotonic])
+    %{conn | remote_ip: {203, 0, rem(div(n, 256), 256), rem(n, 256)}}
+  end
+
   test "reset-password rejects a too-short password", %{conn: conn} do
     email = unique_email()
     post(conn, ~p"/api/auth/register", %{email: email, password: @password})

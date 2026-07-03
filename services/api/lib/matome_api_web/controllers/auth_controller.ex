@@ -13,6 +13,22 @@ defmodule MatomeApiWeb.AuthController do
     end
   end
 
+  # New wire shape (task #1852): a migrated client derives
+  # auth_secret = Argon2id(password, salt_auth) client-side and sends that
+  # instead of the raw password. This clause and the legacy `password` one
+  # below are both served during the additive rollout so an un-migrated
+  # client is never locked out; the `password` clause is scheduled for a
+  # later, separately-tracked subtractive drop.
+  def login(conn, %{"email" => email, "auth_secret" => auth_secret}) do
+    case Auth.login(email, auth_secret) do
+      {:ok, auth} ->
+        json(conn, auth_response(auth))
+
+      {:error, :invalid_credentials} ->
+        conn |> put_status(:unauthorized) |> json(%{error: "invalid_credentials"})
+    end
+  end
+
   def login(conn, %{"email" => email, "password" => password}) do
     case Auth.login(email, password) do
       {:ok, auth} ->

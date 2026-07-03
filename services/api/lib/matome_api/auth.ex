@@ -12,17 +12,32 @@ defmodule MatomeApi.Auth do
 
   def register_user(attrs) do
     %User{}
-    |> User.registration_changeset(attrs)
+    |> User.registration_changeset(normalize_credential(attrs))
     |> Repo.insert()
     |> with_tokens()
   end
 
-  def login(email, password) do
+  @doc """
+  Verifies the caller's login credential against the stored Argon2 hash.
+
+  `credential` is intentionally opaque here — this task (#1852) separates the
+  login secret from the encryption KEK, but that separation lives entirely on
+  the CLIENT (see `.docs/internal/at-rest-key-flow.md` §1/§3): a legacy client
+  passes the raw password; a migrated client passes
+  `auth_secret = Argon2id(password, salt_auth)` instead. Core never derives
+  one from the other and never sees the KEK — it just hashes/verifies
+  whatever credential string arrives against the value that was hashed at
+  registration for that same account.
+  """
+  def login(email, credential) do
     user = Repo.get_by(User, email: String.downcase(email || ""))
 
     cond do
-      user && Argon2.verify_pass(password || "", user.password_hash) -> with_tokens({:ok, user})
-      true -> {:error, :invalid_credentials}
+      user && Argon2.verify_pass(credential || "", user.password_hash) ->
+        with_tokens({:ok, user})
+
+      true ->
+        {:error, :invalid_credentials}
     end
   end
 
@@ -120,6 +135,25 @@ defmodule MatomeApi.Auth do
       returning: true
     )
   end
+
+  # Additive credential-shape support (task #1852, wave 2). A migrated client
+  # never sends the raw password — it sends `auth_secret` (already Argon2id-
+  # derived client-side under `salt_auth`) instead. An un-migrated client
+  # still sends `password`. Both are just opaque strings from Core's point of
+  # view, so accepting either param name here and folding it into the same
+  # virtual `:password` cast field is enough to keep old clients from being
+  # locked out while new clients stop transmitting the raw password.
+  #
+  # Subtractive follow-up (do not implement yet): once every client has
+  # migrated, drop the `password` branch here (and its controller clause) so
+  # registration only ever accepts `auth_secret` — a second breaking change,
+  # tracked separately.
+  defp normalize_credential(%{"auth_secret" => auth_secret} = attrs)
+       when is_binary(auth_secret) do
+    attrs |> Map.delete("auth_secret") |> Map.put("password", auth_secret)
+  end
+
+  defp normalize_credential(attrs), do: attrs
 
   defp with_tokens({:ok, user}), do: issue_tokens(user)
   defp with_tokens(error), do: error
