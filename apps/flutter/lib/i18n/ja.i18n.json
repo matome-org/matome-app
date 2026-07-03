@@ -47,6 +47,7 @@
     "recordMeeting": "会議を録音",
     "importFile": "ファイルを取り込む",
     "addPhoto": "写真を追加",
+    "addVideo": "動画を追加",
     "addFile": "ファイルを追加",
     "collapse": "折りたたむ",
     "expand": "広げる"
@@ -195,6 +196,7 @@
     "personalSpaceHint": "デフォルト",
     "addItem": "項目を追加",
     "addPhoto": "写真を追加",
+    "addVideo": "動画を追加",
     "addFile": "ファイルを追加",
     "addFileFailed": "ファイルの追加に失敗しました: $error",
     "fileTooLarge": "「$name」は大きすぎます（最大 $max MB）",

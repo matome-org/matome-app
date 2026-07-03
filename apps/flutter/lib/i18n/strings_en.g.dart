@@ -217,6 +217,9 @@ class Translations$nav$en {
 	/// en: 'Add photo'
 	String get addPhoto => 'Add photo';
 
+	/// en: 'Add video'
+	String get addVideo => 'Add video';
+
 	/// en: 'Add file'
 	String get addFile => 'Add file';
 
@@ -601,6 +604,9 @@ class Translations$matome$en {
 
 	/// en: 'Add photo'
 	String get addPhoto => 'Add photo';
+
+	/// en: 'Add video'
+	String get addVideo => 'Add video';
 
 	/// en: 'Add file'
 	String get addFile => 'Add file';
@@ -1678,6 +1684,7 @@ extension on Translations {
 			'nav.recordMeeting' => 'Record meeting',
 			'nav.importFile' => 'Import file',
 			'nav.addPhoto' => 'Add photo',
+			'nav.addVideo' => 'Add video',
 			'nav.addFile' => 'Add file',
 			'nav.collapse' => 'Collapse',
 			'nav.expand' => 'Expand',
@@ -1802,6 +1809,7 @@ extension on Translations {
 			'matome.personalSpaceHint' => 'Default',
 			'matome.addItem' => 'Add item',
 			'matome.addPhoto' => 'Add photo',
+			'matome.addVideo' => 'Add video',
 			'matome.addFile' => 'Add file',
 			'matome.addFileFailed' => ({required Object error}) => 'Add file failed: ${error}',
 			'matome.fileTooLarge' => ({required Object name, required Object max}) => '"${name}" is too large (max ${max} MB)',

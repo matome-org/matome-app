@@ -133,6 +133,7 @@ class _Translations$nav$ja extends Translations$nav$en {
 	@override String get recordMeeting => '会議を録音';
 	@override String get importFile => 'ファイルを取り込む';
 	@override String get addPhoto => '写真を追加';
+	@override String get addVideo => '動画を追加';
 	@override String get addFile => 'ファイルを追加';
 	@override String get collapse => '折りたたむ';
 	@override String get expand => '広げる';
@@ -299,6 +300,7 @@ class _Translations$matome$ja extends Translations$matome$en {
 	@override String get personalSpaceHint => 'デフォルト';
 	@override String get addItem => '項目を追加';
 	@override String get addPhoto => '写真を追加';
+	@override String get addVideo => '動画を追加';
 	@override String get addFile => 'ファイルを追加';
 	@override String addFileFailed({required Object error}) => 'ファイルの追加に失敗しました: ${error}';
 	@override String fileTooLarge({required Object name, required Object max}) => '「${name}」は大きすぎます（最大 ${max} MB）';
@@ -798,6 +800,7 @@ extension on TranslationsJa {
 			'nav.recordMeeting' => '会議を録音',
 			'nav.importFile' => 'ファイルを取り込む',
 			'nav.addPhoto' => '写真を追加',
+			'nav.addVideo' => '動画を追加',
 			'nav.addFile' => 'ファイルを追加',
 			'nav.collapse' => '折りたたむ',
 			'nav.expand' => '広げる',
@@ -922,6 +925,7 @@ extension on TranslationsJa {
 			'matome.personalSpaceHint' => 'デフォルト',
 			'matome.addItem' => '項目を追加',
 			'matome.addPhoto' => '写真を追加',
+			'matome.addVideo' => '動画を追加',
 			'matome.addFile' => 'ファイルを追加',
 			'matome.addFileFailed' => ({required Object error}) => 'ファイルの追加に失敗しました: ${error}',
 			'matome.fileTooLarge' => ({required Object name, required Object max}) => '「${name}」は大きすぎます（最大 ${max} MB）',

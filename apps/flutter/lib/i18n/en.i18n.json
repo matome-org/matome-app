@@ -47,6 +47,7 @@
     "recordMeeting": "Record meeting",
     "importFile": "Import file",
     "addPhoto": "Add photo",
+    "addVideo": "Add video",
     "addFile": "Add file",
     "collapse": "Collapse",
     "expand": "Expand"
@@ -195,6 +196,7 @@
     "personalSpaceHint": "Default",
     "addItem": "Add item",
     "addPhoto": "Add photo",
+    "addVideo": "Add video",
     "addFile": "Add file",
     "addFileFailed": "Add file failed: $error",
     "fileTooLarge": "\"$name\" is too large (max $max MB)",
