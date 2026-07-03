@@ -28,6 +28,10 @@ class _FakeKeyStore implements SecureKeyStore {
     writes++;
     _data[key] = value;
   }
+
+  /// Test-only helper (not part of [SecureKeyStore]): simulates an OS
+  /// keystore entry vanishing (e.g. the `resetOnError` wipe footgun).
+  Future<void> remove(String key) async => _data.remove(key);
 }
 
 /// Deterministic Random so the generated key is predictable in tests.
@@ -191,6 +195,85 @@ void main() {
       final storage = buildDeviceKekSecureStorage();
       final androidOptions = storage.aOptions;
       expect(androidOptions.toMap()['resetOnError'], 'false');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // NativeDekProvisioner — task #1853, plan #131 W3.
+  //
+  // The DEK source the LIVE native SQLCipher open path (connection_native.dart
+  // `openEncryptedNativeConnection`) actually calls. Proves the bootstrap /
+  // reuse / fails-closed contract at the key-material layer, independent of
+  // SQLCipher itself (the SQLCipher-level wrong-key proof lives in
+  // sqlcipher_encrypted_open_test.dart, gated on a built native lib).
+  // ---------------------------------------------------------------------------
+  group('NativeDekProvisioner', () {
+    test('first call (no prior enrollment) bootstraps a device-KEK + wrapped '
+        'DEK entirely offline, and persists both', () async {
+      final store = _FakeKeyStore();
+      final dek = await NativeDekProvisioner(store).obtainDek();
+
+      expect(dek.bytes, hasLength(32));
+      expect(
+        await store.read(DeviceKeystoreKeyUnwrapper.storageKey),
+        isNotNull,
+        reason: 'a device-KEK must be minted on first boot',
+      );
+      expect(
+        await store.read(NativeDekProvisioner.wrappedDekStorageKey),
+        isNotNull,
+        reason: 'the DEK must be persisted wrapped, never raw',
+      );
+    });
+
+    test('subsequent calls against the same store reuse the SAME DEK '
+        '(no silent regeneration on every open)', () async {
+      final store = _FakeKeyStore();
+      final first = await NativeDekProvisioner(store).obtainDek();
+      final second = await NativeDekProvisioner(store).obtainDek();
+
+      expect(second.bytes, first.bytes);
+    });
+
+    test('two independent stores bootstrap different DEKs (entropy sanity)',
+        () async {
+      final a = await NativeDekProvisioner(_FakeKeyStore()).obtainDek();
+      final b = await NativeDekProvisioner(_FakeKeyStore()).obtainDek();
+      expect(a.bytes, isNot(b.bytes));
+    });
+
+    test('fails closed: an enrolled device (wrapped DEK present) whose '
+        'device-KEK has vanished from the keystore throws — NEVER mints a '
+        'replacement DEK that would orphan the existing encrypted database',
+        () async {
+      final store = _FakeKeyStore();
+      await NativeDekProvisioner(store).obtainDek(); // enroll once
+      await store.remove(DeviceKeystoreKeyUnwrapper.storageKey); // simulate
+      // a wiped/corrupted OS keystore entry (e.g. the resetOnError footgun).
+
+      expect(
+        NativeDekProvisioner(store).obtainDek(),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('fails closed: an enrolled device whose device-KEK bytes changed '
+        '(tampered/wrong) throws on unwrap — never silently regenerates',
+        () async {
+      final store = _FakeKeyStore();
+      await NativeDekProvisioner(store).obtainDek(); // enroll once
+      // Overwrite the device-KEK with different, well-formed hex bytes —
+      // simulates a corrupted keystore entry that still *reads* successfully
+      // but no longer unwraps the previously-wrapped DEK.
+      await store.write(
+        DeviceKeystoreKeyUnwrapper.storageKey,
+        'ff' * 32,
+      );
+
+      expect(
+        NativeDekProvisioner(store).obtainDek(),
+        throwsA(isA<EnvelopeTamperException>()),
+      );
     });
   });
 }

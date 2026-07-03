@@ -3,8 +3,12 @@ import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../crypto/key_material.dart' show Kek;
-import '../crypto/key_unwrapper.dart' show KeyUnwrapper;
+import '../crypto/envelope.dart'
+    show PayloadType, WrappedEnvelope, WrapperType, wrapKey;
+import '../crypto/key_material.dart'
+    show Dek, Kek, kSymmetricKeyLength, secureRandomBytes;
+import '../crypto/key_unwrapper.dart'
+    show KeyUnwrapper, KeyUnwrapperUnwrap;
 
 /// Minimal key/value contract the [DbEncryptionKeyManager] needs from a secure
 /// store. Abstracted so tests can inject a fake in-memory store without the
@@ -74,16 +78,10 @@ class DbEncryptionKeyManager {
   }
 
   String _generateHexKey() {
-    final bytes = List<int>.generate(_keyBytes, (_) => _random.nextInt(256));
-    return _hex(bytes);
-  }
-
-  static String _hex(List<int> bytes) {
-    final sb = StringBuffer();
-    for (final b in bytes) {
-      sb.write(b.toRadixString(16).padLeft(2, '0'));
-    }
-    return sb.toString();
+    final bytes = Uint8List.fromList(
+      List<int>.generate(_keyBytes, (_) => _random.nextInt(256)),
+    );
+    return hexEncodeKeyBytes(bytes);
   }
 
   /// Builds the `PRAGMA key` statement for a raw hex passphrase. SQLCipher reads
@@ -165,4 +163,106 @@ Uint8List _hexDecode(String hexString) {
     bytes[i] = int.parse(hexString.substring(i * 2, i * 2 + 2), radix: 16);
   }
   return bytes;
+}
+
+/// Lowercase hex encoding shared by every raw key material this file
+/// produces: the legacy [DbEncryptionKeyManager] passphrase, the
+/// [NativeDekProvisioner] device-KEK bootstrap, and (via
+/// `connection_native.dart`) the final DEK handed to `PRAGMA key`. One
+/// implementation so the wire shape (`^[0-9a-f]+$`, even length) can't drift
+/// between call sites.
+String hexEncodeKeyBytes(Uint8List bytes) {
+  final sb = StringBuffer();
+  for (final b in bytes) {
+    sb.write(b.toRadixString(16).padLeft(2, '0'));
+  }
+  return sb.toString();
+}
+
+/// Provisions -- bootstraps once, then reuses -- the DEK that keys the live
+/// native SQLCipher connection (task #1853, plan #131 W3), entirely through
+/// the shared [KeyUnwrapper] core in `key_unwrapper.dart` that W1
+/// ([DeviceKeystoreKeyUnwrapper], [WrappedEnvelope]) built but did not yet
+/// wire into the open path.
+///
+/// **No enrollment/login flow exists yet** to sync a server-issued
+/// `wrapped_dek_pw` down to this device -- `/keybundle` (task #1851) is a
+/// separate Core API concern from this native storage layer, and the actual
+/// password-entry UI is a later wave. So on a device that has never
+/// unlocked before, [obtainDek] bootstraps entirely OFFLINE: it generates a
+/// fresh device-KEK (if the OS keystore doesn't already have one under
+/// [DeviceKeystoreKeyUnwrapper.storageKey]) and a fresh [Dek], wraps the DEK
+/// under that device-KEK (`wrapper_type = deviceKek`, the same
+/// [WrappedEnvelope] layout `wrapped_dek_device` uses everywhere else in the
+/// design), and persists the wrapped blob locally under
+/// [wrappedDekStorageKey]. Every later call reuses that SAME wrapped blob
+/// through [DeviceKeystoreKeyUnwrapper.unwrapDek] (the `KeyUnwrapperUnwrap`
+/// extension -- the one unwrap core every backend shares, see that file's
+/// INVARIANT note) — so a missing/corrupted device-KEK or a tampered
+/// wrapped blob throws EXPLICITLY (a [StateError] or
+/// [EnvelopeTamperException]) instead of silently regenerating a new DEK,
+/// which would orphan the existing encrypted database. There is no
+/// plaintext-fallback branch anywhere in this class.
+///
+/// **KNOWN GAP (flagged, not silently swallowed):** this bootstrap does not
+/// sync the DEK to any other device via the server-side `wrapped_dek_pw` --
+/// a second device enrolling today would mint its OWN independent DEK, not
+/// the account's shared one, and it does not migrate an existing PLAINTEXT
+/// `matome.sqlite` written before [kSqlCipherEnabled] was ever turned on for
+/// this install (flipping the flag on a device with an existing plaintext
+/// file would try to open it with a key it was never written with --
+/// SQLCipher would reject it, which is fails-closed but not a migration).
+/// Both are out of this task's scope: cross-device DEK sync needs the
+/// login/password UI flow (task #1851 and beyond); an existing-plaintext-DB
+/// migration is not covered by any task in this plan today and should be
+/// tracked before [kSqlCipherEnabled] ever flips on for a real user install.
+class NativeDekProvisioner {
+  NativeDekProvisioner(this._store);
+
+  final SecureKeyStore _store;
+
+  /// Secure-store key under which the base64 [WrappedEnvelope] wrapping the
+  /// DEK under the device-KEK is kept. The blob is ciphertext (AEAD output),
+  /// so storing it alongside the device-KEK in the OS keystore is
+  /// belt-and-suspenders, not a secrecy requirement of the blob itself.
+  static const String wrappedDekStorageKey = 'matome.db.wrapped_dek_device';
+
+  Future<Dek> obtainDek() async {
+    final existing = await _store.read(wrappedDekStorageKey);
+    if (existing != null && existing.isNotEmpty) {
+      // Already enrolled (this boot or a prior one): unwrap through the
+      // SHARED core -- fails closed on a missing/wrong device-KEK or a
+      // tampered blob, never regenerates. No network involved (offline
+      // cold-start, #1853 AC).
+      final wrapped = WrappedEnvelope.fromBase64(existing);
+      return DeviceKeystoreKeyUnwrapper(_store).unwrapDek(wrapped);
+    }
+
+    // First-ever unlock on this device: bootstrap entirely offline (no
+    // network / no /keybundle round-trip -- see class doc KNOWN GAP).
+    final kekBytes = await _obtainOrCreateDeviceKek();
+    final dek = Dek.generate();
+    final wrapped = await wrapKey(
+      plaintext: dek.bytes,
+      wrappingKey: kekBytes,
+      payloadType: PayloadType.dek,
+      wrapperType: WrapperType.deviceKek,
+    );
+    await _store.write(wrappedDekStorageKey, wrapped.toBase64());
+    return dek;
+  }
+
+  Future<Uint8List> _obtainOrCreateDeviceKek() async {
+    final existingHex =
+        await _store.read(DeviceKeystoreKeyUnwrapper.storageKey);
+    if (existingHex != null && existingHex.isNotEmpty) {
+      return _hexDecode(existingHex);
+    }
+    final bytes = secureRandomBytes(kSymmetricKeyLength);
+    await _store.write(
+      DeviceKeystoreKeyUnwrapper.storageKey,
+      hexEncodeKeyBytes(bytes),
+    );
+    return bytes;
+  }
 }
