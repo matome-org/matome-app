@@ -13,6 +13,7 @@ defmodule MatomeApi.Application do
       {Oban, Application.fetch_env!(:matome_api, Oban)},
       {DNSCluster, query: Application.get_env(:matome_api, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: MatomeApi.PubSub},
+      MatomeApi.RateLimiter,
       # Start a worker by calling: MatomeApi.Worker.start_link(arg)
       # {MatomeApi.Worker, arg},
       # Start to serve requests, typically the last entry

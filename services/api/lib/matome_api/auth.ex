@@ -1,7 +1,7 @@
 defmodule MatomeApi.Auth do
   import Ecto.Query
 
-  alias MatomeApi.Auth.{Guardian, RefreshToken, User}
+  alias MatomeApi.Auth.{Guardian, KeyBundle, RefreshToken, User}
   alias MatomeApi.Repo
 
   @access_ttl {15, :minutes}
@@ -97,6 +97,28 @@ defmodule MatomeApi.Auth do
     else
       _ -> {:error, :unauthorized}
     end
+  end
+
+  @doc "Returns the caller's key bundle, or `nil` if none has been stored yet."
+  def get_key_bundle(%User{id: user_id}), do: Repo.get_by(KeyBundle, user_id: user_id)
+
+  @doc """
+  Upserts (PUT semantics) the caller's key bundle. Every field is an opaque,
+  already-wrapped blob generated client-side — this function does not (and
+  cannot) decode, verify, or derive anything from them; it is a passthrough
+  store keyed on the unique `user_id` index, atomic via `on_conflict` rather
+  than a read-then-write race.
+  """
+  def upsert_key_bundle(%User{id: user_id}, attrs) do
+    attrs = Map.put(attrs, "user_id", user_id)
+
+    %KeyBundle{}
+    |> KeyBundle.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, KeyBundle.upsert_replace_fields()},
+      conflict_target: :user_id,
+      returning: true
+    )
   end
 
   defp with_tokens({:ok, user}), do: issue_tokens(user)

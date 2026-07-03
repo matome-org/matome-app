@@ -13,11 +13,37 @@ defmodule MatomeApiWeb.Router do
     plug MatomeApiWeb.Plugs.RequireInternalToken
   end
 
+  # Anti credential-stuffing on the public auth endpoints: a per-IP limit
+  # (blunt volumetric defense) plus a per-account limit keyed on the
+  # `email` param (the actual lockout — a compromised/crackable wrapped
+  # envelope is useless to an attacker who can't also brute-force the
+  # login credential past this).
+  pipeline :auth_rate_limit do
+    plug MatomeApiWeb.Plugs.RateLimit,
+      scope: :auth,
+      checks: [
+        {:ip, limit: 60, window_ms: 60_000, lockout_ms: 60_000},
+        {{:param, "email"}, limit: 5, window_ms: 60_000, lockout_ms: 300_000}
+      ]
+  end
+
+  # Same idea for GET /keybundle: an offline attacker who dumps the
+  # opaque bundle store still cannot decrypt it, but the endpoint itself
+  # must not become a low-cost oracle for enumerating/hammering accounts.
+  pipeline :keybundle_get_rate_limit do
+    plug MatomeApiWeb.Plugs.RateLimit,
+      scope: :keybundle_get,
+      checks: [
+        {:user, limit: 10, window_ms: 60_000, lockout_ms: 300_000},
+        {:ip, limit: 30, window_ms: 60_000, lockout_ms: 60_000}
+      ]
+  end
+
   get "/health", MatomeApiWeb.HealthController, :show
   get "/openapi", OpenApiSpex.Plug.RenderSpec, []
 
   scope "/api", MatomeApiWeb do
-    pipe_through :api
+    pipe_through [:api, :auth_rate_limit]
 
     post "/auth/register", AuthController, :register
     post "/auth/login", AuthController, :login
@@ -25,6 +51,10 @@ defmodule MatomeApiWeb.Router do
     post "/auth/logout", AuthController, :logout
     post "/auth/forgot-password", AuthController, :forgot_password
     post "/auth/reset-password", AuthController, :reset_password
+  end
+
+  scope "/api", MatomeApiWeb do
+    pipe_through :api
 
     scope "/auth" do
       pipe_through :auth
@@ -33,7 +63,15 @@ defmodule MatomeApiWeb.Router do
     end
 
     scope "/" do
+      pipe_through [:auth, :keybundle_get_rate_limit]
+
+      get "/keybundle", KeyBundleController, :show
+    end
+
+    scope "/" do
       pipe_through :auth
+
+      put "/keybundle", KeyBundleController, :upsert
 
       get "/spaces/search", WorkspaceController, :search
       resources "/spaces", WorkspaceController, except: [:new, :edit]
