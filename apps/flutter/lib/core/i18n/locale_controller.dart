@@ -49,5 +49,5 @@ class LocaleController extends StateNotifier<AppLocale> {
 
 final localeControllerProvider =
     StateNotifierProvider<LocaleController, AppLocale>(
-  (ref) => LocaleController(ref.watch(settingsStoreProvider)),
-);
+      (ref) => LocaleController(ref.watch(settingsStoreProvider)),
+    );

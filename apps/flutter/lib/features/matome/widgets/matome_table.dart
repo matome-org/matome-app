@@ -186,8 +186,9 @@ class _MatomeTableState extends State<MatomeTable> {
     final view = [..._rows];
     int cmp(MatomeTableRow a, MatomeTableRow b) {
       final v = switch (_sortKey) {
-        MatomeTableSort.title =>
-          a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        MatomeTableSort.title => a.title.toLowerCase().compareTo(
+          b.title.toLowerCase(),
+        ),
         MatomeTableSort.when => a.whenSort.compareTo(b.whenSort),
         MatomeTableSort.items => a.itemCount.compareTo(b.itemCount),
         MatomeTableSort.people => a.people.compareTo(b.people),
@@ -460,8 +461,10 @@ class _HeaderRow extends StatelessWidget {
 
     return Container(
       color: colors.subtleFill,
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
           SizedBox(
@@ -669,8 +672,8 @@ class _DataRowState extends State<_DataRow> {
     final bg = widget.selected
         ? colors.accentSoft.withValues(alpha: 0.5)
         : (widget.active
-            ? colors.subtleFillStrong
-            : (_hovered ? colors.subtleFill : colors.surface));
+              ? colors.subtleFillStrong
+              : (_hovered ? colors.subtleFill : colors.surface));
 
     return _RowFocus(
       focused: _focused,
@@ -739,8 +742,9 @@ class _DataRowState extends State<_DataRow> {
                   child: Text(
                     row.when,
                     textAlign: TextAlign.center,
-                    style: typography.label
-                        .copyWith(color: colors.textSecondary),
+                    style: typography.label.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                 ),
                 SizedBox(
@@ -849,7 +853,9 @@ class _RowFocus extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border.all(
-            color: focused ? colors.accent : colors.surface.withValues(alpha: 0),
+            color: focused
+                ? colors.accent
+                : colors.surface.withValues(alpha: 0),
             width: 2,
           ),
         ),
@@ -895,15 +901,24 @@ class _RowActionsMenu extends StatelessWidget {
     final spacing = context.spacing;
     final typography = context.typography;
 
-    Widget item(IconData icon, String label, MatomeTableAction action,
-        {Color? color}) {
+    Widget item(
+      IconData icon,
+      String label,
+      MatomeTableAction action, {
+      Color? color,
+    }) {
       return MenuItemButton(
-        leadingIcon: Icon(icon, size: context.typography.body.fontSize, color: color ?? colors.textSecondary),
+        leadingIcon: Icon(
+          icon,
+          size: context.typography.body.fontSize,
+          color: color ?? colors.textSecondary,
+        ),
         onPressed: () => onAction(action),
         child: Text(
           label,
-          style:
-              typography.bodySmall.copyWith(color: color ?? colors.textPrimary),
+          style: typography.bodySmall.copyWith(
+            color: color ?? colors.textPrimary,
+          ),
         ),
       );
     }
@@ -922,25 +937,40 @@ class _RowActionsMenu extends StatelessWidget {
         ),
       ),
       builder: (context, controller, child) => IconButton(
-        icon: Icon(Icons.more_horiz, size: context.typography.body.fontSize, color: colors.textMuted),
+        icon: Icon(
+          Icons.more_horiz,
+          size: context.typography.body.fontSize,
+          color: colors.textMuted,
+        ),
         tooltip: t.matome.table.rowActions,
         padding: EdgeInsets.zero,
-        constraints:
-            BoxConstraints(minWidth: spacing.xl, minHeight: spacing.xl),
+        constraints: BoxConstraints(
+          minWidth: spacing.xl,
+          minHeight: spacing.xl,
+        ),
         visualDensity: VisualDensity.compact,
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
       ),
       menuChildren: [
         item(Icons.open_in_new, t.matome.table.open, MatomeTableAction.open),
-        item(Icons.drive_file_move_outlined, t.matome.table.moveToSpace,
-            MatomeTableAction.moveToSpace),
-        item(Icons.archive_outlined, t.matome.table.archive,
-            MatomeTableAction.archive),
+        item(
+          Icons.drive_file_move_outlined,
+          t.matome.table.moveToSpace,
+          MatomeTableAction.moveToSpace,
+        ),
+        item(
+          Icons.archive_outlined,
+          t.matome.table.archive,
+          MatomeTableAction.archive,
+        ),
         Divider(height: spacing.sm, color: colors.border),
-        item(Icons.delete_outline, t.matome.table.delete,
-            MatomeTableAction.delete,
-            color: colors.failed),
+        item(
+          Icons.delete_outline,
+          t.matome.table.delete,
+          MatomeTableAction.delete,
+          color: colors.failed,
+        ),
       ],
     );
   }
@@ -1000,10 +1030,16 @@ class _IconCount extends StatelessWidget {
     final token = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: context.typography.bodySmall.fontSize, color: colors.textMuted),
+        Icon(
+          icon,
+          size: context.typography.bodySmall.fontSize,
+          color: colors.textMuted,
+        ),
         SizedBox(width: context.spacing.xs),
-        Text('$count',
-            style: typography.label.copyWith(color: colors.textSecondary)),
+        Text(
+          '$count',
+          style: typography.label.copyWith(color: colors.textSecondary),
+        ),
       ],
     );
     return tooltip == null ? token : Tooltip(message: tooltip!, child: token);
@@ -1016,8 +1052,7 @@ class _MutedDash extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typography = context.typography;
-    return Text('—',
-        style: typography.label.copyWith(color: colors.textMuted));
+    return Text('—', style: typography.label.copyWith(color: colors.textMuted));
   }
 }
 
@@ -1049,8 +1084,10 @@ class _CompactSortBar extends StatelessWidget {
 
     return Container(
       color: colors.subtleFill,
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
           Text(
@@ -1150,8 +1187,10 @@ class _SortPill extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(radius.pill),
       child: Container(
-        padding:
-            EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xxs),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.sm,
+          vertical: spacing.xxs,
+        ),
         decoration: BoxDecoration(
           color: active ? colors.textPrimary : colors.surface,
           borderRadius: BorderRadius.circular(radius.pill),
@@ -1258,8 +1297,9 @@ class _CompactRowState extends State<_CompactRow> {
                         SizedBox(width: spacing.xs),
                         Text(
                           row.when,
-                          style: typography.label
-                              .copyWith(color: colors.textMuted),
+                          style: typography.label.copyWith(
+                            color: colors.textMuted,
+                          ),
                         ),
                       ],
                     ),
@@ -1289,29 +1329,37 @@ class _CompactRowState extends State<_CompactRow> {
                           _IconCount(
                             icon: Icons.mic_none_rounded,
                             count: row.audio,
-                            tooltip:
-                                _itemTooltip(row.audio, t.matome.table.audioUnit),
+                            tooltip: _itemTooltip(
+                              row.audio,
+                              t.matome.table.audioUnit,
+                            ),
                           ),
                         if (row.image > 0)
                           _IconCount(
                             icon: Icons.image_outlined,
                             count: row.image,
-                            tooltip:
-                                _itemTooltip(row.image, t.matome.table.imageUnit),
+                            tooltip: _itemTooltip(
+                              row.image,
+                              t.matome.table.imageUnit,
+                            ),
                           ),
                         if (row.doc > 0)
                           _IconCount(
                             icon: Icons.description_outlined,
                             count: row.doc,
-                            tooltip:
-                                _itemTooltip(row.doc, t.matome.table.docUnit),
+                            tooltip: _itemTooltip(
+                              row.doc,
+                              t.matome.table.docUnit,
+                            ),
                           ),
                         if (row.people > 0)
                           _IconCount(
                             icon: Icons.people_outline,
                             count: row.people,
                             tooltip: _itemTooltip(
-                                row.people, t.matome.table.peopleUnit),
+                              row.people,
+                              t.matome.table.peopleUnit,
+                            ),
                           ),
                         SpaceChip(space: row.space),
                         MatomeSyncChip(rollup: row.rollup),
@@ -1355,14 +1403,20 @@ class _BulkBar extends StatelessWidget {
     return Container(
       key: const ValueKey('matome-table-bulk-bar'),
       color: colors.accentSoft,
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
           SizedBox(
             width: _wCheck,
             child: IconButton(
-              icon: Icon(Icons.close, size: context.typography.body.fontSize, color: colors.accentDark),
+              icon: Icon(
+                Icons.close,
+                size: context.typography.body.fontSize,
+                color: colors.accentDark,
+              ),
               visualDensity: VisualDensity.compact,
               tooltip: t.matome.table.clear,
               onPressed: onClear,
@@ -1429,8 +1483,10 @@ class _BulkAction extends StatelessWidget {
       icon: Icon(icon, size: context.typography.body.fontSize, color: fg),
       label: Text(label, style: typography.label.copyWith(color: fg)),
       style: TextButton.styleFrom(
-        padding:
-            EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xxs),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.sm,
+          vertical: spacing.xxs,
+        ),
         minimumSize: Size.zero,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -1460,11 +1516,17 @@ class _UndoBar extends StatelessWidget {
     return Container(
       key: const ValueKey('matome-table-undo-bar'),
       color: colors.subtleFill,
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
-          Icon(Icons.history, size: context.typography.body.fontSize, color: colors.textSecondary),
+          Icon(
+            Icons.history,
+            size: context.typography.body.fontSize,
+            color: colors.textSecondary,
+          ),
           SizedBox(width: spacing.xs),
           Expanded(
             child: Text(
@@ -1474,7 +1536,11 @@ class _UndoBar extends StatelessWidget {
           ),
           AppTextButton(onPressed: onUndo, child: Text(t.matome.table.undo)),
           IconButton(
-            icon: Icon(Icons.close, size: context.typography.body.fontSize, color: colors.textMuted),
+            icon: Icon(
+              Icons.close,
+              size: context.typography.body.fontSize,
+              color: colors.textMuted,
+            ),
             visualDensity: VisualDensity.compact,
             tooltip: t.matome.table.clear,
             onPressed: onDismiss,
@@ -1504,7 +1570,11 @@ class _EmptyRows extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.table_rows_outlined, size: context.spacing.xl, color: colors.border),
+          Icon(
+            Icons.table_rows_outlined,
+            size: context.spacing.xl,
+            color: colors.border,
+          ),
           SizedBox(height: spacing.sm),
           Text(
             t.matome.table.emptyTitle,

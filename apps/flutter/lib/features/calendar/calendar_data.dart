@@ -65,8 +65,11 @@ class CalendarData {
     DateTime date, {
     required Map<String, String> spaceNames,
   }) async {
-    final dayStart = DateTime(date.year, date.month, date.day)
-        .millisecondsSinceEpoch;
+    final dayStart = DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).millisecondsSinceEpoch;
     final dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
 
     final rows = await _dao.matomeItemsByDateRange(dayStart, dayEnd);

@@ -17,7 +17,7 @@ import 'recording_controller.dart';
 /// must disable with the human-readable [unsupportedReason].
 class MeetingCaptureCapability {
   const MeetingCaptureCapability({MeetingLoopbackSource? loopback})
-      : _loopback = loopback ?? const MeetingLoopbackSource();
+    : _loopback = loopback ?? const MeetingLoopbackSource();
 
   final MeetingLoopbackSource _loopback;
 
@@ -85,5 +85,5 @@ final meetingRecordingServiceProvider = Provider<AudioRecordingService>((ref) {
 /// UI as the mic recorder, but over the meeting (loopback) service.
 final meetingRecordingControllerProvider =
     StateNotifierProvider<RecordingController, RecordingState>((ref) {
-  return RecordingController(ref.watch(meetingRecordingServiceProvider));
-});
+      return RecordingController(ref.watch(meetingRecordingServiceProvider));
+    });

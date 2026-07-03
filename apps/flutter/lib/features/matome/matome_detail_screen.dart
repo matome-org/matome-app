@@ -27,6 +27,7 @@ import '../../ui/loading_indicator.dart';
 import '../../ui/matome_detail_panel.dart';
 import '../../ui/relationship_picker.dart';
 import '../home/home_filters.dart' show formatTimestamp;
+import '../items/matome_item_type.dart';
 import 'matome_actions_menu.dart';
 import 'matome_detail_controller.dart';
 
@@ -1306,6 +1307,8 @@ const List<String> _kDocExtensions = [
   'json',
 ];
 
+const List<String> _kVideoExtensions = ['mp4', 'mov', 'mkv', 'avi'];
+
 /// The leading glyph for a candidate file row, by media kind.
 IconData _fileKindIcon(FileKind kind) {
   switch (kind) {
@@ -1313,6 +1316,8 @@ IconData _fileKindIcon(FileKind kind) {
       return Icons.image_outlined;
     case FileKind.document:
       return Icons.description_outlined;
+    case FileKind.video:
+      return Icons.video_file_outlined;
     case FileKind.audio:
       return Icons.mic_none_rounded;
   }
@@ -1406,11 +1411,22 @@ Future<void> _openMatomeAddAnything(
         label: t.matome.addPhoto,
         icon: Icons.add_photo_alternate_outlined,
       ),
+      RelationshipAction(
+        id: 'video',
+        label: t.matome.addVideo,
+        icon: Icons.video_file_outlined,
+      ),
       if (FeatureFlags.documents)
         RelationshipAction(
           id: 'file',
           label: t.matome.addFile,
           icon: Icons.upload_file_outlined,
+        ),
+      if (matome.coreId != null)
+        RelationshipAction(
+          id: 'text-note',
+          label: 'Text note',
+          icon: Icons.notes_outlined,
         ),
       // Record audio into this matome has no flow yet — a deferred stub.
       RelationshipAction(
@@ -1447,6 +1463,14 @@ Future<void> _openMatomeAddAnything(
           type: FileType.image,
           label: 'addPhoto',
         );
+      case 'video':
+        await _importFileIntoMatome(
+          context,
+          matomeId,
+          type: FileType.custom,
+          allowedExtensions: _kVideoExtensions,
+          label: 'addVideo',
+        );
       case 'file':
         await _importFileIntoMatome(
           context,
@@ -1455,6 +1479,12 @@ Future<void> _openMatomeAddAnything(
           allowedExtensions: _kDocExtensions,
           label: 'addFile',
         );
+      case 'text-note':
+        final body = await _promptTextNote(context);
+        if (body != null && body.trim().isNotEmpty) {
+          final itemId = await controller.addTextNote(body);
+          if (context.mounted) context.push('/items/text/$itemId');
+        }
       case 'create-contact':
         final name = await _promptRelationshipName(
           context,
@@ -1533,6 +1563,38 @@ Future<void> _importFileIntoMatome(
   }
 }
 
+Future<String?> _promptTextNote(BuildContext context) async {
+  final field = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AppDialog(
+      title: const Text('Text note'),
+      content: AppTextField(
+        key: const ValueKey('matome-text-note-field'),
+        controller: field,
+        autofocus: true,
+        hint: 'Write a plain-text note',
+        minLines: 6,
+        maxLines: null,
+        textInputAction: TextInputAction.newline,
+      ),
+      actions: [
+        AppTextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text(t.matome.cancel),
+        ),
+        AppTextButton(
+          key: const ValueKey('matome-text-note-save'),
+          onPressed: () => Navigator.of(ctx).pop(field.text.trim()),
+          child: Text(t.matome.save),
+        ),
+      ],
+    ),
+  );
+  field.dispose();
+  return result;
+}
+
 /// A small name-entry dialog for the picker's "Create contact" / "New space"
 /// actions. Returns the trimmed name, or null on cancel.
 Future<String?> _promptRelationshipName(
@@ -1577,25 +1639,28 @@ class _RecordingTile extends ConsumerWidget {
   final RecordingItem item;
   final String matomeId;
 
-  bool get _isImage => item.mediaType.startsWith('image');
-  bool get _isDocument => item.mediaType.startsWith('document');
+  bool get _isFile => item.itemType == MatomeItemType.file;
+  bool get _isText => item.itemType == MatomeItemType.text;
+  bool get _isImage => _isFile && item.mediaType.startsWith('image');
+  bool get _isDocument => _isFile && item.mediaType.startsWith('document');
+  bool get _isVideo => _isFile && item.mediaType.startsWith('video');
 
   void _openRecording(BuildContext context) {
     // The single-recording DetailsScreen, reached from INSIDE the matome hub for
     // one Item (#1378). This is its own non-redirecting route — the old
     // recording-centric deep-links (`/inbox/:id`, `/calendar/:id`,
     // `/spaces/recording/:id`) now redirect back UP to the parent matome, so the
-    // hub must use the dedicated `/recording/detail/:id` route to drill DOWN.
-    context.push('/recording/detail/${item.id}');
+    // hub must use the dedicated `/items/audio/:id` route to drill DOWN.
+    context.push('/items/audio/${item.id}');
   }
 
   /// Document Items drill into the DEDICATED document host (#1450). A document
-  /// must NEVER hit `/recording/detail/:id` (the AUDIO host, which awaits a
+  /// must NEVER hit `/items/audio/:id` (the AUDIO host, which awaits a
   /// presigned audio-source `downloadUrl` and renders a player bar / hangs on
   /// audio loading). The id rides in the PATH (not `extra`, which go_router
   /// drops on rebuild → `state.extra!` crash); the host loads only the row.
   void _openDocument(BuildContext context) {
-    context.push('/recording/document/${item.id}');
+    context.push('/items/document/${item.id}');
   }
 
   /// Image Items now drill into the unified file-detail HOST (#1438): an inline
@@ -1604,11 +1669,19 @@ class _RecordingTile extends ConsumerWidget {
   /// audio-vs-image mental-model split (critique P0): both kinds open a real
   /// file-detail screen rather than a one-way dialog.
   void _openImage(BuildContext context) {
-    // Image drill-down by id (`/recording/image/:id`). The id rides in the PATH
+    // Image drill-down by id (`/items/image/:id`). The id rides in the PATH
     // (not `extra`, which go_router drops on rebuild → `state.extra!` crash).
     // The host loads only the row — no audio-source `downloadUrl` an image
     // doesn't need.
-    context.push('/recording/image/${item.id}');
+    context.push('/items/image/${item.id}');
+  }
+
+  void _openVideo(BuildContext context) {
+    context.push('/items/video/${item.id}');
+  }
+
+  void _openText(BuildContext context) {
+    context.push('/items/text/${item.id}');
   }
 
   Future<void> _confirmRemove(BuildContext context) async {
@@ -1647,7 +1720,11 @@ class _RecordingTile extends ConsumerWidget {
       AppLog.event(LogCat.action, 'removeItem: confirmed ${item.id}');
       await container
           .read(matomeDetailControllerProvider(matomeId).notifier)
-          .removeItem(item.id, filePath: item.filePath);
+          .removeItem(
+            item.id,
+            filePath: item.filePath,
+            itemType: item.itemType,
+          );
       AppLog.event(LogCat.action, 'removeItem: done ${item.id}');
     } catch (e, st) {
       AppLog.error(LogCat.action, 'removeItem failed ${item.id}', e, st);
@@ -1735,16 +1812,19 @@ class _RecordingTile extends ConsumerWidget {
       );
     }
 
-    // Documents drill into the DOCUMENT host; everything else (audio) drills
-    // into the audio host — never cross the streams. The leading glyph reflects
-    // the media type (document → description glyph, audio → mic).
+    // Document/video drill into row-only file hosts; everything else (audio)
+    // drills into the audio host — never cross the streams.
     return MatomePanelRow(
       icon: matomeItemIcon(item.mediaType),
       title: item.title,
       meta: _meta(),
       trailing: trailing,
-      onTap: () =>
-          _isDocument ? _openDocument(context) : _openRecording(context),
+      onTap: () {
+        if (_isDocument) return _openDocument(context);
+        if (_isVideo) return _openVideo(context);
+        if (_isText) return _openText(context);
+        return _openRecording(context);
+      },
       onLongPress: () => _openActionsSheet(context),
     );
   }

@@ -17,14 +17,15 @@ class WorkspacesDao extends DatabaseAccessor<AppDatabase>
 
   /// All workspaces, oldest first. Mirrors `getWorkspaces`.
   Future<List<WorkspaceRow>> getWorkspaces() {
-    return (select(workspaces)
-          ..orderBy([(w) => OrderingTerm.asc(w.createdAt)]))
-        .get();
+    return (select(
+      workspaces,
+    )..orderBy([(w) => OrderingTerm.asc(w.createdAt)])).get();
   }
 
   Future<WorkspaceRow?> getWorkspaceById(String id) {
-    return (select(workspaces)..where((w) => w.id.equals(id)))
-        .getSingleOrNull();
+    return (select(
+      workspaces,
+    )..where((w) => w.id.equals(id))).getSingleOrNull();
   }
 
   /// Create a non-default workspace with a generated id. Mirrors
@@ -66,13 +67,11 @@ class WorkspacesDao extends DatabaseAccessor<AppDatabase>
   /// prior attempt) this is a no-op, so a crashed/retried promotion does not
   /// duplicate the row or re-point twice. Returns true when it performed the
   /// re-key, false when it was already done.
-  Future<bool> promoteToCloud({
-    required String oldId,
-    required String newId,
-  }) {
+  Future<bool> promoteToCloud({required String oldId, required String newId}) {
     return transaction(() async {
-      final old = await (select(workspaces)..where((w) => w.id.equals(oldId)))
-          .getSingleOrNull();
+      final old = await (select(
+        workspaces,
+      )..where((w) => w.id.equals(oldId))).getSingleOrNull();
       if (old == null) return false; // already promoted — idempotent no-op.
 
       // Drop the old local row FIRST so the cloud row can reuse its UNIQUE name
@@ -99,8 +98,9 @@ class WorkspacesDao extends DatabaseAccessor<AppDatabase>
       // Re-point every item from the old id to the new cloud id. Matomes via
       // `space_id`, directly-filed recordings via `workspace_id`. The FK is now
       // satisfied by the new row inserted above.
-      await (update(matomes)..where((m) => m.spaceId.equals(oldId)))
-          .write(MatomesCompanion(spaceId: Value(newId)));
+      await (update(matomes)..where((m) => m.spaceId.equals(oldId))).write(
+        MatomesCompanion(spaceId: Value(newId)),
+      );
       await (update(recordings)..where((r) => r.workspaceId.equals(oldId)))
           .write(RecordingsCompanion(workspaceId: Value(newId)));
       return true;
@@ -112,8 +112,9 @@ class WorkspacesDao extends DatabaseAccessor<AppDatabase>
   /// `deleteWorkspace`. Wrapped in a transaction so the two writes are atomic.
   Future<void> deleteWorkspace(String id) {
     return transaction(() async {
-      await (update(recordings)..where((r) => r.workspaceId.equals(id)))
-          .write(const RecordingsCompanion(workspaceId: Value(null)));
+      await (update(recordings)..where((r) => r.workspaceId.equals(id))).write(
+        const RecordingsCompanion(workspaceId: Value(null)),
+      );
       await (delete(workspaces)..where((w) => w.id.equals(id))).go();
     });
   }

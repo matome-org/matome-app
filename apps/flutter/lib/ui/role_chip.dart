@@ -46,15 +46,23 @@ class RoleChip extends StatelessWidget {
     final typography = context.typography;
 
     final (Color color, String label) = switch (role) {
-      MatomeContactRole.organizer => (colors.accentDark, t.matome.roleOrganizer),
+      MatomeContactRole.organizer => (
+        colors.accentDark,
+        t.matome.roleOrganizer,
+      ),
       MatomeContactRole.speaker => (colors.badgeIdeas, t.matome.roleSpeaker),
-      MatomeContactRole.attendee => (colors.textSecondary, t.matome.roleAttendee),
+      MatomeContactRole.attendee => (
+        colors.textSecondary,
+        t.matome.roleAttendee,
+      ),
     };
 
     return Container(
       key: ValueKey('role-chip-${role.name}'),
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.xs, vertical: spacing.xxs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.xs,
+        vertical: spacing.xxs,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(radius.pill),

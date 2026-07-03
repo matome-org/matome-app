@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
-import '../storage/app_storage.dart' show isRunningFlutterTest, kMatomeFolderName;
+import '../storage/app_storage.dart'
+    show isRunningFlutterTest, kMatomeFolderName;
 
 /// Coarse log categories so the single app log can be grepped per concern
 /// (`grep ' sync:' app.log`, `grep '\[ERR\]'`, …).

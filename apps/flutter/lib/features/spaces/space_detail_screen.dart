@@ -95,8 +95,7 @@ class _List extends ConsumerWidget {
     final colors = context.colors;
     final spacing = context.spacing;
     final typography = context.typography;
-    final spaces =
-        ref.watch(filingSpacesProvider).valueOrNull ?? const [];
+    final spaces = ref.watch(filingSpacesProvider).valueOrNull ?? const [];
 
     if (items.isEmpty) {
       return RefreshIndicator(

@@ -36,8 +36,10 @@ class SpaceChip extends StatelessWidget {
 
     return Container(
       key: const ValueKey('space-chip'),
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.xs, vertical: spacing.xxs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.xs,
+        vertical: spacing.xxs,
+      ),
       decoration: BoxDecoration(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(radius.pill),

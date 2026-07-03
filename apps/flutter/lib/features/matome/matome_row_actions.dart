@@ -105,8 +105,9 @@ class MatomeRowActions {
   Future<void> _archive(BuildContext context, WidgetRef ref) async {
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
-    final controller =
-        container.read(matomeDetailControllerProvider(matome.id).notifier);
+    final controller = container.read(
+      matomeDetailControllerProvider(matome.id).notifier,
+    );
 
     final confirmed = await showDialog<bool>(
       context: context,

@@ -38,7 +38,7 @@ abstract class RecorderBackend {
 /// Production backend — delegates straight to `record`'s [AudioRecorder].
 class RecordRecorderBackend implements RecorderBackend {
   RecordRecorderBackend([AudioRecorder? recorder])
-      : _recorder = recorder ?? AudioRecorder();
+    : _recorder = recorder ?? AudioRecorder();
 
   final AudioRecorder _recorder;
 
@@ -46,8 +46,7 @@ class RecordRecorderBackend implements RecorderBackend {
   Future<bool> hasPermission() => _recorder.hasPermission();
 
   @override
-  Future<void> start(String path,
-      {AudioEncoder encoder = AudioEncoder.aacLc}) {
+  Future<void> start(String path, {AudioEncoder encoder = AudioEncoder.aacLc}) {
     return _recorder.start(RecordConfig(encoder: encoder), path: path);
   }
 

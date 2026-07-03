@@ -119,7 +119,9 @@ class ContactsRepository {
   /// `DELETE /api/contacts/:id` (Bearer). 204/200/404 are all success.
   Future<void> deleteContact(int id) async {
     try {
-      final response = await _apiClient.dio.delete<dynamic>('/api/contacts/$id');
+      final response = await _apiClient.dio.delete<dynamic>(
+        '/api/contacts/$id',
+      );
       final status = response.statusCode ?? 0;
       if (status == 401) throw _unauthorized;
       if (status != 204 && status != 200 && status != 404) {

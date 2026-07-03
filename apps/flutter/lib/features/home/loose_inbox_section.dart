@@ -34,7 +34,8 @@ class LooseInboxSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
-    final items = ref.watch(looseInboxControllerProvider).valueOrNull ??
+    final items =
+        ref.watch(looseInboxControllerProvider).valueOrNull ??
         const <InboxItem>[];
     if (items.isEmpty) return const SizedBox.shrink();
 
@@ -105,18 +106,20 @@ class _LooseCard extends ConsumerWidget {
     final ids = result.candidateIds;
     if (ids == null || ids.isEmpty) return;
     final spaceId = ids.first;
-    await ref.read(inboxControllerProvider.notifier).moveToSpace(item.id, spaceId);
+    await ref
+        .read(inboxControllerProvider.notifier)
+        .moveToSpace(item.id, spaceId);
   }
 
   static String _mediaLabel(String mediaType) => switch (mediaType) {
-        'image' => 'Photo',
-        'document' => 'Document',
-        _ => 'Audio',
-      };
+    'image' => 'Photo',
+    'document' => 'Document',
+    _ => 'Audio',
+  };
 
   static IconData _mediaIcon(String mediaType) => switch (mediaType) {
-        'image' => Icons.image_outlined,
-        'document' => Icons.description_outlined,
-        _ => Icons.mic_none,
-      };
+    'image' => Icons.image_outlined,
+    'document' => Icons.description_outlined,
+    _ => Icons.mic_none,
+  };
 }

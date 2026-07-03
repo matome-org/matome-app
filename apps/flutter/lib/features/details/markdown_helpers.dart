@@ -24,8 +24,8 @@ bool computeIsDirty(String transcript, String savedText) =>
 /// __tests__/unit/isDirty.unit.test.ts.
 class DirtyTracker {
   DirtyTracker(String initialText)
-      : _savedText = initialText,
-        _transcript = initialText;
+    : _savedText = initialText,
+      _transcript = initialText;
 
   String _savedText;
   String _transcript;

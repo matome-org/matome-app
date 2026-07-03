@@ -105,9 +105,8 @@ class MasterDetailScaffold extends StatelessWidget {
     // onClick is a TRANSIENT pane: give it a close affordance so the user can
     // dismiss it back to the full-width master (the embedded detail has none of
     // its own). `always` is persistent → no close bar.
-    final showCloseBar = mode == ReadingPaneMode.onClick &&
-        hasSelection &&
-        onClosePane != null;
+    final showCloseBar =
+        mode == ReadingPaneMode.onClick && hasSelection && onClosePane != null;
     final Widget pane = showCloseBar
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

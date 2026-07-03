@@ -16,10 +16,8 @@ class CommandResult {
 /// PipeWire/Pulse source resolution below is unit-testable without spawning
 /// `which` / `pactl`. Mirrors the codebase idiom of `Process.run` +
 /// `which fmedia` in [AudioRecordingService].
-typedef CommandRunner = Future<CommandResult> Function(
-  String executable,
-  List<String> arguments,
-);
+typedef CommandRunner =
+    Future<CommandResult> Function(String executable, List<String> arguments);
 
 /// Production [CommandRunner] — straight delegate to [Process.run].
 Future<CommandResult> defaultCommandRunner(
@@ -53,9 +51,9 @@ class MeetingLoopbackSource {
   const MeetingLoopbackSource({
     CommandRunner runner = defaultCommandRunner,
     bool Function()? isLinux,
-  })  : _run = runner,
-        // ignore: prefer_initializing_formals
-        _isLinux = isLinux;
+  }) : _run = runner,
+       // ignore: prefer_initializing_formals
+       _isLinux = isLinux;
 
   final CommandRunner _run;
   final bool Function()? _isLinux;

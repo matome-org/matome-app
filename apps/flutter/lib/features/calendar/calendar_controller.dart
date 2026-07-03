@@ -127,9 +127,7 @@ class CalendarController extends StateNotifier<CalendarState> {
     if (!mounted) return;
     await Future.wait([
       loadMonthDots(state.year, state.month),
-      loadDayMatomes(
-        DateTime(state.year, state.month + 1, state.selectedDay),
-      ),
+      loadDayMatomes(DateTime(state.year, state.month + 1, state.selectedDay)),
     ]);
   }
 

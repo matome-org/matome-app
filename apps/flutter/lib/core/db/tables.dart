@@ -101,7 +101,8 @@ class Recordings extends Table {
   // exists purely as the pre-migration copy of `notes`. NULLABLE: rows whose
   // pre-migration `notes` was NULL snapshot to NULL. Distinct from `notes`
   // (user-owned, mutable) and `transcript` (machine-owned).
-  TextColumn get notesLegacyRaw => text().named('notes_legacy_raw').nullable()();
+  TextColumn get notesLegacyRaw =>
+      text().named('notes_legacy_raw').nullable()();
 
   // m012 (#1449) — the ORIGINAL file extension of an imported document Item
   // (lower-case, no leading dot — e.g. `pdf`, `docx`, `md`). This is a SCHEMA
@@ -342,13 +343,11 @@ class Contacts extends Table {
 
   // Arbitrary JSON map of contact fields (notes, etc). Stored as a TEXT
   // blob; defaults to an empty JSON object so a bare insert is valid.
-  TextColumn get metadata =>
-      text().withDefault(const Constant('{}'))();
+  TextColumn get metadata => text().withDefault(const Constant('{}'))();
 
   // Reserved FK → a real platform user. NULLABLE/unenforced: when set, the
   // owner may (eventually) view that user's Matome profile — BEHAVIOUR deferred.
-  TextColumn get linkedUserId =>
-      text().named('linked_user_id').nullable()();
+  TextColumn get linkedUserId => text().named('linked_user_id').nullable()();
 
   IntColumn get createdAt => integer().named('created_at')();
 
@@ -377,7 +376,8 @@ class MatomeContacts extends Table {
   String get tableName => 'matome_contacts';
 
   TextColumn get id => text()();
-  TextColumn get matomeId => text().named('matome_id').references(Matomes, #id)();
+  TextColumn get matomeId =>
+      text().named('matome_id').references(Matomes, #id)();
   TextColumn get contactId =>
       text().named('contact_id').references(Contacts, #id)();
   TextColumn get role => text().withDefault(const Constant('attendee'))();
@@ -387,8 +387,8 @@ class MatomeContacts extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {matomeId, contactId},
-      ];
+    {matomeId, contactId},
+  ];
 }
 
 /// Edge: a Contact as a member of a Space (.docs/internal/architecture.md §11 (D4) — `space_contacts`).
@@ -413,8 +413,8 @@ class SpaceContacts extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {spaceId, contactId},
-      ];
+    {spaceId, contactId},
+  ];
 }
 
 /// Edge: a Contact linked DIRECTLY to a file (recording) — the direct
@@ -447,8 +447,70 @@ class RecordingContacts extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {recordingId, contactId},
-      ];
+    {recordingId, contactId},
+  ];
+}
+
+/// Core `file_blobs` payload table for file items.
+@DataClassName('FileBlobRow')
+class FileBlobs extends Table {
+  @override
+  String get tableName => 'file_blobs';
+
+  IntColumn get id => integer()();
+  TextColumn get storageKey => text().named('storage_key')();
+  IntColumn get byteSize => integer().named('byte_size')();
+  TextColumn get mediaType => text().named('media_type')();
+  IntColumn get duration => integer().nullable()();
+  TextColumn get transcript => text().nullable()();
+  TextColumn get summary => text().nullable()();
+  TextColumn get insertedAt => text().named('inserted_at').nullable()();
+  TextColumn get updatedAt => text().named('updated_at').nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Core `text_contents` payload table for text items.
+@DataClassName('TextContentRow')
+class TextContents extends Table {
+  @override
+  String get tableName => 'text_contents';
+
+  IntColumn get id => integer()();
+  TextColumn get body => text()();
+  TextColumn get insertedAt => text().named('inserted_at').nullable()();
+  TextColumn get updatedAt => text().named('updated_at').nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Core `items` table. Client-side Drift intentionally declares no FK clauses:
+/// sync/listing resolves the payload arc by `item_type` with left joins.
+@DataClassName('ItemRow')
+class Items extends Table {
+  @override
+  String get tableName => 'items';
+
+  IntColumn get id => integer()();
+  IntColumn get matomeId => integer().named('matome_id')();
+  IntColumn get position => integer()();
+  TextColumn get itemType => text().named('item_type')();
+  TextColumn get metadata => text().withDefault(const Constant('{}'))();
+  IntColumn get fileBlobId => integer().named('file_blob_id').nullable()();
+  IntColumn get textContentId =>
+      integer().named('text_content_id').nullable()();
+  TextColumn get insertedAt => text().named('inserted_at').nullable()();
+  TextColumn get updatedAt => text().named('updated_at').nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {matomeId, position},
+  ];
 }
 
 /// Edge: a Matome shared with a user (.docs/internal/architecture.md §11 (D4) — `matome_shares`).

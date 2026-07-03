@@ -4,10 +4,10 @@ import 'matome_card.dart';
 import 'recording_card.dart';
 
 /// The kind of a file (an Item / recording), driving its type icon and any
-/// kind-specific meta (duration is audio-only). Mirrors the three `mediaType`
+/// kind-specific meta (duration is audio-only). Mirrors the four `mediaType`
 /// buckets `mediaTypeForPath` writes and the `FileKind` the DR-003 Files
 /// proposal (`matome_files_proposal.dart`) uses.
-enum FileKind { audio, image, document }
+enum FileKind { audio, image, document, video }
 
 /// Maps a persisted `recordings.mediaType` string to a [FileKind]. The third
 /// bucket (`document`) catches anything that is not audio/image — matching
@@ -20,6 +20,8 @@ FileKind fileKindFromMediaType(String mediaType) {
       return FileKind.audio;
     case 'image':
       return FileKind.image;
+    case 'video':
+      return FileKind.video;
     default:
       return FileKind.document;
   }
@@ -72,7 +74,7 @@ class FileRow {
   /// Display name of the file (the recording title).
   final String name;
 
-  /// audio | image | document — drives the type icon.
+  /// audio | image | document | video — drives the type icon.
   final FileKind kind;
 
   /// Lower-case source extension, no leading dot (`pdf`, `m4a`, `jpg`). From
@@ -156,14 +158,19 @@ class FileRow {
     // iff `matome.space_id ?? recording.workspace_id` is non-null. No inline
     // recompute — the Files filter partitions on this resolved bit (spec R1.2).
     final effectiveSpaceId = EffectiveSpace.effectiveSpaceId(
-      ItemMembership(matomeSpaceId: matomeSpaceId, workspaceId: row.workspaceId),
+      ItemMembership(
+        matomeSpaceId: matomeSpaceId,
+        workspaceId: row.workspaceId,
+      ),
     );
     return FileRow(
       id: row.id,
       name: row.title,
       kind: kind,
       ext: row.originalExtension,
-      sizeLabel: formatBytes(row.byteSize), // null only for legacy/no-size rows.
+      sizeLabel: formatBytes(
+        row.byteSize,
+      ), // null only for legacy/no-size rows.
       when: relativeWhen(row.createdAt, now: now),
       whenSort: row.createdAt,
       matome: matomeTitle,

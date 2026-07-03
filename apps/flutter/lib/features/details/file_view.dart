@@ -10,9 +10,9 @@ import '../../ui/status_badge.dart';
 /// The kind of media this file represents. Drives which header is shown and the
 /// default umbrella tag under the "Contents" section.
 ///
-/// `doc` is carried for completeness but its media header is deferred (the
-/// caller may pass a stub or `null` [FileViewData.mediaHeader] for now).
-enum FileMediaKind { audio, image, doc }
+/// `doc` and `video` are file-host variants; callers supply their lightweight
+/// media headers so no payload table or item_type split is needed.
+enum FileMediaKind { audio, image, doc, video }
 
 /// The honest, producer-INDEPENDENT state of a file's read-only Contents body
 /// (audio → transcript, image → description, …).
@@ -239,9 +239,7 @@ class _FileViewState extends State<FileView> {
 
     return ListView(
       shrinkWrap: widget.shrinkWrap,
-      physics: widget.shrinkWrap
-          ? const NeverScrollableScrollPhysics()
-          : null,
+      physics: widget.shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       padding: EdgeInsets.all(spacing.md),
       children: [
         _Header(title: data.title),
@@ -279,6 +277,7 @@ class _FileViewState extends State<FileView> {
       FileMediaKind.audio => tags.transcript,
       FileMediaKind.image => tags.description,
       FileMediaKind.doc => tags.document,
+      FileMediaKind.video => 'Video',
     };
   }
 }
@@ -400,10 +399,7 @@ class _Section extends StatelessWidget {
               label,
               style: typography.label.copyWith(color: colors.textSecondary),
             ),
-            if (tag != null) ...[
-              SizedBox(width: spacing.xs),
-              _Tag(label: tag),
-            ],
+            if (tag != null) ...[SizedBox(width: spacing.xs), _Tag(label: tag)],
           ],
         ),
         SizedBox(height: spacing.sm),
@@ -493,20 +489,25 @@ class _ContentsSection extends StatelessWidget {
     final status = t.fileView.contentsStatus;
     return switch (mediaKind) {
       FileMediaKind.audio => (
-          processing: status.audio.processing,
-          failed: status.audio.failed,
-          empty: status.audio.empty,
-        ),
+        processing: status.audio.processing,
+        failed: status.audio.failed,
+        empty: status.audio.empty,
+      ),
       FileMediaKind.image => (
-          processing: status.image.processing,
-          failed: status.image.failed,
-          empty: status.image.empty,
-        ),
+        processing: status.image.processing,
+        failed: status.image.failed,
+        empty: status.image.empty,
+      ),
       FileMediaKind.doc => (
-          processing: status.doc.processing,
-          failed: status.doc.failed,
-          empty: status.doc.empty,
-        ),
+        processing: status.doc.processing,
+        failed: status.doc.failed,
+        empty: status.doc.empty,
+      ),
+      FileMediaKind.video => (
+        processing: status.doc.processing,
+        failed: status.doc.failed,
+        empty: status.doc.empty,
+      ),
     };
   }
 
@@ -515,17 +516,18 @@ class _ContentsSection extends StatelessWidget {
     // A ready state with no text degrades to empty so we never render a blank
     // body claiming to be ready.
     final hasText = text != null && text.trim().isNotEmpty;
-    final effective =
-        (state == ContentsState.ready && !hasText) ? ContentsState.empty : state;
+    final effective = (state == ContentsState.ready && !hasText)
+        ? ContentsState.empty
+        : state;
     final status = _status();
 
     return switch (effective) {
       ContentsState.ready => _ReadyBody(text: text!),
       ContentsState.processing => _ProcessingBody(label: status.processing),
       ContentsState.failed => _FailedBody(
-          label: status.failed,
-          onRetry: onRetry,
-        ),
+        label: status.failed,
+        onRetry: onRetry,
+      ),
       ContentsState.empty => _EmptyBody(label: status.empty),
     };
   }

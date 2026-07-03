@@ -7,7 +7,8 @@
 library;
 
 import 'audio_desktop_init_noop.dart'
-    if (dart.library.io) 'audio_desktop_init_io.dart' as impl;
+    if (dart.library.io) 'audio_desktop_init_io.dart'
+    as impl;
 
 /// Initialize the desktop playback backend if the current platform needs it.
 /// No-op on mobile (just_audio native already works) and web.

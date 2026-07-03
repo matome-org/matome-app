@@ -62,12 +62,11 @@ List<InboxItem> inboxLooseItems(
   List<InboxItem> items, {
   required String? Function(InboxItem item) matomeSpaceIdOf,
   required String? Function(InboxItem item) workspaceIdOf,
-}) =>
-    items
-        .where(
-          (i) => isInboxLooseItem(
-            matomeSpaceId: matomeSpaceIdOf(i),
-            workspaceId: workspaceIdOf(i),
-          ),
-        )
-        .toList(growable: false);
+}) => items
+    .where(
+      (i) => isInboxLooseItem(
+        matomeSpaceId: matomeSpaceIdOf(i),
+        workspaceId: workspaceIdOf(i),
+      ),
+    )
+    .toList(growable: false);

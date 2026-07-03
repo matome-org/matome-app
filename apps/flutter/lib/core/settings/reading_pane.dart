@@ -22,7 +22,7 @@ String _readingPaneKey(ReadingPaneSurface surface) =>
 /// surfaces consume `readingPaneModeProvider(ReadingPaneSurface.<self>)`.
 class ReadingPaneModeController extends StateNotifier<ReadingPaneMode> {
   ReadingPaneModeController(this._store, this.surface)
-      : super(ReadingPaneMode.onClick) {
+    : super(ReadingPaneMode.onClick) {
     _hydrate();
   }
 
@@ -49,8 +49,12 @@ class ReadingPaneModeController extends StateNotifier<ReadingPaneMode> {
 
 /// Per-surface reading-pane mode. Keyed by [ReadingPaneSurface]; each surface
 /// gets its own independently-persisted controller.
-final readingPaneModeProvider = StateNotifierProvider.family<
-    ReadingPaneModeController, ReadingPaneMode, ReadingPaneSurface>(
-  (ref, surface) =>
-      ReadingPaneModeController(ref.watch(settingsStoreProvider), surface),
-);
+final readingPaneModeProvider =
+    StateNotifierProvider.family<
+      ReadingPaneModeController,
+      ReadingPaneMode,
+      ReadingPaneSurface
+    >(
+      (ref, surface) =>
+          ReadingPaneModeController(ref.watch(settingsStoreProvider), surface),
+    );

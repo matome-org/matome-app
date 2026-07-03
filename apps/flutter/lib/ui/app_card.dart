@@ -201,8 +201,9 @@ class AppCard extends StatelessWidget {
                           color: hasSummary
                               ? colors.textSecondary
                               : colors.textMuted,
-                          fontStyle:
-                              hasSummary ? FontStyle.normal : FontStyle.italic,
+                          fontStyle: hasSummary
+                              ? FontStyle.normal
+                              : FontStyle.italic,
                         ),
                       ),
                       SizedBox(height: spacing.xs),
@@ -253,10 +254,7 @@ class AppCard extends StatelessWidget {
                 // Actions at the right edge, centered to the whole row so
                 // mobile users can act without opening the matome. Always
                 // present; a null handler degrades to a no-op (read-only host).
-                MatomeActionsMenu(
-                  dense: true,
-                  onAction: onAction ?? (_) {},
-                ),
+                MatomeActionsMenu(dense: true, onAction: onAction ?? (_) {}),
               ],
             ),
           ),
@@ -682,10 +680,7 @@ class _MatomeMetaToken extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: colors.textMuted),
         SizedBox(width: context.spacing.xxs),
-        Text(
-          text,
-          style: TextStyle(fontSize: 11, color: colors.textSecondary),
-        ),
+        Text(text, style: TextStyle(fontSize: 11, color: colors.textSecondary)),
       ],
     );
   }
@@ -761,10 +756,7 @@ class _RecordingFooter extends StatelessWidget {
         if (card.duration.isNotEmpty)
           Text(
             card.duration,
-            style: TextStyle(
-              fontSize: 11,
-              color: context.colors.textMuted,
-            ),
+            style: TextStyle(fontSize: 11, color: context.colors.textMuted),
           ),
       ],
     );

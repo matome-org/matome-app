@@ -54,7 +54,9 @@ QueryExecutor openPlatformConnection({SecureKeyStore? keyStore}) {
   // Encrypted path — only reachable once a SQLCipher-capable native lib is
   // packaged (see kSqlCipherEnabled doc). Kept as a LazyDatabase so the async
   // key fetch defers to the first open.
-  final keyManager = DbEncryptionKeyManager(keyStore ?? FlutterSecureKeyStore());
+  final keyManager = DbEncryptionKeyManager(
+    keyStore ?? FlutterSecureKeyStore(),
+  );
   return LazyDatabase(() async {
     final hexKey = await keyManager.obtainKey();
     return driftDatabase(
@@ -64,8 +66,9 @@ QueryExecutor openPlatformConnection({SecureKeyStore? keyStore}) {
         setup: (db) {
           db.execute(DbEncryptionKeyManager.pragmaKeyStatement(hexKey));
           final cipher = db.select('PRAGMA cipher_version');
-          final version =
-              cipher.isEmpty ? '' : (cipher.first.values.first?.toString() ?? '');
+          final version = cipher.isEmpty
+              ? ''
+              : (cipher.first.values.first?.toString() ?? '');
           if (version.isEmpty) {
             throw StateError(
               'SQLCipher not active: PRAGMA cipher_version returned empty. '

@@ -25,9 +25,7 @@ enum AudioSourceKind { localFile, remoteUrl, none }
 
 class AudioSource {
   const AudioSource(this.kind, this.value);
-  const AudioSource.none()
-      : kind = AudioSourceKind.none,
-        value = null;
+  const AudioSource.none() : kind = AudioSourceKind.none, value = null;
 
   final AudioSourceKind kind;
   final String? value;
@@ -123,8 +121,8 @@ class DetailsController extends StateNotifier<DetailsState> {
     this._ref,
     String id, {
     RecordingResultAwaiter awaitResult = liveRecordingResultAwaiter,
-  })  : _awaitTerminal = awaitResult,
-        super(DetailsState(id: id)) {
+  }) : _awaitTerminal = awaitResult,
+       super(DetailsState(id: id)) {
     load();
   }
 
@@ -383,12 +381,7 @@ class DetailsController extends StateNotifier<DetailsState> {
       } catch (e, st) {
         // Local row already gone; tolerate a Core failure (e.g. already
         // deleted server-side) so the UX still navigates away.
-        AppLog.error(
-          LogCat.sync,
-          'delete Core failed coreId=$coreId',
-          e,
-          st,
-        );
+        AppLog.error(LogCat.sync, 'delete Core failed coreId=$coreId', e, st);
       }
     }
   }
@@ -415,5 +408,5 @@ class DetailsController extends StateNotifier<DetailsState> {
 /// Core id from the route param).
 final detailsControllerProvider = StateNotifierProvider.autoDispose
     .family<DetailsController, DetailsState, String>(
-  (ref, id) => DetailsController(ref, id),
-);
+      (ref, id) => DetailsController(ref, id),
+    );

@@ -10,13 +10,15 @@ import 'inbox_item.dart';
 List<InboxItem> searchItems(List<InboxItem> items, String query) {
   final q = query.trim().toLowerCase();
   if (q.isEmpty) return items;
-  return items.where((item) {
-    final card = item.card;
-    final title = card.title.toLowerCase();
-    final summary = (card.summary ?? '').toLowerCase();
-    final notes = (card.notes ?? '').toLowerCase();
-    return title.contains(q) || summary.contains(q) || notes.contains(q);
-  }).toList(growable: false);
+  return items
+      .where((item) {
+        final card = item.card;
+        final title = card.title.toLowerCase();
+        final summary = (card.summary ?? '').toLowerCase();
+        final notes = (card.notes ?? '').toLowerCase();
+        return title.contains(q) || summary.contains(q) || notes.contains(q);
+      })
+      .toList(growable: false);
 }
 
 /// Midnight (local) for the day containing [epochMs].
@@ -26,8 +28,18 @@ DateTime _startOfDay(int epochMs) {
 }
 
 const List<String> _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /// Section title for a recording day, mirroring mobile getSectionTitle:

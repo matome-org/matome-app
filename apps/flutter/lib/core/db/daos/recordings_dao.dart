@@ -67,15 +67,16 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     // (1) The owner-scoped rows, with matome + space names via LEFT joins. The
     // owner predicate is on `recordings.owner_id` itself so Unfiled/Inbox rows
     // (NULL matome/workspace) stay scoped.
-    final query = select(recordings).join([
-      leftOuterJoin(matomes, matomes.id.equalsExp(recordings.matomeId)),
-      leftOuterJoin(
-        workspaces,
-        workspaces.id.equalsExp(recordings.workspaceId),
-      ),
-    ])
-      ..where(recordings.ownerId.equals(ownerId))
-      ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
+    final query =
+        select(recordings).join([
+            leftOuterJoin(matomes, matomes.id.equalsExp(recordings.matomeId)),
+            leftOuterJoin(
+              workspaces,
+              workspaces.id.equalsExp(recordings.workspaceId),
+            ),
+          ])
+          ..where(recordings.ownerId.equals(ownerId))
+          ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
 
     final rows = await query.get();
     if (rows.isEmpty) return const [];
@@ -89,11 +90,15 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
         .toList(growable: false);
     final contactsByMatome = <String, List<String>>{};
     if (matomeIds.isNotEmpty) {
-      final contactQuery = select(matomeContacts).join([
-        innerJoin(contacts, contacts.id.equalsExp(matomeContacts.contactId)),
-      ])
-        ..where(matomeContacts.matomeId.isIn(matomeIds))
-        ..orderBy([OrderingTerm.asc(contacts.displayName)]);
+      final contactQuery =
+          select(matomeContacts).join([
+              innerJoin(
+                contacts,
+                contacts.id.equalsExp(matomeContacts.contactId),
+              ),
+            ])
+            ..where(matomeContacts.matomeId.isIn(matomeIds))
+            ..orderBy([OrderingTerm.asc(contacts.displayName)]);
       for (final row in await contactQuery.get()) {
         final mid = row.readTable(matomeContacts).matomeId;
         final name = row.readTable(contacts).displayName;
@@ -105,19 +110,26 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     // truth). One join over `recording_contacts` → `contacts` for the recording
     // ids on this page. Unlike the matome-mediated set, this also resolves
     // contacts for Unfiled files (no matome).
-    final recordingIds =
-        rows.map((r) => r.readTable(recordings).id).toList(growable: false);
+    final recordingIds = rows
+        .map((r) => r.readTable(recordings).id)
+        .toList(growable: false);
     final contactsByRecording = <String, List<String>>{};
     if (recordingIds.isNotEmpty) {
-      final directQuery = select(recordingContacts).join([
-        innerJoin(contacts, contacts.id.equalsExp(recordingContacts.contactId)),
-      ])
-        // Recording ids are already owner-scoped (the page is owner B-free);
-        // also filter the joined contact on owner so a stray cross-owner link
-        // row can never surface another owner's contact name (defense-in-depth).
-        ..where(recordingContacts.recordingId.isIn(recordingIds) &
-            contacts.ownerId.equals(ownerId))
-        ..orderBy([OrderingTerm.asc(contacts.displayName)]);
+      final directQuery =
+          select(recordingContacts).join([
+              innerJoin(
+                contacts,
+                contacts.id.equalsExp(recordingContacts.contactId),
+              ),
+            ])
+            // Recording ids are already owner-scoped (the page is owner B-free);
+            // also filter the joined contact on owner so a stray cross-owner link
+            // row can never surface another owner's contact name (defense-in-depth).
+            ..where(
+              recordingContacts.recordingId.isIn(recordingIds) &
+                  contacts.ownerId.equals(ownerId),
+            )
+            ..orderBy([OrderingTerm.asc(contacts.displayName)]);
       for (final row in await directQuery.get()) {
         final rid = row.readTable(recordingContacts).recordingId;
         final name = row.readTable(contacts).displayName;
@@ -125,33 +137,36 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
       }
     }
 
-    return rows.map((row) {
-      final recording = row.readTable(recordings);
-      final matome = row.readTableOrNull(matomes);
-      final space = row.readTableOrNull(workspaces);
-      // UNION direct + matome-mediated names, de-duplicated (direct first) so a
-      // contact linked both ways is shown once. Order: direct names (display-name
-      // asc), then any matome-only names not already present.
-      final names = <String>[];
-      final seen = <String>{};
-      for (final n in contactsByRecording[recording.id] ?? const <String>[]) {
-        if (seen.add(n)) names.add(n);
-      }
-      if (matome != null) {
-        for (final n in contactsByMatome[matome.id] ?? const <String>[]) {
-          if (seen.add(n)) names.add(n);
-        }
-      }
-      return FileRow.fromRow(
-        recording,
-        matomeTitle: matome?.title,
-        spaceName: space?.name,
-        // matome WINS (R1.1): the resolver reads the matome's space first; pass
-        // it so the Files filter's effective-space partition honours precedence.
-        matomeSpaceId: matome?.spaceId,
-        contacts: names,
-      );
-    }).toList(growable: false);
+    return rows
+        .map((row) {
+          final recording = row.readTable(recordings);
+          final matome = row.readTableOrNull(matomes);
+          final space = row.readTableOrNull(workspaces);
+          // UNION direct + matome-mediated names, de-duplicated (direct first) so a
+          // contact linked both ways is shown once. Order: direct names (display-name
+          // asc), then any matome-only names not already present.
+          final names = <String>[];
+          final seen = <String>{};
+          for (final n
+              in contactsByRecording[recording.id] ?? const <String>[]) {
+            if (seen.add(n)) names.add(n);
+          }
+          if (matome != null) {
+            for (final n in contactsByMatome[matome.id] ?? const <String>[]) {
+              if (seen.add(n)) names.add(n);
+            }
+          }
+          return FileRow.fromRow(
+            recording,
+            matomeTitle: matome?.title,
+            spaceName: space?.name,
+            // matome WINS (R1.1): the resolver reads the matome's space first; pass
+            // it so the Files filter's effective-space partition honours precedence.
+            matomeSpaceId: matome?.spaceId,
+            contacts: names,
+          );
+        })
+        .toList(growable: false);
   }
 
   /// Backfill the owning user onto every NULL-owner local row (#1469).
@@ -173,8 +188,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   Future<int> backfillNullOwner(String ownerId) {
     assert(ownerId.isNotEmpty, 'backfillNullOwner requires a non-empty owner');
     if (ownerId.isEmpty) return Future.value(0);
-    return (update(recordings)..where((r) => r.ownerId.isNull()))
-        .write(RecordingsCompanion(ownerId: Value(ownerId)));
+    return (update(recordings)..where((r) => r.ownerId.isNull())).write(
+      RecordingsCompanion(ownerId: Value(ownerId)),
+    );
   }
 
   /// All recordings, newest first.
@@ -352,8 +368,7 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
       // references it), mirroring the m007 backfill: space_id = workspaceId,
       // happened_at/created_at = the recording's createdAt.
       final matomeId = mintLocalMatomeId();
-      final happenedAt =
-          entry.createdAt.present ? entry.createdAt.value : 0;
+      final happenedAt = entry.createdAt.present ? entry.createdAt.value : 0;
       final spaceId = entry.workspaceId.present
           ? entry.workspaceId.value
           : null;
@@ -367,9 +382,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
           createdAt: happenedAt,
         ),
       );
-      await into(recordings).insertOnConflictUpdate(
-        entry.copyWith(matomeId: Value(matomeId)),
-      );
+      await into(
+        recordings,
+      ).insertOnConflictUpdate(entry.copyWith(matomeId: Value(matomeId)));
     });
   }
 
@@ -378,8 +393,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// [MatomesDao.markSummaryStale]; written inline so it joins the caller's
   /// transaction (the `Matomes` table is in this accessor).
   Future<void> _markMatomeSummaryStale(String matomeId) async {
-    await (update(matomes)..where((m) => m.id.equals(matomeId)))
-        .write(const MatomesCompanion(summaryStale: Value(true)));
+    await (update(matomes)..where((m) => m.id.equals(matomeId))).write(
+      const MatomesCompanion(summaryStale: Value(true)),
+    );
   }
 
   /// Partial update. Only the provided companion fields are written, mirroring
@@ -437,9 +453,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     String ownerId,
   ) async {
     if (ids.isEmpty) return const {};
-    final rows = await (select(recordings)
-          ..where((r) => r.id.isIn(ids) & r.ownerId.equals(ownerId)))
-        .get();
+    final rows = await (select(
+      recordings,
+    )..where((r) => r.id.isIn(ids) & r.ownerId.equals(ownerId))).get();
     return {for (final r in rows) r.id: r.matomeId};
   }
 
@@ -477,15 +493,13 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
       // Stash the source matomes BEFORE the write so we can invalidate them too.
       final prior = await matomeIdsForOwnedRecordings(ids, ownerId);
 
-      final moved = await (update(recordings)
-            ..where((r) => r.id.isIn(ids) & r.ownerId.equals(ownerId)))
-          .write(RecordingsCompanion(matomeId: Value(matomeId)));
+      final moved =
+          await (update(recordings)
+                ..where((r) => r.id.isIn(ids) & r.ownerId.equals(ownerId)))
+              .write(RecordingsCompanion(matomeId: Value(matomeId)));
 
       // Mark every affected matome's summary stale (source + destination).
-      final affected = <String>{
-        ...prior.values.whereType<String>(),
-        ?matomeId,
-      };
+      final affected = <String>{...prior.values.whereType<String>(), ?matomeId};
       for (final mid in affected) {
         await _markMatomeSummaryStale(mid);
       }
@@ -498,9 +512,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
   /// [ownerId]. Used to reject a cross-owner move target while still allowing an
   /// empty (un-owned) destination matome and the owner's own matomes (#1473).
   Future<bool> _isForeignMatome(String matomeId, String ownerId) async {
-    final rows = await (select(recordings)
-          ..where((r) => r.matomeId.equals(matomeId)))
-        .get();
+    final rows = await (select(
+      recordings,
+    )..where((r) => r.matomeId.equals(matomeId))).get();
     if (rows.isEmpty) return false; // empty matome — a valid destination.
     final ownedHere = rows.any((r) => r.ownerId == ownerId);
     return !ownedHere; // only other-owner rows → foreign.
@@ -518,10 +532,9 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
     await transaction(() async {
       final affected = <String>{};
       for (final entry in priorByRecording.entries) {
-        await (update(recordings)
-              ..where(
-                (r) => r.id.equals(entry.key) & r.ownerId.equals(ownerId),
-              ))
+        await (update(
+              recordings,
+            )..where((r) => r.id.equals(entry.key) & r.ownerId.equals(ownerId)))
             .write(RecordingsCompanion(matomeId: Value(entry.value)));
         if (entry.value != null) affected.add(entry.value!);
       }

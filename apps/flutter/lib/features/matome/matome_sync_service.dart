@@ -63,14 +63,20 @@ class MatomeSyncService {
       AppLog.event(LogCat.sync, 'sync: done');
     } on ApiException catch (error, stack) {
       if (error.isUnauthorized || error.statusCode != null) {
-        developer.log('Matome sync failed (not offline)',
-            name: 'matome.sync', error: error);
-        AppLog.error(
-            LogCat.sync, 'sync: failed (not offline)', error, stack);
+        developer.log(
+          'Matome sync failed (not offline)',
+          name: 'matome.sync',
+          error: error,
+        );
+        AppLog.error(LogCat.sync, 'sync: failed (not offline)', error, stack);
       }
     } catch (error, stack) {
-      developer.log('Matome sync write failed',
-          name: 'matome.sync', error: error, stackTrace: stack);
+      developer.log(
+        'Matome sync write failed',
+        name: 'matome.sync',
+        error: error,
+        stackTrace: stack,
+      );
       AppLog.error(LogCat.sync, 'sync: write failed', error, stack);
     }
   }
@@ -112,7 +118,9 @@ class MatomeSyncService {
 
     await _matomesRepo.updateMatome(
       coreId,
-      title: (trimmedTitle == null || trimmedTitle.isEmpty) ? null : trimmedTitle,
+      title: (trimmedTitle == null || trimmedTitle.isEmpty)
+          ? null
+          : trimmedTitle,
       happenedAt: happenedAt,
     );
   }
@@ -267,7 +275,9 @@ class MatomeSyncService {
   /// sync, spec R2). Only called behind the `localFirstSpaces` flag.
   Future<bool> _maySyncSpace(String spaceId) async {
     final spaceRow = await _workspacesDao.getWorkspaceById(spaceId);
-    if (spaceRow == null) return false; // fail-closed: unknown/local-only space.
+    if (spaceRow == null) {
+      return false; // fail-closed: unknown/local-only space.
+    }
     return SyncPolicy.can(
       currentCaller(_ref),
       Operation.spaceSync,
@@ -298,7 +308,11 @@ class MatomeSyncService {
       } on ApiException catch (error, stack) {
         // Offline / server error — leave it for the next sync to retry.
         AppLog.error(
-            LogCat.sync, 'pushArchives: archive re-push failed', error, stack);
+          LogCat.sync,
+          'pushArchives: archive re-push failed',
+          error,
+          stack,
+        );
       }
     }
     AppLog.event(LogCat.sync, 'pushArchives: converged $converged');
@@ -343,10 +357,7 @@ class MatomeSyncService {
     for (final rec in children) {
       final recCoreId = rec.coreId;
       if (recCoreId == null) continue; // not reconciled — do not send matome_id
-      await _recordingsRepo.updateRecording(
-        recCoreId,
-        matomeId: matomeCoreId,
-      );
+      await _recordingsRepo.updateRecording(recCoreId, matomeId: matomeCoreId);
     }
   }
 
@@ -366,9 +377,12 @@ class MatomeSyncService {
   Future<void> pullContacts() async {
     final remote = await _contactsRepo.fetchContacts();
     for (final contact in remote) {
-      final existing = await _contactsDao.contactByCoreId(contact.id) ??
+      final existing =
+          await _contactsDao.contactByCoreId(contact.id) ??
           await _contactsDao.getById(coreIdToLocalId(contact.id));
-      await _contactsDao.upsert(contactToCompanion(contact, existing: existing));
+      await _contactsDao.upsert(
+        contactToCompanion(contact, existing: existing),
+      );
     }
     AppLog.event(LogCat.sync, 'pullContacts: upserted ${remote.length}');
   }
@@ -380,7 +394,8 @@ class MatomeSyncService {
   Future<void> pullMatomes() async {
     final remote = await _matomesRepo.fetchMatomes();
     for (final matome in remote) {
-      final existing = await _matomesDao.matomeByCoreId(matome.id) ??
+      final existing =
+          await _matomesDao.matomeByCoreId(matome.id) ??
           await _matomesDao.getById(coreIdToLocalId(matome.id));
       await _matomesDao.upsert(matomeToCompanion(matome, existing: existing));
 
@@ -402,7 +417,9 @@ class MatomeSyncService {
   ) async {
     for (final edge in edges) {
       final contact = await _contactsDao.contactByCoreId(edge.contactId);
-      if (contact == null) continue; // contact not local yet — pull will fill it
+      if (contact == null) {
+        continue; // contact not local yet — pull will fill it
+      }
       await _contactsDao.addContactToMatome(
         matomeId: localMatomeId,
         contactId: contact.id,

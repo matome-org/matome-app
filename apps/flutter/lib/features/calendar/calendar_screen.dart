@@ -83,9 +83,7 @@ class CalendarScreen extends ConsumerWidget {
         if (state.dayMatomes.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
-            child: state.isDayLoading
-                ? const _DayLoading()
-                : const _DayEmpty(),
+            child: state.isDayLoading ? const _DayLoading() : const _DayEmpty(),
           )
         else
           SliverPadding(

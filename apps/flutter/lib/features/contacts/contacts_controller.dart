@@ -129,5 +129,5 @@ String contactNotes(ContactRow contact) {
 
 final contactsControllerProvider =
     StateNotifierProvider<ContactsController, AsyncValue<List<ContactRow>>>(
-  (ref) => ContactsController(ref),
-);
+      (ref) => ContactsController(ref),
+    );

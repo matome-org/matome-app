@@ -23,8 +23,7 @@ import 'inbox_item.dart';
 /// [inboxControllerProvider] emits (a loose capture, a triage move, a Core
 /// reconcile) so a freshly-captured loose item surfaces without re-running Core
 /// sync — mirroring [MatomeInboxController]'s listen wiring.
-class LooseInboxController
-    extends StateNotifier<AsyncValue<List<InboxItem>>> {
+class LooseInboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   LooseInboxController(this._ref) : super(const AsyncValue.loading()) {
     if (!FeatureFlags.localFirstSpaces) {
       // Flag OFF: the loose lane does not exist. Publish an empty, settled list
@@ -74,7 +73,7 @@ class LooseInboxController
   }
 }
 
-final looseInboxControllerProvider = StateNotifierProvider<LooseInboxController,
-    AsyncValue<List<InboxItem>>>(
-  (ref) => LooseInboxController(ref),
-);
+final looseInboxControllerProvider =
+    StateNotifierProvider<LooseInboxController, AsyncValue<List<InboxItem>>>(
+      (ref) => LooseInboxController(ref),
+    );

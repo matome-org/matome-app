@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../features/details/file_detail_screen.dart';
 import '../../features/files/files_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/items/text_item_host.dart';
 import '../../features/matome/matome_detail_screen.dart';
 import '../screens/recording_screen.dart';
 
@@ -57,6 +58,9 @@ class FileDetailPage extends StatelessWidget {
   const FileDetailPage.document({super.key, required this.id})
     : _kind = _FileDetailPageKind.document;
 
+  const FileDetailPage.video({super.key, required this.id})
+    : _kind = _FileDetailPageKind.video;
+
   final String id;
   final _FileDetailPageKind _kind;
 
@@ -66,11 +70,22 @@ class FileDetailPage extends StatelessWidget {
       _FileDetailPageKind.audio => FileDetailScreen.byId(id: id),
       _FileDetailPageKind.image => FileDetailScreen.imageById(id: id),
       _FileDetailPageKind.document => FileDetailScreen.documentById(id: id),
+      _FileDetailPageKind.video => FileDetailScreen.videoById(id: id),
     };
   }
 }
 
-enum _FileDetailPageKind { audio, image, document }
+enum _FileDetailPageKind { audio, image, document, video }
+
+/// Canonical route target for `/items/text/:id`.
+class TextItemPage extends StatelessWidget {
+  const TextItemPage({super.key, required this.id});
+
+  final int id;
+
+  @override
+  Widget build(BuildContext context) => TextItemHost(itemId: id);
+}
 
 /// Canonical route target for `/inbox`.
 class InboxPage extends StatelessWidget {

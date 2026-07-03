@@ -46,11 +46,9 @@ class MatomeActionsMenu extends StatelessWidget {
     final c = t.matome.actions;
 
     Widget itemLabel(String text, {Color? color}) => Text(
-          text,
-          style: typography.bodySmall.copyWith(
-            color: color ?? colors.textPrimary,
-          ),
-        );
+      text,
+      style: typography.bodySmall.copyWith(color: color ?? colors.textPrimary),
+    );
 
     Icon icon(IconData data, {Color? color}) =>
         Icon(data, size: spacing.md, color: color ?? colors.textSecondary);

@@ -63,9 +63,9 @@ class Matome {
     final rawContacts = json['contacts'];
     final contacts = rawContacts is List
         ? rawContacts
-            .whereType<Map<String, dynamic>>()
-            .map(MatomeContactEdge.fromJson)
-            .toList(growable: false)
+              .whereType<Map<String, dynamic>>()
+              .map(MatomeContactEdge.fromJson)
+              .toList(growable: false)
         : const <MatomeContactEdge>[];
     return Matome(
       id: asInt(json['id']),

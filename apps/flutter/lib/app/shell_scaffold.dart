@@ -135,14 +135,14 @@ class _GraduatedShell extends ConsumerWidget {
   final List<ShellTab> branches;
 
   List<NavDestinationSpec> _specs() => [
-        for (final tab in branches)
-          NavDestinationSpec(
-            id: tab.location,
-            icon: tab.icon,
-            selectedIcon: tab.selectedIcon,
-            label: tab.label,
-          ),
-      ];
+    for (final tab in branches)
+      NavDestinationSpec(
+        id: tab.location,
+        icon: tab.icon,
+        selectedIcon: tab.selectedIcon,
+        label: tab.label,
+      ),
+  ];
 
   /// The branch location currently selected — the destination [NavDestinationSpec.id]
   /// the widgets compare against.
@@ -185,8 +185,9 @@ class _GraduatedShell extends ConsumerWidget {
 ///   - recordAudio  → `/recording` fullscreen modal (#1378)
 ///   - recordMeeting → `/meeting` loopback recorder (capability-gated, #828)
 ///   - addPhoto     → image file-picker → Inbox upload pipeline (#1450)
+///   - addVideo     → video file-picker → Inbox upload pipeline
 ///   - addFile      → document file-picker → Inbox upload pipeline (#1449)
-/// The photo/file imports reuse the SAME `inboxUploaderProvider.upload(...)`
+/// The photo/video/file imports reuse the SAME `inboxUploaderProvider.upload(...)`
 /// pipeline the legacy desktop `_NewCaptureMenu._importFile` already drives, so
 /// a picked file lands in a fresh Inbox matome exactly as before.
 /// The add-menu options the nav hero "+" offers, trimming flag-gated ones.
@@ -194,9 +195,9 @@ class _GraduatedShell extends ConsumerWidget {
 /// the matome detail picker — so the affordance never appears when the document
 /// flow is still dark (#1449).
 List<NavAddOption> _availableAddOptions() => [
-      for (final o in NavAddOption.values)
-        if (o != NavAddOption.addFile || FeatureFlags.documents) o,
-    ];
+  for (final o in NavAddOption.values)
+    if (o != NavAddOption.addFile || FeatureFlags.documents) o,
+];
 
 Future<void> _handleAddOption(
   BuildContext context,
@@ -210,6 +211,8 @@ Future<void> _handleAddOption(
       context.push('/meeting');
     case NavAddOption.addPhoto:
       await _pickAndUpload(context, ref, type: FileType.image);
+    case NavAddOption.addVideo:
+      await _pickAndUpload(context, ref, type: FileType.video);
     case NavAddOption.addFile:
       await _pickAndUpload(context, ref, type: FileType.any);
   }
@@ -243,9 +246,9 @@ Future<void> _pickAndUpload(
       title: base.isEmpty ? 'Untitled' : base,
       mediaType: mediaTypeForPath(path),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Uploading "${picked.title}"…')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Uploading "${picked.title}"…')));
     AppLog.event(LogCat.action, 'nav add: uploading "${picked.title}"');
     unawaited(
       ref
@@ -290,7 +293,8 @@ class _DockShell extends ConsumerWidget {
     // + the bottom anchor inset, derived from the same spacing tokens the
     // overlay below is laid out with (no magic number).
     final media = MediaQuery.of(context);
-    final dockReserve = _kDockFabSize +
+    final dockReserve =
+        _kDockFabSize +
         spacing.sm +
         _kDockTapTarget +
         spacing.sm * 2 +
@@ -670,11 +674,11 @@ class _ShellBottomBar extends StatelessWidget {
     final split = tabs.length ~/ 2;
 
     Widget item(int i) => _NavItem(
-          icon: tabs[i].icon,
-          label: tabs[i].label,
-          selected: currentIndex == i,
-          onTap: () => onTap(i),
-        );
+      icon: tabs[i].icon,
+      label: tabs[i].label,
+      selected: currentIndex == i,
+      onTap: () => onTap(i),
+    );
 
     return BottomAppBar(
       height: spacing.xxl + spacing.md,

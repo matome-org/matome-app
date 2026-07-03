@@ -22,15 +22,14 @@ import 'effective_space.dart';
 /// [SpaceTenancy] (reserved/unenforced in #102 — constant `personal` in
 /// practice). `owner_id` carries through (nullable, reserved).
 SpaceRef spaceRefFromRow(WorkspaceRow row) => SpaceRef(
-      id: row.id,
-      syncMode:
-          row.isLocal == 1 ? SpaceSyncMode.local : SpaceSyncMode.cloud,
-      tenancy: _tenancyOf(row.spaceType),
-      ownerId: row.ownerId,
-    );
+  id: row.id,
+  syncMode: row.isLocal == 1 ? SpaceSyncMode.local : SpaceSyncMode.cloud,
+  tenancy: _tenancyOf(row.spaceType),
+  ownerId: row.ownerId,
+);
 
 SpaceTenancy _tenancyOf(String spaceType) => switch (spaceType) {
-      'org' => SpaceTenancy.org,
-      'shared' => SpaceTenancy.shared,
-      _ => SpaceTenancy.personal,
-    };
+  'org' => SpaceTenancy.org,
+  'shared' => SpaceTenancy.shared,
+  _ => SpaceTenancy.personal,
+};

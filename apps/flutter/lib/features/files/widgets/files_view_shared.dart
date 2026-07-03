@@ -59,9 +59,10 @@ typedef FileBulkCallback = void Function(FileAction action, Set<String> ids);
     FileKind.audio => (icon: Icons.mic_none_rounded, color: colors.accentDark),
     FileKind.image => (icon: Icons.image_outlined, color: colors.badgeIdeas),
     FileKind.document => (
-        icon: FileTypeChip.iconForExtension(f.ext),
-        color: colors.textSecondary,
-      ),
+      icon: FileTypeChip.iconForExtension(f.ext),
+      color: colors.textSecondary,
+    ),
+    FileKind.video => (icon: Icons.video_file_outlined, color: colors.accent),
   };
 }
 
@@ -130,17 +131,24 @@ class FileActionsMenu extends StatelessWidget {
     final spacing = context.spacing;
     final typography = context.typography;
 
-    Widget item(IconData icon, String label, FileAction action,
-        {Color? color}) {
+    Widget item(
+      IconData icon,
+      String label,
+      FileAction action, {
+      Color? color,
+    }) {
       return MenuItemButton(
-        leadingIcon: Icon(icon,
-            size: context.typography.body.fontSize,
-            color: color ?? colors.textSecondary),
+        leadingIcon: Icon(
+          icon,
+          size: context.typography.body.fontSize,
+          color: color ?? colors.textSecondary,
+        ),
         onPressed: () => onAction(action),
         child: Text(
           label,
-          style:
-              typography.bodySmall.copyWith(color: color ?? colors.textPrimary),
+          style: typography.bodySmall.copyWith(
+            color: color ?? colors.textPrimary,
+          ),
         ),
       );
     }
@@ -159,30 +167,45 @@ class FileActionsMenu extends StatelessWidget {
         ),
       ),
       builder: (context, controller, child) => IconButton(
-        icon: Icon(Icons.more_horiz,
-            size: context.typography.body.fontSize, color: colors.textMuted),
+        icon: Icon(
+          Icons.more_horiz,
+          size: context.typography.body.fontSize,
+          color: colors.textMuted,
+        ),
         tooltip: t.files.fileActions,
         padding: EdgeInsets.zero,
-        constraints:
-            BoxConstraints(minWidth: spacing.xl, minHeight: spacing.xl),
+        constraints: BoxConstraints(
+          minWidth: spacing.xl,
+          minHeight: spacing.xl,
+        ),
         visualDensity: VisualDensity.compact,
         onPressed: () =>
             controller.isOpen ? controller.close() : controller.open(),
       ),
       menuChildren: [
         item(Icons.open_in_new, t.files.open, FileAction.open),
-        item(Icons.drive_file_move_outlined, t.files.moveToMatome,
-            FileAction.moveToMatome),
+        item(
+          Icons.drive_file_move_outlined,
+          t.files.moveToMatome,
+          FileAction.moveToMatome,
+        ),
         // File-into-space (#1501) — a SPACE is the sync boundary, distinct from a
         // matome group. Surfaced only behind the local-first-spaces flag; the
         // `const if` tree-shakes the entry out when OFF (shipped reality).
         if (FeatureFlags.localFirstSpaces)
-          item(Icons.workspaces_outline, t.files.fileIntoSpace,
-              FileAction.fileIntoSpace),
+          item(
+            Icons.workspaces_outline,
+            t.files.fileIntoSpace,
+            FileAction.fileIntoSpace,
+          ),
         item(Icons.download_outlined, t.files.download, FileAction.download),
         Divider(height: spacing.sm, color: colors.border),
-        item(Icons.delete_outline, t.files.delete, FileAction.delete,
-            color: colors.failed),
+        item(
+          Icons.delete_outline,
+          t.files.delete,
+          FileAction.delete,
+          color: colors.failed,
+        ),
       ],
     );
   }
@@ -218,8 +241,11 @@ class FilesBulkBar extends StatelessWidget {
     final typography = context.typography;
 
     final clear = IconButton(
-      icon: Icon(Icons.close,
-          size: context.typography.body.fontSize, color: colors.accentDark),
+      icon: Icon(
+        Icons.close,
+        size: context.typography.body.fontSize,
+        color: colors.accentDark,
+      ),
       visualDensity: VisualDensity.compact,
       tooltip: t.files.clear,
       onPressed: onClear,
@@ -228,8 +254,10 @@ class FilesBulkBar extends StatelessWidget {
     return Container(
       key: const ValueKey('files-bulk-bar'),
       color: colors.accentSoft,
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
           if (leadingWidth != null)
@@ -298,8 +326,10 @@ class _FilesBulkAction extends StatelessWidget {
       icon: Icon(icon, size: context.typography.body.fontSize, color: fg),
       label: Text(label, style: typography.label.copyWith(color: fg)),
       style: TextButton.styleFrom(
-        padding:
-            EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xxs),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.sm,
+          vertical: spacing.xxs,
+        ),
         minimumSize: Size.zero,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -329,13 +359,17 @@ class FilesUndoBar extends StatelessWidget {
     return Container(
       key: const ValueKey('files-undo-bar'),
       color: colors.subtleFill,
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
-          Icon(Icons.history,
-              size: context.typography.body.fontSize,
-              color: colors.textSecondary),
+          Icon(
+            Icons.history,
+            size: context.typography.body.fontSize,
+            color: colors.textSecondary,
+          ),
           SizedBox(width: spacing.xs),
           Expanded(
             child: Text(
@@ -345,9 +379,11 @@ class FilesUndoBar extends StatelessWidget {
           ),
           AppTextButton(onPressed: onUndo, child: Text(t.files.undo)),
           IconButton(
-            icon: Icon(Icons.close,
-                size: context.typography.body.fontSize,
-                color: colors.textMuted),
+            icon: Icon(
+              Icons.close,
+              size: context.typography.body.fontSize,
+              color: colors.textMuted,
+            ),
             visualDensity: VisualDensity.compact,
             tooltip: t.files.clear,
             onPressed: onDismiss,
@@ -369,13 +405,18 @@ class FilesEmptyState extends StatelessWidget {
     final typography = context.typography;
 
     return Padding(
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.lg, vertical: spacing.xl),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.lg,
+        vertical: spacing.xl,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.folder_open_outlined,
-              size: context.spacing.xl, color: colors.border),
+          Icon(
+            Icons.folder_open_outlined,
+            size: context.spacing.xl,
+            color: colors.border,
+          ),
           SizedBox(height: spacing.sm),
           Text(
             t.files.emptyTitle,

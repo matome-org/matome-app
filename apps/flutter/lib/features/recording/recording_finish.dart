@@ -42,11 +42,10 @@ class RecordingFinisher {
   RecordingFinisher(
     this._ref, {
     StateNotifierProvider<RecordingController, RecordingState>?
-        controllerProvider,
+    controllerProvider,
     Provider<AudioRecordingService>? serviceProvider,
-  })  : _controllerProvider =
-            controllerProvider ?? recordingControllerProvider,
-        _serviceProvider = serviceProvider ?? audioRecordingServiceProvider;
+  }) : _controllerProvider = controllerProvider ?? recordingControllerProvider,
+       _serviceProvider = serviceProvider ?? audioRecordingServiceProvider;
 
   final Ref _ref;
 
@@ -54,7 +53,7 @@ class RecordingFinisher {
   /// meeting (loopback) recorder when constructed for the meeting flow. Both
   /// share the same single-file finalize → F4 upload pipeline below.
   final StateNotifierProvider<RecordingController, RecordingState>
-      _controllerProvider;
+  _controllerProvider;
   final Provider<AudioRecordingService> _serviceProvider;
 
   RecordingController get _controller =>
@@ -143,8 +142,9 @@ class RecordingFinisher {
 }
 
 /// Provider for the S3 Finish orchestrator (mic recorder).
-final recordingFinisherProvider =
-    Provider<RecordingFinisher>((ref) => RecordingFinisher(ref));
+final recordingFinisherProvider = Provider<RecordingFinisher>(
+  (ref) => RecordingFinisher(ref),
+);
 
 /// Finish orchestrator for the **meeting (loopback) recorder** — same F4 upload
 /// pipeline, wired to the meeting controller/service so the captured WAV flows

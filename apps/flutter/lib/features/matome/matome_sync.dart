@@ -49,17 +49,21 @@ MatomesCompanion matomeToCompanion(Matome matome, {MatomeRow? existing}) {
   // survives a sparse pull.
   final summaryValue = mergeAggregatedSummary(matome.aggregatedSummary);
   final descriptionValue = _mergeNullableText(matome.description);
-  final archivedAtValue =
-      _mergeArchivedAt(matome.archivedAt, existing?.archivedAt);
+  final archivedAtValue = _mergeArchivedAt(
+    matome.archivedAt,
+    existing?.archivedAt,
+  );
 
   // `upsert` runs `insertOnConflictUpdate`, which validates the companion as an
   // INSERT — so the NOT-NULL happenedAt/createdAt must always be present. Keep
   // the EXISTING local timestamps on a re-sync (don't reset the local row's
   // happened/created); only derive fresh ones for a first-time pull.
-  final happenedAt = existing?.happenedAt ??
+  final happenedAt =
+      existing?.happenedAt ??
       (matome.happenedAt ?? matome.insertedAt ?? DateTime.now())
           .millisecondsSinceEpoch;
-  final createdAt = existing?.createdAt ??
+  final createdAt =
+      existing?.createdAt ??
       (matome.insertedAt ?? DateTime.now()).millisecondsSinceEpoch;
 
   return MatomesCompanion(
@@ -92,13 +96,13 @@ ContactsCompanion contactToCompanion(Contact contact, {ContactRow? existing}) {
   // metadata leaves the column untouched (Value.absent) so a local blob is not
   // wiped, otherwise the trimmed incoming JSON is adopted.
   final trimmedMetadata = contact.metadata?.trim();
-  final metadataValue =
-      (trimmedMetadata == null || trimmedMetadata.isEmpty)
-          ? const Value<String>.absent()
-          : Value<String>(trimmedMetadata);
+  final metadataValue = (trimmedMetadata == null || trimmedMetadata.isEmpty)
+      ? const Value<String>.absent()
+      : Value<String>(trimmedMetadata);
   // `upsert` validates as an INSERT, so the NOT-NULL createdAt must always be
   // present; keep the existing local value on a re-sync.
-  final createdAt = existing?.createdAt ??
+  final createdAt =
+      existing?.createdAt ??
       (contact.insertedAt ?? DateTime.now()).millisecondsSinceEpoch;
 
   return ContactsCompanion(

@@ -120,7 +120,9 @@ class MatomeItem {
   /// the pill stays meaningful even without hydrated rows.
   MatomeSyncRollup get syncRollup {
     if (recordings.isEmpty) {
-      return coreId != null ? MatomeSyncRollup.cloud : MatomeSyncRollup.onDevice;
+      return coreId != null
+          ? MatomeSyncRollup.cloud
+          : MatomeSyncRollup.onDevice;
     }
     final synced = recordings.where((r) => r.isOnCloud).length;
     if (synced == 0) return MatomeSyncRollup.onDevice;

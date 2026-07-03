@@ -29,50 +29,50 @@ enum ShellTab {
   /// legacy shell `/files` stays a root-level deep-link route, so `files` is not
   /// "enabled" as a legacy tab.
   bool get enabled => switch (this) {
-        ShellTab.inbox => true,
-        ShellTab.calendar => FeatureFlags.calendar,
-        ShellTab.spaces => FeatureFlags.spaces,
-        ShellTab.satori => FeatureFlags.satori,
-        ShellTab.contacts => FeatureFlags.contacts,
-        ShellTab.files => FeatureFlags.newNavShell,
-      };
+    ShellTab.inbox => true,
+    ShellTab.calendar => FeatureFlags.calendar,
+    ShellTab.spaces => FeatureFlags.spaces,
+    ShellTab.satori => FeatureFlags.satori,
+    ShellTab.contacts => FeatureFlags.contacts,
+    ShellTab.files => FeatureFlags.newNavShell,
+  };
 
   /// The branch's root location (matches the GoRoute paths in `router.dart`).
   String get location => switch (this) {
-        ShellTab.inbox => '/inbox',
-        ShellTab.calendar => '/calendar',
-        ShellTab.spaces => '/spaces',
-        ShellTab.satori => '/satori',
-        ShellTab.contacts => '/contacts',
-        ShellTab.files => '/files',
-      };
+    ShellTab.inbox => '/inbox',
+    ShellTab.calendar => '/calendar',
+    ShellTab.spaces => '/spaces',
+    ShellTab.satori => '/satori',
+    ShellTab.contacts => '/contacts',
+    ShellTab.files => '/files',
+  };
 
   IconData get icon => switch (this) {
-        ShellTab.inbox => Icons.inbox_outlined,
-        ShellTab.calendar => Icons.calendar_today_outlined,
-        ShellTab.spaces => Icons.folder_outlined,
-        ShellTab.satori => Icons.auto_awesome_outlined,
-        ShellTab.contacts => Icons.contacts_outlined,
-        ShellTab.files => Icons.description_outlined,
-      };
+    ShellTab.inbox => Icons.inbox_outlined,
+    ShellTab.calendar => Icons.calendar_today_outlined,
+    ShellTab.spaces => Icons.folder_outlined,
+    ShellTab.satori => Icons.auto_awesome_outlined,
+    ShellTab.contacts => Icons.contacts_outlined,
+    ShellTab.files => Icons.description_outlined,
+  };
 
   IconData get selectedIcon => switch (this) {
-        ShellTab.inbox => Icons.inbox,
-        ShellTab.calendar => Icons.calendar_today,
-        ShellTab.spaces => Icons.folder,
-        ShellTab.satori => Icons.auto_awesome,
-        ShellTab.contacts => Icons.contacts,
-        ShellTab.files => Icons.description,
-      };
+    ShellTab.inbox => Icons.inbox,
+    ShellTab.calendar => Icons.calendar_today,
+    ShellTab.spaces => Icons.folder,
+    ShellTab.satori => Icons.auto_awesome,
+    ShellTab.contacts => Icons.contacts,
+    ShellTab.files => Icons.description,
+  };
 
   String get label => switch (this) {
-        ShellTab.inbox => t.inbox.title,
-        ShellTab.calendar => t.calendar.title,
-        ShellTab.spaces => t.spaces.title,
-        ShellTab.satori => t.satori.title,
-        ShellTab.contacts => t.contacts.title,
-        ShellTab.files => t.files.title,
-      };
+    ShellTab.inbox => t.inbox.title,
+    ShellTab.calendar => t.calendar.title,
+    ShellTab.spaces => t.spaces.title,
+    ShellTab.satori => t.satori.title,
+    ShellTab.contacts => t.contacts.title,
+    ShellTab.files => t.files.title,
+  };
 }
 
 /// The tabs enabled by the current build's [FeatureFlags], in canonical order.

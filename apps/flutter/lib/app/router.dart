@@ -58,11 +58,12 @@ Future<String?> _redirectRecordingToMatome(Ref ref, String? recordingId) async {
 }
 
 /// The app router (matome-centric, #1378). The primary detail route is the
-/// **Matome hub** `/matome/:id`; the individual-recording [FileDetailScreen] is
-/// reached from inside the hub via `/recording/detail/:id`. Tree:
+/// **Matome hub** `/matome/:id`; the individual file [FileDetailScreen] is
+/// reached from inside the hub via `/items/audio/:id`. Tree:
 ///   /                       welcome (unauthenticated landing)
 ///   /recording              fullscreen capture modal (root navigator)
-///   /recording/detail/:id   single-recording details (drill-down from the hub)
+///   /items/audio/:id        audio file details (drill-down from the hub)
+///   /items/text/:id         plain-text item host (file-less drill-down)
 ///   /matome/:id             the Matome hub (primary detail)
 ///   [shell]                 5 stateful tab branches:
 ///     /inbox                inbox root (inbox MATOMES)
@@ -157,33 +158,26 @@ final routerProvider = Provider<GoRouter>((ref) {
           parentNavigatorKey: _rootKey,
           builder: (context, state) => const FilesPage(),
         ),
-      // Single-recording details (#1378): the drill-DOWN route used from inside
-      // the Matome hub to open ONE Item. Distinct from the legacy recording
+      // Single file details (#1378): the drill-DOWN route used from inside
+      // the Matome hub to open ONE file Item. Distinct from legacy recording
       // deep-links, which now redirect UP to the parent matome — so this route
       // is the only non-redirecting path to the [FileDetailScreen].
       GoRoute(
-        path: '/recording/detail/:id',
+        path: '/items/audio/:id',
         parentNavigatorKey: _rootKey,
         pageBuilder: (context, state) => fileDetailPage(
           context,
           FileDetailPage.audio(id: state.pathParameters['id']!),
         ),
       ),
-      // Image drill-down (#97). Images carry their full [RecordingItem] from the
-      // hub, so they open the item-driven image host DIRECTLY via `extra` — they
-      // must NOT go through the audio-centric id-load, which awaits
-      // `downloadUrl` (a presigned audio-source call an image does not need) and
-      // strands the viewer on the audio loading host when Core is slow.
-      // Declarative (go_router-owned) so the route survives auth-refresh
-      // rebuilds, unlike the old imperative push.
       // Image drill-down by id. The id is in the PATH (not `extra`) so it
       // survives go_router rebuilds — `extra` is dropped on rebuild, which made
       // `state.extra!` throw a null-check and blow up the image detail. The
       // host loads only the row (no audio-source `downloadUrl`). Path stays
-      // under `/recording/` so the auth guard's allowed-prefix list lets it
+      // under `/items/` so the auth guard's allowed-prefix list lets it
       // through without a special case.
       GoRoute(
-        path: '/recording/image/:id',
+        path: '/items/image/:id',
         parentNavigatorKey: _rootKey,
         pageBuilder: (context, state) => fileDetailPage(
           context,
@@ -191,20 +185,36 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       // Document drill-down by id (#1450). A document must NEVER hit
-      // `/recording/detail/:id` (the AUDIO host, which awaits a presigned
+      // `/items/audio/:id` (the AUDIO host, which awaits a presigned
       // audio-source `downloadUrl`). Mirrors the image route exactly: the id is
       // in the PATH (not `extra`, which go_router drops on rebuild → a
       // `state.extra!` null-check crash); the host loads only the row, with NO
-      // audio load. Path stays under `/recording/` so the auth guard's
+      // audio load. Path stays under `/items/` so the auth guard's
       // allowed-prefix list lets it through. Wrapped in `fileDetailPage` so
       // desktop gets the bounded dialog and mobile gets full-screen.
       GoRoute(
-        path: '/recording/document/:id',
+        path: '/items/document/:id',
         parentNavigatorKey: _rootKey,
         pageBuilder: (context, state) => fileDetailPage(
           context,
           FileDetailPage.document(id: state.pathParameters['id']!),
         ),
+      ),
+      GoRoute(
+        path: '/items/video/:id',
+        parentNavigatorKey: _rootKey,
+        pageBuilder: (context, state) => fileDetailPage(
+          context,
+          FileDetailPage.video(id: state.pathParameters['id']!),
+        ),
+      ),
+      // Text-note drill-down by id. Text items are file-less, so this route uses
+      // the text host directly and never touches file detail/audio presign paths.
+      GoRoute(
+        path: '/items/text/:id',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) =>
+            TextItemPage(id: int.parse(state.pathParameters['id']!)),
       ),
       // Desktop meeting recorder (loopback + mic, MVP Linux). Same fullscreen
       // modal as /recording, bound to the meeting (ffmpeg loopback) recorder.

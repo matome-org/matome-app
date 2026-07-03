@@ -43,8 +43,8 @@ class JustAudioPlayback implements AudioPlayback {
   Duration? get duration => _player.duration;
 
   @override
-  Stream<PlaybackState> get playerStateStream => _player.playerStateStream
-      .map((s) => PlaybackState(playing: s.playing));
+  Stream<PlaybackState> get playerStateStream =>
+      _player.playerStateStream.map((s) => PlaybackState(playing: s.playing));
 
   @override
   Stream<Duration> get positionStream => _player.positionStream;

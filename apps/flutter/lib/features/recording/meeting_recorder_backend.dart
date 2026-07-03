@@ -14,16 +14,13 @@ import 'recorder_backend.dart';
 /// `Process.run`/`which fmedia` subprocess idiom already in the codebase, but
 /// uses [Process.start] because ffmpeg is a long-running capture, not a
 /// one-shot command.
-typedef FfmpegSpawner = Future<Process> Function(
-  String executable,
-  List<String> arguments,
-);
+typedef FfmpegSpawner =
+    Future<Process> Function(String executable, List<String> arguments);
 
 Future<Process> _defaultFfmpegSpawner(
   String executable,
   List<String> arguments,
-) =>
-    Process.start(executable, arguments);
+) => Process.start(executable, arguments);
 
 /// [RecorderBackend] that captures the **system output (loopback) mixed with
 /// the microphone into ONE WAV file** via an ffmpeg subprocess — the desktop
@@ -68,13 +65,13 @@ class MeetingRecorderBackend implements RecorderBackend {
     FfmpegSpawner spawn = _defaultFfmpegSpawner,
     bool Function()? hasMicPermission,
     Duration stopGrace = const Duration(seconds: 5),
-  })  : _loopback = loopback ?? const MeetingLoopbackSource(),
-        // ignore: prefer_initializing_formals
-        _spawn = spawn,
-        // ignore: prefer_initializing_formals
-        _hasMicPermission = hasMicPermission,
-        // ignore: prefer_initializing_formals
-        _stopGrace = stopGrace;
+  }) : _loopback = loopback ?? const MeetingLoopbackSource(),
+       // ignore: prefer_initializing_formals
+       _spawn = spawn,
+       // ignore: prefer_initializing_formals
+       _hasMicPermission = hasMicPermission,
+       // ignore: prefer_initializing_formals
+       _stopGrace = stopGrace;
 
   final MeetingLoopbackSource _loopback;
   final FfmpegSpawner _spawn;
@@ -112,7 +109,10 @@ class MeetingRecorderBackend implements RecorderBackend {
   /// The [encoder] arg is ignored — the meeting backend always produces WAV
   /// (pcm_s16le); it exists only to satisfy the [RecorderBackend] contract.
   @override
-  Future<void> start(String path, {AudioEncoder encoder = AudioEncoder.wav}) async {
+  Future<void> start(
+    String path, {
+    AudioEncoder encoder = AudioEncoder.wav,
+  }) async {
     if (_process != null) {
       throw StateError('MeetingRecorderBackend: capture already in progress');
     }
@@ -129,12 +129,7 @@ class MeetingRecorderBackend implements RecorderBackend {
     try {
       process = await _spawn('ffmpeg', args);
     } catch (e, st) {
-      AppLog.error(
-        LogCat.error,
-        'start: failed to launch ffmpeg',
-        e,
-        st,
-      );
+      AppLog.error(LogCat.error, 'start: failed to launch ffmpeg', e, st);
       throw MeetingCaptureUnsupportedError('failed to launch ffmpeg: $e');
     }
 
@@ -305,15 +300,12 @@ class MeetingRecorderBackend implements RecorderBackend {
   /// meeting UI treats the waveform as a "capturing" liveness indicator.
   @override
   Stream<Amplitude> onAmplitudeChanged(Duration interval) {
-    return Stream<Amplitude>.periodic(
-      interval,
-      (i) {
-        if (_process == null) return Amplitude(current: -160, max: 0);
-        // Gentle deterministic oscillation (-30..-15 dBFS) for a live look.
-        final db = -30.0 + 7.5 * (1 + sin(i / 3));
-        return Amplitude(current: db, max: 0);
-      },
-    );
+    return Stream<Amplitude>.periodic(interval, (i) {
+      if (_process == null) return Amplitude(current: -160, max: 0);
+      // Gentle deterministic oscillation (-30..-15 dBFS) for a live look.
+      final db = -30.0 + 7.5 * (1 + sin(i / 3));
+      return Amplitude(current: db, max: 0);
+    });
   }
 
   @override
@@ -394,7 +386,8 @@ class MeetingCaptureUnsupportedError implements Exception {
   const MeetingCaptureUnsupportedError([this.reason]);
   final String? reason;
   @override
-  String toString() => 'MeetingCaptureUnsupportedError: '
+  String toString() =>
+      'MeetingCaptureUnsupportedError: '
       'loopback meeting capture is not available on this host'
       '${reason == null ? '' : ' ($reason)'}.';
 }

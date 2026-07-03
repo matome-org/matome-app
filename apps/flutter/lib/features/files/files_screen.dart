@@ -74,8 +74,7 @@ class FilesViewController extends StateNotifier<FilesView> {
   }
 }
 
-final filesViewProvider =
-    StateNotifierProvider<FilesViewController, FilesView>(
+final filesViewProvider = StateNotifierProvider<FilesViewController, FilesView>(
   (ref) => FilesViewController(ref.watch(settingsStoreProvider)),
 );
 
@@ -89,7 +88,7 @@ const double _kFilesMaxWidth = 1080;
 /// expanded widths with the reading pane on the right, tapping a file sets this
 /// instead of navigating, so the grid/table stays visible beside the
 /// [_FilesPaneDetail] reading pane. Narrower widths (and the flag-OFF reality)
-/// ignore it and route to `/recording/...` as before — the [selectsOnTap]
+/// ignore it and route to `/items/...` as before — the [selectsOnTap]
 /// predicate in [_FilesScreenState._openFile] is the single source of truth.
 final filesSelectionProvider = StateProvider<String?>((ref) => null);
 
@@ -147,9 +146,10 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     if (!mounted) return;
     final mediaType = row?.mediaType ?? 'audio';
     final path = switch (mediaType) {
-      'image' => '/recording/image/$fileId',
-      'document' => '/recording/document/$fileId',
-      _ => '/recording/detail/$fileId',
+      'image' => '/items/image/$fileId',
+      'document' => '/items/document/$fileId',
+      'video' => '/items/video/$fileId',
+      _ => '/items/audio/$fileId',
     };
     context.push(path);
   }
@@ -203,8 +203,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     if (ownerId == null) return;
     final dao = ref.read(recordingsDaoProvider);
 
-    final targets =
-        await ref.read(matomeTargetsForCurrentOwnerProvider.future);
+    final targets = await ref.read(matomeTargetsForCurrentOwnerProvider.future);
     if (!mounted) return;
     if (targets.isEmpty) {
       messenger.showSnackBar(SnackBar(content: Text(t.files.moveNoTargets)));
@@ -221,8 +220,11 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
 
     // Stash the prior filing BEFORE the write so Undo can restore it.
     final prior = await dao.matomeIdsForOwnedRecordings(ids, ownerId);
-    final moved =
-        await dao.moveRecordingsToMatome(ids, picked.matomeId, ownerId);
+    final moved = await dao.moveRecordingsToMatome(
+      ids,
+      picked.matomeId,
+      ownerId,
+    );
     ref.invalidate(filesForCurrentOwnerProvider);
     ref.invalidate(matomeTargetsForCurrentOwnerProvider);
     if (!mounted) return;
@@ -273,14 +275,16 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     final inbox = ref.read(inboxControllerProvider.notifier);
     var filed = 0;
     for (final id in ids) {
-      final ok = await inbox.fileIntoSpace(id, picked.spaceId, ownerId: ownerId);
+      final ok = await inbox.fileIntoSpace(
+        id,
+        picked.spaceId,
+        ownerId: ownerId,
+      );
       if (ok) filed++;
     }
     ref.invalidate(filesForCurrentOwnerProvider);
     if (!mounted || filed == 0) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text(t.files.filedMsg(n: filed))),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(t.files.filedMsg(n: filed))));
   }
 
   @override
@@ -301,8 +305,9 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
               surfaceTintColor: colors.background,
               title: Text(
                 t.files.title,
-                style: context.typography.title
-                    .copyWith(color: colors.textPrimary),
+                style: context.typography.title.copyWith(
+                  color: colors.textPrimary,
+                ),
               ),
             ),
       body: SafeArea(
@@ -367,7 +372,11 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
   /// ConstrainedBox(1080)` (flag-OFF reality); [centered] = false renders it
   /// full-width with just padding (the [MasterDetailScaffold] path), so the
   /// reading pane fills the freed whitespace.
-  Widget _master(List<FileRow> scoped, FilesView view, {required bool centered}) {
+  Widget _master(
+    List<FileRow> scoped,
+    FilesView view, {
+    required bool centered,
+  }) {
     final column = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -389,11 +398,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
           SizedBox(height: context.spacing.md),
         ],
         view == FilesView.grid
-            ? FilesGrid(
-                files: scoped,
-                onOpen: _openFile,
-                onBulk: _onBulk,
-              )
+            ? FilesGrid(files: scoped, onOpen: _openFile, onBulk: _onBulk)
             : FilesTable(
                 files: scoped,
                 activeId: ref.watch(filesSelectionProvider),
@@ -481,8 +486,9 @@ class _FilesPaneDetail extends ConsumerWidget {
             // The machine-owned Contents (audio → transcript, doc → stub
             // summary; image keeps it null). Read-only, from the row's OWN
             // fields.
-            contentsText:
-                mediaKind == FileMediaKind.image ? null : row.transcript,
+            contentsText: mediaKind == FileMediaKind.image
+                ? null
+                : row.transcript,
             notesText: row.notes,
           ),
           // The pane is a read surface — the editable Notes lifecycle stays on
@@ -572,8 +578,7 @@ class _MoveToMatomeSheet extends StatelessWidget {
         for (final m in targets)
           ListTile(
             key: ValueKey('files-move-target-${m.id}'),
-            leading:
-                Icon(Icons.folder_outlined, color: colors.textSecondary),
+            leading: Icon(Icons.folder_outlined, color: colors.textSecondary),
             title: Text(m.title),
             onTap: () => Navigator.of(context).pop(_MoveTarget(m.id)),
           ),
@@ -628,9 +633,7 @@ class _FileIntoSpaceSheet extends StatelessWidget {
           ListTile(
             key: ValueKey('files-space-target-${w.id}'),
             leading: Icon(
-              w.isLocal == 1
-                  ? Icons.workspaces_outline
-                  : Icons.cloud_outlined,
+              w.isLocal == 1 ? Icons.workspaces_outline : Icons.cloud_outlined,
               color: colors.textSecondary,
             ),
             title: Text(w.name),
@@ -655,7 +658,12 @@ class _FilesHeader extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(spacing.md, spacing.sm, spacing.md, spacing.sm),
+      padding: EdgeInsets.fromLTRB(
+        spacing.md,
+        spacing.sm,
+        spacing.md,
+        spacing.sm,
+      ),
       decoration: BoxDecoration(
         color: colors.background,
         border: Border(bottom: BorderSide(color: colors.border)),
@@ -693,8 +701,9 @@ class _CenteredMessage extends StatelessWidget {
         child: Text(
           message,
           textAlign: TextAlign.center,
-          style: context.typography.bodySmall
-              .copyWith(color: context.colors.textMuted),
+          style: context.typography.bodySmall.copyWith(
+            color: context.colors.textMuted,
+          ),
         ),
       ),
     );

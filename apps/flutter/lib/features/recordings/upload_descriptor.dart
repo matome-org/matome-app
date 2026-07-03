@@ -33,7 +33,7 @@ class UploadDescriptor {
     return UploadDescriptor(
       method: asString(json['method'], fallback: 'PUT').toUpperCase(),
       url: asString(json['url']),
-      storageKey: asString(json['storage_key']),
+      storageKey: asString(json['storage_key'], fallback: ''),
       expiresIn: asIntOrNull(json['expires_in']),
     );
   }

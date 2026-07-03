@@ -65,8 +65,8 @@ class MatomePanelSection extends StatelessWidget {
     final Widget? trailingWidget = trailing == null
         ? null
         : (onTrailingTap == null
-            ? trailing
-            : InkWell(onTap: onTrailingTap, child: trailing));
+              ? trailing
+              : InkWell(onTap: onTrailingTap, child: trailing));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +82,7 @@ class MatomePanelSection extends StatelessWidget {
                 ),
               ),
             ),
-                ?trailingWidget,
+            ?trailingWidget,
           ],
         ),
         SizedBox(height: spacing.sm),
@@ -168,10 +168,7 @@ class MatomePanelRow extends StatelessWidget {
             ],
           ),
         ),
-        if (trailing != null) ...[
-          SizedBox(width: spacing.sm),
-          trailing!,
-        ],
+        if (trailing != null) ...[SizedBox(width: spacing.sm), trailing!],
       ],
     );
 
@@ -238,11 +235,12 @@ class MatomePanelAddRow extends StatelessWidget {
 
 /// The media/type icon for a panel item row, derived from a [RecordingItem]'s
 /// media type. Documents and text get the document glyph; images the image
-/// glyph; everything else (audio) the mic glyph. This is the per-row analogue
+/// glyph; videos the video glyph; everything else (audio) the mic glyph. This is the per-row analogue
 /// of [AppCard]'s media icon, so the panel's compact rows show the right type
 /// at a glance.
 IconData matomeItemIcon(String mediaType) {
   if (mediaType.startsWith('image')) return Icons.image_outlined;
+  if (mediaType.startsWith('video')) return Icons.video_file_outlined;
   if (mediaType.contains('document') ||
       mediaType.contains('meeting') ||
       mediaType.contains('text')) {
@@ -259,8 +257,7 @@ IconData matomeItemIcon(String mediaType) {
 MatomeSyncChip matomeItemSyncChip(RecordingItem item, {Key? key}) {
   return MatomeSyncChip(
     key: key,
-    rollup:
-        item.isOnCloud ? MatomeSyncRollup.cloud : MatomeSyncRollup.onDevice,
+    rollup: item.isOnCloud ? MatomeSyncRollup.cloud : MatomeSyncRollup.onDevice,
   );
 }
 

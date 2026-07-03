@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,11 +26,7 @@ void main() {
   // slang: hydrate from the device locale; the persisted choice is applied by
   // LocaleController on first build.
   LocaleSettings.useDeviceLocale();
-  runApp(
-    ProviderScope(
-      child: TranslationProvider(child: const MatomeApp()),
-    ),
-  );
+  runApp(ProviderScope(child: TranslationProvider(child: const MatomeApp())));
 }
 
 /// App root: boots Riverpod + slang, then renders the go_router shell with the

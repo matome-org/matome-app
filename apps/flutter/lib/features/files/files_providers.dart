@@ -41,8 +41,9 @@ final filesForCurrentOwnerProvider = FutureProvider<List<FileRow>>((ref) async {
 /// owns recordings in ([RecordingsDao.matomeTargetsForOwner]) — never an
 /// unscoped matome list. Signed out → empty, so the picker can never offer
 /// another owner's matome.
-final matomeTargetsForCurrentOwnerProvider =
-    FutureProvider<List<MatomeRow>>((ref) async {
+final matomeTargetsForCurrentOwnerProvider = FutureProvider<List<MatomeRow>>((
+  ref,
+) async {
   final ownerId = ref.watch(currentOwnerIdProvider);
   if (ownerId == null) return const <MatomeRow>[];
   final dao = ref.watch(recordingsDaoProvider);

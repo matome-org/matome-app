@@ -8,10 +8,7 @@ class AuthUser {
   final String email;
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
-    return AuthUser(
-      id: asInt(json['id']),
-      email: asString(json['email']),
-    );
+    return AuthUser(id: asInt(json['id']), email: asString(json['email']));
   }
 }
 

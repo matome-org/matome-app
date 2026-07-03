@@ -205,8 +205,7 @@ abstract final class EffectiveSpace {
   static bool isCloudSynced(
     ItemMembership item, {
     required SpaceRef? Function(String spaceId) resolveSpace,
-  }) =>
-      statusOf(item, resolveSpace: resolveSpace) is SyncCloud;
+  }) => statusOf(item, resolveSpace: resolveSpace) is SyncCloud;
 
   /// Whether a given space VALUE OBJECT is a cloud space (`is_local == false`).
   /// The space-level half of the predicate (R2), used by the operation-keyed

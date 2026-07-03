@@ -31,9 +31,9 @@ class AuthRefreshInterceptor extends Interceptor {
     required this.onRefresh,
     this.onSignOut,
     // ignore: prefer_initializing_formals
-  })  : _dio = dio,
-        // ignore: prefer_initializing_formals
-        _tokenStore = tokenStore;
+  }) : _dio = dio,
+       // ignore: prefer_initializing_formals
+       _tokenStore = tokenStore;
 
   final Dio _dio;
   final TokenStore _tokenStore;

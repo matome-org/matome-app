@@ -12,6 +12,7 @@ import '../../ui/app_button.dart';
 import '../../ui/app_dialog.dart';
 import '../../ui/file_type_chip.dart';
 import '../../ui/loading_indicator.dart';
+import '../items/matome_item_type.dart';
 import '../recordings/recording_ids.dart';
 import 'audio_player_bar.dart';
 import 'details_controller.dart';
@@ -19,7 +20,9 @@ import 'file_actions_menu.dart';
 import 'file_view.dart';
 import 'markdown_helpers.dart';
 
-/// Maps a stored `mediaType` string (audio | image | document — the buckets
+const double _kVideoHeaderIconSize = 40;
+
+/// Maps a stored `mediaType` string (audio | image | document | video — the buckets
 /// `mediaTypeForPath` writes) to the [FileMediaKind] that drives [FileView]'s
 /// media header and default Contents tag. Anything not image/document is treated
 /// as audio (the original default). Centralised here so the item-driven
@@ -29,6 +32,7 @@ import 'markdown_helpers.dart';
 FileMediaKind mediaKindForType(String mediaType) {
   if (mediaType.startsWith('image')) return FileMediaKind.image;
   if (mediaType.startsWith('document')) return FileMediaKind.doc;
+  if (mediaType.startsWith('video')) return FileMediaKind.video;
   return FileMediaKind.audio;
 }
 
@@ -58,7 +62,9 @@ String _formatBytes(int bytes) {
     unit++;
   }
   final text = value.toStringAsFixed(1);
-  final trimmed = text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
+  final trimmed = text.endsWith('.0')
+      ? text.substring(0, text.length - 2)
+      : text;
   return '$trimmed ${units[unit]}';
 }
 
@@ -113,7 +119,7 @@ Future<void> _fileDeleteFlow(
 ///     the inline framed image media header whose tap opens a fullscreen viewer.
 ///
 ///   * [FileDetailScreen.byId] (`id:`) — AUDIO path (#1439). Routed from
-///     `/recording/detail/:id`, it loads via [detailsControllerProvider] and
+///     `/items/audio/:id`, it loads via [detailsControllerProvider] and
 ///     owns the full edit lifecycle: Notes save (to the user-owned `notes`
 ///     column), the unsaved-changes leave guard, retry / delete / move-to-space,
 ///     and an [AudioPlayerBar] media header. Audio Contents (read-only) reads the
@@ -132,23 +138,23 @@ Future<void> _fileDeleteFlow(
 class FileDetailScreen extends StatelessWidget {
   /// Image entry point — the [RecordingItem] is supplied directly.
   const FileDetailScreen({super.key, required this.item})
-      : id = null,
-        _rowOnlyKind = null;
+    : id = null,
+      _rowOnlyKind = null;
 
   /// Audio entry point — the file is loaded by id via [detailsControllerProvider].
   const FileDetailScreen.byId({super.key, required this.id})
-      : item = null,
-        _rowOnlyKind = null;
+    : item = null,
+      _rowOnlyKind = null;
 
-  /// Image drill-down by id (`/recording/image/:id`). Loads ONLY the row (no
+  /// Image drill-down by id (`/items/image/:id`). Loads ONLY the row (no
   /// audio-source resolution / `downloadUrl`) and renders the image host. The id
   /// lives in the route PATH so it SURVIVES go_router rebuilds — unlike `extra`,
   /// which go_router drops on rebuild, making `state.extra!` throw a null-check.
   const FileDetailScreen.imageById({super.key, required this.id})
-      : item = null,
-        _rowOnlyKind = FileMediaKind.image;
+    : item = null,
+      _rowOnlyKind = FileMediaKind.image;
 
-  /// Document drill-down by id (`/recording/document/:id`, #1450). Mirrors
+  /// Document drill-down by id (`/items/document/:id`, #1450). Mirrors
   /// [imageById] exactly — loads ONLY the row via `getRecordingById` (NO
   /// audio-source `downloadUrl`; a document never hits the audio host) and
   /// renders the generic file host with [FileMediaKind.doc] (the "Document"
@@ -156,8 +162,15 @@ class FileDetailScreen extends StatelessWidget {
   /// it SURVIVES go_router rebuilds — `extra` is dropped on rebuild, which would
   /// make `state.extra!` throw a null-check.
   const FileDetailScreen.documentById({super.key, required this.id})
-      : item = null,
-        _rowOnlyKind = FileMediaKind.doc;
+    : item = null,
+      _rowOnlyKind = FileMediaKind.doc;
+
+  /// Video drill-down by id (`/items/video/:id`). Reuses the row-only file host:
+  /// video remains `item_type=file`, with `mediaType=video` selecting this
+  /// lightweight player shell rather than the audio source path.
+  const FileDetailScreen.videoById({super.key, required this.id})
+    : item = null,
+      _rowOnlyKind = FileMediaKind.video;
 
   /// The Item being shown (item-driven image path). Null on the id paths.
   final RecordingItem? item;
@@ -174,8 +187,12 @@ class FileDetailScreen extends StatelessWidget {
   /// that selects [FileView]'s media header and default Contents tag. Mirrors
   /// the audio/image/document buckets `mediaTypeForPath` writes — an imported
   /// document (#1449) maps to [FileMediaKind.doc], NOT image/audio.
-  static FileMediaKind mediaKindOf(RecordingItem item) =>
-      mediaKindForType(item.mediaType);
+  static FileMediaKind mediaKindOf(RecordingItem item) {
+    if (item.itemType == MatomeItemType.file) {
+      return mediaKindForType(item.mediaType);
+    }
+    throw UnsupportedError('Text items do not use FileDetailScreen');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,13 +209,13 @@ class FileDetailScreen extends StatelessWidget {
 /// Loads ONLY the row by id (no audio-source resolution / `downloadUrl`) and
 /// renders the kind-specific host. Robust to go_router rebuilds — the id comes
 /// from the route path, not `extra`.
-final _imageRowProvider =
-    FutureProvider.autoDispose.family<RecordingRow?, String>(
-  (ref, id) => ref.watch(recordingsDaoProvider).getRecordingById(id),
-);
+final _imageRowProvider = FutureProvider.autoDispose
+    .family<RecordingRow?, String>(
+      (ref, id) => ref.watch(recordingsDaoProvider).getRecordingById(id),
+    );
 
-/// The row-only id host shared by the image (`/recording/image/:id`) and
-/// document (`/recording/document/:id`, #1450) routes. Both load ONLY the row —
+/// The row-only id host shared by the image (`/items/image/:id`) and
+/// document (`/items/document/:id`, #1450) routes. Both load ONLY the row —
 /// no audio-source `downloadUrl` — and render the generic [_ImageDetailHost]
 /// with the supplied [mediaKind] (image → framed preview; doc → "Document" tag,
 /// no inline preview). Keeping a single host for both keeps the no-audio-load
@@ -220,15 +237,17 @@ class _RowOnlyDetailByIdState extends ConsumerState<_RowOnlyDetailById> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     Widget shell(Widget body) => Scaffold(
-          backgroundColor: colors.background,
-          appBar: AppBar(
-            backgroundColor: colors.background,
-            surfaceTintColor: colors.background,
-          ),
-          body: body,
-        );
+      backgroundColor: colors.background,
+      appBar: AppBar(
+        backgroundColor: colors.background,
+        surfaceTintColor: colors.background,
+      ),
+      body: body,
+    );
 
-    return ref.watch(_imageRowProvider(widget.id)).when(
+    return ref
+        .watch(_imageRowProvider(widget.id))
+        .when(
           data: (row) => row == null
               ? shell(Center(child: Text(t.recording.title)))
               : _ImageDetailHost.fromRow(
@@ -269,6 +288,7 @@ class _FileDetailById extends ConsumerWidget {
     //   * image  → the framed image host,
     //   * doc    → the generic file host (no inline preview; v1 only STORES
     //              documents — open/extract/parse is deferred, #1449),
+    //   * video  → the lightweight video file host,
     //   * audio  → the audio host (the default).
     switch (mediaKindForType(row.mediaType)) {
       case FileMediaKind.image:
@@ -278,6 +298,12 @@ class _FileDetailById extends ConsumerWidget {
           row: row,
           place: state.badge,
           mediaKind: FileMediaKind.doc,
+        );
+      case FileMediaKind.video:
+        return _ImageDetailHost.fromRow(
+          row: row,
+          place: state.badge,
+          mediaKind: FileMediaKind.video,
         );
       case FileMediaKind.audio:
         return _AudioDetailHost(id: id);
@@ -294,21 +320,21 @@ class _ImageDetailHost extends StatelessWidget {
   /// Built from the [RecordingItem] the matome hub already holds (the direct
   /// `FileDetailScreen(item:)` entry — embedded / two-pane hosts).
   _ImageDetailHost.fromItem({required RecordingItem item})
-      : title = item.title,
-        place = item.workspaceName,
-        coreId = item.coreId,
-        processingStatus = item.processingStatus,
-        path = item.filePath,
-        notes = item.notes,
-        mediaKind = mediaKindForType(item.mediaType),
-        originalExtension = null,
-        // The item-driven path carries no machine text/processing flag, so the
-        // doc Contents falls back to its honest derivation (empty).
-        contentsText = null,
-        isProcessing = false,
-        trailing = null;
+    : title = item.title,
+      place = item.workspaceName,
+      coreId = item.coreId,
+      processingStatus = item.processingStatus,
+      path = item.filePath,
+      notes = item.notes,
+      mediaKind = mediaKindForType(item.mediaType),
+      originalExtension = null,
+      // The item-driven path carries no machine text/processing flag, so the
+      // doc Contents falls back to its honest derivation (empty).
+      contentsText = null,
+      isProcessing = false,
+      trailing = null;
 
-  /// Built from a loaded [RecordingRow] — the id-driven `/recording/detail/:id`
+  /// Built from a loaded [RecordingRow] — the id-driven `/items/audio/:id`
   /// route, which now dispatches images here (#97 unification) so the image and
   /// audio tiles drill down through the SAME go_router route. [mediaKind]
   /// defaults to image but is [FileMediaKind.doc] for an imported document
@@ -318,22 +344,22 @@ class _ImageDetailHost extends StatelessWidget {
     required this.place,
     this.trailing,
     this.mediaKind = FileMediaKind.image,
-  })  : title = row.title,
-        coreId = row.coreId,
-        processingStatus = row.processingStatus,
-        // The image's on-disk path lives in the `audioFilePath` column (the
-        // generic media-path column shared across kinds).
-        path = row.audioFilePath,
-        notes = row.notes,
-        // The machine-produced text (Core-owned `transcript` column — the SAME
-        // column audio uses) carries the document's stub summary once the
-        // pipeline resolves (#1454). The doc Contents renders it as the "ready"
-        // body; image keeps it null (its description producer is deferred).
-        contentsText = row.transcript,
-        isProcessing = row.isProcessing == 1,
-        // The persisted source extension (#1449) drives the doc chip's type
-        // icon; null on non-document rows (and on the item-driven path).
-        originalExtension = row.originalExtension;
+  }) : title = row.title,
+       coreId = row.coreId,
+       processingStatus = row.processingStatus,
+       // The image's on-disk path lives in the `audioFilePath` column (the
+       // generic media-path column shared across kinds).
+       path = row.audioFilePath,
+       notes = row.notes,
+       // The machine-produced text (Core-owned `transcript` column — the SAME
+       // column audio uses) carries the document's stub summary once the
+       // pipeline resolves (#1454). The doc Contents renders it as the "ready"
+       // body; image keeps it null (its description producer is deferred).
+       contentsText = row.transcript,
+       isProcessing = row.isProcessing == 1,
+       // The persisted source extension (#1449) drives the doc chip's type
+       // icon; null on non-document rows (and on the item-driven path).
+       originalExtension = row.originalExtension;
 
   final String title;
   final String? place;
@@ -374,17 +400,19 @@ class _ImageDetailHost extends StatelessWidget {
       //   * image → the framed inline preview that opens the fullscreen viewer,
       //   * doc   → the FileTypeChip (type icon + name + size + DISABLED "Open"
       //             labelled "soon"; open/preview is deferred, #1455),
+      //   * video → a minimal file-host player shell (no AI dispatch),
       //   * audio → handled by the audio host, not here.
       mediaHeader: switch (mediaKind) {
         FileMediaKind.image => _ImageMediaHeader(
-            path: path,
-            onOpenFullscreen: () => _openFullscreen(context),
-          ),
+          path: path,
+          onOpenFullscreen: () => _openFullscreen(context),
+        ),
         FileMediaKind.doc => FileTypeChip(
-            fileName: title,
-            extension: originalExtension,
-            sizeLabel: _fileSizeLabel(path),
-          ),
+          fileName: title,
+          extension: originalExtension,
+          sizeLabel: _fileSizeLabel(path),
+        ),
+        FileMediaKind.video => _VideoMediaHeader(title: title, path: path),
         FileMediaKind.audio => null,
       },
       // Contents body, per kind:
@@ -467,6 +495,58 @@ class _ImageDetailHost extends StatelessWidget {
   }
 }
 
+class _VideoMediaHeader extends StatelessWidget {
+  const _VideoMediaHeader({required this.title, required this.path});
+
+  final String title;
+  final String? path;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+    final hasPath = path != null && path!.isNotEmpty;
+
+    return Container(
+      key: const ValueKey('file-detail-video-header'),
+      padding: EdgeInsets.all(spacing.lg),
+      decoration: BoxDecoration(
+        color: colors.subtleFill,
+        borderRadius: BorderRadius.circular(radius.md),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.play_circle_outline,
+            color: colors.textSecondary,
+            size: _kVideoHeaderIconSize,
+          ),
+          SizedBox(width: spacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Video',
+                  style: typography.label.copyWith(color: colors.textSecondary),
+                ),
+                SizedBox(height: spacing.xxs),
+                Text(
+                  hasPath ? title : 'Video file unavailable',
+                  style: typography.body.copyWith(color: colors.textPrimary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Audio host (editable, id-driven) ───────────────────────────────────────
 
 /// The audio detail host: loads the recording via [detailsControllerProvider]
@@ -518,8 +598,7 @@ class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
   }
 
   Future<void> _save() async {
-    final controller =
-        ref.read(detailsControllerProvider(widget.id).notifier);
+    final controller = ref.read(detailsControllerProvider(widget.id).notifier);
     final messenger = ScaffoldMessenger.of(context);
     try {
       await controller.save(_notesController.text);
@@ -569,12 +648,12 @@ class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
   }
 
   void _onDelete() => _fileDeleteFlow(
-        context,
-        ref,
-        widget.id,
-        // Clear dirty so the leave-guard doesn't block the post-delete pop.
-        onBeforeDelete: () => _dirty.discard(_notesController.text),
-      );
+    context,
+    ref,
+    widget.id,
+    // Clear dirty so the leave-guard doesn't block the post-delete pop.
+    onBeforeDelete: () => _dirty.discard(_notesController.text),
+  );
 
   FileViewData _viewData(DetailsState state) {
     final row = state.row;
@@ -803,10 +882,7 @@ class _ImageMediaHeader extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(radius.lg),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: frame,
-              ),
+              child: AspectRatio(aspectRatio: 16 / 9, child: frame),
             ),
             Padding(
               padding: EdgeInsets.symmetric(

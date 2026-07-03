@@ -46,10 +46,11 @@ class RecordingDraftsDao extends DatabaseAccessor<AppDatabase>
 
   /// Load the current draft, or null if none exists. Mirrors `loadDraft`.
   Future<RecordingDraft?> loadDraft() async {
-    final row = await (select(recordingDrafts)
-          ..orderBy([(d) => OrderingTerm.desc(d.id)])
-          ..limit(1))
-        .getSingleOrNull();
+    final row =
+        await (select(recordingDrafts)
+              ..orderBy([(d) => OrderingTerm.desc(d.id)])
+              ..limit(1))
+            .getSingleOrNull();
     if (row == null) return null;
 
     List<String> segments = const [];

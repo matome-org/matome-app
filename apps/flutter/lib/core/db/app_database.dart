@@ -7,6 +7,7 @@ import '../storage/app_storage.dart';
 import 'connection.dart';
 import 'db_encryption.dart';
 import 'daos/contacts_dao.dart';
+import 'daos/items_dao.dart';
 import 'daos/matomes_dao.dart';
 import 'daos/recordings_dao.dart';
 import 'daos/recording_drafts_dao.dart';
@@ -210,7 +211,13 @@ part 'app_database.g.dart';
 /// (local). Non-lossy — it touches only the `is_local` label, never data.
 ///   UPDATE workspaces SET is_local = 1;
 ///   PRAGMA user_version = 17;
-const int kSchemaVersion = 18;
+///
+/// v19 (m019, items rebuild-clean foundation — #1823) adds Core-shaped `items`,
+/// `file_blobs`, and `text_contents` tables. These tables intentionally carry no
+/// client-side FKs; sync/listing resolves payload arcs by `item_type`. This is
+/// the rebuild-clean seam for the post-recordings item model: existing offline
+/// cache can be reset and re-synced from Core rather than transformed in place.
+const int kSchemaVersion = 19;
 
 /// The offline-first local store.
 ///
@@ -231,6 +238,9 @@ const int kSchemaVersion = 18;
     SpaceContacts,
     MatomeShares,
     RecordingContacts,
+    FileBlobs,
+    TextContents,
+    Items,
   ],
   daos: [
     RecordingsDao,
@@ -239,13 +249,14 @@ const int kSchemaVersion = 18;
     SpacesDao,
     MatomesDao,
     ContactsDao,
+    ItemsDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   /// Production constructor: opens the platform connection, SQLCipher-encrypted
   /// on native (key from [keyStore], defaulting to `flutter_secure_storage`).
   AppDatabase({SecureKeyStore? keyStore})
-      : super(openConnection(keyStore: keyStore));
+    : super(openConnection(keyStore: keyStore));
 
   /// Test constructor — pass a [NativeDatabase.memory] executor.
   AppDatabase.forTesting(super.executor);
@@ -255,379 +266,386 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        // Fresh install: build the fully-migrated schema in one shot. Drift's
-        // generated `createAll()` produces the same final tables/columns the
-        // mobile app reaches after running 001..004.
-        onCreate: (m) async {
-          AppLog.event(LogCat.db, 'db onCreate version=$kSchemaVersion');
-          await m.createAll();
-          await _seedDefaultWorkspace();
-        },
-        // Upgrade path ports the expo-sqlite migrations step by step so a DB
-        // opened at an older version reaches the current schema identically to
-        // the mobile runner (index == version).
-        onUpgrade: (m, from, to) async {
-          AppLog.event(LogCat.db, 'db onUpgrade $from->$to');
-          // m001 — add `notes` to recordings.
-          if (from < 1) {
-            await m.addColumn(recordings, recordings.notes);
-          }
-          // m002 — workspaces table + workspaceId FK + default workspace.
-          if (from < 2) {
-            await m.createTable(workspaces);
-            await m.addColumn(recordings, recordings.workspaceId);
-            await _seedDefaultWorkspace();
-          }
-          // m003 — recording_drafts table.
-          if (from < 3) {
-            await m.createTable(recordingDrafts);
-          }
-          // m004 — mediaType + processingStatus on recordings.
-          if (from < 4) {
-            await m.addColumn(recordings, recordings.mediaType);
-            await m.addColumn(recordings, recordings.processingStatus);
-          }
-          // m005 — local-first id model (plan #43): add nullable `coreId` and
-          // backfill it from legacy rows whose stringified `id` is a Core int.
-          // The GLOB guard APPROXIMATES Dart's `int.tryParse(id)` for canonical
-          // Core ids (a leading-sign-optional run of digits → UUID-style
-          // `rec_local_…` ids stay NULL). It is NOT exact: it accepts embedded
-          // `-` (e.g. `12-34`) that `int.tryParse` rejects, and does not bound
-          // length, so an overflowing all-digit string would diverge too. That
-          // is acceptable here because real Core ids are small positive ints —
-          // no actual row matches the divergent cases. The GLOB still prevents
-          // SQLite's bare CAST from silently coercing non-numeric text to 0.
-          // (This is an applied, irreversible migration — do NOT change the SQL.)
-          if (from < 5) {
-            await m.addColumn(recordings, recordings.coreId);
-            await customStatement(
-              "UPDATE recordings SET coreId = CAST(id AS INTEGER) "
-              "WHERE coreId IS NULL "
-              "AND (id GLOB '[0-9]*' OR id GLOB '-[0-9]*') "
-              "AND id NOT GLOB '*[^0-9-]*' "
-              "AND id GLOB '*[0-9]*'",
-            );
-          }
-          // m006 — Space collaboration schema (matome-centric-pivot Wave 1,
-          // .docs/internal/architecture.md §11 (D3)/(D4)). The Space rename is LOGICAL: the table stays named
-          // `workspaces`. Two columns are added to it and two reserved tables
-          // are created. All collaboration columns are UNENFORCED — no ACL
-          // logic reads them until the `matome-collaboration` plan.
-          //
-          // Both columns are NULLABLE/defaulted, so Drift's ALTER ADD COLUMN
-          // backfills existing rows: `space_type` → 'personal' (its column
-          // default), `owner_id` → NULL. The seeded default Space ('Pessoal',
-          // isDefault=1) therefore becomes type 'personal' — it is the default
-          // triage destination (.docs/internal/architecture.md §11 (D4)). The explicit UPDATE below is a
-          // belt-and-braces backfill in case a prior build had already created
-          // the column without the default.
-          //
-          // DOWN-migration / reversal (no automatic downgrade path in Drift;
-          // documented for discipline — additive, low-risk, no prod users):
-          //   DROP TABLE IF EXISTS organizations;
-          //   DROP TABLE IF EXISTS space_members;
-          //   -- SQLite < 3.35 cannot DROP COLUMN; rebuild `workspaces` without
-          //   -- space_type/owner_id via a copy table if a true v5 shape is
-          //   -- required. Leaving the columns in place is otherwise harmless.
-          //   PRAGMA user_version = 5;
-          if (from < 6) {
-            await m.addColumn(workspaces, workspaces.spaceType);
-            await m.addColumn(workspaces, workspaces.ownerId);
-            await customStatement(
-              "UPDATE workspaces SET space_type = 'personal' "
-              "WHERE space_type IS NULL",
-            );
-            await m.createTable(spaceMembers);
-            await m.createTable(organizations);
-          }
-          // m007 — Matome becomes the central entity (matome-centric-pivot,
-          // .docs/internal/architecture.md §11 (D3) — the KEYSTONE data slice). Adds the `matomes` table and
-          // the `recordings.matome_id` FK, then BACKFILLS one Matome per
-          // existing recording so every recording is an Item of exactly one
-          // Matome (.docs/internal/architecture.md §11 (D3) invariant 1/2). The Matome is minted local-only
-          // (`mat_local_<uuid>`, `core_id` NULL — Inbox/untriaged until
-          // triaged into a Space; .docs/internal/architecture.md §11 (D4)) and takes its `space_id` from the
-          // recording's existing `workspaceId` so a recording already filed in a
-          // Space yields a Space-filed Matome, and an Inbox recording
-          // (workspaceId NULL) yields an Inbox Matome.
-          //
-          // ORDERING: the Matome row is INSERTed BEFORE the recording is
-          // pointed at it, so the (eventually-non-null) FK never sees an orphan
-          // window (.docs/internal/architecture.md §11 (D3) invariant 4). `recordings.matomeId` is added as a
-          // nullable column (Drift ALTER ADD can't add a NOT NULL column to a
-          // populated table), then the backfill makes it non-null for every
-          // row; the WHERE matome_id IS NULL guard makes the whole step
-          // IDEMPOTENT (a re-run finds no un-backfilled rows and creates no
-          // duplicate Matomes).
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, low-risk, no prod users):
-          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v6 shape,
-          //   -- rebuild `recordings` without `matome_id` via a copy table.
-          //   -- Leaving the column in place is otherwise harmless.
-          //   DROP TABLE IF EXISTS matomes;
-          //   PRAGMA user_version = 6;
-          if (from < 7) {
-            await m.createTable(matomes);
-            await m.addColumn(recordings, recordings.matomeId);
-            await _backfillMatomesPerRecording();
-          }
-          // m008 — Contacts schema (.docs/internal/architecture.md §11 (D4)). Creates the owner-owned
-          // `contacts` table and the three edge tables `matome_contacts`,
-          // `space_contacts` and `matome_shares`. New domain — NO backfill.
-          // SCHEMA-READY / NOT ENFORCED: no sharing / profile / ACL logic and
-          // no UI ships here (deferred to the `matome-collaboration` plan).
-          //
-          // Deletion-cascade is EXPLICIT (ContactsDao/MatomesDao transactions),
-          // NOT an on-disk FK clause: this drift build emits no REFERENCES DDL,
-          // so a runtime PRAGMA cascade would not fire. Deleting a Contact drops
-          // its matome_contacts/space_contacts edges; deleting a Matome drops
-          // its matome_contacts/matome_shares edges — never the counterpart row.
-          // The M:N add is idempotent (UNIQUE(matome_id, contact_id) /
-          // UNIQUE(space_id, contact_id)): a re-sync re-adding an existing edge
-          // is a no-op and never drops other members (set-merge).
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, new domain, no prod users):
-          //   DROP TABLE IF EXISTS matome_shares;
-          //   DROP TABLE IF EXISTS space_contacts;
-          //   DROP TABLE IF EXISTS matome_contacts;
-          //   DROP TABLE IF EXISTS contacts;
-          //   PRAGMA user_version = 7;
-          if (from < 8) {
-            await m.createTable(contacts);
-            await m.createTable(matomeContacts);
-            await m.createTable(spaceContacts);
-            await m.createTable(matomeShares);
-          }
-          // m009 — Matome archive / soft-delete (#1409, W3). Adds the nullable
-          // `matomes.archived_at` column (epoch ms when archived, NULL ⟺
-          // active). Drift's ALTER ADD COLUMN backfills existing rows to NULL,
-          // so every pre-existing Matome stays active — no data migration. The
-          // row + its child recordings are RETAINED on archive (recoverable via
-          // restore); only the list/watch queries hide it.
-          //
-          // GUARD `from >= 7`: the `matomes` table is created by m007 via
-          // `m.createTable(matomes)`, which always emits the CURRENT table
-          // definition — already including `archived_at`. So a DB upgrading from
-          // before v7 reaches v7 with the column already present; re-adding it
-          // here would throw "duplicate column". Only a DB that already had the
-          // m007/m008-era `matomes` (no archived_at) needs the ALTER.
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, nullable, no prod users):
-          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v8 shape,
-          //   -- rebuild `matomes` without `archived_at` via a copy table.
-          //   -- Leaving the column in place is otherwise harmless.
-          //   PRAGMA user_version = 8;
-          if (from >= 7 && from < 9) {
-            await m.addColumn(matomes, matomes.archivedAt);
-          }
-          // m010 — Recording transcript (#1433). Adds the nullable
-          // `recordings.transcript` TEXT column (machine-generated,
-          // type-specific text — DISTINCT from the user-owned `notes` column,
-          // which is untouched here; sync semantics for the pair are task
-          // #1434). Drift's ALTER ADD COLUMN backfills existing rows to NULL
-          // (no transcript until the pipeline produces one), so no data
-          // migration. The `recordings` table predates every migration in this
-          // strategy, so — unlike m009's `matomes` guard — no `from >=` floor
-          // is needed: any DB reaching here from < 10 already has `recordings`
-          // WITHOUT `transcript`, and the column is added exactly once.
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, nullable, no prod users):
-          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v9 shape,
-          //   -- rebuild `recordings` without `transcript` via a copy table.
-          //   -- Leaving the column in place is otherwise harmless.
-          //   PRAGMA user_version = 9;
-          if (from < 10) {
-            await m.addColumn(recordings, recordings.transcript);
-          }
-          // m011 — backfill transcript from legacy notes (#1436). THE
-          // IRREVERSIBLE data slice, made reversible-by-construction. Historical
-          // `notes` commingles {old machine transcript copied by the legacy
-          // sync} + {user edits} with NO discriminator, so the only safe rule is
-          // COPY-FORWARD, never split. Done in [_snapshotAndCopyForwardNotes].
-          //
-          // ORDERING IS LOAD-BEARING: the snapshot (notes → notes_legacy_raw) is
-          // written for every row BEFORE the copy-forward, so even a crash
-          // between the two leaves the restore anchor intact.
-          //
-          // IDEMPOTENT: the ALTER ADD COLUMN runs once (from < 11); the snapshot
-          // UPDATE guards `notes_legacy_raw IS NULL`; the copy-forward UPDATE
-          // guards `transcript IS NULL OR transcript = ''` AND `mediaType =
-          // 'audio'`. A re-run / re-open finds nothing to do.
-          //
-          // NON-LOSSY BY CONSTRUCTION: `notes` is NEVER written — only read.
-          // `notes_legacy_raw` is the immutable pre-migration copy of `notes`.
-          // `transcript` is only ever FILLED when empty, never overwritten.
-          //
-          // RESTORE PROCEDURE (no automatic Drift downgrade; documented for
-          // discipline). The backfill is reversed WITHOUT data loss because the
-          // pre-migration `notes` was snapshotted first:
-          //   -- 1. Restore notes to their exact pre-migration bytes:
-          //   UPDATE recordings SET notes = notes_legacy_raw;
-          //   -- 2. (optional) undo the copy-forward — clear transcripts that
-          //   --    this backfill filled from notes. Only safe if the fixed sync
-          //   --    has not since written a real transcript; prefer (1) alone.
-          //   --    UPDATE recordings SET transcript = NULL
-          //   --      WHERE mediaType = 'audio' AND transcript = notes_legacy_raw;
-          //   -- 3. SQLite < 3.35 cannot DROP COLUMN; leaving notes_legacy_raw in
-          //   --    place is harmless. To reach a true v10 shape, rebuild
-          //   --    `recordings` without it via a copy table.
-          //   PRAGMA user_version = 10;
-          if (from < 11) {
-            await m.addColumn(recordings, recordings.notesLegacyRaw);
-            await _snapshotAndCopyForwardNotes();
-          }
-          // m012 — document-import original extension (#1449). Adds the nullable
-          // `recordings.original_extension` TEXT column (lower-case source
-          // extension, no dot — e.g. 'pdf'). Drift's ALTER ADD COLUMN backfills
-          // existing rows to NULL (no extension recorded until the generic
-          // document-import path writes one at insert), so no data migration.
-          // The `recordings` table predates every migration in this strategy, so
-          // — like m010/m011 and unlike m009's `matomes` guard — no `from >=`
-          // floor is needed: any DB reaching here from < 12 already has
-          // `recordings` WITHOUT `original_extension`, and the column is added
-          // exactly once. NON-LOSSY: this step ONLY adds a column; no existing
-          // column is read or written.
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, nullable, no prod users):
-          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v11 shape,
-          //   -- rebuild `recordings` without `original_extension` via a copy
-          //   -- table. Leaving the column in place is otherwise harmless.
-          //   PRAGMA user_version = 11;
-          if (from < 12) {
-            await m.addColumn(recordings, recordings.originalExtension);
-          }
-          // m013 — owner-scoping column on recordings (#1461). Mirrors Core's
-          // NOT-NULL `recordings.owner_id`; the SECURITY-CRITICAL scope for the
-          // Files view's cross-matome + Unfiled + Inbox list. Additive +
-          // nullable: Drift's ALTER ADD COLUMN backfills every existing row to
-          // NULL. No data backfill — a legacy NULL owner is treated as "not the
-          // current owner" by the owner-scoped query (excluded, never leaked);
-          // the Core reconcile path populates it on next sync from the
-          // recording JSON's `owner_id`.
-          if (from < 13) {
-            await m.addColumn(recordings, recordings.ownerId);
-          }
-          // m014 — structured contact fields (#1462). Adds the nullable
-          // `contacts.email/phone/company/title` TEXT columns, mirroring Core's
-          // typed columns. Validation/normalization is enforced Core-side on
-          // write; the local store just persists what Core returns. Drift's
-          // ALTER ADD COLUMN backfills existing rows to NULL — no data
-          // migration.
-          //
-          // GUARD `from >= 8`: the `contacts` table is created by m008 via
-          // `m.createTable(contacts)`, which always emits the CURRENT table
-          // definition — already including these four columns. A DB upgrading
-          // from before v8 reaches v8 with the columns already present, so
-          // re-adding them here would throw "duplicate column". Only a DB that
-          // already had the m008-era `contacts` (no structured fields) needs
-          // the ALTER.
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, nullable, no prod users):
-          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v13 shape,
-          //   -- rebuild `contacts` without these columns via a copy table.
-          //   -- Leaving the columns in place is otherwise harmless.
-          //   PRAGMA user_version = 13;
-          if (from >= 8 && from < 14) {
-            await m.addColumn(contacts, contacts.email);
-            await m.addColumn(contacts, contacts.phone);
-            await m.addColumn(contacts, contacts.company);
-            await m.addColumn(contacts, contacts.title);
-          }
-          // m015 — recording byte size (#1471). Mirrors Core's nullable
-          // `recordings.byte_size` (bigint). Additive + nullable: Drift's ALTER
-          // ADD COLUMN backfills every existing row to NULL (legacy rows have no
-          // declared size, rendered as "—"); the reconcile path populates it on
-          // next sync from the recording JSON's `byte_size`. The `recordings`
-          // table predates every migration here, so no `from >=` floor is needed:
-          // any DB reaching here from < 15 has `recordings` WITHOUT `byte_size`,
-          // and the column is added exactly once. NON-LOSSY: only adds a column.
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, nullable, no prod users):
-          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v14 shape,
-          //   -- rebuild `recordings` without `byte_size` via a copy table.
-          //   -- Leaving the column in place is otherwise harmless.
-          //   PRAGMA user_version = 14;
-          if (from < 15) {
-            await m.addColumn(recordings, recordings.byteSize);
-          }
-          // m016 — direct file↔contact edge (#1472). Creates the
-          // `recording_contacts` join table (mirrors Core's `recording_contacts`),
-          // the DIRECT file↔contact relation that replaces the matome-mediated-only
-          // people model (DR-003) as the source of truth. Additive — a brand-new
-          // table via `m.createTable`, so no data migration and existing rows are
-          // untouched. `createTable` always emits the CURRENT definition (TEXT id
-          // PK + UNIQUE(recording_id, contact_id)), so no `from >=` floor is needed:
-          // any DB reaching here from < 16 simply gains the table once.
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, non-lossy, drops only the new join):
-          //   DROP TABLE IF EXISTS recording_contacts;
-          //   PRAGMA user_version = 15;
-          if (from < 16) {
-            await m.createTable(recordingContacts);
-          }
-          // m017 — workspaces.is_local (local-first-spaces #102 W1,
-          // .docs/internal/architecture.md §5). Adds the SYNC-MODE bit (Axis A) to the
-          // Space: `is_local` INTEGER NOT NULL DEFAULT 1 (local). Drift's ALTER
-          // ADD COLUMN backfills EVERY existing row to 1 (local) from the column
-          // default — no data rewrite, no per-row UPDATE. Old code that never
-          // reads the column is unaffected; the column ships DARK (no sync gate
-          // keys off it until later W-tasks behind the `localFirstSpaces` flag).
-          //
-          // FORWARD-COMPAT (H5): is_local (Axis A: sync) is ORTHOGONAL to the
-          // reserved m006 `space_type` (Axis B: tenancy). This step touches
-          // NEITHER `space_type` (default 'personal') NOR `owner_id` (nullable,
-          // SSO-ready stable user id) — they are byte-conserved. Invariant
-          // (documented, not enforced here): local ⟹ personal. Migrating an
-          // existing filed space to CLOUD is a SEPARATE backfill (W5 #1500); m017
-          // alone leaves every existing row LOCAL and changes no sync reality.
-          //
-          // The `workspaces` table predates this step, so no `from >=` floor is
-          // needed: any DB reaching here from < 17 has `workspaces` WITHOUT
-          // `is_local`, and the column is added exactly once.
-          //
-          // DOWN-migration / reversal (no automatic Drift downgrade; documented
-          // for discipline — additive, defaulted, ships dark; a true revert is a
-          // compensating m018):
-          //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v16 shape,
-          //   -- rebuild `workspaces` without `is_local` via a copy table.
-          //   -- Leaving the column in place is otherwise harmless.
-          //   PRAGMA user_version = 16;
-          if (from < 17) {
-            await m.addColumn(workspaces, workspaces.isLocal);
-          }
-          // m018 — W5 CORRECTIVE backfill (local-first-spaces #102 W5, #1500,
-          // sync-gate spec §4 M1/M3). m017 defaulted EVERY workspace to
-          // is_local=1 (LOCAL), but filed spaces SYNC in the live world today
-          // (pre-#102 gate: matome.space_id != null). Leaving a synced space at
-          // is_local=1 would DARKEN it under the W4 #1498 gate. This step flips
-          // the spaces whose items sync today back to CLOUD (is_local=0),
-          // preserving today's sync reality EXACTLY.
-          //
-          // Backfill-only + non-destructive + idempotent: writes ONLY is_local,
-          // never deletes/moves a row, never touches Core. The CLOUD set is
-          // re-derived from live membership each run, so a re-run changes
-          // nothing. Axis B (`space_type`) is left untouched (default 'personal')
-          // so no row lands in an illegal combo (H6 / spec R2.2).
-          //
-          // Reversal: [reverseW5Backfill] restores the m017-default state
-          // (is_local=1 on every row) — proven by test (#1500 gate).
-          if (from < 18) {
-            await _backfillCloudSyncedSpaces();
-          }
-        },
-        beforeOpen: (details) async {
-          await customStatement('PRAGMA foreign_keys = ON');
-          await _relocateLegacyMedia();
-        },
-      );
+    // Fresh install: build the fully-migrated schema in one shot. Drift's
+    // generated `createAll()` produces the same final tables/columns the
+    // mobile app reaches after running 001..004.
+    onCreate: (m) async {
+      AppLog.event(LogCat.db, 'db onCreate version=$kSchemaVersion');
+      await m.createAll();
+      await _seedDefaultWorkspace();
+    },
+    // Upgrade path ports the expo-sqlite migrations step by step so a DB
+    // opened at an older version reaches the current schema identically to
+    // the mobile runner (index == version).
+    onUpgrade: (m, from, to) async {
+      AppLog.event(LogCat.db, 'db onUpgrade $from->$to');
+      // m001 — add `notes` to recordings.
+      if (from < 1) {
+        await m.addColumn(recordings, recordings.notes);
+      }
+      // m002 — workspaces table + workspaceId FK + default workspace.
+      if (from < 2) {
+        await m.createTable(workspaces);
+        await m.addColumn(recordings, recordings.workspaceId);
+        await _seedDefaultWorkspace();
+      }
+      // m003 — recording_drafts table.
+      if (from < 3) {
+        await m.createTable(recordingDrafts);
+      }
+      // m004 — mediaType + processingStatus on recordings.
+      if (from < 4) {
+        await m.addColumn(recordings, recordings.mediaType);
+        await m.addColumn(recordings, recordings.processingStatus);
+      }
+      // m005 — local-first id model (plan #43): add nullable `coreId` and
+      // backfill it from legacy rows whose stringified `id` is a Core int.
+      // The GLOB guard APPROXIMATES Dart's `int.tryParse(id)` for canonical
+      // Core ids (a leading-sign-optional run of digits → UUID-style
+      // `rec_local_…` ids stay NULL). It is NOT exact: it accepts embedded
+      // `-` (e.g. `12-34`) that `int.tryParse` rejects, and does not bound
+      // length, so an overflowing all-digit string would diverge too. That
+      // is acceptable here because real Core ids are small positive ints —
+      // no actual row matches the divergent cases. The GLOB still prevents
+      // SQLite's bare CAST from silently coercing non-numeric text to 0.
+      // (This is an applied, irreversible migration — do NOT change the SQL.)
+      if (from < 5) {
+        await m.addColumn(recordings, recordings.coreId);
+        await customStatement(
+          "UPDATE recordings SET coreId = CAST(id AS INTEGER) "
+          "WHERE coreId IS NULL "
+          "AND (id GLOB '[0-9]*' OR id GLOB '-[0-9]*') "
+          "AND id NOT GLOB '*[^0-9-]*' "
+          "AND id GLOB '*[0-9]*'",
+        );
+      }
+      // m006 — Space collaboration schema (matome-centric-pivot Wave 1,
+      // .docs/internal/architecture.md §11 (D3)/(D4)). The Space rename is LOGICAL: the table stays named
+      // `workspaces`. Two columns are added to it and two reserved tables
+      // are created. All collaboration columns are UNENFORCED — no ACL
+      // logic reads them until the `matome-collaboration` plan.
+      //
+      // Both columns are NULLABLE/defaulted, so Drift's ALTER ADD COLUMN
+      // backfills existing rows: `space_type` → 'personal' (its column
+      // default), `owner_id` → NULL. The seeded default Space ('Pessoal',
+      // isDefault=1) therefore becomes type 'personal' — it is the default
+      // triage destination (.docs/internal/architecture.md §11 (D4)). The explicit UPDATE below is a
+      // belt-and-braces backfill in case a prior build had already created
+      // the column without the default.
+      //
+      // DOWN-migration / reversal (no automatic downgrade path in Drift;
+      // documented for discipline — additive, low-risk, no prod users):
+      //   DROP TABLE IF EXISTS organizations;
+      //   DROP TABLE IF EXISTS space_members;
+      //   -- SQLite < 3.35 cannot DROP COLUMN; rebuild `workspaces` without
+      //   -- space_type/owner_id via a copy table if a true v5 shape is
+      //   -- required. Leaving the columns in place is otherwise harmless.
+      //   PRAGMA user_version = 5;
+      if (from < 6) {
+        await m.addColumn(workspaces, workspaces.spaceType);
+        await m.addColumn(workspaces, workspaces.ownerId);
+        await customStatement(
+          "UPDATE workspaces SET space_type = 'personal' "
+          "WHERE space_type IS NULL",
+        );
+        await m.createTable(spaceMembers);
+        await m.createTable(organizations);
+      }
+      // m007 — Matome becomes the central entity (matome-centric-pivot,
+      // .docs/internal/architecture.md §11 (D3) — the KEYSTONE data slice). Adds the `matomes` table and
+      // the `recordings.matome_id` FK, then BACKFILLS one Matome per
+      // existing recording so every recording is an Item of exactly one
+      // Matome (.docs/internal/architecture.md §11 (D3) invariant 1/2). The Matome is minted local-only
+      // (`mat_local_<uuid>`, `core_id` NULL — Inbox/untriaged until
+      // triaged into a Space; .docs/internal/architecture.md §11 (D4)) and takes its `space_id` from the
+      // recording's existing `workspaceId` so a recording already filed in a
+      // Space yields a Space-filed Matome, and an Inbox recording
+      // (workspaceId NULL) yields an Inbox Matome.
+      //
+      // ORDERING: the Matome row is INSERTed BEFORE the recording is
+      // pointed at it, so the (eventually-non-null) FK never sees an orphan
+      // window (.docs/internal/architecture.md §11 (D3) invariant 4). `recordings.matomeId` is added as a
+      // nullable column (Drift ALTER ADD can't add a NOT NULL column to a
+      // populated table), then the backfill makes it non-null for every
+      // row; the WHERE matome_id IS NULL guard makes the whole step
+      // IDEMPOTENT (a re-run finds no un-backfilled rows and creates no
+      // duplicate Matomes).
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, low-risk, no prod users):
+      //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v6 shape,
+      //   -- rebuild `recordings` without `matome_id` via a copy table.
+      //   -- Leaving the column in place is otherwise harmless.
+      //   DROP TABLE IF EXISTS matomes;
+      //   PRAGMA user_version = 6;
+      if (from < 7) {
+        await m.createTable(matomes);
+        await m.addColumn(recordings, recordings.matomeId);
+        await _backfillMatomesPerRecording();
+      }
+      // m008 — Contacts schema (.docs/internal/architecture.md §11 (D4)). Creates the owner-owned
+      // `contacts` table and the three edge tables `matome_contacts`,
+      // `space_contacts` and `matome_shares`. New domain — NO backfill.
+      // SCHEMA-READY / NOT ENFORCED: no sharing / profile / ACL logic and
+      // no UI ships here (deferred to the `matome-collaboration` plan).
+      //
+      // Deletion-cascade is EXPLICIT (ContactsDao/MatomesDao transactions),
+      // NOT an on-disk FK clause: this drift build emits no REFERENCES DDL,
+      // so a runtime PRAGMA cascade would not fire. Deleting a Contact drops
+      // its matome_contacts/space_contacts edges; deleting a Matome drops
+      // its matome_contacts/matome_shares edges — never the counterpart row.
+      // The M:N add is idempotent (UNIQUE(matome_id, contact_id) /
+      // UNIQUE(space_id, contact_id)): a re-sync re-adding an existing edge
+      // is a no-op and never drops other members (set-merge).
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, new domain, no prod users):
+      //   DROP TABLE IF EXISTS matome_shares;
+      //   DROP TABLE IF EXISTS space_contacts;
+      //   DROP TABLE IF EXISTS matome_contacts;
+      //   DROP TABLE IF EXISTS contacts;
+      //   PRAGMA user_version = 7;
+      if (from < 8) {
+        await m.createTable(contacts);
+        await m.createTable(matomeContacts);
+        await m.createTable(spaceContacts);
+        await m.createTable(matomeShares);
+      }
+      // m009 — Matome archive / soft-delete (#1409, W3). Adds the nullable
+      // `matomes.archived_at` column (epoch ms when archived, NULL ⟺
+      // active). Drift's ALTER ADD COLUMN backfills existing rows to NULL,
+      // so every pre-existing Matome stays active — no data migration. The
+      // row + its child recordings are RETAINED on archive (recoverable via
+      // restore); only the list/watch queries hide it.
+      //
+      // GUARD `from >= 7`: the `matomes` table is created by m007 via
+      // `m.createTable(matomes)`, which always emits the CURRENT table
+      // definition — already including `archived_at`. So a DB upgrading from
+      // before v7 reaches v7 with the column already present; re-adding it
+      // here would throw "duplicate column". Only a DB that already had the
+      // m007/m008-era `matomes` (no archived_at) needs the ALTER.
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, nullable, no prod users):
+      //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v8 shape,
+      //   -- rebuild `matomes` without `archived_at` via a copy table.
+      //   -- Leaving the column in place is otherwise harmless.
+      //   PRAGMA user_version = 8;
+      if (from >= 7 && from < 9) {
+        await m.addColumn(matomes, matomes.archivedAt);
+      }
+      // m010 — Recording transcript (#1433). Adds the nullable
+      // `recordings.transcript` TEXT column (machine-generated,
+      // type-specific text — DISTINCT from the user-owned `notes` column,
+      // which is untouched here; sync semantics for the pair are task
+      // #1434). Drift's ALTER ADD COLUMN backfills existing rows to NULL
+      // (no transcript until the pipeline produces one), so no data
+      // migration. The `recordings` table predates every migration in this
+      // strategy, so — unlike m009's `matomes` guard — no `from >=` floor
+      // is needed: any DB reaching here from < 10 already has `recordings`
+      // WITHOUT `transcript`, and the column is added exactly once.
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, nullable, no prod users):
+      //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v9 shape,
+      //   -- rebuild `recordings` without `transcript` via a copy table.
+      //   -- Leaving the column in place is otherwise harmless.
+      //   PRAGMA user_version = 9;
+      if (from < 10) {
+        await m.addColumn(recordings, recordings.transcript);
+      }
+      // m011 — backfill transcript from legacy notes (#1436). THE
+      // IRREVERSIBLE data slice, made reversible-by-construction. Historical
+      // `notes` commingles {old machine transcript copied by the legacy
+      // sync} + {user edits} with NO discriminator, so the only safe rule is
+      // COPY-FORWARD, never split. Done in [_snapshotAndCopyForwardNotes].
+      //
+      // ORDERING IS LOAD-BEARING: the snapshot (notes → notes_legacy_raw) is
+      // written for every row BEFORE the copy-forward, so even a crash
+      // between the two leaves the restore anchor intact.
+      //
+      // IDEMPOTENT: the ALTER ADD COLUMN runs once (from < 11); the snapshot
+      // UPDATE guards `notes_legacy_raw IS NULL`; the copy-forward UPDATE
+      // guards `transcript IS NULL OR transcript = ''` AND `mediaType =
+      // 'audio'`. A re-run / re-open finds nothing to do.
+      //
+      // NON-LOSSY BY CONSTRUCTION: `notes` is NEVER written — only read.
+      // `notes_legacy_raw` is the immutable pre-migration copy of `notes`.
+      // `transcript` is only ever FILLED when empty, never overwritten.
+      //
+      // RESTORE PROCEDURE (no automatic Drift downgrade; documented for
+      // discipline). The backfill is reversed WITHOUT data loss because the
+      // pre-migration `notes` was snapshotted first:
+      //   -- 1. Restore notes to their exact pre-migration bytes:
+      //   UPDATE recordings SET notes = notes_legacy_raw;
+      //   -- 2. (optional) undo the copy-forward — clear transcripts that
+      //   --    this backfill filled from notes. Only safe if the fixed sync
+      //   --    has not since written a real transcript; prefer (1) alone.
+      //   --    UPDATE recordings SET transcript = NULL
+      //   --      WHERE mediaType = 'audio' AND transcript = notes_legacy_raw;
+      //   -- 3. SQLite < 3.35 cannot DROP COLUMN; leaving notes_legacy_raw in
+      //   --    place is harmless. To reach a true v10 shape, rebuild
+      //   --    `recordings` without it via a copy table.
+      //   PRAGMA user_version = 10;
+      if (from < 11) {
+        await m.addColumn(recordings, recordings.notesLegacyRaw);
+        await _snapshotAndCopyForwardNotes();
+      }
+      // m012 — document-import original extension (#1449). Adds the nullable
+      // `recordings.original_extension` TEXT column (lower-case source
+      // extension, no dot — e.g. 'pdf'). Drift's ALTER ADD COLUMN backfills
+      // existing rows to NULL (no extension recorded until the generic
+      // document-import path writes one at insert), so no data migration.
+      // The `recordings` table predates every migration in this strategy, so
+      // — like m010/m011 and unlike m009's `matomes` guard — no `from >=`
+      // floor is needed: any DB reaching here from < 12 already has
+      // `recordings` WITHOUT `original_extension`, and the column is added
+      // exactly once. NON-LOSSY: this step ONLY adds a column; no existing
+      // column is read or written.
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, nullable, no prod users):
+      //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v11 shape,
+      //   -- rebuild `recordings` without `original_extension` via a copy
+      //   -- table. Leaving the column in place is otherwise harmless.
+      //   PRAGMA user_version = 11;
+      if (from < 12) {
+        await m.addColumn(recordings, recordings.originalExtension);
+      }
+      // m013 — owner-scoping column on recordings (#1461). Mirrors Core's
+      // NOT-NULL `recordings.owner_id`; the SECURITY-CRITICAL scope for the
+      // Files view's cross-matome + Unfiled + Inbox list. Additive +
+      // nullable: Drift's ALTER ADD COLUMN backfills every existing row to
+      // NULL. No data backfill — a legacy NULL owner is treated as "not the
+      // current owner" by the owner-scoped query (excluded, never leaked);
+      // the Core reconcile path populates it on next sync from the
+      // recording JSON's `owner_id`.
+      if (from < 13) {
+        await m.addColumn(recordings, recordings.ownerId);
+      }
+      // m014 — structured contact fields (#1462). Adds the nullable
+      // `contacts.email/phone/company/title` TEXT columns, mirroring Core's
+      // typed columns. Validation/normalization is enforced Core-side on
+      // write; the local store just persists what Core returns. Drift's
+      // ALTER ADD COLUMN backfills existing rows to NULL — no data
+      // migration.
+      //
+      // GUARD `from >= 8`: the `contacts` table is created by m008 via
+      // `m.createTable(contacts)`, which always emits the CURRENT table
+      // definition — already including these four columns. A DB upgrading
+      // from before v8 reaches v8 with the columns already present, so
+      // re-adding them here would throw "duplicate column". Only a DB that
+      // already had the m008-era `contacts` (no structured fields) needs
+      // the ALTER.
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, nullable, no prod users):
+      //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v13 shape,
+      //   -- rebuild `contacts` without these columns via a copy table.
+      //   -- Leaving the columns in place is otherwise harmless.
+      //   PRAGMA user_version = 13;
+      if (from >= 8 && from < 14) {
+        await m.addColumn(contacts, contacts.email);
+        await m.addColumn(contacts, contacts.phone);
+        await m.addColumn(contacts, contacts.company);
+        await m.addColumn(contacts, contacts.title);
+      }
+      // m015 — recording byte size (#1471). Mirrors Core's nullable
+      // `recordings.byte_size` (bigint). Additive + nullable: Drift's ALTER
+      // ADD COLUMN backfills every existing row to NULL (legacy rows have no
+      // declared size, rendered as "—"); the reconcile path populates it on
+      // next sync from the recording JSON's `byte_size`. The `recordings`
+      // table predates every migration here, so no `from >=` floor is needed:
+      // any DB reaching here from < 15 has `recordings` WITHOUT `byte_size`,
+      // and the column is added exactly once. NON-LOSSY: only adds a column.
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, nullable, no prod users):
+      //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v14 shape,
+      //   -- rebuild `recordings` without `byte_size` via a copy table.
+      //   -- Leaving the column in place is otherwise harmless.
+      //   PRAGMA user_version = 14;
+      if (from < 15) {
+        await m.addColumn(recordings, recordings.byteSize);
+      }
+      // m016 — direct file↔contact edge (#1472). Creates the
+      // `recording_contacts` join table (mirrors Core's `recording_contacts`),
+      // the DIRECT file↔contact relation that replaces the matome-mediated-only
+      // people model (DR-003) as the source of truth. Additive — a brand-new
+      // table via `m.createTable`, so no data migration and existing rows are
+      // untouched. `createTable` always emits the CURRENT definition (TEXT id
+      // PK + UNIQUE(recording_id, contact_id)), so no `from >=` floor is needed:
+      // any DB reaching here from < 16 simply gains the table once.
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, non-lossy, drops only the new join):
+      //   DROP TABLE IF EXISTS recording_contacts;
+      //   PRAGMA user_version = 15;
+      if (from < 16) {
+        await m.createTable(recordingContacts);
+      }
+      // m017 — workspaces.is_local (local-first-spaces #102 W1,
+      // .docs/internal/architecture.md §5). Adds the SYNC-MODE bit (Axis A) to the
+      // Space: `is_local` INTEGER NOT NULL DEFAULT 1 (local). Drift's ALTER
+      // ADD COLUMN backfills EVERY existing row to 1 (local) from the column
+      // default — no data rewrite, no per-row UPDATE. Old code that never
+      // reads the column is unaffected; the column ships DARK (no sync gate
+      // keys off it until later W-tasks behind the `localFirstSpaces` flag).
+      //
+      // FORWARD-COMPAT (H5): is_local (Axis A: sync) is ORTHOGONAL to the
+      // reserved m006 `space_type` (Axis B: tenancy). This step touches
+      // NEITHER `space_type` (default 'personal') NOR `owner_id` (nullable,
+      // SSO-ready stable user id) — they are byte-conserved. Invariant
+      // (documented, not enforced here): local ⟹ personal. Migrating an
+      // existing filed space to CLOUD is a SEPARATE backfill (W5 #1500); m017
+      // alone leaves every existing row LOCAL and changes no sync reality.
+      //
+      // The `workspaces` table predates this step, so no `from >=` floor is
+      // needed: any DB reaching here from < 17 has `workspaces` WITHOUT
+      // `is_local`, and the column is added exactly once.
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline — additive, defaulted, ships dark; a true revert is a
+      // compensating m018):
+      //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v16 shape,
+      //   -- rebuild `workspaces` without `is_local` via a copy table.
+      //   -- Leaving the column in place is otherwise harmless.
+      //   PRAGMA user_version = 16;
+      if (from < 17) {
+        await m.addColumn(workspaces, workspaces.isLocal);
+      }
+      // m018 — W5 CORRECTIVE backfill (local-first-spaces #102 W5, #1500,
+      // sync-gate spec §4 M1/M3). m017 defaulted EVERY workspace to
+      // is_local=1 (LOCAL), but filed spaces SYNC in the live world today
+      // (pre-#102 gate: matome.space_id != null). Leaving a synced space at
+      // is_local=1 would DARKEN it under the W4 #1498 gate. This step flips
+      // the spaces whose items sync today back to CLOUD (is_local=0),
+      // preserving today's sync reality EXACTLY.
+      //
+      // Backfill-only + non-destructive + idempotent: writes ONLY is_local,
+      // never deletes/moves a row, never touches Core. The CLOUD set is
+      // re-derived from live membership each run, so a re-run changes
+      // nothing. Axis B (`space_type`) is left untouched (default 'personal')
+      // so no row lands in an illegal combo (H6 / spec R2.2).
+      //
+      // Reversal: [reverseW5Backfill] restores the m017-default state
+      // (is_local=1 on every row) — proven by test (#1500 gate).
+      if (from < 18) {
+        await _backfillCloudSyncedSpaces();
+      }
+      // m019 — items rebuild-clean foundation (#1823). Brand-new Core-shaped
+      // tables, no client FKs; payloads are resolved by `item_type`.
+      if (from < 19) {
+        await m.createTable(fileBlobs);
+        await m.createTable(textContents);
+        await m.createTable(items);
+      }
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+      await _relocateLegacyMedia();
+    },
+  );
 
   /// One-time, best-effort: move pre-existing `import_*` / `segment_*` media out
   /// of the Documents root into the dedicated Matome folder, then rewrite the
@@ -950,7 +968,8 @@ class W5BackfillAudit {
   final int illegalLocalOrg;
 
   @override
-  String toString() => 'W5BackfillAudit('
+  String toString() =>
+      'W5BackfillAudit('
       'loose: $looseRecordings, draft: $draftMatomes, '
       'local: $localSpaces, cloud: $cloudSpaces, '
       'syncsToday: $syncsTodaySpaces, '

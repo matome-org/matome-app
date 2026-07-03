@@ -22,58 +22,55 @@ const double _kContactDetailMaxWidth = 920;
 /// #1472) UNIONed with the matome-mediated set (de-duplicated by id — DR-003);
 /// the direct edge is the source of truth. Returns null when the contact does
 /// not exist.
-final contactDetailProvider =
-    FutureProvider.family<ContactDetailData?, String>((ref, contactId) async {
-  final dao = ref.watch(contactsDaoProvider);
-  final row = await dao.getById(contactId);
-  if (row == null) return null;
+final contactDetailProvider = FutureProvider.family<ContactDetailData?, String>(
+  (ref, contactId) async {
+    final dao = ref.watch(contactsDaoProvider);
+    final row = await dao.getById(contactId);
+    if (row == null) return null;
 
-  final matomeEntries = await dao.listMatomesForContact(contactId);
-  final spaces = await dao.listSpacesForContact(contactId);
-  final files = await dao.listFilesForContactUnion(contactId);
+    final matomeEntries = await dao.listMatomesForContact(contactId);
+    final spaces = await dao.listSpacesForContact(contactId);
+    final files = await dao.listFilesForContactUnion(contactId);
 
-  // The contact's index in the owner directory drives the avatar tint so it
-  // matches the list tile's colour; fall back to a hash when not found.
-  final ownerContacts = await dao.listContactsForOwner(row.ownerId);
-  final avatarIndex = () {
-    final i = ownerContacts.indexWhere((c) => c.id == contactId);
-    return i >= 0 ? i : row.id.hashCode.abs();
-  }();
+    // The contact's index in the owner directory drives the avatar tint so it
+    // matches the list tile's colour; fall back to a hash when not found.
+    final ownerContacts = await dao.listContactsForOwner(row.ownerId);
+    final avatarIndex = () {
+      final i = ownerContacts.indexWhere((c) => c.id == contactId);
+      return i >= 0 ? i : row.id.hashCode.abs();
+    }();
 
-  return ContactDetailData(
-    id: row.id,
-    name: row.displayName,
-    avatarIndex: avatarIndex,
-    sync: row.coreId != null
-        ? ContactSyncState.synced
-        : ContactSyncState.onDevice,
-    company: row.company,
-    title: row.title,
-    email: row.email,
-    phone: row.phone,
-    notes: () {
-      final n = contactNotes(row);
-      return n.isEmpty ? null : n;
-    }(),
-    matomes: [
-      for (final e in matomeEntries)
-        ContactMatomeRef(
-          id: e.matome.id,
-          title: e.matome.title,
-          role: MatomeContactRole.fromString(e.role),
-        ),
-    ],
-    spaces: [for (final s in spaces) s.name],
-    files: [
-      for (final f in files)
-        ContactFileRef(
-          id: f.id,
-          name: f.title,
-          kind: _fileKind(f),
-        ),
-    ],
-  );
-});
+    return ContactDetailData(
+      id: row.id,
+      name: row.displayName,
+      avatarIndex: avatarIndex,
+      sync: row.coreId != null
+          ? ContactSyncState.synced
+          : ContactSyncState.onDevice,
+      company: row.company,
+      title: row.title,
+      email: row.email,
+      phone: row.phone,
+      notes: () {
+        final n = contactNotes(row);
+        return n.isEmpty ? null : n;
+      }(),
+      matomes: [
+        for (final e in matomeEntries)
+          ContactMatomeRef(
+            id: e.matome.id,
+            title: e.matome.title,
+            role: MatomeContactRole.fromString(e.role),
+          ),
+      ],
+      spaces: [for (final s in spaces) s.name],
+      files: [
+        for (final f in files)
+          ContactFileRef(id: f.id, name: f.title, kind: _fileKind(f)),
+      ],
+    );
+  },
+);
 
 ContactFileKind _fileKind(RecordingRow row) {
   switch (row.mediaType) {
@@ -81,6 +78,8 @@ ContactFileKind _fileKind(RecordingRow row) {
       return ContactFileKind.image;
     case 'document':
       return ContactFileKind.document;
+    case 'video':
+      return ContactFileKind.video;
     case 'audio':
     default:
       return ContactFileKind.audio;
@@ -100,14 +99,16 @@ class ContactDetailScreen extends ConsumerWidget {
     // `recording_contacts`, or via its matome). Route by its media type so a
     // document/image never hits the audio-only detail host.
     final container = ProviderScope.containerOf(context, listen: false);
-    final row =
-        await container.read(recordingsDaoProvider).getRecordingById(fileId);
+    final row = await container
+        .read(recordingsDaoProvider)
+        .getRecordingById(fileId);
     if (!context.mounted) return;
     final mediaType = row?.mediaType ?? 'audio';
     final path = switch (mediaType) {
-      'image' => '/recording/image/$fileId',
-      'document' => '/recording/document/$fileId',
-      _ => '/recording/detail/$fileId',
+      'image' => '/items/image/$fileId',
+      'document' => '/items/document/$fileId',
+      'video' => '/items/video/$fileId',
+      _ => '/items/audio/$fileId',
     };
     context.push(path);
   }
@@ -140,8 +141,9 @@ class ContactDetailScreen extends ConsumerWidget {
               child: Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
-                  constraints:
-                      const BoxConstraints(maxWidth: _kContactDetailMaxWidth),
+                  constraints: const BoxConstraints(
+                    maxWidth: _kContactDetailMaxWidth,
+                  ),
                   child: ContactDetail(
                     contact: data,
                     onEdit: () => _edit(context, ref, data.id),
@@ -159,13 +161,19 @@ class ContactDetailScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _edit(BuildContext context, WidgetRef ref, String contactId) async {
+  Future<void> _edit(
+    BuildContext context,
+    WidgetRef ref,
+    String contactId,
+  ) async {
     final row = await ref.read(contactsDaoProvider).getById(contactId);
     if (row == null || !context.mounted) return;
     // Reuse the shared create/edit modal from the list screen.
     final draft = await showContactEditDialog(context, existing: row);
     if (draft == null || draft.name.trim().isEmpty) return;
-    await ref.read(contactsControllerProvider.notifier).updateContact(
+    await ref
+        .read(contactsControllerProvider.notifier)
+        .updateContact(
           id: contactId,
           displayName: draft.name,
           notes: draft.notes,
@@ -208,8 +216,9 @@ class _CenteredMessage extends StatelessWidget {
         child: Text(
           message,
           textAlign: TextAlign.center,
-          style: context.typography.bodySmall
-              .copyWith(color: context.colors.textMuted),
+          style: context.typography.bodySmall.copyWith(
+            color: context.colors.textMuted,
+          ),
         ),
       ),
     );

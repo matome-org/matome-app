@@ -15,11 +15,11 @@ const Duration kPollInterval = Duration(seconds: 2);
 /// Result of awaiting a recording's processing.
 class RecordingResult {
   const RecordingResult.done(this.recording)
-      : failed = false,
-        errorReason = null;
+    : failed = false,
+      errorReason = null;
   const RecordingResult.failed(this.errorReason)
-      : failed = true,
-        recording = null;
+    : failed = true,
+      recording = null;
 
   final bool failed;
   final Recording? recording;
@@ -42,11 +42,11 @@ class RecordingResultWaiter {
     required Future<Recording?> Function() poll,
     Duration timeout = kProcessingTimeout,
     Duration pollInterval = kPollInterval,
-  })  : _recordingId = recordingId,
-        _statusEvents = statusEvents,
-        _poll = poll,
-        _timeout = timeout,
-        _pollInterval = pollInterval;
+  }) : _recordingId = recordingId,
+       _statusEvents = statusEvents,
+       _poll = poll,
+       _timeout = timeout,
+       _pollInterval = pollInterval;
 
   final int _recordingId;
   final Stream<RecordingStatusEvent> _statusEvents;
@@ -65,7 +65,12 @@ class RecordingResultWaiter {
   /// [timeout].
   Future<RecordingResult> wait() {
     AppLog.event(LogCat.upload, 'wait: awaiting terminal for $_recordingId');
-    _eventSub = _statusEvents.listen(_onEvent, onError: (_) {/* poll covers */});
+    _eventSub = _statusEvents.listen(
+      _onEvent,
+      onError: (_) {
+        /* poll covers */
+      },
+    );
 
     _pollTimer = Timer.periodic(_pollInterval, (_) => _pollOnce());
 
@@ -81,9 +86,11 @@ class RecordingResultWaiter {
     if (event.status == RecordingStatus.done) {
       _settle(RecordingResult.done(_recordingFromEvent(event)));
     } else if (event.status == RecordingStatus.failed) {
-      _settle(RecordingResult.failed(
-        event.errorReason ?? 'recording_processing_failed',
-      ));
+      _settle(
+        RecordingResult.failed(
+          event.errorReason ?? 'recording_processing_failed',
+        ),
+      );
     }
   }
 
@@ -95,9 +102,11 @@ class RecordingResultWaiter {
       if (latest.status == RecordingStatus.done) {
         _settle(RecordingResult.done(latest));
       } else if (latest.status == RecordingStatus.failed) {
-        _settle(RecordingResult.failed(
-          latest.errorReason ?? 'recording_processing_failed',
-        ));
+        _settle(
+          RecordingResult.failed(
+            latest.errorReason ?? 'recording_processing_failed',
+          ),
+        );
       }
     } catch (e, st) {
       AppLog.error(

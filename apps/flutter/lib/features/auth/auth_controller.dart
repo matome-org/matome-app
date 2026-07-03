@@ -83,10 +83,7 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
           .read(authRepositoryProvider)
           .login(email: email, password: password);
     });
-    AppLog.event(
-      LogCat.auth,
-      'login ${state.hasError ? 'fail' : 'ok'}',
-    );
+    AppLog.event(LogCat.auth, 'login ${state.hasError ? 'fail' : 'ok'}');
   }
 
   Future<void> register({
@@ -100,10 +97,7 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
           .read(authRepositoryProvider)
           .register(email: email, password: password);
     });
-    AppLog.event(
-      LogCat.auth,
-      'register ${state.hasError ? 'fail' : 'ok'}',
-    );
+    AppLog.event(LogCat.auth, 'register ${state.hasError ? 'fail' : 'ok'}');
   }
 
   Future<void> logout() async {
@@ -126,8 +120,8 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
 
 final authControllerProvider =
     StateNotifierProvider<AuthController, AsyncValue<AuthSession?>>(
-  (ref) => AuthController(ref),
-);
+      (ref) => AuthController(ref),
+    );
 
 /// Reduces an email to just its domain for non-sensitive auth breadcrumbs.
 ///

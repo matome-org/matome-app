@@ -66,7 +66,11 @@ class SpaceSyncTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.folder_outlined, size: spacing.lg, color: colors.textSecondary),
+          Icon(
+            Icons.folder_outlined,
+            size: spacing.lg,
+            color: colors.textSecondary,
+          ),
           SizedBox(width: spacing.sm),
           Expanded(
             child: Column(
@@ -82,8 +86,10 @@ class SpaceSyncTile extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: spacing.xxs),
-                Text(meta,
-                    style: typography.label.copyWith(color: colors.textMuted)),
+                Text(
+                  meta,
+                  style: typography.label.copyWith(color: colors.textMuted),
+                ),
               ],
             ),
           ),
@@ -103,12 +109,16 @@ class SpaceSyncTile extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.cloud_upload_outlined,
-                          size: spacing.md, color: colors.accent),
+                      Icon(
+                        Icons.cloud_upload_outlined,
+                        size: spacing.md,
+                        color: colors.accent,
+                      ),
                       SizedBox(width: spacing.xxs),
-                      Text(promoteLabel,
-                          style:
-                              typography.label.copyWith(color: colors.accent)),
+                      Text(
+                        promoteLabel,
+                        style: typography.label.copyWith(color: colors.accent),
+                      ),
                     ],
                   ),
                 ),
@@ -219,8 +229,10 @@ class _Segment extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: typography.label
-                      .copyWith(color: fg, fontWeight: FontWeight.w600),
+                  style: typography.label.copyWith(
+                    color: fg,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

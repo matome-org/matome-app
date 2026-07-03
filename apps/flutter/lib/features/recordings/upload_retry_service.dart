@@ -121,11 +121,7 @@ class UploadRetryService {
         e,
         st,
       );
-      developer.log(
-        'reachability probe threw',
-        name: 'upload.retry',
-        error: e,
-      );
+      developer.log('reachability probe threw', name: 'upload.retry', error: e);
       return false;
     }
   }

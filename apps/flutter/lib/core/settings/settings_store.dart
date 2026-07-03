@@ -15,7 +15,7 @@ abstract class SettingsStore {
 /// Default [SettingsStore] backed by `flutter_secure_storage`.
 class SecureSettingsStore implements SettingsStore {
   SecureSettingsStore([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 
@@ -29,8 +29,7 @@ class SecureSettingsStore implements SettingsStore {
 
 /// In-memory [SettingsStore] for tests and platforms without secure storage.
 class InMemorySettingsStore implements SettingsStore {
-  InMemorySettingsStore([Map<String, String>? seed])
-      : _data = {...?seed};
+  InMemorySettingsStore([Map<String, String>? seed]) : _data = {...?seed};
 
   final Map<String, String> _data;
 

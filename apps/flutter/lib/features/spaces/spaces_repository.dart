@@ -57,10 +57,7 @@ class SpacesRepository {
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/api/spaces',
-        data: <String, dynamic>{
-          'name': name,
-          'description': ?description,
-        },
+        data: <String, dynamic>{'name': name, 'description': ?description},
       );
       final status = response.statusCode ?? 0;
       if (status == 401) {

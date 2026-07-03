@@ -78,10 +78,7 @@ RecordingProgress? advanceOnStatus({
 }) {
   switch (status) {
     case RecordingStatus.done:
-      return current.copyWith(
-        phase: RecordingPhase.done,
-        recording: recording,
-      );
+      return current.copyWith(phase: RecordingPhase.done, recording: recording);
     case RecordingStatus.failed:
       return RecordingProgress(
         phase: RecordingPhase.failed,

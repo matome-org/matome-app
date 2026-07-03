@@ -17,8 +17,9 @@ final tokenStoreProvider = Provider<TokenStore>((ref) => SecureTokenStore());
 
 /// Persisted UI preferences store (theme mode + language).
 /// Overridden in tests with an in-memory implementation.
-final settingsStoreProvider =
-    Provider<SettingsStore>((ref) => SecureSettingsStore());
+final settingsStoreProvider = Provider<SettingsStore>(
+  (ref) => SecureSettingsStore(),
+);
 
 /// Configured dio-backed API client (with the Bearer interceptor).
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -84,15 +85,21 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 
 /// Typed DAO providers for the local store — the plain-Dart persistence
 /// surface the UI/sync layer (Wave 3) drives.
-final recordingsDaoProvider =
-    Provider((ref) => ref.watch(appDatabaseProvider).recordingsDao);
-final workspacesDaoProvider =
-    Provider((ref) => ref.watch(appDatabaseProvider).workspacesDao);
-final matomesDaoProvider =
-    Provider((ref) => ref.watch(appDatabaseProvider).matomesDao);
-final spacesDaoProvider =
-    Provider((ref) => ref.watch(appDatabaseProvider).spacesDao);
-final recordingDraftsDaoProvider =
-    Provider((ref) => ref.watch(appDatabaseProvider).recordingDraftsDao);
-final contactsDaoProvider =
-    Provider((ref) => ref.watch(appDatabaseProvider).contactsDao);
+final recordingsDaoProvider = Provider(
+  (ref) => ref.watch(appDatabaseProvider).recordingsDao,
+);
+final workspacesDaoProvider = Provider(
+  (ref) => ref.watch(appDatabaseProvider).workspacesDao,
+);
+final matomesDaoProvider = Provider(
+  (ref) => ref.watch(appDatabaseProvider).matomesDao,
+);
+final spacesDaoProvider = Provider(
+  (ref) => ref.watch(appDatabaseProvider).spacesDao,
+);
+final recordingDraftsDaoProvider = Provider(
+  (ref) => ref.watch(appDatabaseProvider).recordingDraftsDao,
+);
+final contactsDaoProvider = Provider(
+  (ref) => ref.watch(appDatabaseProvider).contactsDao,
+);

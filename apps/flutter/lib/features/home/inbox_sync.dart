@@ -113,15 +113,16 @@ RecordingsCompanion recordingToCompanion(
   // refresh. For a first-time sync (no existing row) the PK is the stringified
   // Core id (the legacy convention). Either way the `coreId` column is set so
   // the row is reconcilable by Core id from then on.
-  final localId =
-      (existing != null) ? existing.id : coreIdToLocalId(recording.id);
+  final localId = (existing != null)
+      ? existing.id
+      : coreIdToLocalId(recording.id);
 
   final coreWorkspaceId = coreWorkspaceIdToLocal(recording.workspaceId);
   // Keep a local move-to-space if Core hasn't caught up (still reports Inbox).
   final mergedWorkspaceId =
       (coreWorkspaceId == null && existing?.workspaceId != null)
-          ? existing!.workspaceId
-          : coreWorkspaceId;
+      ? existing!.workspaceId
+      : coreWorkspaceId;
 
   // matomeId merge-guard (m007, .docs/internal/architecture.md §11 (D3)): every local recording is an Item of
   // exactly one Matome, but Core does NOT yet carry a Matome id on its
@@ -155,7 +156,8 @@ RecordingsCompanion recordingToCompanion(
   //     for any existing row the local note is preserved verbatim and only the
   //     save-path (push, task #1435) may overwrite it.
   final coreTranscript = recording.transcript;
-  final mergedTranscript = (coreTranscript == null && existing?.transcript != null)
+  final mergedTranscript =
+      (coreTranscript == null && existing?.transcript != null)
       ? existing!.transcript
       : coreTranscript;
 
@@ -167,7 +169,8 @@ RecordingsCompanion recordingToCompanion(
   // data-loss guard as notes / move-to-space above).
   final coreDuration = formatDurationText(recording.duration);
   final existingDuration = existing?.duration;
-  final mergedDuration = (coreDuration.isEmpty &&
+  final mergedDuration =
+      (coreDuration.isEmpty &&
           existingDuration != null &&
           existingDuration.isNotEmpty)
       ? existingDuration
@@ -182,11 +185,13 @@ RecordingsCompanion recordingToCompanion(
   // path is empty or is itself a storage key, not a real on-device file path.
   final coreStorageKey = recording.storageKey ?? '';
   final existingAudioPath = existing?.audioFilePath;
-  final hasLocalCopy = existingAudioPath != null &&
+  final hasLocalCopy =
+      existingAudioPath != null &&
       (existingAudioPath.startsWith('/') ||
           existingAudioPath.startsWith('file:'));
-  final mergedAudioFilePath =
-      (coreStorageKey.isEmpty && hasLocalCopy) ? existingAudioPath : coreStorageKey;
+  final mergedAudioFilePath = (coreStorageKey.isEmpty && hasLocalCopy)
+      ? existingAudioPath
+      : coreStorageKey;
 
   // OWNER-SCOPING (#1469, A01 — Broken Access Control). `recordings.owner_id` is
   // the SECURITY-CRITICAL scope for the Files view (filesForOwner): a NULL owner
@@ -222,8 +227,8 @@ RecordingsCompanion recordingToCompanion(
   final byteSizeValue = (coreByteSize != null)
       ? Value<int?>(coreByteSize)
       : (existing?.byteSize != null)
-          ? Value<int?>(existing!.byteSize)
-          : const Value<int?>.absent();
+      ? Value<int?>(existing!.byteSize)
+      : const Value<int?>.absent();
 
   return RecordingsCompanion(
     id: Value(localId),

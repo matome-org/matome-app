@@ -71,8 +71,9 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   /// Local row whose reconciled Core id is [coreId], or null if none has been
   /// reconciled yet.
   Future<ContactRow?> contactByCoreId(int coreId) {
-    return (select(contacts)..where((c) => c.coreId.equals(coreId)))
-        .getSingleOrNull();
+    return (select(
+      contacts,
+    )..where((c) => c.coreId.equals(coreId))).getSingleOrNull();
   }
 
   /// All Contacts owned by [ownerId], display-name ascending.
@@ -85,9 +86,9 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
 
   /// Every Contact, display-name ascending.
   Future<List<ContactRow>> listContacts() {
-    return (select(contacts)
-          ..orderBy([(c) => OrderingTerm.asc(c.displayName)]))
-        .get();
+    return (select(
+      contacts,
+    )..orderBy([(c) => OrderingTerm.asc(c.displayName)])).get();
   }
 
   /// Partial update — only the provided companion fields are written. Named
@@ -106,8 +107,9 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
     return transaction(() async {
       await (delete(matomeContacts)..where((e) => e.contactId.equals(id))).go();
       await (delete(spaceContacts)..where((e) => e.contactId.equals(id))).go();
-      await (delete(recordingContacts)..where((e) => e.contactId.equals(id)))
-          .go();
+      await (delete(
+        recordingContacts,
+      )..where((e) => e.contactId.equals(id))).go();
       return (delete(contacts)..where((c) => c.id.equals(id))).go();
     });
   }
@@ -117,12 +119,12 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   /// deleting a Matome cleans up its edges. Returns the total edge rows deleted.
   Future<int> deleteMatomeEdges(String matomeId) {
     return transaction(() async {
-      final a =
-          await (delete(matomeContacts)..where((e) => e.matomeId.equals(matomeId)))
-              .go();
-      final b =
-          await (delete(matomeShares)..where((e) => e.matomeId.equals(matomeId)))
-              .go();
+      final a = await (delete(
+        matomeContacts,
+      )..where((e) => e.matomeId.equals(matomeId))).go();
+      final b = await (delete(
+        matomeShares,
+      )..where((e) => e.matomeId.equals(matomeId))).go();
       return a + b;
     });
   }
@@ -161,9 +163,9 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
     required String contactId,
     required String role,
   }) {
-    return (update(matomeContacts)
-          ..where((e) => e.matomeId.equals(matomeId) &
-              e.contactId.equals(contactId)))
+    return (update(matomeContacts)..where(
+          (e) => e.matomeId.equals(matomeId) & e.contactId.equals(contactId),
+        ))
         .write(MatomeContactsCompanion(role: Value(role)));
   }
 
@@ -173,20 +175,24 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
     required String matomeId,
     required String contactId,
   }) {
-    return (delete(matomeContacts)
-          ..where((e) => e.matomeId.equals(matomeId) &
-              e.contactId.equals(contactId)))
+    return (delete(matomeContacts)..where(
+          (e) => e.matomeId.equals(matomeId) & e.contactId.equals(contactId),
+        ))
         .go();
   }
 
   /// The Contacts tagged in [matomeId], paired with their edge `role`,
   /// display-name ascending.
   Future<List<MatomeContactEntry>> listContactsForMatome(String matomeId) {
-    final query = select(matomeContacts).join([
-      innerJoin(contacts, contacts.id.equalsExp(matomeContacts.contactId)),
-    ])
-      ..where(matomeContacts.matomeId.equals(matomeId))
-      ..orderBy([OrderingTerm.asc(contacts.displayName)]);
+    final query =
+        select(matomeContacts).join([
+            innerJoin(
+              contacts,
+              contacts.id.equalsExp(matomeContacts.contactId),
+            ),
+          ])
+          ..where(matomeContacts.matomeId.equals(matomeId))
+          ..orderBy([OrderingTerm.asc(contacts.displayName)]);
     return query.map((row) {
       return MatomeContactEntry(
         contact: row.readTable(contacts),
@@ -221,19 +227,20 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
     required String spaceId,
     required String contactId,
   }) {
-    return (delete(spaceContacts)
-          ..where((e) =>
-              e.spaceId.equals(spaceId) & e.contactId.equals(contactId)))
+    return (delete(spaceContacts)..where(
+          (e) => e.spaceId.equals(spaceId) & e.contactId.equals(contactId),
+        ))
         .go();
   }
 
   /// The Contacts that are members of [spaceId], display-name ascending.
   Future<List<ContactRow>> listContactsForSpace(String spaceId) {
-    final query = select(spaceContacts).join([
-      innerJoin(contacts, contacts.id.equalsExp(spaceContacts.contactId)),
-    ])
-      ..where(spaceContacts.spaceId.equals(spaceId))
-      ..orderBy([OrderingTerm.asc(contacts.displayName)]);
+    final query =
+        select(spaceContacts).join([
+            innerJoin(contacts, contacts.id.equalsExp(spaceContacts.contactId)),
+          ])
+          ..where(spaceContacts.spaceId.equals(spaceId))
+          ..orderBy([OrderingTerm.asc(contacts.displayName)]);
     return query.map((row) => row.readTable(contacts)).get();
   }
 
@@ -272,35 +279,40 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
     required String recordingId,
     required String contactId,
   }) {
-    return (delete(recordingContacts)
-          ..where((e) =>
-              e.recordingId.equals(recordingId) &
-              e.contactId.equals(contactId)))
+    return (delete(recordingContacts)..where(
+          (e) =>
+              e.recordingId.equals(recordingId) & e.contactId.equals(contactId),
+        ))
         .go();
   }
 
   /// The Contacts linked DIRECTLY to [recordingId] (via `recording_contacts`),
   /// display-name ascending.
   Future<List<ContactRow>> listContactsForFile(String recordingId) {
-    final query = select(recordingContacts).join([
-      innerJoin(contacts, contacts.id.equalsExp(recordingContacts.contactId)),
-    ])
-      ..where(recordingContacts.recordingId.equals(recordingId))
-      ..orderBy([OrderingTerm.asc(contacts.displayName)]);
+    final query =
+        select(recordingContacts).join([
+            innerJoin(
+              contacts,
+              contacts.id.equalsExp(recordingContacts.contactId),
+            ),
+          ])
+          ..where(recordingContacts.recordingId.equals(recordingId))
+          ..orderBy([OrderingTerm.asc(contacts.displayName)]);
     return query.map((row) => row.readTable(contacts)).get();
   }
 
   /// The Files (recordings) linked DIRECTLY to [contactId] (via
   /// `recording_contacts`), newest first.
   Future<List<RecordingRow>> listFilesForContact(String contactId) {
-    final query = select(recordingContacts).join([
-      innerJoin(
-        recordings,
-        recordings.id.equalsExp(recordingContacts.recordingId),
-      ),
-    ])
-      ..where(recordingContacts.contactId.equals(contactId))
-      ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
+    final query =
+        select(recordingContacts).join([
+            innerJoin(
+              recordings,
+              recordings.id.equalsExp(recordingContacts.recordingId),
+            ),
+          ])
+          ..where(recordingContacts.contactId.equals(contactId))
+          ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
     return query.map((row) => row.readTable(recordings)).get();
   }
 
@@ -314,12 +326,15 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   /// Matomes (`archived_at IS NOT NULL`) are excluded so the detail mirrors the
   /// active list surfaces.
   Future<List<ContactMatomeEntry>> listMatomesForContact(String contactId) {
-    final query = select(matomeContacts).join([
-      innerJoin(matomes, matomes.id.equalsExp(matomeContacts.matomeId)),
-    ])
-      ..where(matomeContacts.contactId.equals(contactId) &
-          matomes.archivedAt.isNull())
-      ..orderBy([OrderingTerm.desc(matomes.happenedAt)]);
+    final query =
+        select(matomeContacts).join([
+            innerJoin(matomes, matomes.id.equalsExp(matomeContacts.matomeId)),
+          ])
+          ..where(
+            matomeContacts.contactId.equals(contactId) &
+                matomes.archivedAt.isNull(),
+          )
+          ..orderBy([OrderingTerm.desc(matomes.happenedAt)]);
     return query.map((row) {
       return ContactMatomeEntry(
         matome: row.readTable(matomes),
@@ -331,11 +346,15 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   /// The Spaces (workspaces) [contactId] is a member of (`space_contacts`),
   /// name-ascending.
   Future<List<WorkspaceRow>> listSpacesForContact(String contactId) {
-    final query = select(spaceContacts).join([
-      innerJoin(workspaces, workspaces.id.equalsExp(spaceContacts.spaceId)),
-    ])
-      ..where(spaceContacts.contactId.equals(contactId))
-      ..orderBy([OrderingTerm.asc(workspaces.name)]);
+    final query =
+        select(spaceContacts).join([
+            innerJoin(
+              workspaces,
+              workspaces.id.equalsExp(spaceContacts.spaceId),
+            ),
+          ])
+          ..where(spaceContacts.contactId.equals(contactId))
+          ..orderBy([OrderingTerm.asc(workspaces.name)]);
     return query.map((row) => row.readTable(workspaces)).get();
   }
 
@@ -350,10 +369,11 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
     final matomeRows = await listMatomesForContact(contactId);
     final matomeIds = matomeRows.map((e) => e.matome.id).toList();
     if (matomeIds.isEmpty) return const [];
-    final rows = await (select(recordings)
-          ..where((r) => r.matomeId.isIn(matomeIds))
-          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
-        .get();
+    final rows =
+        await (select(recordings)
+              ..where((r) => r.matomeId.isIn(matomeIds))
+              ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
+            .get();
     return rows;
   }
 
@@ -419,8 +439,9 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
 
   /// All share edges of [matomeId].
   Future<List<MatomeShareRow>> listSharesForMatome(String matomeId) {
-    return (select(matomeShares)..where((s) => s.matomeId.equals(matomeId)))
-        .get();
+    return (select(
+      matomeShares,
+    )..where((s) => s.matomeId.equals(matomeId))).get();
   }
 
   // ---------------------------------------------------------------------------

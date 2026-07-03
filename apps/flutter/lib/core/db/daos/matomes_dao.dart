@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../features/matome/matome_summary.dart';
+import '../../../features/items/matome_item_type.dart';
 import '../app_database.dart';
 import '../matome_card.dart';
 import '../recording_card.dart';
@@ -135,9 +136,9 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// two ends converge to archived. Inbox/local-only archived rows (no `core_id`)
   /// were never on Core and are excluded.
   Future<List<MatomeRow>> listArchivedReconciledMatomes() {
-    return (select(matomes)
-          ..where((m) => m.archivedAt.isNotNull() & m.coreId.isNotNull()))
-        .get();
+    return (select(
+      matomes,
+    )..where((m) => m.archivedAt.isNotNull() & m.coreId.isNotNull())).get();
   }
 
   /// Matomes filed into a given Space, newest first. Excludes archived (#1409).
@@ -164,9 +165,11 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// recording-, scoped. Excludes archived (#1409).
   Future<List<MatomeRow>> matomesByDateRange(int startEpoch, int endEpoch) {
     return (select(matomes)
-          ..where((m) =>
-              m.happenedAt.isBetweenValues(startEpoch, endEpoch) &
-              m.archivedAt.isNull())
+          ..where(
+            (m) =>
+                m.happenedAt.isBetweenValues(startEpoch, endEpoch) &
+                m.archivedAt.isNull(),
+          )
           ..orderBy([(m) => OrderingTerm.desc(m.happenedAt)]))
         .get();
   }
@@ -200,9 +203,13 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
       filter: recordings.mediaType.equals('document'),
     );
     final mixQuery = selectOnly(recordings)
-      ..addColumns(
-        [recordings.matomeId, totalExpr, audioExpr, imageExpr, documentExpr],
-      )
+      ..addColumns([
+        recordings.matomeId,
+        totalExpr,
+        audioExpr,
+        imageExpr,
+        documentExpr,
+      ])
       ..where(recordings.matomeId.isIn(ids))
       ..groupBy([recordings.matomeId]);
     final total = <String, int>{};
@@ -277,17 +284,16 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   Future<List<MatomeItem>> matomeItemsByDateRange(
     int startEpoch,
     int endEpoch,
-  ) async =>
-      _hydrateCounts(await matomesByDateRange(startEpoch, endEpoch));
+  ) async => _hydrateCounts(await matomesByDateRange(startEpoch, endEpoch));
 
   /// The parent Matome id of a recording, or null when the recording does not
   /// exist (or — pre-backfill — has no Matome). Powers the deep-link redirect
   /// that resolves an OLD recording-centric link to its parent Matome hub
   /// (#1378): `/inbox/:recId` → `/matome/<matomeId>` (1-rec→1-matome invariant).
   Future<String?> matomeIdForRecording(String recordingId) async {
-    final row = await (select(recordings)
-          ..where((r) => r.id.equals(recordingId)))
-        .getSingleOrNull();
+    final row = await (select(
+      recordings,
+    )..where((r) => r.id.equals(recordingId))).getSingleOrNull();
     return row?.matomeId;
   }
 
@@ -299,21 +305,47 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// `recordings.matome_id`), hydrated into a [MatomeItem]. Returns null when no
   /// Matome has [id]. Children are ordered newest-first by `createdAt`.
   Future<MatomeItem?> getMatomeWithRecordings(String id) async {
-    final row =
-        await (select(matomes)..where((m) => m.id.equals(id))).getSingleOrNull();
+    final row = await (select(
+      matomes,
+    )..where((m) => m.id.equals(id))).getSingleOrNull();
     if (row == null) return null;
 
-    final children = await (select(recordings)
-          ..where((r) => r.matomeId.equals(id))
-          ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
-        .get();
+    final children =
+        await (select(recordings)
+              ..where((r) => r.matomeId.equals(id))
+              ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
+            .get();
+    final coreMatomeId = row.coreId;
+    final textItems = coreMatomeId == null
+        ? const <RecordingItem>[]
+        : await _textItemsForCoreMatome(coreMatomeId);
 
     return MatomeItem.fromRow(
       row,
-      recordings: children
-          .map((r) => RecordingItem.fromRow(r))
-          .toList(growable: false),
+      recordings: [
+        ...textItems,
+        ...children.map((r) => RecordingItem.fromRow(r)),
+      ],
     );
+  }
+
+  /// The Matome's text Items, ordered by position — read through the typed
+  /// [ItemsDao.listForMatome] (task #1830 / I4) rather than hand-rolled SQL, so
+  /// there is ONE payload-arc resolver. Only `text` items surface here (file
+  /// Items are represented by their `recordings` rows); a stray non-text Item is
+  /// filtered out.
+  Future<List<RecordingItem>> _textItemsForCoreMatome(int coreMatomeId) async {
+    final rows = await attachedDatabase.itemsDao.listForMatome(coreMatomeId);
+    return rows
+        .where((row) => row.type == MatomeItemType.text)
+        .map(
+          (row) => RecordingItem.textItem(
+            id: row.item.id,
+            body: row.text?.body ?? '',
+            insertedAt: row.item.insertedAt ?? '',
+          ),
+        )
+        .toList(growable: false);
   }
 
   // ---------------------------------------------------------------------------
@@ -325,8 +357,9 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// Returns rows updated (0 if [matomeId] does not exist). Alias
   /// [moveMatomeToSpace] re-files an already-filed Matome into a different Space.
   Future<int> fileIntoSpace(String matomeId, String spaceId) {
-    return (update(matomes)..where((m) => m.id.equals(matomeId)))
-        .write(MatomesCompanion(spaceId: Value(spaceId)));
+    return (update(matomes)..where((m) => m.id.equals(matomeId))).write(
+      MatomesCompanion(spaceId: Value(spaceId)),
+    );
   }
 
   /// Re-file a Matome into a different Space (same write as [fileIntoSpace];
@@ -344,14 +377,14 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// transaction so the move + both stale-marks go atomically.
   Future<int> moveRecordingToMatome(String recordingId, String matomeId) {
     return transaction(() async {
-      final current = await (select(recordings)
-            ..where((r) => r.id.equals(recordingId)))
-          .getSingleOrNull();
+      final current = await (select(
+        recordings,
+      )..where((r) => r.id.equals(recordingId))).getSingleOrNull();
       final sourceMatomeId = current?.matomeId;
 
-      final n = await (update(recordings)
-            ..where((r) => r.id.equals(recordingId)))
-          .write(RecordingsCompanion(matomeId: Value(matomeId)));
+      final n =
+          await (update(recordings)..where((r) => r.id.equals(recordingId)))
+              .write(RecordingsCompanion(matomeId: Value(matomeId)));
 
       if (n > 0) {
         await markSummaryStale(matomeId, true);
@@ -377,8 +410,9 @@ class MatomesDao extends DatabaseAccessor<AppDatabase> with _$MatomesDaoMixin {
   /// Flag/unflag the aggregated summary as pending regeneration (the item set
   /// changed). Returns rows updated.
   Future<int> markSummaryStale(String matomeId, bool stale) {
-    return (update(matomes)..where((m) => m.id.equals(matomeId)))
-        .write(MatomesCompanion(summaryStale: Value(stale)));
+    return (update(matomes)..where((m) => m.id.equals(matomeId))).write(
+      MatomesCompanion(summaryStale: Value(stale)),
+    );
   }
 
   /// Recompute the aggregated summary from the Matome's CURRENT child Items and

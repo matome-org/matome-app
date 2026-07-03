@@ -52,13 +52,13 @@ class AudioRecordingService {
     Future<int?> Function(String path)? durationProbe,
     Future<bool> Function()? captureSupportedProbe,
     this.segmentExtension = 'm4a',
-  })  : _recorder = recorder ?? RecordRecorderBackend(),
-        _documentsDirProvider = documentsDirProvider ?? matomeStorageDir,
-        _durationProbe = durationProbe ?? _probeDurationMs,
-        // ignore: prefer_initializing_formals
-        _captureSupportedProbe = captureSupportedProbe,
-        // ignore: prefer_initializing_formals
-        _draftsDao = draftsDao;
+  }) : _recorder = recorder ?? RecordRecorderBackend(),
+       _documentsDirProvider = documentsDirProvider ?? matomeStorageDir,
+       _durationProbe = durationProbe ?? _probeDurationMs,
+       // ignore: prefer_initializing_formals
+       _captureSupportedProbe = captureSupportedProbe,
+       // ignore: prefer_initializing_formals
+       _draftsDao = draftsDao;
 
   final RecordingDraftsDao _draftsDao;
   final RecorderBackend _recorder;
@@ -254,7 +254,9 @@ class AudioRecordingService {
     _liveFilePath = null;
 
     final wasContinuous = _isContinuousSession;
-    final superseded = wasContinuous ? List<String>.from(_sessionSegments) : const <String>[];
+    final superseded = wasContinuous
+        ? List<String>.from(_sessionSegments)
+        : const <String>[];
     _isContinuousSession = false;
 
     // Copy to a uniquely named durable segment so it survives restarts and OS
@@ -498,8 +500,8 @@ class AudioRecordingService {
     try {
       final draft = await _draftsDao.loadDraft();
       if (draft == null) return;
-      final ownedByThisSession = draft.segments.isNotEmpty &&
-          draft.segments.every(snapshot.contains);
+      final ownedByThisSession =
+          draft.segments.isNotEmpty && draft.segments.every(snapshot.contains);
       if (ownedByThisSession) {
         await _draftsDao.deleteDraft();
       }

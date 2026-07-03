@@ -303,12 +303,7 @@ class _RelationshipPickerState extends State<RelationshipPicker> {
         // Search.
         if (data.hasSearch)
           Padding(
-            padding: EdgeInsets.fromLTRB(
-              spacing.lg,
-              0,
-              spacing.lg,
-              spacing.sm,
-            ),
+            padding: EdgeInsets.fromLTRB(spacing.lg, 0, spacing.lg, spacing.sm),
             child: _SearchField(
               controller: _search,
               hint: data.searchHint!,
@@ -602,8 +597,7 @@ class _CreateActionsButton extends StatelessWidget {
               size: spacing.md,
               color: action.enabled ? colors.textSecondary : colors.textMuted,
             ),
-            onPressed:
-                action.enabled ? () => onAction?.call(action.id) : null,
+            onPressed: action.enabled ? () => onAction?.call(action.id) : null,
             child: Tooltip(
               message: action.enabled ? '' : (action.tooltip ?? ''),
               child: Text(
@@ -698,7 +692,9 @@ class _CandidateRow extends StatelessWidget {
                         c.subtitle!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: typography.label.copyWith(color: colors.textMuted),
+                        style: typography.label.copyWith(
+                          color: colors.textMuted,
+                        ),
                       ),
                   ],
                 ),
@@ -729,15 +725,15 @@ Future<RelationshipPickerResult?> showRelationshipPicker({
   final isWide = MediaQuery.sizeOf(context).width >= wideBreakpoint;
 
   RelationshipPicker buildPicker(BuildContext ctx) => RelationshipPicker(
-        data: data,
-        onAction: (id) =>
-            Navigator.of(ctx).pop(RelationshipPickerResult.action(id)),
-        onPick: (id) =>
-            Navigator.of(ctx).pop(RelationshipPickerResult.picked([id])),
-        onConfirm: (ids) =>
-            Navigator.of(ctx).pop(RelationshipPickerResult.picked(ids)),
-        onClose: () => Navigator.of(ctx).pop(),
-      );
+    data: data,
+    onAction: (id) =>
+        Navigator.of(ctx).pop(RelationshipPickerResult.action(id)),
+    onPick: (id) =>
+        Navigator.of(ctx).pop(RelationshipPickerResult.picked([id])),
+    onConfirm: (ids) =>
+        Navigator.of(ctx).pop(RelationshipPickerResult.picked(ids)),
+    onClose: () => Navigator.of(ctx).pop(),
+  );
 
   if (isWide) {
     final colors = context.colors;
@@ -774,7 +770,7 @@ class RelationshipPickerResult {
 
   /// The user chose one or more candidates.
   const RelationshipPickerResult.picked(List<String> ids)
-      : this._(candidateIds: ids);
+    : this._(candidateIds: ids);
 
   final String? actionId;
   final List<String>? candidateIds;

@@ -46,7 +46,10 @@ class PeopleCluster extends StatelessWidget {
             for (var i = 0; i < shown.length; i++)
               Positioned(
                 left: i * overlap,
-                child: _MiniAvatar(label: shown[i].characters.first, size: size),
+                child: _MiniAvatar(
+                  label: shown[i].characters.first,
+                  size: size,
+                ),
               ),
             if (extra > 0)
               Positioned(

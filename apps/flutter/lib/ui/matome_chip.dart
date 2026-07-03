@@ -35,8 +35,10 @@ class MatomeChip extends StatelessWidget {
 
     return Container(
       key: const ValueKey('matome-chip'),
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.xs, vertical: spacing.xxs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.xs,
+        vertical: spacing.xxs,
+      ),
       decoration: BoxDecoration(
         color: colors.subtleFill,
         borderRadius: BorderRadius.circular(radius.pill),

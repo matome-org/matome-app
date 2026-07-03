@@ -66,7 +66,7 @@ class ContactFileRef {
 }
 
 /// The media family of a [ContactFileRef], picking the row's leading glyph.
-enum ContactFileKind { audio, image, document }
+enum ContactFileKind { audio, image, document, video }
 
 /// The overflow-menu actions the detail can emit.
 enum ContactDetailAction { merge, delete }
@@ -163,11 +163,7 @@ class ContactDetail extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(
-              contact: contact,
-              onEdit: onEdit,
-              onAction: onAction,
-            ),
+            _Header(contact: contact, onEdit: onEdit, onAction: onAction),
             Divider(height: 1, color: colors.border),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -251,8 +247,7 @@ class _Header extends StatelessWidget {
           SizedBox(height: spacing.xxs),
           Text(
             subtitleParts.join(' · '),
-            style:
-                typography.bodySmall.copyWith(color: colors.textSecondary),
+            style: typography.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ],
         SizedBox(height: spacing.sm),
@@ -333,21 +328,21 @@ class _ActionsMenu extends StatelessWidget {
       VoidCallback? onPressed, {
       Color? color,
       Key? key,
-    }) =>
-        MenuItemButton(
-          key: key,
-          leadingIcon: Icon(
-            icon,
-            size: typography.body.fontSize,
-            color: color ?? colors.textSecondary,
-          ),
-          onPressed: onPressed,
-          child: Text(
-            label,
-            style:
-                typography.bodySmall.copyWith(color: color ?? colors.textPrimary),
-          ),
-        );
+    }) => MenuItemButton(
+      key: key,
+      leadingIcon: Icon(
+        icon,
+        size: typography.body.fontSize,
+        color: color ?? colors.textSecondary,
+      ),
+      onPressed: onPressed,
+      child: Text(
+        label,
+        style: typography.bodySmall.copyWith(
+          color: color ?? colors.textPrimary,
+        ),
+      ),
+    );
 
     return MenuAnchor(
       style: MenuStyle(
@@ -358,8 +353,9 @@ class _ActionsMenu extends StatelessWidget {
             side: BorderSide(color: colors.border),
           ),
         ),
-        padding:
-            WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: spacing.xs)),
+        padding: WidgetStatePropertyAll(
+          EdgeInsets.symmetric(vertical: spacing.xs),
+        ),
       ),
       builder: (context, controller, child) => IconButton(
         key: const ValueKey('contact-detail-actions'),
@@ -498,8 +494,9 @@ class _InfoRow extends StatelessWidget {
                 SizedBox(height: spacing.xxs),
                 SelectableText(
                   value,
-                  style:
-                      typography.bodySmall.copyWith(color: colors.textPrimary),
+                  style: typography.bodySmall.copyWith(
+                    color: colors.textPrimary,
+                  ),
                 ),
               ],
             ),
@@ -530,7 +527,8 @@ class _RelationsColumn extends StatelessWidget {
       children: [
         _Section(
           key: const ValueKey('contact-detail-matomes-section'),
-          label: '${t.contacts.detail.matomesLabel} · ${contact.matomes.length}',
+          label:
+              '${t.contacts.detail.matomesLabel} · ${contact.matomes.length}',
           child: contact.matomes.isEmpty
               ? _MutedLine(text: t.contacts.detail.empty)
               : Column(
@@ -569,8 +567,9 @@ class _RelationsColumn extends StatelessWidget {
                     for (final f in contact.files)
                       _FileRow(
                         ref: f,
-                        onTap:
-                            onOpenFile == null ? null : () => onOpenFile!(f.id),
+                        onTap: onOpenFile == null
+                            ? null
+                            : () => onOpenFile!(f.id),
                       ),
                   ],
                 ),
@@ -606,8 +605,11 @@ class _MatomeRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.workspaces_outlined,
-                  size: typography.body.fontSize, color: colors.textSecondary),
+              Icon(
+                Icons.workspaces_outlined,
+                size: typography.body.fontSize,
+                color: colors.textSecondary,
+              ),
               SizedBox(width: spacing.sm),
               Expanded(
                 child: Text(
@@ -654,6 +656,7 @@ class _FileRow extends StatelessWidget {
       ContactFileKind.audio => Icons.mic_none_rounded,
       ContactFileKind.image => Icons.image_outlined,
       ContactFileKind.document => Icons.description_outlined,
+      ContactFileKind.video => Icons.video_file_outlined,
     };
 
     return Material(
@@ -669,15 +672,20 @@ class _FileRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, size: typography.body.fontSize, color: colors.textSecondary),
+              Icon(
+                icon,
+                size: typography.body.fontSize,
+                color: colors.textSecondary,
+              ),
               SizedBox(width: spacing.sm),
               Expanded(
                 child: Text(
                   ref.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      typography.bodySmall.copyWith(color: colors.textPrimary),
+                  style: typography.bodySmall.copyWith(
+                    color: colors.textPrimary,
+                  ),
                 ),
               ),
             ],

@@ -63,7 +63,7 @@ class MatomeInboxController
   }
 }
 
-final matomeInboxControllerProvider = StateNotifierProvider<
-    MatomeInboxController, AsyncValue<List<MatomeItem>>>(
-  (ref) => MatomeInboxController(ref),
-);
+final matomeInboxControllerProvider =
+    StateNotifierProvider<MatomeInboxController, AsyncValue<List<MatomeItem>>>(
+      (ref) => MatomeInboxController(ref),
+    );

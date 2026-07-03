@@ -67,7 +67,8 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         // its UUID PK, so keying off the stringified Core id alone would miss it
         // and the upsert would insert a duplicate. Fall back to the legacy
         // stringified-id PK for rows that predate the coreId column.
-        final existing = await _dao.recordingByCoreId(recording.id) ??
+        final existing =
+            await _dao.recordingByCoreId(recording.id) ??
             await _dao.getRecordingById(coreIdToLocalId(recording.id));
         // m007 (.docs/internal/architecture.md §11 (D3)): a Core-originated recording must also become an Item
         // of a Matome. `upsertRecordingWithMatome` reuses the existing row's
@@ -256,8 +257,11 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     );
     // OWNER-SCOPED local write (A01): a forged id for another owner's file moves
     // zero rows — the assign is rejected at the data source, not the picker.
-    final moved =
-        await _dao.fileRecordingIntoSpace(recordingId, spaceId, ownerId);
+    final moved = await _dao.fileRecordingIntoSpace(
+      recordingId,
+      spaceId,
+      ownerId,
+    );
     await reloadFromLocal();
     if (moved == 0) return false; // not the caller's row — nothing filed.
 
@@ -422,7 +426,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   }
 }
 
-final inboxControllerProvider = StateNotifierProvider<InboxController,
-    AsyncValue<List<InboxItem>>>(
-  (ref) => InboxController(ref),
-);
+final inboxControllerProvider =
+    StateNotifierProvider<InboxController, AsyncValue<List<InboxItem>>>(
+      (ref) => InboxController(ref),
+    );

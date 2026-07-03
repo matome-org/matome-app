@@ -102,7 +102,9 @@ class _FilesTableState extends State<FilesTable> {
     final view = [..._files];
     int cmp(FileRow a, FileRow b) {
       final v = switch (_sortKey) {
-        FileSortKey.name => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        FileSortKey.name => a.name.toLowerCase().compareTo(
+          b.name.toLowerCase(),
+        ),
         FileSortKey.when => a.whenSort.compareTo(b.whenSort),
         // Size is not persisted (#1461): the column stays present + sortable but
         // every label is a dash, so size-sort is a stable no-op until a size
@@ -335,8 +337,10 @@ class _HeaderRow extends StatelessWidget {
 
     return Container(
       color: colors.subtleFill,
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
           SizedBox(
@@ -546,8 +550,8 @@ class _DataRowState extends State<_DataRow> {
     final bg = widget.selected
         ? colors.accentSoft.withValues(alpha: 0.5)
         : (widget.active
-            ? colors.subtleFillStrong
-            : (_hovered ? colors.subtleFill : colors.surface));
+              ? colors.subtleFillStrong
+              : (_hovered ? colors.subtleFill : colors.surface));
 
     return _RowFocus(
       focused: _focused,
@@ -579,9 +583,11 @@ class _DataRowState extends State<_DataRow> {
                     padding: EdgeInsets.only(right: spacing.sm),
                     child: Row(
                       children: [
-                        Icon(vis.icon,
-                            size: context.typography.body.fontSize,
-                            color: vis.color),
+                        Icon(
+                          vis.icon,
+                          size: context.typography.body.fontSize,
+                          color: vis.color,
+                        ),
                         SizedBox(width: spacing.sm),
                         Expanded(
                           child: Text(
@@ -625,7 +631,9 @@ class _DataRowState extends State<_DataRow> {
                     child: f.contacts.isEmpty
                         ? const FilesMutedDash()
                         : PeopleCluster(
-                            names: f.contacts, size: context.spacing.lg),
+                            names: f.contacts,
+                            size: context.spacing.lg,
+                          ),
                   ),
                 ),
                 SizedBox(
@@ -633,8 +641,9 @@ class _DataRowState extends State<_DataRow> {
                   child: Text(
                     f.when,
                     textAlign: TextAlign.center,
-                    style:
-                        typography.label.copyWith(color: colors.textSecondary),
+                    style: typography.label.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                 ),
                 SizedBox(
@@ -642,8 +651,9 @@ class _DataRowState extends State<_DataRow> {
                   child: Text(
                     f.sizeLabel ?? t.files.noSize,
                     textAlign: TextAlign.center,
-                    style:
-                        typography.label.copyWith(color: colors.textSecondary),
+                    style: typography.label.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                 ),
                 SizedBox(
@@ -717,7 +727,9 @@ class _RowFocus extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border.all(
-            color: focused ? colors.accent : colors.surface.withValues(alpha: 0),
+            color: focused
+                ? colors.accent
+                : colors.surface.withValues(alpha: 0),
             width: 2,
           ),
         ),
@@ -778,8 +790,10 @@ class _CompactSortBar extends StatelessWidget {
 
     return Container(
       color: colors.subtleFill,
-      padding:
-          EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.sm,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
           Text(
@@ -835,13 +849,16 @@ class _SortPill extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(radius.pill),
       child: Container(
-        padding:
-            EdgeInsets.symmetric(horizontal: spacing.sm, vertical: spacing.xxs),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.sm,
+          vertical: spacing.xxs,
+        ),
         decoration: BoxDecoration(
           color: active ? colors.textPrimary : colors.surface,
           borderRadius: BorderRadius.circular(radius.pill),
-          border:
-              Border.all(color: active ? colors.textPrimary : colors.border),
+          border: Border.all(
+            color: active ? colors.textPrimary : colors.border,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -922,8 +939,11 @@ class _CompactRowState extends State<_CompactRow> {
                   onChanged: widget.onSelect,
                 ),
               ),
-              Icon(vis.icon,
-                  size: context.typography.body.fontSize, color: vis.color),
+              Icon(
+                vis.icon,
+                size: context.typography.body.fontSize,
+                color: vis.color,
+              ),
               SizedBox(width: spacing.sm),
               Expanded(
                 child: Column(
@@ -945,8 +965,9 @@ class _CompactRowState extends State<_CompactRow> {
                         SizedBox(width: spacing.xs),
                         Text(
                           f.when,
-                          style: typography.label
-                              .copyWith(color: colors.textMuted),
+                          style: typography.label.copyWith(
+                            color: colors.textMuted,
+                          ),
                         ),
                       ],
                     ),
@@ -958,14 +979,17 @@ class _CompactRowState extends State<_CompactRow> {
                       children: [
                         Text(
                           f.sizeLabel ?? t.files.noSize,
-                          style: typography.label
-                              .copyWith(color: colors.textMuted),
+                          style: typography.label.copyWith(
+                            color: colors.textMuted,
+                          ),
                         ),
                         MatomeChip(matome: f.matome),
                         SpaceChip(space: f.space),
                         if (f.contacts.isNotEmpty)
                           PeopleCluster(
-                              names: f.contacts, size: context.spacing.lg),
+                            names: f.contacts,
+                            size: context.spacing.lg,
+                          ),
                         if (f.localOnly)
                           const SpaceSyncChip(state: SpaceSyncState.local)
                         else

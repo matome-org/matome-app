@@ -14,7 +14,7 @@ abstract class SecureKeyStore {
 /// in the OS keystore (Keychain / Keystore / libsecret), NOT inside the DB file.
 class FlutterSecureKeyStore implements SecureKeyStore {
   FlutterSecureKeyStore([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 
@@ -39,7 +39,7 @@ class FlutterSecureKeyStore implements SecureKeyStore {
 /// and a deterministic round-trip across boots.
 class DbEncryptionKeyManager {
   DbEncryptionKeyManager(this._store, {Random? random})
-      : _random = random ?? Random.secure();
+    : _random = random ?? Random.secure();
 
   final SecureKeyStore _store;
   final Random _random;
@@ -70,8 +70,7 @@ class DbEncryptionKeyManager {
   }
 
   String _generateHexKey() {
-    final bytes =
-        List<int>.generate(_keyBytes, (_) => _random.nextInt(256));
+    final bytes = List<int>.generate(_keyBytes, (_) => _random.nextInt(256));
     return _hex(bytes);
   }
 
@@ -85,5 +84,6 @@ class DbEncryptionKeyManager {
 
   /// Builds the `PRAGMA key` statement for a raw hex passphrase. SQLCipher reads
   /// `x'...'` as the literal key bytes (no KDF), giving a stable round-trip.
-  static String pragmaKeyStatement(String hexKey) => "PRAGMA key = \"x'$hexKey'\"";
+  static String pragmaKeyStatement(String hexKey) =>
+      "PRAGMA key = \"x'$hexKey'\"";
 }

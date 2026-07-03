@@ -13,17 +13,21 @@ import 'inbox_grouping.dart' show sectionTitleFor;
 List<MatomeItem> searchMatomes(List<MatomeItem> items, String query) {
   final q = query.trim().toLowerCase();
   if (q.isEmpty) return items;
-  return items.where((item) {
-    if (item.title.toLowerCase().contains(q)) return true;
-    if ((item.description ?? '').toLowerCase().contains(q)) return true;
-    if ((item.aggregatedSummary ?? '').toLowerCase().contains(q)) return true;
-    for (final rec in item.recordings) {
-      if (rec.title.toLowerCase().contains(q)) return true;
-      if ((rec.summary ?? '').toLowerCase().contains(q)) return true;
-      if ((rec.notes ?? '').toLowerCase().contains(q)) return true;
-    }
-    return false;
-  }).toList(growable: false);
+  return items
+      .where((item) {
+        if (item.title.toLowerCase().contains(q)) return true;
+        if ((item.description ?? '').toLowerCase().contains(q)) return true;
+        if ((item.aggregatedSummary ?? '').toLowerCase().contains(q)) {
+          return true;
+        }
+        for (final rec in item.recordings) {
+          if (rec.title.toLowerCase().contains(q)) return true;
+          if ((rec.summary ?? '').toLowerCase().contains(q)) return true;
+          if ((rec.notes ?? '').toLowerCase().contains(q)) return true;
+        }
+        return false;
+      })
+      .toList(growable: false);
 }
 
 /// A titled group of inbox matomes (Today / Yesterday / "Mon D[, YYYY]").

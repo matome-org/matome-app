@@ -73,10 +73,7 @@ class RecordingController extends StateNotifier<RecordingState> {
   Future<RecordingDraftDetection> detectDraft() async {
     final draft = await _service.detectRecoverableDraft();
     state = state.copyWith(hasRecoverableDraft: draft != null);
-    AppLog.event(
-      LogCat.action,
-      'detectDraft: recoverable=${draft != null}',
-    );
+    AppLog.event(LogCat.action, 'detectDraft: recoverable=${draft != null}');
     return RecordingDraftDetection(draft: draft);
   }
 
@@ -204,5 +201,5 @@ final audioRecordingServiceProvider = Provider<AudioRecordingService>((ref) {
 /// Recorder state for the S3 modal.
 final recordingControllerProvider =
     StateNotifierProvider<RecordingController, RecordingState>((ref) {
-  return RecordingController(ref.watch(audioRecordingServiceProvider));
-});
+      return RecordingController(ref.watch(audioRecordingServiceProvider));
+    });

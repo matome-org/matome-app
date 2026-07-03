@@ -8,7 +8,7 @@ import 'auth_models.dart';
 /// Talks to the Guardian auth endpoints and persists the resulting tokens.
 class AuthRepository {
   AuthRepository({required ApiClient apiClient, required TokenStore tokenStore})
-      : this._(apiClient, tokenStore);
+    : this._(apiClient, tokenStore);
 
   AuthRepository._(this._apiClient, this._tokenStore);
 
@@ -194,8 +194,9 @@ class AuthRepository {
         code: code ?? 'email_and_password_required',
       );
     }
-    final fallback =
-        context == _AuthContext.register ? 'Registration failed.' : 'Login failed.';
+    final fallback = context == _AuthContext.register
+        ? 'Registration failed.'
+        : 'Login failed.';
     throw ApiException(fallback, statusCode: status, code: code);
   }
 }

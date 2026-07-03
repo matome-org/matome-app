@@ -79,8 +79,7 @@ class InboxViewController extends StateNotifier<InboxView> {
   }
 }
 
-final inboxViewProvider =
-    StateNotifierProvider<InboxViewController, InboxView>(
+final inboxViewProvider = StateNotifierProvider<InboxViewController, InboxView>(
   (ref) => InboxViewController(ref.watch(settingsStoreProvider)),
 );
 
@@ -446,16 +445,12 @@ class _Header extends StatelessWidget {
               ),
               Text(
                 t.inbox.title,
-                style: typography.display.copyWith(
-                  color: colors.textPrimary,
-                ),
+                style: typography.display.copyWith(color: colors.textPrimary),
               ),
               if (total > 0)
                 Text(
                   t.inbox.matomeCount(n: total),
-                  style: typography.label.copyWith(
-                    color: colors.textSecondary,
-                  ),
+                  style: typography.label.copyWith(color: colors.textSecondary),
                 ),
             ],
           ),
@@ -549,11 +544,13 @@ class _Body extends ConsumerWidget {
     // ConsumerWidget that watches the loose controller itself; here we only need
     // to know whether any loose items exist so the empty-state doesn't show while
     // loose items are present.
-    final hasLoose = FeatureFlags.localFirstSpaces &&
+    final hasLoose =
+        FeatureFlags.localFirstSpaces &&
         (ref.watch(looseInboxControllerProvider).valueOrNull?.isNotEmpty ??
             false);
-    const looseSection =
-        FeatureFlags.localFirstSpaces ? LooseInboxSection() : SizedBox.shrink();
+    const looseSection = FeatureFlags.localFirstSpaces
+        ? LooseInboxSection()
+        : SizedBox.shrink();
 
     // Table view — the columnar counterpart (DR-001). One flat, sortable list
     // (no date sections); selection + bulk actions + per-row menu + undo all

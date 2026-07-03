@@ -84,66 +84,66 @@ class SatoriScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-              // Header.
-              Text(
-                s.title,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              SizedBox(height: spacing.xxs),
-              Text(
-                s.subtitle,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colors.textSecondary,
-                ),
-              ),
-              SizedBox(height: spacing.xl + spacing.xxs),
-
-              // Medallion + headline (centered).
-              const _Medallion(),
-              SizedBox(height: spacing.lg),
-              Text(
-                s.underConstruction,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: colors.accentDark,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2,
-                ),
-              ),
-              SizedBox(height: spacing.xs),
-              _Headline(theme: theme),
-              SizedBox(height: spacing.sm),
-              Text(
-                s.body,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colors.textSecondary,
-                  height: 1.5,
-                ),
-              ),
-              SizedBox(height: spacing.lg + spacing.xxs),
-
-              // Roadmap card.
-              _RoadmapCard(label: s.roadmapLabel, items: roadmap),
-              SizedBox(height: spacing.md + spacing.xxs),
-
-              // Notify CTA (decorative parity — no real action).
-              PrimaryButton.icon(
-                onPressed: () {},
-                icon: Icon(Icons.auto_awesome, color: colors.accent),
-                style: FilledButton.styleFrom(
-                  backgroundColor: notifyBackground,
-                  foregroundColor: notifyForeground,
-                  padding: EdgeInsets.symmetric(vertical: spacing.md),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(radius.lg),
+                  // Header.
+                  Text(
+                    s.title,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
                   ),
-                ),
-                label: Text(s.notify),
-              ),
+                  SizedBox(height: spacing.xxs),
+                  Text(
+                    s.subtitle,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                  SizedBox(height: spacing.xl + spacing.xxs),
+
+                  // Medallion + headline (centered).
+                  const _Medallion(),
+                  SizedBox(height: spacing.lg),
+                  Text(
+                    s.underConstruction,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colors.accentDark,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  SizedBox(height: spacing.xs),
+                  _Headline(theme: theme),
+                  SizedBox(height: spacing.sm),
+                  Text(
+                    s.body,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.textSecondary,
+                      height: 1.5,
+                    ),
+                  ),
+                  SizedBox(height: spacing.lg + spacing.xxs),
+
+                  // Roadmap card.
+                  _RoadmapCard(label: s.roadmapLabel, items: roadmap),
+                  SizedBox(height: spacing.md + spacing.xxs),
+
+                  // Notify CTA (decorative parity — no real action).
+                  PrimaryButton.icon(
+                    onPressed: () {},
+                    icon: Icon(Icons.auto_awesome, color: colors.accent),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: notifyBackground,
+                      foregroundColor: notifyForeground,
+                      padding: EdgeInsets.symmetric(vertical: spacing.md),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(radius.lg),
+                      ),
+                    ),
+                    label: Text(s.notify),
+                  ),
                 ],
               ),
             ),

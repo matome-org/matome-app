@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show Value, Variable;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -21,9 +21,11 @@ import '../home/inbox_upload.dart'
     show DurableImportCopy, PickedUpload, durableImportCopy, mediaTypeForPath;
 import '../home/matome_inbox_controller.dart'
     show matomeInboxControllerProvider;
+import '../items/matome_item_type.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/upload_queue.dart' show uploadQueueProvider;
 import 'matome_sync_service.dart';
+import 'matomes_repository.dart';
 
 /// Immutable view-state for the Matome detail hub (#1371, triage #1372).
 ///
@@ -82,8 +84,8 @@ class MatomeDetailState {
 /// Item of this Matome.
 class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   MatomeDetailController(this._ref, String id, {DurableImportCopy? durableCopy})
-      : _durableCopy = durableCopy ?? durableImportCopy,
-        super(MatomeDetailState(id: id)) {
+    : _durableCopy = durableCopy ?? durableImportCopy,
+      super(MatomeDetailState(id: id)) {
     load();
   }
 
@@ -97,6 +99,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   SpacesDao get _spacesDao => _ref.read(spacesDaoProvider);
   RecordingsDao get _recordingsDao => _ref.read(recordingsDaoProvider);
   ContactsDao get _contactsDao => _ref.read(contactsDaoProvider);
+  AppDatabase get _db => _ref.read(appDatabaseProvider);
+  MatomesRepository get _matomesRepo => _ref.read(matomesRepositoryProvider);
 
   /// The current owner id used to scope the directory picker — `user_<coreId>`
   /// for a signed-in user, otherwise the single-user placeholder. Mirrors
@@ -135,9 +139,14 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// Tag [contactId] in this Matome with [role] (default 'attendee'). The
   /// (matome_id, contact_id) UNIQUE makes a re-add a no-op (set-merge rule), so
   /// attaching is idempotent. Reloads so the chip appears.
-  Future<void> attachContact(String contactId, {String role = 'attendee'}) async {
+  Future<void> attachContact(
+    String contactId, {
+    String role = 'attendee',
+  }) async {
     AppLog.event(
-        LogCat.action, 'attachContact $contactId to ${state.id} ($role)');
+      LogCat.action,
+      'attachContact $contactId to ${state.id} ($role)',
+    );
     await _contactsDao.addContactToMatome(
       matomeId: state.id,
       contactId: contactId,
@@ -154,8 +163,9 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// [RecordingsDao.filesForOwner]; excludes the current Items by id.
   Future<List<FileRow>> candidateFiles() async {
     final all = await _recordingsDao.filesForOwner(_ownerId);
-    final here =
-        (state.matome?.recordings ?? const []).map((r) => r.id).toSet();
+    final here = (state.matome?.recordings ?? const [])
+        .map((r) => r.id)
+        .toSet();
     return all.where((f) => !here.contains(f.id)).toList();
   }
 
@@ -166,7 +176,9 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   Future<int> linkFiles(Set<String> recordingIds) async {
     if (recordingIds.isEmpty) return 0;
     AppLog.event(
-        LogCat.action, 'linkFiles ${recordingIds.length} -> ${state.id}');
+      LogCat.action,
+      'linkFiles ${recordingIds.length} -> ${state.id}',
+    );
     final moved = await _recordingsDao.moveRecordingsToMatome(
       recordingIds,
       state.id,
@@ -184,8 +196,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     final name = displayName.trim();
     if (name.isEmpty) return;
     final id = 'contact_local_${const Uuid().v4()}';
-    AppLog.event(
-        LogCat.action, 'createContactAndAttach $id -> ${state.id}');
+    AppLog.event(LogCat.action, 'createContactAndAttach $id -> ${state.id}');
     await _contactsDao.create(
       ContactsCompanion.insert(
         id: id,
@@ -203,8 +214,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
     final ws = await _ref.read(workspacesDaoProvider).createWorkspace(trimmed);
-    AppLog.event(
-        LogCat.action, 'createSpaceAndFile ${ws.id} -> ${state.id}');
+    AppLog.event(LogCat.action, 'createSpaceAndFile ${ws.id} -> ${state.id}');
     await fileIntoSpace(ws.id);
   }
 
@@ -212,8 +222,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// `matome_contacts` edge (set-merge rule: membership is never trimmed
   /// implicitly). Reloads so the chip disappears.
   Future<void> detachContact(String contactId) async {
-    AppLog.event(
-        LogCat.action, 'detachContact $contactId from ${state.id}');
+    AppLog.event(LogCat.action, 'detachContact $contactId from ${state.id}');
     await _contactsDao.removeContactFromMatome(
       matomeId: state.id,
       contactId: contactId,
@@ -225,7 +234,9 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// Change the edge [role] of an already-attached [contactId]. Reloads.
   Future<void> setContactRole(String contactId, String role) async {
     AppLog.event(
-        LogCat.action, 'setContactRole $contactId on ${state.id} -> $role');
+      LogCat.action,
+      'setContactRole $contactId on ${state.id} -> $role',
+    );
     await _contactsDao.setMatomeContactRole(
       matomeId: state.id,
       contactId: contactId,
@@ -252,8 +263,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// `space_id`, moving it out of the Inbox into the sync domain. Reloads so the
   /// screen reflects the filed state (and any inbox list elsewhere drops it).
   Future<void> fileIntoSpace(String spaceId) async {
-    AppLog.event(
-        LogCat.action, 'fileIntoSpace ${state.id} -> $spaceId');
+    AppLog.event(LogCat.action, 'fileIntoSpace ${state.id} -> $spaceId');
     await _dao.fileIntoSpace(state.id, spaceId);
     await load();
   }
@@ -376,8 +386,9 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     // so a later trigger retries it. We do NOT await it (an in-flight upload must
     // not block the import returning) and catch so a throwing drain never escapes.
     unawaited(
-      Future(() => _ref.read(uploadQueueProvider).drainRow(recordingId))
-          .catchError((Object e, StackTrace st) {
+      Future(
+        () => _ref.read(uploadQueueProvider).drainRow(recordingId),
+      ).catchError((Object e, StackTrace st) {
         AppLog.error(
           LogCat.upload,
           'addFile: best-effort drain failed (row stays pending_upload) '
@@ -387,6 +398,87 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
         );
       }),
     );
+  }
+
+  /// Create a plain-text Item for this Matome without entering the file upload
+  /// pipeline. This writes only the Core-shaped `text_contents` + `items` local
+  /// mirror and deliberately performs no durable copy, presign, upload queue, or
+  /// AI dispatch work; rich-text editing is intentionally out of scope.
+  Future<int> addTextNote(String body) async {
+    final text = body.trim();
+    if (text.isEmpty) {
+      throw ArgumentError.value(body, 'body', 'Text note cannot be empty');
+    }
+
+    final matomeId = state.id;
+    final matome = await _dao.getById(matomeId);
+    final coreMatomeId = matome?.coreId;
+    if (coreMatomeId == null) {
+      throw StateError('Text notes require a reconciled Matome core id');
+    }
+
+    final db = _db;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final localPayloadId = -DateTime.now().microsecondsSinceEpoch;
+
+    await db.transaction(() async {
+      final maxRow = await db
+          .customSelect(
+            'SELECT COALESCE(MAX(position), 0) AS max_position '
+            'FROM items WHERE matome_id = ?',
+            variables: [Variable<int>(coreMatomeId)],
+          )
+          .getSingle();
+      final position = maxRow.read<int>('max_position') + 1;
+
+      await db
+          .into(db.textContents)
+          .insert(
+            TextContentsCompanion.insert(
+              id: Value(localPayloadId),
+              body: text,
+              insertedAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+      await db
+          .into(db.items)
+          .insert(
+            ItemsCompanion.insert(
+              id: Value(localPayloadId),
+              matomeId: coreMatomeId,
+              position: position,
+              itemType: MatomeItemType.text.wireName,
+              textContentId: Value(localPayloadId),
+              insertedAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+    });
+
+    await _dao.markSummaryStale(matomeId, true);
+
+    // SYNC (#1830 / W1): a reconciled Matome MUST push the note to Core so it is
+    // durable + visible cross-device — the local mirror alone was lost on
+    // reinstall / device loss. Local-first + best-effort: the note is already
+    // committed to Drift above; a failed POST (offline / server error) is
+    // logged and swallowed here (NEVER reverts the local write). An
+    // un-reconciled Matome never reaches this method (the action is UI-gated on
+    // `coreId != null` and the guard above throws), so it stays local-only.
+    try {
+      await _matomesRepo.createTextItem(matomeId: coreMatomeId, body: text);
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.sync,
+        'addTextNote: Core POST failed (note kept local, reconciles later) '
+        '$matomeId',
+        e,
+        st,
+      );
+    }
+
+    if (mounted) await load();
+    return localPayloadId;
   }
 
   /// Rename this Matome — the local-first edit (task #1408 / W5). Writes the
@@ -445,10 +537,19 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// Remove an Item (recording) from this Matome: delete the row, its on-device
   /// file (best-effort), mark the aggregated summary stale (the item set
   /// changed), and reload so the hub drops it.
-  Future<void> removeItem(String recordingId, {String? filePath}) async {
+  Future<void> removeItem(
+    String recordingId, {
+    String? filePath,
+    MatomeItemType itemType = MatomeItemType.file,
+  }) async {
     final matomeId = state.id;
     AppLog.event(LogCat.action, 'removeItem $recordingId from $matomeId');
-    await _recordingsDao.deleteRecording(recordingId);
+    if (itemType == MatomeItemType.text) {
+      final itemId = int.tryParse(recordingId);
+      if (itemId != null) await _db.itemsDao.deleteWithPayload(itemId);
+    } else {
+      await _recordingsDao.deleteRecording(recordingId);
+    }
     if (filePath != null && filePath.isNotEmpty) {
       try {
         final f = File(filePath);
@@ -513,5 +614,5 @@ String _clock(DateTime when) {
 /// Family provider keyed by the Matome id (the Drift TEXT id from the route).
 final matomeDetailControllerProvider = StateNotifierProvider.autoDispose
     .family<MatomeDetailController, MatomeDetailState, String>(
-  (ref, id) => MatomeDetailController(ref, id),
-);
+      (ref, id) => MatomeDetailController(ref, id),
+    );

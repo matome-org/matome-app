@@ -14,7 +14,7 @@ abstract class TokenStore {
 /// Default [TokenStore] backed by `flutter_secure_storage`.
 class SecureTokenStore implements TokenStore {
   SecureTokenStore([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 

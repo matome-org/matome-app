@@ -99,8 +99,9 @@ class SpacesScreen extends ConsumerWidget {
     WidgetRef ref,
     SpaceCard space,
   ) async {
-    final consent =
-        await ref.read(spacePromotionServiceProvider).consentFor(space.id);
+    final consent = await ref
+        .read(spacePromotionServiceProvider)
+        .consentFor(space.id);
     if (!context.mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -130,7 +131,8 @@ class SpacesScreen extends ConsumerWidget {
     // off [MasterDetailScaffold.selectsOnTap] (the single source of truth), not
     // whether a space is currently selected.
     final mode = ref.watch(readingPaneModeProvider(ReadingPaneSurface.spaces));
-    final paneCanShow = FeatureFlags.masterDetailLayout &&
+    final paneCanShow =
+        FeatureFlags.masterDetailLayout &&
         MasterDetailScaffold.selectsOnTap(context, mode);
     final masterIsWide = paneCanShow ? false : isWide;
 
@@ -292,8 +294,9 @@ class _SpacePaneDetail extends ConsumerWidget {
                   child: EmptyState(
                     icon: Icons.inbox_outlined,
                     title: t.spaces.detailEmptyMatomes,
-                    titleStyle: typography.bodySmall
-                        .copyWith(color: colors.textSecondary),
+                    titleStyle: typography.bodySmall.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                 ),
               ],
@@ -326,13 +329,13 @@ class _SpacePaneDetail extends ConsumerWidget {
                   children: [
                     Text(
                       detail.name ?? '',
-                      style:
-                          typography.title.copyWith(color: colors.textPrimary),
+                      style: typography.title.copyWith(
+                        color: colors.textPrimary,
+                      ),
                     ),
                     Text(
                       '${t.spaces.matomeCount(n: items.length)} · $syncLabel',
-                      style:
-                          typography.label.copyWith(color: colors.textMuted),
+                      style: typography.label.copyWith(color: colors.textMuted),
                     ),
                   ],
                 ),
@@ -418,9 +421,7 @@ class _Header extends StatelessWidget {
           ),
           Text(
             t.spaces.title,
-            style: typography.display.copyWith(
-              color: colors.textPrimary,
-            ),
+            style: typography.display.copyWith(color: colors.textPrimary),
           ),
           if (total > 0)
             Text(

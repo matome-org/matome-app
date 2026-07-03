@@ -17,7 +17,8 @@
 library;
 
 import 'audio_playback_factory.dart'
-    if (dart.library.html) 'audio_playback_factory_web.dart' as factory_impl;
+    if (dart.library.html) 'audio_playback_factory_web.dart'
+    as factory_impl;
 
 /// What the player can be told to load: a local file path or a remote URL.
 enum PlaybackSourceKind { localFile, remoteUrl }

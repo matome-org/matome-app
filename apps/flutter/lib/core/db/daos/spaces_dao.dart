@@ -39,16 +39,18 @@ class SpacesDao extends DatabaseAccessor<AppDatabase> with _$SpacesDaoMixin {
   /// The `space_type` ∈ { personal | shared | org } of a Space, or null when
   /// the Space does not exist.
   Future<String?> getSpaceType(String spaceId) async {
-    final row = await (select(workspaces)..where((w) => w.id.equals(spaceId)))
-        .getSingleOrNull();
+    final row = await (select(
+      workspaces,
+    )..where((w) => w.id.equals(spaceId))).getSingleOrNull();
     return row?.spaceType;
   }
 
   /// The reserved (unenforced) `owner_id` of a Space, or null when unset or the
   /// Space does not exist.
   Future<String?> getOwnerId(String spaceId) async {
-    final row = await (select(workspaces)..where((w) => w.id.equals(spaceId)))
-        .getSingleOrNull();
+    final row = await (select(
+      workspaces,
+    )..where((w) => w.id.equals(spaceId))).getSingleOrNull();
     return row?.ownerId;
   }
 
@@ -70,9 +72,9 @@ class SpacesDao extends DatabaseAccessor<AppDatabase> with _$SpacesDaoMixin {
     await (update(workspaces)
           ..where((w) => w.id.equals(kDefaultPersonalSpaceId)))
         .write(const WorkspacesCompanion(spaceType: Value('personal')));
-    return (select(workspaces)
-          ..where((w) => w.id.equals(kDefaultPersonalSpaceId)))
-        .getSingle();
+    return (select(
+      workspaces,
+    )..where((w) => w.id.equals(kDefaultPersonalSpaceId))).getSingle();
   }
 
   // ---------------------------------------------------------------------------
@@ -105,8 +107,9 @@ class SpacesDao extends DatabaseAccessor<AppDatabase> with _$SpacesDaoMixin {
 
   /// All membership rows of a Space.
   Future<List<SpaceMemberRow>> membersOfSpace(String spaceId) {
-    return (select(spaceMembers)..where((m) => m.spaceId.equals(spaceId)))
-        .get();
+    return (select(
+      spaceMembers,
+    )..where((m) => m.spaceId.equals(spaceId))).get();
   }
 
   /// Removes a single membership edge by its id.
@@ -133,14 +136,15 @@ class SpacesDao extends DatabaseAccessor<AppDatabase> with _$SpacesDaoMixin {
   }
 
   Future<OrganizationRow?> getOrganizationById(String id) {
-    return (select(organizations)..where((o) => o.id.equals(id)))
-        .getSingleOrNull();
+    return (select(
+      organizations,
+    )..where((o) => o.id.equals(id))).getSingleOrNull();
   }
 
   Future<List<OrganizationRow>> getOrganizations() {
-    return (select(organizations)
-          ..orderBy([(o) => OrderingTerm.asc(o.createdAt)]))
-        .get();
+    return (select(
+      organizations,
+    )..orderBy([(o) => OrderingTerm.asc(o.createdAt)])).get();
   }
 
   Future<void> deleteOrganization(String id) {

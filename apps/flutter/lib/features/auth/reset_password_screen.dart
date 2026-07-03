@@ -24,8 +24,9 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
-  late final TextEditingController _token =
-      TextEditingController(text: widget.initialToken ?? '');
+  late final TextEditingController _token = TextEditingController(
+    text: widget.initialToken ?? '',
+  );
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   bool _loading = false;

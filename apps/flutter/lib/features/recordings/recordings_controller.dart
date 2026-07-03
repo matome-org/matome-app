@@ -30,7 +30,7 @@ class RecordingsController extends StateNotifier<AsyncValue<List<Recording>>> {
   Future<void> refresh() => load();
 }
 
-final recordingsControllerProvider = StateNotifierProvider<RecordingsController,
-    AsyncValue<List<Recording>>>(
-  (ref) => RecordingsController(ref),
-);
+final recordingsControllerProvider =
+    StateNotifierProvider<RecordingsController, AsyncValue<List<Recording>>>(
+      (ref) => RecordingsController(ref),
+    );

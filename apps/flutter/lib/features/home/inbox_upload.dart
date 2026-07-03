@@ -8,30 +8,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/audio/audio_playback.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/storage/app_storage.dart';
-import '../../core/config/app_config.dart';
 import '../../core/db/app_database.dart';
-import '../../core/providers.dart';
 import '../recordings/recording.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recording_result_waiter.dart';
-import '../recordings/recording_status_socket.dart';
+import '../recordings/recording_status_event.dart';
 import '../recordings/upload_queue.dart';
 import 'inbox_controller.dart';
 import 'inbox_sync.dart';
 
-/// Awaits a recording's terminal result by racing the `recording:status`
-/// socket against a periodic poll. Injectable so the finish/upload flow can be
-/// unit-tested without a live Phoenix socket.
+/// Awaits a recording's terminal result by polling `GET /api/recordings/{id}`
+/// until it is `done` / `failed` (or times out). Injectable so the
+/// finish/upload flow can be unit-tested without a live backend.
 ///
-/// The default ([liveRecordingResultAwaiter]) connects a [RecordingStatusSocket]
-/// for the recording's owner (primary path) and falls back to polling
-/// `GET /api/recordings/{id}` via [poll] when the socket is unavailable or
-/// never emits — mirroring apps/mobile `coreRecordingService`.
-typedef RecordingResultAwaiter = Future<RecordingResult> Function({
-  required Recording recording,
-  required Future<Recording?> Function() poll,
-  required Ref ref,
-});
+/// The realtime `recording:status` socket path was removed with task #1830 (W4)
+/// once the Core channel + `broadcast_recording_status` were deleted server-
+/// side: the join always failed and fell back to this poll anyway, so the
+/// socket (and its `phoenix_socket` dependency) was dead weight. The default
+/// ([liveRecordingResultAwaiter]) is now poll-only.
+typedef RecordingResultAwaiter =
+    Future<RecordingResult> Function({
+      required Recording recording,
+      required Future<Recording?> Function() poll,
+      required Ref ref,
+    });
 
 /// Picked file ready to upload through the Inbox upload flow.
 class PickedUpload {
@@ -79,7 +79,8 @@ Future<PickedUpload> durableImportCopy(PickedUpload picked) async {
     // Take the last path segment first, then its last '.'-suffix.
     final basename = picked.file.path.split('/').last;
     final ext = basename.contains('.') ? basename.split('.').last : 'bin';
-    final destPath = '${dir.path}/import_'
+    final destPath =
+        '${dir.path}/import_'
         '${DateTime.now().millisecondsSinceEpoch}_${_randSuffix(6)}.$ext';
     final durable = await picked.file.copy(destPath);
     AppLog.event(LogCat.upload, 'durableImportCopy ok -> $destPath');
@@ -144,13 +145,15 @@ String _randSuffix(int len) {
 }
 
 /// Resolves a coarse media type from a file path extension, mirroring the
-/// audio/image/doc buckets apps/mobile uploadRecordingService uses.
+/// audio/image/video/doc buckets apps/mobile uploadRecordingService uses.
 String mediaTypeForPath(String path) {
   final ext = path.split('.').last.toLowerCase();
   const audio = {'m4a', 'mp3', 'wav', 'aac', 'ogg', 'flac', 'caf', 'webm'};
   const image = {'png', 'jpg', 'jpeg', 'gif', 'heic', 'webp'};
+  const video = {'mp4', 'mov', 'mkv', 'avi', 'webm'};
   if (audio.contains(ext)) return 'audio';
   if (image.contains(ext)) return 'image';
+  if (video.contains(ext)) return 'video';
   return 'document';
 }
 
@@ -177,8 +180,8 @@ class InboxUploader {
     this._ref, {
     DurableImportCopy? durableCopy,
     ImportDurationProbe? durationProbe,
-  })  : _durableCopy = durableCopy ?? durableImportCopy,
-        _durationProbe = durationProbe ?? probeImportDurationSeconds;
+  }) : _durableCopy = durableCopy ?? durableImportCopy,
+       _durationProbe = durationProbe ?? probeImportDurationSeconds;
 
   final Ref _ref;
 
@@ -236,8 +239,9 @@ class InboxUploader {
     //    already hands a durable segment (#43 W2), so it skips this step to avoid
     //    a redundant copy that would also slip the #43 cleanup. On WEB the copy
     //    is a no-op (cloud-direct), see [durableImportCopy].
-    final stored =
-        importFromExternalSource ? await _durableCopy(picked) : picked;
+    final stored = importFromExternalSource
+        ? await _durableCopy(picked)
+        : picked;
 
     // 0b. DURATION PROBE (plan #46 W3): an imported audio file arrives with NO
     //     known length, so the card + Details showed a BLANK duration. Probe the
@@ -320,50 +324,30 @@ class InboxUploader {
   }
 }
 
-/// Default [RecordingResultAwaiter]: connects the `recording:status` socket for
-/// [recording]'s owner (primary) and races it against [poll] (fallback) via a
-/// [RecordingResultWaiter]. The socket is best-effort — if connect/join throws
-/// or it never emits, the poll loop still resolves the pipeline.
+/// Default [RecordingResultAwaiter]: resolves [recording]'s terminal result by
+/// polling [poll] (`GET /api/recordings/{id}`) via a [RecordingResultWaiter].
+///
+/// Poll-only since task #1830 (W4): the realtime socket source is gone (the
+/// Core channel was deleted), so the waiter is fed an empty status stream and
+/// the poll loop is the sole terminal-result source. `ref` is retained for the
+/// injectable signature (shared by the upload queue + details controller).
 Future<RecordingResult> liveRecordingResultAwaiter({
   required Recording recording,
   required Future<Recording?> Function() poll,
   required Ref ref,
 }) async {
-  final socket = RecordingStatusSocket(
-    apiBaseUrl: AppConfig.apiBaseUrl,
-    tokenStore: ref.read(tokenStoreProvider),
-    // #1469: `Recording.ownerId` is now the TEXT/string Core id. The socket's
-    // `user:{ownerId}` topic is keyed on the numeric Core user id, so parse it
-    // back to int (0 when absent — a missing owner means no real channel to
-    // join; connect/join then fails and the poll fallback takes over).
-    ownerId: int.tryParse(recording.ownerId ?? '') ?? 0,
+  final waiter = RecordingResultWaiter(
+    recordingId: recording.id,
+    statusEvents: const Stream<RecordingStatusEvent>.empty(),
+    poll: poll,
   );
-
-  RecordingResultWaiter? waiter;
   try {
-    try {
-      await socket.connectAndJoin();
-    } catch (e, st) {
-      AppLog.error(
-        LogCat.upload,
-        'liveRecordingResultAwaiter: socket connect/join failed (poll fallback)',
-        e,
-        st,
-      );
-      // Socket unavailable — the poll fallback takes over.
-    }
-
-    waiter = RecordingResultWaiter(
-      recordingId: recording.id,
-      statusEvents: socket.events,
-      poll: poll,
-    );
     return await waiter.wait();
   } finally {
-    waiter?.cancel();
-    await socket.dispose();
+    waiter.cancel();
   }
 }
 
-final inboxUploaderProvider =
-    Provider<InboxUploader>((ref) => InboxUploader(ref));
+final inboxUploaderProvider = Provider<InboxUploader>(
+  (ref) => InboxUploader(ref),
+);

@@ -1,4 +1,5 @@
 import 'app_database.dart';
+import '../../features/items/matome_item_type.dart';
 
 /// UI-facing recording item, ported from the RN home card data shape
 /// (apps/mobile/processes/homeData + recordToCard in recordingService.ts).
@@ -16,6 +17,7 @@ class RecordingItem {
     required this.isProcessing,
     required this.mediaType,
     required this.processingStatus,
+    this.itemType = MatomeItemType.file,
     this.summary,
     this.notes,
     this.workspaceName,
@@ -31,6 +33,7 @@ class RecordingItem {
   final String badge;
   final String? notes;
   final bool isProcessing;
+  final MatomeItemType itemType;
   final String mediaType;
   final String processingStatus;
 
@@ -71,6 +74,7 @@ class RecordingItem {
       badge: row.badge,
       notes: row.notes,
       isProcessing: row.isProcessing == 1,
+      itemType: MatomeItemType.file,
       mediaType: row.mediaType,
       processingStatus: row.processingStatus.isNotEmpty
           ? row.processingStatus
@@ -78,6 +82,27 @@ class RecordingItem {
       workspaceName: workspaceName,
       coreId: row.coreId,
       filePath: row.audioFilePath,
+    );
+  }
+
+  factory RecordingItem.textItem({
+    required int id,
+    required String body,
+    required String insertedAt,
+  }) {
+    final title = body.trim().split('\n').first.trim();
+    return RecordingItem(
+      id: id.toString(),
+      title: title.isEmpty ? 'Text note' : title,
+      summary: body,
+      timestamp: insertedAt,
+      duration: '',
+      badge: 'Note',
+      notes: body,
+      isProcessing: false,
+      itemType: MatomeItemType.text,
+      mediaType: 'text',
+      processingStatus: 'done',
     );
   }
 }

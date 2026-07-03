@@ -17,10 +17,7 @@ const List<String> _sensitiveQueryKeys = ['token', 'ticket'];
 String redactSensitiveQueryParams(String message) {
   var out = message;
   for (final key in _sensitiveQueryKeys) {
-    out = out.replaceAll(
-      RegExp('$key=[^&\\s"\'\\]]+'),
-      '$key=[REDACTED]',
-    );
+    out = out.replaceAll(RegExp('$key=[^&\\s"\'\\]]+'), '$key=[REDACTED]');
   }
   return out;
 }
@@ -46,7 +43,9 @@ bool _installed = false;
 /// Idempotent — safe to call from `main()` once. Pass [onRecord] to forward the
 /// already-redacted records to a real sink (e.g. a crash reporter); when null,
 /// records are dropped after redaction (default app behaviour).
-void installSocketLogRedaction({void Function(String message, LogRecord record)? onRecord}) {
+void installSocketLogRedaction({
+  void Function(String message, LogRecord record)? onRecord,
+}) {
   if (_installed) return;
   _installed = true;
   Logger.root.onRecord.listen((record) {

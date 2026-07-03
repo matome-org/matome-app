@@ -64,10 +64,9 @@ class ContactsScreen extends ConsumerWidget {
   Future<void> _create(BuildContext context, WidgetRef ref) async {
     final result = await showContactEditDialog(context);
     if (result == null || result.name.trim().isEmpty) return;
-    await ref.read(contactsControllerProvider.notifier).createContact(
-          displayName: result.name,
-          notes: result.notes,
-        );
+    await ref
+        .read(contactsControllerProvider.notifier)
+        .createContact(displayName: result.name, notes: result.notes);
   }
 
   /// Open a contact. W4 (#1544): the unified [MasterDetailScaffold] owns the
@@ -103,11 +102,14 @@ class ContactsScreen extends ConsumerWidget {
     WidgetRef ref,
     ContactRow contact,
   ) async {
-    final confirmed = await showContactDeleteDialog(context, contact.displayName);
+    final confirmed = await showContactDeleteDialog(
+      context,
+      contact.displayName,
+    );
     if (confirmed != true) return;
-    await ref.read(contactsControllerProvider.notifier).deleteContact(
-          contact.id,
-        );
+    await ref
+        .read(contactsControllerProvider.notifier)
+        .deleteContact(contact.id);
   }
 
   @override
@@ -126,9 +128,11 @@ class ContactsScreen extends ConsumerWidget {
     // source of truth) rather than whether a contact is currently selected, so
     // an onClick surface with nothing selected yet still shows the list, exactly
     // like the approved `_mdContactsList` proposal scene.
-    final mode =
-        ref.watch(readingPaneModeProvider(ReadingPaneSurface.contacts));
-    final paneCanShow = FeatureFlags.masterDetailLayout &&
+    final mode = ref.watch(
+      readingPaneModeProvider(ReadingPaneSurface.contacts),
+    );
+    final paneCanShow =
+        FeatureFlags.masterDetailLayout &&
         MasterDetailScaffold.selectsOnTap(context, mode);
     final masterIsWide = paneCanShow ? false : isWide;
 
@@ -192,7 +196,10 @@ class ContactsScreen extends ConsumerWidget {
       body = MasterDetailScaffold(
         master: listColumn,
         detail: selectedId != null
-            ? _ContactsPaneDetail(key: ValueKey(selectedId), contactId: selectedId)
+            ? _ContactsPaneDetail(
+                key: ValueKey(selectedId),
+                contactId: selectedId,
+              )
             : null,
         emptyState: const _ContactPaneEmptyState(),
         mode: mode,
@@ -238,7 +245,9 @@ class _ContactsPaneDetail extends ConsumerWidget {
     if (row == null || !context.mounted) return;
     final draft = await showContactEditDialog(context, existing: row);
     if (draft == null || draft.name.trim().isEmpty) return;
-    await ref.read(contactsControllerProvider.notifier).updateContact(
+    await ref
+        .read(contactsControllerProvider.notifier)
+        .updateContact(
           id: contactId,
           displayName: draft.name,
           notes: draft.notes,
@@ -259,22 +268,27 @@ class _ContactsPaneDetail extends ConsumerWidget {
         await ref
             .read(contactsControllerProvider.notifier)
             .deleteContact(data.id);
-        // The list re-reads from Drift; the build's post-frame reconcile clears
-        // the now-stale selection so the pane falls back to its empty state.
+      // The list re-reads from Drift; the build's post-frame reconcile clears
+      // the now-stale selection so the pane falls back to its empty state.
       case ContactDetailAction.merge:
         // Merge is reserved (DR-004) — no destructive default.
         break;
     }
   }
 
-  Future<void> _openFile(BuildContext context, WidgetRef ref, String fileId) async {
+  Future<void> _openFile(
+    BuildContext context,
+    WidgetRef ref,
+    String fileId,
+  ) async {
     final row = await ref.read(recordingsDaoProvider).getRecordingById(fileId);
     if (!context.mounted) return;
     final mediaType = row?.mediaType ?? 'audio';
     final path = switch (mediaType) {
-      'image' => '/recording/image/$fileId',
-      'document' => '/recording/document/$fileId',
-      _ => '/recording/detail/$fileId',
+      'image' => '/items/image/$fileId',
+      'document' => '/items/document/$fileId',
+      'video' => '/items/video/$fileId',
+      _ => '/items/audio/$fileId',
     };
     context.push(path);
   }
@@ -387,9 +401,7 @@ class _Header extends StatelessWidget {
           ),
           Text(
             t.contacts.title,
-            style: typography.display.copyWith(
-              color: colors.textPrimary,
-            ),
+            style: typography.display.copyWith(color: colors.textPrimary),
           ),
           if (total > 0)
             Text(
@@ -529,9 +541,9 @@ class _ContactDialogState extends State<_ContactDialog> {
     super.dispose();
   }
 
-  void _submit() => Navigator.of(context).pop(
-        ContactDraft(name: _name.text, notes: _notes.text),
-      );
+  void _submit() => Navigator.of(
+    context,
+  ).pop(ContactDraft(name: _name.text, notes: _notes.text));
 
   @override
   Widget build(BuildContext context) {

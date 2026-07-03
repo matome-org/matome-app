@@ -183,15 +183,17 @@ class SpacePromotionService {
     final matomes = await _matomesDao.listMatomesInSpace(spaceId);
 
     // Matomes filed into the space that have no Core row yet.
-    final pendingMatomes =
-        matomes.where((m) => m.coreId == null).toList(growable: false);
+    final pendingMatomes = matomes
+        .where((m) => m.coreId == null)
+        .toList(growable: false);
 
     // Recordings that will egress:
     //   * children of the (still-uncreated) matomes in this space, and
     //   * recordings filed DIRECTLY into the space (no matome wrapper),
     // each only when they lack a Core row.
-    final pendingMatomeIds =
-        matomes.map((m) => m.id).toSet(); // membership shadow check
+    final pendingMatomeIds = matomes
+        .map((m) => m.id)
+        .toSet(); // membership shadow check
     var pendingRecordings = 0;
 
     for (final m in matomes) {
@@ -199,8 +201,9 @@ class SpacePromotionService {
       pendingRecordings += children.where((r) => r.coreId == null).length;
     }
 
-    final directlyFiled =
-        await _recordingsDao.getRecordingsInWorkspace(spaceId);
+    final directlyFiled = await _recordingsDao.getRecordingsInWorkspace(
+      spaceId,
+    );
     for (final r in directlyFiled) {
       // matome WINS (R1.1): a recording wrapped in one of this space's matomes
       // is already counted under that matome — do not double-count it here.
@@ -317,8 +320,9 @@ class SpacePromotionService {
       remaining += children.where((r) => r.coreId == null).length;
     }
 
-    final directlyFiled =
-        await _recordingsDao.getRecordingsInWorkspace(cloudSpaceId);
+    final directlyFiled = await _recordingsDao.getRecordingsInWorkspace(
+      cloudSpaceId,
+    );
     for (final r in directlyFiled) {
       if (r.matomeId != null && matomeIds.contains(r.matomeId)) continue;
       if (r.coreId == null) remaining += 1;
@@ -349,5 +353,5 @@ final spacePromotionServiceProvider = Provider<SpacePromotionService>(
 /// keyed by the space id (family).
 final promotionConsentProvider = FutureProvider.autoDispose
     .family<PromotionConsent, String>((ref, spaceId) {
-  return ref.read(spacePromotionServiceProvider).consentFor(spaceId);
-});
+      return ref.read(spacePromotionServiceProvider).consentFor(spaceId);
+    });

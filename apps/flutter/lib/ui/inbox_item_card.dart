@@ -78,9 +78,9 @@ class InboxItemCard extends StatelessWidget {
   final VoidCallback? onFile;
 
   IconData get _defaultIcon => switch (kind) {
-        InboxEntryKind.looseItem => Icons.insert_drive_file_outlined,
-        InboxEntryKind.draftMatome => Icons.workspaces_outline,
-      };
+    InboxEntryKind.looseItem => Icons.insert_drive_file_outlined,
+    InboxEntryKind.draftMatome => Icons.workspaces_outline,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -100,8 +100,11 @@ class InboxItemCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           leading ??
-              Icon(icon ?? _defaultIcon,
-                  size: spacing.lg, color: colors.textSecondary),
+              Icon(
+                icon ?? _defaultIcon,
+                size: spacing.lg,
+                color: colors.textSecondary,
+              ),
           SizedBox(width: spacing.sm),
           Expanded(
             child: Column(
@@ -170,7 +173,10 @@ class _KindTag extends StatelessWidget {
     final typography = context.typography;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: spacing.xs, vertical: spacing.xxs),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.xs,
+        vertical: spacing.xxs,
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius.pill),
         border: Border.all(color: colors.border),
@@ -200,7 +206,11 @@ class _FileAffordance extends StatelessWidget {
     final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.drive_file_move_outline, size: spacing.md, color: colors.accent),
+        Icon(
+          Icons.drive_file_move_outline,
+          size: spacing.md,
+          color: colors.accent,
+        ),
         SizedBox(width: spacing.xxs),
         Text(label, style: typography.label.copyWith(color: colors.accent)),
       ],
@@ -212,7 +222,10 @@ class _FileAffordance extends StatelessWidget {
       mouseCursor: SystemMouseCursors.click,
       borderRadius: BorderRadius.circular(radius.sm),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: spacing.xxs, vertical: spacing.xxs),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.xxs,
+          vertical: spacing.xxs,
+        ),
         child: row,
       ),
     );

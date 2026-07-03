@@ -124,6 +124,38 @@ class Recording {
     );
   }
 
+  factory Recording.fromItemJson(Map<String, dynamic> json) {
+    final file = json['file'] is Map<String, dynamic>
+        ? json['file'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final metadata = json['metadata'] is Map<String, dynamic>
+        ? json['metadata'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final transcript = asStringOrNull(file['transcript']);
+    final summary = asStringOrNull(file['summary']);
+    return Recording(
+      id: asInt(json['id']),
+      ownerId: _ownerIdOrNull(json['owner_id']),
+      title: asString(metadata['title'], fallback: 'Untitled'),
+      status: RecordingStatus.fromName(
+        asStringOrNull(metadata['status']) ??
+            (summary != null || transcript != null ? 'done' : 'pending'),
+      ),
+      summary: summary,
+      transcript: transcript,
+      notes: asStringOrNull(metadata['notes']),
+      mediaType: asStringOrNull(file['media_type']),
+      storageKey: asStringOrNull(file['storage_key']),
+      duration: asIntOrNull(file['duration']),
+      byteSize: asIntOrNull(file['byte_size']),
+      badge: asStringOrNull(metadata['badge']),
+      workspaceId: asIntOrNull(metadata['workspace_id']),
+      matomeId: asIntOrNull(json['matome_id']),
+      insertedAt: asDateTimeOrNull(json['inserted_at']),
+      updatedAt: asDateTimeOrNull(json['updated_at']),
+    );
+  }
+
   /// Parses a wire `owner_id` into a non-empty TEXT id, or null.
   ///
   /// Returns null for an absent value AND for a blank/whitespace string, so a
@@ -143,6 +175,16 @@ class Recording {
     return raw
         .whereType<Map<String, dynamic>>()
         .map(Recording.fromJson)
+        .toList(growable: false);
+  }
+
+  static List<Recording> listFromItemsEnvelope(Map<String, dynamic> json) {
+    final raw = json['items'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .where((item) => item['item_type'] == 'file')
+        .map(Recording.fromItemJson)
         .toList(growable: false);
   }
 }

@@ -48,12 +48,13 @@ class NavDestinationSpec {
 /// The options behind the hero "Add" action — the single entry point for
 /// everything you can bring into a matome. The widget renders them; the host
 /// decides what each one does via [onAddOption].
-enum NavAddOption { recordAudio, addPhoto, addFile, recordMeeting }
+enum NavAddOption { recordAudio, addPhoto, addVideo, addFile, recordMeeting }
 
 extension NavAddOptionX on NavAddOption {
   IconData get icon => switch (this) {
     NavAddOption.recordAudio => Icons.mic_none_rounded,
     NavAddOption.addPhoto => Icons.photo_camera_outlined,
+    NavAddOption.addVideo => Icons.video_file_outlined,
     NavAddOption.addFile => Icons.upload_file,
     NavAddOption.recordMeeting => Icons.groups_outlined,
   };
@@ -61,6 +62,7 @@ extension NavAddOptionX on NavAddOption {
   String label(Translations t) => switch (this) {
     NavAddOption.recordAudio => t.nav.recordAudio,
     NavAddOption.addPhoto => t.nav.addPhoto,
+    NavAddOption.addVideo => t.nav.addVideo,
     NavAddOption.addFile => t.nav.addFile,
     NavAddOption.recordMeeting => t.nav.recordMeeting,
   };
@@ -457,46 +459,46 @@ class MatomeSidebar extends StatelessWidget {
           child: SizedBox(
             width: expanded ? kSidebarExpandedWidth : kSidebarRailWidth,
             child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _SidebarHeader(expanded: expanded, onToggle: onToggle),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              spacing.sm,
-              spacing.xs,
-              spacing.sm,
-              spacing.md,
-            ),
-            child: _AddButton(
-              expanded: expanded,
-              onAddOption: onAddOption,
-              options: options,
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.symmetric(horizontal: spacing.sm),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final dest in destinations)
-                  Padding(
-                    padding: EdgeInsets.only(bottom: spacing.xxs),
-                    child: _SidebarItem(
-                      dest: dest,
-                      active: dest.id == selectedId,
-                      expanded: expanded,
-                      onTap: () => onSelect(dest.id),
-                    ),
+                _SidebarHeader(expanded: expanded, onToggle: onToggle),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    spacing.sm,
+                    spacing.xs,
+                    spacing.sm,
+                    spacing.md,
                   ),
+                  child: _AddButton(
+                    expanded: expanded,
+                    onAddOption: onAddOption,
+                    options: options,
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.symmetric(horizontal: spacing.sm),
+                    children: [
+                      for (final dest in destinations)
+                        Padding(
+                          padding: EdgeInsets.only(bottom: spacing.xxs),
+                          child: _SidebarItem(
+                            dest: dest,
+                            active: dest.id == selectedId,
+                            expanded: expanded,
+                            onTap: () => onSelect(dest.id),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: colors.border),
+                _SidebarFooter(
+                  expanded: expanded,
+                  accountName: accountName,
+                  onSettings: onSettings,
+                ),
               ],
-            ),
-          ),
-          Divider(height: 1, color: colors.border),
-          _SidebarFooter(
-            expanded: expanded,
-            accountName: accountName,
-            onSettings: onSettings,
-          ),
-        ],
             ),
           ),
         ),

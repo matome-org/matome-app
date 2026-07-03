@@ -74,6 +74,55 @@ class MatomesRepository {
     }
   }
 
+  /// `POST /api/matomes/:matomeId/items {item_type: "text", body}` (Bearer).
+  /// Creates a plain-text Item on Core so a reconciled Matome's typed notes are
+  /// durable + visible cross-device (task #1830 / W1). Returns the freshly
+  /// minted Core item id. 201 is success; 200 is tolerated (idempotent server).
+  ///
+  /// The unit is a single text Item — no presign/upload leg (that is the file
+  /// item's concern, [RecordingsRepository.createItemRecording]).
+  Future<int> createTextItem({
+    required int matomeId,
+    required String body,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/matomes/$matomeId/items',
+        data: <String, dynamic>{'item_type': 'text', 'body': body},
+      );
+      final status = response.statusCode ?? 0;
+      if (status == 401) throw _unauthorized;
+      if (status != 201 && status != 200) {
+        throw ApiException(
+          'Failed to create text item.',
+          statusCode: status,
+          code: errorCodeFromBody(response.data),
+        );
+      }
+      final raw = response.data?['item'];
+      if (raw is! Map<String, dynamic>) {
+        throw ApiException(
+          'Malformed create-text-item response.',
+          statusCode: status,
+          code: 'malformed_response',
+        );
+      }
+      final id = raw['id'];
+      if (id is int) return id;
+      if (id is String) {
+        final parsed = int.tryParse(id);
+        if (parsed != null) return parsed;
+      }
+      throw ApiException(
+        'Malformed create-text-item response.',
+        statusCode: status,
+        code: 'malformed_response',
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   /// `PATCH /api/matomes/:id` (Bearer). Persists edits; only provided fields are
   /// sent. [workspaceId] re-files the Matome into a different Space.
   Future<Matome> updateMatome(

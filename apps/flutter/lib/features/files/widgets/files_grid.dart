@@ -121,7 +121,8 @@ class _FilesGridState extends State<FilesGrid> {
     }
   }
 
-  void _move(Set<String> ids) => widget.onBulk?.call(FileAction.moveToMatome, ids);
+  void _move(Set<String> ids) =>
+      widget.onBulk?.call(FileAction.moveToMatome, ids);
   void _download(Set<String> ids) =>
       widget.onBulk?.call(FileAction.download, ids);
 
@@ -269,8 +270,11 @@ class _FileTileState extends State<_FileTile> {
                     child: ColoredBox(
                       color: vis.color.withValues(alpha: 0.10),
                       child: Center(
-                        child: Icon(vis.icon,
-                            size: context.spacing.xl, color: vis.color),
+                        child: Icon(
+                          vis.icon,
+                          size: context.spacing.xl,
+                          color: vis.color,
+                        ),
                       ),
                     ),
                   ),
@@ -319,16 +323,21 @@ class _FileTileState extends State<_FileTile> {
                         // fabricated size.
                         Text(
                           f.sizeLabel ?? t.files.noSize,
-                          style:
-                              typography.label.copyWith(color: colors.textMuted),
+                          style: typography.label.copyWith(
+                            color: colors.textMuted,
+                          ),
                         ),
-                        Text(' · ',
-                            style: typography.label
-                                .copyWith(color: colors.textMuted)),
+                        Text(
+                          ' · ',
+                          style: typography.label.copyWith(
+                            color: colors.textMuted,
+                          ),
+                        ),
                         Text(
                           f.when,
-                          style:
-                              typography.label.copyWith(color: colors.textMuted),
+                          style: typography.label.copyWith(
+                            color: colors.textMuted,
+                          ),
                         ),
                       ],
                     ),
@@ -352,7 +361,9 @@ class _FileTileState extends State<_FileTile> {
                         if (f.contacts.isNotEmpty) ...[
                           SizedBox(width: spacing.xs),
                           PeopleCluster(
-                              names: f.contacts, size: context.spacing.lg),
+                            names: f.contacts,
+                            size: context.spacing.lg,
+                          ),
                         ],
                       ],
                     ),
@@ -415,16 +426,23 @@ class _SyncDot extends StatelessWidget {
       return const SpaceSyncChip(state: SpaceSyncState.local, compact: true);
     }
     final (IconData icon, Color color) = switch (rollup) {
-      MatomeSyncRollup.cloud => (Icons.cloud_done_outlined, colors.badgePersonal),
+      MatomeSyncRollup.cloud => (
+        Icons.cloud_done_outlined,
+        colors.badgePersonal,
+      ),
       MatomeSyncRollup.partial => (
-          Icons.cloud_sync_outlined,
-          colors.textSecondary,
-        ),
+        Icons.cloud_sync_outlined,
+        colors.textSecondary,
+      ),
       MatomeSyncRollup.onDevice => (Icons.cloud_off_outlined, colors.textMuted),
     };
     return Tooltip(
       message: t.cardStatus.syncState,
-      child: Icon(icon, size: context.typography.bodySmall.fontSize, color: color),
+      child: Icon(
+        icon,
+        size: context.typography.bodySmall.fontSize,
+        color: color,
+      ),
     );
   }
 }

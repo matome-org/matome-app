@@ -16,7 +16,6 @@
 ///   - otherwise                → null
 library;
 
-
 import '../core/observability/app_log.dart';
 
 /// Redirect targets the guard may emit.
@@ -40,6 +39,8 @@ const _tabPrefixes = [
   // today; the nav destination cutover is #1467. Allow-listed so an authed user
   // landing on /files is not bounced to /inbox.
   '/files',
+  // File item drill-down routes live outside the shell but require auth.
+  '/items',
 ];
 // Capture modals living above the shell on the root navigator: the mic
 // recorder (`/recording`) and the desktop meeting recorder (`/meeting`).

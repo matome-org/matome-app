@@ -94,17 +94,11 @@ dependencies:
   # namespace + shared-OpenSSL) and uncommenting:
   #   sqlcipher_flutter_libs: ^0.6.0
 
-  # package:logging — used directly so the socket log-redaction guard (#815)
-  # can install a root-logger listener that strips `?token=<jwt>` out of any
-  # phoenix_socket log record before it reaches a sink. Already pulled in
-  # transitively by phoenix_socket; pinned here to make the dependency explicit.
+  # package:logging — used directly so the log-redaction guard (#815) can
+  # install a root-logger listener that strips `?token=<jwt>` out of any log
+  # record before it reaches a sink. Pinned explicitly (the transitive source,
+  # phoenix_socket, was removed with task #1830 / W4).
   logging: ^1.2.0
-
-  # Phoenix Channels client (F4 de-risk). Connects to the Core `/socket`,
-  # joins `user:{ownerId}`, and listens for `recording:status` push events.
-  # On web it transparently uses the browser WebSocket; on native it uses
-  # dart:io WebSocket. Speaks the Phoenix v2 JSON serializer.
-  phoenix_socket: ^0.7.0
 
   # Audio capture (F3 de-risk). Single native recorder with a true
   # pause()/resume() cycle that appends to the SAME underlying file, plus an

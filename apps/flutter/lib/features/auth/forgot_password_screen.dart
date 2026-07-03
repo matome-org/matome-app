@@ -42,9 +42,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     }
     setState(() => _loading = true);
     try {
-      await ref
-          .read(authRepositoryProvider)
-          .requestPasswordReset(email: email);
+      await ref.read(authRepositoryProvider).requestPasswordReset(email: email);
       if (!mounted) return;
       setState(() => _sent = true);
     } on ApiException {
@@ -103,7 +101,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               SizedBox(height: spacing.sm),
               Center(
                 child: AppTextButton(
-                  onPressed: _loading ? null : () => context.go('/reset-password'),
+                  onPressed: _loading
+                      ? null
+                      : () => context.go('/reset-password'),
                   child: Text(t.auth.resetPasswordSubmit),
                 ),
               ),

@@ -144,12 +144,7 @@ class UploadQueue {
     try {
       pending = await _dao.getPendingUploadRecordings();
     } catch (e, st) {
-      AppLog.error(
-        LogCat.upload,
-        'drain: could not read pending rows',
-        e,
-        st,
-      );
+      AppLog.error(LogCat.upload, 'drain: could not read pending rows', e, st);
       developer.log(
         'upload-queue could not read pending rows',
         name: 'upload.queue',
@@ -247,6 +242,12 @@ class UploadQueue {
     UploadDescriptor? upload;
 
     if (coreId == null) {
+      final localMatomeId = row.matomeId;
+      if (localMatomeId == null) return;
+      final matome = await _matomesDao.getById(localMatomeId);
+      final coreMatomeId = matome?.coreId;
+      if (coreMatomeId == null) return;
+
       // #1471: declare the on-disk media size so Core persists `byte_size` and
       // the Files view renders a real size. Best-effort: a missing/unreadable
       // file leaves it null (the upload itself would fail later anyway), so the
@@ -254,8 +255,9 @@ class UploadQueue {
       final contentLength = await _byteSizeOf(row.audioFilePath);
       final RecordingCreateResult created;
       try {
-        created = await _repo.createRecording(
+        created = await _repo.createItemRecording(
           title: row.title,
+          matomeId: coreMatomeId,
           durationSeconds: _durationSecondsFor(row),
           mediaType: row.mediaType,
           contentLength: contentLength,
@@ -283,7 +285,9 @@ class UploadQueue {
       // (This branch is defensive; reconcileCoreId already flips status to
       // processing, so a coreId + pending_upload pairing is rare.)
       final fetched = await _safeFetch(coreId);
-      if (fetched == null) return; // Core unreachable — retry later, audio kept.
+      if (fetched == null) {
+        return; // Core unreachable — retry later, audio kept.
+      }
       recording = fetched;
       // The row was created on Core but may never have been enqueued for
       // processing (a prior attempt died between create and enqueue). Without
@@ -460,5 +464,4 @@ class UploadQueue {
   }
 }
 
-final uploadQueueProvider =
-    Provider<UploadQueue>((ref) => UploadQueue(ref));
+final uploadQueueProvider = Provider<UploadQueue>((ref) => UploadQueue(ref));
