@@ -1,6 +1,10 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:matome_flutter/core/crypto/envelope.dart';
+import 'package:matome_flutter/core/crypto/key_material.dart';
+import 'package:matome_flutter/core/crypto/key_unwrapper.dart';
 import 'package:matome_flutter/core/db/db_encryption.dart';
 
 // ---------------------------------------------------------------------------
@@ -100,6 +104,93 @@ void main() {
         DbEncryptionKeyManager.pragmaKeyStatement(hex),
         'PRAGMA key = "x\'deadbeef\'"',
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // DeviceKeystoreKeyUnwrapper — task #1850, plan #131 W1.
+  //
+  // Passwordless native backend for the KeyUnwrapper strategy interface
+  // (core/crypto/key_unwrapper.dart): the device-KEK bytes come from the OS
+  // keystore via SecureKeyStore/FlutterSecureKeyStore, never from anything
+  // the user types. Unwraps `wrapped_dek_device`.
+  // ---------------------------------------------------------------------------
+  group('DeviceKeystoreKeyUnwrapper', () {
+    Uint8List key32(int seed) =>
+        Uint8List.fromList(List.generate(32, (i) => (i + seed) & 0xff));
+
+    String hex(Uint8List bytes) {
+      final sb = StringBuffer();
+      for (final b in bytes) {
+        sb.write(b.toRadixString(16).padLeft(2, '0'));
+      }
+      return sb.toString();
+    }
+
+    test('deriveKEK reads the device-KEK hex from the secure store and '
+        'unwrapDek recovers the DEK from wrapped_dek_device', () async {
+      final store = _FakeKeyStore();
+      final deviceKek = key32(9);
+      await store.write(DeviceKeystoreKeyUnwrapper.storageKey, hex(deviceKek));
+
+      final dek = Dek.generate();
+      final wrappedDekDevice = await wrapKey(
+        plaintext: dek.bytes,
+        wrappingKey: deviceKek,
+        payloadType: PayloadType.dek,
+        wrapperType: WrapperType.deviceKek,
+      );
+
+      final unwrapper = DeviceKeystoreKeyUnwrapper(store);
+      final recovered = await unwrapper.unwrapDek(wrappedDekDevice);
+
+      expect(recovered.bytes, dek.bytes);
+    });
+
+    test('deriveKEK throws explicitly when no device KEK has been '
+        'enrolled yet (no silent fallback)', () async {
+      final unwrapper = DeviceKeystoreKeyUnwrapper(_FakeKeyStore());
+      expect(unwrapper.deriveKEK(), throwsA(isA<StateError>()));
+    });
+
+    test('unwrapDek fails explicitly (does not silently wipe/regenerate) '
+        'when the stored device KEK is wrong for the wrapped blob', () async {
+      final store = _FakeKeyStore();
+      await store.write(
+        DeviceKeystoreKeyUnwrapper.storageKey,
+        hex(key32(1)),
+      );
+
+      final dek = Dek.generate();
+      final wrappedDekDevice = await wrapKey(
+        plaintext: dek.bytes,
+        wrappingKey: key32(2), // different key than what's stored
+        payloadType: PayloadType.dek,
+        wrapperType: WrapperType.deviceKek,
+      );
+
+      final unwrapper = DeviceKeystoreKeyUnwrapper(store);
+      expect(
+        () => unwrapper.unwrapDek(wrappedDekDevice),
+        throwsA(isA<EnvelopeTamperException>()),
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // resetOnError: false — CRITICAL for the device-KEK secure store.
+  //
+  // flutter_secure_storage 10.x's AndroidOptions.resetOnError defaults to
+  // `true`: on a platform decrypt error it silently WIPES the stored value.
+  // For the DEK-wrapping key (unlike the JWT/token_store case) that is an
+  // unrecoverable lockout, so buildDeviceKekSecureStorage() MUST always
+  // construct AndroidOptions with resetOnError: false.
+  // ---------------------------------------------------------------------------
+  group('buildDeviceKekSecureStorage', () {
+    test('constructs AndroidOptions with resetOnError: false', () {
+      final storage = buildDeviceKekSecureStorage();
+      final androidOptions = storage.aOptions;
+      expect(androidOptions.toMap()['resetOnError'], 'false');
     });
   });
 }
