@@ -148,6 +148,14 @@ dependencies:
   # pinned here to make the direct dependency explicit.
   uuid: ^4.5.3
 
+  # Envelope-encryption crypto core (#1849, plan #131 W1): pure-Dart Argon2id
+  # KDF (RFC 9106) + AES-256-GCM AEAD, both from `package:cryptography/dart.dart`
+  # (the `Dart*` classes are forced pure-Dart implementations with NO platform
+  # channel / dart:ffi plugin — they run identically under `flutter test` on
+  # any host, which this layer's zero-platform-deps constraint requires). Used
+  # by lib/core/crypto/ only; not yet wired into live storage.
+  cryptography: ^2.9.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
