@@ -23,6 +23,21 @@ Future<String> _matomeDbDirectory() async {
 /// this to `true` (after dropping `drift_flutter` for a hand-rolled native
 /// connection, or a sqlcipher build with a distinct namespace) is a localized
 /// change — the `setup`/`isolateSetup` recipe is documented below.
+///
+/// Spike #815 (task #1847, plan #131 Wave 0) proved this exact recipe
+/// end-to-end on Linux desktop: `package:sqlite3` + `open.overrideFor` +
+/// a SQLCipher build + `PRAGMA key`/`cipher_version` round-trips correctly,
+/// and confirmed (not just theorized) that `sqlcipher_flutter_libs`' Linux
+/// CMake fails on shared-OpenSSL-only distros. Verdict: GO on the
+/// **hand-rolled connection**, not a namespaced fork of the stock plugin —
+/// see `tool/spike_815_sqlcipher/DECISION.md` and
+/// `test/db/sqlcipher_native_spike_test.dart`. Android round-trip remains
+/// unverified (no device/emulator in that spike); this flag stays `false`
+/// until the production per-platform library build lands and the connection
+/// construction below is swapped for `NativeDatabase.opened(...)` over a
+/// hand-rolled `sqlite3.open()` (today's `driftDatabase(..., setup: ...)`
+/// path still depends on the very drift_flutter native setup whose co-build
+/// was in question).
 const bool kSqlCipherEnabled = bool.fromEnvironment(
   'MATOME_SQLCIPHER',
   defaultValue: false,
