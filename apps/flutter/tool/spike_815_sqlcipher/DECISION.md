@@ -1,7 +1,7 @@
 # Spike #815 / task #1847 — SQLCipher keyed by raw DEK: go/no-go
 
 **Plan:** p1-unified-login-encryption (#131), Wave 0 gate.
-**Blocks:** `.temp/e2e-offline-key-flow.md` §7 ("flip Native connection to
+**Blocks:** `.docs/internal/at-rest-key-flow.md` §7 ("flip Native connection to
 SQLCipher keyed by DEK once the `sqlcipher_flutter_libs` build conflict is
 resolved").
 
