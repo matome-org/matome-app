@@ -114,6 +114,27 @@ defmodule MatomeApi.Auth do
     end
   end
 
+  @doc """
+  Verifies a password-reset token (minted by `request_password_reset/1`) and
+  resolves the user it was issued for. This is the pre-auth bootstrap task
+  #1854 needs (CF-1, .docs/internal/at-rest-key-flow.md §5): a user who
+  forgot their password has no session and so cannot hit the normal
+  `:auth`-gated routes, but DOES have proof of email ownership via the reset
+  token — which `MatomeApiWeb.Plugs.RequireResetToken` accepts in its place,
+  scoped to only the `/keybundle/recovery` routes. Deliberately a separate
+  function from `verify_access_token/1`: the `"typ"` claim check means an
+  `access` token can never authenticate here and a `reset` token can never
+  authenticate a normal `:auth`-gated route.
+  """
+  def verify_reset_token(token) do
+    with {:ok, claims} <- Guardian.decode_and_verify(token, %{"typ" => "reset"}),
+         {:ok, user} <- Guardian.resource_from_claims(claims) do
+      {:ok, user, claims}
+    else
+      _ -> {:error, :invalid_reset_token}
+    end
+  end
+
   @doc "Returns the caller's key bundle, or `nil` if none has been stored yet."
   def get_key_bundle(%User{id: user_id}), do: Repo.get_by(KeyBundle, user_id: user_id)
 

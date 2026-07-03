@@ -13,6 +13,15 @@ defmodule MatomeApiWeb.Router do
     plug MatomeApiWeb.Plugs.RequireInternalToken
   end
 
+  # Task #1854 (plan #131 W3) — the pre-auth salt bootstrap (CF-1): a user
+  # who forgot their password has no session, so the normal :auth pipeline
+  # is unreachable. This pipeline authenticates with the reset token instead
+  # (proof of email ownership), scoped ONLY to the /keybundle/recovery
+  # routes below.
+  pipeline :require_reset_token do
+    plug MatomeApiWeb.Plugs.RequireResetToken
+  end
+
   # Anti credential-stuffing on the public auth endpoints: a per-IP limit
   # (blunt volumetric defense) plus a per-account limit keyed on the
   # `email` param (the actual lockout — a compromised/crackable wrapped
@@ -36,6 +45,18 @@ defmodule MatomeApiWeb.Router do
       checks: [
         {:user, limit: 10, window_ms: 60_000, lockout_ms: 300_000},
         {:ip, limit: 30, window_ms: 60_000, lockout_ms: 60_000}
+      ]
+  end
+
+  # Task #1854, plan #131 W3 — same idea as :keybundle_get_rate_limit, applied
+  # to the pre-auth recovery bootstrap routes: a leaked/guessed reset token
+  # must not become a low-cost oracle for hammering an account's key bundle.
+  pipeline :keybundle_recovery_rate_limit do
+    plug MatomeApiWeb.Plugs.RateLimit,
+      scope: :keybundle_recovery,
+      checks: [
+        {:user, limit: 5, window_ms: 60_000, lockout_ms: 300_000},
+        {:ip, limit: 20, window_ms: 60_000, lockout_ms: 60_000}
       ]
   end
 
@@ -66,6 +87,17 @@ defmodule MatomeApiWeb.Router do
       pipe_through [:auth, :keybundle_get_rate_limit]
 
       get "/keybundle", KeyBundleController, :show
+    end
+
+    # Task #1854, plan #131 W3 — pre-auth recovery bootstrap (CF-1). Reuses
+    # the SAME KeyBundleController actions as the authenticated /keybundle
+    # routes above (every field is an opaque blob regardless of which auth
+    # channel fetched/stored it); only the auth pipeline differs.
+    scope "/" do
+      pipe_through [:require_reset_token, :keybundle_recovery_rate_limit]
+
+      get "/keybundle/recovery", KeyBundleController, :show
+      put "/keybundle/recovery", KeyBundleController, :upsert
     end
 
     scope "/" do
