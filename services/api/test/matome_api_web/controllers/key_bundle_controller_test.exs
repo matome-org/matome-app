@@ -119,6 +119,26 @@ defmodule MatomeApiWeb.KeyBundleControllerTest do
     assert get(conn, ~p"/api/keybundle").status == 429
   end
 
+  # okt-audit AUDIT-CORE (task #1865): PUT /keybundle used to have no
+  # rate-limit pipeline at all (unlike GET /keybundle and both
+  # /keybundle/recovery routes), so a stolen/guessed access token could
+  # hammer the upsert endpoint without limit. router.ex now pipes it through
+  # :keybundle_put_rate_limit (10/min per user, 30/min per IP).
+  test "rate-limit/lockout: repeated PUT /keybundle calls trip a 429 for that account", %{
+    conn: conn
+  } do
+    %{conn: conn} = register_conn(conn)
+
+    # The per-user limit is 10/min (see router.ex :keybundle_put_rate_limit).
+    statuses = for _ <- 1..14, do: put(conn, ~p"/api/keybundle", bundle_params()).status
+
+    assert 200 in statuses
+    assert 429 in statuses
+
+    # Once tripped it stays tripped for the caller (lockout, not a flicker).
+    assert put(conn, ~p"/api/keybundle", bundle_params()).status == 429
+  end
+
   defp register_conn(conn) do
     email = "user-#{System.unique_integer([:positive])}@example.com"
 

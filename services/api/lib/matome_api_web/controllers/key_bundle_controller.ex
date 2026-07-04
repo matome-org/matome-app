@@ -3,6 +3,8 @@ defmodule MatomeApiWeb.KeyBundleController do
 
   alias MatomeApi.Auth
 
+  import MatomeApiWeb.ChangesetErrors, only: [errors_on: 1]
+
   # Every field here is an opaque, client-generated blob (see
   # .docs/internal/at-rest-key-flow.md Appendix A). This controller only
   # ever passes them straight through to `MatomeApi.Auth` — it never
@@ -36,13 +38,5 @@ defmodule MatomeApiWeb.KeyBundleController do
       kdf_params: key_bundle.kdf_params,
       updated_at: key_bundle.updated_at
     }
-  end
-
-  defp errors_on(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
-      Enum.reduce(opts, message, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
-    end)
   end
 end

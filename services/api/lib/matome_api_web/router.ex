@@ -60,6 +60,21 @@ defmodule MatomeApiWeb.Router do
       ]
   end
 
+  # okt-audit AUDIT-CORE (task #1865): PUT /keybundle is an authenticated
+  # write, so a stolen/guessed access token still shouldn't get unlimited,
+  # rate-limit-free attempts at overwriting the bundle — every other
+  # keybundle route (GET here, GET/PUT under /recovery) already carries a
+  # rate-limit pipeline; this closes the one gap left uncovered (DoS-oracle
+  # asymmetry). Same shape/numbers as :keybundle_get_rate_limit.
+  pipeline :keybundle_put_rate_limit do
+    plug MatomeApiWeb.Plugs.RateLimit,
+      scope: :keybundle_put,
+      checks: [
+        {:user, limit: 10, window_ms: 60_000, lockout_ms: 300_000},
+        {:ip, limit: 30, window_ms: 60_000, lockout_ms: 60_000}
+      ]
+  end
+
   get "/health", MatomeApiWeb.HealthController, :show
   get "/openapi", OpenApiSpex.Plug.RenderSpec, []
 
@@ -101,9 +116,13 @@ defmodule MatomeApiWeb.Router do
     end
 
     scope "/" do
-      pipe_through :auth
+      pipe_through [:auth, :keybundle_put_rate_limit]
 
       put "/keybundle", KeyBundleController, :upsert
+    end
+
+    scope "/" do
+      pipe_through :auth
 
       get "/spaces/search", WorkspaceController, :search
       resources "/spaces", WorkspaceController, except: [:new, :edit]

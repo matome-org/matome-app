@@ -3,6 +3,8 @@ defmodule MatomeApiWeb.AuthController do
 
   alias MatomeApi.Auth
 
+  import MatomeApiWeb.ChangesetErrors, only: [errors_on: 1]
+
   def register(conn, params) do
     case Auth.register_user(params) do
       {:ok, auth} ->
@@ -103,12 +105,4 @@ defmodule MatomeApiWeb.AuthController do
   end
 
   defp user_response(user), do: %{id: user.id, email: user.email}
-
-  defp errors_on(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
-      Enum.reduce(opts, message, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
-    end)
-  end
 end

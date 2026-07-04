@@ -13,6 +13,11 @@ defmodule MatomeApi.Application do
       {Oban, Application.fetch_env!(:matome_api, Oban)},
       {DNSCluster, query: Application.get_env(:matome_api, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: MatomeApi.PubSub},
+      # Must start before MatomeApi.RateLimiter — it's that GenServer's ETS
+      # `heir:` (see MatomeApi.RateLimiter.TableHeir and rate_limiter.ex),
+      # so it needs to already be registered when RateLimiter's `init/1`
+      # creates the table.
+      MatomeApi.RateLimiter.TableHeir,
       MatomeApi.RateLimiter,
       # Start a worker by calling: MatomeApi.Worker.start_link(arg)
       # {MatomeApi.Worker, arg},

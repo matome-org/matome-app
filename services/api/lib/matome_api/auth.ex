@@ -36,7 +36,18 @@ defmodule MatomeApi.Auth do
       user && Argon2.verify_pass(credential || "", user.password_hash) ->
         with_tokens({:ok, user})
 
+      user ->
+        {:error, :invalid_credentials}
+
       true ->
+        # okt-audit AUDIT-CORE (task #1865): no account for this email, so
+        # there's no `password_hash` to verify against — but skipping the
+        # Argon2 call entirely makes this branch return far faster than the
+        # "wrong password for a real account" branch above, and that timing
+        # gap is itself a user-enumeration oracle. `Argon2.no_user_verify/0`
+        # runs the same hash work against a fixed dummy hash so both
+        # branches take comparable time.
+        Argon2.no_user_verify()
         {:error, :invalid_credentials}
     end
   end
