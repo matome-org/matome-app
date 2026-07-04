@@ -142,6 +142,20 @@ class RecoveryRepository {
       );
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
+    } on RecoveryBundleFormatException catch (error) {
+      // Normalize to this method's ApiException contract (okt-audit info
+      // follow-up, #1866): `RecoveryKeyBundle.fromJson` now throws EXPLICITLY
+      // on a malformed 200 body instead of silently coercing to ''/{} — but
+      // every OTHER failure branch here surfaces as [ApiException], so a
+      // caller pattern-matching on that type (the convention this repo's API
+      // layer follows) must see the same type here too. `error.toString()`
+      // (which names the specific malformed field) is preserved in the
+      // message for diagnosability.
+      throw ApiException(
+        'The recovery data returned by the server was malformed: $error',
+        statusCode: 200,
+        code: 'malformed_response',
+      );
     }
   }
 

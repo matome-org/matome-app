@@ -14,6 +14,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
+import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/features/auth/recovery_repository.dart';
 
 void main() {
@@ -66,6 +67,28 @@ void main() {
     expect(
       () => repo.fetchRecoveryBundle(resetToken: 'reset-tok-404'),
       throwsA(isA<Exception>()),
+    );
+  });
+
+  test(
+      'fetchRecoveryBundle surfaces a malformed 200 key_bundle as an '
+      'ApiException (okt-audit info follow-up #1866) — RecoveryKeyBundle.'
+      'fromJson\'s RecoveryBundleFormatException must NOT leak past this '
+      'method\'s established ApiException contract', () async {
+    adapter.onGet(
+      '/api/keybundle/recovery',
+      (server) => server.reply(200, {
+        'key_bundle': {
+          // Missing every required field.
+          'updated_at': '2026-01-01T00:00:00Z',
+        },
+      }),
+      headers: {'authorization': 'Bearer reset-tok-malformed'},
+    );
+
+    await expectLater(
+      () => repo.fetchRecoveryBundle(resetToken: 'reset-tok-malformed'),
+      throwsA(isA<ApiException>()),
     );
   });
 

@@ -224,6 +224,13 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// [resolvePlaybackPath] to decrypt to a private scratch file BEFORE the
   /// player ever opens it. A null `wrappedFek` is today's exact behavior,
   /// unchanged: the raw path is handed straight to the player.
+  ///
+  /// A decrypt failure (tampered ciphertext, wrong/missing DEK, malformed
+  /// `wrappedFek`, ...) is caught here rather than left to propagate out of
+  /// [load] — every OTHER failure branch in this function degrades to a
+  /// fallback source instead of throwing, and `load()` has no catch around
+  /// this call, so an uncaught exception here would strand the controller at
+  /// `isLoading: true` forever with no recovery signal.
   Future<AudioSource> _resolveAudioSource(RecordingRow row) async {
     final path = row.audioFilePath;
     if (path.isNotEmpty && _isLocalPath(path) && File(path).existsSync()) {
@@ -231,14 +238,25 @@ class DetailsController extends StateNotifier<DetailsState> {
       if (wrappedFek == null) {
         return AudioSource(AudioSourceKind.localFile, path);
       }
-      final resolvedPath = await resolvePlaybackPath(
-        recordingId: row.id,
-        sourcePath: path,
-        wrappedFekBase64: wrappedFek,
-        dekSource: _mediaDekSource,
-        scratchDirSource: _playbackScratchDirSource,
-      );
-      return AudioSource(AudioSourceKind.localFile, resolvedPath);
+      try {
+        final resolvedPath = await resolvePlaybackPath(
+          recordingId: row.id,
+          sourcePath: path,
+          wrappedFekBase64: wrappedFek,
+          dekSource: _mediaDekSource,
+          scratchDirSource: _playbackScratchDirSource,
+        );
+        return AudioSource(AudioSourceKind.localFile, resolvedPath);
+      } catch (e, st) {
+        // Never let this crash `load()` — fall through to the remote-URL
+        // attempt below, same as any other "local file not usable" case.
+        AppLog.error(
+          LogCat.error,
+          'details resolve audio decrypt failed id=${row.id}',
+          e,
+          st,
+        );
+      }
     }
     // Read coreId off the row being resolved (state.row isn't published yet at
     // this point in load()). A local-only row (coreId null) has no remote URL.

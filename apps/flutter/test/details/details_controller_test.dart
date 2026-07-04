@@ -435,4 +435,81 @@ void main() {
     expect(await File(resolvedPath).readAsBytes(), plaintext,
         reason: 'the resolved file is the real decrypted plaintext');
   });
+
+  test(
+      '#1866 regression: a decrypt failure on a wrappedFek row does NOT '
+      'crash load() and strand the controller at isLoading forever — it '
+      'degrades to a fallback source, like every other resolution failure '
+      'in this function', () async {
+    final tmp = await Directory.systemTemp.createTemp('details_media_read_');
+    addTearDown(() async {
+      if (await tmp.exists()) await tmp.delete(recursive: true);
+    });
+
+    // A row whose wrappedFek does not actually match the DEK the injected
+    // dekSource hands back — decryption will fail (AEAD auth error) exactly
+    // like a tampered/foreign ciphertext or a wrong/rotated DEK would.
+    final dek = Dek.generate();
+    final wrongDek = Dek.generate();
+    final ciphertextFile = File('${tmp.path}/import_bad.enc');
+    final result = await encryptFileToFile(
+      source: File('${tmp.path}/plain.bin')
+        ..writeAsBytesSync(Uint8List.fromList([1, 2, 3, 4])),
+      destination: ciphertextFile,
+      dek: dek,
+    );
+
+    const localId = 'rec_local_details-media-decrypt-fail';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Encrypted capture',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: ciphertextFile.path,
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('done'),
+        wrappedFek: Value(result.wrappedFek.toBase64()),
+      ),
+    );
+
+    // No Core endpoints mocked: a local-only row (coreId null) attempts no
+    // remote fallback, so this also proves the catch doesn't accidentally
+    // trigger an unexpected Core call.
+    final dio = Dio(BaseOptions(
+      baseUrl: 'http://localhost:4000',
+      validateStatus: (s) => s != null && s < 500,
+    ));
+    DioAdapter(dio: dio);
+    final repo = RecordingsRepository(
+      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+    );
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(repo),
+    ]);
+    addTearDown(container.dispose);
+
+    final controllerProvider = Provider<DetailsController>(
+      (ref) => DetailsController(
+        ref,
+        localId,
+        awaitResult: ({required recording, required poll, required ref}) async =>
+            const RecordingResult.done(null),
+        mediaDekSource: () async => Dek(Uint8List.fromList(wrongDek.bytes)),
+        playbackScratchDirSource: () async =>
+            Directory('${tmp.path}/scratch'),
+      ),
+    );
+    final controller = container.read(controllerProvider);
+    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+
+    expect(controller.state.isLoading, isFalse,
+        reason: 'load() must settle, not hang, when decrypt throws');
+    expect(controller.state.notFound, isFalse);
+    expect(controller.state.audioSource.kind, AudioSourceKind.none,
+        reason: 'no usable source — degrades cleanly instead of crashing');
+  });
 }
