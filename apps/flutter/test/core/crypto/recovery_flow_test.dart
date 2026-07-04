@@ -127,5 +127,47 @@ void main() {
       final recovered = await backend.unwrapDek(enrollment.wrappedDekRecovery);
       expect(recovered.bytes, dek.bytes);
     });
+
+    test(
+        'wipes the recovered DEK on the throw path — a later step failing '
+        'AFTER the recovery-code unwrap already succeeded must not leave '
+        'the DEK live with no reachable owner (okt-audit B3 info '
+        'follow-up)', () async {
+      final dek = Dek.generate();
+      expect(dek.bytes.any((b) => b != 0), isTrue); // sanity: CSPRNG
+      final enrollment = await enrollRecovery(dek: dek);
+
+      Dek? capturedDek;
+      Future<void> injectedLaterStepFailure(Dek recoveredDek) async {
+        capturedDek = recoveredDek;
+        throw StateError('simulated failure in a step after the DEK was '
+            'already recovered');
+      }
+
+      await expectLater(
+        resetPasswordWithRecoveryCode(
+          enteredCode: enrollment.code,
+          saltRec: enrollment.saltRec,
+          wrappedDekRecovery: enrollment.wrappedDekRecovery,
+          newPassword: 'irrelevant password',
+          debugFailAfterRecoveryUnwrap: injectedLaterStepFailure,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(
+        capturedDek,
+        isNotNull,
+        reason: 'the injected hook must have run with the recovered DEK',
+      );
+      expect(
+        capturedDek!.bytes.every((b) => b == 0),
+        isTrue,
+        reason:
+            'a later-step failure must wipe the already-recovered DEK — a '
+            'non-zero byte here means it was left live with no reachable '
+            'owner after the throw',
+      );
+    });
   });
 }

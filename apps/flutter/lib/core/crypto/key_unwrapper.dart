@@ -6,13 +6,23 @@
 // That whole path is byte-identical on every platform; the ONLY thing that
 // varies is *where the KEK comes from*.
 //
-// INVARIANT (zero per-platform fork of the unwrap logic): `unwrapDek` below
-// is declared as an *extension* on [KeyUnwrapper], not as a method on the
-// interface. Extension methods cannot be overridden by implementing
-// classes in Dart, so no backend — password, device-keystore, or any
-// future one (recovery, passkey, space-KEK) — can shadow or fork the
-// unwrap core. Only `deriveKEK()` is virtual; that is deliberate and it is
-// the entire surface where backends differ.
+// INVARIANT (zero per-platform fork of the unwrap logic, ENFORCED BY
+// CONVENTION, not by the language): `unwrapDek` below is declared as an
+// *extension* on [KeyUnwrapper], not as a method on the interface. Dart
+// resolves instance methods ahead of extension methods, so this is NOT
+// mechanically impossible to fork — a backend class is free to declare its
+// own `unwrapDek` member, and a caller holding a *concrete-typed* reference
+// to that backend would hit the shadow instead of this shared core (see
+// the "extension invariant" regression test in key_unwrapper_test.dart,
+// which demonstrates exactly that). What IS enforced is narrower: because
+// the [KeyUnwrapper] interface itself never declares `unwrapDek`, any call
+// made through a `KeyUnwrapper`-typed variable resolves to this extension
+// regardless of the runtime backend and regardless of whether that backend
+// also has its own same-named method. The convention every call site in
+// this codebase follows — and must keep following — is to hold backends as
+// `KeyUnwrapper` (not their concrete type) at the point `unwrapDek` is
+// called. Only `deriveKEK()` is virtual; that is deliberate and it is the
+// entire surface where backends differ.
 //
 // #1853 (native SQLCipher open path), #1854 (recovery backend), and #1860
 // (web OPFS store) all consume this interface. This file does not wire into

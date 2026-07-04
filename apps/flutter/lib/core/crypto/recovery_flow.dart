@@ -11,6 +11,8 @@
 // for a platform fork to attach to).
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'argon2id.dart' show deriveArgon2id;
 import 'envelope.dart'
     show PayloadType, WrappedEnvelope, WrapperType, wrapKey;
@@ -119,6 +121,15 @@ Future<RecoveryResetResult> resetPasswordWithRecoveryCode({
   required WrappedEnvelope wrappedDekRecovery,
   required String newPassword,
   Argon2idParams params = Argon2idParams.portableV1,
+  // Test-only fault-injection seam (okt-audit B3 info follow-up): when
+  // non-null, invoked with the just-recovered [dek] right after the
+  // recovery-code unwrap succeeds, before any later step runs. Lets tests
+  // deterministically exercise "a later step throws after the DEK is
+  // already recovered" without needing to break the KDF/wrap primitives
+  // themselves. Must never be set outside test code — mirrors the
+  // `timerFactory`/`dekSource` injection pattern already used in
+  // `dek_session_guard.dart`/`inbox_upload.dart`.
+  @visibleForTesting Future<void> Function(Dek dek)? debugFailAfterRecoveryUnwrap,
 }) async {
   final unwrapper = RecoveryKeyUnwrapper(
     recoveryCode: enteredCode,
@@ -127,34 +138,49 @@ Future<RecoveryResetResult> resetPasswordWithRecoveryCode({
   );
   final dek = await unwrapper.unwrapDek(wrappedDekRecovery);
 
-  final newSaltEnc = secureRandomBytes(kArgon2SaltLen);
-  final newKekBytes = await deriveArgon2id(
-    password: newPassword,
-    salt: newSaltEnc,
-    params: params,
-  );
-  final newKek = Kek(newKekBytes);
-  late final WrappedEnvelope wrappedDekPw;
   try {
-    wrappedDekPw = await wrapKey(
-      plaintext: dek.bytes,
-      wrappingKey: newKek.bytes,
-      payloadType: PayloadType.dek,
-      wrapperType: WrapperType.passwordKek,
+    if (debugFailAfterRecoveryUnwrap != null) {
+      await debugFailAfterRecoveryUnwrap(dek);
+    }
+
+    final newSaltEnc = secureRandomBytes(kArgon2SaltLen);
+    final newKekBytes = await deriveArgon2id(
+      password: newPassword,
+      salt: newSaltEnc,
+      params: params,
     );
-  } finally {
-    newKek.wipe();
+    final newKek = Kek(newKekBytes);
+    late final WrappedEnvelope wrappedDekPw;
+    try {
+      wrappedDekPw = await wrapKey(
+        plaintext: dek.bytes,
+        wrappingKey: newKek.bytes,
+        payloadType: PayloadType.dek,
+        wrapperType: WrapperType.passwordKek,
+      );
+    } finally {
+      newKek.wipe();
+    }
+
+    // Single-use / rotation: a brand-new code + salt_rec replace the one
+    // the user just spent, so it can never be replayed against the
+    // server's (now-updated) wrapped_dek_recovery.
+    final rotatedRecovery = await enrollRecovery(dek: dek, params: params);
+
+    return RecoveryResetResult(
+      dek: dek,
+      saltEnc: newSaltEnc,
+      wrappedDekPw: wrappedDekPw,
+      rotatedRecovery: rotatedRecovery,
+    );
+  } catch (_) {
+    // The recovered DEK must not be left live with no reachable owner if
+    // ANY step after the recovery-unwrap fails (okt-audit B3 info
+    // follow-up: the old code only wiped intermediate KEKs in `finally`,
+    // never this DEK). On the success path above, `dek` is returned live
+    // to the caller (who needs it to open the store) — it is deliberately
+    // NOT wiped there.
+    dek.wipe();
+    rethrow;
   }
-
-  // Single-use / rotation: a brand-new code + salt_rec replace the one the
-  // user just spent, so it can never be replayed against the server's
-  // (now-updated) wrapped_dek_recovery.
-  final rotatedRecovery = await enrollRecovery(dek: dek, params: params);
-
-  return RecoveryResetResult(
-    dek: dek,
-    saltEnc: newSaltEnc,
-    wrappedDekPw: wrappedDekPw,
-    rotatedRecovery: rotatedRecovery,
-  );
 }

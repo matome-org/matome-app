@@ -28,6 +28,56 @@ void main() {
 
       guard.dispose();
     });
+
+    test(
+        'wipes the PREVIOUSLY-live DEK before swapping in a new one when '
+        'adopt() is called again without an intervening lock/logout '
+        '(okt-audit B3 info follow-up)', () {
+      final guard = DekSessionGuard();
+      final firstDek = Dek.generate();
+      expect(firstDek.bytes.any((b) => b != 0), isTrue); // sanity
+
+      guard.adopt(firstDek);
+      expect(guard.current, same(firstDek));
+
+      final secondDek = Dek.generate();
+      guard.adopt(secondDek);
+
+      // The new key is live and untouched...
+      expect(guard.current, same(secondDek));
+      expect(guard.isUnlocked, isTrue);
+      expect(secondDek.bytes.any((b) => b != 0), isTrue);
+      // ...but the OLD reference — which nothing else can reach anymore —
+      // must have been zeroed rather than left live in the heap.
+      expect(
+        firstDek.bytes.every((b) => b == 0),
+        isTrue,
+        reason:
+            'adopt() must wipe a previously-live DEK before replacing it; '
+            'a non-zero byte here means the old key was silently dropped '
+            'instead of wiped',
+      );
+
+      guard.dispose();
+    });
+
+    test('adopting the SAME instance again is a harmless no-op wipe-wise',
+        () {
+      final guard = DekSessionGuard();
+      final dek = Dek.generate();
+      guard.adopt(dek);
+
+      guard.adopt(dek);
+
+      expect(guard.current, same(dek));
+      expect(
+        dek.bytes.any((b) => b != 0),
+        isTrue,
+        reason: 're-adopting the identical instance must not wipe it',
+      );
+
+      guard.dispose();
+    });
   });
 
   group('DekSessionGuard.lock', () {

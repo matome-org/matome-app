@@ -78,7 +78,17 @@ class DekSessionGuard {
 
   /// Adopts [dek] as the live session key (e.g. the result of a successful
   /// cold-start/login unwrap) and (re)starts the idle-timeout clock.
+  ///
+  /// If a DEK is already live (e.g. a re-unlock/re-login flow adopts a new
+  /// key without an intervening [lock]/[logout]), the previous DEK's bytes
+  /// are wiped in place before the reference is replaced (okt-audit B3
+  /// info follow-up) — otherwise the old plaintext key would keep sitting
+  /// live in the heap with no reachable reference to ever wipe it.
   void adopt(Dek dek) {
+    final previous = _dek;
+    if (previous != null && !identical(previous, dek)) {
+      previous.wipe();
+    }
     _dek = dek;
     _restartIdleTimer();
   }
