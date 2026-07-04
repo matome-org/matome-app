@@ -422,9 +422,9 @@ Future<Uint8List> decryptDbImage({
     availableCipherBytes: ciphertext.length - kDbImageHeaderLength,
   );
 
-  final Uint8List fekBytes;
+  final Uint8List unwrappedFekBytes;
   try {
-    fekBytes = await unwrapKey(
+    unwrappedFekBytes = await unwrapKey(
       wrapped: WrappedEnvelope(wrappedFekBytes),
       wrappingKey: dek,
     );
@@ -435,68 +435,76 @@ Future<Uint8List> decryptDbImage({
     // envelope.dart's exception type across this module's boundary.
     throw const DbImageTamperException(-1);
   }
-  final secretKey = SecretKey(fekBytes);
+  // Wrapped in a Fek (not used bare) so it's wiped in the `finally` below —
+  // mirrors media_cipher.dart's decrypt-side posture: the unwrapped key is
+  // only ever live for the duration of this call.
+  final fek = Fek(unwrappedFekBytes);
+  final secretKey = SecretKey(fek.bytes);
 
-  final out = Uint8List(plaintextLength);
+  try {
+    final out = Uint8List(plaintextLength);
 
-  var readOffset = kDbImageHeaderLength;
-  var writeOffset = 0;
-  var chunkIndex = 0;
-  while (writeOffset < plaintextLength) {
-    final remainingPlaintext = plaintextLength - writeOffset;
-    final thisChunkPlaintextLen =
-        remainingPlaintext < chunkSize ? remainingPlaintext : chunkSize;
-    final framedLen = thisChunkPlaintextLen + _kTagLength;
+    var readOffset = kDbImageHeaderLength;
+    var writeOffset = 0;
+    var chunkIndex = 0;
+    while (writeOffset < plaintextLength) {
+      final remainingPlaintext = plaintextLength - writeOffset;
+      final thisChunkPlaintextLen =
+          remainingPlaintext < chunkSize ? remainingPlaintext : chunkSize;
+      final framedLen = thisChunkPlaintextLen + _kTagLength;
 
-    if (readOffset + framedLen > ciphertext.length) {
-      throw DbImageTamperException(chunkIndex);
-    }
+      if (readOffset + framedLen > ciphertext.length) {
+        throw DbImageTamperException(chunkIndex);
+      }
 
-    final chunkCiphertext =
-        ciphertext.sublist(readOffset, readOffset + thisChunkPlaintextLen);
-    final tag = ciphertext.sublist(
-      readOffset + thisChunkPlaintextLen,
-      readOffset + framedLen,
-    );
-
-    final chunkIndexBytes = _beBytes(chunkIndex, _kChunkIndexLength);
-    final nonce = Uint8List(_kNonceLength)
-      ..setRange(0, _kNoncePrefixLength, noncePrefix)
-      ..setRange(_kNoncePrefixLength, _kNonceLength, chunkIndexBytes);
-
-    final aad = _aadFor(
-      chunkIndex,
-      noncePrefix: noncePrefix,
-      chunkSize: chunkSize,
-      plaintextLength: plaintextLength,
-    );
-
-    final box = SecretBox(chunkCiphertext, nonce: nonce, mac: Mac(tag));
-
-    final List<int> chunkPlaintext;
-    try {
-      chunkPlaintext = await _aesGcm.decrypt(
-        box,
-        secretKey: secretKey,
-        aad: aad,
+      final chunkCiphertext =
+          ciphertext.sublist(readOffset, readOffset + thisChunkPlaintextLen);
+      final tag = ciphertext.sublist(
+        readOffset + thisChunkPlaintextLen,
+        readOffset + framedLen,
       );
-    } on SecretBoxAuthenticationError {
+
+      final chunkIndexBytes = _beBytes(chunkIndex, _kChunkIndexLength);
+      final nonce = Uint8List(_kNonceLength)
+        ..setRange(0, _kNoncePrefixLength, noncePrefix)
+        ..setRange(_kNoncePrefixLength, _kNonceLength, chunkIndexBytes);
+
+      final aad = _aadFor(
+        chunkIndex,
+        noncePrefix: noncePrefix,
+        chunkSize: chunkSize,
+        plaintextLength: plaintextLength,
+      );
+
+      final box = SecretBox(chunkCiphertext, nonce: nonce, mac: Mac(tag));
+
+      final List<int> chunkPlaintext;
+      try {
+        chunkPlaintext = await _aesGcm.decrypt(
+          box,
+          secretKey: secretKey,
+          aad: aad,
+        );
+      } on SecretBoxAuthenticationError {
+        throw DbImageTamperException(chunkIndex);
+      }
+
+      out.setRange(writeOffset, writeOffset + chunkPlaintext.length, chunkPlaintext);
+
+      readOffset += framedLen;
+      writeOffset += thisChunkPlaintextLen;
+      chunkIndex++;
+    }
+
+    // Trailing garbage after the last expected chunk is itself a form of
+    // tampering (an attacker appending extra bytes) — reject rather than
+    // silently ignore.
+    if (readOffset != ciphertext.length) {
       throw DbImageTamperException(chunkIndex);
     }
 
-    out.setRange(writeOffset, writeOffset + chunkPlaintext.length, chunkPlaintext);
-
-    readOffset += framedLen;
-    writeOffset += thisChunkPlaintextLen;
-    chunkIndex++;
+    return out;
+  } finally {
+    fek.wipe();
   }
-
-  // Trailing garbage after the last expected chunk is itself a form of
-  // tampering (an attacker appending extra bytes) — reject rather than
-  // silently ignore.
-  if (readOffset != ciphertext.length) {
-    throw DbImageTamperException(chunkIndex);
-  }
-
-  return out;
 }
