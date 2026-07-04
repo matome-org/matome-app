@@ -569,6 +569,71 @@ defmodule MatomeApiWeb.MatomeComponents do
     do:
       ~s(<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5 15.4 17.5M15.4 6.5 8.6 10.5"/>)
 
+  # --- Composite-tier glyphs (W2 #1870) — additive; W1 clauses above unchanged.
+  defp icon_paths("arrow_upward"), do: ~s(<path d="M12 19V5M5 12l7-7 7 7"/>)
+  defp icon_paths("arrow_downward"), do: ~s(<path d="M12 5v14M5 12l7 7 7-7"/>)
+  defp icon_paths("unfold_more"), do: ~s(<path d="M8 9l4-4 4 4M8 15l4 4 4-4"/>)
+
+  defp icon_paths("more_horiz"),
+    do: ~s(<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>)
+
+  defp icon_paths("menu"), do: ~s(<path d="M4 6h16M4 12h16M4 18h16"/>)
+  defp icon_paths("menu_open"), do: ~s(<path d="M4 6h16M4 12h10M4 18h16M20 9l-3 3 3 3"/>)
+  defp icon_paths("chevron_right"), do: ~s(<path d="M9 6l6 6-6 6"/>)
+  defp icon_paths("expand_more"), do: ~s(<path d="M6 9l6 6 6-6"/>)
+
+  defp icon_paths("settings"),
+    do:
+      ~s(<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>)
+
+  defp icon_paths("schedule"), do: ~s(<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>)
+
+  defp icon_paths("mic"),
+    do: ~s(<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/>)
+
+  defp icon_paths("image"),
+    do:
+      ~s(<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5L5 20"/>)
+
+  defp icon_paths("description"),
+    do:
+      ~s(<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4M9 13h6M9 17h4"/>)
+
+  defp icon_paths("video"),
+    do: ~s(<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/>)
+
+  defp icon_paths("play"), do: ~s(<path d="M8 5v14l11-7z"/>)
+
+  defp icon_paths("group"),
+    do:
+      ~s(<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/>)
+
+  defp icon_paths("warning"), do: ~s(<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/>)
+  defp icon_paths("refresh"), do: ~s(<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>)
+  defp icon_paths("mail"), do: ~s(<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>)
+
+  defp icon_paths("phone"),
+    do:
+      ~s(<path d="M4 4h4l2 5-3 2a12 12 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2Z"/>)
+
+  defp icon_paths("business"),
+    do:
+      ~s(<path d="M3 21h18M6 21V7l6-4 6 4v14"/><path d="M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h.01M15 17h.01"/>)
+
+  defp icon_paths("download"), do: ~s(<path d="M12 4v10m-4-4 4 4 4-4M5 20h14"/>)
+  defp icon_paths("edit"), do: ~s(<path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13 5l4 4"/>)
+
+  defp icon_paths("archive"),
+    do:
+      ~s(<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>)
+
+  defp icon_paths("delete"),
+    do: ~s(<path d="M4 7h16M9 7V4h6v3M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/>)
+
+  defp icon_paths("drive_file_move"),
+    do:
+      ~s(<path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M10 13h5m-2-2 2 2-2 2"/>)
+
   defp icon_paths(_other), do: ~s(<circle cx="12" cy="12" r="9"/>)
 
   # ─── Private helpers ────────────────────────────────────────────────────────

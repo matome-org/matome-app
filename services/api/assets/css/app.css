@@ -6,6 +6,7 @@
 @import "tailwindcss";
 @import "./foundations.css";
 @import "./components.css";
+@import "./composites.css";
 
 /* Scan the server-rendered templates for utility classes. */
 @source "../../lib/matome_api_web";
