@@ -26,6 +26,8 @@ defmodule MatomeApiWeb do
       # Import common connection and controller functions to use in pipelines
       import Plug.Conn
       import Phoenix.Controller
+      # `live/3` + `:fetch_live_flash` for the /admin LiveView routes (W0 #1868).
+      import Phoenix.LiveView.Router
     end
   end
 
@@ -41,6 +43,54 @@ defmodule MatomeApiWeb do
         formats: [:json]
 
       import Plug.Conn
+
+      unquote(verified_routes())
+    end
+  end
+
+  @doc """
+  HTML controllers/components for the server-rendered /admin back-office
+  (W0 #1868). The JSON API surface above is untouched.
+  """
+  def html do
+    quote do
+      use Phoenix.Component
+
+      # Import convenience functions from controllers
+      import Phoenix.Controller,
+        only: [get_csrf_token: 0, view_module: 1, view_template: 1]
+
+      # Include general helpers for rendering HTML
+      unquote(html_helpers())
+    end
+  end
+
+  def live_view do
+    quote do
+      use Phoenix.LiveView,
+        layout: {MatomeApiWeb.Layouts, :app}
+
+      unquote(html_helpers())
+    end
+  end
+
+  def live_component do
+    quote do
+      use Phoenix.LiveComponent
+
+      unquote(html_helpers())
+    end
+  end
+
+  defp html_helpers do
+    quote do
+      # HTML escaping functionality
+      import Phoenix.HTML
+      # Core UI components
+      import MatomeApiWeb.CoreComponents
+
+      # Shortcut for generating JS commands
+      alias Phoenix.LiveView.JS
 
       unquote(verified_routes())
     end

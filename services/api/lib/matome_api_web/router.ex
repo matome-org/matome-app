@@ -5,6 +5,17 @@ defmodule MatomeApiWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # Server-rendered HTML pipeline for the /admin back-office (W0 #1868). The
+  # JSON API pipelines above are untouched — admin is an additive surface.
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {MatomeApiWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
+
   pipeline :auth do
     plug MatomeApiWeb.Plugs.RequireAuth
   end
@@ -153,5 +164,15 @@ defmodule MatomeApiWeb.Router do
     pipe_through [:api, :internal_auth]
 
     post "/jobs/:id/result", InternalJobController, :result
+  end
+
+  # Server-rendered admin back-office (plan p2-core-backoffice, W0 #1868).
+  # Empty shell for now — auth + data views are wired in later waves. Mounted
+  # in all envs (it is harmless static shell); Livebook is intentionally NOT
+  # mounted here (see docs/livebook-threat-model.md).
+  scope "/admin", MatomeApiWeb do
+    pipe_through :browser
+
+    live "/", AdminLive.Index, :index
   end
 end

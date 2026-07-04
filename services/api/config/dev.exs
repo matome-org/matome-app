@@ -29,7 +29,21 @@ config :matome_api, MatomeApiWeb.Endpoint,
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "nFz3cPuQd6IVxfg7IFBHkKPj8r51tj+iAjVKzJudHFEClX5a3DG+VHC2fzMWglwg",
-  watchers: []
+  # Rebuild /admin assets on change (W0 #1868). install_and_run skips the
+  # network install when the binaries are already present under _build.
+  watchers: [
+    esbuild: {Esbuild, :install_and_run, [:matome, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:matome, ~w(--watch)]}
+  ]
+
+# Watch static and templates for browser reloading of the /admin LiveView.
+config :matome_api, MatomeApiWeb.Endpoint,
+  live_reload: [
+    patterns: [
+      ~r"priv/static/(?!uploads/).*(js|css|png|jpeg|jpg|gif|svg)$",
+      ~r"lib/matome_api_web/(controllers|live|components)/.*(ex|heex)$"
+    ]
+  ]
 
 # ## SSL Support
 #
