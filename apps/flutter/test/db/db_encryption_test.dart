@@ -199,6 +199,46 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
+  // FlutterSecureKeyStore.deviceKek() — task #1863 (okt-audit SHIP-BLOCKER B2).
+  //
+  // buildDeviceKekSecureStorage() above was DEAD CODE: both production device
+  // -KEK call sites (connection_native.dart's `keyStore ?? FlutterSecureKeyStore()`
+  // default and inbox_upload.dart's `NativeDekProvisioner(FlutterSecureKeyStore())`)
+  // built the BARE `FlutterSecureKeyStore()`, which falls through to
+  // `const FlutterSecureStorage()` — the un-hardened default with
+  // `resetOnError: true`. A transient Android keystore decrypt error would then
+  // silently wipe the device-KEK, and NativeDekProvisioner would mint a brand
+  // new DEK, permanently orphaning the existing SQLCipher DB / media FEKs.
+  //
+  // This asserts the actual PRODUCTION CONSTRUCTION PATH — the single hardened
+  // factory both call sites now use — carries `resetOnError: false`, not just
+  // the free function in isolation (that was already covered above, and was
+  // insufficient: the free function existing didn't mean anything called it).
+  // ---------------------------------------------------------------------------
+  group('FlutterSecureKeyStore.deviceKek (production device-KEK construction '
+      'path)', () {
+    test(
+        'the exact factory constructor connection_native.dart and '
+        'inbox_upload.dart call is backed by hardened storage '
+        '(resetOnError: false)', () {
+      final store = FlutterSecureKeyStore.deviceKek();
+
+      final androidOptions = store.debugStorage.aOptions;
+
+      expect(
+        androidOptions.toMap()['resetOnError'],
+        'false',
+        reason:
+            'FlutterSecureKeyStore.deviceKek() is the ONLY constructor the '
+            'production device-KEK sites should ever call. If this regresses '
+            'to the un-hardened default (resetOnError: true), a transient '
+            'Android keystore error silently wipes the device-KEK and orphans '
+            'the encrypted database — see task #1863 / okt-audit B2.',
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // NativeDekProvisioner — task #1853, plan #131 W3.
   //
   // The DEK source the LIVE native SQLCipher open path (connection_native.dart

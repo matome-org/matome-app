@@ -15,6 +15,7 @@ library;
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../crypto/envelope.dart'
@@ -38,7 +39,27 @@ class FlutterSecureKeyStore implements SecureKeyStore {
   FlutterSecureKeyStore([FlutterSecureStorage? storage])
     : _storage = storage ?? const FlutterSecureStorage();
 
+  /// Hardened device-KEK constructor (task #1863, okt-audit SHIP-BLOCKER B2).
+  ///
+  /// Always backed by [buildDeviceKekSecureStorage] — i.e. `resetOnError:
+  /// false` is enforced regardless of call site. Every PRODUCTION site that
+  /// reads/writes the device-KEK (`connection_native.dart`'s
+  /// [openPlatformConnection] default, `inbox_upload.dart`'s media-DEK
+  /// source) MUST construct through this factory, never the bare default
+  /// constructor above — the bare form falls through to
+  /// `const FlutterSecureStorage()`, whose 10.x default silently WIPES the
+  /// device-KEK on a transient Android keystore decrypt error (see
+  /// [buildDeviceKekSecureStorage]'s doc for the full failure chain).
+  FlutterSecureKeyStore.deviceKek() : this(buildDeviceKekSecureStorage());
+
   final FlutterSecureStorage _storage;
+
+  /// Exposed so tests can assert the PRODUCTION construction path (not just
+  /// the free function in isolation) carries the hardened options — see
+  /// `test/db/db_encryption_test.dart`'s `FlutterSecureKeyStore.deviceKek`
+  /// group.
+  @visibleForTesting
+  FlutterSecureStorage get debugStorage => _storage;
 
   @override
   Future<String?> read(String key) => _storage.read(key: key);
@@ -132,8 +153,8 @@ FlutterSecureStorage buildDeviceKekSecureStorage() =>
 /// (Keychain / Keystore / DPAPI / libsecret), read via [SecureKeyStore] —
 /// never derived from anything the user types. Unwraps `wrapped_dek_device`.
 ///
-/// Construct with a [FlutterSecureKeyStore] built over
-/// [buildDeviceKekSecureStorage] (not the bare default `FlutterSecureStorage`)
+/// Construct with a [FlutterSecureKeyStore.deviceKek] (built over
+/// [buildDeviceKekSecureStorage], not the bare default `FlutterSecureStorage`)
 /// so `resetOnError: false` is enforced. This class only *reads* the
 /// device-KEK — writing it happens at enrollment time, out of scope here
 /// (see #1853/#1854).

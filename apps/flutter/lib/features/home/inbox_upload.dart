@@ -104,7 +104,8 @@ Future<PickedUpload> durableImportCopy(PickedUpload picked) async {
       final durable = await encryptedDurableImportCopy(
         picked,
         dir: dir,
-        dekSource: () => NativeDekProvisioner(FlutterSecureKeyStore()).obtainDek(),
+        dekSource: () =>
+            NativeDekProvisioner(FlutterSecureKeyStore.deviceKek()).obtainDek(),
       );
       AppLog.event(
         LogCat.upload,

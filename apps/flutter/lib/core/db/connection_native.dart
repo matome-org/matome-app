@@ -82,7 +82,7 @@ QueryExecutor openPlatformConnection({SecureKeyStore? keyStore}) {
     );
   }
 
-  final store = keyStore ?? FlutterSecureKeyStore();
+  final store = keyStore ?? FlutterSecureKeyStore.deviceKek();
   // Kept as a LazyDatabase so the async key fetch + file open defer to the
   // first actual use of the connection, matching the unencrypted branch's
   // laziness.
