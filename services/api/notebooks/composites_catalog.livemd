@@ -1,0 +1,584 @@
+# Matome Composite Components — Design-System Catalog (drift guard)
+
+```elixir
+# Kino ships with Livebook; no Mix.install needed.
+alias Kino.HTML
+```
+
+## What this is
+
+A **dev-only** visual catalog of the Matome **composite-tier** components
+(W2 #1870) — the server-side HEEx port of the Flutter `flutter_widgetbook`
+composite tier (data table, nav shell, list rows, detail panel, contact
+detail, file card). It is the sibling of `components_catalog.livemd` (base
+atoms) and `foundations_catalog.livemd` (raw tokens), and renders each
+composite's variants in **Light + Dark** so the `/admin` back-office can be
+eyeballed against the Flutter client.
+
+Every composite is **assembled from the W1 base atoms** — this catalog mirrors
+the SAME semantic classes the HEEx composites produce, over the SAME three
+stylesheets (`foundations.css` + `components.css` + `composites.css`).
+
+**Drift-guard chain:**
+
+```
+apps/flutter/lib/{ui,features}/*.dart                              ← Flutter SSOT
+        │
+        ▼
+services/api/lib/matome_api_web/components/matome_composites.ex     ← HEEx composites
+services/api/assets/css/composites.css                             ← token-only layout
+        │
+        ▼
+THIS notebook  (injects the 3 stylesheets, renders each variant)
+        │
+        ▼
+apps/flutter_widgetbook  ([Screens]/[Molecules] composite stories)  ← Flutter's live render
+```
+
+> ### Threat model (read before running)
+>
+> Livebook executes **arbitrary Elixir** with full OS-user privileges — the
+> keys-to-the-kingdom by design. It is therefore **never a dependency of the
+> app and never mounted** by the Phoenix router/endpoint. Run it standalone,
+> dev-only: `livebook server` then open this file. See
+> `docs/livebook-threat-model.md`.
+
+> **Why this notebook mirrors the class markup (not the compiled components):**
+> the HEEx function components need the full app compiled + running, which the
+> standalone Livebook does not load. So — exactly like the sibling catalogs —
+> this one emits the SAME semantic classes the composites produce. The class
+> contract is the shared drift surface; accepted deviations live in
+> `docs/design-system-reconciliation.md`. The inline-SVG icon set below is
+> duplicated from `matome_components.ex` `icon_paths/1` and must be kept in
+> sync when glyphs change.
+
+## Load the token + component + composite stylesheets
+
+```elixir
+# __DIR__ is services/api/notebooks; the CSS lives one level up under assets.
+css_dir = Path.expand("../assets/css", __DIR__)
+css =
+  ["foundations.css", "components.css", "composites.css"]
+  |> Enum.map_join("\n", &File.read!(Path.join(css_dir, &1)))
+
+IO.puts("Loaded #{byte_size(css)} bytes of tokens + component + composite CSS")
+```
+
+## Helpers — icons + the Light/Dark stage
+
+```elixir
+# Mirror of matome_components.ex `icon_paths/1` (base + W2 composite glyphs).
+# Keep in sync when glyphs change.
+icon = fn name, klass ->
+  paths =
+    case name do
+      "check" -> ~s(<path d="M20 6 9 17l-5-5"/>)
+      "close" -> ~s(<path d="M18 6 6 18M6 6l12 12"/>)
+      "error" -> ~s(<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>)
+      "add" -> ~s(<path d="M12 5v14M5 12h14"/>)
+      "cloud_done" ->
+        ~s(<path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 1 1 17 18Z"/><path d="m9 13 2 2 4-4"/>)
+      "cloud_sync" ->
+        ~s(<path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 1 1 17 18Z"/><path d="M10 12a2.5 2.5 0 0 1 4-1M14 15a2.5 2.5 0 0 1-4 1"/>)
+      "cloud_off" ->
+        ~s(<path d="M7 18a4 4 0 0 1-.5-8 5 5 0 0 1 7-3.5M17 18a3.5 3.5 0 0 0 1-6.8"/><path d="M3 3l18 18"/>)
+      "folder" ->
+        ~s(<path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>)
+      "inbox" ->
+        ~s(<path d="M4 13h4l2 3h4l2-3h4"/><path d="M4 13 6 5h12l2 8v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>)
+      "workspaces" ->
+        ~s(<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><circle cx="12" cy="16" r="3"/>)
+      "person" -> ~s(<circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/>)
+      "person_add" ->
+        ~s(<circle cx="10" cy="8" r="4"/><path d="M3 21a7 7 0 0 1 12-5"/><path d="M18 14v6M15 17h6"/>)
+      "file" ->
+        ~s(<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/>)
+      "share" ->
+        ~s(<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5 15.4 17.5M15.4 6.5 8.6 10.5"/>)
+      "arrow_downward" -> ~s(<path d="M12 5v14M5 12l7 7 7-7"/>)
+      "unfold_more" -> ~s(<path d="M8 9l4-4 4 4M8 15l4 4 4-4"/>)
+      "more_horiz" ->
+        ~s(<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>)
+      "menu" -> ~s(<path d="M4 6h16M4 12h16M4 18h16"/>)
+      "menu_open" -> ~s(<path d="M4 6h16M4 12h10M4 18h16M20 9l-3 3 3 3"/>)
+      "chevron_right" -> ~s(<path d="M9 6l6 6-6 6"/>)
+      "expand_more" -> ~s(<path d="M6 9l6 6 6-6"/>)
+      "settings" ->
+        ~s(<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>)
+      "schedule" -> ~s(<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>)
+      "mic" -> ~s(<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/>)
+      "image" ->
+        ~s(<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5L5 20"/>)
+      "description" ->
+        ~s(<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4M9 13h6M9 17h4"/>)
+      "group" ->
+        ~s(<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/>)
+      "warning" -> ~s(<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/>)
+      "refresh" -> ~s(<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>)
+      "mail" -> ~s(<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>)
+      "phone" ->
+        ~s(<path d="M4 4h4l2 5-3 2a12 12 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2Z"/>)
+      "business" ->
+        ~s(<path d="M3 21h18M6 21V7l6-4 6 4v14"/><path d="M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h.01M15 17h.01"/>)
+      _ -> ~s(<circle cx="12" cy="12" r="9"/>)
+    end
+
+  ~s(<svg class="matome-icon #{klass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" ) <>
+    ~s(stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">#{paths}</svg>)
+end
+
+# Render one demo `body` (HTML string) on both a Light and a Dark themed stage.
+stage = fn css, body ->
+  panel = fn label, theme_class ->
+    """
+    <section class="#{theme_class}" style="flex:1;min-width:0;background:var(--matome-background);
+             padding:var(--matome-space-lg);border-radius:var(--matome-radius-lg)">
+      <h4 style="margin:0 0 var(--matome-space-md);font:600 var(--matome-type-label-size)/1.25
+          var(--matome-font-body);letter-spacing:var(--matome-type-label-tracking);
+          text-transform:uppercase;color:var(--matome-text-muted)">#{label}</h4>
+      #{body}
+    </section>
+    """
+  end
+
+  HTML.new("""
+  <style>#{css}</style>
+  <div style="display:flex;gap:var(--matome-space-md);align-items:flex-start">
+    #{panel.("Light", "")}
+    #{panel.("Dark", "dark")}
+  </div>
+  """)
+end
+
+# Reusable markup fragments (mirror the composite HEEx output).
+sync = fn state ->
+  {ico, lbl, mod} =
+    case state do
+      "cloud" -> {"cloud_done", "Cloud", "cloud"}
+      "syncing" -> {"cloud_sync", "Syncing", "syncing"}
+      "on_device" -> {"cloud_off", "On device", "on-device"}
+    end
+
+  ~s(<span class="matome-sync-chip matome-sync-chip--#{mod}">#{icon.(ico, "matome-sync-chip__icon")}<span>#{lbl}</span></span>)
+end
+```
+
+## Data table — MatomeTable / FilesTable
+
+A selectable, sortable table with a bulk bar, a fixed-geometry header, an
+active-row tint, and an empty state. The primary column is flexible; secondary
+columns are fixed-width. Built from the base checkbox + icon button atoms.
+
+```elixir
+row = fn checked, active, title, summary, when_txt, items, people, space, sync_state ->
+  sel = if checked, do: " matome-table__row--selected", else: ""
+  act = if active, do: " matome-table__row--active", else: ""
+  chk = if checked, do: "checked", else: ""
+  summ_cls = if summary == "", do: "matome-table__summary matome-table__summary--empty", else: "matome-table__summary"
+  summ_txt = if summary == "", do: "No summary yet", else: summary
+
+  """
+  <div class="matome-table__row#{sel}#{act}">
+    <span class="matome-table__check"><input type="checkbox" class="matome-checkbox__box" #{chk}></span>
+    <div class="matome-table__cell--flex">
+      <div class="matome-table__title">#{title}</div>
+      <div class="#{summ_cls}">#{summ_txt}</div>
+    </div>
+    <div class="matome-table__cell--when matome-table__cell--center"><span class="matome-table__text">#{when_txt}</span></div>
+    <div class="matome-table__cell--items matome-table__cell--center">
+      <span class="matome-table__count-mix">
+        <span class="matome-table__count">#{icon.("mic", "")}<span>#{items}</span></span>
+      </span>
+    </div>
+    <div class="matome-table__cell--people matome-table__cell--center">
+      <span class="matome-table__count">#{icon.("group", "")}<span>#{people}</span></span>
+    </div>
+    <div class="matome-table__cell--space"><span class="matome-chip matome-chip--space">#{icon.("folder", "")}<span class="matome-chip__label">#{space}</span></span></div>
+    <div class="matome-table__cell--sync">#{sync.(sync_state)}</div>
+    <div class="matome-table__cell--actions"><button class="matome-icon-btn" aria-label="Row actions">#{icon.("more_horiz", "")}</button></div>
+  </div>
+  """
+end
+
+sort_head = fn label, active, dir ->
+  cls = if active, do: "matome-table__sort matome-table__sort--active", else: "matome-table__sort"
+  ico = if active, do: icon.("arrow_downward", "matome-table__sort-icon"), else: icon.("unfold_more", "matome-table__sort-icon")
+  ~s(<button class="#{cls}"><span>#{label}</span>#{ico}</button>)
+end
+
+table = """
+<div class="matome-table">
+  <div class="matome-table__bulkbar">
+    <button class="matome-icon-btn" aria-label="Clear selection">#{icon.("close", "")}</button>
+    <span class="matome-table__bulkbar-count">1 selected</span>
+    <span class="matome-table__bulkbar-actions">
+      <button class="matome-btn matome-btn--text">#{icon.("drive_file_move", "")}<span>Move</span></button>
+      <button class="matome-btn matome-btn--text">Archive</button>
+    </span>
+  </div>
+  <div class="matome-table__head">
+    <span class="matome-table__check"><input type="checkbox" class="matome-checkbox__box"></span>
+    <div class="matome-table__cell--flex">#{sort_head.("Title", false, "asc")}</div>
+    <div class="matome-table__cell--when matome-table__cell--center">#{sort_head.("When", true, "desc")}</div>
+    <div class="matome-table__cell--items matome-table__cell--center">#{sort_head.("Items", false, "asc")}</div>
+    <div class="matome-table__cell--people matome-table__cell--center">#{sort_head.("People", false, "asc")}</div>
+    <div class="matome-table__cell--space"><span class="matome-table__collabel">Space</span></div>
+    <div class="matome-table__cell--sync"><span class="matome-table__collabel">Sync</span></div>
+    <div class="matome-table__cell--actions"></div>
+  </div>
+  #{row.(true, false, "Client X — weekly sync", "Recap + action items", "Mon", 3, 2, "Marketing", "cloud")}
+  #{row.(false, true, "Design review", "", "Tue", 1, 4, "Product", "syncing")}
+  #{row.(false, false, "Onboarding notes", "Welcome flow", "Wed", 2, 1, "Ops", "on_device")}
+</div>
+"""
+
+stage.(css, table)
+```
+
+## Nav shell — sidebar (expanded / collapsed) · dock · FAB
+
+```elixir
+dests = [
+  {"inbox", "inbox", "Inbox"},
+  {"calendar", "schedule", "Calendar"},
+  {"files", "folder", "Files"},
+  {"contacts", "person", "Contacts"},
+  {"spaces", "workspaces", "Spaces"}
+]
+
+nav_item = fn {id, ico, label}, active_id ->
+  cls = if id == active_id, do: "matome-nav-item matome-nav-item--active", else: "matome-nav-item"
+  ~s(<button class="#{cls}"><span class="matome-nav-item__icon">#{icon.(ico, "")}</span><span class="matome-nav-item__label">#{label}</span></button>)
+end
+
+sidebar = fn collapsed, active ->
+  root = if collapsed, do: "matome-sidebar matome-sidebar--collapsed", else: "matome-sidebar"
+  add = if collapsed,
+    do: ~s(<button class="matome-nav-add matome-nav-add--tile">#{icon.("add", "")}</button>),
+    else: ~s(<button class="matome-nav-add">#{icon.("add", "")}<span class="matome-nav-add__label">Add</span>#{icon.("expand_more", "")}</button>)
+  toggle = if collapsed, do: icon.("menu", ""), else: icon.("menu_open", "")
+
+  """
+  <div class="#{root}" style="height:360px">
+    <div class="matome-sidebar__header">
+      <span class="matome-sidebar__wordmark">matome</span>
+      <button class="matome-icon-btn" aria-label="Toggle sidebar">#{toggle}</button>
+    </div>
+    <div class="matome-sidebar__add">#{add}</div>
+    <div class="matome-sidebar__nav">#{Enum.map_join(dests, "", &nav_item.(&1, active))}</div>
+    <div class="matome-sidebar__footer">
+      <button class="matome-nav-item"><span class="matome-nav-item__icon">#{icon.("settings", "")}</span><span class="matome-nav-item__label">Settings</span></button>
+      <div class="matome-nav-item"><span class="matome-avatar matome-avatar--sm">AR</span><span class="matome-sidebar__footer-name">Ana Ribeiro</span></div>
+    </div>
+  </div>
+  """
+end
+
+dock_item = fn {id, ico, label}, active_id ->
+  cls = if id == active_id, do: "matome-dock__item matome-dock__item--active", else: "matome-dock__item"
+  ~s(<button class="#{cls}" aria-label="#{label}">#{icon.(ico, "")}</button>)
+end
+
+dock = """
+<div style="display:flex;flex-direction:column;gap:var(--matome-space-lg)">
+  <div style="display:flex;gap:var(--matome-space-md);align-items:flex-start">
+    #{sidebar.(false, "files")}
+    #{sidebar.(true, "files")}
+  </div>
+  <div style="display:flex;align-items:center;gap:var(--matome-space-md)">
+    <div class="matome-dock" style="flex:1">#{Enum.map_join(dests, "", &dock_item.(&1, "inbox"))}<span class="matome-avatar matome-avatar--md">AR</span></div>
+    <button class="matome-fab" aria-label="Add">#{icon.("add", "")}</button>
+  </div>
+</div>
+"""
+
+stage.(css, dock)
+```
+
+## Master / detail scaffold
+
+```elixir
+master_detail = """
+<div class="matome-masterdetail" style="height:200px;border:1px solid var(--matome-border);border-radius:var(--matome-radius-lg);overflow:hidden;background:var(--matome-surface)">
+  <div class="matome-masterdetail__master" style="padding:var(--matome-space-md)">
+    <div class="matome-list-row" style="border:none;background:var(--matome-subtle-fill)">
+      <span class="matome-list-row__leading">#{icon.("workspaces", "")}</span>
+      <div class="matome-list-row__body"><div class="matome-list-row__title">Client X — weekly sync</div>
+      <div class="matome-list-row__meta">Marketing · Mon</div></div>
+    </div>
+  </div>
+  <div class="matome-masterdetail__divider"></div>
+  <div class="matome-masterdetail__pane">
+    <div class="matome-masterdetail__closebar"><button class="matome-icon-btn" aria-label="Close pane">#{icon.("close", "")}</button></div>
+    <div style="padding:var(--matome-space-md);color:var(--matome-text-secondary);font:400 var(--matome-type-body-small-size)/1.45 var(--matome-font-body)">Detail pane content…</div>
+  </div>
+</div>
+"""
+
+stage.(css, master_detail)
+```
+
+## List row — InboxItemCard shape
+
+```elixir
+list_rows = """
+<div style="display:flex;flex-direction:column;gap:var(--matome-space-md);max-width:420px">
+  <div class="matome-list-row">
+    <span class="matome-list-row__leading">#{icon.("mic", "")}</span>
+    <div class="matome-list-row__body">
+      <div class="matome-list-row__titlerow"><span class="matome-list-row__title">Standup audio</span><span class="matome-kind-tag">Loose</span></div>
+      <div class="matome-list-row__meta">14:30 · 03:12</div>
+      <div class="matome-list-row__footer">#{sync.("on_device")}<button class="matome-file-affordance">#{icon.("drive_file_move", "")}<span>File</span></button></div>
+    </div>
+  </div>
+  <div class="matome-list-row">
+    <span class="matome-list-row__leading">#{icon.("workspaces", "")}</span>
+    <div class="matome-list-row__body">
+      <div class="matome-list-row__titlerow"><span class="matome-list-row__title">Client X — notes</span><span class="matome-kind-tag">Draft</span></div>
+      <div class="matome-list-row__meta">2 items · 1 person</div>
+      <div class="matome-list-row__footer">#{sync.("cloud")}<button class="matome-file-affordance">#{icon.("drive_file_move", "")}<span>Organize</span></button></div>
+    </div>
+  </div>
+</div>
+"""
+
+stage.(css, list_rows)
+```
+
+## Contact tile
+
+```elixir
+tile = fn name, notes, color ->
+  n = if notes == "", do: "", else: ~s(<div class="matome-contact-tile__notes">#{notes}</div>)
+  """
+  <button class="matome-contact-tile">
+    <span class="matome-contact-tile__swatch" style="background:color-mix(in srgb, var(--matome-space-#{color}) 13%, transparent);color:var(--matome-space-#{color})">#{icon.("person", "")}</span>
+    <div class="matome-contact-tile__body"><div class="matome-contact-tile__name">#{name}</div>#{n}</div>
+    #{icon.("chevron_right", "matome-list-row__chevron")}
+  </button>
+  """
+end
+
+contact_tiles = """
+<div style="display:flex;flex-direction:column;gap:var(--matome-space-sm);max-width:360px">
+  #{tile.("Ana Ribeiro", "Design lead · Acme", "blue")}
+  #{tile.("Leo", "", "green")}
+</div>
+"""
+
+stage.(css, contact_tiles)
+```
+
+## AppCard — matome / calendar / recording states
+
+```elixir
+cards = """
+<div style="display:flex;flex-direction:column;gap:var(--matome-space-md);max-width:420px">
+  <button class="matome-card">
+    <div class="matome-card__body">
+      <div class="matome-card__title">Client X — weekly</div>
+      <div class="matome-card__summary">Recap + action items for the sprint.</div>
+      <div class="matome-card__meta">
+        <span class="matome-card__meta-token">#{icon.("mic", "")}<span>2</span></span>
+        <span class="matome-card__meta-token">#{icon.("image", "")}<span>1</span></span>
+        <span class="matome-place-chip">#{icon.("folder", "")}<span>Marketing</span></span>
+        #{sync.("cloud")}
+      </div>
+    </div>
+    <button class="matome-icon-btn" aria-label="Actions">#{icon.("more_horiz", "")}</button>
+  </button>
+
+  <button class="matome-card matome-card--calendar">
+    <span class="matome-card__dot matome-card__dot--work"></span>
+    <div class="matome-card__body">
+      <div class="matome-card__title">Team standup</div>
+      <div class="matome-card__footer"><span class="matome-badge matome-badge--work">Work</span><span class="matome-card__duration">30m</span></div>
+    </div>
+    #{icon.("chevron_right", "matome-list-row__chevron")}
+  </button>
+
+  <div class="matome-card">
+    <span class="matome-card__avatar"><span class="matome-spinner matome-spinner--sm"></span></span>
+    <div class="matome-card__body">
+      <div class="matome-card__title">Meeting recording</div>
+      <div class="matome-card__row matome-card__row--processing"><span>Processing…</span></div>
+    </div>
+  </div>
+
+  <div class="matome-card">
+    <span class="matome-card__avatar matome-card__avatar--failed">#{icon.("warning", "")}</span>
+    <div class="matome-card__body">
+      <div class="matome-card__title">Voice memo</div>
+      <div class="matome-card__row matome-card__row--failed">#{icon.("error", "")}<span>Upload failed</span><button class="matome-btn matome-btn--text">#{icon.("refresh", "")}<span>Retry</span></button></div>
+    </div>
+  </div>
+
+  <div class="matome-card">
+    <span class="matome-card__avatar matome-card__avatar--done">#{icon.("mic", "")}</span>
+    <div class="matome-card__body">
+      <div class="matome-card__title">Interview notes</div>
+      <div class="matome-card__footer">#{sync.("cloud")}<span class="matome-card__duration">12:04</span></div>
+    </div>
+  </div>
+</div>
+"""
+
+stage.(css, cards)
+```
+
+## Detail panel — assembled MatomeDetailPanel
+
+```elixir
+panel_item = fn ico, title, meta, sync_state ->
+  m = if meta == "", do: "", else: ~s(<div class="matome-panel-row__meta">#{meta}</div>)
+  """
+  <div class="matome-panel-row">
+    <span class="matome-panel-row__icon">#{icon.(ico, "")}</span>
+    <div class="matome-panel-row__body"><div class="matome-panel-row__title">#{title}</div>#{m}</div>
+    #{sync.(sync_state)}
+  </div>
+  """
+end
+
+panel = fn filed ->
+  space =
+    if filed do
+      ~s(<div class="matome-detail-panel__space">#{icon.("folder", "")}<span class="matome-detail-panel__space-name">Marketing</span><button class="matome-btn matome-btn--text">Refile</button></div>)
+    else
+      ~s(<div class="matome-detail-panel__space"><button class="matome-panel-add">#{icon.("folder", "matome-panel-add__icon")}<span>File into space</span></button></div>)
+    end
+
+  """
+  <div class="matome-detail-panel" style="max-width:420px;border:1px solid var(--matome-border);border-radius:var(--matome-radius-lg)">
+    <div class="matome-detail-panel__header"><span class="matome-detail-panel__title">Client X — weekly</span><button class="matome-icon-btn" aria-label="Close">#{icon.("close", "")}</button></div>
+
+    <section class="matome-panel-section">
+      <div class="matome-panel-section__head"><span class="matome-panel-section__label">Items · 2</span></div>
+      <div class="matome-panel-section__body">
+        #{panel_item.("mic", "Meeting audio", "12:04", "cloud")}
+        #{panel_item.("image", "Whiteboard", "", "on_device")}
+        <button class="matome-panel-add">#{icon.("add", "matome-panel-add__icon")}<span>Add item</span></button>
+      </div>
+      <hr class="matome-panel-section__divider">
+    </section>
+
+    <section class="matome-panel-section">
+      <div class="matome-panel-section__head"><span class="matome-panel-section__label">People · 1</span></div>
+      <div class="matome-panel-section__body">
+        <div class="matome-panel-row"><span class="matome-avatar matome-avatar--sm">A</span><div class="matome-panel-row__body"><div class="matome-panel-row__title">Ana</div><div class="matome-panel-row__meta">Organizer</div></div></div>
+        <button class="matome-panel-add">#{icon.("person_add", "matome-panel-add__icon")}<span>Add person</span></button>
+      </div>
+      <hr class="matome-panel-section__divider">
+    </section>
+
+    <section class="matome-panel-section">
+      <div class="matome-panel-section__head"><span class="matome-panel-section__label">Space</span></div>
+      <div class="matome-panel-section__body">#{space}</div>
+      <hr class="matome-panel-section__divider">
+    </section>
+
+    <section class="matome-panel-section">
+      <div class="matome-panel-section__head"><span class="matome-panel-section__label">Notes</span><button class="matome-panel-section__action">Edit</button></div>
+      <div class="matome-panel-section__body"><div class="matome-detail-panel__notes">Discussed Q3 roadmap and owners.</div></div>
+    </section>
+
+    <button class="matome-detail-panel__share">#{icon.("share", "")}<span>Share</span></button>
+  </div>
+  """
+end
+
+stage.(css, ~s(<div style="display:flex;gap:var(--matome-space-md);align-items:flex-start">#{panel.(true)}#{panel.(false)}</div>))
+```
+
+## Contact detail — graduated proposal
+
+```elixir
+contact_detail = """
+<div class="matome-contact-detail">
+  <div class="matome-contact-detail__header">
+    <span class="matome-avatar matome-avatar--lg">AR</span>
+    <div class="matome-contact-detail__identity">
+      <div class="matome-contact-detail__name">Ana Ribeiro</div>
+      <div class="matome-contact-detail__subtitle">Design lead · Acme</div>
+      #{sync.("cloud")}
+    </div>
+    <button class="matome-icon-btn" aria-label="Contact actions">#{icon.("more_horiz", "")}</button>
+  </div>
+  <div class="matome-contact-detail__body">
+    <div class="matome-contact-detail__col matome-contact-detail__col--identity">
+      <section class="matome-panel-section">
+        <div class="matome-panel-section__head"><span class="matome-panel-section__label">Contact info</span></div>
+        <div class="matome-panel-section__body">
+          <div class="matome-info-row"><span class="matome-info-row__icon">#{icon.("mail", "")}</span><div><div class="matome-info-row__label">Email</div><div class="matome-info-row__value">ana@acme.co</div></div></div>
+          <div class="matome-info-row"><span class="matome-info-row__icon">#{icon.("phone", "")}</span><div><div class="matome-info-row__label">Phone</div><div class="matome-info-row__value">+1 555 0100</div></div></div>
+          <div class="matome-info-row"><span class="matome-info-row__icon">#{icon.("business", "")}</span><div><div class="matome-info-row__label">Company</div><div class="matome-info-row__value">Acme</div></div></div>
+        </div>
+        <hr class="matome-panel-section__divider">
+      </section>
+      <section class="matome-panel-section">
+        <div class="matome-panel-section__head"><span class="matome-panel-section__label">Notes</span><button class="matome-panel-section__action">Edit</button></div>
+        <div class="matome-panel-section__body"><div class="matome-detail-panel__notes">Prefers async updates.</div></div>
+      </section>
+    </div>
+    <div class="matome-contact-detail__col matome-contact-detail__col--relations">
+      <section class="matome-panel-section">
+        <div class="matome-panel-section__head"><span class="matome-panel-section__label">Matomes · 1</span></div>
+        <div class="matome-panel-section__body">
+          <div class="matome-panel-row"><span class="matome-panel-row__icon">#{icon.("workspaces", "")}</span><div class="matome-panel-row__body"><div class="matome-panel-row__title">Client X sync</div><div class="matome-panel-row__meta">Mon</div></div><span class="matome-role-chip matome-role-chip--organizer">Organizer</span></div>
+        </div>
+        <hr class="matome-panel-section__divider">
+      </section>
+      <section class="matome-panel-section">
+        <div class="matome-panel-section__head"><span class="matome-panel-section__label">Spaces · 2</span></div>
+        <div class="matome-panel-section__body"><div class="matome-relation-wrap"><span class="matome-chip matome-chip--space">#{icon.("folder", "")}<span class="matome-chip__label">Marketing</span></span><span class="matome-chip matome-chip--space">#{icon.("folder", "")}<span class="matome-chip__label">Ops</span></span></div></div>
+        <hr class="matome-panel-section__divider">
+      </section>
+      <section class="matome-panel-section">
+        <div class="matome-panel-section__head"><span class="matome-panel-section__label">Files · 1</span></div>
+        <div class="matome-panel-section__body"><div class="matome-panel-row"><span class="matome-panel-row__icon">#{icon.("description", "")}</span><div class="matome-panel-row__body"><div class="matome-panel-row__title">brief.pdf</div></div></div></div>
+      </section>
+    </div>
+  </div>
+</div>
+"""
+
+stage.(css, contact_detail)
+```
+
+## File card — FilesGrid tile (graduated proposal)
+
+```elixir
+file_card = fn name, kind, glyph, size, when_txt, matome, space, sync_state, dur ->
+  d = if dur == "", do: "", else: ~s(<span class="matome-file-card__duration">#{dur}</span>)
+  mchip =
+    if matome == "",
+      do: ~s(<span class="matome-chip matome-chip--matome matome-chip--empty">#{icon.("inbox", "")}<span class="matome-chip__label">Unfiled</span></span>),
+      else: ~s(<span class="matome-chip matome-chip--matome">#{icon.("workspaces", "")}<span class="matome-chip__label">#{matome}</span></span>)
+  schip =
+    if space == "",
+      do: ~s(<span class="matome-chip matome-chip--space matome-chip--empty">#{icon.("inbox", "")}<span class="matome-chip__label">Inbox</span></span>),
+      else: ~s(<span class="matome-chip matome-chip--space">#{icon.("folder", "")}<span class="matome-chip__label">#{space}</span></span>)
+
+  """
+  <div class="matome-file-card" style="width:200px">
+    <div class="matome-file-card__preview matome-file-card__preview--#{kind}">#{icon.(glyph, "")}#{d}</div>
+    <div class="matome-file-card__footer">
+      <div class="matome-file-card__name">#{name}</div>
+      <div class="matome-file-card__sub"><span>#{size}</span><span>·</span><span>#{when_txt}</span></div>
+      <div class="matome-file-card__relrow">#{mchip}#{sync.(sync_state)}</div>
+      <div class="matome-file-card__relrow">#{schip}<span class="matome-cluster"><span class="matome-avatar matome-avatar--sm">A</span><span class="matome-avatar matome-avatar--sm">K</span></span></div>
+    </div>
+  </div>
+  """
+end
+
+grid = """
+<div style="display:flex;flex-wrap:wrap;gap:var(--matome-space-md)">
+  #{file_card.("standup.m4a", "audio", "mic", "4.2 MB", "Mon", "Client X", "Marketing", "cloud", "03:12")}
+  #{file_card.("whiteboard.jpg", "image", "image", "1.1 MB", "Tue", "", "", "on_device", "")}
+  #{file_card.("brief.pdf", "document", "description", "820 KB", "Wed", "Ops review", "Ops", "syncing", "")}
+</div>
+"""
+
+stage.(css, grid)
+```

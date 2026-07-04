@@ -1,14 +1,19 @@
-# Design-System Reconciliation — Base-tier components (W1 #1869)
+# Design-System Reconciliation — Base + composite components (W1 #1869, W2 #1870)
 
-Server-side HEEx base components vs the Flutter `flutter_widgetbook` base tier
-(`Components/Atoms/*`). This note records **what matches** and **every accepted
-deviation**, so a reviewer can trust the drift-guard catalog
-(`notebooks/components_catalog.livemd`) rather than re-deriving parity by hand.
+Server-side HEEx components vs the Flutter `flutter_widgetbook`. This note
+records **what matches** and **every accepted deviation**, so a reviewer can
+trust the drift-guard catalogs (`notebooks/components_catalog.livemd` for the
+base tier, `notebooks/composites_catalog.livemd` for the composite tier) rather
+than re-deriving parity by hand.
 
-- **Flutter SSOT:** `apps/flutter/lib/ui/*.dart`, `apps/flutter/lib/features/auth/auth_widgets.dart`
-- **Widgetbook source:** `apps/flutter_widgetbook/lib/widgetbook.dart` (path `Components/Atoms/*`)
-- **Server port:** `lib/matome_api_web/components/matome_components.ex` + `assets/css/components.css`
+- **Flutter SSOT:** `apps/flutter/lib/ui/*.dart`, `apps/flutter/lib/features/**`, `apps/flutter/lib/features/auth/auth_widgets.dart`
+- **Widgetbook source:** `apps/flutter_widgetbook/lib/widgetbook.dart` (`Components/Atoms/*`, `[Molecules]`, `[Screens]`, graduated proposals)
+- **Server port:** `lib/matome_api_web/components/matome_components.ex` (base) + `matome_composites.ex` (composite) + `assets/css/{components,composites}.css`
 - **Tokens:** `assets/css/foundations.css` (hand-mirrored from `app_theme.dart`, W0 #1868)
+
+The base tier (W1) is documented below; the **composite tier (W2)** is a new
+section farther down. The composite tier is assembled entirely FROM the base
+atoms — no composite re-styles an atom from scratch.
 
 ## Base tier ported (widgetbook atom → server component → variants)
 
@@ -98,24 +103,96 @@ block (no per-component dark overrides).
    + colored icon/label) was chosen. `StatusBadge.sync`'s alternative
    12%-alpha-background treatment is intentionally not ported (single chip idiom).
 
-## Deliberately deferred (out of the base/atom tier — later waves)
+# Composite tier (W2 #1870)
 
-These are **not** base atoms (they sit under `Components/Composite/*`,
-`[Screens]`, `[Layouts]`, or `[Flows]` in the widgetbook) and are out of scope
-for W1; listed here so coverage is honest:
+Server-side HEEx composites (`matome_composites.ex` + `composites.css`) vs the
+Flutter composite widgets. Each composite is **assembled from the W1 base
+atoms** — it only adds layout scaffolding. Catalog: `composites_catalog.livemd`
+(Light + Dark, every variant).
 
-- **Composite cards/details:** `AppCard` (+ calendar/done/failed/processing/
-  pending states), `AudioPlayerBar`, `MatomeDetailPanel` (assembled), `FileView`,
-  `InboxItemCard`, `ContactTile`, `ContactDetail`.
-- **Menus / bars / overlays:** `FileActionsMenu`, `MatomeActionsMenu`,
-  `FilesBulkBar`, `FilesUndoBar`, `MatomeAddFab`, `AppBottomSheet`, `AppDialog`.
-- **Tables / grids / navigation:** `MatomeTable` (and table-cell primitives),
-  `FilesTable`, `FilesGrid`, `FilesScreen`, `FilesScopeFilter`,
-  `MasterDetailScaffold`, `MatomeSidebar`, `MatomeBottomDock`, `RelationshipPicker`.
-- **Sync/space composites:** `SpaceSyncChip`, `SpaceSyncChoice`, `SpaceSyncTile`.
-- **Frames / pages / flows:** `PhoneFrame` / `WindowFrame` / `AuthPageFrame` /
-  `RouteFrame`, all `[Screens]` pages, and the `[Flows]` walkthroughs.
+## Composite tier ported (Flutter widget → server composite → W1 atoms composed)
 
-Table-cell primitives specifically (called out in the admin-priority list) are
-deferred with `MatomeTable`, its composite owner — there is no standalone
-table-cell atom in the widgetbook to port in isolation.
+| Flutter widget (file) | Server composite | Variants covered | W1 atoms composed |
+| --- | --- | --- | --- |
+| `MatomeTable` / `FilesTable` (`features/**/widgets`) | `data_table/1` (+ `table_primary_cell`, `table_count`) | sortable header (active asc/desc), selection + bulk bar, active-row tint, empty state; column-slot parameterized for both tables | `checkbox` (box), `icon`, `icon_button`, `empty_state` |
+| `MatomeSidebar` (`features/shell`) | `nav_sidebar/1` | expanded / collapsed rail, active destination, add button, settings + account footer | `avatar`, `icon`, `icon_button` |
+| `MatomeBottomDock` (`features/shell`) | `nav_dock/1` | icon-only items, active tint, settings avatar | `avatar`, `icon` |
+| `MatomeAddFab` (`features/shell`) | `nav_fab/1` | accent add FAB | `icon` |
+| `MasterDetailScaffold` (`ui`) | `master_detail/1` | master + detail/empty slots, optional close bar | `icon_button` |
+| `InboxItemCard` (`ui`) | `list_row/1` | leading icon/slot, kind tag, meta, footer + trailing slots | `icon` (+ slots take `sync_chip`, etc.) |
+| `ContactTile` (`features/contacts`) | `contact_tile/1` | tinted spaces-band swatch, name, optional notes, chevron | `icon` |
+| `AppCard` (`ui`) | `app_card/1` | matome (summary + meta strip + trailing), calendar (badge dot + status badge + duration), recording (done/processing/failed/pending) (+ `place_chip`, `meta_token`) | `status_badge`, `sync_chip`, `loading_indicator`, `icon`, `icon_button`, `text_button` |
+| `MatomeDetailPanel` (`ui`) | `detail_panel/1` | fixed IA: header, Items, People, Space (filed vs inbox), Notes, Share | `panel_section`, `panel_row`, `panel_add_row`, `sync_chip`, `avatar`, `text_button`, `icon_button` |
+| `ContactDetail` (`features/contacts`, proposal) | `contact_detail/1` (+ `info_row`) | header sync chip + actions; identity column (info rows / notes); relations column (role chips, space chips, files); sparse muted placeholders | `avatar`, `sync_chip`, `role_chip`, `space_chip`, `panel_section`, `panel_row`, `text_button`, `icon_button` |
+| `FilesGrid` `_FileTile` (`features/files`, proposal) | `file_card/1` | kind-tinted preview + audio duration tag; name/size·when; matome + sync + space + people relation rows; filed vs unfiled | `matome_chip`, `space_chip`, `sync_chip`, `people_cluster`, `icon` |
+
+### Graduated proposals (widgetbook proposal stories → server composite)
+
+The proposal mocks were deleted at convergence (DR-000..004); the proposal
+stories render the real widgets, so parity is against those:
+
+- **"matome table"** / **"files table"** → `data_table/1`.
+- **"nav rework"** → `nav_sidebar/1` + `nav_dock/1` + `nav_fab/1`.
+- **"contact detail"** → `contact_detail/1`.
+- **"files grid"** → `file_card/1`.
+
+## Composite-tier accepted deviations
+
+1. **Static render, not interactive.** These are stateless HEEx function
+   components: sort direction, selection set, hover/focus rings, menu anchors,
+   and the FAB/add popover MENUS are rendered as MARKUP (classes + affordances),
+   not wired behaviour. The admin data-LiveViews (W6/W7) own the events. So the
+   Flutter `_RowFocus` keyboard model (`x`=select, Enter/Space=open, 2px focus
+   ring), `MenuAnchor` popovers, and the undo-bar timers are represented by their
+   resting-state markup only. `data_table` exposes `selected` / `active_id` /
+   `sort_key` / `sort_dir` as inputs the LiveView drives.
+
+2. **Fixed structural widths use raw `px`.** `composites.css` sets the
+   table secondary-column widths (`--when 64`, `--items 128`, `--people 84`,
+   `--space 132`, `--sync 116`, `--size 72`, `--matome 148`; checkbox/actions =
+   spacing tokens) and the sidebar rail widths (`248` expanded / `76` collapsed)
+   as literal `px`. These mirror the Flutter geometry constants verbatim
+   (`matome_table.dart` L99 / `files_table.dart` L36; `kSidebarExpandedWidth` /
+   `kSidebarRailWidth` in `matome_nav.dart`) — they are structural layout
+   geometry, NOT design-scale values, and there is no foundations token for them
+   (same class as the W1 hairline `1px` deviation). The flexible primary column
+   and all paddings/gaps stay token-driven.
+
+3. **Spaces-band swatch tints are inline `style`, token-referenced.** The
+   contact-tile swatch and file-card previews tint a spaces-band token at a low
+   alpha via `color-mix(in srgb, var(--matome-space-*) N%, transparent)`. The
+   tile swatch computes the token name at runtime (`swatch_style/1`), so it lands
+   as an inline `style` attribute — but the value is a `var(--matome-*)` token,
+   not a hardcoded color. The `N%` is an opacity, not a design value.
+
+4. **`AudioPlayerBar` peek, `FilesTable` size-sort, deep menus dropped.** The
+   recording card omits the inline audio-player scrubber (deferred with the
+   player); `data_table`'s size column is a plain sort header (Flutter's
+   size-sort is a documented no-op → recency); per-row/action MENUS render as a
+   single `more_horiz` `icon_button` affordance, not the expanded menu.
+
+5. **Icon set extended (additively).** `icon/1` gained ~30 composite glyphs
+   (sort arrows, `more_horiz`, `menu`/`menu_open`, `settings`, `chevron_right`,
+   `expand_more`, media/`schedule`/`group`/`warning`/`refresh`, `mail`/`phone`/
+   `business`, `download`/`edit`/`archive`/`delete`/`drive_file_move`). Same
+   inline-SVG approximation caveat as the base tier (deviation #1 above): glyph
+   shape may differ from Material; color + size stay token-driven. The composite
+   catalog duplicates the SVG set and must be kept in sync.
+
+## Deliberately deferred (still out of scope — later waves)
+
+Listed so composite coverage is honest. These are interaction-/overlay-heavy or
+belong to feature screens, and the admin data-LiveViews do not need them as
+static primitives:
+
+- **Overlays / menus / bars (interactive):** `FileActionsMenu`,
+  `MatomeActionsMenu`, the sidebar/FAB add MENUS, `FilesUndoBar` timer,
+  `AppBottomSheet`, `AppDialog`, `RelationshipPicker`.
+- **Media:** `AudioPlayerBar` scrubber, `FileView` (full assembled file screen).
+- **Sync/space composites:** `SpaceSyncChoice`, `SpaceSyncTile`,
+  `FilesScopeFilter` (the base `SpaceChip`/`sync_chip` cover the chip surface).
+- **Screens / frames / flows:** `FilesScreen` and other `[Screens]` pages,
+  `PhoneFrame` / `WindowFrame` / `AuthPageFrame` / `RouteFrame`, and `[Flows]`.
+
+`FilesTable` shares `data_table/1` (same geometry/machinery), so it is covered
+rather than deferred; only its interactive layer is deferred per deviation #1.
