@@ -5,6 +5,7 @@
  * that resolve through the CSS vars, so `.dark` theme-switching works. */
 @import "tailwindcss";
 @import "./foundations.css";
+@import "./components.css";
 
 /* Scan the server-rendered templates for utility classes. */
 @source "../../lib/matome_api_web";
