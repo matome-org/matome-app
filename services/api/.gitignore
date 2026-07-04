@@ -25,3 +25,7 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 matome_api-*.tar
 
+# Compiled asset bundles (built from assets/ by esbuild + tailwind; W0 #1868).
+/priv/static/assets/
+/priv/static/cache_manifest.json
+

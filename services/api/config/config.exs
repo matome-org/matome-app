@@ -55,6 +55,29 @@ config :matome_api, MatomeApiWeb.Endpoint,
   pubsub_server: MatomeApi.PubSub,
   live_view: [signing_salt: "da57Xt5Q"]
 
+# Asset pipeline for the /admin back-office (plan p2-core-backoffice, W0
+# #1868). esbuild bundles the LiveView JS; Tailwind builds the CSS. Both are
+# dev-time tools (runtime: false in prod) — only the compiled priv/static
+# artifacts ship. `version` mirrors the binaries seeded under _build; a
+# networked env installs them via `mix assets.setup`.
+config :esbuild,
+  version: "0.17.11",
+  matome: [
+    args:
+      ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
+    cd: Path.expand("../assets", __DIR__),
+    env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
+  ]
+
+# Tailwind v4 (CSS-first config; the theme lives in assets/css/app.css via
+# `@theme`, sourced from the hand-maintained foundations token file).
+config :tailwind,
+  version: "4.1.5",
+  matome: [
+    args: ~w(--input=css/app.css --output=../priv/static/assets/app.css),
+    cd: Path.expand("../assets", __DIR__)
+  ]
+
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
