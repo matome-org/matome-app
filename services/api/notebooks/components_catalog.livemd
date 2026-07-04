@@ -1,0 +1,268 @@
+# Matome Base Components — Design-System Catalog (drift guard)
+
+```elixir
+# Kino ships with Livebook; no Mix.install needed.
+alias Kino.HTML
+```
+
+## What this is
+
+A **dev-only** visual catalog of the Matome **base-tier** components (W1 #1869),
+the server-side HEEx port of the Flutter `flutter_widgetbook` `Components/Atoms/*`
+tier. It is the sibling of `foundations_catalog.livemd` (which covers the raw
+tokens) and renders each component's variants in **Light + Dark** so the `/admin`
+back-office design system can be eyeballed against the Flutter client.
+
+**Drift-guard chain:**
+
+```
+apps/flutter/lib/ui/*.dart + features/auth/auth_widgets.dart   ← Flutter SSOT
+        │
+        ▼
+services/api/lib/matome_api_web/components/matome_components.ex ← HEEx components
+services/api/assets/css/components.css                          ← token-only styling
+        │
+        ▼
+THIS notebook  (injects foundations.css + components.css, renders each variant)
+        │
+        ▼
+apps/flutter_widgetbook  (Components/Atoms/*)                   ← Flutter's live render
+```
+
+> ### Threat model (read before running)
+>
+> Livebook executes **arbitrary Elixir** with full OS-user privileges — the
+> keys-to-the-kingdom by design. It is therefore **never a dependency of the app
+> and never mounted** by the Phoenix router/endpoint. Run it standalone, dev-only:
+> `livebook server` then open this file. See `docs/livebook-threat-model.md`.
+
+> **Why this notebook mirrors the class markup (not the compiled components):**
+> the HEEx function components need the full app compiled + running, which the
+> standalone Livebook does not load. So — exactly like `foundations_catalog.livemd`
+> renders swatches from the CSS rather than the app — this catalog emits the SAME
+> semantic classes the components produce, over the SAME `components.css`. The
+> class contract is the shared surface; the reconciliation note
+> (`docs/design-system-reconciliation.md`) records the accepted deviations.
+
+## Load the token + component stylesheets
+
+```elixir
+# __DIR__ is services/api/notebooks; the CSS lives one level up under assets.
+css_dir = Path.expand("../assets/css", __DIR__)
+foundations = File.read!(Path.join(css_dir, "foundations.css"))
+components = File.read!(Path.join(css_dir, "components.css"))
+css = foundations <> "\n" <> components
+IO.puts("Loaded #{byte_size(css)} bytes of tokens + component CSS")
+```
+
+## Helpers — icons + the Light/Dark stage
+
+```elixir
+# Mirror of matome_components.ex `icon_paths/1` — keep in sync when glyphs change.
+icon = fn name, klass ->
+  paths =
+    case name do
+      "check" -> ~s(<path d="M20 6 9 17l-5-5"/>)
+      "close" -> ~s(<path d="M18 6 6 18M6 6l12 12"/>)
+      "error" -> ~s(<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>)
+      "add" -> ~s(<path d="M12 5v14M5 12h14"/>)
+      "cloud_done" ->
+        ~s(<path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 1 1 17 18Z"/><path d="m9 13 2 2 4-4"/>)
+      "cloud_sync" ->
+        ~s(<path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A3.5 3.5 0 1 1 17 18Z"/><path d="M10 12a2.5 2.5 0 0 1 4-1M14 15a2.5 2.5 0 0 1-4 1"/>)
+      "cloud_off" ->
+        ~s(<path d="M7 18a4 4 0 0 1-.5-8 5 5 0 0 1 7-3.5M17 18a3.5 3.5 0 0 0 1-6.8"/><path d="M3 3l18 18"/>)
+      "folder" ->
+        ~s(<path d="M3 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>)
+      "inbox" ->
+        ~s(<path d="M4 13h4l2 3h4l2-3h4"/><path d="M4 13 6 5h12l2 8v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>)
+      "workspaces" ->
+        ~s(<circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><circle cx="12" cy="16" r="3"/>)
+      "person" -> ~s(<circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/>)
+      "file" ->
+        ~s(<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/>)
+      "open" ->
+        ~s(<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>)
+      _ -> ~s(<circle cx="12" cy="12" r="9"/>)
+    end
+
+  ~s(<svg class="matome-icon #{klass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" ) <>
+    ~s(stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">#{paths}</svg>)
+end
+
+# Render one demo `body` (HTML string) on both a Light and a Dark themed stage.
+stage = fn css, body ->
+  panel = fn label, theme_class ->
+    """
+    <section class="#{theme_class}" style="flex:1;background:var(--matome-background);
+             padding:var(--matome-space-lg);border-radius:var(--matome-radius-lg)">
+      <h4 style="margin:0 0 var(--matome-space-md);font:600 var(--matome-type-label-size)/1.25
+          var(--matome-font-body);letter-spacing:var(--matome-type-label-tracking);
+          text-transform:uppercase;color:var(--matome-text-muted)">#{label}</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:var(--matome-space-md);align-items:flex-start">
+        #{body}
+      </div>
+    </section>
+    """
+  end
+
+  HTML.new("""
+  <style>#{css}</style>
+  <div style="display:flex;gap:var(--matome-space-md)">
+    #{panel.("Light", "")}
+    #{panel.("Dark", "dark")}
+  </div>
+  """)
+end
+```
+
+## Buttons — primary / text / icon / submit
+
+```elixir
+stage.(css, """
+<button class="matome-btn matome-btn--primary">Save</button>
+<button class="matome-btn matome-btn--primary">#{icon.("add", "")}<span>Add item</span></button>
+<button class="matome-btn matome-btn--primary" disabled>Disabled</button>
+<button class="matome-btn matome-btn--text">Cancel</button>
+<button class="matome-btn matome-btn--text" disabled>Disabled</button>
+<button class="matome-icon-btn" aria-label="Close">#{icon.("close", "")}</button>
+<div style="width:100%"></div>
+<div style="width:220px"><button class="matome-btn matome-btn--submit">Sign in</button></div>
+<div style="width:220px"><button class="matome-btn matome-btn--submit" disabled>
+  <span class="matome-spinner matome-spinner--sm"></span></button></div>
+""")
+```
+
+## Form fields — text / password / select / checkbox
+
+```elixir
+stage.(css, """
+<div style="width:240px"><label class="matome-field">
+  <span class="matome-field__label">Email</span>
+  <input class="matome-field__control" type="text" placeholder="you@example.com" value="ana@acme.co">
+</label></div>
+<div style="width:240px"><label class="matome-field">
+  <span class="matome-field__label">Password</span>
+  <input class="matome-field__control" type="password" value="secret">
+</label></div>
+<div style="width:240px"><label class="matome-field">
+  <span class="matome-field__label">Disabled</span>
+  <input class="matome-field__control" type="text" value="Locked" disabled>
+</label></div>
+<div style="width:240px"><label class="matome-field">
+  <span class="matome-field__label">Space</span>
+  <select class="matome-field__control"><option>Work</option><option selected>Personal</option></select>
+</label></div>
+<label class="matome-checkbox"><input class="matome-checkbox__box" type="checkbox" checked>
+  <span>Remember me</span></label>
+""")
+```
+
+## Feedback — empty state / spinner / banners
+
+```elixir
+stage.(css, """
+<div style="width:260px"><div class="matome-empty">
+  <div class="matome-empty__icon">#{icon.("inbox", "")}</div>
+  <div class="matome-empty__title">Nothing here yet</div>
+  <div class="matome-empty__message">Add your first item to get started.</div>
+</div></div>
+<div style="display:flex;gap:var(--matome-space-md);align-items:center">
+  <span class="matome-spinner matome-spinner--sm"></span>
+  <span class="matome-spinner matome-spinner--md"></span>
+  <span class="matome-spinner matome-spinner--lg"></span>
+</div>
+<div style="width:100%"></div>
+<div style="width:300px"><div class="matome-banner matome-banner--error">
+  #{icon.("error", "matome-banner__icon")}<span>Invalid credentials.</span></div></div>
+<div style="width:300px"><div class="matome-banner matome-banner--notice">
+  #{icon.("check", "matome-banner__icon")}<span>Reset link sent.</span></div></div>
+""")
+```
+
+## Avatars — sizes / icon / people cluster
+
+```elixir
+stage.(css, """
+<span class="matome-avatar matome-avatar--sm">AK</span>
+<span class="matome-avatar matome-avatar--md">AK</span>
+<span class="matome-avatar matome-avatar--lg">AK</span>
+<span class="matome-avatar matome-avatar--md">#{icon.("person", "")}</span>
+<span class="matome-cluster">
+  <span class="matome-avatar matome-avatar--sm">L</span>
+  <span class="matome-avatar matome-avatar--sm">A</span>
+  <span class="matome-avatar matome-avatar--sm">K</span>
+  <span class="matome-avatar matome-avatar--sm matome-cluster__overflow">+2</span>
+</span>
+""")
+```
+
+## Status — badges / sync chips
+
+```elixir
+stage.(css, """
+<span class="matome-badge matome-badge--work"><span class="matome-badge__dot"></span><span>Work</span></span>
+<span class="matome-badge matome-badge--personal"><span class="matome-badge__dot"></span><span>Personal</span></span>
+<span class="matome-badge matome-badge--ideas"><span class="matome-badge__dot"></span><span>Ideas</span></span>
+<span class="matome-badge matome-badge--default"><span class="matome-badge__dot"></span><span>Default</span></span>
+<div style="width:100%"></div>
+<span class="matome-sync-chip matome-sync-chip--cloud">#{icon.("cloud_done", "matome-sync-chip__icon")}<span>Cloud</span></span>
+<span class="matome-sync-chip matome-sync-chip--syncing">#{icon.("cloud_sync", "matome-sync-chip__icon")}<span>Syncing</span></span>
+<span class="matome-sync-chip matome-sync-chip--on-device">#{icon.("cloud_off", "matome-sync-chip__icon")}<span>On device</span></span>
+""")
+```
+
+## Relation chips — matome / space / role / file type
+
+```elixir
+stage.(css, """
+<span class="matome-chip matome-chip--matome">#{icon.("workspaces", "")}<span class="matome-chip__label">Client X — weekly sync</span></span>
+<span class="matome-chip matome-chip--matome matome-chip--empty">#{icon.("inbox", "")}<span class="matome-chip__label">Unfiled</span></span>
+<span class="matome-chip matome-chip--space">#{icon.("folder", "")}<span class="matome-chip__label">Marketing</span></span>
+<span class="matome-chip matome-chip--space matome-chip--empty">#{icon.("inbox", "")}<span class="matome-chip__label">Inbox</span></span>
+<div style="width:100%"></div>
+<span class="matome-role-chip matome-role-chip--organizer">Organizer</span>
+<span class="matome-role-chip matome-role-chip--speaker">Speaker</span>
+<span class="matome-role-chip matome-role-chip--attendee">Attendee</span>
+<div style="width:100%"></div>
+<div style="width:320px"><div class="matome-file-chip">
+  <span class="matome-file-chip__icon">#{icon.("file", "")}</span>
+  <div class="matome-file-chip__body">
+    <div class="matome-file-chip__name">Q3 roadmap.pdf</div>
+    <div class="matome-file-chip__size">2.4 MB</div>
+  </div>
+  <div class="matome-file-chip__open">
+    <button class="matome-btn matome-btn--text" disabled>#{icon.("open", "")}<span>Open</span></button>
+    <span class="matome-file-chip__soon">soon</span>
+  </div>
+</div></div>
+""")
+```
+
+## Panel atoms — section / row / add row
+
+```elixir
+stage.(css, """
+<div style="width:340px">
+  <section class="matome-panel-section">
+    <div class="matome-panel-section__head">
+      <span class="matome-panel-section__label">Items · 2</span>
+      <button class="matome-panel-section__action">Edit</button>
+    </div>
+    <div class="matome-panel-section__body">
+      <div class="matome-panel-row">
+        <span class="matome-panel-row__icon">#{icon.("file", "")}</span>
+        <div class="matome-panel-row__body">
+          <div class="matome-panel-row__title">Meeting audio</div>
+          <div class="matome-panel-row__meta">14:30 · 12:04</div>
+        </div>
+        <span class="matome-sync-chip matome-sync-chip--cloud">#{icon.("cloud_done", "matome-sync-chip__icon")}<span>Cloud</span></span>
+      </div>
+      <div style="height:var(--matome-space-xs)"></div>
+      <button class="matome-panel-add">#{icon.("add", "matome-panel-add__icon")}<span>Add item</span></button>
+    </div>
+    <hr class="matome-panel-section__divider">
+  </section>
+</div>
+""")
+```
