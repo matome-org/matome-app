@@ -228,6 +228,14 @@ part 'app_database.g.dart';
 /// `recordings` table predates this step, so no `from >=` floor is needed:
 /// any DB reaching here from < 20 lacks both columns, and they are added
 /// exactly once.
+///
+/// DOWN-migration / reversal (no automatic Drift downgrade; documented for
+/// discipline, okt-audit info follow-up #1866 — additive, nullable, drops
+/// only the two new columns):
+///   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v19 shape, rebuild
+///   -- `recordings` without `wrapped_fek`/`file_nonce_prefix` via a copy
+///   -- table. Leaving the columns in place is otherwise harmless.
+///   PRAGMA user_version = 19;
 const int kSchemaVersion = 20;
 
 /// The offline-first local store.
@@ -657,6 +665,16 @@ class AppDatabase extends _$AppDatabase {
       // PLAINTEXT file" state every row is in today. No data migration; no
       // existing column is read or written. See `tables.dart`
       // ([Recordings.wrappedFek]) for the exact contract.
+      //
+      // DOWN-migration / reversal (no automatic Drift downgrade; documented
+      // for discipline, okt-audit info follow-up #1866 — additive, nullable,
+      // drops only the two new columns):
+      //   -- SQLite < 3.35 cannot DROP COLUMN; to reach a true v19 shape,
+      //   -- rebuild `recordings` without `wrapped_fek`/`file_nonce_prefix`
+      //   -- via a copy table. Leaving the columns in place (both NULL,
+      //   -- unread while kMediaEncryptionEnabled stays dark) is otherwise
+      //   -- harmless.
+      //   PRAGMA user_version = 19;
       if (from < 20) {
         await m.addColumn(recordings, recordings.wrappedFek);
         await m.addColumn(recordings, recordings.fileNoncePrefix);

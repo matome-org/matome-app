@@ -402,12 +402,8 @@ class MediaMigrationDryRunResult {
 }
 
 class MediaMigrationRunResult {
-  const MediaMigrationRunResult({
-    required this.migratedRecordingIds,
-    required this.alreadyDoneRecordingIds,
-  });
+  const MediaMigrationRunResult({required this.migratedRecordingIds});
   final List<String> migratedRecordingIds;
-  final List<String> alreadyDoneRecordingIds;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,9 +486,14 @@ class MediaMigrationRunner {
 
   /// Migrates every candidate (or the first [canaryLimit] of them, for a
   /// bounded canary batch) through the crash-safe pipeline. Resumable: a
-  /// candidate already at `done` in the manifest is skipped (belt-and-
-  /// suspenders — the candidate query itself already excludes migrated rows
-  /// since their `wrapped_fek` is no longer NULL).
+  /// candidate already `done` can never reach [bounded] in the first place —
+  /// [_store.fetchCandidates] selects on `wrapped_fek IS NULL`, and
+  /// [_stepFinish] always sets `wrapped_fek` (via `markMigrated`) BEFORE the
+  /// manifest entry's step becomes `done` (okt-audit info follow-up, #1866:
+  /// this used to carry a redundant runtime `existing.step == done` check
+  /// here — provably unreachable given that invariant, removed rather than
+  /// tested, since constructing a test for it would require an
+  /// invariant-violating fixture, not a real bug this code defends against).
   Future<MediaMigrationRunResult> run({int? canaryLimit}) async {
     _assertGateOpen();
     await _backupDir.create(recursive: true);
@@ -525,20 +526,11 @@ class MediaMigrationRunner {
         canaryLimit == null ? combined : combined.take(canaryLimit).toList();
 
     final migrated = <String>[];
-    final alreadyDone = <String>[];
     for (final candidate in bounded) {
-      final existing = manifest.entries[candidate.recordingId];
-      if (existing != null && existing.step == MediaMigrationStep.done) {
-        alreadyDone.add(candidate.recordingId);
-        continue;
-      }
       await _migrateOne(candidate, manifest);
       migrated.add(candidate.recordingId);
     }
-    return MediaMigrationRunResult(
-      migratedRecordingIds: migrated,
-      alreadyDoneRecordingIds: alreadyDone,
-    );
+    return MediaMigrationRunResult(migratedRecordingIds: migrated);
   }
 
   Future<void> _migrateOne(

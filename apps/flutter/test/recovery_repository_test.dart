@@ -121,4 +121,75 @@ void main() {
     // No throw == success; the adapter's `data:` matcher already asserts
     // the exact request body shape.
   });
+
+  group('RecoveryKeyBundle.fromJson — boundary validation (okt-audit info '
+      'follow-up #1866)', () {
+    Map<String, dynamic> validJson() => {
+          'wrapped_dek_pw': 'pw-blob',
+          'wrapped_dek_recovery': 'recovery-blob',
+          'salt_enc': 'salt-enc',
+          'salt_rec': 'salt-rec',
+          'salt_auth': 'salt-auth',
+          'kdf_params': {'profile': 'argon2id-v1-portable'},
+        };
+
+    test('parses a well-formed bundle', () {
+      final bundle = RecoveryKeyBundle.fromJson(validJson());
+      expect(bundle.wrappedDekPw, 'pw-blob');
+      expect(bundle.kdfParams['profile'], 'argon2id-v1-portable');
+    });
+
+    for (final field in [
+      'wrapped_dek_pw',
+      'wrapped_dek_recovery',
+      'salt_enc',
+      'salt_rec',
+      'salt_auth',
+    ]) {
+      test('throws RecoveryBundleFormatException when "$field" is missing '
+          '(never silently coerces to an empty string)', () {
+        final json = validJson()..remove(field);
+        expect(
+          () => RecoveryKeyBundle.fromJson(json),
+          throwsA(isA<RecoveryBundleFormatException>()),
+        );
+      });
+
+      test('throws RecoveryBundleFormatException when "$field" is an empty '
+          'string', () {
+        final json = validJson()..[field] = '';
+        expect(
+          () => RecoveryKeyBundle.fromJson(json),
+          throwsA(isA<RecoveryBundleFormatException>()),
+        );
+      });
+
+      test('throws RecoveryBundleFormatException when "$field" is the wrong '
+          'type', () {
+        final json = validJson()..[field] = 12345;
+        expect(
+          () => RecoveryKeyBundle.fromJson(json),
+          throwsA(isA<RecoveryBundleFormatException>()),
+        );
+      });
+    }
+
+    test('throws RecoveryBundleFormatException when "kdf_params" is missing',
+        () {
+      final json = validJson()..remove('kdf_params');
+      expect(
+        () => RecoveryKeyBundle.fromJson(json),
+        throwsA(isA<RecoveryBundleFormatException>()),
+      );
+    });
+
+    test('throws RecoveryBundleFormatException when "kdf_params" is not a '
+        'Map', () {
+      final json = validJson()..['kdf_params'] = 'not-a-map';
+      expect(
+        () => RecoveryKeyBundle.fromJson(json),
+        throwsA(isA<RecoveryBundleFormatException>()),
+      );
+    });
+  });
 }

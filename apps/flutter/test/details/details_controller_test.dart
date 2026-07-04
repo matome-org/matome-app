@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' show Value;
@@ -7,6 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 
+import 'package:matome_flutter/core/crypto/key_material.dart' show Dek;
+import 'package:matome_flutter/core/crypto/media_cipher.dart'
+    show encryptFileToFile;
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
@@ -348,5 +352,87 @@ void main() {
         reason: 'user-delete frees the local audio file (W2 #871)');
     expect(await db.recordingsDao.getRecordingById(localId), isNull,
         reason: 'user-delete removes the Drift row');
+  });
+
+  test(
+      '#1866 encrypted-media read seam: a row with a non-null wrappedFek '
+      'resolves its audio source through the decrypt path, never handing '
+      'the raw ciphertext path to the player', () async {
+    final tmp = await Directory.systemTemp.createTemp('details_media_read_');
+    addTearDown(() async {
+      if (await tmp.exists()) await tmp.delete(recursive: true);
+    });
+
+    // A real encrypted media file, exactly what `inbox_upload.dart`'s
+    // `encryptedDurableImportCopy` would have produced under
+    // `kMediaEncryptionEnabled`.
+    final dek = Dek.generate();
+    final plaintext = Uint8List.fromList(List.generate(4096, (i) => i & 0xff));
+    final ciphertextFile = File('${tmp.path}/import_x.enc');
+    final result = await encryptFileToFile(
+      source: File('${tmp.path}/plain.bin')..writeAsBytesSync(plaintext),
+      destination: ciphertextFile,
+      dek: dek,
+    );
+
+    const localId = 'rec_local_details-media-read';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Encrypted capture',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: ciphertextFile.path,
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('done'),
+        wrappedFek: Value(result.wrappedFek.toBase64()),
+      ),
+    );
+
+    final dio = Dio(BaseOptions(
+      baseUrl: 'http://localhost:4000',
+      validateStatus: (s) => s != null && s < 500,
+    ));
+    DioAdapter(dio: dio);
+    final repo = RecordingsRepository(
+      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+    );
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(repo),
+    ]);
+    addTearDown(container.dispose);
+
+    final scratchDir = Directory('${tmp.path}/scratch');
+    var dekSourceCalls = 0;
+    final controllerProvider = Provider<DetailsController>(
+      (ref) => DetailsController(
+        ref,
+        localId,
+        awaitResult: ({required recording, required poll, required ref}) async =>
+            const RecordingResult.done(null),
+        // Injected — proves the wiring without touching
+        // `flutter_secure_storage`'s platform channel.
+        mediaDekSource: () async {
+          dekSourceCalls++;
+          return Dek(Uint8List.fromList(dek.bytes));
+        },
+        playbackScratchDirSource: () async => scratchDir,
+      ),
+    );
+    final controller = container.read(controllerProvider);
+    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+
+    expect(dekSourceCalls, 1,
+        reason: 'a wrappedFek row must go through the decrypt-source seam');
+    expect(controller.state.audioSource.kind, AudioSourceKind.localFile);
+    final resolvedPath = controller.state.audioSource.value!;
+    expect(resolvedPath, isNot(ciphertextFile.path),
+        reason: 'the player must never be pointed at the raw ciphertext');
+    expect(resolvedPath, startsWith(scratchDir.path));
+    expect(await File(resolvedPath).readAsBytes(), plaintext,
+        reason: 'the resolved file is the real decrypted plaintext');
   });
 }

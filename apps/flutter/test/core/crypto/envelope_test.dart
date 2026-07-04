@@ -118,6 +118,43 @@ void main() {
     });
   });
 
+  group('wrappingKey length validation (symmetric wrap/unwrap, okt-audit '
+      'info follow-up #1866)', () {
+    test('wrapKey rejects a wrappingKey that is not exactly 32 bytes',
+        () async {
+      expect(
+        () => wrapKey(
+          plaintext: _payload32(1),
+          wrappingKey: Uint8List(16),
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test(
+        'unwrapKey rejects a wrappingKey that is not exactly 32 bytes — '
+        'symmetric with wrapKey, instead of falling through to whatever the '
+        'underlying AEAD call does with a malformed key length', () async {
+      final wrapped = await wrapKey(
+        plaintext: _payload32(2),
+        wrappingKey: _key32(5),
+        payloadType: PayloadType.dek,
+        wrapperType: WrapperType.passwordKek,
+      );
+
+      expect(
+        () => unwrapKey(wrapped: wrapped, wrappingKey: Uint8List(16)),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => unwrapKey(wrapped: wrapped, wrappingKey: Uint8List(64)),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+  });
+
   group('unwrapKey — tamper detection (never silent, never partial)', () {
     late Uint8List wrappingKey;
     late Uint8List plaintext;

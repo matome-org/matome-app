@@ -12,7 +12,6 @@
 /// (`apps/flutter/tool/spike_815_sqlcipher/DECISION.md`).
 library;
 
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -25,9 +24,10 @@ import '../crypto/key_material.dart'
 import '../crypto/key_unwrapper.dart'
     show KeyUnwrapper, KeyUnwrapperUnwrap;
 
-/// Minimal key/value contract the [DbEncryptionKeyManager] needs from a secure
-/// store. Abstracted so tests can inject a fake in-memory store without the
-/// `flutter_secure_storage` platform channel (mirrors [TokenStore]'s design).
+/// Minimal key/value contract [FlutterSecureKeyStore], [NativeDekProvisioner],
+/// and [DeviceKeystoreKeyUnwrapper] need from a secure store. Abstracted so
+/// tests can inject a fake in-memory store without the `flutter_secure_storage`
+/// platform channel (mirrors [TokenStore]'s design).
 abstract class SecureKeyStore {
   Future<String?> read(String key);
   Future<void> write(String key, String value);
@@ -69,56 +69,24 @@ class FlutterSecureKeyStore implements SecureKeyStore {
       _storage.write(key: key, value: value);
 }
 
-/// Generates (once, on first boot) and persists the 256-bit SQLCipher passphrase
-/// used to encrypt the native Drift database at-rest.
+/// Namespace for the `PRAGMA key` statement builder used to key the native
+/// SQLCipher connection.
 ///
-/// First boot: a 32-byte key is drawn from [Random.secure], hex-encoded, and
-/// written to the secure store. Every subsequent boot reads the same key back,
-/// so the existing encrypted DB keeps opening. The key never touches the DB file
-/// or app logs.
-///
-/// The passphrase is applied as a raw key (`PRAGMA key = "x'<hex>'"`) so
-/// SQLCipher uses the bytes verbatim — no PBKDF key-derivation salt collision
-/// and a deterministic round-trip across boots.
+/// HISTORY / STALE-DOC FIX (okt-audit info follow-up, #1866): this class
+/// used to ALSO generate + persist its own ad-hoc 256-bit passphrase
+/// (`obtainKey`/`_generateHexKey`, keyed under `storageKey` in a
+/// [SecureKeyStore]) as a standalone SQLCipher-key bootstrap. That instance
+/// code was superseded by [NativeDekProvisioner] (the [KeyUnwrapper]
+/// device-keystore chain wired into `connection_native.dart`'s
+/// [openEncryptedNativeConnection]) — which derives the real DEK through the
+/// shared envelope-encryption hierarchy instead of a one-off local secret —
+/// and became DEAD: no production call site ever constructed
+/// `DbEncryptionKeyManager(...)`. It has been removed. The only piece still
+/// used in production is the static [pragmaKeyStatement] helper below
+/// (`connection_native.dart:154`), kept as a class member purely so that
+/// call site's `DbEncryptionKeyManager.pragmaKeyStatement(...)` reference
+/// did not need to change.
 class DbEncryptionKeyManager {
-  DbEncryptionKeyManager(this._store, {Random? random})
-    : _random = random ?? Random.secure();
-
-  final SecureKeyStore _store;
-  final Random _random;
-
-  /// Secure-store key under which the hex passphrase is kept.
-  static const String storageKey = 'matome.db.sqlcipher_key';
-
-  static const int _keyBytes = 32; // 256-bit
-
-  /// NOTE (flutter_secure_storage 10.x): `AndroidOptions.resetOnError` now
-  /// defaults to `true` — on a platform decrypt error the backend WIPES the
-  /// stored value instead of throwing. For the JWT (token_store) that only
-  /// forces a re-login, but for THIS SQLCipher passphrase a silent wipe is
-  /// unrecoverable: [obtainKey] would then read empty, generate a *new* key,
-  /// and the existing encrypted Drift DB could never be reopened. When at-rest
-  /// encryption is switched on (`kSqlCipherEnabled`), construct the backing
-  /// [FlutterSecureStorage] with `aOptions: AndroidOptions(resetOnError: false)`
-  /// so a transient read error degrades to an explicit failure, not data loss.
-  ///
-  /// Returns the persisted passphrase, generating + storing one on first boot.
-  Future<String> obtainKey() async {
-    final existing = await _store.read(storageKey);
-    if (existing != null && existing.isNotEmpty) return existing;
-
-    final generated = _generateHexKey();
-    await _store.write(storageKey, generated);
-    return generated;
-  }
-
-  String _generateHexKey() {
-    final bytes = Uint8List.fromList(
-      List<int>.generate(_keyBytes, (_) => _random.nextInt(256)),
-    );
-    return hexEncodeKeyBytes(bytes);
-  }
-
   /// Builds the `PRAGMA key` statement for a raw hex passphrase. SQLCipher reads
   /// `x'...'` as the literal key bytes (no KDF), giving a stable round-trip.
   static String pragmaKeyStatement(String hexKey) =>
@@ -130,9 +98,10 @@ class DbEncryptionKeyManager {
 ///
 /// CRITICAL: flutter_secure_storage 10.x's `AndroidOptions.resetOnError`
 /// defaults to `true` — on a platform decrypt error the backend WIPES the
-/// stored value instead of throwing (see [DbEncryptionKeyManager.obtainKey]
-/// doc above for the same footgun on the SQLCipher passphrase). For the
-/// device-KEK a silent wipe is even worse: it is the ONLY key that unwraps
+/// stored value instead of throwing (the same footgun the removed
+/// `DbEncryptionKeyManager` instance code used to carry a NOTE about, see
+/// that class's doc above). For the device-KEK a silent wipe is even worse:
+/// it is the ONLY key that unwraps
 /// `wrapped_dek_device` for the passwordless native unlock path, so losing
 /// it is an unrecoverable lockout unless the user also has their password
 /// or recovery code enrolled. This constructor MUST always pass
@@ -201,8 +170,7 @@ Uint8List _hexDecode(String hexString) {
 }
 
 /// Lowercase hex encoding shared by every raw key material this file
-/// produces: the legacy [DbEncryptionKeyManager] passphrase, the
-/// [NativeDekProvisioner] device-KEK bootstrap, and (via
+/// produces: the [NativeDekProvisioner] device-KEK bootstrap, and (via
 /// `connection_native.dart`) the final DEK handed to `PRAGMA key`. One
 /// implementation so the wire shape (`^[0-9a-f]+$`, even length) can't drift
 /// between call sites.

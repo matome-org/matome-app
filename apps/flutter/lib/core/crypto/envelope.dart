@@ -237,6 +237,18 @@ Future<Uint8List> unwrapKey({
   required WrappedEnvelope wrapped,
   required Uint8List wrappingKey,
 }) async {
+  // Symmetric with [wrapKey]'s own `wrappingKey.length` guard (okt-audit
+  // info follow-up, #1866): a wrong-length key must fail with the same
+  // explicit, cheap `ArgumentError` on BOTH sides of wrap/unwrap, rather than
+  // only on wrap and falling through to whatever the `cryptography` package
+  // does with a malformed `SecretKey` length on unwrap.
+  if (wrappingKey.length != 32) {
+    throw ArgumentError.value(
+      wrappingKey.length,
+      'wrappingKey.length',
+      'expected exactly 32 bytes',
+    );
+  }
   // Fast-path guards on the two versioning axes owned by this layer (the
   // wrap-layout version and the AEAD algorithm id) — checked before any
   // crypto is attempted.

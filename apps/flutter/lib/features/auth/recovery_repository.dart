@@ -24,17 +24,52 @@ class RecoveryKeyBundle {
   final String saltAuth;
   final Map<String, dynamic> kdfParams;
 
+  /// Parses the `key_bundle` object from `GET/PUT /api/keybundle/recovery`.
+  ///
+  /// Fails EXPLICITLY (throws [RecoveryBundleFormatException]) on any
+  /// missing or malformed field (okt-audit info follow-up, #1866) — a
+  /// partial/malformed server response must never silently coerce into a
+  /// bundle carrying empty-string crypto material (`''`/`{}`), which would
+  /// otherwise flow into `unwrapKey`/envelope logic downstream looking like
+  /// valid-but-wrong key material instead of a loud, attributable parse
+  /// failure at the boundary where the bad data actually entered.
   factory RecoveryKeyBundle.fromJson(Map<String, dynamic> json) {
+    String requireString(String key) {
+      final value = json[key];
+      if (value is! String || value.isEmpty) {
+        throw RecoveryBundleFormatException(key);
+      }
+      return value;
+    }
+
     final kdfParams = json['kdf_params'];
+    if (kdfParams is! Map<String, dynamic>) {
+      throw const RecoveryBundleFormatException('kdf_params');
+    }
+
     return RecoveryKeyBundle(
-      wrappedDekPw: json['wrapped_dek_pw']?.toString() ?? '',
-      wrappedDekRecovery: json['wrapped_dek_recovery']?.toString() ?? '',
-      saltEnc: json['salt_enc']?.toString() ?? '',
-      saltRec: json['salt_rec']?.toString() ?? '',
-      saltAuth: json['salt_auth']?.toString() ?? '',
-      kdfParams: kdfParams is Map<String, dynamic> ? kdfParams : const {},
+      wrappedDekPw: requireString('wrapped_dek_pw'),
+      wrappedDekRecovery: requireString('wrapped_dek_recovery'),
+      saltEnc: requireString('salt_enc'),
+      saltRec: requireString('salt_rec'),
+      saltAuth: requireString('salt_auth'),
+      kdfParams: kdfParams,
     );
   }
+}
+
+/// Thrown by [RecoveryKeyBundle.fromJson] when the server's `key_bundle`
+/// JSON is missing [field] or carries the wrong type for it — a boundary
+/// failure, never silently coerced to an empty placeholder.
+class RecoveryBundleFormatException implements Exception {
+  const RecoveryBundleFormatException(this.field);
+
+  final String field;
+
+  @override
+  String toString() =>
+      'RecoveryBundleFormatException: missing or malformed "$field" field '
+      'in the recovery key bundle response';
 }
 
 /// Talks to the pre-auth recovery bootstrap endpoints (task #1854; resolves

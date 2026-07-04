@@ -2,10 +2,16 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
+import '../../core/crypto/key_material.dart' show Dek;
+import '../../core/crypto/media_playback_resolver.dart'
+    show PlaybackScratchDirSource, resolvePlaybackPath;
+import '../../core/db/db_encryption.dart'
+    show FlutterSecureKeyStore, NativeDekProvisioner;
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../recordings/recording_ids.dart';
@@ -121,7 +127,15 @@ class DetailsController extends StateNotifier<DetailsState> {
     this._ref,
     String id, {
     RecordingResultAwaiter awaitResult = liveRecordingResultAwaiter,
+    Future<Dek> Function()? mediaDekSource,
+    PlaybackScratchDirSource? playbackScratchDirSource,
   }) : _awaitTerminal = awaitResult,
+       _mediaDekSource =
+           mediaDekSource ??
+           (() =>
+               NativeDekProvisioner(FlutterSecureKeyStore.deviceKek()).obtainDek()),
+       _playbackScratchDirSource =
+           playbackScratchDirSource ?? _defaultPlaybackScratchDir,
        super(DetailsState(id: id)) {
     load();
   }
@@ -132,6 +146,19 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// Shared with the upload flow ([liveRecordingResultAwaiter], B1) so there is
   /// a single socket/poll await implementation; injected in tests.
   final RecordingResultAwaiter _awaitTerminal;
+
+  /// Encrypted-media read seam (task #1866): supplies the DEK
+  /// [resolvePlaybackPath] unwraps a recording's `wrappedFek` with. Defaults
+  /// to the SAME `NativeDekProvisioner(FlutterSecureKeyStore.deviceKek())`
+  /// wiring `inbox_upload.dart` uses on the write side; injected in tests so
+  /// the encrypted branch is exercisable without a `flutter_secure_storage`
+  /// platform channel.
+  final Future<Dek> Function() _mediaDekSource;
+
+  /// Where [resolvePlaybackPath] decrypts a `wrappedFek`-bearing recording
+  /// to before handing it to the player; injected in tests, defaults to
+  /// [_defaultPlaybackScratchDir].
+  final PlaybackScratchDirSource _playbackScratchDirSource;
 
   RecordingsDao get _dao => _ref.read(recordingsDaoProvider);
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
@@ -189,10 +216,29 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// playable path in `audioFilePath`); otherwise ask Core for a presigned
   /// download URL. Synced rows whose `audioFilePath` is just a storage key (not
   /// an existing file) fall through to the remote URL.
+  ///
+  /// ENCRYPTED-MEDIA READ SEAM (task #1866, okt-audit warning on #1857): a
+  /// non-null `wrappedFek` means `audioFilePath` names `media_cipher.dart`
+  /// ciphertext (written by `inbox_upload.dart`'s `encryptedDurableImportCopy`
+  /// once `kMediaEncryptionEnabled` is on) — it is routed through
+  /// [resolvePlaybackPath] to decrypt to a private scratch file BEFORE the
+  /// player ever opens it. A null `wrappedFek` is today's exact behavior,
+  /// unchanged: the raw path is handed straight to the player.
   Future<AudioSource> _resolveAudioSource(RecordingRow row) async {
     final path = row.audioFilePath;
     if (path.isNotEmpty && _isLocalPath(path) && File(path).existsSync()) {
-      return AudioSource(AudioSourceKind.localFile, path);
+      final wrappedFek = row.wrappedFek;
+      if (wrappedFek == null) {
+        return AudioSource(AudioSourceKind.localFile, path);
+      }
+      final resolvedPath = await resolvePlaybackPath(
+        recordingId: row.id,
+        sourcePath: path,
+        wrappedFekBase64: wrappedFek,
+        dekSource: _mediaDekSource,
+        scratchDirSource: _playbackScratchDirSource,
+      );
+      return AudioSource(AudioSourceKind.localFile, resolvedPath);
     }
     // Read coreId off the row being resolved (state.row isn't published yet at
     // this point in load()). A local-only row (coreId null) has no remote URL.
@@ -218,6 +264,17 @@ class DetailsController extends StateNotifier<DetailsState> {
 
   static bool _isLocalPath(String path) {
     return path.startsWith('/') || path.startsWith('file:');
+  }
+
+  /// Default private scratch directory for [resolvePlaybackPath]'s
+  /// decrypted-media output (task #1866). Deliberately `getTemporaryDirectory()`,
+  /// NOT `matomeStorageDir()` — the decrypted bytes are transiently plaintext
+  /// on disk for the player's use (documented trade-off, `media_cipher.dart`'s
+  /// `decryptToFile` doc), so they belong under the OS-managed cache/temp
+  /// area, never the durable Matome folder.
+  static Future<Directory> _defaultPlaybackScratchDir() async {
+    final tmp = await getTemporaryDirectory();
+    return Directory('${tmp.path}/matome_playback_cache');
   }
 
   /// Persists the edited buffer to Drift (`notes`) AND Core (`notes`), keeping
