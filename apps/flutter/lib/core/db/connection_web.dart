@@ -68,6 +68,14 @@ import 'web_store_opener.dart';
 /// (once per checkpoint here vs. once per page there); the [EncryptedBlobStore]
 /// contract and the wire format stay the same.
 ///
+/// **okt-audit SHIP-BLOCKER B1 fix (task #1862):** this Timer re-encrypts the
+/// whole image under the SAME `result.dek` on every tick for the life of the
+/// session — `db_image_cipher.dart`'s v2 format is what makes that safe: each
+/// `encryptDbImage` call mints a FRESH per-image FEK (never the stable DEK
+/// directly), so no number of repeated calls under one `dek` can ever
+/// collide a (key, nonce) pair. See that module's doc comment for the full
+/// nonce-reuse writeup.
+///
 /// The [keyStore] argument on [openPlatformConnection] is accepted for a
 /// uniform cross-platform signature (`core/db/connection.dart`) but unused —
 /// the in-memory fallback has no at-rest key to manage.

@@ -1,9 +1,6 @@
 // Whole-image codec for the web encrypted-DB-image-in-OPFS store — task
 // #1860, plan #131 (web wave). Encrypts/decrypts an entire serialized sqlite3
-// database (or any other opaque byte blob, e.g. a future media snapshot)
-// under the DEK directly (not wrapped through a KEK — this is a bulk-data
-// AEAD stream, not a key-wrap; see envelope.dart for the 64-byte key-wrap
-// layout used for `wrapped_dek_*`).
+// database (or any other opaque byte blob, e.g. a future media snapshot).
 //
 // This is the MVP persistence primitive AC (a) in #1860 falls back to: a full
 // custom page-level sqlite3 VFS (encrypt-per-page on a real OPFS VFS) needs a
@@ -13,14 +10,70 @@
 // in memory while the store is open (the stated MVP tradeoff) and persisted
 // as ONE encrypted blob. Chunked (not single-shot AEAD) so a multi-megabyte
 // DB image doesn't require one gigantic GCM call, and so the wire shape
-// mirrors the already-frozen per-file media stream design (Appendix A.5 of
-// .docs/internal/at-rest-key-flow.md) — same nonce-prefix + chunk-counter
-// construction, same "AAD binds chunk position" guarantee against reordering
-// or truncation.
+// mirrors the per-file media stream design (`media_cipher.dart`) — same
+// nonce-prefix + chunk-counter construction, same "AAD binds chunk position"
+// guarantee against reordering or truncation.
+//
+// ---------------------------------------------------------------------------
+// FORMAT v2 — okt-audit SHIP-BLOCKER B1 fix (task #1862, verdict pinned on
+// #1857)
+// ---------------------------------------------------------------------------
+// v1 (format_version 0x01, now UNSUPPORTED — decrypt rejects it outright)
+// encrypted every image directly under the caller-supplied DEK, with only a
+// 32-bit CSPRNG nonce_prefix distinguishing one encrypt call from the next.
+// `connection_web.dart`'s ~4s auto-persist Timer re-encrypts the WHOLE image
+// under that SAME stable DEK for the life of the account on that browser —
+// unboundedly many calls under one unchanging key. A 32-bit random prefix
+// collides at the birthday bound (~2^16 calls for 50%, non-negligible far
+// earlier), and a (key, nonce) collision under AES-GCM is catastrophic: a
+// keystream-XOR plaintext leak (sqlite header/schema pages are near-static
+// across checkpoints, making the leak practically exploitable) PLUS GHASH
+// authentication-key recovery (the AES-GCM "forbidden attack"), which lets an
+// attacker forge future ciphertexts — tamper detection collapses entirely.
+//
+// v2 (format_version 0x02, current) fixes this the same way `media_cipher
+// .dart` was already safe: mint a FRESH random FEK (File/Frame Encryption
+// Key) on EVERY `encryptDbImage` call, encrypt the image under that FEK (not
+// the DEK), and wrap the FEK under the caller's DEK using the same 64-byte
+// authenticated envelope layout (`envelope.dart`) `media_cipher.dart` uses
+// for its per-file FEK. Because the AEAD key is fresh every call, a
+// nonce-prefix collision across independent calls can NEVER reuse a (key,
+// nonce) pair — the birthday bound on the nonce space is irrelevant once the
+// key itself is never repeated. This also happens to close the GHASH
+// auth-key-recovery angle: recovering chunk 0's auth subkey for one image's
+// FEK is useless against any other image, which has its own FEK.
+//
+// Header layout (fixed 88 bytes), all multi-byte integers big-endian:
+//   0   4   magic 'MDBI'
+//   4   1   format_version (0x02)
+//   5   1   purpose
+//   6   2   reserved (0x0000)
+//   8   64  wrapped_fek — a `WrappedEnvelope` (envelope.dart) wrapping the
+//           fresh per-image FEK under the caller's DEK (PayloadType.fek /
+//           WrapperType.dekAsWrappingKey). Self-authenticating: an unwrap
+//           failure (wrong DEK, or ANY tampered wrap byte) throws before a
+//           single image chunk is even attempted.
+//   72  4   nonce_prefix (CSPRNG, unique per encrypt call; scoped to the
+//           fresh FEK above, so it is never reused across the KEY it pairs
+//           with even though the field itself is only 32 bits)
+//   76  4   chunk_size (plaintext bytes per chunk, except possibly the last)
+//   80  8   plaintext_length (total plaintext bytes)
+//
+// nonce_prefix / chunk_size / plaintext_length are bound as AEAD
+// ADDITIONAL AUTHENTICATED DATA (AAD) on chunk 0 (see `_aadFor`) — tampering
+// ANY of those three header fields, even while keeping the blob structurally
+// well-formed, fails chunk 0's authentication tag and surfaces as
+// `DbImageTamperException(0)`. `plaintext_length` is ALSO validated
+// structurally (`validateDbImagePlaintextLengthBound`) BEFORE the
+// `Uint8List(plaintextLength)` output buffer is ever allocated — a forged,
+// arbitrarily large `plaintext_length` can drive an out-of-memory
+// allocation-only denial of service if that check is skipped (an attacker
+// with write access to the persisted blob, pre-AEAD), so the bound is
+// checked with pure O(1) integer arithmetic ahead of any allocation.
 //
 // UPGRADE SEAM: a future page-level VFS can keep this exact chunk format for
 // individual 4096-byte sqlite pages (chunk_size := page size) instead of the
-// whole image — the header/chunk framing below does not need to change,
+// whole image — the header/chunk framing above does not need to change,
 // only who calls it (per-xWrite/xRead instead of once per checkpoint).
 library;
 
@@ -29,11 +82,28 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart' show Mac, SecretBox, SecretBoxAuthenticationError, SecretKey;
 import 'package:cryptography/dart.dart' show DartAesGcm;
 
-import 'key_material.dart' show secureRandomBytes;
+import 'envelope.dart'
+    show
+        EnvelopeUnwrapException,
+        PayloadType,
+        WrappedEnvelope,
+        WrapperType,
+        kWrappedEnvelopeLength,
+        unwrapKey,
+        wrapKey;
+import 'key_material.dart' show Fek, secureRandomBytes;
 
 /// 'MDBI' — Matome DB Image.
 const List<int> _kMagic = [0x4D, 0x44, 0x42, 0x49];
-const int kDbImageFormatVersion = 0x01;
+
+/// v1 is the pre-fix format (whole image encrypted directly under the stable
+/// DEK) — okt-audit SHIP-BLOCKER B1. No longer accepted by [decryptDbImage];
+/// kept named here only so the version history/reason is discoverable.
+const int kDbImageFormatVersionV1Superseded = 0x01;
+
+/// Current format: fresh per-image FEK wrapped under the DEK. See the module
+/// doc "FORMAT v2" section above.
+const int kDbImageFormatVersion = 0x02;
 const int kDbImagePurposeSqliteImage = 0x01;
 
 const int _kNoncePrefixLength = 4;
@@ -41,17 +111,16 @@ const int _kChunkIndexLength = 8;
 const int _kNonceLength = _kNoncePrefixLength + _kChunkIndexLength; // 12
 const int _kTagLength = 16;
 
-/// Header layout (fixed 24 bytes), all multi-byte integers big-endian:
-///   0   4   magic 'MDBI'
-///   4   1   format_version
-///   5   1   purpose
-///   6   2   reserved (0x0000)
-///   8   4   nonce_prefix (CSPRNG)
-///   12  4   chunk_size (plaintext bytes per chunk, except possibly the last)
-///   16  8   plaintext_length (total, so the last chunk's exact length is
-///           unambiguous even though ciphertext length == plaintext length
-///           for AES-GCM)
-const int _kHeaderLength = 24;
+const int _kWrappedFekOffset = 8;
+const int _kNoncePrefixOffset = _kWrappedFekOffset + kWrappedEnvelopeLength; // 72
+const int _kChunkSizeOffset = _kNoncePrefixOffset + _kNoncePrefixLength; // 76
+const int _kPlaintextLengthOffset = _kChunkSizeOffset + 4; // 80
+
+/// Fixed header length — see the module doc's "Header layout" section.
+/// Exposed (not private) so tests can address header-field byte offsets
+/// without hardcoding a number that could silently drift from the real
+/// implementation.
+const int kDbImageHeaderLength = _kPlaintextLengthOffset + 8; // 88
 
 /// Plaintext chunk size — 64 KiB. Large enough to keep chunk-count (and thus
 /// AEAD call count) reasonable for multi-MB DB images, small enough that a
@@ -67,7 +136,9 @@ abstract class DbImageDecryptException implements Exception {
 }
 
 /// The blob is too short to even contain a header, or its magic/format
-/// version/purpose bytes don't match what this build understands.
+/// version/purpose bytes don't match what this build understands, or a
+/// header field (`plaintext_length`) is structurally impossible given the
+/// actual ciphertext length (see [validateDbImagePlaintextLengthBound]).
 class DbImageHeaderException extends DbImageDecryptException {
   final String reason;
   const DbImageHeaderException(this.reason);
@@ -76,16 +147,22 @@ class DbImageHeaderException extends DbImageDecryptException {
   String toString() => 'DbImageHeaderException: $reason';
 }
 
-/// AEAD authentication failed on a chunk: wrong DEK, or the ciphertext/tag
-/// for that chunk (or its position, via AAD) was tampered with/reordered/
-/// truncated.
+/// AEAD authentication failed: wrong DEK / tampered `wrapped_fek`
+/// ([chunkIndex] `-1`, a header/key-level failure before any image chunk is
+/// reached), or a specific chunk's ciphertext/tag/position (via AAD) was
+/// tampered with/reordered/truncated ([chunkIndex] `>= 0`). Chunk 0's AAD
+/// additionally binds `nonce_prefix`/`chunk_size`/`plaintext_length`, so
+/// tampering any of those three header fields also surfaces here as
+/// `chunkIndex == 0`.
 class DbImageTamperException extends DbImageDecryptException {
   final int chunkIndex;
   const DbImageTamperException(this.chunkIndex);
 
   @override
-  String toString() =>
-      'DbImageTamperException: chunk $chunkIndex failed authentication';
+  String toString() => chunkIndex < 0
+      ? 'DbImageTamperException: header/wrapped-FEK failed authentication '
+          '(wrong DEK, or a tampered wrapped_fek)'
+      : 'DbImageTamperException: chunk $chunkIndex failed authentication';
 }
 
 final DartAesGcm _aesGcm = DartAesGcm(
@@ -111,13 +188,87 @@ int _beToInt(Uint8List bytes) {
   return v;
 }
 
+/// The AAD bound to each chunk's AEAD call. Chunk 0 additionally binds
+/// [noncePrefix]/[chunkSize]/[plaintextLength] (the header fields that are
+/// otherwise only structurally parsed, never cryptographically checked) —
+/// this is what turns "tamper the header" into an AEAD authentication
+/// failure instead of a silent misparse. Every other chunk's AAD is just its
+/// own big-endian chunk index, exactly as before (still enough to defeat
+/// cross-chunk reordering/substitution).
+Uint8List _aadFor(
+  int chunkIndex, {
+  required Uint8List noncePrefix,
+  required int chunkSize,
+  required int plaintextLength,
+}) {
+  final chunkIndexBytes = _beBytes(chunkIndex, _kChunkIndexLength);
+  if (chunkIndex != 0) {
+    return chunkIndexBytes;
+  }
+  final out = Uint8List(_kChunkIndexLength + _kNoncePrefixLength + 4 + 8);
+  var offset = 0;
+  out.setRange(offset, offset + _kChunkIndexLength, chunkIndexBytes);
+  offset += _kChunkIndexLength;
+  out.setRange(offset, offset + _kNoncePrefixLength, noncePrefix);
+  offset += _kNoncePrefixLength;
+  out.setRange(offset, offset + 4, _beBytes(chunkSize, 4));
+  offset += 4;
+  out.setRange(offset, offset + 8, _beBytes(plaintextLength, 8));
+  return out;
+}
+
+/// Validates that a header-declared [plaintextLength] (combined with
+/// [chunkSize]) is even POSSIBLE given [availableCipherBytes] (the ciphertext
+/// bytes actually present after the fixed header) — BEFORE
+/// [decryptDbImage] allocates its `Uint8List(plaintextLength)` output buffer.
+///
+/// Every plaintext chunk of [chunkSize] bytes costs at least
+/// `chunkSize + tagLength` ciphertext bytes (AES-GCM: ciphertext length ==
+/// plaintext length, plus a fixed 16-byte tag per chunk), so a declared
+/// [plaintextLength] that would require MORE ciphertext than actually exists
+/// is unconditionally a forgery — never the legitimate output of
+/// [encryptDbImage] — and is rejected here using only O(1) integer
+/// arithmetic, with NO allocation proportional to the attacker-controlled
+/// [plaintextLength]. Exposed (not private) so this guard is directly
+/// unit-testable without needing to actually attempt a multi-gigabyte
+/// allocation in a test.
+void validateDbImagePlaintextLengthBound({
+  required int plaintextLength,
+  required int chunkSize,
+  required int availableCipherBytes,
+}) {
+  if (chunkSize <= 0) {
+    throw const DbImageHeaderException('chunk_size must be positive');
+  }
+  if (plaintextLength < 0) {
+    throw const DbImageHeaderException(
+      'plaintext_length must be non-negative',
+    );
+  }
+  final chunkCount = plaintextLength == 0
+      ? 0
+      : (plaintextLength + chunkSize - 1) ~/ chunkSize;
+  final requiredCipherBytes = plaintextLength + chunkCount * _kTagLength;
+  if (requiredCipherBytes > availableCipherBytes) {
+    throw DbImageHeaderException(
+      'forged plaintext_length ($plaintextLength bytes, implying '
+      '$chunkCount chunk(s)) would require $requiredCipherBytes ciphertext '
+      'bytes but only $availableCipherBytes are present -- rejected before '
+      'any Uint8List(plaintextLength) allocation',
+    );
+  }
+}
+
 /// Encrypts an entire byte image (typically a serialized sqlite3 database)
-/// under [dek] (32 raw bytes). Returns the framed ciphertext — this is
-/// exactly the bytes that are safe to persist to OPFS (never the plaintext
+/// so it is safe to persist to OPFS. Returns the framed v2 ciphertext — this
+/// is exactly the bytes that are safe to write (never the plaintext
 /// [plaintext] itself).
 ///
-/// A fresh CSPRNG nonce prefix is generated per call — never reuse a nonce
-/// prefix with the same key across independent encrypt calls.
+/// A FRESH random FEK is minted on every call and used as the actual AEAD
+/// key for the image; [dek] only wraps that FEK in the header (see the
+/// module doc "FORMAT v2" section — this is the okt-audit SHIP-BLOCKER B1
+/// fix: it is what makes repeated calls under the same stable [dek] safe,
+/// since the AEAD key itself is never repeated).
 Future<Uint8List> encryptDbImage({
   required Uint8List plaintext,
   required Uint8List dek,
@@ -130,8 +281,9 @@ Future<Uint8List> encryptDbImage({
     throw ArgumentError.value(chunkSize, 'chunkSize', 'must be positive');
   }
 
+  final fek = Fek.generate();
   final noncePrefix = secureRandomBytes(_kNoncePrefixLength);
-  final secretKey = SecretKey(dek);
+  final secretKey = SecretKey(fek.bytes);
 
   final chunkCount = plaintext.isEmpty ? 0 : (plaintext.length / chunkSize).ceil();
   final encryptedChunks = <Uint8List>[];
@@ -147,11 +299,18 @@ Future<Uint8List> encryptDbImage({
       ..setRange(0, _kNoncePrefixLength, noncePrefix)
       ..setRange(_kNoncePrefixLength, _kNonceLength, chunkIndexBytes);
 
+    final aad = _aadFor(
+      i,
+      noncePrefix: noncePrefix,
+      chunkSize: chunkSize,
+      plaintextLength: plaintext.length,
+    );
+
     final box = await _aesGcm.encrypt(
       chunkPlaintext,
       secretKey: secretKey,
       nonce: nonce,
-      aad: chunkIndexBytes,
+      aad: aad,
     );
 
     final framed = Uint8List(box.cipherText.length + _kTagLength)
@@ -161,17 +320,42 @@ Future<Uint8List> encryptDbImage({
     totalCipherLen += framed.length;
   }
 
-  final out = Uint8List(_kHeaderLength + totalCipherLen);
+  // Wrap the FEK under the DEK using the same envelope.dart layout
+  // media_cipher.dart uses for its per-file FEK. Wrap BEFORE wipe: wiping
+  // first would wrap an all-zero key instead of the FEK that actually
+  // encrypted the chunks above.
+  final wrappedFek = await wrapKey(
+    plaintext: fek.bytes,
+    wrappingKey: dek,
+    payloadType: PayloadType.fek,
+    wrapperType: WrapperType.dekAsWrappingKey,
+  );
+  fek.wipe();
+
+  final out = Uint8List(kDbImageHeaderLength + totalCipherLen);
   out.setRange(0, 4, _kMagic);
   out[4] = kDbImageFormatVersion;
   out[5] = kDbImagePurposeSqliteImage;
   out[6] = 0;
   out[7] = 0;
-  out.setRange(8, 12, noncePrefix);
-  out.setRange(12, 16, _beBytes(chunkSize, 4));
-  out.setRange(16, 24, _beBytes(plaintext.length, 8));
+  out.setRange(
+    _kWrappedFekOffset,
+    _kWrappedFekOffset + kWrappedEnvelopeLength,
+    wrappedFek.bytes,
+  );
+  out.setRange(
+    _kNoncePrefixOffset,
+    _kNoncePrefixOffset + _kNoncePrefixLength,
+    noncePrefix,
+  );
+  out.setRange(_kChunkSizeOffset, _kChunkSizeOffset + 4, _beBytes(chunkSize, 4));
+  out.setRange(
+    _kPlaintextLengthOffset,
+    kDbImageHeaderLength,
+    _beBytes(plaintext.length, 8),
+  );
 
-  var offset = _kHeaderLength;
+  var offset = kDbImageHeaderLength;
   for (final chunk in encryptedChunks) {
     out.setRange(offset, offset + chunk.length, chunk);
     offset += chunk.length;
@@ -184,7 +368,8 @@ Future<Uint8List> encryptDbImage({
 /// original plaintext image bytes.
 ///
 /// Fails EXPLICITLY (throws a [DbImageDecryptException] subtype) on a
-/// malformed header, a wrong [dek], or ANY tampered/reordered/truncated
+/// malformed header, a structurally-impossible `plaintext_length`, a wrong
+/// [dek], a tampered `wrapped_fek`, or ANY tampered/reordered/truncated
 /// chunk. Never returns partial or garbage plaintext, and never silently
 /// treats a decrypt failure as "no existing database" — callers must
 /// propagate this as a hard failure (wrong password / corrupted store), not
@@ -196,7 +381,7 @@ Future<Uint8List> decryptDbImage({
   if (dek.length != 32) {
     throw ArgumentError.value(dek.length, 'dek.length', 'expected 32 bytes');
   }
-  if (ciphertext.length < _kHeaderLength) {
+  if (ciphertext.length < kDbImageHeaderLength) {
     throw const DbImageHeaderException('blob shorter than the fixed header');
   }
   for (var i = 0; i < 4; i++) {
@@ -213,14 +398,48 @@ Future<Uint8List> decryptDbImage({
     throw DbImageHeaderException('unsupported purpose byte $purpose');
   }
 
-  final noncePrefix = ciphertext.sublist(8, 12);
-  final chunkSize = _beToInt(ciphertext.sublist(12, 16));
-  final plaintextLength = _beToInt(ciphertext.sublist(16, 24));
+  final wrappedFekBytes = ciphertext.sublist(
+    _kWrappedFekOffset,
+    _kWrappedFekOffset + kWrappedEnvelopeLength,
+  );
+  final noncePrefix = ciphertext.sublist(
+    _kNoncePrefixOffset,
+    _kNoncePrefixOffset + _kNoncePrefixLength,
+  );
+  final chunkSize = _beToInt(
+    ciphertext.sublist(_kChunkSizeOffset, _kChunkSizeOffset + 4),
+  );
+  final plaintextLength = _beToInt(
+    ciphertext.sublist(_kPlaintextLengthOffset, kDbImageHeaderLength),
+  );
 
-  final secretKey = SecretKey(dek);
+  // Reject a structurally-impossible header BEFORE `out` is allocated below
+  // — see [validateDbImagePlaintextLengthBound]'s doc for why this must run
+  // ahead of any Uint8List(plaintextLength) allocation (pre-AEAD OOM DoS).
+  validateDbImagePlaintextLengthBound(
+    plaintextLength: plaintextLength,
+    chunkSize: chunkSize,
+    availableCipherBytes: ciphertext.length - kDbImageHeaderLength,
+  );
+
+  final Uint8List fekBytes;
+  try {
+    fekBytes = await unwrapKey(
+      wrapped: WrappedEnvelope(wrappedFekBytes),
+      wrappingKey: dek,
+    );
+  } on EnvelopeUnwrapException {
+    // Wrong DEK, or a tampered wrapped_fek — surfaced through this codec's
+    // own exception hierarchy (chunkIndex -1 denotes a header/key-level
+    // failure, before any image chunk is even reached) rather than leaking
+    // envelope.dart's exception type across this module's boundary.
+    throw const DbImageTamperException(-1);
+  }
+  final secretKey = SecretKey(fekBytes);
+
   final out = Uint8List(plaintextLength);
 
-  var readOffset = _kHeaderLength;
+  var readOffset = kDbImageHeaderLength;
   var writeOffset = 0;
   var chunkIndex = 0;
   while (writeOffset < plaintextLength) {
@@ -245,6 +464,13 @@ Future<Uint8List> decryptDbImage({
       ..setRange(0, _kNoncePrefixLength, noncePrefix)
       ..setRange(_kNoncePrefixLength, _kNonceLength, chunkIndexBytes);
 
+    final aad = _aadFor(
+      chunkIndex,
+      noncePrefix: noncePrefix,
+      chunkSize: chunkSize,
+      plaintextLength: plaintextLength,
+    );
+
     final box = SecretBox(chunkCiphertext, nonce: nonce, mac: Mac(tag));
 
     final List<int> chunkPlaintext;
@@ -252,7 +478,7 @@ Future<Uint8List> decryptDbImage({
       chunkPlaintext = await _aesGcm.decrypt(
         box,
         secretKey: secretKey,
-        aad: chunkIndexBytes,
+        aad: aad,
       );
     } on SecretBoxAuthenticationError {
       throw DbImageTamperException(chunkIndex);
