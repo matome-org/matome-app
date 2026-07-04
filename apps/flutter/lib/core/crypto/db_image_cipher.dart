@@ -75,6 +75,19 @@
 // individual 4096-byte sqlite pages (chunk_size := page size) instead of the
 // whole image — the header/chunk framing above does not need to change,
 // only who calls it (per-xWrite/xRead instead of once per checkpoint).
+//
+// EMPTY-IMAGE HEADER AUTHENTICATION (task #1867, okt-audit PASS-2
+// FINDING-2 — info, since fixed): a `plaintext_length == 0` image used to
+// skip the chunk loop ENTIRELY, so `nonce_prefix`/`chunk_size`/
+// `plaintext_length` were only ever structurally parsed, never bound as AAD
+// — the "tamper the header, fail AEAD auth" guarantee the module doc above
+// describes for every non-empty image quietly did not hold for an empty
+// one. Fixed by always emitting/verifying ONE chunk-0 AEAD frame — an
+// AES-GCM call over a zero-length plaintext is well-formed and yields a
+// zero-length ciphertext plus a real 16-byte tag over the chunk-0 AAD — so
+// an empty image's header is authenticated exactly like every other
+// image's. Dark/unwired feature (per the pinned reaudit verdict on #1857),
+// so this is a wire-format change with no live persisted data to migrate.
 library;
 
 import 'dart:typed_data';
@@ -245,8 +258,12 @@ void validateDbImagePlaintextLengthBound({
       'plaintext_length must be non-negative',
     );
   }
+  // Even a `plaintext_length == 0` image now always carries exactly ONE
+  // chunk-0 AEAD frame (a zero-length ciphertext + a real 16-byte tag) so
+  // the header fields bound as chunk 0's AAD are authenticated — okt-audit
+  // PASS-2 FINDING-2. So the minimum chunk count is 1, not 0.
   final chunkCount = plaintextLength == 0
-      ? 0
+      ? 1
       : (plaintextLength + chunkSize - 1) ~/ chunkSize;
   final requiredCipherBytes = plaintextLength + chunkCount * _kTagLength;
   if (requiredCipherBytes > availableCipherBytes) {
@@ -285,7 +302,11 @@ Future<Uint8List> encryptDbImage({
   final noncePrefix = secureRandomBytes(_kNoncePrefixLength);
   final secretKey = SecretKey(fek.bytes);
 
-  final chunkCount = plaintext.isEmpty ? 0 : (plaintext.length / chunkSize).ceil();
+  // Always at least 1 chunk, even for an empty image — see the module doc
+  // "EMPTY-IMAGE HEADER AUTHENTICATION" note (okt-audit PASS-2 FINDING-2):
+  // chunk 0's AEAD call is what authenticates the header fields, so it must
+  // run unconditionally.
+  final chunkCount = plaintext.isEmpty ? 1 : (plaintext.length / chunkSize).ceil();
   final encryptedChunks = <Uint8List>[];
   var totalCipherLen = 0;
 
@@ -444,10 +465,21 @@ Future<Uint8List> decryptDbImage({
   try {
     final out = Uint8List(plaintextLength);
 
+    // Always at least 1 chunk, even for `plaintextLength == 0` — chunk 0's
+    // AEAD call is what authenticates the header fields (nonce_prefix /
+    // chunk_size / plaintext_length via AAD), so it must run and be
+    // verified even when there is no actual image content (okt-audit
+    // PASS-2 FINDING-2). Looping on `chunkIndex < chunkCount` (rather than
+    // the old `writeOffset < plaintextLength`) is what makes that one
+    // header-only chunk run for the empty case.
+    final chunkCount = plaintextLength == 0
+        ? 1
+        : (plaintextLength + chunkSize - 1) ~/ chunkSize;
+
     var readOffset = kDbImageHeaderLength;
     var writeOffset = 0;
     var chunkIndex = 0;
-    while (writeOffset < plaintextLength) {
+    while (chunkIndex < chunkCount) {
       final remainingPlaintext = plaintextLength - writeOffset;
       final thisChunkPlaintextLen =
           remainingPlaintext < chunkSize ? remainingPlaintext : chunkSize;

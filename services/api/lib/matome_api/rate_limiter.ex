@@ -41,6 +41,22 @@ defmodule MatomeApi.RateLimiter do
   never depended on who currently "owns" the table anyway. `init/1`'s
   `ensure_table/0` then finds the already-alive table via `:ets.whereis/1`
   and leaves it alone.
+
+  ## Heir-restart resilience (okt-audit PASS-2 FINDING-3, task #1867)
+
+  A `heir:` pid is captured into the ETS table options once, at creation
+  time — it is NOT live-updated if `TableHeir` itself later crashes and
+  restarts with a fresh pid. Left unaddressed, that means a `TableHeir`
+  crash+restart happening BEFORE (not after) a `RateLimiter` crash would
+  leave the table's heir field pointing at a dead process, so the NEXT
+  `RateLimiter` crash destroys the table instead of transferring it —
+  silently wiping every counter/lockout, exactly what the mechanism above
+  exists to prevent. Fixed at the supervision-tree level, not here: see
+  `MatomeApi.RateLimiter.Supervisor`, which pairs this GenServer with
+  `TableHeir` under `:rest_for_one` so a `TableHeir` crash always
+  cascade-restarts this GenServer too, destroying-and-recreating the table
+  (fresh heir, correctly pointing at the live `TableHeir`) in the same
+  beat — never leaving a stale-heir window open indefinitely.
   """
   use GenServer
 

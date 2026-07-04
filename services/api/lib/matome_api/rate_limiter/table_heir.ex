@@ -16,6 +16,13 @@ defmodule MatomeApi.RateLimiter.TableHeir do
   freshly-restarted `MatomeApi.RateLimiter`) can keep reading/writing it
   regardless of which process currently "owns" it in the ETS sense — no
   further hand-back is needed.
+
+  Started by `MatomeApi.RateLimiter.Supervisor` (NOT directly by the
+  top-level `MatomeApi.Application` supervisor) under a `:rest_for_one`
+  strategy paired with `MatomeApi.RateLimiter` — see that module's
+  moduledoc for why a plain `:one_for_one` sibling relationship would
+  leave a stale-heir gap open after THIS process crashes and restarts
+  (okt-audit PASS-2 FINDING-3, task #1867).
   """
   use GenServer
 

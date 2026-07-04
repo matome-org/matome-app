@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'package:matome_flutter/app/auth_state.dart';
 import 'package:matome_flutter/app/navigation_guard.dart';
@@ -205,21 +209,42 @@ class _TestAppState extends ConsumerState<_TestApp> {
   }
 }
 
+/// Fake path_provider so `AuthController.logout()`'s default playback-cache
+/// sweep (`defaultPlaybackScratchDir` → `getTemporaryDirectory()`, okt-audit
+/// PASS-2 FINDING-1, task #1867) resolves against a real temp dir instead of
+/// a platform channel with no registered mock handler — which, in a
+/// `testWidgets` harness, does not throw but never resolves, silently
+/// stalling `logout()` before it reaches `state = AsyncValue.data(null)`.
+/// Mirrors `matome_add_photo_e2e_test.dart`'s `_FakePathProvider`.
+class _FakeTempPathProvider extends PathProviderPlatform
+    with MockPlatformInterfaceMixin {
+  _FakeTempPathProvider(this.tempPath);
+  final String tempPath;
+  @override
+  Future<String?> getTemporaryPath() async => tempPath;
+}
+
 void main() {
   late AppDatabase db;
   late InMemoryTokenStore store;
+  late Directory fakeTempRoot;
 
   setUp(() {
     LocaleSettings.setLocaleSync(AppLocale.en);
     db = AppDatabase.forTesting(NativeDatabase.memory());
     store = InMemoryTokenStore();
+    fakeTempRoot = Directory.systemTemp.createTempSync('settings_satori_fake_temp_');
+    PathProviderPlatform.instance = _FakeTempPathProvider(fakeTempRoot.path);
     // Seed a valid persisted session so startup restoreSession() lands authed.
     store.saveTokens(
       accessToken: _session.accessToken,
       refreshToken: _session.refreshToken!,
     );
   });
-  tearDown(() => db.close());
+  tearDown(() async {
+    await db.close();
+    if (fakeTempRoot.existsSync()) fakeTempRoot.deleteSync(recursive: true);
+  });
 
   testWidgets('Sign out from Settings clears tokens and returns to Welcome', (
     tester,
@@ -244,6 +269,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(_session.user.email), findsOneWidget);
     await tester.tap(signOut);
+    // `AuthController.logout()` now also sweeps the playback scratch cache
+    // (okt-audit PASS-2 FINDING-1, task #1867) via real `dart:io`
+    // `Directory.exists()`/`delete()` calls. `testWidgets()`'s default zone
+    // does not resolve real (non-mocked-channel) async I/O — only
+    // `tester.runAsync()` runs in a real zone where it can actually
+    // complete — so without this, `logout()` would stall forever before
+    // ever reaching `state = AsyncValue.data(null)`, and the redirect to
+    // Welcome below would never happen.
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
     await tester.pumpAndSettle();
 
     // Tokens cleared and the guard redirected to the Welcome screen.

@@ -7,6 +7,8 @@ import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'package:matome_flutter/core/crypto/key_material.dart' show Dek;
 import 'package:matome_flutter/core/crypto/media_cipher.dart'
@@ -87,11 +89,35 @@ Future<void> _seedDone(AppDatabase db) {
   );
 }
 
-void main() {
-  late AppDatabase db;
+/// Fake path_provider so tests that DON'T inject a `playbackScratchDirSource`
+/// (the plaintext-media paths, e.g. the W2 #871 delete test) still resolve
+/// `DetailsController`'s default scratch-dir source
+/// (`defaultPlaybackScratchDir` → `getTemporaryDirectory()`) against a real
+/// temp dir instead of hanging on the absent plugin channel — mirrors
+/// `matome_add_photo_e2e_test.dart`'s `_FakePathProvider`.
+class _FakeTempPathProvider extends PathProviderPlatform
+    with MockPlatformInterfaceMixin {
+  _FakeTempPathProvider(this.tempPath);
+  final String tempPath;
+  @override
+  Future<String?> getTemporaryPath() async => tempPath;
+}
 
-  setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
-  tearDown(() => db.close());
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late AppDatabase db;
+  late Directory fakeTempRoot;
+
+  setUp(() {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    fakeTempRoot = Directory.systemTemp.createTempSync('details_fake_temp_');
+    PathProviderPlatform.instance = _FakeTempPathProvider(fakeTempRoot.path);
+  });
+  tearDown(() async {
+    await db.close();
+    if (fakeTempRoot.existsSync()) fakeTempRoot.deleteSync(recursive: true);
+  });
 
   test(
       'B3 regression: retry won by a sparse socket `done` (null summary/notes) '
@@ -511,5 +537,159 @@ void main() {
     expect(controller.state.notFound, isFalse);
     expect(controller.state.audioSource.kind, AudioSourceKind.none,
         reason: 'no usable source — degrades cleanly instead of crashing');
+    // okt-audit PASS-2 FINDING-1 (secondary): the failed decrypt must not
+    // leave a partial/stray plaintext scratch file behind.
+    final stray = File(
+      '${tmp.path}/scratch/rec_local_details-media-decrypt-fail.playback',
+    );
+    expect(await stray.exists(), isFalse,
+        reason: 'a failed decrypt must not leave any scratch file, even an '
+            'empty one');
+  });
+
+  test(
+      'okt-audit PASS-2 FINDING-1: DetailsController.dispose() unlinks the '
+      'decrypted playback scratch file it resolved — no permanent plaintext '
+      'copy survives past the controller/player\'s lifetime', () async {
+    final tmp = await Directory.systemTemp.createTemp('details_dispose_evict_');
+    addTearDown(() async {
+      if (await tmp.exists()) await tmp.delete(recursive: true);
+    });
+
+    final dek = Dek.generate();
+    final plaintext = Uint8List.fromList(List.generate(4096, (i) => i & 0xff));
+    final ciphertextFile = File('${tmp.path}/import_dispose.enc');
+    final result = await encryptFileToFile(
+      source: File('${tmp.path}/plain.bin')..writeAsBytesSync(plaintext),
+      destination: ciphertextFile,
+      dek: dek,
+    );
+
+    const localId = 'rec_local_details-dispose-evict';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Encrypted capture',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: ciphertextFile.path,
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('done'),
+        wrappedFek: Value(result.wrappedFek.toBase64()),
+      ),
+    );
+
+    final dio = Dio(BaseOptions(
+      baseUrl: 'http://localhost:4000',
+      validateStatus: (s) => s != null && s < 500,
+    ));
+    DioAdapter(dio: dio);
+    final repo = RecordingsRepository(
+      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+    );
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(repo),
+    ]);
+    addTearDown(container.dispose);
+
+    final scratchDir = Directory('${tmp.path}/scratch');
+    final controllerProvider = Provider<DetailsController>(
+      (ref) => DetailsController(
+        ref,
+        localId,
+        awaitResult: ({required recording, required poll, required ref}) async =>
+            const RecordingResult.done(null),
+        mediaDekSource: () async => Dek(Uint8List.fromList(dek.bytes)),
+        playbackScratchDirSource: () async => scratchDir,
+      ),
+    );
+    final controller = container.read(controllerProvider);
+    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+
+    final resolvedPath = controller.state.audioSource.value!;
+    final scratchFile = File(resolvedPath);
+    expect(await scratchFile.exists(), isTrue,
+        reason: 'sanity: the decrypted scratch file exists while the '
+            'controller/player is alive');
+
+    controller.dispose();
+
+    expect(await scratchFile.exists(), isFalse,
+        reason: 'dispose() must unlink the decrypted scratch file — no '
+            'permanent plaintext copy (okt-audit PASS-2 FINDING-1)');
+  });
+
+  test(
+      'okt-audit PASS-2 FINDING-1: delete() also unlinks the decrypted '
+      'playback scratch file for the recording being deleted', () async {
+    final tmp = await Directory.systemTemp.createTemp('details_delete_evict_');
+    addTearDown(() async {
+      if (await tmp.exists()) await tmp.delete(recursive: true);
+    });
+
+    final dek = Dek.generate();
+    final plaintext = Uint8List.fromList(List.generate(512, (i) => i & 0xff));
+    final ciphertextFile = File('${tmp.path}/import_delete.enc');
+    final result = await encryptFileToFile(
+      source: File('${tmp.path}/plain.bin')..writeAsBytesSync(plaintext),
+      destination: ciphertextFile,
+      dek: dek,
+    );
+
+    const localId = 'rec_local_details-delete-evict';
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: localId,
+        title: 'Encrypted capture',
+        timestamp: '9:00 AM',
+        duration: '0:30',
+        audioFilePath: ciphertextFile.path,
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        processingStatus: const Value('done'),
+        wrappedFek: Value(result.wrappedFek.toBase64()),
+      ),
+    );
+
+    final dio = Dio(BaseOptions(
+      baseUrl: 'http://localhost:4000',
+      validateStatus: (s) => s != null && s < 500,
+    ));
+    DioAdapter(dio: dio);
+    final repo = RecordingsRepository(
+      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+    );
+    final container = ProviderContainer(overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(repo),
+    ]);
+    addTearDown(container.dispose);
+
+    final scratchDir = Directory('${tmp.path}/scratch');
+    final controllerProvider = Provider<DetailsController>(
+      (ref) => DetailsController(
+        ref,
+        localId,
+        awaitResult: ({required recording, required poll, required ref}) async =>
+            const RecordingResult.done(null),
+        mediaDekSource: () async => Dek(Uint8List.fromList(dek.bytes)),
+        playbackScratchDirSource: () async => scratchDir,
+      ),
+    );
+    final controller = container.read(controllerProvider);
+    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+
+    final scratchFile = File(controller.state.audioSource.value!);
+    expect(await scratchFile.exists(), isTrue);
+
+    await controller.delete();
+
+    expect(await scratchFile.exists(), isFalse,
+        reason: 'deleting the recording must not leave its decrypted '
+            'scratch copy behind');
   });
 }

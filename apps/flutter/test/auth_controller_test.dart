@@ -1,5 +1,12 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:matome_flutter/core/crypto/media_playback_resolver.dart'
+    show evictAllPlaybackScratch;
 import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
@@ -93,13 +100,35 @@ const _session = AuthSession(
   refreshToken: 'refresh-1',
 );
 
+/// Fake path_provider so the default (non-injected) logout sweep —
+/// `AuthController`'s default `evictPlaybackCache` → `defaultPlaybackScratchDir`
+/// → `getTemporaryDirectory()` — resolves against a real temp dir instead of
+/// hanging on the absent plugin channel in tests that don't inject a fake
+/// `evictPlaybackCache` (mirrors `matome_add_photo_e2e_test.dart`'s
+/// `_FakePathProvider`).
+class _FakeTempPathProvider extends PathProviderPlatform
+    with MockPlatformInterfaceMixin {
+  _FakeTempPathProvider(this.tempPath);
+  final String tempPath;
+  @override
+  Future<String?> getTemporaryPath() async => tempPath;
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late InMemoryTokenStore store;
   late _FakeAuthRepository repo;
+  late Directory fakeTempRoot;
 
   setUp(() {
     store = InMemoryTokenStore();
     repo = _FakeAuthRepository(store);
+    fakeTempRoot = Directory.systemTemp.createTempSync('auth_fake_temp_');
+    PathProviderPlatform.instance = _FakeTempPathProvider(fakeTempRoot.path);
+  });
+  tearDown(() {
+    if (fakeTempRoot.existsSync()) fakeTempRoot.deleteSync(recursive: true);
   });
 
   test('bootstrap with no tokens resolves to signed-out', () async {
@@ -201,5 +230,107 @@ void main() {
 
     expect(repo.logoutCalls, 1);
     expect(c.read(authControllerProvider).valueOrNull, isNull);
+  });
+
+  test(
+      'okt-audit PASS-2 FINDING-1: logout() sweeps the playback scratch '
+      'cache (the "logout/account-switch" eviction point named in the '
+      'finding) AFTER repo.logout() succeeds', () async {
+    repo.loginResult = _session;
+    var evictCalls = 0;
+
+    final container = ProviderContainer(
+      overrides: [
+        tokenStoreProvider.overrideWithValue(store),
+        authRepositoryProvider.overrideWithValue(repo),
+        authControllerProvider.overrideWith(
+          (ref) => AuthController(
+            ref,
+            evictPlaybackCache: () async {
+              evictCalls++;
+            },
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final controller = container.read(authControllerProvider.notifier);
+    await controller.restoreSession();
+    await controller.login(email: 'a', password: 'b');
+
+    await controller.logout();
+
+    expect(evictCalls, 1);
+    expect(repo.logoutCalls, 1);
+  });
+
+  test(
+      'okt-audit PASS-2 FINDING-1: logout() real (non-fake) sweep actually '
+      'deletes the on-disk playback scratch cache directory', () async {
+    final tmp =
+        await Directory.systemTemp.createTemp('auth_controller_logout_evict_');
+    addTearDown(() async {
+      if (await tmp.exists()) await tmp.delete(recursive: true);
+    });
+    final scratchDir = Directory('${tmp.path}/matome_playback_cache')
+      ..createSync(recursive: true);
+    File('${scratchDir.path}/rec_a.playback').writeAsBytesSync([1, 2, 3]);
+
+    repo.loginResult = _session;
+    final container = ProviderContainer(
+      overrides: [
+        tokenStoreProvider.overrideWithValue(store),
+        authRepositoryProvider.overrideWithValue(repo),
+        authControllerProvider.overrideWith(
+          (ref) => AuthController(
+            ref,
+            evictPlaybackCache: () =>
+                evictAllPlaybackScratch(scratchDirSource: () async => scratchDir),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final controller = container.read(authControllerProvider.notifier);
+    await controller.restoreSession();
+    await controller.login(email: 'a', password: 'b');
+
+    await controller.logout();
+
+    expect(await scratchDir.exists(), isFalse,
+        reason: 'logout must wipe the whole playback scratch cache, not '
+            'just log out of the API session');
+  });
+
+  test(
+      'okt-audit PASS-2 FINDING-1: signedOutByInterceptor() also sweeps the '
+      'playback scratch cache (forced-signout is a session boundary too)',
+      () async {
+    final evicted = Completer<void>();
+
+    final container = ProviderContainer(
+      overrides: [
+        tokenStoreProvider.overrideWithValue(store),
+        authRepositoryProvider.overrideWithValue(repo),
+        authControllerProvider.overrideWith(
+          (ref) => AuthController(
+            ref,
+            evictPlaybackCache: () async {
+              if (!evicted.isCompleted) evicted.complete();
+            },
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final controller = container.read(authControllerProvider.notifier);
+    await controller.restoreSession();
+
+    controller.signedOutByInterceptor();
+
+    await evicted.future.timeout(const Duration(seconds: 2));
   });
 }

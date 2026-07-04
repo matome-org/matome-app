@@ -2,14 +2,17 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/crypto/key_material.dart' show Dek;
 import '../../core/crypto/media_playback_resolver.dart'
-    show PlaybackScratchDirSource, resolvePlaybackPath;
+    show
+        PlaybackScratchDirSource,
+        defaultPlaybackScratchDir,
+        evictPlaybackScratch,
+        resolvePlaybackPath;
 import '../../core/db/db_encryption.dart'
     show FlutterSecureKeyStore, NativeDekProvisioner;
 import '../../core/observability/app_log.dart';
@@ -135,7 +138,7 @@ class DetailsController extends StateNotifier<DetailsState> {
            (() =>
                NativeDekProvisioner(FlutterSecureKeyStore.deviceKek()).obtainDek()),
        _playbackScratchDirSource =
-           playbackScratchDirSource ?? _defaultPlaybackScratchDir,
+           playbackScratchDirSource ?? defaultPlaybackScratchDir,
        super(DetailsState(id: id)) {
     load();
   }
@@ -157,8 +160,19 @@ class DetailsController extends StateNotifier<DetailsState> {
 
   /// Where [resolvePlaybackPath] decrypts a `wrappedFek`-bearing recording
   /// to before handing it to the player; injected in tests, defaults to
-  /// [_defaultPlaybackScratchDir].
+  /// [defaultPlaybackScratchDir].
   final PlaybackScratchDirSource _playbackScratchDirSource;
+
+  /// The scratch-file path the last successful [resolvePlaybackPath] call
+  /// produced for THIS recording, if any (`null` when the row is plaintext —
+  /// `wrappedFek == null` — or no resolution has succeeded yet). Tracked so
+  /// [dispose] can unlink exactly that file: okt-audit PASS-2 FINDING-1 named
+  /// the never-deleted decrypted scratch file a permanent plaintext-at-rest
+  /// leak, violating `media_cipher.dart` `decryptToFile`'s own "delete once
+  /// playback ends" contract. `AudioPlayerBar` (the actual player) only
+  /// exists while its owning Details screen — and this controller — is
+  /// mounted, so controller disposal is this app's "player stopped" boundary.
+  String? _resolvedScratchPath;
 
   RecordingsDao get _dao => _ref.read(recordingsDaoProvider);
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
@@ -246,6 +260,8 @@ class DetailsController extends StateNotifier<DetailsState> {
           dekSource: _mediaDekSource,
           scratchDirSource: _playbackScratchDirSource,
         );
+        // Remember it so `dispose()` can unlink it — see [_resolvedScratchPath].
+        _resolvedScratchPath = resolvedPath;
         return AudioSource(AudioSourceKind.localFile, resolvedPath);
       } catch (e, st) {
         // Never let this crash `load()` — fall through to the remote-URL
@@ -284,15 +300,28 @@ class DetailsController extends StateNotifier<DetailsState> {
     return path.startsWith('/') || path.startsWith('file:');
   }
 
-  /// Default private scratch directory for [resolvePlaybackPath]'s
-  /// decrypted-media output (task #1866). Deliberately `getTemporaryDirectory()`,
-  /// NOT `matomeStorageDir()` — the decrypted bytes are transiently plaintext
-  /// on disk for the player's use (documented trade-off, `media_cipher.dart`'s
-  /// `decryptToFile` doc), so they belong under the OS-managed cache/temp
-  /// area, never the durable Matome folder.
-  static Future<Directory> _defaultPlaybackScratchDir() async {
-    final tmp = await getTemporaryDirectory();
-    return Directory('${tmp.path}/matome_playback_cache');
+  /// Unlinks this recording's decrypted playback scratch file (if any) the
+  /// moment this controller is torn down — the "player stopped / controller
+  /// dispose" eviction point for okt-audit PASS-2 FINDING-1. A plaintext row
+  /// (`_resolvedScratchPath == null`) is a no-op. Best-effort: a cleanup
+  /// failure is logged, never rethrown — teardown must still complete.
+  @override
+  void dispose() {
+    final path = _resolvedScratchPath;
+    if (path != null) {
+      try {
+        final file = File(path);
+        if (file.existsSync()) file.deleteSync();
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.error,
+          'details dispose scratch evict failed id=${state.id}',
+          e,
+          st,
+        );
+      }
+    }
+    super.dispose();
   }
 
   /// Persists the edited buffer to Drift (`notes`) AND Core (`notes`), keeping
@@ -448,6 +477,13 @@ class DetailsController extends StateNotifier<DetailsState> {
       // Reuse the queue's best-effort path delete (never throws).
       await deleteAudioFile(path);
     }
+    // A decrypted playback scratch copy (if this row was ever encrypted
+    // media) must not outlive the recording it was decrypted from — okt-audit
+    // PASS-2 FINDING-1. Idempotent no-op when nothing was ever resolved.
+    await evictPlaybackScratch(
+      recordingId: state.id,
+      scratchDirSource: _playbackScratchDirSource,
+    );
     await _dao.deleteRecording(state.id);
     final coreId = state.coreId;
     if (coreId != null) {
