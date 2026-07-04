@@ -1,0 +1,141 @@
+/* Admin back-office stylesheet (W0 #1868).
+ * Tailwind v4 (CSS-first config). The foundations import carries the design
+ * tokens extracted from the Flutter app; `@theme inline` exposes them as
+ * Tailwind utilities (bg-accent, text-text-primary, p-md, rounded-md, ...)
+ * that resolve through the CSS vars, so `.dark` theme-switching works. */
+@import "tailwindcss";
+@import "./foundations.css";
+
+/* Scan the server-rendered templates for utility classes. */
+@source "../../lib/matome_api_web";
+
+/* Class-based dark mode: add `dark` to <html> to flip the token set. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  /* Colors -> `--color-*` (bg-*, text-*, border-*). */
+  --color-primary: var(--matome-primary);
+  --color-accent: var(--matome-accent);
+  --color-accent-dark: var(--matome-accent-dark);
+  --color-accent-soft: var(--matome-accent-soft);
+  --color-on-accent: var(--matome-on-accent);
+  --color-on-text-primary: var(--matome-on-text-primary);
+  --color-background: var(--matome-background);
+  --color-surface: var(--matome-surface);
+  --color-border: var(--matome-border);
+  --color-subtle-fill: var(--matome-subtle-fill);
+  --color-subtle-fill-strong: var(--matome-subtle-fill-strong);
+  --color-text-primary: var(--matome-text-primary);
+  --color-text-secondary: var(--matome-text-secondary);
+  --color-text-muted: var(--matome-text-muted);
+  --color-failed: var(--matome-failed);
+  --color-badge-work: var(--matome-badge-work);
+  --color-badge-work-text: var(--matome-badge-work-text);
+  --color-badge-personal: var(--matome-badge-personal);
+  --color-badge-ideas: var(--matome-badge-ideas);
+  --color-badge-default: var(--matome-badge-default);
+  --color-space-gold: var(--matome-space-gold);
+  --color-space-green: var(--matome-space-green);
+  --color-space-blue: var(--matome-space-blue);
+  --color-space-orange: var(--matome-space-orange);
+  --color-space-rose: var(--matome-space-rose);
+  --color-space-purple: var(--matome-space-purple);
+  --color-space-teal: var(--matome-space-teal);
+  --color-space-red: var(--matome-space-red);
+
+  /* Type families -> `font-display`, `font-body`. */
+  --font-display: var(--matome-font-display);
+  --font-body: var(--matome-font-body);
+
+  /* Type scale -> `text-display` ... `text-label`. */
+  --text-display: var(--matome-type-display-size);
+  --text-title: var(--matome-type-title-size);
+  --text-body: var(--matome-type-body-size);
+  --text-body-small: var(--matome-type-body-small-size);
+  --text-label: var(--matome-type-label-size);
+
+  /* Spacing -> `p-xxs` ... `p-xxl` (and margins/gaps). */
+  --spacing-xxs: var(--matome-space-xxs);
+  --spacing-xs: var(--matome-space-xs);
+  --spacing-sm: var(--matome-space-sm);
+  --spacing-md: var(--matome-space-md);
+  --spacing-lg: var(--matome-space-lg);
+  --spacing-xl: var(--matome-space-xl);
+  --spacing-xxl: var(--matome-space-xxl);
+
+  /* Radius -> `rounded-sm` ... `rounded-pill`. */
+  --radius-sm: var(--matome-radius-sm);
+  --radius-md: var(--matome-radius-md);
+  --radius-lg: var(--matome-radius-lg);
+  --radius-xl: var(--matome-radius-xl);
+  --radius-pill: var(--matome-radius-pill);
+}
+
+/* --- Admin shell (Wave 0 empty state) --------------------------------- */
+.admin-body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--matome-background);
+  color: var(--matome-text-primary);
+  font-family: var(--matome-font-body);
+  font-size: var(--matome-type-body-size);
+  line-height: var(--matome-type-body-line);
+}
+
+.admin-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--matome-space-xxl) var(--matome-space-lg);
+}
+
+.admin-flash-group:empty {
+  display: none;
+}
+
+.admin-flash {
+  border-radius: var(--matome-radius-md);
+  padding: var(--matome-space-sm) var(--matome-space-md);
+  margin-bottom: var(--matome-space-md);
+  font-size: var(--matome-type-body-small-size);
+}
+
+.admin-flash--info {
+  background: var(--matome-subtle-fill);
+  color: var(--matome-text-secondary);
+}
+
+.admin-flash--error {
+  background: var(--matome-subtle-fill-strong);
+  color: var(--matome-failed);
+}
+
+.admin-empty {
+  border: 1px solid var(--matome-border);
+  border-radius: var(--matome-radius-lg);
+  background: var(--matome-surface);
+  padding: var(--matome-space-xl);
+}
+
+.admin-empty__eyebrow {
+  margin: 0 0 var(--matome-space-xs);
+  font-size: var(--matome-type-label-size);
+  font-weight: var(--matome-type-label-weight);
+  letter-spacing: var(--matome-type-label-tracking);
+  text-transform: uppercase;
+  color: var(--matome-text-muted);
+}
+
+.admin-empty__title {
+  margin: 0 0 var(--matome-space-sm);
+  font-family: var(--matome-font-display);
+  font-size: var(--matome-type-title-size);
+  font-weight: var(--matome-type-title-weight);
+  line-height: var(--matome-type-title-line);
+  letter-spacing: var(--matome-type-title-tracking);
+  color: var(--matome-text-primary);
+}
+
+.admin-empty__body {
+  margin: 0;
+  color: var(--matome-text-secondary);
+}

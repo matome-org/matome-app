@@ -1,0 +1,130 @@
+/* =============================================================================
+ * Matome foundations tokens — server-side mirror of the Flutter design system.
+ *
+ * SINGLE SOURCE OF TRUTH: apps/flutter/lib/core/theme/app_theme.dart
+ * This is a HAND-MAINTAINED static file (NOT generated). Every value carries a
+ * `app_theme.dart:LINE` reference so drift is auditable. When app_theme.dart
+ * changes, update the matching line here and re-eyeball the Livebook catalog
+ * (services/api/notebooks/foundations_catalog.livemd) against the Flutter
+ * widgetbook (apps/flutter_widgetbook/lib/foundations_stories.dart).
+ *
+ * Full Flutter-line -> CSS-var map: docs/foundations-token-map.md
+ *
+ * Colors: MatomeColors ThemeExtension (Light + Dark).  Flutter colors are
+ * 0xAARRGGBB; opaque tokens are written #RRGGBB, translucent fills #RRGGBBAA.
+ * ========================================================================== */
+
+:root {
+  /* --- MatomeColors · LIGHT (MatomeColors.light, app_theme.dart:137) ------- */
+  --matome-primary: #e1b346;           /* _accent            :39 / light:138 */
+  --matome-accent: #e1b346;            /* _accent            :39 */
+  --matome-accent-dark: #b98a1f;       /* _accentDark        :40 */
+  --matome-accent-soft: #f6e8c0;       /* _accentSoft        :41 */
+  --matome-on-accent: #221e16;         /* _onAccent=_textPrimary  :43 / :75 */
+  --matome-on-text-primary: #fdfcf9;   /* _onTextPrimary=_surface :57 / :48 */
+  --matome-background: #f6f4ef;        /* _background        :47 */
+  --matome-surface: #fdfcf9;           /* _surface           :48 */
+  --matome-border: #e7e2d7;            /* _border            :49 */
+  --matome-subtle-fill: #1a17120f;     /* _subtleFill        :62 (alpha 0x0F) */
+  --matome-subtle-fill-strong: #1a17121a; /* _subtleFillStrong :63 (alpha 0x1A) */
+  --matome-text-primary: #221e16;      /* _textPrimary       :75 */
+  --matome-text-secondary: #585249;    /* _textSecondary     :76 */
+  --matome-text-muted: #655d4f;        /* _textMuted         :77 */
+  --matome-failed: #b23a2e;            /* _failed            :85 */
+  --matome-badge-work: #e1b346;        /* _badgeWork         :97 */
+  --matome-badge-work-text: #8f6d2a;   /* _badgeWorkText     :100 */
+  --matome-badge-personal: #3a7150;    /* _badgePersonal     :103 */
+  --matome-badge-ideas: #4a6fc0;       /* _badgeIdeas        :106 */
+  --matome-badge-default: #6b7280;     /* _badgeDefault      :109 */
+
+  /* Spaces accent band — identical Light/Dark (app_theme.dart:128-135). */
+  --matome-space-gold: #c8a24e;        /* _spaceGold         :128 */
+  --matome-space-green: #7e9b6e;       /* _spaceGreen        :129 */
+  --matome-space-blue: #6e86a8;        /* _spaceBlue         :130 */
+  --matome-space-orange: #c68a5e;      /* _spaceOrange       :131 */
+  --matome-space-rose: #bc8497;        /* _spaceRose         :132 */
+  --matome-space-purple: #9587ae;      /* _spacePurple       :133 */
+  --matome-space-teal: #6fa39a;        /* _spaceTeal         :134 */
+  --matome-space-red: #c2705f;         /* _spaceRed          :135 */
+
+  /* --- AppTypography (AppTypography.standard, app_theme.dart:512) --------- */
+  --matome-font-display: "Schibsted Grotesk", "Zen Kaku Gothic New", sans-serif; /* :506,508 */
+  --matome-font-body: "Hanken Grotesk", "Zen Kaku Gothic New", sans-serif;       /* :507,508 */
+
+  --matome-type-display-size: 44px;    /* display  :516 */
+  --matome-type-display-weight: 700;   /*          :517 */
+  --matome-type-display-line: 1.04;    /*          :518 */
+  --matome-type-display-tracking: -1px;/*          :519 */
+
+  --matome-type-title-size: 24px;      /* title    :524 */
+  --matome-type-title-weight: 700;     /*          :525 */
+  --matome-type-title-line: 1.16;      /*          :526 */
+  --matome-type-title-tracking: -0.4px;/*          :527 */
+
+  --matome-type-body-size: 16px;       /* body     :532 */
+  --matome-type-body-weight: 400;      /*          :533 */
+  --matome-type-body-line: 1.5;        /*          :534 */
+  --matome-type-body-tracking: 0;
+
+  --matome-type-body-small-size: 14px; /* bodySmall :538 */
+  --matome-type-body-small-weight: 400;/*           :539 */
+  --matome-type-body-small-line: 1.45; /*           :540 */
+  --matome-type-body-small-tracking: 0;
+
+  --matome-type-label-size: 12px;      /* label    :545 */
+  --matome-type-label-weight: 600;     /*          :546 */
+  --matome-type-label-line: 1.25;      /*          :547 */
+  --matome-type-label-tracking: 0.4px; /*          :548 */
+
+  /* --- AppSpacing (AppSpacing.standard, app_theme.dart:379) -------------- */
+  --matome-space-xxs: 4px;   /* xxs :380 */
+  --matome-space-xs: 8px;    /* xs  :381 */
+  --matome-space-sm: 12px;   /* sm  :382 */
+  --matome-space-md: 16px;   /* md  :383 */
+  --matome-space-lg: 24px;   /* lg  :384 */
+  --matome-space-xl: 32px;   /* xl  :385 */
+  --matome-space-xxl: 48px;  /* xxl :386 */
+
+  /* --- AppRadius (AppRadius.standard, app_theme.dart:445) ---------------- */
+  --matome-radius-sm: 8px;    /* sm   :446 */
+  --matome-radius-md: 12px;   /* md   :447 */
+  --matome-radius-lg: 16px;   /* lg   :448 */
+  --matome-radius-xl: 24px;   /* xl   :449 */
+  --matome-radius-pill: 999px;/* pill :450 */
+
+  /* --- AppElevation (AppElevation.standard, app_theme.dart:600) ---------- */
+  --matome-elevation-0: 0;    /* level0 :601 */
+  --matome-elevation-1: 1;    /* level1 :602 */
+  --matome-elevation-2: 3;    /* level2 :603 */
+  --matome-elevation-3: 8;    /* level3 :604 */
+
+  color-scheme: light;
+}
+
+/* --- MatomeColors · DARK (MatomeColors.dark, app_theme.dart:168) --------- */
+.dark,
+[data-theme="dark"] {
+  --matome-primary: #b98a1f;           /* _accentDark        :40 / dark:169 */
+  --matome-accent: #e1b346;            /* _accent            :39 */
+  --matome-accent-dark: #b98a1f;       /* _accentDark        :40 */
+  --matome-accent-soft: #3a2d10;       /* _accentSoftDark    :42 */
+  --matome-on-accent: #221e16;         /* _onAccent=_textPrimary  :43 */
+  --matome-on-text-primary: #1a1714;   /* _onTextPrimaryDark=_backgroundDark :58 / :52 */
+  --matome-background: #1a1714;        /* _backgroundDark    :52 */
+  --matome-surface: #252119;           /* _surfaceDark       :53 */
+  --matome-border: #38322a;            /* _borderDark        :54 */
+  --matome-subtle-fill: #f4f1e914;     /* _subtleFillDark    :64 (alpha 0x14) */
+  --matome-subtle-fill-strong: #f4f1e929; /* _subtleFillStrongDark :65 (alpha 0x29) */
+  --matome-text-primary: #f4f1e9;      /* _textPrimaryDark   :78 */
+  --matome-text-secondary: #c4bcad;    /* _textSecondaryDark :79 */
+  --matome-text-muted: #aaa08d;        /* _textMutedDark     :80 */
+  --matome-failed: #ff6b75;            /* _failedDark        :88 */
+  --matome-badge-work: #e1b346;        /* _badgeWorkDark=_badgeWork :112 */
+  --matome-badge-work-text: #e1b346;   /* dark: badgeWorkText=_badgeWorkDark :185 */
+  --matome-badge-personal: #6fb180;    /* _badgePersonalDark :114 */
+  --matome-badge-ideas: #7899e8;       /* _badgeIdeasDark    :117 */
+  --matome-badge-default: #a6adb8;     /* _badgeDefaultDark  :120 */
+
+  /* Spaces band is theme-invariant (dark reuses the same values). */
+  color-scheme: dark;
+}
