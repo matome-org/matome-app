@@ -15,10 +15,14 @@ defmodule MatomeApiWeb.Endpoint do
     websocket: true,
     longpoll: false
 
-  # LiveView socket for the /admin back-office (W0 #1868).
+  # LiveView socket for the /admin back-office (W0 #1868). `peer_data` +
+  # `x_headers` feed the connected-mount network re-check in
+  # `MatomeApiWeb.AdminAuth.on_mount/4` (W3 #1871): the websocket upgrade
+  # does not traverse the /admin router pipelines, so the network guard is
+  # re-run from connect_info.
   socket "/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [session: @session_options]],
-    longpoll: [connect_info: [session: @session_options]]
+    websocket: [connect_info: [:peer_data, :x_headers, session: @session_options]],
+    longpoll: [connect_info: [:peer_data, :x_headers, session: @session_options]]
 
   # Serve at "/" the static files from "priv/static" directory.
   #

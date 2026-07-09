@@ -49,6 +49,22 @@ defmodule MatomeApiWeb do
   end
 
   @doc """
+  Server-rendered HTML controllers for the /admin back-office (W3 #1871).
+  Separate from `controller/0` (JSON) so the API surface stays untouched.
+  """
+  def html_controller do
+    quote do
+      use Phoenix.Controller,
+        formats: [:html],
+        layouts: [html: MatomeApiWeb.Layouts]
+
+      import Plug.Conn
+
+      unquote(verified_routes())
+    end
+  end
+
+  @doc """
   HTML controllers/components for the server-rendered /admin back-office
   (W0 #1868). The JSON API surface above is untouched.
   """

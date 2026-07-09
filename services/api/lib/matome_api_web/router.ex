@@ -168,13 +168,55 @@ defmodule MatomeApiWeb.Router do
     post "/jobs/:id/result", InternalJobController, :result
   end
 
-  # Server-rendered admin back-office (plan p2-core-backoffice, W0 #1868).
-  # Empty shell for now — auth + data views are wired in later waves. Mounted
-  # in all envs (it is harmless static shell).
-  scope "/admin", MatomeApiWeb do
-    pipe_through :browser
+  # ── /admin defense-in-depth gate (plan p2-core-backoffice §9.1, W3 #1871) ──
+  #
+  # Layer order is deliberate: network guard FIRST (outside the allowlist the
+  # back-office does not even exist — 404), then the browser stack, then the
+  # session gate (password + mandatory TOTP, short absolute TTL). Sensitive
+  # actions in later waves additionally mount
+  # `MatomeApiWeb.Plugs.RequireRecentTotp` for per-action re-auth.
 
-    live "/", AdminLive.Index, :index
+  pipeline :admin_network do
+    plug MatomeApiWeb.Plugs.AdminNetworkGuard
+  end
+
+  pipeline :admin_auth do
+    plug MatomeApiWeb.Plugs.RequireAdminSession
+  end
+
+  # Anti brute-force on the admin first factor, same shape as :auth_rate_limit.
+  pipeline :admin_login_rate_limit do
+    plug MatomeApiWeb.Plugs.RateLimit,
+      scope: :admin_login,
+      checks: [
+        {:ip, limit: 30, window_ms: 60_000, lockout_ms: 60_000},
+        {{:param, "email"}, limit: 5, window_ms: 60_000, lockout_ms: 300_000}
+      ]
+  end
+
+  scope "/admin", MatomeApiWeb do
+    pipe_through [:browser, :admin_network]
+
+    get "/login", AdminSessionController, :new
+    get "/mfa", AdminSessionController, :mfa
+    post "/mfa", AdminSessionController, :verify_mfa
+    post "/logout", AdminSessionController, :delete
+  end
+
+  scope "/admin", MatomeApiWeb do
+    pipe_through [:browser, :admin_network, :admin_login_rate_limit]
+
+    post "/login", AdminSessionController, :create
+  end
+
+  scope "/admin", MatomeApiWeb do
+    pipe_through [:browser, :admin_network, :admin_auth]
+
+    # `on_mount` re-checks session AND network on the CONNECTED mount — the
+    # websocket upgrade bypasses these router pipelines (see AdminAuth).
+    live_session :admin, on_mount: [{MatomeApiWeb.AdminAuth, :require_admin}] do
+      live "/", AdminLive.Index, :index
+    end
   end
 
   # Design-system catalog (plan p2-core-backoffice, Phase A) — the Elixir
