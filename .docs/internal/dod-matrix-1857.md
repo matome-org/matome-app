@@ -162,6 +162,14 @@ Files changed:
   session, not independently reproduced here.
 - **CF-10 (OPEN):** `ff.godMode` weakens the web CSP; unchanged by this
   task.
+- **CF-11 (OPEN, added by W6 #1874, plan p2-core-backoffice):** the admin
+  Sessions view's "active now" signal is DEGRADED to `last_seen_at`
+  recency — real online/idle/offline Presence needs a Flutter-side
+  `user_socket` heartbeat contract that does not exist (`user_socket.ex`
+  is a stub with no channel/heartbeat). Cross-repo external dependency:
+  Flutter client work on `migration/flutter-lab`, outside the Core plan's
+  critical path. Until it lands, `/admin/sessions` must not be read as
+  live presence.
 
 ## Test evidence (actual counts from this session)
 
