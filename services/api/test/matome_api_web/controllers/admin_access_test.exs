@@ -141,7 +141,7 @@ defmodule MatomeApiWeb.AdminAccessTest do
       conn = post(conn, "/admin/mfa", %{"code" => current_code(secret)})
       assert redirected_to(conn) == "/admin"
 
-      assert conn |> get("/admin") |> html_response(200) =~ "Admin shell"
+      assert conn |> get("/admin") |> html_response(200) =~ "Admin"
       assert "admin.login" in audit_actions(user.id)
     end
 
@@ -171,7 +171,7 @@ defmodule MatomeApiWeb.AdminAccessTest do
       conn = post(conn, "/admin/mfa", %{"code" => current_code(secret)})
       assert redirected_to(conn) == "/admin"
 
-      assert conn |> get("/admin") |> html_response(200) =~ "Admin shell"
+      assert conn |> get("/admin") |> html_response(200) =~ "Admin"
       assert audit_actions(user.id) == ["admin.totp_enrolled", "admin.login"]
     end
 

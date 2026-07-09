@@ -217,6 +217,8 @@ defmodule MatomeApiWeb.Router do
     live_session :admin, on_mount: [{MatomeApiWeb.AdminAuth, :require_admin}] do
       live "/", AdminLive.Index, :index
       live "/sessions", AdminLive.Sessions, :index
+      live "/users", AdminLive.Users, :index
+      live "/audit", AdminLive.Audit, :index
     end
   end
 

@@ -166,3 +166,40 @@
   margin: 0;
   color: var(--matome-text-secondary);
 }
+
+.admin-empty__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--matome-space-md);
+  margin-top: var(--matome-space-lg);
+}
+
+.admin-empty__nav a {
+  color: var(--matome-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.admin-users__title,
+.admin-audit__title,
+.admin-sessions__title {
+  margin: 0 0 var(--matome-space-md);
+  font-family: var(--matome-font-display);
+  font-size: var(--matome-type-title-size);
+  font-weight: var(--matome-type-title-weight);
+  color: var(--matome-text-primary);
+}
+
+.admin-users .matome-banner,
+.admin-audit__lede {
+  margin: 0 0 var(--matome-space-lg);
+  color: var(--matome-text-secondary);
+}
+
+.admin-audit__filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--matome-space-md);
+  align-items: end;
+  margin-bottom: var(--matome-space-lg);
+}

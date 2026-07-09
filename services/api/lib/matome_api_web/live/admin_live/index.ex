@@ -1,10 +1,9 @@
 defmodule MatomeApiWeb.AdminLive.Index do
   @moduledoc """
-  The /admin back-office root — an EMPTY shell for Wave 0 (#1868).
+  The /admin back-office root (W0 shell, W7 nav).
 
-  It exists to prove the LiveView socket, asset pipeline, and foundations
-  theme are wired end to end. No data views live here yet; later waves of
-  the p2-core-backoffice plan hang the real admin surfaces off this mount.
+  Landing page behind the W3 gate with links to the Sessions / Users /
+  Audit LiveViews. Still metadata-only — no DEK, FEKs, or user content.
   """
   use MatomeApiWeb, :live_view
 
@@ -18,11 +17,16 @@ defmodule MatomeApiWeb.AdminLive.Index do
     ~H"""
     <section class="admin-empty">
       <p class="admin-empty__eyebrow">matome · back-office</p>
-      <h1 class="admin-empty__title">Admin shell</h1>
+      <h1 class="admin-empty__title">Admin</h1>
       <p class="admin-empty__body">
-        Wave 0 scaffold. LiveView socket, esbuild + Tailwind pipeline, and the
-        foundations design tokens are wired. Data views arrive in later waves.
+        Staff-only surfaces behind the W3 gate. Zero-knowledge safe: metadata
+        only — no DEK, FEKs, or user content.
       </p>
+      <nav class="admin-empty__nav" aria-label="Admin views">
+        <a href="/admin/sessions">Sessions</a>
+        <a href="/admin/users">Users</a>
+        <a href="/admin/audit">Audit log</a>
+      </nav>
     </section>
     """
   end

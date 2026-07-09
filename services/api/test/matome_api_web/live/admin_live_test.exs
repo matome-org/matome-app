@@ -39,7 +39,9 @@ defmodule MatomeApiWeb.AdminLiveTest do
     assert html =~ "/assets/app.css"
     assert html =~ "/assets/app.js"
     # The AdminLive.Index empty-shell content rendered.
-    assert html =~ "Admin shell"
+    assert html =~ "Admin"
+    assert html =~ "/admin/users"
+    assert html =~ "/admin/audit"
     assert html =~ "matome · back-office"
   end
 
