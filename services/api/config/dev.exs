@@ -79,6 +79,13 @@ config :matome_api, MatomeApi.Admin.SecretVault,
     System.get_env("ADMIN_SECRET_VAULT_KEY") ||
       Base.encode64("dev-only-admin-vault-key-32bytes")
 
+# /admin network guard (W3 #1871): dev allows loopback only. Prod is
+# env-driven and FAILS CLOSED (empty allowlist denies everyone) until the
+# deploy topology decision lands — see services/api/docs/admin-access-control.md.
+config :matome_api, :admin_network,
+  allowlist: ["127.0.0.1/32", "::1/128"],
+  trusted_proxies: []
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"
 

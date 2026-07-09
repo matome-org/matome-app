@@ -50,4 +50,10 @@ config :matome_api, MatomeApi.Mailer, adapter: Swoosh.Adapters.Test
 config :matome_api, MatomeApi.Admin.SecretVault,
   key: Base.encode64("test-only-admin-vault-key32bytes")
 
+# /admin network guard (W3 #1871): tests run from loopback; the guard's
+# deny paths are exercised by overriding this env per-test.
+config :matome_api, :admin_network,
+  allowlist: ["127.0.0.1/32", "::1/128"],
+  trusted_proxies: []
+
 config :matome_api, MatomeApi.Storage.ObjectStore, adapter: MatomeApi.Storage.ObjectStore.Noop

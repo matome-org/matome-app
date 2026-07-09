@@ -86,6 +86,24 @@ if config_env() == :prod do
 
   config :matome_api, MatomeApi.Admin.SecretVault, key: admin_secret_vault_key
 
+  # /admin network guard (W3 #1871). Comma-separated CIDRs. FAIL-CLOSED BY
+  # DESIGN: with ADMIN_IP_ALLOWLIST unset the allowlist is empty and every
+  # /admin request is denied — the deploy/network topology (VPN? which
+  # reverse proxy?) is still undecided (recorded gap, see
+  # services/api/docs/admin-access-control.md), so nothing is reachable
+  # until that decision is configured explicitly. X-Forwarded-For is only
+  # honored from peers inside ADMIN_TRUSTED_PROXIES.
+  parse_cidr_list = fn env_var ->
+    (System.get_env(env_var) || "")
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  config :matome_api, :admin_network,
+    allowlist: parse_cidr_list.("ADMIN_IP_ALLOWLIST"),
+    trusted_proxies: parse_cidr_list.("ADMIN_TRUSTED_PROXIES")
+
   storage_s3_endpoint =
     System.get_env("STORAGE_S3_ENDPOINT") ||
       raise "environment variable STORAGE_S3_ENDPOINT is missing."
