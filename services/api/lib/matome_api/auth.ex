@@ -1,6 +1,8 @@
 defmodule MatomeApi.Auth do
   import Ecto.Query
 
+  require Logger
+
   alias MatomeApi.Auth.{Device, Guardian, KeyBundle, RefreshToken, TokenAllowlist, User}
   alias MatomeApi.Repo
 
@@ -192,12 +194,49 @@ defmodule MatomeApi.Auth do
     })
   end
 
+  @doc """
+  Verifies an access token: Guardian signature/exp/typ checks, then — behind
+  the `TokenAllowlist` mode flag (W5 #1873) — the per-request session
+  revocation check against the token's `sid` claim. `:off` (default) skips
+  the check; `:shadow` runs it and logs would-be denials without rejecting;
+  `:enforce` rejects revoked/unknown/unbound sessions and fails CLOSED when
+  the allowlist lookup itself errors. Used by both `RequireAuth` (every
+  authenticated HTTP request) and `UserSocket.connect/3`.
+  """
   def verify_access_token(token) do
     with {:ok, claims} <- Guardian.decode_and_verify(token, %{"typ" => "access"}),
+         :ok <- check_session_allowlist(claims),
          {:ok, user} <- Guardian.resource_from_claims(claims) do
       {:ok, user, claims}
     else
       _ -> {:error, :unauthorized}
+    end
+  end
+
+  defp check_session_allowlist(claims) do
+    case TokenAllowlist.mode() do
+      :off ->
+        :ok
+
+      :shadow ->
+        case TokenAllowlist.check(claims["sid"]) do
+          :allowed ->
+            :ok
+
+          {:denied, reason} ->
+            Logger.warning(
+              "token_allowlist shadow: would deny access token " <>
+                "(reason=#{reason} sid=#{inspect(claims["sid"])} sub=#{inspect(claims["sub"])})"
+            )
+
+            :ok
+        end
+
+      :enforce ->
+        case TokenAllowlist.check(claims["sid"]) do
+          :allowed -> :ok
+          {:denied, _reason} -> {:error, :unauthorized}
+        end
     end
   end
 
