@@ -74,6 +74,18 @@ if config_env() == :prod do
 
   config :matome_api, MatomeApi.Auth.Guardian, secret_key: guardian_secret_key
 
+  # Admin back-office gate (W3 #1871) — TOTP secrets are encrypted at rest;
+  # prod FAILS CLOSED at boot when the vault key is missing (no fallback).
+  admin_secret_vault_key =
+    System.get_env("ADMIN_SECRET_VAULT_KEY") ||
+      raise """
+      environment variable ADMIN_SECRET_VAULT_KEY is missing.
+      It must be base64 of 32 random bytes; generate one with:
+      openssl rand -base64 32
+      """
+
+  config :matome_api, MatomeApi.Admin.SecretVault, key: admin_secret_vault_key
+
   storage_s3_endpoint =
     System.get_env("STORAGE_S3_ENDPOINT") ||
       raise "environment variable STORAGE_S3_ENDPOINT is missing."

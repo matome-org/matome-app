@@ -71,6 +71,14 @@ config :matome_api, MatomeApiWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :matome_api, dev_routes: true
 
+# Admin back-office gate (W3 #1871). Dev-only fallback key for the TOTP
+# secret vault — prod fails closed at boot without ADMIN_SECRET_VAULT_KEY
+# (see config/runtime.exs).
+config :matome_api, MatomeApi.Admin.SecretVault,
+  key:
+    System.get_env("ADMIN_SECRET_VAULT_KEY") ||
+      Base.encode64("dev-only-admin-vault-key-32bytes")
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"
 

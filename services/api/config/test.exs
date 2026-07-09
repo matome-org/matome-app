@@ -45,4 +45,9 @@ config :phoenix, :plug_init_mode, :runtime
 # Capture outgoing email in-memory so tests can assert on deliveries.
 config :matome_api, MatomeApi.Mailer, adapter: Swoosh.Adapters.Test
 
+# Admin back-office gate (W3 #1871). Fixed test key for the TOTP secret
+# vault — prod fails closed at boot without ADMIN_SECRET_VAULT_KEY.
+config :matome_api, MatomeApi.Admin.SecretVault,
+  key: Base.encode64("test-only-admin-vault-key32bytes")
+
 config :matome_api, MatomeApi.Storage.ObjectStore, adapter: MatomeApi.Storage.ObjectStore.Noop
