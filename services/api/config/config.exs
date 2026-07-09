@@ -26,6 +26,19 @@ config :matome_api, MatomeApi.Auth.Guardian,
   secret_key:
     System.get_env("GUARDIAN_SECRET_KEY") || "test-dev-guardian-secret-change-before-prod"
 
+# Per-request access-token revocation (W5 #1873) — see
+# docs/token-revocation.md for the full contract and rollout runbook.
+#   mode: :off (dark, default) | :shadow (check + log, never rejects)
+#        | :enforce (revoked/unknown sessions get 401)
+#   cache: false reverts to the no-cache path (every check hits the DB)
+#   cache_ttl_ms: ETS entry TTL — the bounded-staleness window for a node
+#                 that misses a revocation broadcast
+# NOTE: Core does not hot-reload config — changing these requires a restart.
+config :matome_api, MatomeApi.Auth.TokenAllowlist,
+  mode: :off,
+  cache: true,
+  cache_ttl_ms: 30_000
+
 config :matome_api, MatomeApi.Storage.Presigner,
   endpoint: System.get_env("STORAGE_S3_ENDPOINT") || "http://127.0.0.1:54321/storage/v1/s3",
   access_key_id: System.get_env("STORAGE_S3_ACCESS_KEY_ID") || "test-access-key",

@@ -13,6 +13,10 @@ defmodule MatomeApi.Application do
       {Oban, Application.fetch_env!(:matome_api, Oban)},
       {DNSCluster, query: Application.get_env(:matome_api, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: MatomeApi.PubSub},
+      # Owns the token-allowlist ETS cache and applies PubSub invalidations
+      # (W5 #1873). Must start after PubSub (it subscribes in init/1) and
+      # before the Endpoint (requests may consult the table).
+      MatomeApi.Auth.TokenAllowlist.Cache,
       # TableHeir + RateLimiter are wrapped in their own `:rest_for_one`
       # supervisor (okt-audit PASS-2 FINDING-3, task #1867) rather than
       # sitting directly here as two `:one_for_one` siblings: a TableHeir
