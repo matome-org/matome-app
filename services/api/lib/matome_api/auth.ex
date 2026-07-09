@@ -160,6 +160,15 @@ defmodule MatomeApi.Auth do
 
   def logout(_refresh_token), do: :ok
 
+  @doc """
+  Revokes the whole session (family) a refresh-token row belongs to — same
+  semantics as `logout/1` (rows retained, allowlist busted on every node,
+  remote-lock disconnect broadcast), but keyed on an already-loaded row so
+  administrative callers (W6 #1874) can revoke by `jti` without holding the
+  raw token string.
+  """
+  def revoke_session(%RefreshToken{} = stored), do: revoke_family(stored)
+
   defp revoke_all_sessions(user_id) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 

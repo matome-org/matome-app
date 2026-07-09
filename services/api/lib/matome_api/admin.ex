@@ -17,7 +17,8 @@ defmodule MatomeApi.Admin do
   import Ecto.Query
 
   alias MatomeApi.Admin.{AuditEvent, SecretVault, TOTP, TotpSecret}
-  alias MatomeApi.Auth.User
+  alias MatomeApi.Auth
+  alias MatomeApi.Auth.{RefreshToken, User}
   alias MatomeApi.RateLimiter
   alias MatomeApi.Repo
 
@@ -167,6 +168,79 @@ defmodule MatomeApi.Admin do
       where: t.id == ^id and (is_nil(t.last_used_timestep) or t.last_used_timestep < ^timestep)
     )
     |> Repo.update_all(set: [last_used_timestep: timestep])
+  end
+
+  @doc """
+  The §9.2 sessions view data (W6 #1874): every ACTIVE session (unrevoked,
+  unexpired refresh-token row) grouped `user → device → tokens`. Tokens
+  minted without a correlated device gather under a `device: nil` group.
+  Users and device groups are ordered by most-recent activity; a user with
+  no live session does not appear at all.
+
+  "Activity" is `last_seen_at` (falling back to `inserted_at`) — the honest
+  degraded signal. It is NOT live Presence: `user_socket.ex` has no
+  channel/heartbeat contract yet (recorded cross-repo gap, dod-matrix).
+  """
+  def session_tree(now \\ DateTime.utc_now()) do
+    from(t in RefreshToken,
+      where: is_nil(t.revoked_at) and t.expires_at > ^now,
+      order_by: [desc: t.last_seen_at],
+      preload: [:user, :device]
+    )
+    |> Repo.all()
+    |> Enum.group_by(& &1.user_id)
+    |> Enum.map(fn {_user_id, [first | _] = tokens} ->
+      %{
+        user: first.user,
+        last_seen_at: most_recent(tokens),
+        devices: group_by_device(tokens)
+      }
+    end)
+    |> Enum.sort_by(& &1.last_seen_at, {:desc, DateTime})
+  end
+
+  defp group_by_device(tokens) do
+    tokens
+    |> Enum.group_by(& &1.device_id)
+    |> Enum.map(fn {_device_id, [first | _] = device_tokens} ->
+      %{device: first.device, tokens: device_tokens, last_seen_at: most_recent(device_tokens)}
+    end)
+    |> Enum.sort_by(& &1.last_seen_at, {:desc, DateTime})
+  end
+
+  defp most_recent(tokens) do
+    tokens
+    |> Enum.map(&(&1.last_seen_at || &1.inserted_at))
+    |> Enum.max(DateTime)
+  end
+
+  @doc """
+  Administrative session revocation (W6 #1874): revokes the whole family the
+  `jti` belongs to via `MatomeApi.Auth.revoke_session/1` (allowlist bust +
+  remote-lock disconnect included) and appends the mandatory audit event.
+  `opts`: `:remote_ip`. Returns `:ok` or `{:error, :not_found}`.
+  """
+  def revoke_session(%User{} = actor, jti, opts \\ []) when is_binary(jti) do
+    case Repo.get_by(RefreshToken, jti: jti) do
+      nil ->
+        {:error, :not_found}
+
+      %RefreshToken{} = token ->
+        :ok = Auth.revoke_session(token)
+
+        audit!("admin.session_revoked",
+          actor: actor,
+          metadata: %{
+            "jti" => jti,
+            "user_id" => token.user_id,
+            "family_id" => token.family_id,
+            "device_id" => token.device_id
+          },
+          remote_ip: Keyword.get(opts, :remote_ip)
+        )
+
+        :ok
+    end
   end
 
   @doc """
