@@ -210,6 +210,45 @@ defmodule MatomeApi.AuthTest do
     end
   end
 
+  describe "access-token session binding (W5 #1873)" do
+    test "login mints an access token whose sid claim is the refresh row jti" do
+      email = unique_email()
+      {:ok, _} = Auth.register_user(%{"email" => email, "password" => @password})
+
+      {:ok, %{user: user, access_token: access_token}} = Auth.login(email, @password, @meta)
+
+      {:ok, claims} = MatomeApi.Auth.Guardian.decode_and_verify(access_token)
+      assert claims["sid"] == latest_token(user).jti
+      assert is_binary(claims["sid"])
+    end
+
+    test "refresh rebinds the new access token to the successor row jti" do
+      email = unique_email()
+
+      {:ok, %{user: user, refresh_token: refresh_token}} =
+        Auth.register_user(%{"email" => email, "password" => @password}, @meta)
+
+      old = latest_token(user)
+
+      {:ok, %{access_token: new_access_token}} = Auth.refresh(refresh_token, %{})
+
+      {:ok, claims} = MatomeApi.Auth.Guardian.decode_and_verify(new_access_token)
+      new_row = latest_token(user)
+      assert claims["sid"] == new_row.jti
+      assert claims["sid"] != old.jti
+    end
+
+    test "register also binds the access token to its session row" do
+      email = unique_email()
+
+      {:ok, %{user: user, access_token: access_token}} =
+        Auth.register_user(%{"email" => email, "password" => @password})
+
+      {:ok, claims} = MatomeApi.Auth.Guardian.decode_and_verify(access_token)
+      assert claims["sid"] == latest_token(user).jti
+    end
+  end
+
   defp latest_token(user) do
     Repo.one!(
       from(t in RefreshToken,

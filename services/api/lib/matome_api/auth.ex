@@ -216,11 +216,19 @@ defmodule MatomeApi.Auth do
   defp with_tokens({:ok, user}, meta), do: issue_tokens(user, meta)
   defp with_tokens(error, _meta), do: error
 
+  # The refresh token is minted FIRST so its jti (the session identifier —
+  # the same value stored on the refresh_tokens row) can be embedded into the
+  # access token as the `sid` claim. That binding is what lets W5 (#1873)
+  # correlate every access token back to its session row for the per-request
+  # revocation check without a second table.
   defp issue_tokens(user, meta) do
-    with {:ok, access_token, _access_claims} <-
-           Guardian.encode_and_sign(user, %{}, token_type: "access", ttl: @access_ttl),
-         {:ok, refresh_token, refresh_claims} <-
+    with {:ok, refresh_token, refresh_claims} <-
            Guardian.encode_and_sign(user, %{}, token_type: "refresh", ttl: @refresh_ttl),
+         {:ok, access_token, _access_claims} <-
+           Guardian.encode_and_sign(user, %{"sid" => refresh_claims["jti"]},
+             token_type: "access",
+             ttl: @access_ttl
+           ),
          {:ok, _stored_token} <- store_refresh_token(user, refresh_token, refresh_claims, meta) do
       {:ok, %{user: user, access_token: access_token, refresh_token: refresh_token}}
     end
