@@ -74,6 +74,12 @@ defmodule MatomeApiWeb.StorybookTest do
   end
 
   test "every component/composite story targets an exported function/1 (no dangling stories)" do
+    # `function_exported?/3` never loads the module — on a lazily-loaded
+    # test node this test only passed when an earlier (seed-ordered) test
+    # happened to load the component modules first. Load them explicitly.
+    Code.ensure_loaded!(MatomeComponents)
+    Code.ensure_loaded!(MatomeComposites)
+
     for %{path: path} <- MatomeApiWeb.Storybook.leaves() do
       case String.split(path, "/", trim: true) do
         ["components", fun] ->
