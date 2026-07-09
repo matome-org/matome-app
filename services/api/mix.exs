@@ -83,11 +83,11 @@ defmodule MatomeApi.MixProject do
       {:phoenix_storybook, "~> 0.9"},
       # Offline pin: this wave's Hex cache has makeup 1.2.1 but not the newer
       # 1.2.2 the resolver would otherwise pick (see mix.exs offline note).
-      {:makeup, "1.2.1", override: true}
-      # NOTE (W0 #1868 deviation): `nimble_totp` (staged for W3 admin 2FA) is
-      # NOT yet listed — the build environment for this wave has no Hex network
-      # reachability and the package is not in the local cache, so adding it
-      # would break `mix deps.get`. It will be added in W3 when TOTP is wired.
+      {:makeup, "1.2.1", override: true},
+      # RFC-6238 TOTP for the /admin mandatory MFA gate (W3 #1871). Hex
+      # network reachability was verified in this session, resolving the W0
+      # deviation note that had deferred this dep.
+      {:nimble_totp, "~> 1.0"}
     ]
   end
 
