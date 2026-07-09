@@ -10,12 +10,13 @@ the `/admin` back-office, so the two never silently diverge.
 - **Tailwind exposure:** `services/api/assets/css/app.css` (`@theme inline`)
 - **Flutter live render (cross-check):**
   `apps/flutter_widgetbook/lib/foundations_stories.dart`
-- **Visual drift guard:** `services/api/notebooks/foundations_catalog.livemd`
+- **Visual drift guard:** `phoenix_storybook` at `/storybook` → Foundations
+  (dev-only; stories under `services/api/storybook/foundations/`)
 
 This is a **static, hand-maintained** file — there is deliberately **no code
 generation pipeline**. When `app_theme.dart` changes, update the matching line
 in `foundations.css` (each var carries an inline `app_theme.dart:LINE` ref) and
-re-eyeball the Livebook catalog against the widgetbook.
+re-eyeball the Storybook catalog against the widgetbook.
 
 Flutter colors are `0xAARRGGBB`. Opaque tokens map to `#RRGGBB`; the two
 translucent fills map to `#RRGGBBAA`.

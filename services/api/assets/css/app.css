@@ -14,6 +14,31 @@
 /* Class-based dark mode: add `dark` to <html> to flip the token set. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* phoenix_storybook sandbox (dev-only catalog). Paint the matome surface so
+ * stories render on the app's own background + text tokens, readable in both
+ * light and dark.
+ *
+ * The color-mode toggle adds `.dark` to the element wrapping the component, but
+ * WHICH element differs by render path:
+ *   - inline variations: `.dark` lands on the `.matome-sandbox` div itself, so
+ *     `.matome-sandbox` matches and its own tokens flip.
+ *   - component iframe: `.matome-sandbox` is the (always-light) <body>, and
+ *     `.dark` lands on an inner wrapper div. Custom properties don't cascade
+ *     upward, so the body can't follow it — we must paint that inner `.dark`
+ *     wrapper directly for its dark tokens to take effect.
+ * Painting both selectors covers every path; in light mode the inner wrapper
+ * has no `.dark`, so only the sandbox base (light) applies. */
+.matome-sandbox,
+.matome-sandbox .dark {
+  background: var(--matome-background);
+  color: var(--matome-text-primary);
+}
+
+.matome-sandbox {
+  min-height: 100%;
+  padding: var(--matome-space-lg);
+}
+
 @theme inline {
   /* Colors -> `--color-*` (bg-*, text-*, border-*). */
   --color-primary: var(--matome-primary);

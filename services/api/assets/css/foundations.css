@@ -4,9 +4,9 @@
  * SINGLE SOURCE OF TRUTH: apps/flutter/lib/core/theme/app_theme.dart
  * This is a HAND-MAINTAINED static file (NOT generated). Every value carries a
  * `app_theme.dart:LINE` reference so drift is auditable. When app_theme.dart
- * changes, update the matching line here and re-eyeball the Livebook catalog
- * (services/api/notebooks/foundations_catalog.livemd) against the Flutter
- * widgetbook (apps/flutter_widgetbook/lib/foundations_stories.dart).
+ * changes, update the matching line here and re-eyeball the Storybook catalog
+ * (/storybook -> Foundations, dev-only) against the Flutter widgetbook
+ * (apps/flutter_widgetbook/lib/foundations_stories.dart).
  *
  * Full Flutter-line -> CSS-var map: docs/foundations-token-map.md
  *

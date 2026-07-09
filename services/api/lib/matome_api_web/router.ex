@@ -1,6 +1,8 @@
 defmodule MatomeApiWeb.Router do
   use MatomeApiWeb, :router
 
+  import PhoenixStorybook.Router
+
   pipeline :api do
     plug :accepts, ["json"]
   end
@@ -168,11 +170,30 @@ defmodule MatomeApiWeb.Router do
 
   # Server-rendered admin back-office (plan p2-core-backoffice, W0 #1868).
   # Empty shell for now — auth + data views are wired in later waves. Mounted
-  # in all envs (it is harmless static shell); Livebook is intentionally NOT
-  # mounted here (see docs/livebook-threat-model.md).
+  # in all envs (it is harmless static shell).
   scope "/admin", MatomeApiWeb do
     pipe_through :browser
 
     live "/", AdminLive.Index, :index
+  end
+
+  # Design-system catalog (plan p2-core-backoffice, Phase A) — the Elixir
+  # equivalent of the Flutter Widgetbook, rendering the real HEEx base +
+  # composite components as a browsable drift-guard gallery.
+  #
+  # Compile-gated on `:dev_routes` (true only in dev/test config) so the mount
+  # is provably ABSENT from a :prod release — a stronger guarantee than a
+  # runtime check, and the reason phoenix_storybook can be a normal dep without
+  # ever exposing an arbitrary-render surface in production.
+  if Application.compile_env(:matome_api, :dev_routes) do
+    scope "/" do
+      storybook_assets()
+    end
+
+    scope "/", MatomeApiWeb do
+      pipe_through :browser
+
+      live_storybook "/storybook", backend_module: MatomeApiWeb.Storybook
+    end
   end
 end

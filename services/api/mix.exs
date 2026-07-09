@@ -43,7 +43,12 @@ defmodule MatomeApi.MixProject do
       # Versions are pinned exactly (not `~>`) because this wave's build
       # environment has no Hex network; these are the newest builds present in
       # the local Hex cache. Relax to `~>` when network resolution is available.
-      {:phoenix_live_view, "1.2.3"},
+      # Pinned to 1.1.x (cached): phoenix_storybook 0.9.x — the only line that
+      # tracks Phoenix 1.7 — ships a HEEx layout the LiveView 1.2 tokenizer
+      # rejects, so the design-system catalog needs LV 1.1. Our LiveView surface
+      # (the empty /admin shell + dead-render tests) is 1.1/1.2-agnostic. Bump
+      # back to 1.2.x only alongside Phoenix 1.8 + phoenix_storybook 1.2.
+      {:phoenix_live_view, "1.1.32"},
       {:phoenix_html, "4.3.0"},
       # Floki is present for future dead-render assertions. NOTE: the CONNECTED
       # `live/2` socket test additionally needs `{:lazy_html, ">= 0.1.0", only:
@@ -65,16 +70,24 @@ defmodule MatomeApi.MixProject do
       {:swoosh, "~> 1.17"},
       {:dns_cluster, "~> 0.1.1"},
       {:cors_plug, "~> 3.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      # Design-system catalog (plan p2-core-backoffice, Phase A). The Elixir
+      # equivalent of the Flutter Widgetbook: renders the real HEEx base +
+      # composite components (`MatomeComponents`, `MatomeComposites`) as a
+      # browsable, drift-guard gallery. Pinned to 0.9.x — the only line that
+      # tracks Phoenix 1.7 (1.2.x requires Phoenix 1.8). The `/storybook` mount
+      # is compile-gated on `:dev_routes` (router.ex) so it can NEVER reach a
+      # :prod release — the same "provably absent from prod" guarantee the
+      # earlier standalone-notebook approach targeted, but as a first-class,
+      # component-rendering catalog tool instead of an arbitrary-code notebook.
+      {:phoenix_storybook, "~> 0.9"},
+      # Offline pin: this wave's Hex cache has makeup 1.2.1 but not the newer
+      # 1.2.2 the resolver would otherwise pick (see mix.exs offline note).
+      {:makeup, "1.2.1", override: true}
       # NOTE (W0 #1868 deviation): `nimble_totp` (staged for W3 admin 2FA) is
       # NOT yet listed — the build environment for this wave has no Hex network
       # reachability and the package is not in the local cache, so adding it
       # would break `mix deps.get`. It will be added in W3 when TOTP is wired.
-      #
-      # NOTE (W0 #1868 Livebook): Livebook is intentionally NOT a Mix dep. It
-      # runs as a standalone `livebook server` against notebooks/ (dev-only) —
-      # see docs/livebook-threat-model.md. Keeping it out of mix.exs is the
-      # strongest possible proof it can never mount in a :prod release.
     ]
   end
 

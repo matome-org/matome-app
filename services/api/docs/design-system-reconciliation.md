@@ -91,12 +91,12 @@ block (no per-component dark overrides).
    the `border: 1px solid var(--matome-border)` precedent. All color still comes
    from tokens.
 
-4. **Catalog mirrors class markup, not the compiled components.** The standalone
-   Livebook can't load the compiled app, so — like `foundations_catalog.livemd` —
-   `components_catalog.livemd` emits the SAME semantic classes over the SAME
-   `components.css`. The class contract is the shared drift surface; the `icon/1`
-   SVG set is duplicated in the notebook and must be kept in sync when glyphs
-   change (called out in the notebook).
+4. **Catalog renders the real compiled components.** `phoenix_storybook` mounts
+   the actual `MatomeComponents`/`MatomeComposites` function components (each
+   `.story.exs` points `def function` at the real `&Module.fun/1`) over the same
+   `components.css`/`composites.css`. There is no separately-maintained markup
+   copy to drift — the story variations exercise the shipped components directly,
+   so the `icon/1` SVG set (and everything else) is single-sourced.
 
 5. **Sync chip follows `MatomeSyncChip`, not `StatusBadge.sync`.** Both exist in
    Flutter; the canonical rollup chip (`MatomeSyncChip`: `subtle-fill` background
