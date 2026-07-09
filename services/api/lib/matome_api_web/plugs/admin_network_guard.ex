@@ -25,7 +25,9 @@ defmodule MatomeApiWeb.Plugs.AdminNetworkGuard do
     if NetworkPolicy.allowed?(conn.remote_ip, xff) do
       conn
     else
-      Logger.warning("admin network guard denied #{:inet.ntoa(conn.remote_ip)} #{conn.request_path}")
+      Logger.warning(
+        "admin network guard denied #{:inet.ntoa(conn.remote_ip)} #{conn.request_path}"
+      )
 
       conn
       |> put_resp_content_type("text/plain")

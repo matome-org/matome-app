@@ -15,7 +15,11 @@ defmodule MatomeApi.Admin.NetworkPolicyTest do
     test "allows an IP inside the allowlist" do
       assert NetworkPolicy.allowed?({10, 8, 0, 7}, [], allowlist: @allow, trusted_proxies: [])
       assert NetworkPolicy.allowed?({127, 0, 0, 1}, [], allowlist: @allow, trusted_proxies: [])
-      assert NetworkPolicy.allowed?({0, 0, 0, 0, 0, 0, 0, 1}, [], allowlist: @allow, trusted_proxies: [])
+
+      assert NetworkPolicy.allowed?({0, 0, 0, 0, 0, 0, 0, 1}, [],
+               allowlist: @allow,
+               trusted_proxies: []
+             )
     end
 
     test "denies an IP outside the allowlist" do
@@ -106,8 +110,15 @@ defmodule MatomeApi.Admin.NetworkPolicyTest do
 
   describe "cidr parsing" do
     test "bare addresses get a full-length prefix" do
-      assert NetworkPolicy.allowed?({127, 0, 0, 1}, [], allowlist: ["127.0.0.1"], trusted_proxies: [])
-      refute NetworkPolicy.allowed?({127, 0, 0, 2}, [], allowlist: ["127.0.0.1"], trusted_proxies: [])
+      assert NetworkPolicy.allowed?({127, 0, 0, 1}, [],
+               allowlist: ["127.0.0.1"],
+               trusted_proxies: []
+             )
+
+      refute NetworkPolicy.allowed?({127, 0, 0, 2}, [],
+               allowlist: ["127.0.0.1"],
+               trusted_proxies: []
+             )
     end
 
     test "ipv6 cidr membership" do

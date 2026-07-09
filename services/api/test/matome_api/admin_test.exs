@@ -72,7 +72,8 @@ defmodule MatomeApi.AdminTest do
     end
 
     test "rejects an unknown email" do
-      assert {:error, :invalid_credentials} = Admin.authenticate_admin("nobody@example.com", @password)
+      assert {:error, :invalid_credentials} =
+               Admin.authenticate_admin("nobody@example.com", @password)
     end
   end
 
@@ -102,7 +103,11 @@ defmodule MatomeApi.AdminTest do
       {:ok, ^secret} = Admin.start_totp_enrollment(user)
 
       now = System.os_time(:second)
-      :ok = Admin.confirm_totp_enrollment(user, NimbleTOTP.verification_code(secret, time: now), now: now)
+
+      :ok =
+        Admin.confirm_totp_enrollment(user, NimbleTOTP.verification_code(secret, time: now),
+          now: now
+        )
 
       assert {:error, :already_enrolled} = Admin.start_totp_enrollment(user)
     end
@@ -173,12 +178,15 @@ defmodule MatomeApi.AdminTest do
 
       now = System.os_time(:second) + 300
 
-      assert :ok = Admin.verify_totp(user, NimbleTOTP.verification_code(secret, time: now), now: now)
+      assert :ok =
+               Admin.verify_totp(user, NimbleTOTP.verification_code(secret, time: now), now: now)
 
       later = now + 60
 
       assert :ok =
-               Admin.verify_totp(user, NimbleTOTP.verification_code(secret, time: later), now: later)
+               Admin.verify_totp(user, NimbleTOTP.verification_code(secret, time: later),
+                 now: later
+               )
     end
 
     test "LOCKOUT: repeated failures lock the account out, even for a then-valid code" do
@@ -200,7 +208,11 @@ defmodule MatomeApi.AdminTest do
       user = create_user!("admin")
 
       event =
-        Admin.audit!("admin.login", actor: user, metadata: %{"path" => "/admin"}, remote_ip: "127.0.0.1")
+        Admin.audit!("admin.login",
+          actor: user,
+          metadata: %{"path" => "/admin"},
+          remote_ip: "127.0.0.1"
+        )
 
       assert %AuditEvent{} = event
       assert event.actor_id == user.id

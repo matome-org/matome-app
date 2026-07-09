@@ -164,8 +164,7 @@ defmodule MatomeApi.Admin do
   # older timestep matches zero rows and is rejected.
   defp claim_timestep(%TotpSecret{id: id}, timestep) do
     from(t in TotpSecret,
-      where:
-        t.id == ^id and (is_nil(t.last_used_timestep) or t.last_used_timestep < ^timestep)
+      where: t.id == ^id and (is_nil(t.last_used_timestep) or t.last_used_timestep < ^timestep)
     )
     |> Repo.update_all(set: [last_used_timestep: timestep])
   end

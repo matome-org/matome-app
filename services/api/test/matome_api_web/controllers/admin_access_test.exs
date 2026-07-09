@@ -22,7 +22,9 @@ defmodule MatomeApiWeb.AdminAccessTest do
   defp create_admin!(opts \\ []) do
     email = "admin-#{System.unique_integer([:positive])}@example.com"
     {:ok, %{user: user}} = Auth.register_user(%{"email" => email, "password" => @password})
-    user = user |> Ecto.Changeset.change(role: Keyword.get(opts, :role, "admin")) |> Repo.update!()
+
+    user =
+      user |> Ecto.Changeset.change(role: Keyword.get(opts, :role, "admin")) |> Repo.update!()
 
     secret =
       if Keyword.get(opts, :enroll, true) do
@@ -30,7 +32,12 @@ defmodule MatomeApiWeb.AdminAccessTest do
         # Confirm with a PAST timestep so the enrollment's replay high-water
         # mark does not swallow the login code the test sends "now".
         past = System.os_time(:second) - 90
-        :ok = Admin.confirm_totp_enrollment(user, NimbleTOTP.verification_code(secret, time: past), now: past)
+
+        :ok =
+          Admin.confirm_totp_enrollment(user, NimbleTOTP.verification_code(secret, time: past),
+            now: past
+          )
+
         secret
       end
 
@@ -66,7 +73,9 @@ defmodule MatomeApiWeb.AdminAccessTest do
       assert conn |> get("/admin") |> response(404)
     end
 
-    test "fails closed when the allowlist is empty (undecided-topology prod default)", %{conn: conn} do
+    test "fails closed when the allowlist is empty (undecided-topology prod default)", %{
+      conn: conn
+    } do
       original = Application.get_env(:matome_api, :admin_network)
       on_exit(fn -> Application.put_env(:matome_api, :admin_network, original) end)
       Application.put_env(:matome_api, :admin_network, allowlist: [], trusted_proxies: [])
@@ -95,7 +104,9 @@ defmodule MatomeApiWeb.AdminAccessTest do
       assert conn |> get("/admin") |> redirected_to() == "/admin/login"
     end
 
-    test "a password-only (pending) session does NOT open /admin — TOTP is mandatory", %{conn: conn} do
+    test "a password-only (pending) session does NOT open /admin — TOTP is mandatory", %{
+      conn: conn
+    } do
       {user, _secret} = create_admin!()
 
       conn = post(conn, "/admin/login", %{"email" => user.email, "password" => @password})
