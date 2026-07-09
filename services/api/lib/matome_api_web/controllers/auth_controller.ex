@@ -1,12 +1,13 @@
 defmodule MatomeApiWeb.AuthController do
   use MatomeApiWeb, :controller
 
+  alias MatomeApi.Admin.NetworkPolicy
   alias MatomeApi.Auth
 
   import MatomeApiWeb.ChangesetErrors, only: [errors_on: 1]
 
   def register(conn, params) do
-    case Auth.register_user(params) do
+    case Auth.register_user(params, session_meta(conn, params, "register")) do
       {:ok, auth} ->
         conn |> put_status(:created) |> json(auth_response(auth))
 
@@ -21,8 +22,8 @@ defmodule MatomeApiWeb.AuthController do
   # below are both served during the additive rollout so an un-migrated
   # client is never locked out; the `password` clause is scheduled for a
   # later, separately-tracked subtractive drop.
-  def login(conn, %{"email" => email, "auth_secret" => auth_secret}) do
-    case Auth.login(email, auth_secret) do
+  def login(conn, %{"email" => email, "auth_secret" => auth_secret} = params) do
+    case Auth.login(email, auth_secret, session_meta(conn, params, "auth_secret")) do
       {:ok, auth} ->
         json(conn, auth_response(auth))
 
@@ -31,8 +32,8 @@ defmodule MatomeApiWeb.AuthController do
     end
   end
 
-  def login(conn, %{"email" => email, "password" => password}) do
-    case Auth.login(email, password) do
+  def login(conn, %{"email" => email, "password" => password} = params) do
+    case Auth.login(email, password, session_meta(conn, params, "password")) do
       {:ok, auth} ->
         json(conn, auth_response(auth))
 
@@ -45,8 +46,10 @@ defmodule MatomeApiWeb.AuthController do
     conn |> put_status(:unprocessable_entity) |> json(%{error: "email_and_password_required"})
   end
 
-  def refresh(conn, %{"refresh_token" => refresh_token}) do
-    case Auth.refresh(refresh_token) do
+  def refresh(conn, %{"refresh_token" => refresh_token} = params) do
+    # No login_method here: a refresh continues an existing session, so the
+    # method (and device) are inherited from the rotated token in the context.
+    case Auth.refresh(refresh_token, session_meta(conn, params, nil)) do
       {:ok, auth} ->
         json(conn, auth_response(auth))
 
@@ -74,8 +77,8 @@ defmodule MatomeApiWeb.AuthController do
     conn |> put_status(:unprocessable_entity) |> json(%{error: "email_required"})
   end
 
-  def reset_password(conn, %{"token" => token, "password" => password}) do
-    case Auth.reset_password(token, password) do
+  def reset_password(conn, %{"token" => token, "password" => password} = params) do
+    case Auth.reset_password(token, password, session_meta(conn, params, "password_reset")) do
       {:ok, auth} ->
         json(conn, auth_response(auth))
 
@@ -105,4 +108,32 @@ defmodule MatomeApiWeb.AuthController do
   end
 
   defp user_response(user), do: %{id: user.id, email: user.email}
+
+  # Session-metadata capture (W4 #1872): what the token/device rows record
+  # about this request. The client may additionally describe itself with an
+  # optional `device` object (`id` = stable client-generated UUID used for
+  # correlation, plus `platform`/`display_name`).
+  defp session_meta(conn, params, login_method) do
+    %{
+      ip: client_ip(conn),
+      user_agent: conn |> get_req_header("user-agent") |> List.first(),
+      device: device_params(params),
+      login_method: login_method
+    }
+  end
+
+  defp device_params(%{"device" => %{} = device}), do: device
+  defp device_params(_params), do: nil
+
+  # Reuses the W3 trusted-proxy resolution (NetworkPolicy) instead of
+  # re-deriving X-Forwarded-For handling: the header only participates when
+  # the direct peer is a pinned trusted proxy; otherwise the peer itself is
+  # the client. An unresolvable chain records nothing rather than attacker
+  # input.
+  defp client_ip(conn) do
+    case NetworkPolicy.client_ip(conn.remote_ip, get_req_header(conn, "x-forwarded-for")) do
+      {:ok, ip} -> ip |> :inet.ntoa() |> to_string()
+      :error -> nil
+    end
+  end
 end

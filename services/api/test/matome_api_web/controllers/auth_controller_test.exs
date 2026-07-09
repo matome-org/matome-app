@@ -183,6 +183,68 @@ defmodule MatomeApiWeb.AuthControllerTest do
     %{conn | remote_ip: {203, 0, rem(div(n, 256), 256), rem(n, 256)}}
   end
 
+  describe "session-metadata capture (W4 #1872)" do
+    alias MatomeApi.Auth.{Device, RefreshToken}
+    alias MatomeApi.Repo
+
+    test "login captures ip, user agent, method and device from the request" do
+      email = unique_email()
+      post(build_conn(), ~p"/api/auth/register", %{email: email, password: @password})
+
+      device_id = Ecto.UUID.generate()
+
+      conn =
+        build_conn()
+        |> put_req_header("user-agent", "MatomeFlutter/1.0 (Linux)")
+        |> post(~p"/api/auth/login", %{
+          email: email,
+          password: @password,
+          device: %{id: device_id, platform: "linux", display_name: "Howl's laptop"}
+        })
+
+      %{"refresh_token" => refresh_token} = json_response(conn, 200)
+
+      token = Repo.get_by!(RefreshToken, token: refresh_token)
+      assert token.ip == "127.0.0.1"
+      assert token.user_agent == "MatomeFlutter/1.0 (Linux)"
+      assert token.login_method == "password"
+      assert is_binary(token.jti)
+      assert is_binary(token.family_id)
+
+      device = Repo.get!(Device, token.device_id)
+      assert device.client_id == device_id
+      assert device.platform == "linux"
+      assert device.display_name == "Howl's laptop"
+    end
+
+    test "refresh rotates within the family and captures the new request context" do
+      email = unique_email()
+
+      register_conn =
+        build_conn()
+        |> put_req_header("user-agent", "MatomeFlutter/1.0 (Linux)")
+        |> post(~p"/api/auth/register", %{email: email, password: @password})
+
+      %{"refresh_token" => old_refresh} = json_response(register_conn, 201)
+      old = Repo.get_by!(RefreshToken, token: old_refresh)
+      assert old.login_method == "register"
+
+      refresh_conn =
+        build_conn()
+        |> put_req_header("user-agent", "MatomeFlutter/1.1 (Linux)")
+        |> post(~p"/api/auth/refresh", %{refresh_token: old_refresh})
+
+      %{"refresh_token" => new_refresh} = json_response(refresh_conn, 200)
+
+      new_token = Repo.get_by!(RefreshToken, token: new_refresh)
+      assert new_token.family_id == old.family_id
+      assert new_token.rotated_from == old.jti
+      assert new_token.login_method == "register"
+      assert new_token.user_agent == "MatomeFlutter/1.1 (Linux)"
+      assert new_token.ip == "127.0.0.1"
+    end
+  end
+
   test "reset-password rejects a too-short password", %{conn: conn} do
     email = unique_email()
     post(conn, ~p"/api/auth/register", %{email: email, password: @password})

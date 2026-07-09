@@ -1,20 +1,26 @@
 defmodule MatomeApi.Auth do
   import Ecto.Query
 
-  alias MatomeApi.Auth.{Guardian, KeyBundle, RefreshToken, User}
+  alias MatomeApi.Auth.{Device, Guardian, KeyBundle, RefreshToken, User}
   alias MatomeApi.Repo
 
   @access_ttl {15, :minutes}
   @refresh_ttl {30, :days}
   @reset_ttl {30, :minutes}
 
+  # Session metadata capture (W4 #1872): `meta` is an optional map assembled
+  # by the web layer — `%{ip, user_agent, login_method, device}` where
+  # `device` is the client-supplied `%{"id", "platform", "display_name"}`.
+  # Every key is optional; an empty map reproduces the pre-W4 behavior with
+  # only the rotation fields (jti/family_id) populated.
+
   def get_user(id), do: Repo.get(User, id)
 
-  def register_user(attrs) do
+  def register_user(attrs, meta \\ %{}) do
     %User{}
     |> User.registration_changeset(normalize_credential(attrs))
     |> Repo.insert()
-    |> with_tokens()
+    |> with_tokens(meta)
   end
 
   @doc """
@@ -29,12 +35,12 @@ defmodule MatomeApi.Auth do
   whatever credential string arrives against the value that was hashed at
   registration for that same account.
   """
-  def login(email, credential) do
+  def login(email, credential, meta \\ %{}) do
     user = Repo.get_by(User, email: String.downcase(email || ""))
 
     cond do
       user && Argon2.verify_pass(credential || "", user.password_hash) ->
-        with_tokens({:ok, user})
+        with_tokens({:ok, user}, meta)
 
       user ->
         {:error, :invalid_credentials}
@@ -79,7 +85,7 @@ defmodule MatomeApi.Auth do
   Returns `{:ok, auth}`, `{:error, %Ecto.Changeset{}}` (weak password), or
   `{:error, :invalid_reset_token}`.
   """
-  def reset_password(token, new_password) do
+  def reset_password(token, new_password, meta \\ %{}) do
     with {:ok, claims} <- Guardian.decode_and_verify(token, %{"typ" => "reset"}),
          {:ok, %User{} = user} <- Guardian.resource_from_claims(claims),
          {:ok, updated} <-
@@ -87,25 +93,45 @@ defmodule MatomeApi.Auth do
            |> User.password_update_changeset(%{password: new_password})
            |> Repo.update() do
       Repo.delete_all(from(t in RefreshToken, where: t.user_id == ^updated.id))
-      issue_tokens(updated)
+      issue_tokens(updated, meta)
     else
       {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
       _ -> {:error, :invalid_reset_token}
     end
   end
 
-  def refresh(refresh_token) when is_binary(refresh_token) do
+  def refresh(refresh_token, meta \\ %{})
+
+  def refresh(refresh_token, meta) when is_binary(refresh_token) do
     with {:ok, claims} <- Guardian.decode_and_verify(refresh_token, %{"typ" => "refresh"}),
          %RefreshToken{} = stored <- active_refresh_token(refresh_token),
          {:ok, user} <- Guardian.resource_from_claims(claims) do
-      Repo.delete!(stored)
-      issue_tokens(user)
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      # Rotation (W4 #1872): the presented token is retained as a REVOKED row
+      # rather than deleted, so a later replay of it is distinguishable from
+      # a token that never existed — the reuse-detection seam W5 builds on.
+      stored
+      |> Ecto.Changeset.change(revoked_at: now, last_seen_at: now)
+      |> Repo.update!()
+
+      # The successor inherits the session identity (family, device, how the
+      # session was originally established) and records the chain link; only
+      # the network context (ip/user_agent) comes from the current request.
+      meta =
+        meta
+        |> Map.put(:family_id, stored.family_id || Ecto.UUID.generate())
+        |> Map.put(:rotated_from, stored.jti)
+        |> Map.put(:device_id, stored.device_id)
+        |> Map.put(:login_method, stored.login_method)
+
+      issue_tokens(user, meta)
     else
       _ -> {:error, :invalid_refresh_token}
     end
   end
 
-  def refresh(_refresh_token), do: {:error, :invalid_refresh_token}
+  def refresh(_refresh_token, _meta), do: {:error, :invalid_refresh_token}
 
   def logout(refresh_token) when is_binary(refresh_token) do
     from(token in RefreshToken, where: token.token == ^refresh_token)
@@ -187,34 +213,141 @@ defmodule MatomeApi.Auth do
 
   defp normalize_credential(attrs), do: attrs
 
-  defp with_tokens({:ok, user}), do: issue_tokens(user)
-  defp with_tokens(error), do: error
+  defp with_tokens({:ok, user}, meta), do: issue_tokens(user, meta)
+  defp with_tokens(error, _meta), do: error
 
-  defp issue_tokens(user) do
+  defp issue_tokens(user, meta) do
     with {:ok, access_token, _access_claims} <-
            Guardian.encode_and_sign(user, %{}, token_type: "access", ttl: @access_ttl),
          {:ok, refresh_token, refresh_claims} <-
            Guardian.encode_and_sign(user, %{}, token_type: "refresh", ttl: @refresh_ttl),
-         {:ok, _stored_token} <- store_refresh_token(user, refresh_token, refresh_claims) do
+         {:ok, _stored_token} <- store_refresh_token(user, refresh_token, refresh_claims, meta) do
       {:ok, %{user: user, access_token: access_token, refresh_token: refresh_token}}
     end
   end
 
-  defp store_refresh_token(user, token, %{"exp" => expires_at}) do
+  defp store_refresh_token(user, token, %{"exp" => expires_at} = claims, meta) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    device = resolve_device(user, meta, now)
+
     %RefreshToken{}
     |> RefreshToken.changeset(%{
       token: token,
       user_id: user.id,
-      expires_at: DateTime.from_unix!(expires_at)
+      expires_at: DateTime.from_unix!(expires_at),
+      jti: claims["jti"],
+      # A login starts a new token family; a refresh passes the inherited
+      # family through `meta` (see `refresh/2`).
+      family_id: Map.get(meta, :family_id) || Ecto.UUID.generate(),
+      rotated_from: Map.get(meta, :rotated_from),
+      device_id: device && device.id,
+      ip: Map.get(meta, :ip),
+      user_agent: Map.get(meta, :user_agent),
+      login_method: Map.get(meta, :login_method),
+      last_seen_at: now
     })
     |> Repo.insert()
+  end
+
+  # Resolves the device a token belongs to (W4 #1872).
+  #
+  # Refresh path: `meta.device_id` carries the device the family was minted
+  # on — only its `last_seen_at` is touched, never re-correlated.
+  defp resolve_device(_user, %{device_id: device_id}, now) when not is_nil(device_id) do
+    case Repo.get(Device, device_id) do
+      nil -> nil
+      device -> device |> Ecto.Changeset.change(last_seen_at: now) |> Repo.update!()
+    end
+  end
+
+  # Login path — correlation key, in order of preference:
+  #   1. `(user_id, client_id)` when the client sent a stable `device.id`
+  #      (upserted atomically on the unique index, so concurrent logins from
+  #      the same device cannot duplicate);
+  #   2. `(user_id, user_agent)` among NULL-client rows when it did not —
+  #      weaker (a UA bump after an app update reads as a new device) but
+  #      adds no identifier beyond what the request already carries;
+  #   3. no user agent either ⇒ no device row (token keeps ip/ua only).
+  defp resolve_device(user, meta, now) do
+    device_params = Map.get(meta, :device) || %{}
+    client_id = cast_uuid(device_params["id"])
+    user_agent = Map.get(meta, :user_agent)
+
+    cond do
+      client_id != nil ->
+        upsert_device(user, client_id, device_params, user_agent, now)
+
+      is_binary(user_agent) ->
+        correlate_device_by_user_agent(user, device_params, user_agent, now)
+
+      true ->
+        nil
+    end
+  end
+
+  defp upsert_device(user, client_id, device_params, user_agent, now) do
+    %Device{}
+    |> Device.changeset(%{
+      user_id: user.id,
+      client_id: client_id,
+      platform: device_params["platform"],
+      display_name: device_params["display_name"],
+      user_agent: user_agent,
+      first_seen_at: now,
+      last_seen_at: now
+    })
+    |> Repo.insert!(
+      # On re-login the client-sent descriptor is authoritative for the
+      # mutable fields; `first_seen_at`, `device_key_enrolled` and
+      # `revoked_at` are deliberately NOT replaced.
+      on_conflict:
+        {:replace, [:platform, :display_name, :user_agent, :last_seen_at, :updated_at]},
+      conflict_target: [:user_id, :client_id],
+      returning: true
+    )
+  end
+
+  defp correlate_device_by_user_agent(user, device_params, user_agent, now) do
+    existing =
+      Device
+      |> where([d], d.user_id == ^user.id and is_nil(d.client_id) and d.user_agent == ^user_agent)
+      |> limit(1)
+      |> Repo.one()
+
+    case existing do
+      nil ->
+        %Device{}
+        |> Device.changeset(%{
+          user_id: user.id,
+          platform: device_params["platform"],
+          display_name: device_params["display_name"],
+          user_agent: user_agent,
+          first_seen_at: now,
+          last_seen_at: now
+        })
+        |> Repo.insert!()
+
+      device ->
+        device |> Ecto.Changeset.change(last_seen_at: now) |> Repo.update!()
+    end
+  end
+
+  defp cast_uuid(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, uuid} -> uuid
+      :error -> nil
+    end
   end
 
   defp active_refresh_token(token) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     RefreshToken
-    |> where([refresh_token], refresh_token.token == ^token and refresh_token.expires_at > ^now)
+    |> where(
+      [refresh_token],
+      refresh_token.token == ^token and refresh_token.expires_at > ^now and
+        is_nil(refresh_token.revoked_at)
+    )
     |> Repo.one()
   end
 end
