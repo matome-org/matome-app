@@ -249,6 +249,75 @@ defmodule MatomeApi.AuthTest do
     end
   end
 
+  describe "logout/1 family revocation (W5 #1873)" do
+    test "revokes every live row in the session family" do
+      email = unique_email()
+
+      {:ok, %{user: user, refresh_token: first_refresh}} =
+        Auth.register_user(%{"email" => email, "password" => @password}, @meta)
+
+      {:ok, %{refresh_token: second_refresh}} = Auth.refresh(first_refresh, %{})
+
+      assert Auth.logout(second_refresh) == :ok
+
+      rows = Repo.all(from(t in RefreshToken, where: t.user_id == ^user.id))
+      assert length(rows) == 2
+      assert Enum.all?(rows, & &1.revoked_at)
+    end
+
+    test "busts the allowlist cache for the revoked session" do
+      email = unique_email()
+
+      {:ok, %{user: user, refresh_token: refresh_token}} =
+        Auth.register_user(%{"email" => email, "password" => @password}, @meta)
+
+      jti = latest_token(user).jti
+
+      # Prime the cache with the live status, as a real request would.
+      assert MatomeApi.Auth.TokenAllowlist.check(jti) == :allowed
+
+      assert Auth.logout(refresh_token) == :ok
+
+      assert MatomeApi.Auth.TokenAllowlist.check(jti) == {:denied, :revoked}
+    end
+
+    test "broadcasts a socket disconnect for the user (remote-lock signal)" do
+      email = unique_email()
+
+      {:ok, %{user: user, refresh_token: refresh_token}} =
+        Auth.register_user(%{"email" => email, "password" => @password}, @meta)
+
+      :ok = Phoenix.PubSub.subscribe(MatomeApi.PubSub, "user_socket:#{user.id}")
+
+      assert Auth.logout(refresh_token) == :ok
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
+    end
+
+    test "an unknown refresh token still returns :ok without side effects" do
+      assert Auth.logout("no-such-token") == :ok
+      assert Auth.logout(nil) == :ok
+    end
+  end
+
+  describe "refresh/2 allowlist invalidation (W5 #1873)" do
+    test "rotation busts the cache entry for the rotated-out session jti" do
+      email = unique_email()
+
+      {:ok, %{user: user, refresh_token: refresh_token}} =
+        Auth.register_user(%{"email" => email, "password" => @password}, @meta)
+
+      old_jti = latest_token(user).jti
+      assert MatomeApi.Auth.TokenAllowlist.check(old_jti) == :allowed
+
+      {:ok, _} = Auth.refresh(refresh_token, %{})
+
+      # The pre-rotation access token (bound to old_jti) must not survive on
+      # a stale cache entry.
+      assert MatomeApi.Auth.TokenAllowlist.check(old_jti) == {:denied, :revoked}
+    end
+  end
+
   defp latest_token(user) do
     Repo.one!(
       from(t in RefreshToken,

@@ -1,7 +1,7 @@
 defmodule MatomeApi.Auth do
   import Ecto.Query
 
-  alias MatomeApi.Auth.{Device, Guardian, KeyBundle, RefreshToken, User}
+  alias MatomeApi.Auth.{Device, Guardian, KeyBundle, RefreshToken, TokenAllowlist, User}
   alias MatomeApi.Repo
 
   @access_ttl {15, :minutes}
@@ -115,6 +115,11 @@ defmodule MatomeApi.Auth do
       |> Ecto.Changeset.change(revoked_at: now, last_seen_at: now)
       |> Repo.update!()
 
+      # W5 #1873: the access token minted alongside the rotated-out refresh
+      # token is bound to its jti; bust any cached :active entry so it
+      # cannot outlive the rotation on a warm cache.
+      TokenAllowlist.invalidate(stored.jti)
+
       # The successor inherits the session identity (family, device, how the
       # session was originally established) and records the chain link; only
       # the network context (ip/user_agent) comes from the current request.
@@ -133,14 +138,59 @@ defmodule MatomeApi.Auth do
 
   def refresh(_refresh_token, _meta), do: {:error, :invalid_refresh_token}
 
+  @doc """
+  Ends the session the refresh token belongs to (W5 #1873): every live row
+  in its family is revoked (`revoked_at` set — rows are retained per the W4
+  audit seam, not deleted), the allowlist cache entries for their jtis are
+  busted on every node, and a `"disconnect"` is broadcast on the user's
+  socket id topic (the remote-lock signal — clients drop the DEK on it).
+  Always returns `:ok`; an unknown token is a no-op.
+  """
   def logout(refresh_token) when is_binary(refresh_token) do
-    from(token in RefreshToken, where: token.token == ^refresh_token)
-    |> Repo.delete_all()
-
-    :ok
+    case Repo.get_by(RefreshToken, token: refresh_token) do
+      nil -> :ok
+      stored -> revoke_family(stored)
+    end
   end
 
   def logout(_refresh_token), do: :ok
+
+  defp revoke_family(%RefreshToken{} = stored) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    scope =
+      if stored.family_id do
+        dynamic([t], t.family_id == ^stored.family_id and is_nil(t.revoked_at))
+      else
+        # Pre-W4 rows have no family; revoke just the presented token's row.
+        dynamic([t], t.id == ^stored.id and is_nil(t.revoked_at))
+      end
+
+    {_count, revoked_jtis} =
+      from(t in RefreshToken, where: ^scope, select: t.jti)
+      |> Repo.update_all(set: [revoked_at: now])
+
+    Enum.each(revoked_jtis, &TokenAllowlist.invalidate/1)
+    broadcast_session_disconnect(stored.user_id)
+    :ok
+  end
+
+  # Remote-lock signal (W5 #1873, §9.3): `MatomeApiWeb.UserSocket.id/1` names
+  # every socket of a user "user_socket:<id>", and Phoenix socket transports
+  # terminate on a `"disconnect"` broadcast to that topic. Broadcast via
+  # PubSub directly (this is exactly what `Endpoint.broadcast/3` does) so the
+  # core Auth context does not reach into the web layer. Clients honor the
+  # disconnect by dropping the in-memory DEK (client behavior, out of scope
+  # here — see docs/token-revocation.md).
+  defp broadcast_session_disconnect(user_id) do
+    topic = "user_socket:#{user_id}"
+
+    Phoenix.PubSub.broadcast(MatomeApi.PubSub, topic, %Phoenix.Socket.Broadcast{
+      topic: topic,
+      event: "disconnect",
+      payload: %{}
+    })
+  end
 
   def verify_access_token(token) do
     with {:ok, claims} <- Guardian.decode_and_verify(token, %{"typ" => "access"}),
