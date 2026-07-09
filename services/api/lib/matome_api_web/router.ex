@@ -216,6 +216,7 @@ defmodule MatomeApiWeb.Router do
     # websocket upgrade bypasses these router pipelines (see AdminAuth).
     live_session :admin, on_mount: [{MatomeApiWeb.AdminAuth, :require_admin}] do
       live "/", AdminLive.Index, :index
+      live "/sessions", AdminLive.Sessions, :index
     end
   end
 
@@ -235,7 +236,7 @@ defmodule MatomeApiWeb.Router do
     scope "/", MatomeApiWeb do
       pipe_through :browser
 
-      live_storybook "/storybook", backend_module: MatomeApiWeb.Storybook
+      live_storybook("/storybook", backend_module: MatomeApiWeb.Storybook)
     end
   end
 end
