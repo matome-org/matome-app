@@ -94,7 +94,10 @@ defmodule MatomeApi.Auth do
            user
            |> User.password_update_changeset(%{password: new_password})
            |> Repo.update() do
-      Repo.delete_all(from(t in RefreshToken, where: t.user_id == ^updated.id))
+      # W5 #1873: revoke (don't delete) every live session — rows are
+      # retained per the W4 audit seam, allowlist caches are busted on all
+      # nodes, and connected sockets get the remote-lock disconnect.
+      revoke_all_sessions(updated.id)
       issue_tokens(updated, meta)
     else
       {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
@@ -156,6 +159,21 @@ defmodule MatomeApi.Auth do
   end
 
   def logout(_refresh_token), do: :ok
+
+  defp revoke_all_sessions(user_id) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    {_count, revoked_jtis} =
+      from(t in RefreshToken,
+        where: t.user_id == ^user_id and is_nil(t.revoked_at),
+        select: t.jti
+      )
+      |> Repo.update_all(set: [revoked_at: now])
+
+    Enum.each(revoked_jtis, &TokenAllowlist.invalidate/1)
+    broadcast_session_disconnect(user_id)
+    :ok
+  end
 
   defp revoke_family(%RefreshToken{} = stored) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)

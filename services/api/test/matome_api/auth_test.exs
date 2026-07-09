@@ -318,6 +318,52 @@ defmodule MatomeApi.AuthTest do
     end
   end
 
+  describe "reset_password/3 session revocation (W5 #1873)" do
+    setup do
+      email = unique_email()
+      {:ok, %{user: user}} = Auth.register_user(%{"email" => email, "password" => @password})
+
+      {:ok, reset_token, _claims} =
+        MatomeApi.Auth.Guardian.encode_and_sign(user, %{},
+          token_type: "reset",
+          ttl: {30, :minutes}
+        )
+
+      %{user: user, reset_token: reset_token}
+    end
+
+    test "revokes (retains) prior sessions and denies their jtis", %{
+      user: user,
+      reset_token: reset_token
+    } do
+      old_jti = latest_token(user).jti
+      assert MatomeApi.Auth.TokenAllowlist.check(old_jti) == :allowed
+
+      {:ok, %{user: reset_user}} = Auth.reset_password(reset_token, "brand new passphrase 42")
+      assert reset_user.id == user.id
+
+      # The pre-reset row is retained with revoked_at set (audit seam), and
+      # the allowlist denies it immediately (cache busted).
+      old_row = Repo.one!(from(t in RefreshToken, where: t.jti == ^old_jti))
+      assert %DateTime{} = old_row.revoked_at
+      assert MatomeApi.Auth.TokenAllowlist.check(old_jti) == {:denied, :revoked}
+
+      # The freshly issued session is live.
+      assert latest_token(user).jti != old_jti
+    end
+
+    test "broadcasts a socket disconnect for the user", %{
+      user: user,
+      reset_token: reset_token
+    } do
+      :ok = Phoenix.PubSub.subscribe(MatomeApi.PubSub, "user_socket:#{user.id}")
+
+      {:ok, _} = Auth.reset_password(reset_token, "brand new passphrase 42")
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
+    end
+  end
+
   defp latest_token(user) do
     Repo.one!(
       from(t in RefreshToken,
