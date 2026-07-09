@@ -108,6 +108,31 @@ defmodule MatomeApi.Admin.NetworkPolicyTest do
     end
   end
 
+  describe "client_ip/3 (shared client-IP resolution, W4 #1872)" do
+    test "direct connection: the peer is the client" do
+      assert NetworkPolicy.client_ip({203, 0, 113, 5}, [], trusted_proxies: []) ==
+               {:ok, {203, 0, 113, 5}}
+    end
+
+    test "XFF from an untrusted peer is ignored" do
+      assert NetworkPolicy.client_ip({203, 0, 113, 5}, ["10.8.0.7"], trusted_proxies: @proxies) ==
+               {:ok, {203, 0, 113, 5}}
+    end
+
+    test "through a pinned proxy the rightmost untrusted hop is the client" do
+      assert NetworkPolicy.client_ip(
+               {172, 16, 0, 10},
+               ["10.8.0.7, 203.0.113.5"],
+               trusted_proxies: @proxies
+             ) == {:ok, {203, 0, 113, 5}}
+    end
+
+    test "fails closed on an unparseable chain behind a pinned proxy" do
+      assert NetworkPolicy.client_ip({172, 16, 0, 10}, ["not-an-ip"], trusted_proxies: @proxies) ==
+               :error
+    end
+  end
+
   describe "cidr parsing" do
     test "bare addresses get a full-length prefix" do
       assert NetworkPolicy.allowed?({127, 0, 0, 1}, [],

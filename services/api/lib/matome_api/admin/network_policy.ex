@@ -36,16 +36,32 @@ defmodule MatomeApi.Admin.NetworkPolicy do
     allowlist = parse_cidrs(Keyword.get(opts, :allowlist, []))
     proxies = parse_cidrs(Keyword.get(opts, :trusted_proxies, []))
 
-    case client_ip(remote_ip, xff_values, proxies) do
+    case resolve_client(remote_ip, xff_values, proxies) do
       {:ok, client} -> member_of_any?(allowlist, client)
       :error -> false
     end
   end
 
+  @doc """
+  Resolves the effective client IP for a request — the same trusted-proxy /
+  X-Forwarded-For logic `allowed?/3` gates on, exposed for callers that need
+  the address itself rather than an allow/deny (session-metadata capture,
+  W4 #1872). Returns `{:ok, ip_tuple}` or `:error` (unparseable chain behind
+  a pinned proxy — fail closed, record nothing, never trust the header).
+
+  `opts` defaults to the `:admin_network` app env; only `:trusted_proxies`
+  participates.
+  """
+  def client_ip(remote_ip, xff_values, opts \\ nil) do
+    opts = opts || Application.get_env(:matome_api, :admin_network, [])
+    proxies = parse_cidrs(Keyword.get(opts, :trusted_proxies, []))
+    resolve_client(remote_ip, xff_values, proxies)
+  end
+
   # Resolves the effective client IP. Only when the direct peer is a pinned
   # trusted proxy does X-Forwarded-For participate; then the client is the
   # rightmost hop that is not itself a trusted proxy.
-  defp client_ip(remote_ip, xff_values, proxies) do
+  defp resolve_client(remote_ip, xff_values, proxies) do
     cond do
       proxies == [] or not member_of_any?(proxies, remote_ip) ->
         {:ok, remote_ip}
