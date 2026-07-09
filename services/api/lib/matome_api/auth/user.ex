@@ -8,6 +8,12 @@ defmodule MatomeApi.Auth.User do
     field :password, :string, virtual: true, redact: true
     field :password_hash, :string, redact: true
 
+    # Hard allowlist for the /admin back-office (W3 #1871): user | admin |
+    # superadmin. Deliberately NOT cast by any changeset in this module —
+    # there is no signup/API path to a privileged role; admins are
+    # provisioned out-of-band (SQL / release task) only.
+    field :role, :string, default: "user"
+
     timestamps(type: :utc_datetime)
   end
 
