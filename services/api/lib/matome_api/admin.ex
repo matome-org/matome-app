@@ -261,4 +261,121 @@ defmodule MatomeApi.Admin do
     })
     |> Repo.insert!()
   end
+
+  @doc """
+  The §9.6 users directory (W7 #1875): every account with the distinct
+  login methods observed on its refresh tokens, whether a confirmed TOTP
+  factor is enrolled, and the most recent login/activity timestamp
+  (`last_seen_at`, falling back to the token's `inserted_at`). Read-only —
+  this surface never mutates auth state.
+  """
+  def list_users do
+    mfa_ids =
+      from(t in TotpSecret, where: not is_nil(t.confirmed_at), select: t.user_id)
+      |> Repo.all()
+      |> MapSet.new()
+
+    tokens_by_user =
+      from(t in RefreshToken, order_by: [desc: t.last_seen_at])
+      |> Repo.all()
+      |> Enum.group_by(& &1.user_id)
+
+    from(u in User, order_by: [asc: u.email])
+    |> Repo.all()
+    |> Enum.map(fn user ->
+      tokens = Map.get(tokens_by_user, user.id, [])
+
+      %{
+        user: user,
+        login_methods: distinct_login_methods(tokens),
+        mfa_enabled: MapSet.member?(mfa_ids, user.id),
+        last_login_at: most_recent_or_nil(tokens)
+      }
+    end)
+    |> Enum.sort_by(& &1.last_login_at, {:desc, DateTime})
+  end
+
+  defp distinct_login_methods(tokens) do
+    tokens
+    |> Enum.map(& &1.login_method)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp most_recent_or_nil([]), do: nil
+
+  defp most_recent_or_nil(tokens) do
+    tokens
+    |> Enum.map(&(&1.last_seen_at || &1.inserted_at))
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] -> nil
+      times -> Enum.max(times, DateTime)
+    end
+  end
+
+  @doc """
+  Read the append-only `admin_audit_events` trail (W7 #1875), newest first.
+
+  Filters (all optional; blank/nil are no-ops):
+
+  - `:actor_id` — admin who performed the action
+  - `:action` — exact action string (e.g. `"admin.login"`)
+  - `:target` — substring match against the JSON-encoded `metadata`
+    (covers `user_id` / `jti` / free-form target keys; the table has no
+    dedicated target columns)
+  - `:since` / `:until` — half-open time window on `inserted_at`
+    (`since` inclusive, `until` exclusive)
+  """
+  def list_audit_events(opts \\ []) do
+    actor_id = Keyword.get(opts, :actor_id)
+    action = blank_to_nil(Keyword.get(opts, :action))
+    target = blank_to_nil(Keyword.get(opts, :target))
+    since = Keyword.get(opts, :since)
+    until = Keyword.get(opts, :until)
+
+    from(e in AuditEvent, order_by: [desc: e.inserted_at])
+    |> maybe_where_actor(actor_id)
+    |> maybe_where_action(action)
+    |> maybe_where_since(since)
+    |> maybe_where_until(until)
+    |> Repo.all()
+    |> maybe_filter_target(target)
+  end
+
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp blank_to_nil(value), do: value
+
+  defp maybe_where_actor(query, nil), do: query
+  defp maybe_where_actor(query, actor_id), do: where(query, [e], e.actor_id == ^actor_id)
+
+  defp maybe_where_action(query, nil), do: query
+  defp maybe_where_action(query, action), do: where(query, [e], e.action == ^action)
+
+  defp maybe_where_since(query, nil), do: query
+  defp maybe_where_since(query, since), do: where(query, [e], e.inserted_at >= ^since)
+
+  defp maybe_where_until(query, nil), do: query
+  defp maybe_where_until(query, until), do: where(query, [e], e.inserted_at < ^until)
+
+  defp maybe_filter_target(events, nil), do: events
+
+  defp maybe_filter_target(events, target) do
+    needle = String.downcase(target)
+
+    Enum.filter(events, fn event ->
+      event.metadata
+      |> Jason.encode!()
+      |> String.downcase()
+      |> String.contains?(needle)
+    end)
+  end
 end
