@@ -18,8 +18,16 @@ W6) recognise *"is this session/device mine?"* and revoke what is not
 | `ip` | `refresh_tokens.ip` | `NetworkPolicy.client_ip/3` (trusted-proxy resolution; unresolvable ⇒ `NULL`, never attacker input) | "Session from an unexpected place" recognition |
 | `user_agent` | `refresh_tokens.user_agent`, `devices.user_agent` | `User-Agent` header, verbatim | Session/device recognition; fallback correlation key |
 | `client_id` | `devices.client_id` | Client-generated stable UUID (`device.id` in the login body), optional | Device correlation without fingerprinting |
-| `platform`, `display_name` | `devices` | Client-sent, optional | Human-readable device labels for the sessions view |
+| `platform` | `devices.platform` | Client-sent OS slug (`android`/`ios`/`linux`/`macos`/`windows`/`web`) | Admin “Access by OS” chart; Sessions label |
+| `form_factor` | `devices.form_factor` | Client-sent or derived (`mobile`/`desktop`/`web`) | Admin “Access by form factor” chart |
+| `device_class` | `devices.device_class` | Client-sent or derived (`smartphone`/`tablet`/`laptop`/`desktop`/`browser`) | Admin “Access by device” chart |
+| `model`, `display_name` | `devices` | Client-sent, optional | Human-readable device labels for the sessions view |
 | `login_method`, `jti`, `family_id`, `rotated_from`, `last_seen_at`, `revoked_at` | `refresh_tokens` | Server-generated | Rotation chain, replay detection (W5), sessions view (W6) |
+
+When the client omits `form_factor` / `device_class`, Core derives them from
+`platform` (`android`/`ios` → mobile/smartphone; `web` → web/browser;
+desktop OSes → desktop/desktop). Blank or unknown values normalize to
+`unknown`.
 
 Deliberate non-collection:
 

@@ -40,7 +40,7 @@ flowchart LR
     OB[Oban\njob queue]
     CH[Channels\nrealtime status]
   end
-  ST[(Object Storage\nSupabase Storage / S3)]
+  ST[(Object Storage\nS3-compatible)]
   subgraph AI["Backend B — AI Engine (Python/FastAPI)"]
     P[transcribe · ocr · summarize]
   end
@@ -66,12 +66,12 @@ Owns everything except AI.
 | Concern | Choice |
 |---|---|
 | Framework / language | **Phoenix** / **Elixir** (BEAM) |
-| DB | **Supabase Postgres** (managed) via **Ecto** — system of record |
-| Auth | **Guardian** (JWT access + refresh), **Argon2** hashing; users in Postgres. App-level authz (no Supabase Auth/RLS). Session auth is layered under a separate **at-rest key envelope** (plan #131 / [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md)): `POST/GET /keybundle` (+ `/keybundle/recovery`) stores only opaque `wrapped_dek_*` blobs + salts/KDF params — the server never receives the password, the KEK, or the DEK. `auth_secret` (login) and the password-KEK (data-key unwrap) are independent Argon2id derivations of the same password under distinct salts, so a credential the server legitimately sees can never unwrap client data. See §11 D8 below for what of this is implemented+tested vs dark/deferred. |
+| DB | **Postgres** via **Ecto** — system of record (`DATABASE_URL`; local native or managed) |
+| Auth | **Guardian** (JWT access + refresh), **Argon2** hashing; users in Postgres. App-level authz (no third-party Auth/RLS). Session auth is layered under a separate **at-rest key envelope** (plan #131 / [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md)): `POST/GET /keybundle` (+ `/keybundle/recovery`) stores only opaque `wrapped_dek_*` blobs + salts/KDF params — the server never receives the password, the KEK, or the DEK. `auth_secret` (login) and the password-KEK (data-key unwrap) are independent Argon2id derivations of the same password under distinct salts, so a credential the server legitimately sees can never unwrap client data. See §11 D8 below for what of this is implemented+tested vs dark/deferred. |
 | Authorization | scoping by `owner_id` (Ecto query scopes) |
 | Job queue | **Oban** (Postgres-backed) — dispatch + retry of AI jobs |
 | Realtime | **Phoenix Channels** + PubSub (`RecordingStatusChannel` on `user:*`) |
-| Object storage | **Supabase Storage** — Core issues presigned PUT/GET URLs |
+| Object storage | **S3-compatible** (MinIO local / R2 or S3 in prod) — Core issues path-style presigned PUT/GET URLs ([data-plane.md](../../services/api/docs/data-plane.md)) |
 | API surface | REST, documented as **OpenAPI** (`open_api_spex`) |
 
 Responsibilities: register/login + tokens; CRUD on matomes / recordings / spaces / contacts; create the `pending` record; issue presigned upload URLs; enqueue ingestion jobs; receive AI results via internal callback; archive/restore.
@@ -88,7 +88,7 @@ Responsibilities: register/login + tokens; CRUD on matomes / recordings / spaces
 
 Stateless processors (`transcribe`, `ocr`, `summarize`). Only Core reaches it (service token, private network). It downloads media via presigned GET and returns one terminal result via callback. It stores nothing durable.
 
-**Contract.** Core → AI: `POST /v1/jobs` `{job_id, recording_id, media_type, storage_key, media:{method:GET,url,expires_at}, callback:{url,method:POST}, metadata}` → `202 {accepted:true}`. AI → Core: `POST /internal/jobs/:job_id/result` with `status:done` (`title, transcript, summary, duration`) or `status:failed` (`error.{code,message}`), both `Bearer <AI_ENGINE_TOKEN>`. Callback is idempotent per `job_id`; `metadata` is advisory and must not be used for authorization. Local stub: `bun run ai:stub` (default `http://127.0.0.1:5055/v1/jobs`).
+**Contract.** Core → AI: `POST /v1/jobs` `{job_id, recording_id, media_type, storage_key, media:{method:GET,url,expires_at}, callback:{url,method:POST}, metadata}` → `202 {accepted:true}`. AI → Core: `POST /internal/jobs/:job_id/result` with `status:done` (`title, transcript, summary, duration`) or `status:failed` (`error.{code,message}`), both `Bearer <AI_ENGINE_TOKEN>`. Callback is idempotent per `job_id`; `metadata` is advisory and must not be used for authorization. Local stub: `bun run ai:stub` (default `http://127.0.0.1:7002/v1/jobs`).
 
 ---
 
@@ -264,11 +264,11 @@ matome/
 ├── services/
 │   ├── api/                 # Backend A — Elixir/Phoenix
 │   └── ai-stub/             # Local Node mock of the AI Engine (Backend B is a separate repo)
-├── supabase/                # Local Postgres + S3 storage for dev
+├── script/                  # Native local data plane (Postgres + MinIO)
 └── .docs/
 ```
 
-Toolchain via [mise](https://mise.jdx.dev/) (`mise run up`, `mise run flutter-*`). Design tokens originate in Figma (`LxpS0mmXZHPZ17qLufN7wB`), bound as Flutter `ThemeExtension`s under `lib/core/theme`, governed by the Widgetbook catalog + `mise run flutter-design-system-check`.
+Toolchain via [mise](https://mise.jdx.dev/) (`mise run up` = native Postgres + MinIO + Core + AI stub; `mise run flutter-*`). Design tokens originate in Figma (`LxpS0mmXZHPZ17qLufN7wB`), bound as Flutter `ThemeExtension`s under `lib/core/theme`, governed by the Widgetbook catalog + `mise run flutter-design-system-check`.
 
 ---
 

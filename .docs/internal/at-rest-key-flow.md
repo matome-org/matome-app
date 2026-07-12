@@ -267,6 +267,12 @@ persistence entirely).
      3rd-party/injected script from running at all) but does **not**
      defend against a compromise of the app's OWN first-party JS (a
      supply-chain compromise of this repo's build, or a dependency).
+     CanvasKit is forced same-origin via `--no-web-resources-cdn` (dev
+     `mise run flutter-web` + `Dockerfile.web`); without that flag Flutter
+     loads `gstatic.com/flutter-canvaskit` and the CSP blanks the page.
+     Source meta allows script `'unsafe-inline'` only so DWDS hot-reload
+     works; Docker strips it so production meta matches nginx (no
+     unsafe-inline scripts).
    - **Subresource Integrity is PARTIAL, not full**, for a structural
      reason, not an oversight: Flutter's web build loads `main.dart.js` /
      the CanvasKit or skwasm engine binary / `flutter_service_worker.js`
@@ -439,31 +445,35 @@ Defense in depth — every layer must pass:
 
 | Layer | Control | Notes |
 |---|---|---|
-| Network | VPN / IP allowlist bound to the `/admin` scope | panel not reachable from public internet |
-| Identity | **hard allowlist** — `admin_users` role, provisioned out-of-band | NOT self-service, no signup path to admin |
-| Auth strength | **MFA mandatory** — passkey or TOTP, never password-only | admin is keys-to-the-kingdom |
-| Session | short admin session TTL, re-auth on sensitive actions | |
-| Audit | every admin login + action written to `admin_audit_events` | immutable log |
+| Kill switch | `ADMIN_PANEL_ENABLED` | unset/`false` in prod ⇒ every `/admin*` is 404 |
+| Soft IP tier | `ADMIN_IP_ALLOWLIST` (optional) | rate-limit tier only — **no hard 404** for unknown IPs |
+| Identity | **hard allowlist** — `ADMIN_EMAIL_ALLOWLIST` env CSV; no `users` row required | NOT self-service; non-members get total silence |
+| Auth strength | **email OTP mandatory** — one-shot code, 30-min TTL | password + authenticator TOTP retired for /admin |
+| Session | short admin session TTL, re-auth on sensitive actions | absolute TTL; OTP freshness for revoke |
+| Audit | every admin login + action written to `admin_audit_events` | immutable log; `actor_email` always set |
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor A as Matome staff admin
-    participant NET as Network guard (VPN / IP allowlist)
-    participant LV as Backoffice LiveView (/admin)
-    participant AL as Admin allowlist (DB role)
-    participant MFA as MFA (passkey / TOTP)
+    participant NET as Panel guard (kill switch)
+    participant LV as Backoffice (/admin)
+    participant AL as ADMIN_EMAIL_ALLOWLIST
+    participant Mail as Swoosh OTP
     participant AUD as admin_audit_events
 
     A->>NET: reach /admin
-    NET-->>A: reject if outside VPN or IP allowlist
-    A->>LV: authenticate
-    LV->>AL: is user in admin allowlist?
-    AL-->>LV: role = admin, else deny
-    LV->>MFA: require passkey or TOTP (mandatory)
-    MFA-->>LV: verified
-    LV->>AUD: record admin login
-    LV-->>A: panel mounted, short session TTL
+    NET-->>A: 404 if panel disabled
+    A->>LV: POST email
+    LV->>AL: allowlisted?
+    alt not on list
+        LV-->>A: 200 silence (same login page)
+    else on list
+        LV->>Mail: deliver OTP
+        A->>LV: POST OTP code
+        LV->>AUD: record admin.login
+        LV-->>A: panel mounted, short session TTL
+    end
 ```
 
 ### 9.2 Session hierarchy — user → device → active tokens
@@ -539,8 +549,9 @@ spaces. (Quota and expiration are pure metadata, so admin controls those freely.
 
 > Shared encrypted spaces need a **per-space key** wrapped to each member's public
 > key — an extension of the per-user DEK model in §1. Single-user spaces just use
-> the owner's DEK. Multi-user E2E spaces are a separate design increment
-> (reserved wrapper slot `space-KEK`, Appendix A).
+> the owner's DEK. Multi-user E2E spaces are designed in
+> `services/api/docs/adr/0003-space-kek-multi-user.md` (wrapper slot `space-KEK`,
+> Appendix A `0x05`).
 
 ### 9.5 Schema deltas (Core, Ecto)
 

@@ -38,6 +38,6 @@ flutter test integration_test/audio_recording_live_test.dart -d <device>
 ## Notes
 
 - `test/live_socket_derisk_test.dart` is a separate `live`-tagged unit test that
-  needs the Core API on `:4000` + `LIVE_TOKEN` (`flutter test --tags live`). It
+  needs the Core API on `:7001` + `LIVE_TOKEN` (`flutter test --tags live`). It
   is **not** an integration_test; it lives under `test/` and is skipped by
   default via `dart_test.yaml`.

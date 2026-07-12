@@ -17,8 +17,8 @@ flutter config --enable-web --enable-linux-desktop \
   --enable-macos-desktop --enable-windows-desktop --enable-android --enable-ios
 ```
 
-The API base URL is resolved per-platform (web/linux → `http://localhost:4000`,
-Android emulator → `http://10.0.2.2:4000`). Override with
+The API base URL is resolved per-platform (web/linux → `http://localhost:7001`,
+Android emulator → `http://10.0.2.2:7001`). Override with
 `--dart-define=API_BASE_URL=...`.
 
 ## Native config (versioned — important)

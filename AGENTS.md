@@ -19,17 +19,18 @@ for the real transcription/summarization service during local development.
 The toolchain is driven by [mise](https://mise.jdx.dev/):
 
 ```bash
-mise run up             # Backend: Supabase + Core API (:4000) + AI stub (:5055)
+mise run up             # Backend: native Postgres + MinIO + Core (:7001) + AI stub (:7002)
 mise run backend        # Same as `up` (no client)
 mise run flutter-linux  # Flutter on Linux desktop  → local Core
-mise run flutter-web    # Flutter on Chromium (:8080)
+mise run flutter-web    # Flutter on Chromium (:7000)
 mise run flutter-android# Flutter on the pixel7 emulator
 mise run storybook      # Widgetbook design catalog
 mise run down           # Stop the stack
 mise run nuke           # Wipe the local environment
 ```
 
-Run `mise run up` before any `mise run flutter-*` client.
+Run `mise run up` before any `mise run flutter-*` client. Env contract:
+[services/api/docs/data-plane.md](services/api/docs/data-plane.md).
 
 ## Architecture
 
@@ -99,7 +100,7 @@ i18n/      -> slang translations (en/ja JSON → generated strings)
 
 Elixir / Phoenix 1.7 with Ecto (Postgres), Guardian for JWT auth, Oban for the
 AI job queue, Phoenix Channels for realtime ingestion status, and `cors_plug`.
-Runs on `:4000`. Owns database/storage access and AI orchestration behind the
+Runs on `:7001`. Owns database/storage access and AI orchestration behind the
 API boundary; the Flutter client never touches Postgres or S3 directly. Status
 reaches the client over a `RecordingStatusChannel`, raced against a 2 s poll
 (`recording_result_waiter.dart`).

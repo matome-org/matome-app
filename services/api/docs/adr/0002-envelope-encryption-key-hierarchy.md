@@ -7,6 +7,8 @@ Accepted.
 **Related docs (cross-links):**
 - Design doc (full protocol, sequence diagrams, frozen wire format):
   `.docs/internal/at-rest-key-flow.md`
+- Multi-user space key-share (slot `0x05`):
+  `docs/adr/0003-space-kek-multi-user.md`
 - Architecture record — what of this is implemented+tested vs dark/deferred
   in the shipped client, plus the carry-forward ledger P2 planning inherits:
   `.docs/internal/architecture.md` §11 D8 (this ADR's client sits on top of

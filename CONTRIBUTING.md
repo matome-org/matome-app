@@ -4,13 +4,14 @@
 
 Matome is a cross-platform **Flutter** client (`apps/flutter`) backed by an
 **Elixir / Phoenix** Core API (`services/api`), with a Node mock of the AI
-engine (`services/ai-stub`) and Supabase (Postgres + S3) for local development.
+engine (`services/ai-stub`). Local development uses **native Postgres + MinIO**
+via `mise run up` (see [services/api/docs/data-plane.md](services/api/docs/data-plane.md)).
 The toolchain is managed by [mise](https://mise.jdx.dev/).
 
 ## Development workflow
 
 ```bash
-mise run up             # Start the backend (Supabase + Core API + AI stub)
+mise run up             # Start the backend (Postgres + MinIO + Core + AI stub)
 mise run flutter-linux  # Run a Flutter client (or flutter-web / flutter-android)
 ```
 
