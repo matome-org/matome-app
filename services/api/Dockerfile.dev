@@ -1,0 +1,68 @@
+# Core API — LOCAL DEV image for docker-compose (`mix phx.server`, MIX_ENV=dev).
+# Single-stage: no OTP release, no minified assets. Code compiles on boot and
+# the entrypoint migrates first. For the Dockploy/prod release build see the
+# sibling `services/api/Dockerfile`.
+#
+#   docker compose up --build core     # via mise run up / backend
+ARG ELIXIR_VERSION=1.17.3
+ARG ERLANG_VERSION=27.2
+ARG DEBIAN_VERSION=bookworm-20241202-slim
+
+FROM hexpm/elixir:${ELIXIR_VERSION}-erlang-${ERLANG_VERSION}-debian-${DEBIAN_VERSION}
+
+# inotify-tools → Phoenix live_reload; postgresql-client → entrypoint pg wait;
+# curl → fetch rebar3 (see below).
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+       build-essential git ca-certificates curl inotify-tools postgresql-client \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+ENV MIX_ENV=dev \
+    LANG=C.UTF-8 \
+    MIX_REBAR3=/usr/local/bin/rebar3
+
+# Hex + rebar3 are NOT bundled in hexpm/elixir, and `mix local.hex`/`mix
+# local.rebar` fetch from builds.hex.pm — whose Let's Encrypt chain OTP 27.2
+# rejects at TLS (key_usage_mismatch). Sidestep via tools that use SYSTEM TLS:
+#   - rebar3: curl the github release binary (repo.hex.pm deps.get needs it —
+#     idna/jose/telemetry build with rebar3).
+#   - hex: `mix archive.install github` clones with the `git` binary.
+# The actual package fetch (repo.hex.pm) works fine under OTP 27.2.
+ARG REBAR3_VERSION=3.24.0
+RUN curl -fsSL "https://github.com/erlang/rebar3/releases/download/${REBAR3_VERSION}/rebar3" \
+      -o /usr/local/bin/rebar3 \
+  && chmod +x /usr/local/bin/rebar3 \
+  && mix archive.install github hexpm/hex branch latest --force
+
+# Deps layer — cached until mix.exs/mix.lock change.
+COPY mix.exs mix.lock ./
+RUN mix deps.get
+COPY config config
+RUN mix deps.compile
+
+# App source (see .dockerignore — _build/deps/.git excluded).
+COPY . .
+
+# esbuild + tailwind CLI binaries. The mix installers pull these from github/npm
+# over OTP httpc, which OTP 27.2 rejects at TLS (Let's Encrypt CDN chain,
+# key_usage_mismatch). Fetch with curl (system TLS) straight into the paths the
+# libs probe — `dirname(Mix.Project.build_path())` = `_build` — so the dev
+# watchers' `install_and_run` finds them and skips the download at runtime.
+ARG TAILWIND_VERSION=4.1.5
+ARG ESBUILD_VERSION=0.17.11
+RUN mkdir -p _build \
+  && curl -fsSL "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64" \
+       -o _build/tailwind-linux-x64 \
+  && chmod +x _build/tailwind-linux-x64 \
+  && curl -fsSL "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-${ESBUILD_VERSION}.tgz" \
+       -o /tmp/esbuild.tgz \
+  && tar -xzf /tmp/esbuild.tgz -C /tmp \
+  && mv /tmp/package/bin/esbuild _build/esbuild-linux-x64 \
+  && chmod +x _build/esbuild-linux-x64 \
+  && rm -rf /tmp/esbuild.tgz /tmp/package
+
+RUN chmod +x /app/docker-entrypoint.dev.sh
+
+EXPOSE 7001
+ENTRYPOINT ["/app/docker-entrypoint.dev.sh"]

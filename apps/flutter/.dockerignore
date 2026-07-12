@@ -1,0 +1,12 @@
+build/
+.dart_tool/
+.flutter-plugins-dependencies
+android/
+ios/
+linux/
+macos/
+windows/
+*.log
+.git/
+test/
+integration_test/
