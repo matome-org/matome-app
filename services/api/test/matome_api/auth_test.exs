@@ -76,12 +76,37 @@ defmodule MatomeApi.AuthTest do
       assert device.user_id == user.id
       assert device.client_id == "8f3c9a4e-1c2b-4d5e-9f6a-7b8c9d0e1f2a"
       assert device.platform == "linux"
+      assert device.form_factor == "desktop"
+      assert device.device_class == "desktop"
       assert device.display_name == "Howl's laptop"
       assert device.user_agent == "MatomeTest/1.0 (Linux)"
       assert %DateTime{} = device.first_seen_at
       assert %DateTime{} = device.last_seen_at
       assert device.device_key_enrolled == false
       assert device.revoked_at == nil
+    end
+
+    test "persists explicit form_factor, device_class and model" do
+      email = unique_email()
+      {:ok, _} = Auth.register_user(%{"email" => email, "password" => @password})
+
+      meta =
+        put_in(@meta, [:device], %{
+          "id" => "8f3c9a4e-1c2b-4d5e-9f6a-7b8c9d0e1f2a",
+          "platform" => "linux",
+          "form_factor" => "desktop",
+          "device_class" => "laptop",
+          "model" => "ThinkPad T14",
+          "display_name" => "ThinkPad T14"
+        })
+
+      {:ok, %{user: user}} = Auth.login(email, @password, meta)
+      device = Repo.get!(Device, latest_token(user).device_id)
+
+      assert device.form_factor == "desktop"
+      assert device.device_class == "laptop"
+      assert device.model == "ThinkPad T14"
+      assert device.display_name == "ThinkPad T14"
     end
 
     test "re-login with the same client device id correlates instead of duplicating" do

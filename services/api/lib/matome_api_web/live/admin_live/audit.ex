@@ -1,11 +1,7 @@
 defmodule MatomeApiWeb.AdminLive.Audit do
   @moduledoc """
-  The §9.6 audit-log viewer (W7 #1875): read-only window onto the
-  append-only `admin_audit_events` trail populated since W3.
-
-  Filters (admin / action / target / time) are applied in-process via
-  `Admin.list_audit_events/1`. The table itself is immutable at the DB
-  level — this view never attempts UPDATE/DELETE.
+  The §9.6 audit-log viewer: read-only window onto append-only
+  `admin_audit_events`. Actor filter is by email (email-OTP gate).
   """
   use MatomeApiWeb, :live_view
 
@@ -13,7 +9,8 @@ defmodule MatomeApiWeb.AdminLive.Audit do
   import MatomeApiWeb.MatomeComposites
 
   alias MatomeApi.Admin
-  alias MatomeApi.Auth.User
+  alias MatomeApi.Admin.AuditEvent
+  alias MatomeApi.Admin.NetworkPolicy
   alias MatomeApi.Repo
 
   import Ecto.Query
@@ -33,7 +30,7 @@ defmodule MatomeApiWeb.AdminLive.Audit do
   @impl true
   def handle_event("filter", params, socket) do
     filters = %{
-      actor_id: parse_actor_id(params["actor_id"]),
+      actor_email: blank_to_nil(params["actor_email"]),
       action: blank_to_nil(params["action"]),
       target: blank_to_nil(params["target"]),
       since: parse_datetime(params["since"]),
@@ -67,10 +64,10 @@ defmodule MatomeApiWeb.AdminLive.Audit do
 
       <form phx-change="filter" phx-submit="filter" class="admin-audit__filters">
         <.select
-          name="actor_id"
+          name="actor_email"
           label="Admin"
-          value={actor_value(@filters.actor_id)}
-          options={[{"Any admin", ""} | Enum.map(@admins, &{&1.email, to_string(&1.id)})]}
+          value={@filters.actor_email || ""}
+          options={[{"Any admin", ""} | Enum.map(@admins, &{&1, &1})]}
         />
         <.text_field name="action" label="Action" value={@filters.action || ""} hint="e.g. admin.login" />
         <.text_field
@@ -107,7 +104,7 @@ defmodule MatomeApiWeb.AdminLive.Audit do
         <:col :let={event} label="Admin">
           <.table_primary_cell
             title={event.actor_email || "—"}
-            summary={if event.actor_id, do: "id #{event.actor_id}", else: "no actor"}
+            summary={if event.actor_id, do: "id #{event.actor_id}", else: "email OTP"}
           />
         </:col>
         <:col :let={event} label="Action" width="matome">{event.action}</:col>
@@ -121,7 +118,7 @@ defmodule MatomeApiWeb.AdminLive.Audit do
   defp load_events(socket, filters) do
     opts =
       [
-        actor_id: filters.actor_id,
+        actor_email: filters.actor_email,
         action: filters.action,
         target: filters.target,
         since: filters.since,
@@ -133,12 +130,20 @@ defmodule MatomeApiWeb.AdminLive.Audit do
   end
 
   defp empty_filters do
-    %{actor_id: nil, action: nil, target: nil, since: nil, until: nil}
+    %{actor_email: nil, action: nil, target: nil, since: nil, until: nil}
   end
 
   defp list_admins do
-    from(u in User, where: u.role in ^~w(admin superadmin), order_by: [asc: u.email])
-    |> Repo.all()
+    from_events =
+      from(e in AuditEvent,
+        where: not is_nil(e.actor_email),
+        distinct: true,
+        select: e.actor_email,
+        order_by: [asc: e.actor_email]
+      )
+      |> Repo.all()
+
+    (NetworkPolicy.email_allowlist() ++ from_events) |> Enum.uniq() |> Enum.sort()
   end
 
   defp blank_to_nil(nil), do: nil
@@ -147,16 +152,6 @@ defmodule MatomeApiWeb.AdminLive.Audit do
     case String.trim(value) do
       "" -> nil
       trimmed -> trimmed
-    end
-  end
-
-  defp parse_actor_id(nil), do: nil
-  defp parse_actor_id(""), do: nil
-
-  defp parse_actor_id(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {id, ""} -> id
-      _ -> nil
     end
   end
 
@@ -186,9 +181,6 @@ defmodule MatomeApiWeb.AdminLive.Audit do
         nil
     end
   end
-
-  defp actor_value(nil), do: ""
-  defp actor_value(id), do: to_string(id)
 
   defp datetime_value(nil), do: ""
   defp datetime_value(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%dT%H:%M")

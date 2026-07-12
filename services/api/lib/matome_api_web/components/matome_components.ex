@@ -107,21 +107,23 @@ defmodule MatomeApiWeb.MatomeComponents do
   Labeled text input (Flutter `AppTextField` / `AuthField`).
 
   States: default, hint, `obscure` (password), `disabled`.
+  `type` selects the native input type when not obscured (e.g. `"email"`).
   """
   attr :name, :string, default: nil
   attr :label, :string, default: nil
   attr :value, :string, default: nil
   attr :hint, :string, default: nil, doc: "placeholder text"
+  attr :type, :string, default: "text", doc: "native input type when not obscure"
   attr :obscure, :boolean, default: false, doc: "render as a password field"
   attr :disabled, :boolean, default: false
-  attr :rest, :global, include: ~w(autocomplete inputmode readonly required)
+  attr :rest, :global, include: ~w(autocomplete inputmode pattern readonly required)
 
   def text_field(assigns) do
     ~H"""
     <label class="matome-field">
       <span :if={@label} class="matome-field__label">{@label}</span>
       <input
-        type={if @obscure, do: "password", else: "text"}
+        type={if @obscure, do: "password", else: @type}
         name={@name}
         value={@value}
         placeholder={@hint}

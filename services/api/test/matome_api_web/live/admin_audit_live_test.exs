@@ -26,12 +26,22 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
   end
 
   defp admin_session(conn, admin) do
+    original = Application.get_env(:matome_api, :admin_panel)
+
+    Application.put_env(
+      :matome_api,
+      :admin_panel,
+      Keyword.merge(original || [], enabled: true, email_allowlist: [admin.email])
+    )
+
+    on_exit(fn -> Application.put_env(:matome_api, :admin_panel, original) end)
+
     now = System.os_time(:second)
 
     Plug.Test.init_test_session(conn, %{
-      "admin_user_id" => admin.id,
+      "admin_email" => admin.email,
       "admin_authenticated_at" => now,
-      "admin_totp_verified_at" => now
+      "admin_otp_verified_at" => now
     })
   end
 
@@ -42,9 +52,9 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
           __changed__: %{},
           flash: %{},
           live_action: :index,
-          current_admin: admin,
-          filters: %{actor_id: nil, action: nil, target: nil, since: nil, until: nil},
-          admins: [admin],
+          current_admin: %{email: admin.email},
+          filters: %{actor_email: nil, action: nil, target: nil, since: nil, until: nil},
+          admins: [admin.email],
           events: []
         },
         extra
@@ -58,7 +68,7 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
       admin = admin!("audit-admin@example.com")
 
       Admin.audit!("admin.login",
-        actor: admin,
+        actor: %{email: admin.email},
         metadata: %{"target" => "self"},
         remote_ip: "203.0.113.9"
       )
@@ -73,7 +83,7 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
       assert html =~ "admin.login"
       assert html =~ "audit-admin@example.com"
       assert html =~ "203.0.113.9"
-      assert html =~ ~s(name="actor_id")
+      assert html =~ ~s(name="actor_email")
       assert html =~ ~s(name="action")
       assert html =~ ~s(name="target")
       assert html =~ ~s(name="since")
@@ -89,16 +99,24 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
     test "narrows events by action and target" do
       admin = admin!("filter-admin@example.com")
 
-      Admin.audit!("admin.login", actor: admin, metadata: %{"target" => "self"})
+      Admin.audit!("admin.login",
+        actor: %{email: admin.email},
+        metadata: %{"target" => "self"}
+      )
+
       Admin.audit!("admin.session_revoked",
-        actor: admin,
+        actor: %{email: admin.email},
         metadata: %{"user_id" => 99, "jti" => "tok-xyz"}
       )
 
       {:noreply, socket} =
         Audit.handle_event(
           "filter",
-          %{"action" => "admin.session_revoked", "target" => "99", "actor_id" => ""},
+          %{
+            "action" => "admin.session_revoked",
+            "target" => "99",
+            "actor_email" => ""
+          },
           socket(admin)
         )
 
@@ -110,13 +128,13 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
 
     test "clear resets filters and reloads the full trail" do
       admin = admin!("clear-admin@example.com")
-      Admin.audit!("admin.login", actor: admin)
-      Admin.audit!("admin.logout", actor: admin)
+      Admin.audit!("admin.login", actor: %{email: admin.email})
+      Admin.audit!("admin.logout", actor: %{email: admin.email})
 
       seeded =
         socket(admin, %{
           filters: %{
-            actor_id: admin.id,
+            actor_email: admin.email,
             action: "admin.login",
             target: nil,
             since: nil,
@@ -128,6 +146,7 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
       {:noreply, socket} = Audit.handle_event("clear", %{}, seeded)
 
       assert socket.assigns.filters.action == nil
+      assert socket.assigns.filters.actor_email == nil
       assert length(socket.assigns.events) >= 2
     end
   end

@@ -1,185 +1,157 @@
 defmodule MatomeApi.Admin do
   @moduledoc """
-  Access control for the /admin back-office (W3 #1871, plan
-  p2-core-backoffice §9.1) — the context behind the defense-in-depth gate:
+  Access control for the /admin back-office — email-OTP gate:
 
-  - **Hard role allowlist** — `users.role` in `admin|superadmin`. No signup
-    or API path assigns a privileged role; provisioning is out-of-band.
-  - **Mandatory TOTP** — enrollment (secret encrypted at rest via
-    `SecretVault`) + verification with replay rejection (per-secret timestep
-    high-water mark, claimed atomically) and attempt lockout (existing
-    `MatomeApi.RateLimiter`: #{5} attempts / 60s, 5-min lockout).
-  - **Day-one audit** — `audit!/2` writes to the DB-level append-only
-    `admin_audit_events`; it raises on failure so an admin action can never
-    silently proceed unaudited.
+  - **Panel kill switch** — `ADMIN_PANEL_ENABLED` (see `NetworkPolicy`).
+  - **Email allowlist** — `ADMIN_EMAIL_ALLOWLIST`; no `users` row required.
+  - **One-shot email OTP** — hashed in `admin_login_otps`, 30-min TTL.
+  - **Day-one audit** — `audit!/2` writes append-only `admin_audit_events`.
   """
 
   import Ecto.Query
 
-  alias MatomeApi.Admin.{AuditEvent, SecretVault, TOTP, TotpSecret}
+  alias MatomeApi.Admin.{AuditEvent, Dashboard, LoginOtp, NetworkPolicy, Notifier, TotpSecret}
   alias MatomeApi.Auth
   alias MatomeApi.Auth.{RefreshToken, User}
   alias MatomeApi.RateLimiter
   alias MatomeApi.Repo
 
-  @admin_roles ~w(admin superadmin)
+  @otp_ttl_seconds 30 * 60
+  @otp_attempt_limit 5
+  @otp_window_ms 60_000
+  @otp_lockout_ms 300_000
 
-  # TOTP attempt lockout: more than @totp_attempt_limit attempts inside
-  # @totp_window_ms locks the user out for @totp_lockout_ms.
-  @totp_attempt_limit 5
-  @totp_window_ms 60_000
-  @totp_lockout_ms 300_000
+  @doc "True when `email` is on the admin email allowlist."
+  def email_allowed?(email), do: NetworkPolicy.email_allowed?(email)
 
-  @doc "True when the user's role is on the admin allowlist."
-  def admin?(%User{role: role}), do: role in @admin_roles
-  def admin?(_), do: false
+  @doc "Activity window (seconds) for dashboard + Sessions “active recently”."
+  def activity_window_seconds, do: Dashboard.activity_window_seconds()
 
-  @doc """
-  First factor of the admin login: email + password, AND the role allowlist.
-
-  Returns `{:error, :invalid_credentials}` for a wrong password, an unknown
-  email, and a correct password on a NON-admin account alike — the response
-  must not be an oracle for which accounts are privileged. Unknown emails
-  still burn an Argon2 verification (`no_user_verify/0`) so timing does not
-  enumerate accounts.
-  """
-  def authenticate_admin(email, credential) do
-    case Repo.get_by(User, email: String.downcase(email || "")) do
-      %User{} = user ->
-        # Exactly ONE Argon2 verification on every existing-user path (wrong
-        # password, right-password-but-not-admin, success) so timing cannot
-        # distinguish the branches.
-        if Argon2.verify_pass(credential || "", user.password_hash) && admin?(user) do
-          {:ok, user}
-        else
-          {:error, :invalid_credentials}
-        end
-
-      nil ->
-        Argon2.no_user_verify()
-        {:error, :invalid_credentials}
-    end
-  end
-
-  @doc "True when the user has a CONFIRMED TOTP enrollment."
-  def totp_enabled?(%User{id: user_id}) do
-    Repo.exists?(
-      from t in TotpSecret, where: t.user_id == ^user_id and not is_nil(t.confirmed_at)
-    )
-  end
+  @doc "Landing dashboard aggregations — see `MatomeApi.Admin.Dashboard.stats/1`."
+  def dashboard_stats(now \\ DateTime.utc_now()), do: Dashboard.stats(now)
 
   @doc """
-  Starts (or resumes) TOTP enrollment, returning the PLAINTEXT secret for
-  provisioning-URI display. Idempotent while unconfirmed — revisiting the
-  enrollment page shows the same secret. Refused once a confirmed factor
-  exists (`{:error, :already_enrolled}`): rotating an active factor must be
-  an explicit, separately-audited operation, not a silent overwrite.
+  Request a login OTP for an allowlisted email.
+
+  Returns:
+  - `{:ok, :sent}` when the email is allowlisted and delivery succeeded
+  - `:silent` when the email is not allowlisted (caller must not reveal this)
+  - `{:error, reason}` on delivery/storage failure for an allowlisted email
   """
-  def start_totp_enrollment(%User{id: user_id}) do
-    case Repo.get_by(TotpSecret, user_id: user_id) do
-      %TotpSecret{confirmed_at: %DateTime{}} ->
-        {:error, :already_enrolled}
+  def request_login_otp(email, opts \\ []) do
+    email = normalize_email(email)
+    remote_ip = Keyword.get(opts, :remote_ip)
 
-      %TotpSecret{} = pending ->
-        SecretVault.decrypt(pending.secret_ciphertext)
+    if email_allowed?(email) do
+      code = generate_otp_code()
+      now = DateTime.utc_now()
+      expires_at = DateTime.add(now, @otp_ttl_seconds, :second)
 
-      nil ->
-        secret = TOTP.generate_secret()
+      Repo.transaction(fn ->
+        from(o in LoginOtp, where: o.email == ^email and is_nil(o.consumed_at))
+        |> Repo.update_all(set: [consumed_at: now])
 
-        %TotpSecret{}
-        |> TotpSecret.changeset(%{
-          user_id: user_id,
-          secret_ciphertext: SecretVault.encrypt(secret)
+        %LoginOtp{}
+        |> LoginOtp.changeset(%{
+          email: email,
+          code_hash: hash_code(code),
+          expires_at: expires_at,
+          remote_ip: remote_ip && to_string(remote_ip)
         })
         |> Repo.insert!()
+      end)
+      |> case do
+        {:ok, _} ->
+          case Notifier.deliver_login_otp(email, code) do
+            {:ok, _} ->
+              audit!("admin.login_otp_requested",
+                actor: %{email: email},
+                remote_ip: remote_ip && to_string(remote_ip)
+              )
 
-        {:ok, secret}
-    end
-  end
+              {:ok, :sent}
 
-  @doc """
-  Confirms enrollment by proving possession: the code must match the pending
-  secret. Sets `confirmed_at` and claims the matched timestep so the
-  enrollment code cannot be replayed at login.
-  """
-  def confirm_totp_enrollment(%User{id: user_id}, code, opts \\ []) do
-    now = Keyword.get(opts, :now, System.os_time(:second))
+            {:error, reason} ->
+              {:error, reason}
+          end
 
-    with %TotpSecret{confirmed_at: nil} = pending <- Repo.get_by(TotpSecret, user_id: user_id),
-         {:ok, secret} <- SecretVault.decrypt(pending.secret_ciphertext),
-         {:ok, timestep} <- TOTP.match_timestep(secret, code, now) do
-      pending
-      |> Ecto.Changeset.change(
-        confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second),
-        last_used_timestep: timestep
-      )
-      |> Repo.update!()
-
-      :ok
+        {:error, reason} ->
+          {:error, reason}
+      end
     else
-      nil -> {:error, :not_enrolled}
-      %TotpSecret{} -> {:error, :already_enrolled}
-      _ -> {:error, :invalid_code}
+      :silent
     end
   end
 
   @doc """
-  Second factor of the admin login (and of sensitive-action re-auth).
-
-  Order matters: the lockout counter burns FIRST — every attempt, valid or
-  not, counts — then the code is checked against the confirmed secret within
-  the ±1-step skew window, then the matched timestep is claimed atomically
-  (`UPDATE ... WHERE last_used_timestep < matched`), so a code can be
-  accepted at most once even across concurrent requests (replay rejection,
-  RFC 6238 §5.2).
-
-  Returns `:ok`, `{:error, :invalid_code}`, or `{:error, :rate_limited}`.
+  Verify a one-shot login OTP. Returns `{:ok, email}`, `{:error, :invalid_code}`,
+  or `{:error, :rate_limited}`.
   """
-  def verify_totp(%User{id: user_id}, code, opts \\ []) do
-    now = Keyword.get(opts, :now, System.os_time(:second))
+  def verify_login_otp(email, code, _opts \\ []) do
+    email = normalize_email(email)
+    code = String.trim(code || "")
+    now = DateTime.utc_now()
 
-    case RateLimiter.check(
-           {:admin_totp, user_id},
-           @totp_attempt_limit,
-           @totp_window_ms,
-           @totp_lockout_ms
-         ) do
-      {:error, :locked} ->
-        {:error, :rate_limited}
+    unless email_allowed?(email) do
+      {:error, :invalid_code}
+    else
+      case RateLimiter.check(
+             {:admin_otp, email},
+             @otp_attempt_limit,
+             @otp_window_ms,
+             @otp_lockout_ms
+           ) do
+        {:error, :locked} ->
+          {:error, :rate_limited}
 
-      :ok ->
-        with %TotpSecret{confirmed_at: %DateTime{}} = active <-
-               Repo.get_by(TotpSecret, user_id: user_id),
-             {:ok, secret} <- SecretVault.decrypt(active.secret_ciphertext),
-             {:ok, timestep} <- TOTP.match_timestep(secret, code, now),
-             {1, _} <- claim_timestep(active, timestep) do
-          :ok
-        else
-          _ -> {:error, :invalid_code}
-        end
+        :ok ->
+          otp =
+            from(o in LoginOtp,
+              where:
+                o.email == ^email and is_nil(o.consumed_at) and o.expires_at > ^now,
+              order_by: [desc: o.inserted_at],
+              limit: 1
+            )
+            |> Repo.one()
+
+          cond do
+            is_nil(otp) ->
+              {:error, :invalid_code}
+
+            not secure_compare(otp.code_hash, hash_code(code)) ->
+              {:error, :invalid_code}
+
+            true ->
+              {1, _} =
+                from(o in LoginOtp, where: o.id == ^otp.id and is_nil(o.consumed_at))
+                |> Repo.update_all(set: [consumed_at: now])
+
+              {:ok, email}
+          end
+      end
     end
   end
 
-  # Atomically advances the replay high-water mark. Returns {1, _} only when
-  # this call moved it — a concurrent (or repeated) use of the same or an
-  # older timestep matches zero rows and is rejected.
-  defp claim_timestep(%TotpSecret{id: id}, timestep) do
-    from(t in TotpSecret,
-      where: t.id == ^id and (is_nil(t.last_used_timestep) or t.last_used_timestep < ^timestep)
-    )
-    |> Repo.update_all(set: [last_used_timestep: timestep])
+  defp generate_otp_code do
+    0..5
+    |> Enum.map(fn _ -> Integer.to_string(:rand.uniform(10) - 1) end)
+    |> Enum.join()
   end
 
-  @doc """
-  The §9.2 sessions view data (W6 #1874): every ACTIVE session (unrevoked,
-  unexpired refresh-token row) grouped `user → device → tokens`. Tokens
-  minted without a correlated device gather under a `device: nil` group.
-  Users and device groups are ordered by most-recent activity; a user with
-  no live session does not appear at all.
+  defp hash_code(code), do: :crypto.hash(:sha256, code)
 
-  "Activity" is `last_seen_at` (falling back to `inserted_at`) — the honest
-  degraded signal. It is NOT live Presence: `user_socket.ex` has no
-  channel/heartbeat contract yet (recorded cross-repo gap, dod-matrix).
+  defp secure_compare(a, b) when is_binary(a) and is_binary(b) and byte_size(a) == byte_size(b) do
+    Plug.Crypto.secure_compare(a, b)
+  end
+
+  defp secure_compare(_, _), do: false
+
+  defp normalize_email(email) when is_binary(email), do: email |> String.trim() |> String.downcase()
+  defp normalize_email(_), do: ""
+
+  @doc """
+  The §9.2 sessions view data: every ACTIVE session grouped
+  `user → device → tokens`.
   """
   def session_tree(now \\ DateTime.utc_now()) do
     from(t in RefreshToken,
@@ -215,12 +187,9 @@ defmodule MatomeApi.Admin do
   end
 
   @doc """
-  Administrative session revocation (W6 #1874): revokes the whole family the
-  `jti` belongs to via `MatomeApi.Auth.revoke_session/1` (allowlist bust +
-  remote-lock disconnect included) and appends the mandatory audit event.
-  `opts`: `:remote_ip`. Returns `:ok` or `{:error, :not_found}`.
+  Administrative session revocation. `actor` is `%{email: ...}` (or a User).
   """
-  def revoke_session(%User{} = actor, jti, opts \\ []) when is_binary(jti) do
+  def revoke_session(actor, jti, opts \\ []) when is_binary(jti) do
     case Repo.get_by(RefreshToken, jti: jti) do
       nil ->
         {:error, :not_found}
@@ -244,17 +213,18 @@ defmodule MatomeApi.Admin do
   end
 
   @doc """
-  Appends an admin audit event; raises on failure (an admin action must not
-  proceed unauditable). `opts`: `:actor` (a `%User{}` or nil), `:metadata`
-  (map), `:remote_ip` (string).
+  Appends an admin audit event; raises on failure.
+
+  `opts`: `:actor` (`%{email: ...}`, `%User{}`, or nil), `:metadata`, `:remote_ip`.
   """
   def audit!(action, opts \\ []) when is_binary(action) do
     actor = Keyword.get(opts, :actor)
+    {actor_id, actor_email} = actor_fields(actor)
 
     %AuditEvent{}
     |> AuditEvent.changeset(%{
-      actor_id: actor && actor.id,
-      actor_email: actor && actor.email,
+      actor_id: actor_id,
+      actor_email: actor_email,
       action: action,
       metadata: Keyword.get(opts, :metadata, %{}),
       remote_ip: Keyword.get(opts, :remote_ip)
@@ -262,12 +232,13 @@ defmodule MatomeApi.Admin do
     |> Repo.insert!()
   end
 
+  defp actor_fields(%User{id: id, email: email}), do: {id, email}
+  defp actor_fields(%{email: email}) when is_binary(email), do: {nil, email}
+  defp actor_fields(%{email: email}) when not is_nil(email), do: {nil, to_string(email)}
+  defp actor_fields(_), do: {nil, nil}
+
   @doc """
-  The §9.6 users directory (W7 #1875): every account with the distinct
-  login methods observed on its refresh tokens, whether a confirmed TOTP
-  factor is enrolled, and the most recent login/activity timestamp
-  (`last_seen_at`, falling back to the token's `inserted_at`). Read-only —
-  this surface never mutates auth state.
+  The §9.6 users directory: accounts with login methods, MFA status, last login.
   """
   def list_users do
     mfa_ids =
@@ -316,20 +287,11 @@ defmodule MatomeApi.Admin do
   end
 
   @doc """
-  Read the append-only `admin_audit_events` trail (W7 #1875), newest first.
-
-  Filters (all optional; blank/nil are no-ops):
-
-  - `:actor_id` — admin who performed the action
-  - `:action` — exact action string (e.g. `"admin.login"`)
-  - `:target` — substring match against the JSON-encoded `metadata`
-    (covers `user_id` / `jti` / free-form target keys; the table has no
-    dedicated target columns)
-  - `:since` / `:until` — half-open time window on `inserted_at`
-    (`since` inclusive, `until` exclusive)
+  Read the append-only `admin_audit_events` trail, newest first.
   """
   def list_audit_events(opts \\ []) do
     actor_id = Keyword.get(opts, :actor_id)
+    actor_email = blank_to_nil(Keyword.get(opts, :actor_email))
     action = blank_to_nil(Keyword.get(opts, :action))
     target = blank_to_nil(Keyword.get(opts, :target))
     since = Keyword.get(opts, :since)
@@ -337,6 +299,7 @@ defmodule MatomeApi.Admin do
 
     from(e in AuditEvent, order_by: [desc: e.inserted_at])
     |> maybe_where_actor(actor_id)
+    |> maybe_where_actor_email(actor_email)
     |> maybe_where_action(action)
     |> maybe_where_since(since)
     |> maybe_where_until(until)
@@ -345,6 +308,7 @@ defmodule MatomeApi.Admin do
   end
 
   defp blank_to_nil(nil), do: nil
+
   defp blank_to_nil(value) when is_binary(value) do
     case String.trim(value) do
       "" -> nil
@@ -356,6 +320,11 @@ defmodule MatomeApi.Admin do
 
   defp maybe_where_actor(query, nil), do: query
   defp maybe_where_actor(query, actor_id), do: where(query, [e], e.actor_id == ^actor_id)
+
+  defp maybe_where_actor_email(query, nil), do: query
+
+  defp maybe_where_actor_email(query, email),
+    do: where(query, [e], e.actor_email == ^String.downcase(email))
 
   defp maybe_where_action(query, nil), do: query
   defp maybe_where_action(query, action), do: where(query, [e], e.action == ^action)
@@ -377,5 +346,154 @@ defmodule MatomeApi.Admin do
       |> String.downcase()
       |> String.contains?(needle)
     end)
+  end
+
+  @doc """
+  §9.4 Spaces directory for the admin LiveView — every workspace with owner
+  email, two-axis fields, quota/lifecycle, and active member count.
+  """
+  def list_spaces do
+    member_counts =
+      from(m in MatomeApi.Content.SpaceMember,
+        where: is_nil(m.revoked_at),
+        group_by: m.workspace_id,
+        select: {m.workspace_id, count(m.id)}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    from(w in MatomeApi.Content.Workspace,
+      join: u in assoc(w, :owner),
+      order_by: [asc: w.name],
+      preload: [owner: u]
+    )
+    |> Repo.all()
+    |> Enum.map(fn workspace ->
+      %{
+        workspace: workspace,
+        owner_email: workspace.owner.email,
+        member_count: Map.get(member_counts, workspace.id, 0)
+      }
+    end)
+  end
+
+  def get_space(id) do
+    case Repo.get(MatomeApi.Content.Workspace, id) do
+      nil ->
+        nil
+
+      workspace ->
+        workspace
+        |> Repo.preload([:owner, space_members: :user])
+    end
+  end
+
+  def update_space(id, attrs, opts \\ []) do
+    with %MatomeApi.Content.Workspace{} = workspace <- get_space(id) do
+      workspace
+      |> MatomeApi.Content.Workspace.admin_changeset(attrs)
+      |> Repo.update()
+      |> case do
+        {:ok, updated} ->
+          audit!("admin.space_updated",
+            actor: Keyword.get(opts, :actor),
+            remote_ip: Keyword.get(opts, :remote_ip),
+            metadata: %{
+              workspace_id: updated.id,
+              changes: Map.take(attrs, ~w(quota_bytes expires_at status space_type is_local)a)
+            }
+          )
+
+          {:ok, Repo.preload(updated, [:owner, space_members: :user], force: true)}
+
+        other ->
+          other
+      end
+    end
+  end
+
+  def add_space_member(workspace_id, user_id, role, opts \\ []) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    %MatomeApi.Content.SpaceMember{}
+    |> MatomeApi.Content.SpaceMember.changeset(%{
+      workspace_id: workspace_id,
+      user_id: user_id,
+      role: role,
+      granted_at: now
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, member} ->
+        audit!("admin.space_member_added",
+          actor: Keyword.get(opts, :actor),
+          remote_ip: Keyword.get(opts, :remote_ip),
+          metadata: %{workspace_id: workspace_id, user_id: user_id, role: role}
+        )
+
+        {:ok, Repo.preload(member, :user)}
+
+      other ->
+        other
+    end
+  end
+
+  def revoke_space_member(member_id, opts \\ []) do
+    case Repo.get(MatomeApi.Content.SpaceMember, member_id) do
+      nil ->
+        nil
+
+      member ->
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        Repo.transaction(fn ->
+          {:ok, updated} =
+            member
+            |> Ecto.Changeset.change(revoked_at: now)
+            |> Repo.update()
+
+          from(w in MatomeApi.Content.SpaceKeyWrap,
+            where: w.workspace_id == ^updated.workspace_id,
+            where: w.user_id == ^updated.user_id,
+            where: is_nil(w.revoked_at)
+          )
+          |> Repo.update_all(set: [revoked_at: now])
+
+          audit!("admin.space_member_revoked",
+            actor: Keyword.get(opts, :actor),
+            remote_ip: Keyword.get(opts, :remote_ip),
+            metadata: %{
+              workspace_id: updated.workspace_id,
+              user_id: updated.user_id,
+              member_id: updated.id
+            }
+          )
+
+          updated
+        end)
+        |> case do
+          {:ok, updated} -> {:ok, updated}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  def transition_space(workspace_id, to_status, opts \\ []) do
+    case MatomeApi.Content.SpaceLifecycleJob.transition(workspace_id, to_status) do
+      :ok ->
+        audit!("admin.space_lifecycle",
+          actor: Keyword.get(opts, :actor),
+          remote_ip: Keyword.get(opts, :remote_ip),
+          metadata: %{workspace_id: workspace_id, to_status: to_status}
+        )
+
+        {:ok, get_space(workspace_id)}
+
+      {:discard, reason} ->
+        {:error, reason}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 end

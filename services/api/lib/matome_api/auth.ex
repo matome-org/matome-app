@@ -3,7 +3,7 @@ defmodule MatomeApi.Auth do
 
   require Logger
 
-  alias MatomeApi.Auth.{Device, Guardian, KeyBundle, RefreshToken, TokenAllowlist, User}
+  alias MatomeApi.Auth.{Device, DeviceMeta, Guardian, KeyBundle, RefreshToken, TokenAllowlist, User}
   alias MatomeApi.Repo
 
   @access_ttl {15, :minutes}
@@ -12,9 +12,8 @@ defmodule MatomeApi.Auth do
 
   # Session metadata capture (W4 #1872): `meta` is an optional map assembled
   # by the web layer — `%{ip, user_agent, login_method, device}` where
-  # `device` is the client-supplied `%{"id", "platform", "display_name"}`.
-  # Every key is optional; an empty map reproduces the pre-W4 behavior with
-  # only the rotation fields (jti/family_id) populated.
+  # `device` is the client-supplied map (`id`, `platform`, `form_factor`,
+  # `device_class`, `model`, `display_name`). Every key is optional.
 
   def get_user(id), do: Repo.get(User, id)
 
@@ -410,12 +409,17 @@ defmodule MatomeApi.Auth do
   end
 
   defp upsert_device(user, client_id, device_params, user_agent, now) do
+    meta = DeviceMeta.normalize(device_params)
+
     %Device{}
     |> Device.changeset(%{
       user_id: user.id,
       client_id: client_id,
-      platform: device_params["platform"],
-      display_name: device_params["display_name"],
+      platform: meta["platform"],
+      form_factor: meta["form_factor"],
+      device_class: meta["device_class"],
+      model: meta["model"],
+      display_name: meta["display_name"],
       user_agent: user_agent,
       first_seen_at: now,
       last_seen_at: now
@@ -425,7 +429,17 @@ defmodule MatomeApi.Auth do
       # mutable fields; `first_seen_at`, `device_key_enrolled` and
       # `revoked_at` are deliberately NOT replaced.
       on_conflict:
-        {:replace, [:platform, :display_name, :user_agent, :last_seen_at, :updated_at]},
+        {:replace,
+         [
+           :platform,
+           :form_factor,
+           :device_class,
+           :model,
+           :display_name,
+           :user_agent,
+           :last_seen_at,
+           :updated_at
+         ]},
       conflict_target: [:user_id, :client_id],
       returning: true
     )
@@ -440,11 +454,16 @@ defmodule MatomeApi.Auth do
 
     case existing do
       nil ->
+        meta = DeviceMeta.normalize(device_params)
+
         %Device{}
         |> Device.changeset(%{
           user_id: user.id,
-          platform: device_params["platform"],
-          display_name: device_params["display_name"],
+          platform: meta["platform"],
+          form_factor: meta["form_factor"],
+          device_class: meta["device_class"],
+          model: meta["model"],
+          display_name: meta["display_name"],
           user_agent: user_agent,
           first_seen_at: now,
           last_seen_at: now
@@ -452,7 +471,18 @@ defmodule MatomeApi.Auth do
         |> Repo.insert!()
 
       device ->
-        device |> Ecto.Changeset.change(last_seen_at: now) |> Repo.update!()
+        meta = DeviceMeta.normalize(device_params)
+
+        device
+        |> Device.changeset(%{
+          platform: meta["platform"] || device.platform,
+          form_factor: meta["form_factor"] || device.form_factor,
+          device_class: meta["device_class"] || device.device_class,
+          model: meta["model"] || device.model,
+          display_name: meta["display_name"] || device.display_name,
+          last_seen_at: now
+        })
+        |> Repo.update!()
     end
   end
 

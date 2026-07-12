@@ -78,7 +78,7 @@ defmodule MatomeApiWeb.MatomeComponentsTest do
     refute loading =~ "Sign in"
   end
 
-  test "text_field: label, hint, obscure, disabled" do
+  test "text_field: label, hint, type, obscure, disabled" do
     assigns = %{}
 
     field =
@@ -90,6 +90,13 @@ defmodule MatomeApiWeb.MatomeComponentsTest do
     assert field =~ "Email"
     assert field =~ ~s(placeholder="you@example.com")
     assert field =~ ~s(type="text")
+
+    email =
+      html(~H"""
+      <MatomeComponents.text_field label="Email" type="email" name="email" />
+      """)
+
+    assert email =~ ~s(type="email")
 
     secret =
       html(~H"""

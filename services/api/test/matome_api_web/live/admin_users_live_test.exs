@@ -7,7 +7,6 @@ defmodule MatomeApiWeb.AdminUsersLiveTest do
   """
   use MatomeApiWeb.ConnCase
 
-  alias MatomeApi.Admin
   alias MatomeApi.Auth
   alias MatomeApi.Repo
 
@@ -25,12 +24,22 @@ defmodule MatomeApiWeb.AdminUsersLiveTest do
   end
 
   defp admin_session(conn, admin) do
+    original = Application.get_env(:matome_api, :admin_panel)
+
+    Application.put_env(
+      :matome_api,
+      :admin_panel,
+      Keyword.merge(original || [], enabled: true, email_allowlist: [admin.email])
+    )
+
+    on_exit(fn -> Application.put_env(:matome_api, :admin_panel, original) end)
+
     now = System.os_time(:second)
 
     Plug.Test.init_test_session(conn, %{
-      "admin_user_id" => admin.id,
+      "admin_email" => admin.email,
       "admin_authenticated_at" => now,
-      "admin_totp_verified_at" => now
+      "admin_otp_verified_at" => now
     })
   end
 
@@ -44,10 +53,14 @@ defmodule MatomeApiWeb.AdminUsersLiveTest do
           ip: "203.0.113.44"
         })
 
-      {:ok, secret} = Admin.start_totp_enrollment(holder)
-      now = System.os_time(:second)
-      code = NimbleTOTP.verification_code(secret, time: now)
-      :ok = Admin.confirm_totp_enrollment(holder, code, now: now)
+      # MFA badge still reads confirmed totp_secrets rows (app-user MFA, not admin gate).
+      %MatomeApi.Admin.TotpSecret{}
+      |> MatomeApi.Admin.TotpSecret.changeset(%{
+        user_id: holder.id,
+        secret_ciphertext: <<1, 2, 3, 4>>,
+        confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+      |> Repo.insert!()
 
       html =
         conn

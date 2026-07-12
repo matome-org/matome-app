@@ -19,9 +19,13 @@ defmodule MatomeApi.AdminUsersAuditTest do
   end
 
   defp confirm_totp!(user) do
-    {:ok, secret} = Admin.start_totp_enrollment(user)
-    code = NimbleTOTP.verification_code(secret)
-    :ok = Admin.confirm_totp_enrollment(user, code)
+    %MatomeApi.Admin.TotpSecret{}
+    |> MatomeApi.Admin.TotpSecret.changeset(%{
+      user_id: user.id,
+      secret_ciphertext: <<9, 9, 9, 9>>,
+      confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+    |> Repo.insert!()
   end
 
   describe "list_users/0" do
@@ -105,9 +109,13 @@ defmodule MatomeApi.AdminUsersAuditTest do
       by_admin = Admin.list_audit_events(actor_id: admin_a.id)
       assert Enum.map(by_admin, & &1.action) == ["admin.session_revoked", "admin.login"]
 
+      by_email = Admin.list_audit_events(actor_email: admin_a.email)
+      assert Enum.map(by_email, & &1.action) == ["admin.session_revoked", "admin.login"]
+
       by_action = Admin.list_audit_events(action: "admin.logout")
       assert length(by_action) == 1
       assert hd(by_action).actor_id == admin_b.id
+      assert hd(by_action).actor_email == admin_b.email
 
       by_target = Admin.list_audit_events(target: "42")
       assert length(by_target) == 1
@@ -120,7 +128,14 @@ defmodule MatomeApi.AdminUsersAuditTest do
     test "blank filters are no-ops" do
       Admin.audit!("admin.login", metadata: %{"email" => "x@example.com"})
 
-      assert length(Admin.list_audit_events(actor_id: nil, action: "", target: "  ")) == 1
+      assert length(
+               Admin.list_audit_events(
+                 actor_id: nil,
+                 actor_email: "",
+                 action: "",
+                 target: "  "
+               )
+             ) == 1
     end
   end
 

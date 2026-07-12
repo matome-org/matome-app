@@ -15,8 +15,8 @@ repo_config =
     ]
   end
 
-# Configure your database. DATABASE_URL allows DB-backed checks to run against
-# local Supabase without changing the generated local Postgres fallback.
+# Configure your database. DATABASE_URL points at native/local Postgres
+# (e.g. postgres://postgres@127.0.0.1:7020/matome_api_test from mise up).
 config :matome_api,
        MatomeApi.Repo,
        Keyword.merge(repo_config,
@@ -45,15 +45,19 @@ config :phoenix, :plug_init_mode, :runtime
 # Capture outgoing email in-memory so tests can assert on deliveries.
 config :matome_api, MatomeApi.Mailer, adapter: Swoosh.Adapters.Test
 
-# Admin back-office gate (W3 #1871). Fixed test key for the TOTP secret
-# vault — prod fails closed at boot without ADMIN_SECRET_VAULT_KEY.
+# Leftover vault key (TOTP path retired from login).
 config :matome_api, MatomeApi.Admin.SecretVault,
   key: Base.encode64("test-only-admin-vault-key32bytes")
 
-# /admin network guard (W3 #1871): tests run from loopback; the guard's
-# deny paths are exercised by overriding this env per-test.
+config :matome_api, :admin_panel,
+  enabled: true,
+  email_allowlist: ["admin@example.com"]
+
+# Soft IP tier empty by default (all IPs normal rate limits).
 config :matome_api, :admin_network,
-  allowlist: ["127.0.0.1/32", "::1/128"],
+  allowlist: [],
   trusted_proxies: []
+
+config :matome_api, :admin_session, ttl_seconds: 30 * 60, reauth_ttl_seconds: 5 * 60
 
 config :matome_api, MatomeApi.Storage.ObjectStore, adapter: MatomeApi.Storage.ObjectStore.Noop

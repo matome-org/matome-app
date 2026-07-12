@@ -1,240 +1,112 @@
 defmodule MatomeApi.AdminTest do
   @moduledoc """
-  W3 #1871 — the admin access-control context: hard role allowlist, TOTP
-  enrollment + verification with replay rejection and attempt lockout, and
-  day-one audit writes.
+  Admin email-OTP context: allowlist, one-shot OTP, audit writes.
   """
   use MatomeApi.DataCase, async: false
 
+  import Ecto.Query
+  import Swoosh.TestAssertions
+
   alias MatomeApi.Admin
-  alias MatomeApi.Admin.{AuditEvent, TOTP, TotpSecret}
+  alias MatomeApi.Admin.{AuditEvent, LoginOtp, NetworkPolicy}
   alias MatomeApi.Auth
   alias MatomeApi.Auth.User
 
-  @password "correct horse battery staple"
+  @allowlisted "otp-admin@example.com"
 
-  defp create_user!(role \\ "user") do
-    email = "w3-#{System.unique_integer([:positive])}@example.com"
-    {:ok, %{user: user}} = Auth.register_user(%{"email" => email, "password" => @password})
-    user |> Ecto.Changeset.change(role: role) |> Repo.update!()
+  setup do
+    original = Application.get_env(:matome_api, :admin_panel)
+
+    Application.put_env(
+      :matome_api,
+      :admin_panel,
+      enabled: true,
+      email_allowlist: [@allowlisted]
+    )
+
+    on_exit(fn -> Application.put_env(:matome_api, :admin_panel, original) end)
+    :ok
   end
 
-  defp enroll!(user) do
-    {:ok, secret} = Admin.start_totp_enrollment(user)
-    now = System.os_time(:second)
-    code = NimbleTOTP.verification_code(secret, time: now)
-    :ok = Admin.confirm_totp_enrollment(user, code, now: now)
-    secret
+  defp receive_code! do
+    receive do
+      {:email, %Swoosh.Email{} = email} ->
+        [_, code] = Regex.run(~r/\b(\d{6})\b/, email.text_body)
+        code
+    after
+      1_000 -> flunk("expected OTP email")
+    end
   end
 
-  describe "role allowlist" do
+  describe "email allowlist" do
+    test "email_allowed?/1 matches the env allowlist" do
+      assert Admin.email_allowed?(@allowlisted)
+      assert Admin.email_allowed?(String.upcase(@allowlisted))
+      refute Admin.email_allowed?("stranger@example.com")
+    end
+
     test "registration NEVER grants a privileged role, even if asked to" do
       {:ok, %{user: user}} =
         Auth.register_user(%{
           "email" => "sneaky-#{System.unique_integer([:positive])}@example.com",
-          "password" => @password,
+          "password" => "correct horse battery staple",
           "role" => "admin"
         })
 
       assert Repo.get!(User, user.id).role == "user"
     end
+  end
 
-    test "admin?/1 accepts only admin and superadmin" do
-      refute Admin.admin?(create_user!("user"))
-      assert Admin.admin?(create_user!("admin"))
-      assert Admin.admin?(create_user!("superadmin"))
+  describe "request_login_otp/2" do
+    test "allowlisted email stores a hash and delivers mail" do
+      assert {:ok, :sent} = Admin.request_login_otp(@allowlisted, remote_ip: "127.0.0.1")
+      code = receive_code!()
+      assert String.length(code) == 6
+
+      otp = Repo.get_by!(LoginOtp, email: @allowlisted)
+      assert otp.code_hash == :crypto.hash(:sha256, code)
+      assert is_nil(otp.consumed_at)
+      assert NetworkPolicy.email_allowed?(@allowlisted)
     end
 
-    test "the DB refuses unknown roles" do
-      user = create_user!()
-
-      assert_raise Postgrex.Error, ~r/users_role_must_be_known/, fn ->
-        Repo.query!("UPDATE users SET role = 'root' WHERE id = $1", [user.id])
-      end
+    test "non-allowlisted email is silent — no row, no mail" do
+      assert :silent = Admin.request_login_otp("nope@example.com")
+      refute Repo.exists?(from o in LoginOtp, where: o.email == "nope@example.com")
+      refute_email_sent()
     end
   end
 
-  describe "authenticate_admin/2" do
-    test "authenticates an admin with the right password" do
-      user = create_user!("admin")
-      assert {:ok, %User{id: id}} = Admin.authenticate_admin(user.email, @password)
-      assert id == user.id
+  describe "verify_login_otp/2" do
+    test "accepts a fresh code once" do
+      assert {:ok, :sent} = Admin.request_login_otp(@allowlisted)
+      code = receive_code!()
+
+      assert {:ok, @allowlisted} = Admin.verify_login_otp(@allowlisted, code)
+      assert {:error, :invalid_code} = Admin.verify_login_otp(@allowlisted, code)
     end
 
-    test "rejects a wrong password" do
-      user = create_user!("admin")
-      assert {:error, :invalid_credentials} = Admin.authenticate_admin(user.email, "wrong")
+    test "rejects a wrong code" do
+      assert {:ok, :sent} = Admin.request_login_otp(@allowlisted)
+      _ = receive_code!()
+      assert {:error, :invalid_code} = Admin.verify_login_otp(@allowlisted, "000000")
     end
 
-    test "rejects a non-admin with the RIGHT password, indistinguishably" do
-      user = create_user!("user")
-      assert {:error, :invalid_credentials} = Admin.authenticate_admin(user.email, @password)
-    end
-
-    test "rejects an unknown email" do
-      assert {:error, :invalid_credentials} =
-               Admin.authenticate_admin("nobody@example.com", @password)
-    end
-  end
-
-  describe "TOTP enrollment" do
-    test "start + confirm round-trip enables TOTP" do
-      user = create_user!("admin")
-      refute Admin.totp_enabled?(user)
-
-      enroll!(user)
-
-      assert Admin.totp_enabled?(user)
-    end
-
-    test "the stored secret is encrypted at rest (ciphertext != plaintext)" do
-      user = create_user!("admin")
-      secret = enroll!(user)
-
-      row = Repo.get_by!(TotpSecret, user_id: user.id)
-      refute row.secret_ciphertext == secret
-      assert {:ok, ^secret} = MatomeApi.Admin.SecretVault.decrypt(row.secret_ciphertext)
-    end
-
-    test "start is idempotent while unconfirmed, refused once enrolled" do
-      user = create_user!("admin")
-
-      {:ok, secret} = Admin.start_totp_enrollment(user)
-      {:ok, ^secret} = Admin.start_totp_enrollment(user)
-
-      now = System.os_time(:second)
-
-      :ok =
-        Admin.confirm_totp_enrollment(user, NimbleTOTP.verification_code(secret, time: now),
-          now: now
-        )
-
-      assert {:error, :already_enrolled} = Admin.start_totp_enrollment(user)
-    end
-
-    test "confirm rejects a wrong code and stays unconfirmed" do
-      user = create_user!("admin")
-      {:ok, _secret} = Admin.start_totp_enrollment(user)
-
-      assert {:error, :invalid_code} = Admin.confirm_totp_enrollment(user, "000000")
-      refute Admin.totp_enabled?(user)
-    end
-  end
-
-  describe "verify_totp/3" do
-    test "accepts a valid current code" do
-      user = create_user!("admin")
-      secret = enroll!(user)
-
-      now = System.os_time(:second) + 300
-      code = NimbleTOTP.verification_code(secret, time: now)
-
-      assert :ok = Admin.verify_totp(user, code, now: now)
-    end
-
-    test "rejects an invalid code" do
-      user = create_user!("admin")
-      enroll!(user)
-
-      assert {:error, :invalid_code} = Admin.verify_totp(user, "000000")
-    end
-
-    test "rejects a user with no confirmed enrollment" do
-      user = create_user!("admin")
-      {:ok, secret} = Admin.start_totp_enrollment(user)
-      code = NimbleTOTP.verification_code(secret)
-
-      assert {:error, :invalid_code} = Admin.verify_totp(user, code)
-    end
-
-    test "REPLAY: the same code is rejected the second time" do
-      user = create_user!("admin")
-      secret = enroll!(user)
-
-      now = System.os_time(:second) + 300
-      code = NimbleTOTP.verification_code(secret, time: now)
-
-      assert :ok = Admin.verify_totp(user, code, now: now)
-      assert {:error, :invalid_code} = Admin.verify_totp(user, code, now: now)
-    end
-
-    test "REPLAY: an older timestep's code is rejected after a newer one was used" do
-      user = create_user!("admin")
-      secret = enroll!(user)
-
-      now = System.os_time(:second) + 300
-      newer = NimbleTOTP.verification_code(secret, time: now)
-      older = NimbleTOTP.verification_code(secret, time: now - 30)
-
-      assert :ok = Admin.verify_totp(user, newer, now: now)
-      # `older` is still inside the ±1 skew window, but its timestep is
-      # below the high-water mark — must be rejected.
-      assert {:error, :invalid_code} = Admin.verify_totp(user, older, now: now)
-    end
-
-    test "a LATER code still works after an earlier one (high-water mark moves)" do
-      user = create_user!("admin")
-      secret = enroll!(user)
-
-      now = System.os_time(:second) + 300
-
-      assert :ok =
-               Admin.verify_totp(user, NimbleTOTP.verification_code(secret, time: now), now: now)
-
-      later = now + 60
-
-      assert :ok =
-               Admin.verify_totp(user, NimbleTOTP.verification_code(secret, time: later),
-                 now: later
-               )
-    end
-
-    test "LOCKOUT: repeated failures lock the account out, even for a then-valid code" do
-      user = create_user!("admin")
-      secret = enroll!(user)
-      now = System.os_time(:second) + 300
-
-      for _ <- 1..6 do
-        Admin.verify_totp(user, "000000", now: now)
-      end
-
-      code = NimbleTOTP.verification_code(secret, time: now)
-      assert {:error, :rate_limited} = Admin.verify_totp(user, code, now: now)
+    test "rejects when email is not allowlisted" do
+      assert {:error, :invalid_code} = Admin.verify_login_otp("nope@example.com", "123456")
     end
   end
 
   describe "audit!/2" do
-    test "writes an append-only row with actor snapshot" do
-      user = create_user!("admin")
-
+    test "writes actor_email without requiring a users row" do
       event =
         Admin.audit!("admin.login",
-          actor: user,
-          metadata: %{"path" => "/admin"},
-          remote_ip: "127.0.0.1"
+          actor: %{email: @allowlisted},
+          remote_ip: "127.0.0.1",
+          metadata: %{"via" => "otp"}
         )
 
-      assert %AuditEvent{} = event
-      assert event.actor_id == user.id
-      assert event.actor_email == user.email
-      assert event.action == "admin.login"
-      assert event.metadata == %{"path" => "/admin"}
-      assert event.remote_ip == "127.0.0.1"
+      assert %AuditEvent{actor_id: nil, actor_email: @allowlisted, action: "admin.login"} = event
+      assert event.metadata["via"] == "otp"
     end
-
-    test "accepts events without an actor (e.g. failed login for unknown email)" do
-      event = Admin.audit!("admin.login_failed", metadata: %{"email" => "x@example.com"})
-
-      assert event.actor_id == nil
-      assert event.action == "admin.login_failed"
-    end
-  end
-
-  test "otpauth_uri embeds issuer and account" do
-    uri = TOTP.otpauth_uri(TOTP.generate_secret(), "root@example.com")
-
-    assert uri =~ "otpauth://totp/"
-    assert uri =~ "issuer=matome"
-    assert uri =~ "root@example.com"
   end
 end

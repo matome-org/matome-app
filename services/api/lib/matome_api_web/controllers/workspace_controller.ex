@@ -61,6 +61,12 @@ defmodule MatomeApiWeb.WorkspaceController do
       owner_id: workspace.owner_id,
       name: workspace.name,
       description: workspace.description,
+      is_local: workspace.is_local,
+      space_type: workspace.space_type,
+      quota_bytes: workspace.quota_bytes,
+      used_bytes: workspace.used_bytes,
+      expires_at: workspace.expires_at,
+      status: workspace.status,
       inserted_at: workspace.inserted_at,
       updated_at: workspace.updated_at
     }

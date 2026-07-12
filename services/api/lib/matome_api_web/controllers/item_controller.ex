@@ -45,6 +45,15 @@ defmodule MatomeApiWeb.ItemController do
             conn |> put_status(:unprocessable_entity) |> json(%{error: to_string(reason)})
         end
 
+      {:error, :quota_exceeded} ->
+        conn |> put_status(:request_entity_too_large) |> json(%{error: "quota_exceeded"})
+
+      {:error, :space_not_writable} ->
+        conn |> put_status(:forbidden) |> json(%{error: "space_not_writable"})
+
+      {:error, reason} when is_atom(reason) ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: to_string(reason)})
+
       {:error, changeset} ->
         validation_error(conn, changeset)
     end

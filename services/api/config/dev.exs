@@ -2,12 +2,14 @@ import Config
 
 database_url =
   System.get_env("DATABASE_URL") ||
-    "postgres://postgres:postgres@localhost:5432/matome_api_dev"
+    "postgres://postgres@127.0.0.1:7020/matome_api_dev"
+
+http_port = String.to_integer(System.get_env("PORT") || "7001")
 
 ssl = System.get_env("DATABASE_SSL", "false") in ~w(true 1)
 
-# Point DATABASE_URL at the Supabase Postgres connection string. For pooled
-# Supabase connections, use the pgbouncer host/port and keep pool_size modest.
+# Point DATABASE_URL at any Postgres (native local, compose, or managed).
+# See docs/data-plane.md. For pooled connections, keep pool_size modest.
 config :matome_api, MatomeApi.Repo,
   url: database_url,
   ssl: ssl,
@@ -24,7 +26,7 @@ config :matome_api, MatomeApi.Repo,
 config :matome_api, MatomeApiWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}, port: 4000],
+  http: [ip: {127, 0, 0, 1}, port: http_port],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
@@ -68,23 +70,29 @@ config :matome_api, MatomeApiWeb.Endpoint,
 # configured to run both http and https servers on
 # different ports.
 
-# Enable dev routes for dashboard and mailbox
+# Enable dev routes for storybook + /dev/mailbox
 config :matome_api, dev_routes: true
 
-# Admin back-office gate (W3 #1871). Dev-only fallback key for the TOTP
-# secret vault — prod fails closed at boot without ADMIN_SECRET_VAULT_KEY
-# (see config/runtime.exs).
+# Optional leftover vault key (TOTP path retired; unused by email-OTP login).
 config :matome_api, MatomeApi.Admin.SecretVault,
   key:
     System.get_env("ADMIN_SECRET_VAULT_KEY") ||
       Base.encode64("dev-only-admin-vault-key-32bytes")
 
-# /admin network guard (W3 #1871): dev allows loopback only. Prod is
-# env-driven and FAILS CLOSED (empty allowlist denies everyone) until the
-# deploy topology decision lands — see services/api/docs/admin-access-control.md.
+# /admin email-OTP gate — panel on; soft IP tier empty (all IPs normal limits).
+config :matome_api, :admin_panel,
+  enabled: true,
+  email_allowlist:
+    (System.get_env("ADMIN_EMAIL_ALLOWLIST") || "dev@matome.test")
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+
 config :matome_api, :admin_network,
-  allowlist: ["127.0.0.1/32", "::1/128"],
+  allowlist: [],
   trusted_proxies: []
+
+config :matome_api, :admin_session, ttl_seconds: 30 * 60, reauth_ttl_seconds: 5 * 60
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"

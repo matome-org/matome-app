@@ -164,7 +164,7 @@ function numberFromEnv(name, fallback) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const host = process.env.AI_STUB_HOST ?? "127.0.0.1";
-  const port = Number(process.env.AI_STUB_PORT ?? 5055);
+  const port = Number(process.env.AI_STUB_PORT ?? 7002);
 
   createAiStubServer().listen(port, host, () => {
     console.log(`Matome AI stub listening on http://${host}:${port}`);

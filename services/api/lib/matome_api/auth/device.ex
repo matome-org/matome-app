@@ -10,6 +10,9 @@ defmodule MatomeApi.Auth.Device do
   NULL and correlation degrades to the user-agent string (see
   `MatomeApi.Auth.resolve_device/3`).
 
+  `form_factor` / `device_class` / `model` are client-declared access
+  metadata for the admin dashboard (normalized via `DeviceMeta`).
+
   `device_key_enrolled` marks whether an E2E device key has been enrolled
   for this device (consumed by the key-bundle flow; written by a later
   wave). `revoked_at` is the W5 revocation seam — capture never sets it.
@@ -24,6 +27,9 @@ defmodule MatomeApi.Auth.Device do
   schema "devices" do
     field :client_id, Ecto.UUID
     field :platform, :string
+    field :form_factor, :string
+    field :device_class, :string
+    field :model, :string
     field :display_name, :string
     field :user_agent, :string
     field :first_seen_at, :utc_datetime
@@ -42,6 +48,9 @@ defmodule MatomeApi.Auth.Device do
       :user_id,
       :client_id,
       :platform,
+      :form_factor,
+      :device_class,
+      :model,
       :display_name,
       :user_agent,
       :first_seen_at,
@@ -51,6 +60,9 @@ defmodule MatomeApi.Auth.Device do
     ])
     |> validate_required([:user_id, :first_seen_at, :last_seen_at])
     |> validate_length(:platform, max: 100)
+    |> validate_length(:form_factor, max: 100)
+    |> validate_length(:device_class, max: 100)
+    |> validate_length(:model, max: 255)
     |> validate_length(:display_name, max: 255)
     |> unique_constraint([:user_id, :client_id])
   end

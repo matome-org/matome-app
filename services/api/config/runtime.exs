@@ -26,10 +26,22 @@ if origins = System.get_env("CORS_ORIGINS") do
   config :matome_api, :cors_origins, origins
 end
 
+# Bind the HTTP listener to a specific IP at runtime (all environments). The
+# dev default is loopback ({127,0,0,1}); inside a container that is unreachable
+# from the host / sibling services, so `PHX_HTTP_IP=0.0.0.0` (Docker) opens all
+# interfaces. Deep-merges into the endpoint's `http:` keyword, so `port` and the
+# rest of the dev/prod config are preserved. Absent ⇒ unchanged loopback.
+if ip = System.get_env("PHX_HTTP_IP") do
+  parsed_ip =
+    ip |> String.split(".") |> Enum.map(&String.to_integer/1) |> List.to_tuple()
+
+  config :matome_api, MatomeApiWeb.Endpoint, http: [ip: parsed_ip]
+end
+
 config :matome_api, MatomeApi.AIEngine,
-  endpoint: System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:5055/v1/jobs",
+  endpoint: System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:7002/v1/jobs",
   token: System.get_env("AI_ENGINE_TOKEN") || "dev-ai-token",
-  callback_base_url: System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:4000"
+  callback_base_url: System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:7001"
 
 if config_env() == :prod do
   database_url =
@@ -68,41 +80,71 @@ if config_env() == :prod do
       """
 
   host = System.get_env("PHX_HOST") || "example.com"
-  port = String.to_integer(System.get_env("PORT") || "4000")
+  port = String.to_integer(System.get_env("PORT") || "7001")
 
   config :matome_api, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :matome_api, MatomeApi.Auth.Guardian, secret_key: guardian_secret_key
 
-  # Admin back-office gate (W3 #1871) — TOTP secrets are encrypted at rest;
-  # prod FAILS CLOSED at boot when the vault key is missing (no fallback).
-  admin_secret_vault_key =
-    System.get_env("ADMIN_SECRET_VAULT_KEY") ||
-      raise """
-      environment variable ADMIN_SECRET_VAULT_KEY is missing.
-      It must be base64 of 32 random bytes; generate one with:
-      openssl rand -base64 32
-      """
-
-  config :matome_api, MatomeApi.Admin.SecretVault, key: admin_secret_vault_key
-
-  # /admin network guard (W3 #1871). Comma-separated CIDRs. FAIL-CLOSED BY
-  # DESIGN: with ADMIN_IP_ALLOWLIST unset the allowlist is empty and every
-  # /admin request is denied — the deploy/network topology (VPN? which
-  # reverse proxy?) is still undecided (recorded gap, see
-  # services/api/docs/admin-access-control.md), so nothing is reachable
-  # until that decision is configured explicitly. X-Forwarded-For is only
-  # honored from peers inside ADMIN_TRUSTED_PROXIES.
-  parse_cidr_list = fn env_var ->
+  parse_csv = fn env_var ->
     (System.get_env(env_var) || "")
     |> String.split(",", trim: true)
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
   end
 
+  # /admin email-OTP gate. Panel is OFF unless ADMIN_PANEL_ENABLED=true.
+  # Identity = ADMIN_EMAIL_ALLOWLIST (CSV). Soft ADMIN_IP_ALLOWLIST only
+  # tiers rate limits — empty means every IP may reach the panel.
+  config :matome_api, :admin_panel,
+    enabled: System.get_env("ADMIN_PANEL_ENABLED") in ~w(true 1),
+    email_allowlist: parse_csv.("ADMIN_EMAIL_ALLOWLIST")
+
   config :matome_api, :admin_network,
-    allowlist: parse_cidr_list.("ADMIN_IP_ALLOWLIST"),
-    trusted_proxies: parse_cidr_list.("ADMIN_TRUSTED_PROXIES")
+    allowlist: parse_csv.("ADMIN_IP_ALLOWLIST"),
+    trusted_proxies: parse_csv.("ADMIN_TRUSTED_PROXIES")
+
+  config :matome_api, :admin_session,
+    ttl_seconds: String.to_integer(System.get_env("ADMIN_SESSION_TTL_SECONDS") || "1800"),
+    reauth_ttl_seconds:
+      String.to_integer(System.get_env("ADMIN_REAUTH_TTL_SECONDS") || "300")
+
+  # Optional leftover vault (TOTP path retired). Present only if set.
+  if vault = System.get_env("ADMIN_SECRET_VAULT_KEY") do
+    config :matome_api, MatomeApi.Admin.SecretVault, key: vault
+  end
+
+  # Transactional email — Local is never used in prod.
+  # Mailgun needs an HTTP client on the classpath (`:hackney` or Finch);
+  # add the dep in the deploy image when enabling mailgun.
+  case System.get_env("MAILER_ADAPTER") do
+    "mailgun" ->
+      config :matome_api, MatomeApi.Mailer,
+        adapter: Swoosh.Adapters.Mailgun,
+        api_key: System.get_env("MAILGUN_API_KEY") || raise("MAILGUN_API_KEY is missing."),
+        domain: System.get_env("MAILGUN_DOMAIN") || raise("MAILGUN_DOMAIN is missing.")
+
+      config :swoosh, api_client: Swoosh.ApiClient.Hackney
+
+    "smtp" ->
+      config :matome_api, MatomeApi.Mailer,
+        adapter: Swoosh.Adapters.SMTP,
+        relay: System.get_env("SMTP_RELAY") || raise("SMTP_RELAY is missing."),
+        username: System.get_env("SMTP_USERNAME"),
+        password: System.get_env("SMTP_PASSWORD"),
+        ssl: System.get_env("SMTP_SSL", "true") in ~w(true 1),
+        tls: :always,
+        auth: :always,
+        port: String.to_integer(System.get_env("SMTP_PORT") || "587")
+
+    other when other in [nil, "", "local"] ->
+      raise """
+      production requires MAILER_ADAPTER=mailgun or smtp (Local is disabled).
+      """
+
+    other ->
+      raise "unsupported MAILER_ADAPTER=#{inspect(other)} (use mailgun or smtp)"
+  end
 
   storage_s3_endpoint =
     System.get_env("STORAGE_S3_ENDPOINT") ||

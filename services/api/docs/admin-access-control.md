@@ -1,97 +1,57 @@
-# /admin access control — threat model (W3 #1871)
+# /admin access control — email-OTP gate
 
-Plan `p2-core-backoffice` §9.1. Status: **shipped guard-first** — this gate
-landed before any admin data view exists, so every later admin surface is
-born behind it.
+Plan `p2-core-backoffice` §9.1, revised: **email allowlist + one-shot email OTP**
+replaces password + authenticator TOTP. Staff identity does **not** require a
+`users` row.
 
 ## Assets
 
-- All user data reachable through a future admin surface (accounts, items,
-  matomes, contacts, key bundles — the last are client-encrypted blobs, but
-  metadata is still sensitive).
-- The admin capability itself (mutations, exports, impersonation in later
-  waves).
-- The audit trail (its integrity is what makes every other control
-  reviewable after the fact).
+- Admin capability (sessions revoke, future mutations).
+- The audit trail (`admin_audit_events`).
+- Metadata visible in Users / Audit / Sessions LiveViews.
 
-## Layers (defense in depth, outermost first)
+## Layers (defense in depth)
 
 | # | Layer | Enforced by | Failure mode |
 |---|-------|-------------|--------------|
-| 1 | Network allowlist | `MatomeApiWeb.Plugs.AdminNetworkGuard` → `MatomeApi.Admin.NetworkPolicy` | **Fail closed**: empty/missing/unparseable config denies; denials are 404 + log |
-| 2 | First factor | `MatomeApi.Admin.authenticate_admin/2` (Argon2) + rate limit (`:admin_login`, per-IP + per-email) | Uniform `invalid_credentials`; unknown emails burn a dummy Argon2 pass (no timing oracle); failures audited |
-| 3 | Role allowlist | `users.role ∈ (admin, superadmin)` + DB CHECK; re-checked on **every** request/mount | No signup/API path casts `role`; provisioning is out-of-band SQL only; revocation applies mid-session |
-| 4 | Second factor (mandatory TOTP) | `MatomeApi.Admin.verify_totp/3` | Secret AES-256-GCM at rest (`SecretVault`; prod boots only with `ADMIN_SECRET_VAULT_KEY`); ±1 timestep skew; **replay rejected** via atomic timestep high-water mark; 5 attempts/min then 5-min lockout |
-| 5 | Session | `MatomeApiWeb.AdminAuth` | Separate cookie session (not Guardian JWTs); renewed at each privilege change (fixation); **30-min absolute TTL**, no sliding renewal |
-| 6 | Sensitive-action re-auth | `MatomeApiWeb.Plugs.RequireRecentTotp` | TOTP freshness ≤ 5 min or bounce to `/admin/mfa`; ready for the first data-mutating wave |
-| 7 | Append-only audit | `admin_audit_events` + raise-triggers | UPDATE/DELETE/TRUNCATE raise at the DB **for every role incl. the table owner**; `Admin.audit!/2` raises on failure so actions cannot proceed unaudited |
+| 1 | Panel kill switch | `ADMIN_PANEL_ENABLED` via `AdminNetworkGuard` | **Fail closed**: unset/`false` in prod ⇒ every `/admin*` is 404 |
+| 2 | Soft IP tier | `ADMIN_IP_ALLOWLIST` (optional) | Empty ⇒ all IPs reach the panel. Non-empty ⇒ IPs outside still allowed but under **stricter** per-IP rate limits (corporate laptop / no VPN) |
+| 3 | Email allowlist | `ADMIN_EMAIL_ALLOWLIST` CSV | Non-members get **total silence** on `POST /admin/login` (200 re-render, no flash, no mail, no redirect) |
+| 4 | Email OTP | `Admin.request_login_otp/2` + `verify_login_otp/2` | 6-digit code, SHA-256 at rest, 30-min TTL, one-shot consume; wrong code audited as `admin.login_failed` |
+| 5 | Session | `MatomeApiWeb.AdminAuth` | Cookie session keyed by `admin_email`; absolute TTL (default 30 min); no sliding renewal |
+| 6 | Sensitive re-auth | OTP freshness (`admin_otp_verified_at`, default 5 min) | Stale revoke → `/admin/otp?return_to=…` |
+| 7 | Append-only audit | `admin_audit_events` + raise-triggers | `actor_id` nullable; `actor_email` always set from the allowlisted address |
 
-### LiveView specifics
+### LiveView
 
-The websocket upgrade does not traverse the `/admin` router pipelines, so a
-valid session could otherwise ride a socket opened from outside the
-allowlist. `AdminAuth.on_mount/4` re-checks the session **and** re-runs the
-network policy against `connect_info` (`peer_data` + `x_headers`) on every
-connected mount.
+`AdminAuth.on_mount/4` re-checks panel enabled + email allowlist + TTL. Soft IP
+is not a hard deny on the websocket (rate limits apply on HTTP POSTs only).
 
-## Threats → mitigations
+## Env contract
 
-- **Credential stuffing / password brute force** — per-IP + per-email rate
-  limit on the first factor; Argon2; uniform errors; audited failures.
-- **Phishing/leak of an admin password** — mandatory TOTP; password alone
-  yields only a pending marker that opens nothing.
-- **TOTP code interception/replay** — one-time use enforced atomically
-  (`UPDATE … WHERE last_used_timestep < matched`); an observed code is dead
-  the moment it is used, even across concurrent requests.
-- **TOTP brute force** — 6-digit space vs 5 attempts/min + 5-min lockout
-  (per user id, ETS-backed `MatomeApi.RateLimiter`).
-- **DB dump / at-rest disclosure** — TOTP secrets are AES-256-GCM
-  ciphertexts; key lives only in the runtime env, never in the repo or DB.
-- **Session fixation / theft** — session id renewed on login; absolute TTL
-  bounds any stolen cookie's usefulness; sensitive actions additionally
-  demand a fresh TOTP; logout clears everything. Cookies are signed
-  (tamper-proof); contents are ids + unix stamps only.
-- **Privilege self-escalation** — `role` is not castable by any changeset;
-  DB CHECK constrains values; registration test pins the "role param is
-  ignored" behavior.
-- **IP spoofing via X-Forwarded-For** — the header participates only when
-  the direct peer is inside the pinned trusted-proxy CIDRs; the client is
-  the rightmost hop not itself a trusted proxy, so client-prepended entries
-  are never believed; unparseable chains deny.
-- **Audit tampering by a compromised app/DB role** — UPDATE/DELETE/TRUNCATE
-  raise via triggers (binding even the owner); rewriting history would
-  require `ALTER TABLE … DISABLE TRIGGER` DDL — a louder, separately
-  visible act. `REVOKE` additionally strips non-owner roles.
-- **Back-office discovery/scanning** — out-of-allowlist requests get a
-  bare 404; the login surface itself is inside the guard.
+| Var | Role |
+|---|---|
+| `ADMIN_PANEL_ENABLED` | `true`/`1` to expose `/admin`. Prod default off. Dev default on. |
+| `ADMIN_EMAIL_ALLOWLIST` | CSV emails (lowercased). Empty ⇒ nobody can complete OTP. |
+| `ADMIN_IP_ALLOWLIST` | Soft CIDR tier for rate limits only. |
+| `ADMIN_TRUSTED_PROXIES` | CIDRs that may supply `X-Forwarded-For`. |
+| `ADMIN_SESSION_TTL_SECONDS` | Absolute session TTL (default `1800`). |
+| `MAILER_ADAPTER` | Prod: `mailgun` or `smtp` (Local disabled). Dev: Swoosh Local + `/dev/mailbox`. |
 
-## Recorded gaps (explicit, tracked)
+## Login flow
 
-1. **Passkey/WebAuthn deferred.** The §9.1 target state includes
-   phishing-resistant credentials; this wave ships TOTP only. The
-   `webauthn_credentials` schema delta is partial/deferred — TOTP remains
-   vulnerable to real-time phishing proxies in a way WebAuthn is not.
-   Follow-up belongs to a later wave of `p2-core-backoffice`.
-2. **Deploy/network topology UNDECIDED.** Whether /admin sits behind a VPN,
-   which reverse proxy terminates TLS, and therefore what
-   `ADMIN_IP_ALLOWLIST` / `ADMIN_TRUSTED_PROXIES` must contain, has not been
-   decided. The guard ships config-driven and **fail-closed**: in prod with
-   nothing configured, every /admin request is denied. Nothing must be
-   "opened temporarily" to work around this — decide the topology, then
-   configure it.
+1. `GET /admin/login` — email only (W1 `text_field` + `submit_button`).
+2. `POST /admin/login` — if allowlisted, store OTP hash, email code, redirect `/admin/otp`; else silence.
+3. `POST /admin/otp` — verify one-shot code → session → `/admin`.
+
+Dev: read the code at `http://127.0.0.1:7001/dev/mailbox`.
 
 ## Operational notes
 
-- **Provisioning an admin** (out-of-band, by design):
-  `UPDATE users SET role = 'admin' WHERE email = '…';` via a trusted DB
-  path (release task/psql). First login forces TOTP enrollment.
-- **Prod env contract**: `ADMIN_SECRET_VAULT_KEY` (base64, 32 bytes —
-  `openssl rand -base64 32`) is REQUIRED at boot; `ADMIN_IP_ALLOWLIST` /
-  `ADMIN_TRUSTED_PROXIES` are comma-separated CIDRs, empty ⇒ deny-all.
-- **Rotating a TOTP factor** is deliberately not a silent overwrite
-  (`{:error, :already_enrolled}`); rotation lands as an explicit,
-  audited flow in a later wave. Interim: delete the `totp_secrets` row
-  out-of-band; the next login re-enrolls.
-- **Audit retention/erasure** (e.g. GDPR) requires a DBA acting outside
-  the app role (drop/disable triggers in a maintenance window) — a
-  deliberate, visible operation.
+- **No DB role promotion** for panel access — put the staff address in
+  `ADMIN_EMAIL_ALLOWLIST` and redeploy/restart with the new env.
+- **Revoking access** — remove the email from the allowlist; mid-flight
+  sessions fail the next mount (`email_allowed?` re-check).
+- **TOTP / `users.role` / SecretVault** — leftover from the prior gate; unused
+  by login. App-user MFA badges in the Users directory may still read
+  `totp_secrets` rows if present.

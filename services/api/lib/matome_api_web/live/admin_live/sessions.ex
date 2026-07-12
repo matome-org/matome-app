@@ -13,8 +13,8 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
   "Active now" is DEGRADED to `last_seen_at` recency, deliberately: real
   Presence needs a Flutter-side `user_socket` heartbeat contract that does
   not exist yet (cross-repo gap, recorded in the dod-matrix). Revocation is
-  a sensitive action — it re-checks the W3 TOTP freshness window at event
-  time and bounces to `/admin/mfa` when stale.
+  a sensitive action — it re-checks OTP freshness at event time and bounces
+  to `/admin/otp` when stale.
   """
   use MatomeApiWeb, :live_view
 
@@ -25,10 +25,6 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
   alias MatomeApi.Auth.TokenAllowlist
   alias MatomeApiWeb.AdminAuth
 
-  # last_seen_at within this window reads as "active"; anything older is
-  # shown as a plain "last seen" timestamp. Approximation by design.
-  @recent_window_seconds 5 * 60
-
   @impl true
   def mount(_params, session, socket) do
     if connected?(socket) do
@@ -38,7 +34,7 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
     {:ok,
      socket
      |> assign(page_title: "Sessions")
-     |> assign(totp_verified_at: session["admin_totp_verified_at"])
+     |> assign(otp_verified_at: session["admin_otp_verified_at"])
      |> assign(peer_ip: peer_ip(socket))
      |> load_sessions()}
   end
@@ -50,7 +46,7 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
 
   @impl true
   def handle_event("revoke", %{"jti" => jti}, socket) do
-    if recent_totp?(socket) do
+    if recent_otp?(socket) do
       case Admin.revoke_session(socket.assigns.current_admin, jti,
              remote_ip: socket.assigns.peer_ip
            ) do
@@ -62,7 +58,7 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
       end
     else
       {:noreply,
-       redirect(socket, to: "/admin/mfa?return_to=#{URI.encode_www_form("/admin/sessions")}")}
+       redirect(socket, to: "/admin/otp?return_to=#{URI.encode_www_form("/admin/sessions")}")}
     end
   end
 
@@ -128,8 +124,8 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
     assign(socket, sessions: Admin.session_tree(now), now: now)
   end
 
-  defp recent_totp?(socket) do
-    AdminAuth.recent_totp?(%{"admin_totp_verified_at" => socket.assigns.totp_verified_at})
+  defp recent_otp?(socket) do
+    AdminAuth.recent_otp?(%{"admin_otp_verified_at" => socket.assigns.otp_verified_at})
   end
 
   defp peer_ip(socket) do
@@ -144,7 +140,7 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
   defp activity_label(nil, _now), do: "Never seen"
 
   defp activity_label(last_seen_at, now) do
-    if DateTime.diff(now, last_seen_at) < @recent_window_seconds do
+    if DateTime.diff(now, last_seen_at) < Admin.activity_window_seconds() do
       "Active recently"
     else
       "Last seen #{format_time(last_seen_at)}"
@@ -154,7 +150,9 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
   defp activity_tone(nil, _now), do: "default"
 
   defp activity_tone(last_seen_at, now) do
-    if DateTime.diff(now, last_seen_at) < @recent_window_seconds, do: "work", else: "default"
+    if DateTime.diff(now, last_seen_at) < Admin.activity_window_seconds(),
+      do: "work",
+      else: "default"
   end
 
   defp device_title(nil), do: "Unrecognized device"

@@ -1,56 +1,62 @@
 defmodule MatomeApi.Admin.NetworkPolicy do
   @moduledoc """
-  Network gate policy for /admin (W3 #1871, plan p2-core-backoffice §9.1).
+  Network + identity policy helpers for /admin.
 
-  Pure decision module shared by the HTTP plug
-  (`MatomeApiWeb.Plugs.AdminNetworkGuard`) and the LiveView `on_mount`
-  websocket re-check. Config-driven because the deploy/network topology
-  (VPN? which reverse proxy?) is still UNDECIDED — see
-  `services/api/docs/admin-access-control.md`. Until that decision lands,
-  the policy ships FAIL-CLOSED:
-
-  - missing/empty `allowlist` ⇒ deny everyone (the prod default);
-  - unparseable allowlist/proxy entries are dropped, never widened;
-  - `X-Forwarded-For` is honored ONLY when the direct peer is inside the
-    pinned `trusted_proxies` CIDRs — otherwise the header is attacker
-    input and is ignored;
-  - through a pinned chain, the client is the RIGHTMOST entry that is not
-    itself a trusted proxy (entries the client prepended are never
-    believed); any unparseable hop ⇒ deny.
+  - **Panel kill switch** — `panel_enabled?/0` (env `ADMIN_PANEL_ENABLED`).
+  - **Email allowlist** — `email_allowed?/1` (env `ADMIN_EMAIL_ALLOWLIST`).
+  - **Soft IP allowlist** — `soft_trusted_ip?/2` tiers rate limits only;
+    empty list means every IP is "trusted" for rate-limit purposes. The
+    panel is reachable from any IP when enabled (corporate laptop / no VPN).
+  - **Client IP resolution** — X-Forwarded-For honored only through pinned
+    `trusted_proxies` (unchanged).
 
   Config shape (`config :matome_api, :admin_network`):
 
-      allowlist:       ["10.8.0.0/24", "127.0.0.1/32", "::1/128"],
+      allowlist:       ["10.8.0.0/24"],   # soft IP tier (optional)
       trusted_proxies: ["172.16.0.0/16"]
   """
 
-  @doc """
-  Decides whether a request may reach /admin.
+  @doc "True when the /admin panel is enabled for this runtime."
+  def panel_enabled? do
+    Application.get_env(:matome_api, :admin_panel, [])
+    |> Keyword.get(:enabled, false)
+  end
 
-  `remote_ip` is the direct peer (`conn.remote_ip` / socket peer);
-  `xff_values` the raw `x-forwarded-for` header values (may contain
-  comma-separated lists). `opts` defaults to the `:admin_network` app env.
+  @doc "Normalized email allowlist from app env."
+  def email_allowlist do
+    Application.get_env(:matome_api, :admin_panel, [])
+    |> Keyword.get(:email_allowlist, [])
+    |> Enum.map(&normalize_email/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  @doc "True when `email` is on `ADMIN_EMAIL_ALLOWLIST`."
+  def email_allowed?(email) when is_binary(email) do
+    normalize_email(email) in email_allowlist()
+  end
+
+  def email_allowed?(_), do: false
+
+  @doc """
+  Soft IP tier: empty allowlist ⇒ every resolvable client is trusted
+  (normal rate limits). Non-empty ⇒ only listed CIDRs get the normal tier;
+  everyone else still reaches /admin but under stricter rate limits.
   """
-  def allowed?(remote_ip, xff_values, opts \\ nil) do
+  def soft_trusted_ip?(remote_ip, xff_values, opts \\ nil) do
     opts = opts || Application.get_env(:matome_api, :admin_network, [])
     allowlist = parse_cidrs(Keyword.get(opts, :allowlist, []))
     proxies = parse_cidrs(Keyword.get(opts, :trusted_proxies, []))
 
     case resolve_client(remote_ip, xff_values, proxies) do
+      {:ok, _client} when allowlist == [] -> true
       {:ok, client} -> member_of_any?(allowlist, client)
       :error -> false
     end
   end
 
   @doc """
-  Resolves the effective client IP for a request — the same trusted-proxy /
-  X-Forwarded-For logic `allowed?/3` gates on, exposed for callers that need
-  the address itself rather than an allow/deny (session-metadata capture,
-  W4 #1872). Returns `{:ok, ip_tuple}` or `:error` (unparseable chain behind
-  a pinned proxy — fail closed, record nothing, never trust the header).
-
-  `opts` defaults to the `:admin_network` app env; only `:trusted_proxies`
-  participates.
+  Resolves the effective client IP for a request. Returns `{:ok, ip_tuple}`
+  or `:error` (unparseable chain behind a pinned proxy).
   """
   def client_ip(remote_ip, xff_values, opts \\ nil) do
     opts = opts || Application.get_env(:matome_api, :admin_network, [])
@@ -58,9 +64,9 @@ defmodule MatomeApi.Admin.NetworkPolicy do
     resolve_client(remote_ip, xff_values, proxies)
   end
 
-  # Resolves the effective client IP. Only when the direct peer is a pinned
-  # trusted proxy does X-Forwarded-For participate; then the client is the
-  # rightmost hop that is not itself a trusted proxy.
+  defp normalize_email(email) when is_binary(email), do: email |> String.trim() |> String.downcase()
+  defp normalize_email(_), do: ""
+
   defp resolve_client(remote_ip, xff_values, proxies) do
     cond do
       proxies == [] or not member_of_any?(proxies, remote_ip) ->
@@ -70,8 +76,6 @@ defmodule MatomeApi.Admin.NetworkPolicy do
         with {:ok, hops} <- parse_xff(xff_values) do
           case Enum.reverse(hops) |> Enum.find(&(not member_of_any?(proxies, &1))) do
             nil ->
-              # Every hop is a pinned proxy — the originator is the leftmost
-              # (outermost) entry, itself trusted infrastructure.
               case hops do
                 [first | _] -> {:ok, first}
                 [] -> :error

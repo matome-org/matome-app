@@ -10,6 +10,8 @@ defmodule MatomeApi.Content do
     Item,
     Matome,
     MatomeContact,
+    SpaceKeyWrap,
+    SpaceMember,
     TextContent,
     Workspace
   }
@@ -21,21 +23,174 @@ defmodule MatomeApi.Content do
   @ai_media_types ~w(audio image)
 
   def list_workspaces(%User{id: owner_id}, params \\ %{}) do
+    member_ids =
+      from(m in SpaceMember,
+        where: m.user_id == ^owner_id and is_nil(m.revoked_at),
+        select: m.workspace_id
+      )
+
     Workspace
-    |> where([workspace], workspace.owner_id == ^owner_id)
+    |> where([w], w.owner_id == ^owner_id or w.id in subquery(member_ids))
+    |> where([w], w.status != "deleted")
     |> search_by(:name, params["q"] || params[:q])
     |> order_by([workspace], asc: workspace.name)
     |> Repo.all()
   end
 
-  def get_workspace(%User{id: owner_id}, id) do
-    Repo.get_by(Workspace, id: id, owner_id: owner_id)
+  def get_workspace(%User{id: user_id}, id) do
+    case Repo.get(Workspace, id) do
+      nil ->
+        nil
+
+      %Workspace{status: "deleted"} ->
+        nil
+
+      %Workspace{owner_id: ^user_id} = workspace ->
+        workspace
+
+      %Workspace{} = workspace ->
+        if space_member?(%User{id: user_id}, workspace.id), do: workspace, else: nil
+    end
   end
 
   def create_workspace(%User{id: owner_id}, attrs) do
-    %Workspace{owner_id: owner_id}
-    |> Workspace.changeset(attrs)
-    |> Repo.insert()
+    Ecto.Multi.new()
+    |> Ecto.Multi.insert(:workspace, Workspace.changeset(%Workspace{owner_id: owner_id}, attrs))
+    |> Ecto.Multi.insert(:owner_member, fn %{workspace: workspace} ->
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      SpaceMember.changeset(%SpaceMember{}, %{
+        workspace_id: workspace.id,
+        user_id: owner_id,
+        role: "owner",
+        granted_at: now
+      })
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{workspace: workspace}} -> {:ok, workspace}
+      {:error, :workspace, changeset, _} -> {:error, changeset}
+      {:error, _step, reason, _} -> {:error, reason}
+    end
+  end
+
+  @doc "True when user owns the space or has an active membership row."
+  def space_member?(%User{id: user_id}, workspace_id) do
+    from(m in SpaceMember,
+      where: m.workspace_id == ^workspace_id,
+      where: m.user_id == ^user_id,
+      where: is_nil(m.revoked_at)
+    )
+    |> Repo.exists?()
+  end
+
+  def space_role(%User{id: user_id}, workspace_id) do
+    case Repo.get(Workspace, workspace_id) do
+      %Workspace{owner_id: ^user_id} ->
+        "owner"
+
+      _ ->
+        from(m in SpaceMember,
+          where: m.workspace_id == ^workspace_id,
+          where: m.user_id == ^user_id,
+          where: is_nil(m.revoked_at),
+          select: m.role,
+          limit: 1
+        )
+        |> Repo.one()
+    end
+  end
+
+  def can_manage_members?(%User{} = user, workspace_id) do
+    space_role(user, workspace_id) in ~w(owner admin)
+  end
+
+  def can_share_keys?(%User{} = user, workspace_id) do
+    space_role(user, workspace_id) in ~w(owner admin member)
+  end
+
+  ## Space key wraps (ADR-0003) — opaque blobs only
+
+  def get_own_space_key_wrap(%User{id: user_id} = user, workspace_id) do
+    with %Workspace{} <- get_workspace(user, workspace_id) do
+      from(w in SpaceKeyWrap,
+        where: w.workspace_id == ^workspace_id,
+        where: w.user_id == ^user_id,
+        where: is_nil(w.revoked_at)
+      )
+      |> Repo.one()
+    end
+  end
+
+  def put_space_key_wrap(%User{} = sharer, workspace_id, recipient_id, attrs) do
+    with true <- can_share_keys?(sharer, workspace_id) || {:error, :forbidden},
+         true <- space_member?(%User{id: recipient_id}, workspace_id) || {:error, :not_a_member} do
+      attrs =
+        Map.merge(attrs, %{
+          "workspace_id" => workspace_id,
+          "user_id" => recipient_id,
+          "created_by_id" => sharer.id,
+          "alg_id" => Map.get(attrs, "alg_id") || Map.get(attrs, :alg_id) || 1,
+          "revoked_at" => nil
+        })
+
+      case Repo.get_by(SpaceKeyWrap, workspace_id: workspace_id, user_id: recipient_id) do
+        nil ->
+          %SpaceKeyWrap{}
+          |> SpaceKeyWrap.changeset(attrs)
+          |> Repo.insert()
+
+        existing ->
+          existing
+          |> SpaceKeyWrap.changeset(Map.put(attrs, "revoked_at", nil))
+          |> Repo.update()
+      end
+    else
+      false -> {:error, :forbidden}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def revoke_space_key_wrap(%User{} = actor, workspace_id, recipient_id) do
+    with true <- can_manage_members?(actor, workspace_id) || {:error, :forbidden},
+         %SpaceKeyWrap{} = wrap <-
+           Repo.get_by(SpaceKeyWrap, workspace_id: workspace_id, user_id: recipient_id) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      wrap
+      |> Ecto.Changeset.change(revoked_at: now)
+      |> Repo.update()
+    else
+      nil -> nil
+      false -> {:error, :forbidden}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def list_pending_key_shares(%User{} = actor, workspace_id) do
+    with true <- can_share_keys?(actor, workspace_id) || {:error, :forbidden},
+         %Workspace{} = workspace <- Repo.get(Workspace, workspace_id) do
+      wrapped_ids =
+        from(w in SpaceKeyWrap,
+          where: w.workspace_id == ^workspace_id and is_nil(w.revoked_at),
+          select: w.user_id
+        )
+
+      # Owner holds Space-DEK via personal unlock — no wrap row required.
+      from(m in SpaceMember,
+        where: m.workspace_id == ^workspace_id,
+        where: is_nil(m.revoked_at),
+        where: m.user_id != ^workspace.owner_id,
+        where: m.user_id not in subquery(wrapped_ids),
+        preload: [:user]
+      )
+      |> Repo.all()
+      |> then(&{:ok, &1})
+    else
+      nil -> {:error, :not_found}
+      false -> {:error, :forbidden}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def update_workspace(%User{} = owner, id, attrs) do
@@ -137,10 +292,12 @@ defmodule MatomeApi.Content do
 
   def delete_matome(%User{} = owner, id) do
     with %Matome{} = matome <- get_matome(owner, id) do
+      matome = Repo.preload(matome, :workspace)
+
       {result, storage_keys} =
         Ecto.Multi.new()
         |> Ecto.Multi.run(:payloads, fn repo, _changes ->
-          delete_matome_payloads(repo, matome.id)
+          delete_matome_payloads(repo, matome)
         end)
         |> Ecto.Multi.delete(:matome, matome)
         |> Repo.transaction()
@@ -219,7 +376,12 @@ defmodule MatomeApi.Content do
         |> put_byte_size_from_content_length()
         |> put_storage_key(storage_key(owner.id))
 
+      incoming = incoming_byte_size(attrs)
+
       Ecto.Multi.new()
+      |> Ecto.Multi.run(:quota, fn repo, _changes ->
+        reserve_workspace_quota(repo, matome.workspace_id, incoming)
+      end)
       |> Ecto.Multi.insert(:file_blob, FileBlob.changeset(%FileBlob{}, attrs))
       |> Ecto.Multi.run(:position, fn repo, _changes ->
         next_item_position(repo, matome.id, attrs)
@@ -238,6 +400,7 @@ defmodule MatomeApi.Content do
       |> Repo.transaction()
       |> case do
         {:ok, %{item: item}} -> {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
+        {:error, :quota, reason, _changes} when is_atom(reason) -> {:error, reason}
         {:error, _step, changeset, _changes} -> {:error, changeset}
       end
     end
@@ -367,7 +530,12 @@ defmodule MatomeApi.Content do
   end
 
   defp delete_item_transaction(item) do
+    item = Repo.preload(item, [:file_blob, matome: :workspace])
+
     Ecto.Multi.new()
+    |> Ecto.Multi.run(:release_quota, fn repo, _changes ->
+      release_workspace_quota(repo, item)
+    end)
     |> Ecto.Multi.delete(:item, item)
     |> Ecto.Multi.run(:payload, fn repo, _changes -> delete_item_payload(repo, item) end)
     |> Repo.transaction()
@@ -377,6 +545,83 @@ defmodule MatomeApi.Content do
     end
   rescue
     error in [Ecto.ConstraintError, Ecto.StaleEntryError] -> {{:error, error}, []}
+  end
+
+  @doc """
+  Reserve ciphertext bytes against a workspace quota.
+
+  Locks the workspace row (`FOR UPDATE`) so concurrent under-quota uploads that
+  would sum over the ceiling serialize — one succeeds, the other gets
+  `:quota_exceeded`. `nil` workspace_id skips enforcement (loose / unfiled).
+  """
+  def reserve_workspace_quota(_repo, nil, _incoming), do: {:ok, :no_workspace}
+
+  def reserve_workspace_quota(repo, workspace_id, incoming) when is_integer(incoming) do
+    workspace =
+      Workspace
+      |> where([w], w.id == ^workspace_id)
+      |> lock("FOR UPDATE")
+      |> then(&repo.one/1)
+
+    cond do
+      is_nil(workspace) ->
+        {:error, :workspace_not_found}
+
+      not Workspace.writable?(workspace) ->
+        {:error, :space_not_writable}
+
+      is_nil(workspace.quota_bytes) ->
+        {:ok, workspace}
+
+      workspace.used_bytes + incoming > workspace.quota_bytes ->
+        {:error, :quota_exceeded}
+
+      true ->
+        workspace
+        |> Ecto.Changeset.change(used_bytes: workspace.used_bytes + incoming)
+        |> then(&repo.update/1)
+    end
+  end
+
+  def reserve_workspace_quota(_repo, _workspace_id, _incoming), do: {:error, :invalid_byte_size}
+
+  defp release_workspace_quota(_repo, %Item{item_type: :text}), do: {:ok, :text}
+
+  defp release_workspace_quota(repo, %Item{
+         item_type: :file,
+         file_blob: %FileBlob{byte_size: byte_size},
+         matome: %Matome{workspace_id: workspace_id}
+       })
+       when is_integer(workspace_id) and is_integer(byte_size) and byte_size > 0 do
+    workspace =
+      Workspace
+      |> where([w], w.id == ^workspace_id)
+      |> lock("FOR UPDATE")
+      |> then(&repo.one/1)
+
+    case workspace do
+      nil ->
+        {:ok, :missing}
+
+      %Workspace{} = workspace ->
+        next = max(workspace.used_bytes - byte_size, 0)
+
+        workspace
+        |> Ecto.Changeset.change(used_bytes: next)
+        |> then(&repo.update/1)
+    end
+  end
+
+  defp release_workspace_quota(_repo, _item), do: {:ok, :noop}
+
+  defp incoming_byte_size(attrs) do
+    case Map.get(attrs, :byte_size) || Map.get(attrs, "byte_size") do
+      size when is_integer(size) -> size
+      size when is_binary(size) -> String.to_integer(size)
+      _ -> 0
+    end
+  rescue
+    ArgumentError -> 0
   end
 
   @doc """
@@ -504,13 +749,38 @@ defmodule MatomeApi.Content do
     end
   end
 
-  defp delete_matome_payloads(repo, matome_id) do
+  defp delete_matome_payloads(repo, %Matome{} = matome) do
     items =
       Item
-      |> where([item], item.matome_id == ^matome_id)
+      |> where([item], item.matome_id == ^matome.id)
+      |> preload([:file_blob])
       |> repo.all()
 
-    repo.delete_all(from(item in Item, where: item.matome_id == ^matome_id))
+    if matome.workspace_id do
+      total =
+        items
+        |> Enum.filter(&(&1.item_type == :file && &1.file_blob))
+        |> Enum.reduce(0, fn item, acc -> acc + (item.file_blob.byte_size || 0) end)
+
+      if total > 0 do
+        workspace =
+          Workspace
+          |> where([w], w.id == ^matome.workspace_id)
+          |> lock("FOR UPDATE")
+          |> then(&repo.one/1)
+
+        if workspace do
+          next = max(workspace.used_bytes - total, 0)
+
+          {:ok, _} =
+            workspace
+            |> Ecto.Changeset.change(used_bytes: next)
+            |> then(&repo.update/1)
+        end
+      end
+    end
+
+    repo.delete_all(from(item in Item, where: item.matome_id == ^matome.id))
 
     storage_keys =
       Enum.flat_map(items, fn item ->

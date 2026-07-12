@@ -30,13 +30,26 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
     |> Repo.update!()
   end
 
+  defp ensure_allowlist!(email) do
+    original = Application.get_env(:matome_api, :admin_panel)
+
+    Application.put_env(
+      :matome_api,
+      :admin_panel,
+      Keyword.merge(original || [], enabled: true, email_allowlist: [email])
+    )
+
+    on_exit(fn -> Application.put_env(:matome_api, :admin_panel, original) end)
+  end
+
   defp admin_session(conn, admin) do
+    ensure_allowlist!(admin.email)
     now = System.os_time(:second)
 
     Plug.Test.init_test_session(conn, %{
-      "admin_user_id" => admin.id,
+      "admin_email" => admin.email,
       "admin_authenticated_at" => now,
-      "admin_totp_verified_at" => now
+      "admin_otp_verified_at" => now
     })
   end
 
@@ -47,8 +60,8 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
           __changed__: %{},
           flash: %{},
           live_action: :index,
-          current_admin: admin,
-          totp_verified_at: System.os_time(:second),
+          current_admin: %{email: admin.email},
+          otp_verified_at: System.os_time(:second),
           peer_ip: "192.0.2.99",
           sessions: [],
           now: DateTime.utc_now()
@@ -95,7 +108,7 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
   end
 
   describe "handle_event revoke" do
-    test "with fresh TOTP revokes the family and audits" do
+    test "with fresh OTP revokes the family and audits" do
       admin = admin!("revoking-admin@example.com")
       %{refresh_token: refresh_token} = register!("victim@example.com")
       %RefreshToken{jti: jti} = Repo.get_by!(RefreshToken, token: refresh_token)
@@ -105,12 +118,13 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
       assert %RefreshToken{revoked_at: %DateTime{}} = Repo.get_by!(RefreshToken, jti: jti)
 
       audit = Repo.one!(from e in AuditEvent, where: e.action == "admin.session_revoked")
-      assert audit.actor_id == admin.id
+      assert audit.actor_id == nil
+      assert audit.actor_email == admin.email
       assert audit.remote_ip == "192.0.2.99"
       assert socket.assigns.flash["info"] =~ "revoked"
     end
 
-    test "with stale TOTP redirects to re-auth and revokes nothing" do
+    test "with stale OTP redirects to re-auth and revokes nothing" do
       admin = admin!("stale-admin@example.com")
       %{refresh_token: refresh_token} = register!("safe@example.com")
       %RefreshToken{jti: jti} = Repo.get_by!(RefreshToken, token: refresh_token)
@@ -121,11 +135,11 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
         Sessions.handle_event(
           "revoke",
           %{"jti" => jti},
-          socket(admin, %{totp_verified_at: stale})
+          socket(admin, %{otp_verified_at: stale})
         )
 
       assert {:redirect, %{to: to}} = socket.redirected
-      assert to =~ "/admin/mfa"
+      assert to =~ "/admin/otp"
       assert to =~ "return_to="
 
       assert %RefreshToken{revoked_at: nil} = Repo.get_by!(RefreshToken, jti: jti)

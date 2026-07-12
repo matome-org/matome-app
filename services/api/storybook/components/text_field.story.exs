@@ -7,6 +7,10 @@ defmodule Storybook.Components.TextField do
     [
       %Variation{id: :default, attributes: %{label: "Email", hint: "you@example.com"}},
       %Variation{
+        id: :email,
+        attributes: %{label: "Email", type: "email", hint: "you@example.com", name: "email"}
+      },
+      %Variation{
         id: :with_value,
         attributes: %{label: "Email", value: "hi@x.com"}
       },

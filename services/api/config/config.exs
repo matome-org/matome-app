@@ -17,9 +17,9 @@ config :matome_api, Oban,
   repo: MatomeApi.Repo
 
 config :matome_api, MatomeApi.AIEngine,
-  endpoint: System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:5055/v1/jobs",
+  endpoint: System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:7002/v1/jobs",
   token: System.get_env("AI_ENGINE_TOKEN") || "dev-ai-token",
-  callback_base_url: System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:4000"
+  callback_base_url: System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:7001"
 
 config :matome_api, MatomeApi.Auth.Guardian,
   issuer: "matome_api",
@@ -40,7 +40,7 @@ config :matome_api, MatomeApi.Auth.TokenAllowlist,
   cache_ttl_ms: 30_000
 
 config :matome_api, MatomeApi.Storage.Presigner,
-  endpoint: System.get_env("STORAGE_S3_ENDPOINT") || "http://127.0.0.1:54321/storage/v1/s3",
+  endpoint: System.get_env("STORAGE_S3_ENDPOINT") || "http://127.0.0.1:7021",
   access_key_id: System.get_env("STORAGE_S3_ACCESS_KEY_ID") || "test-access-key",
   secret_access_key: System.get_env("STORAGE_S3_SECRET_ACCESS_KEY") || "test-secret-key",
   region: System.get_env("STORAGE_S3_REGION") || "local",
@@ -50,12 +50,12 @@ config :matome_api, MatomeApi.Storage.Presigner,
 
 # CORS allowed origins for browser clients (Flutter Web).
 # Overridden at runtime via CORS_ORIGINS (comma-separated) in runtime.exs.
-# Defaults cover the `mise run flutter-web` dev origin (port 8080). For prod
+# Defaults cover the `mise run flutter-web` dev origin. For prod
 # set CORS_ORIGINS explicitly.
 config :matome_api,
        :cors_origins,
        System.get_env("CORS_ORIGINS") ||
-         "http://localhost:8080,http://127.0.0.1:8080"
+          "http://localhost:7000,http://127.0.0.1:7000"
 
 # Configures the endpoint
 config :matome_api, MatomeApiWeb.Endpoint,

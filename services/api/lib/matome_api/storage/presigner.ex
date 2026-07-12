@@ -1,6 +1,6 @@
 defmodule MatomeApi.Storage.Presigner do
   @moduledoc """
-  Issues S3-compatible presigned URLs for the Supabase Storage media bucket.
+  Issues S3-compatible path-style presigned URLs for the media bucket.
 
   Core owns the Storage credentials; clients receive only method-scoped URLs for
   the server-generated object key.
