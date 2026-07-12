@@ -2,12 +2,15 @@
 #
 # API_BASE_URL is baked at BUILD time (compile-time --dart-define, tree-shaken),
 # so it must be the URL the BROWSER uses to reach Core — the host-published
-# address, http://localhost:4000 by default (NOT the compose service name, which
+# address, http://localhost:7001 by default (NOT the compose service name, which
 # the browser cannot resolve). Override via build-arg for a different host.
-ARG FLUTTER_IMAGE=ghcr.io/cirruslabs/flutter:stable
+# Pin the exact Flutter version — the moving `:stable` tag can lag behind and
+# fail `pub get` with "version solving failed". 3.44.0 ships Dart 3.12.0, which
+# is why pubspec's SDK floor is ^3.12.0. Bump both in lockstep with the toolchain.
+ARG FLUTTER_IMAGE=ghcr.io/cirruslabs/flutter:3.44.0
 FROM ${FLUTTER_IMAGE} AS build
 
-ARG API_BASE_URL=http://localhost:4000
+ARG API_BASE_URL=http://localhost:7001
 WORKDIR /app
 
 # pub deps first (cached).
@@ -17,6 +20,7 @@ RUN flutter pub get
 COPY . .
 # godMode on so the custom-host switcher is available; feature flags from file.
 RUN flutter build web --release \
+  --no-web-resources-cdn \
   --dart-define=API_BASE_URL=${API_BASE_URL} \
   --dart-define=ff.godMode=true \
   --dart-define-from-file=feature_flags.json
@@ -36,10 +40,19 @@ RUN flutter build web --release \
 # not be a static value in `web/index.html`). The final `grep` makes the
 # build fail loudly if a future Flutter SDK ever changes the exact script
 # tag text this `sed` matches, instead of silently shipping without SRI.
+#
+# Also strip `'unsafe-inline'` from the meta CSP: `web/index.html` allows it
+# so `flutter run` / DWDS hot-reload can inject its client scripts; the
+# production image must stay script-src without unsafe-inline (nginx header
+# is authoritative and already omits it — this keeps the meta defense-in-
+# depth copy aligned).
 RUN set -eu; \
+  sed -i "s/ script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline';/ script-src 'self' 'wasm-unsafe-eval';/" build/web/index.html; \
   HASH=$(openssl dgst -sha384 -binary build/web/flutter_bootstrap.js | openssl base64 -A); \
   sed -i "s#<script src=\"flutter_bootstrap.js\" async></script>#<script src=\"flutter_bootstrap.js\" integrity=\"sha384-${HASH}\" crossorigin=\"anonymous\" async></script>#" build/web/index.html; \
-  grep -q "integrity=\"sha384-${HASH}\"" build/web/index.html
+  grep -q "integrity=\"sha384-${HASH}\"" build/web/index.html; \
+  grep -q "script-src 'self' 'wasm-unsafe-eval';" build/web/index.html; \
+  ! grep -q "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline';" build/web/index.html
 
 FROM nginx:alpine
 COPY --from=build /app/build/web /usr/share/nginx/html

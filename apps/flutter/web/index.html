@@ -49,23 +49,28 @@
     comment block before editing either.
 
     Directive notes:
-      script-src 'self' 'wasm-unsafe-eval' — 'self' only for script origin
-        (blocks inline <script> injection and any 3rd-party script host —
-        the actual XSS-delivery mitigation). 'wasm-unsafe-eval' (NOT the
-        much broader 'unsafe-eval') is required for compiling the sqlite3
-        WebAssembly module (`sqlite3.wasm`) this app loads for the Drift/
-        Wasm database — Chrome's CSP model gates wasm instantiation behind
-        this specific token even though no plaintext `eval()` is ever used.
+      script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' —
+        'self' for script origin (blocks 3rd-party script hosts — the
+        XSS-delivery mitigation). CanvasKit must be served same-origin:
+        `mise run flutter-web` and `Dockerfile.web` pass
+        `--no-web-resources-cdn` so Flutter does NOT load
+        gstatic.com/flutter-canvaskit (which would violate 'self').
+        'wasm-unsafe-eval' (NOT the much broader 'unsafe-eval') is required
+        for compiling the sqlite3 WebAssembly module (`sqlite3.wasm`).
+        'unsafe-inline' is REQUIRED for `flutter run` / DWDS hot-reload
+        (the debug client injects inline scripts). Production Docker
+        builds STRIP this token from the meta tag after `flutter build
+        web` (see Dockerfile.web) so the shipped meta stays aligned with
+        nginx.conf, which NEVER allows script unsafe-inline.
       style-src 'self' 'unsafe-inline' — Flutter's web engine (text
         measurement / glassmorphism helpers) injects inline <style> at
         runtime; there is no nonce hook for this in the current Flutter web
         build output. This is a known, documented residual gap — style
         injection cannot execute arbitrary JS by itself, so it is a much
-        lower-severity relaxation than allowing inline/3rd-party SCRIPT would
-        be, which this policy does NOT allow.
+        lower-severity relaxation than allowing 3rd-party SCRIPT would be.
       connect-src 'self' http: https: ws: wss: — the app's XHR/fetch/
         WebSocket target is NOT same-origin: the Core API is a separate host
-        (`AppConfig.apiBaseUrl`, e.g. http://localhost:4000) and, when the
+        (`AppConfig.apiBaseUrl`, e.g. http://localhost:7001) and, when the
         `ff.godMode` build flag is on (this repo's Dockerfile.web bakes it on
         for the lab/dev image — see `lib/features/dev/god_mode_host.dart`),
         the user can point the client at ANY http(s) host at runtime. A CSP
@@ -89,7 +94,7 @@
   -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' 'wasm-unsafe-eval';
+    script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline';
     style-src 'self' 'unsafe-inline';
     img-src 'self' data: blob:;
     font-src 'self' data:;
