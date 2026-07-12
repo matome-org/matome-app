@@ -73,7 +73,7 @@ void main() {
         final repo = _CoreDownRepository(
           apiClient: ApiClient(
             tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
           ),
         );
 
@@ -120,7 +120,7 @@ void main() {
         addTearDown(() => tmp.exists().then((e) => e ? tmp.delete() : null));
 
         final dio = Dio(BaseOptions(
-          baseUrl: 'http://localhost:4000',
+          baseUrl: 'http://localhost:7001',
           validateStatus: (s) => s != null && s < 500,
         ));
         final adapter = DioAdapter(dio: dio);
@@ -251,7 +251,7 @@ void main() {
         final repo = _CoreDownRepository(
           apiClient: ApiClient(
             tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
           ),
         );
 

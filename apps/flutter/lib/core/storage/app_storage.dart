@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 
 /// Single durable folder that holds ALL of Matome's local files — the Drift
@@ -15,8 +16,12 @@ const String kMatomeFolderName = 'Matome';
 /// True under `flutter test`, where the path_provider platform channel has no
 /// handler and `getApplicationDocumentsDirectory()` HANGS (rather than throws),
 /// so the one-time storage relocation must be skipped entirely.
+///
+/// The `!kIsWeb` short-circuits BEFORE touching `Platform.environment`, which is
+/// `dart:io` and throws `Unsupported operation: Platform._environment` on web.
+/// Without it, every DB open on web crashed in `_relocateLegacyMedia`'s guard.
 bool get isRunningFlutterTest =>
-    Platform.environment.containsKey('FLUTTER_TEST');
+    !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
 
 /// The dedicated Matome storage directory (`<documents>/Matome`), created if
 /// missing. Native only — callers on web use cloud-direct storage.

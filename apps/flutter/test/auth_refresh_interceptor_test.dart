@@ -11,7 +11,7 @@ void main() {
 
   setUp(() {
     dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       // Match ApiClient: don't throw on non-2xx so the interceptor sees a 401
       // as a Response (the path it handles in onResponse).
       validateStatus: (s) => s != null && s < 500,

@@ -43,7 +43,7 @@ Provider<DetailsController> _controllerProvider(RecordingResultAwaiter awaiter) 
 /// fallback never wins — the injected awaiter resolves the race instead).
 ProviderContainer _container(AppDatabase db) {
   final dio = Dio(BaseOptions(
-    baseUrl: 'http://localhost:4000',
+    baseUrl: 'http://localhost:7001',
     validateStatus: (s) => s != null && s < 500,
   ));
   final adapter = DioAdapter(dio: dio);
@@ -199,7 +199,7 @@ void main() {
     // Capture the outgoing PATCH body via an interceptor (the mock-adapter
     // handler callback does not expose the request body directly).
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     Map<String, dynamic>? patchBody;
@@ -274,7 +274,7 @@ void main() {
     // No /api/recordings/* endpoints are mocked: any Core call would throw an
     // unmocked-route error and fail the test. The awaiter must NOT be reached.
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     DioAdapter(dio: dio);
@@ -345,7 +345,7 @@ void main() {
     // No Core endpoints mocked: a local-only row (coreId null) makes no Core
     // call on delete, so an unmocked route would fail the test if it did.
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     DioAdapter(dio: dio);
@@ -416,7 +416,7 @@ void main() {
     );
 
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     DioAdapter(dio: dio);
@@ -503,7 +503,7 @@ void main() {
     // remote fallback, so this also proves the catch doesn't accidentally
     // trigger an unexpected Core call.
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     DioAdapter(dio: dio);
@@ -580,7 +580,7 @@ void main() {
     );
 
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     DioAdapter(dio: dio);
@@ -654,7 +654,7 @@ void main() {
     );
 
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     DioAdapter(dio: dio);

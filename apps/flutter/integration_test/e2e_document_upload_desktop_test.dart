@@ -144,7 +144,7 @@ void main() {
     final repo = _StubCoreDocRepo(
       apiClient: ApiClient(
         tokenStore: store,
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
       presignUrl: presignUrl(),
       doneTranscript: _stubDocSummary,

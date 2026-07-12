@@ -120,7 +120,7 @@ void main() {
         final repo = _CoreDownRepository(
           apiClient: ApiClient(
             tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
           ),
         );
 
@@ -165,7 +165,7 @@ void main() {
         final repo = _CoreDownRepository(
           apiClient: ApiClient(
             tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
           ),
         );
 
@@ -269,7 +269,7 @@ void main() {
         final repo = _CoreDownRepository(
           apiClient: ApiClient(
             tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
           ),
         );
 
@@ -310,7 +310,7 @@ void main() {
 /// coreId (777) onto the local-PK row.
 Dio _stubbedDio() {
   final dio = Dio(BaseOptions(
-    baseUrl: 'http://localhost:4000',
+    baseUrl: 'http://localhost:7001',
     validateStatus: (s) => s != null && s < 500,
   ));
   final adapter = DioAdapter(dio: dio);

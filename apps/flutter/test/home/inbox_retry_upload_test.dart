@@ -115,7 +115,7 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     )..coreUp = true;
 
@@ -153,7 +153,7 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     )..coreUp = true;
 

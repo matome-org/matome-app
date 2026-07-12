@@ -118,7 +118,7 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     );
     final container = containerFor(db, repo);
@@ -163,7 +163,7 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     )
       ..coreUp = true
@@ -192,7 +192,7 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     )
       ..coreUp = true
@@ -223,7 +223,7 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     )
       ..coreUp = true
@@ -254,13 +254,13 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     )
       ..coreUp = true
       // A raw StateError carries a sensitive .toString() that must NOT leak.
       ..throwRawOnEnqueue =
-          StateError('secret host 10.0.0.5:4000 internal trace');
+          StateError('secret host 10.0.0.5:7001 internal trace');
 
     final container = containerFor(db, repo);
     addTearDown(container.dispose);
@@ -284,7 +284,7 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     )..coreUp = true;
 
@@ -311,7 +311,7 @@ void main() {
     final repo = _ToggleRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     )
       ..coreUp = true

@@ -1,10 +1,26 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
+import 'package:matome_flutter/core/device/device_identity.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/features/auth/auth_repository.dart';
+
+const _testDevice = DeviceDescriptor(
+  id: '8f3c9a4e-1c2b-4d5e-9f6a-7b8c9d0e1f2a',
+  platform: 'linux',
+  formFactor: 'desktop',
+  deviceClass: 'desktop',
+  model: 'Test Box',
+  displayName: 'Test Box',
+);
+
+Map<String, dynamic> _authData(String email, String password) => {
+  'email': email,
+  'password': password,
+  'device': _testDevice.toJson(),
+};
 
 void main() {
   late Dio dio;
@@ -13,14 +29,20 @@ void main() {
   late AuthRepository repo;
 
   setUp(() {
-    dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    dio = Dio(
+      BaseOptions(
+        baseUrl: 'http://localhost:7001',
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
     adapter = DioAdapter(dio: dio);
     tokenStore = InMemoryTokenStore();
     final client = ApiClient(tokenStore: tokenStore, dio: dio);
-    repo = AuthRepository(apiClient: client, tokenStore: tokenStore);
+    repo = AuthRepository(
+      apiClient: client,
+      tokenStore: tokenStore,
+      deviceIdentity: FixedDeviceIdentity(_testDevice),
+    );
   });
 
   test('login success returns session and persists tokens', () async {
@@ -32,7 +54,7 @@ void main() {
         'refresh_token': 'refresh-456',
         'token_type': 'Bearer',
       }),
-      data: {'email': 'dev@matome.test', 'password': 'devpassword123'},
+      data: _authData('dev@matome.test', 'devpassword123'),
     );
 
     final session = await repo.login(
@@ -48,18 +70,30 @@ void main() {
     expect(await tokenStore.readRefreshToken(), 'refresh-456');
   });
 
+  test('login device payload includes id platform form_factor device_class', () {
+    final json = _testDevice.toJson();
+    expect(json['id'], _testDevice.id);
+    expect(json['platform'], 'linux');
+    expect(json['form_factor'], 'desktop');
+    expect(json['device_class'], 'desktop');
+    expect(json['model'], 'Test Box');
+    expect(json['display_name'], 'Test Box');
+  });
+
   test('login 401 throws invalid_credentials ApiException', () async {
     adapter.onPost(
       '/api/auth/login',
       (server) => server.reply(401, {'error': 'invalid_credentials'}),
-      data: {'email': 'dev@matome.test', 'password': 'wrong'},
+      data: _authData('dev@matome.test', 'wrong'),
     );
 
     expect(
       () => repo.login(email: 'dev@matome.test', password: 'wrong'),
-      throwsA(isA<ApiException>()
-          .having((e) => e.statusCode, 'statusCode', 401)
-          .having((e) => e.code, 'code', 'invalid_credentials')),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 401)
+            .having((e) => e.code, 'code', 'invalid_credentials'),
+      ),
     );
     expect(await tokenStore.readAccessToken(), isNull);
   });
@@ -68,14 +102,16 @@ void main() {
     adapter.onPost(
       '/api/auth/login',
       (server) => server.reply(422, {'error': 'email_and_password_required'}),
-      data: {'email': '', 'password': ''},
+      data: _authData('', ''),
     );
 
     expect(
       () => repo.login(email: '', password: ''),
-      throwsA(isA<ApiException>()
-          .having((e) => e.statusCode, 'statusCode', 422)
-          .having((e) => e.code, 'code', 'email_and_password_required')),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 422)
+            .having((e) => e.code, 'code', 'email_and_password_required'),
+      ),
     );
   });
 
@@ -89,7 +125,7 @@ void main() {
           reason: 'down',
         ),
       ),
-      data: {'email': 'a', 'password': 'b'},
+      data: _authData('a', 'b'),
     );
 
     expect(
@@ -107,7 +143,7 @@ void main() {
         'refresh_token': 'reg-refresh',
         'token_type': 'Bearer',
       }),
-      data: {'email': 'new@matome.test', 'password': 'pw123456'},
+      data: _authData('new@matome.test', 'pw123456'),
     );
 
     final session = await repo.register(
@@ -125,7 +161,7 @@ void main() {
     adapter.onPost(
       '/api/auth/register',
       (server) => server.reply(409, {'error': 'email_taken'}),
-      data: {'email': 'taken@matome.test', 'password': 'pw123456'},
+      data: _authData('taken@matome.test', 'pw123456'),
     );
 
     expect(
@@ -142,7 +178,7 @@ void main() {
           'email': ['has already been taken'],
         },
       }),
-      data: {'email': 'dev@matome.test', 'password': 'pw123456'},
+      data: _authData('dev@matome.test', 'pw123456'),
     );
 
     expect(
@@ -173,7 +209,8 @@ void main() {
     expect(
       () => repo.me(),
       throwsA(
-          isA<ApiException>().having((e) => e.statusCode, 'statusCode', 401)),
+        isA<ApiException>().having((e) => e.statusCode, 'statusCode', 401),
+      ),
     );
   });
 

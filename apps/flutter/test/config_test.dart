@@ -10,7 +10,7 @@ void main() {
           isWeb: true,
           platform: TargetPlatform.android,
         ),
-        'http://localhost:4000',
+        'http://localhost:7001',
       );
     });
 
@@ -20,7 +20,7 @@ void main() {
           isWeb: false,
           platform: TargetPlatform.android,
         ),
-        'http://10.0.2.2:4000',
+        'http://10.0.2.2:7001',
       );
     });
 
@@ -30,7 +30,7 @@ void main() {
           isWeb: false,
           platform: TargetPlatform.linux,
         ),
-        'http://localhost:4000',
+        'http://localhost:7001',
       );
     });
 

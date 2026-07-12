@@ -14,7 +14,7 @@ void main() {
 
   setUp(() {
     dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     adapter = DioAdapter(dio: dio);
@@ -43,7 +43,7 @@ void main() {
           },
           'presign': {
             'method': 'PUT',
-            'url': 'http://127.0.0.1:54321/storage/v1/s3/media/x?sig=1',
+            'url': 'http://127.0.0.1:7010/storage/v1/s3/media/x?sig=1',
             'storage_key': 'owners/1/recordings/6/media',
             'expires_in': 900,
           },

@@ -117,7 +117,7 @@ class _GodModeHostDialogState extends State<_GodModeHostDialog> {
     final normalized = EndpointController.normalizeBaseUrl(_controller.text);
     if (normalized == null) {
       setState(() => _error =
-          'Enter an absolute http(s) URL (e.g. http://192.168.1.9:4000).');
+          'Enter an absolute http(s) URL (e.g. http://192.168.1.9:7001).');
       return;
     }
     Navigator.of(context).pop(normalized);

@@ -61,7 +61,7 @@ void main() {
 
   Dio stubbedDio() {
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     final adapter = DioAdapter(dio: dio);

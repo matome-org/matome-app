@@ -21,8 +21,8 @@ void main() {
         'https://api.example.com',
       );
       expect(
-        EndpointController.normalizeBaseUrl('http://10.0.0.5:4000//'),
-        'http://10.0.0.5:4000',
+        EndpointController.normalizeBaseUrl('http://10.0.0.5:7001//'),
+        'http://10.0.0.5:7001',
       );
     });
 
@@ -58,9 +58,9 @@ void main() {
       final store = InMemorySettingsStore();
       final c = EndpointController(store);
 
-      expect(await c.setBaseUrl('http://192.168.1.9:4000/'), isTrue);
-      expect(c.state, 'http://192.168.1.9:4000');
-      expect(await store.read(kApiBaseUrlOverrideKey), 'http://192.168.1.9:4000');
+      expect(await c.setBaseUrl('http://192.168.1.9:7001/'), isTrue);
+      expect(c.state, 'http://192.168.1.9:7001');
+      expect(await store.read(kApiBaseUrlOverrideKey), 'http://192.168.1.9:7001');
       expect(c.isOverridden, isTrue);
 
       final before = c.state;

@@ -95,7 +95,7 @@ ProviderContainer _container(AppDatabase db) => ProviderContainer(overrides: [
         _EmptyRepo(
           apiClient: ApiClient(
             tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
           ),
         ),
       ),

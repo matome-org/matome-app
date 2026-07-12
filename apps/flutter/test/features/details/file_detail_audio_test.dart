@@ -28,7 +28,7 @@ class _Recorder {
 ProviderContainer _container(AppDatabase db, _Recorder rec) {
   final dio = Dio(
     BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ),
   );

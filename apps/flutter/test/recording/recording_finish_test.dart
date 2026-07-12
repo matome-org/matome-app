@@ -62,7 +62,7 @@ void main() {
   // /api/items/{id}. The minted-matome coreId is 42; the created item id is 321.
   Dio stubbedDio() {
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     final adapter = DioAdapter(dio: dio);
@@ -119,7 +119,7 @@ void main() {
   // awaiter can flip processing→done (proves the realtime path is wired).
   Dio stubbedDioProcessing() {
     final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://localhost:7001',
       validateStatus: (s) => s != null && s < 500,
     ));
     final adapter = DioAdapter(dio: dio);
@@ -400,7 +400,7 @@ void main() {
     final repo = _CoreDownRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:4000')),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
       ),
     );
 

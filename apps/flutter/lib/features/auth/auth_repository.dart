@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../../core/device/device_identity.dart';
+import '../../core/device/device_model_resolver.dart';
 import '../../core/http/api_client.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/http/token_store.dart';
@@ -7,13 +9,22 @@ import 'auth_models.dart';
 
 /// Talks to the Guardian auth endpoints and persists the resulting tokens.
 class AuthRepository {
-  AuthRepository({required ApiClient apiClient, required TokenStore tokenStore})
-    : this._(apiClient, tokenStore);
+  AuthRepository({
+    required ApiClient apiClient,
+    required TokenStore tokenStore,
+    DeviceIdentity? deviceIdentity,
+  }) : this._(
+         apiClient,
+         tokenStore,
+         deviceIdentity ??
+             SecureDeviceIdentity(modelResolver: resolveDeviceModel),
+       );
 
-  AuthRepository._(this._apiClient, this._tokenStore);
+  AuthRepository._(this._apiClient, this._tokenStore, this._deviceIdentity);
 
   final ApiClient _apiClient;
   final TokenStore _tokenStore;
+  final DeviceIdentity _deviceIdentity;
 
   /// `POST /api/auth/login`. On success, stores the access/refresh tokens.
   Future<AuthSession> login({
@@ -23,7 +34,7 @@ class AuthRepository {
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/api/auth/login',
-        data: {'email': email, 'password': password},
+        data: await _authBody(email: email, password: password),
       );
       return _handleAuthResponse(response);
     } on DioException catch (error) {
@@ -43,12 +54,24 @@ class AuthRepository {
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/api/auth/register',
-        data: {'email': email, 'password': password},
+        data: await _authBody(email: email, password: password),
       );
       return _handleAuthResponse(response, context: _AuthContext.register);
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
     }
+  }
+
+  Future<Map<String, dynamic>> _authBody({
+    required String email,
+    required String password,
+  }) async {
+    final device = await _deviceIdentity.current();
+    return {
+      'email': email,
+      'password': password,
+      'device': device.toJson(),
+    };
   }
 
   /// `POST /api/auth/forgot-password`. Starts the reset flow. The backend always

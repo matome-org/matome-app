@@ -54,6 +54,8 @@ dependencies:
   # closes the corruption path. Reads stay backward-compatible (json decode
   # accepts both forms), so existing secrets survive the upgrade.
   flutter_secure_storage: ^10.0.0
+  # Device model / hostname for auth session metadata (`device` on login).
+  device_info_plus: ^11.3.0
   # State management: AsyncValue-based providers for session + recordings.
   flutter_riverpod: ^2.6.1
   # Declarative routing: app shell (tabs + FAB modal + per-tab stacks) and the
