@@ -16,9 +16,15 @@ const String kWorkStateDead = 'dead';
 
 const String kWorkStageReconcileParent = 'reconcile_parent';
 const String kWorkStageCreateRemote = 'create_remote';
+const String kWorkStageHashFile = 'hash_file';
+const String kWorkStageRequestUpload = 'request_upload';
 const String kWorkStageUpload = 'upload';
+const String kWorkStageUploadSingle = 'upload_single';
+const String kWorkStageUploadParts = 'upload_parts';
+const String kWorkStageCompleteUpload = 'complete_upload';
 const String kWorkStageEnqueueProcessing = 'enqueue_processing';
 const String kWorkStageProcessingAccepted = 'processing_accepted';
+const String kWorkStageUploadOnlyComplete = 'upload_only_complete';
 
 const String kWorkBlockSignedOut = 'signed_out';
 const String kWorkBlockOffline = 'offline';
@@ -306,6 +312,49 @@ class WorkQueueDao extends DatabaseAccessor<AppDatabase>
               );
       if (itemChanged != 1) {
         throw StateError('Accepted work references a missing Item');
+      }
+      return true;
+    });
+  }
+
+  Future<bool> completeUploadOnly(
+    String id, {
+    required String itemId,
+    required String ownerId,
+    required String leaseOwner,
+    required int now,
+  }) {
+    return transaction(() async {
+      final changed =
+          await (update(
+            workQueue,
+          )..where((row) => _owned(row, id, leaseOwner, now))).write(
+            WorkQueueCompanion(
+              state: const Value(kWorkStateSucceeded),
+              stage: const Value(kWorkStageUploadOnlyComplete),
+              progress: const Value(1),
+              leaseOwner: const Value(null),
+              leaseUntil: const Value(null),
+              errorCode: const Value(null),
+              blockedReason: const Value(null),
+              updatedAt: Value(now),
+            ),
+          );
+      if (changed != 1) return false;
+      final itemChanged =
+          await (update(items)..where(
+                (item) => item.id.equals(itemId) & item.ownerId.equals(ownerId),
+              ))
+              .write(
+                const ItemsCompanion(
+                  processingState: Value('not_requested'),
+                  syncState: Value('uploaded'),
+                  processingErrorCode: Value(null),
+                  isDirty: Value(false),
+                ),
+              );
+      if (itemChanged != 1) {
+        throw StateError('Completed upload work references a missing Item');
       }
       return true;
     });

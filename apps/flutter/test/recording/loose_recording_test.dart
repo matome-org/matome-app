@@ -26,6 +26,7 @@ import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import 'audio_recording_service_test.dart' show FakeRecorderBackend;
 import '../support/fake_parent_sync.dart';
+import '../support/verified_upload_repository_fake.dart';
 
 /// Local-first-spaces #102 W2 — AUDIO RECORDINGS land LOOSE behind the flag.
 ///
@@ -414,6 +415,7 @@ class _CoreDownRepository extends RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     throw const ApiException('Core unreachable (test)');
   }
@@ -421,7 +423,8 @@ class _CoreDownRepository extends RecordingsRepository {
 
 /// Repo whose presigned-PUT upload is a no-op (the stub host is unreachable),
 /// so the test exercises the create/process/poll drain without a real S3.
-class _StubUploadRepository extends RecordingsRepository {
+class _StubUploadRepository extends RecordingsRepository
+    with VerifiedSingleUploadRepositoryFake {
   _StubUploadRepository({required super.apiClient});
 
   @override

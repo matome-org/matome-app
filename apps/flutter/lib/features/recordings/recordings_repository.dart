@@ -10,10 +10,9 @@ import 'upload_descriptor.dart';
 
 /// Reads and drives the authenticated user's file items against the Core API.
 ///
-/// Beyond listing, this owns the upload pipeline (F4):
-/// `POST /api/recordings` (presign) -> PUT to the presigned URL ->
-/// `POST /api/recordings/{id}/process`, plus the `GET /api/recordings/{id}`
-/// poll used as the realtime-channel fallback.
+/// Beyond listing, this owns Core's verified single/multipart upload client and
+/// the optional process-acceptance request. Device queue state remains in Drift;
+/// signed storage requests are deliberately memory-only.
 class RecordingsRepository {
   // Plain generative constructor (no redirect) so tests can subclass it to stub
   // the presigned-PUT upload, which otherwise opens its own bare Dio.
@@ -114,6 +113,7 @@ class RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     AppLog.event(LogCat.upload, 'createRecording: $title');
     try {
@@ -134,6 +134,7 @@ class RecordingsRepository {
           // presigned PUT AND persists it as `byte_size` so the Files view shows
           // a real size. Omitted when unknown (legacy/streamed callers).
           'content_length': ?contentLength,
+          'checksum_sha256': ?checksumSha256,
         },
       );
       final status = response.statusCode ?? 0;
@@ -155,8 +156,7 @@ class RecordingsRepository {
       final recordingRaw = data['item'];
       final uploadRaw = data['upload'];
       if (recordingRaw is! Map<String, dynamic> ||
-          uploadRaw is! Map<String, dynamic> ||
-          uploadRaw['request'] is! Map<String, dynamic>) {
+          uploadRaw is! Map<String, dynamic>) {
         throw const ApiException(
           'Malformed create-recording response.',
           statusCode: 201,
@@ -173,18 +173,150 @@ class RecordingsRepository {
     }
   }
 
+  /// Creates or resumes Core's active upload generation with fresh credentials.
+  Future<UploadDescriptor> requestUpload(
+    int itemId, {
+    required int inputRevision,
+    required int byteSize,
+    required String checksumSha256,
+    String? contentType,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/v1/items/$itemId/uploads',
+        data: <String, dynamic>{
+          'contract_version': '1',
+          'idempotency_key': 'item-$itemId-rev-$inputRevision-upload',
+          'input_revision': inputRevision,
+          'mode': 'auto',
+          'byte_size': byteSize,
+          'content_type': ?contentType,
+          'checksum_sha256': checksumSha256,
+        },
+      );
+      return _uploadFromResponse(response, operation: 'request upload');
+    } on DioException catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'requestUpload: transport failed',
+        error,
+        stack,
+      );
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<UploadDescriptor> inspectUpload(String uploadId) async {
+    try {
+      final response = await _apiClient.dio.get<Map<String, dynamic>>(
+        '/api/v1/uploads/$uploadId',
+      );
+      return _uploadFromResponse(response, operation: 'inspect upload');
+    } on DioException catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'inspectUpload: transport failed',
+        error,
+        stack,
+      );
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<UploadPartDescriptor> presignUploadPart(
+    String uploadId, {
+    required int partNumber,
+    required String checksumSha256,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/v1/uploads/$uploadId/parts/$partNumber/presign',
+        data: <String, dynamic>{'checksum_sha256': checksumSha256},
+      );
+      final status = response.statusCode ?? 0;
+      final raw = response.data?['part'];
+      if (status != 200 || raw is! Map<String, dynamic>) {
+        throw ApiException(
+          'Failed to presign upload part.',
+          statusCode: status,
+          code: errorCodeFromBody(response.data),
+        );
+      }
+      return UploadPartDescriptor.fromJson(raw);
+    } on DioException catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'presignUploadPart: transport failed',
+        error,
+        stack,
+      );
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<UploadDescriptor> completeUpload(
+    String uploadId, {
+    required int uploadGeneration,
+    required String checksumSha256,
+    String? etag,
+    List<UploadPart> parts = const [],
+  }) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/v1/uploads/$uploadId/complete',
+        data: <String, dynamic>{
+          'contract_version': '1',
+          'upload_generation': uploadGeneration,
+          'checksum_sha256': checksumSha256,
+          'etag': ?etag,
+          if (parts.isNotEmpty)
+            'parts': parts.map((part) => part.toCompleteJson()).toList(),
+        },
+      );
+      return _uploadFromResponse(response, operation: 'complete upload');
+    } on DioException catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'completeUpload: transport failed',
+        error,
+        stack,
+      );
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  UploadDescriptor _uploadFromResponse(
+    Response<Map<String, dynamic>> response, {
+    required String operation,
+  }) {
+    final status = response.statusCode ?? 0;
+    final raw = response.data?['upload'];
+    if (status != 200 || raw is! Map<String, dynamic>) {
+      throw ApiException(
+        'Failed to $operation.',
+        statusCode: status,
+        code: errorCodeFromBody(response.data),
+      );
+    }
+    return UploadDescriptor.fromJson(raw);
+  }
+
   /// Streams [file] to the presigned [upload] URL.
   ///
   /// Uses a streamed body (`file.openRead()`), so the audio is never fully
-  /// loaded into memory. The presigned URL is absolute and SigV4-signed over
-  /// `host` only — we deliberately use a bare [Dio] (no base URL, no Bearer
-  /// interceptor) so the auth header is not injected, which would invalidate
-  /// the signature.
+  /// loaded into memory. A bare [Dio] avoids injecting the Core Bearer token;
+  /// the exact storage headers carried by the descriptor are sent instead.
   Future<void> uploadFile(UploadDescriptor upload, File file) async {
     final length = await file.length();
     AppLog.event(LogCat.upload, 'uploadFile: $length bytes -> presign');
-    final stream = file.openRead();
-    await _uploadStream(upload, stream, length);
+    final request = upload.request;
+    if (request == null) {
+      throw const ApiException(
+        'Upload credentials are missing.',
+        code: 'malformed_response',
+      );
+    }
+    await _uploadRequest(request, file.openRead(), length, requireEtag: false);
   }
 
   /// Stream-upload variant taking a raw byte stream + known [length].
@@ -194,13 +326,46 @@ class RecordingsRepository {
     UploadDescriptor upload,
     Stream<List<int>> stream,
     int length,
-  ) => _uploadStream(upload, stream, length);
-
-  Future<void> _uploadStream(
-    UploadDescriptor upload,
-    Stream<List<int>> stream,
-    int length,
   ) async {
+    final request = upload.request;
+    if (request == null) {
+      throw const ApiException(
+        'Upload credentials are missing.',
+        code: 'malformed_response',
+      );
+    }
+    await _uploadRequest(request, stream, length, requireEtag: false);
+  }
+
+  /// Uploads exactly `[start, endExclusive)` and returns the provider ETag used
+  /// by Core's completion verification.
+  Future<String> uploadFileRange(
+    UploadRequest request,
+    File file, {
+    required int start,
+    required int endExclusive,
+  }) async {
+    final fileLength = await file.length();
+    if (start < 0 || endExclusive <= start || endExclusive > fileLength) {
+      throw const ApiException(
+        'Invalid upload file range.',
+        code: 'invalid_local_data',
+      );
+    }
+    return _uploadRequest(
+      request,
+      file.openRead(start, endExclusive),
+      endExclusive - start,
+      requireEtag: true,
+    );
+  }
+
+  Future<String> _uploadRequest(
+    UploadRequest request,
+    Stream<List<int>> stream,
+    int length, {
+    required bool requireEtag,
+  }) async {
     final rawDio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 15),
@@ -211,14 +376,15 @@ class RecordingsRepository {
     );
     try {
       final response = await rawDio.requestUri<void>(
-        Uri.parse(upload.url),
+        Uri.parse(request.url),
         data: stream,
         options: Options(
-          method: upload.isPost ? 'POST' : 'PUT',
+          method: request.method,
           headers: <String, dynamic>{
+            ...request.headers,
             Headers.contentLengthHeader: length,
-            // Binary media; the signature covers only the `host` header so
-            // content-type is free-form and intentionally not signed.
+            // Core signs required checksum/length headers. Content type remains
+            // generic because object identity preserves the original filename.
             Headers.contentTypeHeader: 'application/octet-stream',
           },
         ),
@@ -231,6 +397,14 @@ class RecordingsRepository {
           code: 'upload_failed',
         );
       }
+      final etag = response.headers.value('etag')?.replaceAll('"', '').trim();
+      if (requireEtag && (etag == null || etag.isEmpty)) {
+        throw const ApiException(
+          'Upload response did not include an ETag.',
+          code: 'upload_missing_etag',
+        );
+      }
+      return etag ?? '';
     } on DioException catch (e, st) {
       AppLog.error(
         LogCat.upload,

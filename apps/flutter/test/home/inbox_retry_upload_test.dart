@@ -23,6 +23,7 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import '../support/item_fixtures.dart';
+import '../support/verified_upload_repository_fake.dart';
 
 /// W5 (plan #43): the manual retry affordance must RE-ENQUEUE through the same
 /// auto-retry upload queue (drainRow), not a parallel pipeline. A `failed` row
@@ -132,8 +133,8 @@ void main() {
     addTearDown(container.dispose);
 
     // A failed row that already reconciled a coreId (transcription failed).
-    // Its parent is also reconciled so #2033 can replay item create for a fresh
-    // upload descriptor without minting a duplicate item.
+    // Its parent is also reconciled. W4 refreshes upload state directly on the
+    // existing Core item rather than replaying create or skipping absent bytes.
     final matomeId = await seedReconciledMatome(db, coreId: 42);
     const userNotes = '  My retry note.\nSecond line.  ';
     final (localId, audio) = await seedFailedRow(
@@ -165,8 +166,13 @@ void main() {
     );
     expect(
       repo.createCalls,
+      0,
+      reason: 'an existing Core item is never recreated for upload retry',
+    );
+    expect(
+      repo.verifiedUploadRequestCalls,
       1,
-      reason: 'idempotent replay refreshed the presign',
+      reason: 'credentials were fresh',
     );
     // W2 / #871 RETENTION (reverses #43 W4): a retry that reaches `done` must
     // NOT delete the local audio — `done` proves Core accepted the upload, not
@@ -221,7 +227,8 @@ void main() {
   );
 }
 
-class _ToggleRepository extends RecordingsRepository {
+class _ToggleRepository extends RecordingsRepository
+    with VerifiedSingleUploadRepositoryFake {
   _ToggleRepository({required super.apiClient});
 
   bool coreUp = true;
@@ -249,6 +256,7 @@ class _ToggleRepository extends RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     if (!coreUp) throw const ApiException('Core unreachable');
     createCalls++;

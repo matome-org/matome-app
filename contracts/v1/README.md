@@ -42,6 +42,14 @@ Parent reconciliation is work, not a precondition that can silently skip a
 child forever. Queue the parent first, reconcile it, then create/reconcile the
 child.
 
+For files, the device stages are parent reconciliation, finalized-file hashing,
+idempotent item creation, upload request/refresh, single PUT or missing multipart
+parts, verified completion, then either process acceptance or upload-only
+completion. Active and paused capture have no Item/work row, so they issue no
+Core or storage request. Drift persists accepted part evidence and byte-derived
+progress, but never persists presigned URLs or signed headers. The local
+canonical file remains after success.
+
 Core item creation accepts the device's permanent local item identity as
 `client_id`. The key is scoped by authenticated owner: an exact replay returns
 the existing item, a conflicting payload returns `409 client_id_conflict`, and
@@ -64,6 +72,11 @@ desired upload policy and declared byte size.
 - Multipart parts are contiguous and 1-based. Retrying a part keeps the same
   upload id, generation, and part number. A resumed request reports accepted
   parts.
+- An existing Core item always requests fresh upload state before processing;
+  it cannot skip from an absent object directly to `/process`.
+- The device completes unsupported/upload-only media at `uploaded` /
+  `not_requested`; processing-capable media releases its work lease as soon as
+  Core accepts processing and never waits for AI output.
 
 `upload_id` is a logical envelope handle, not a requirement for an
 `upload_sessions` domain table. The active bounded multipart context belongs on

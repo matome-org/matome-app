@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,6 +29,7 @@ import 'recordings_repository.dart';
 import 'upload_descriptor.dart';
 
 typedef AudioCleanup = Future<void> Function(String audioFilePath);
+typedef ProcessingEligibility = bool Function(ItemWithPayload item);
 
 Future<void> deleteAudioFile(String audioFilePath) async {
   if (audioFilePath.isEmpty) return;
@@ -57,12 +60,14 @@ class UploadQueue {
     this.maxRetryDelay = const Duration(minutes: 5),
     this.leaseDuration = const Duration(minutes: 6),
     this.maxAttempts = 5,
+    ProcessingEligibility? shouldProcess,
     // Retained as source-compatible injection seams for current callers. Device
     // work intentionally never invokes either one after the W2 cutover.
     RecordingResultAwaiter? awaitResult,
     this.cleanupAudio = deleteAudioFile,
   }) : _clock = clock ?? DateTime.now,
        _jitter = jitter ?? Random().nextDouble,
+       _shouldProcess = shouldProcess ?? _defaultProcessingEligibility,
        _configRevision =
            configRevision ??
            (() => workConfigRevisionForEndpoint(
@@ -76,6 +81,7 @@ class UploadQueue {
   final DateTime Function() _clock;
   final double Function() _jitter;
   final int Function() _configRevision;
+  final ProcessingEligibility _shouldProcess;
   final String _leaseOwner;
   final Duration baseRetryDelay;
   final Duration maxRetryDelay;
@@ -184,10 +190,11 @@ class UploadQueue {
   }
 
   String _resumeStage(ItemWithPayload item) {
-    if (item.file?.uploadState == 'uploaded' && item.coreId != null) {
-      return kWorkStageEnqueueProcessing;
+    if (item.coreId != null) {
+      return item.file?.checksumSha256 == null
+          ? kWorkStageHashFile
+          : kWorkStageRequestUpload;
     }
-    if (item.coreId != null) return kWorkStageUpload;
     return kWorkStageReconcileParent;
   }
 
@@ -206,51 +213,218 @@ class UploadQueue {
       }
 
       var stage = work.stage;
-      RecordingCreateResult? created;
+      UploadDescriptor? upload;
+
+      // A pre-W4 worker could persist enqueue_processing after a raw PUT, before
+      // Core had any verified-completion API. Never trust that legacy stage when
+      // the local file has no checksum evidence.
+      if (stage == kWorkStageEnqueueProcessing &&
+          item.file?.checksumSha256 == null) {
+        if (!await _advance(work, kWorkStageHashFile, 0.1)) return;
+        stage = kWorkStageHashFile;
+      }
 
       if (stage == kWorkStageReconcileParent) {
         await _requireCoreParent(item);
-        if (!await _advance(work, kWorkStageCreateRemote, 0.2)) return;
-        stage = kWorkStageCreateRemote;
+        if (!await _advance(work, kWorkStageHashFile, 0.1)) return;
+        stage = kWorkStageHashFile;
       }
 
       if (stage == kWorkStageCreateRemote) {
-        created = await _createRemote(item);
+        if (item.file?.checksumSha256 == null) {
+          await _persistFileFacts(item, ownerId);
+          item = (await _items.getById(work.itemId, ownerId))!;
+        }
+        final created = await _createRemote(item);
         await _inbox.markCoreCreated(item.id, created.recording.id);
-        if (!await _advance(work, kWorkStageUpload, 0.4)) return;
-        stage = kWorkStageUpload;
+        if (!await _advance(work, kWorkStageRequestUpload, 0.2)) return;
+        stage = kWorkStageRequestUpload;
         item = (await _items.getById(work.itemId, ownerId))!;
       }
 
-      if (stage == kWorkStageUpload) {
+      // `upload` is the pre-W4 stage. Existing databases resume by hashing the
+      // canonical finalized file before obtaining fresh Core credentials.
+      if (stage == kWorkStageUpload) stage = kWorkStageHashFile;
+
+      if (stage == kWorkStageHashFile) {
+        await _persistFileFacts(item, ownerId);
+        item = (await _items.getById(work.itemId, ownerId))!;
+        if (item.coreId == null) {
+          if (!await _advance(work, kWorkStageCreateRemote, 0.15)) return;
+          final created = await _createRemote(item);
+          await _inbox.markCoreCreated(item.id, created.recording.id);
+          item = (await _items.getById(work.itemId, ownerId))!;
+        }
+        if (!await _advance(work, kWorkStageRequestUpload, 0.2)) return;
+        stage = kWorkStageRequestUpload;
+      }
+
+      if (stage == kWorkStageRequestUpload) {
         final hold = await _egressHold(item);
         if (hold != null) {
           await _block(work, hold);
           return;
         }
-        created ??= await _createRemote(item);
-        if (item.coreId != null && item.coreId != created.recording.id) {
-          throw const _PermanentWorkFailure(kWorkErrorContentRejected);
+        upload = await _requestUpload(item);
+        if (upload.isUploaded) {
+          await _persistVerifiedUpload(item, ownerId, upload);
+          stage = await _nextAfterUpload(work, item);
+        } else {
+          await _persistUploadContext(item, ownerId, upload);
+          stage = upload.mode == UploadMode.multipart
+              ? kWorkStageUploadParts
+              : kWorkStageUploadSingle;
+          if (!await _advance(work, stage, 0.25)) return;
         }
-        if (item.coreId == null) {
-          await _inbox.markCoreCreated(item.id, created.recording.id);
+      }
+
+      if (stage == kWorkStageUploadSingle) {
+        final context = _LocalUploadContext.fromJson(
+          item.file?.multipartContext,
+        );
+        if (context?.etag == null) {
+          upload ??= await _requestUpload(item);
+          if (upload.isUploaded) {
+            await _persistVerifiedUpload(item, ownerId, upload);
+            stage = await _nextAfterUpload(work, item);
+          } else {
+            final request = upload.request;
+            final file = await _localFile(item);
+            if (request == null || upload.mode != UploadMode.single) {
+              throw const _PermanentWorkFailure(kWorkErrorContentRejected);
+            }
+            if (!await _renew(work)) return;
+            final etag = await _repo.uploadFileRange(
+              request,
+              file,
+              start: 0,
+              endExclusive: item.file!.byteSize,
+            );
+            await _persistUploadContext(item, ownerId, upload, etag: etag);
+            if (!await _advance(work, kWorkStageCompleteUpload, 0.82)) return;
+            stage = kWorkStageCompleteUpload;
+            item = (await _items.getById(work.itemId, ownerId))!;
+          }
+        } else {
+          if (!await _advance(work, kWorkStageCompleteUpload, 0.82)) return;
+          stage = kWorkStageCompleteUpload;
         }
-        final localPath = item.localPath;
-        if (localPath == null || localPath.isEmpty) {
+      }
+
+      if (stage == kWorkStageUploadParts) {
+        upload = await _requestUpload(item);
+        if (upload.isUploaded) {
+          await _persistVerifiedUpload(item, ownerId, upload);
+          stage = await _nextAfterUpload(work, item);
+        } else {
+          if (upload.mode != UploadMode.multipart || upload.partSize == null) {
+            throw const _PermanentWorkFailure(kWorkErrorContentRejected);
+          }
+          final file = await _localFile(item);
+          final accepted = <int, UploadPart>{
+            for (final part in upload.acceptedParts) part.partNumber: part,
+          };
+          await _persistUploadContext(
+            item,
+            ownerId,
+            upload,
+            parts: accepted.values,
+          );
+          for (final partNumber in upload.missingParts) {
+            final start = (partNumber - 1) * upload.partSize!;
+            final end = min(start + upload.partSize!, item.file!.byteSize);
+            final checksum = await _checksumRange(file, start, end);
+            final part = await _repo.presignUploadPart(
+              upload.uploadId,
+              partNumber: partNumber,
+              checksumSha256: checksum,
+            );
+            if (part.byteSize != end - start ||
+                part.checksumSha256 != checksum) {
+              throw const _PermanentWorkFailure(kWorkErrorContentRejected);
+            }
+            if (!await _renew(work)) return;
+            final etag = await _repo.uploadFileRange(
+              part.request,
+              file,
+              start: start,
+              endExclusive: end,
+            );
+            accepted[partNumber] = UploadPart(
+              partNumber: partNumber,
+              etag: etag,
+              checksumSha256: checksum,
+              byteSize: end - start,
+            );
+            await _persistUploadContext(
+              item,
+              ownerId,
+              upload,
+              parts: accepted.values,
+            );
+            final acceptedBytes = accepted.values.fold<int>(
+              0,
+              (total, part) => total + part.byteSize,
+            );
+            final progress = 0.25 + 0.55 * acceptedBytes / item.file!.byteSize;
+            if (!await _advance(
+              work,
+              kWorkStageUploadParts,
+              progress.clamp(0.25, 0.8),
+            )) {
+              return;
+            }
+          }
+          if (!await _advance(work, kWorkStageCompleteUpload, 0.82)) return;
+          stage = kWorkStageCompleteUpload;
+          item = (await _items.getById(work.itemId, ownerId))!;
+        }
+      }
+
+      if (stage == kWorkStageCompleteUpload) {
+        final context = _LocalUploadContext.fromJson(
+          item.file?.multipartContext,
+        );
+        if (context == null) {
           throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
         }
         if (!await _renew(work)) return;
-        await _inbox.markFileUploading(item.id);
-        await _repo.uploadFile(created.upload, File(localPath));
-        await _inbox.markFileUploaded(item.id);
-        if (!await _advance(work, kWorkStageEnqueueProcessing, 0.85)) return;
-        stage = kWorkStageEnqueueProcessing;
+        final completed = await _repo.completeUpload(
+          context.uploadId,
+          uploadGeneration: context.uploadGeneration,
+          checksumSha256: item.file!.checksumSha256!,
+          etag: context.etag,
+          parts: context.parts,
+        );
+        if (completed.state == UploadState.stale ||
+            completed.state == UploadState.failed ||
+            completed.state == UploadState.aborted) {
+          if (!await _advance(work, kWorkStageRequestUpload, 0.2)) return;
+          throw const ApiException(
+            'Upload generation must be refreshed.',
+            code: 'upload_expired',
+          );
+        }
+        await _persistVerifiedUpload(item, ownerId, completed);
+        stage = await _nextAfterUpload(work, item);
+      }
+
+      if (stage == kWorkStageUploadOnlyComplete) {
+        final completed = await _work.completeUploadOnly(
+          work.id,
+          itemId: item.id,
+          ownerId: ownerId,
+          leaseOwner: _leaseOwner,
+          now: _now,
+        );
+        if (completed) await _inbox.reloadFromLocal();
+        return;
       }
 
       if (stage == kWorkStageEnqueueProcessing) {
         item = (await _items.getById(work.itemId, ownerId))!;
         final coreId = item.coreId;
-        if (coreId == null) {
+        if (coreId == null || item.file?.uploadState != 'uploaded') {
           throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
         }
         if (!await _renew(work)) return;
@@ -298,7 +472,157 @@ class UploadQueue {
       durationSeconds: item.durationSeconds ?? 0,
       mediaType: item.mediaType,
       contentLength: await _byteSizeOf(localPath),
+      checksumSha256: item.file?.checksumSha256,
     );
+  }
+
+  Future<void> _persistFileFacts(ItemWithPayload item, String ownerId) async {
+    final file = await _localFile(item, requireKnownLength: false);
+    final before = await file.stat();
+    if (before.size <= 0) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+    final checksum = await _checksumRange(file, 0, before.size);
+    final after = await file.stat();
+    if (after.size != before.size || after.modified != before.modified) {
+      throw const _BlockedWork(kWorkBlockCore);
+    }
+    final changed = await _items.updateFile(
+      item.id,
+      ownerId,
+      FileBlobsCompanion(
+        byteSize: Value(after.size),
+        checksumSha256: Value(checksum),
+        uploadState: const Value('pending'),
+        uploadedAt: const Value(null),
+        multipartContext: const Value(null),
+        updatedAt: Value(_now),
+        isDirty: const Value(true),
+      ),
+    );
+    if (changed != 1) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+  }
+
+  Future<UploadDescriptor> _requestUpload(ItemWithPayload item) {
+    final coreId = item.coreId;
+    final file = item.file;
+    if (coreId == null ||
+        file == null ||
+        file.byteSize <= 0 ||
+        file.checksumSha256 == null) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+    return _repo.requestUpload(
+      coreId,
+      inputRevision: item.item.sourceRevision,
+      byteSize: file.byteSize,
+      contentType: file.contentType,
+      checksumSha256: file.checksumSha256!,
+    );
+  }
+
+  Future<File> _localFile(
+    ItemWithPayload item, {
+    bool requireKnownLength = true,
+  }) async {
+    final path = item.localPath;
+    if (path == null || path.isEmpty) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+    if (requireKnownLength && await file.length() != item.file?.byteSize) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+    return file;
+  }
+
+  Future<String> _checksumRange(File file, int start, int endExclusive) async {
+    if (start < 0 || endExclusive <= start) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+    return (await sha256.bind(file.openRead(start, endExclusive)).first)
+        .toString();
+  }
+
+  Future<void> _persistUploadContext(
+    ItemWithPayload item,
+    String ownerId,
+    UploadDescriptor upload, {
+    String? etag,
+    Iterable<UploadPart>? parts,
+  }) async {
+    final context = _LocalUploadContext(
+      uploadId: upload.uploadId,
+      uploadGeneration: upload.uploadGeneration,
+      mode: upload.mode,
+      partSize: upload.partSize,
+      etag: etag,
+      parts: (parts ?? upload.acceptedParts).toList(growable: false),
+    );
+    final changed = await _items.updateFile(
+      item.id,
+      ownerId,
+      FileBlobsCompanion(
+        uploadState: const Value('uploading'),
+        uploadGeneration: Value(upload.uploadGeneration),
+        uploadedAt: const Value(null),
+        multipartContext: Value(context.toJson()),
+        updatedAt: Value(_now),
+        isDirty: const Value(true),
+      ),
+    );
+    if (changed != 1) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+  }
+
+  Future<void> _persistVerifiedUpload(
+    ItemWithPayload item,
+    String ownerId,
+    UploadDescriptor upload,
+  ) async {
+    final file = item.file;
+    if (!upload.isUploaded ||
+        file == null ||
+        upload.verifiedByteSize != file.byteSize ||
+        upload.verifiedChecksumSha256 != file.checksumSha256) {
+      throw const _PermanentWorkFailure(kWorkErrorContentRejected);
+    }
+    final changed = await _items.updateFile(
+      item.id,
+      ownerId,
+      FileBlobsCompanion(
+        byteSize: Value(upload.verifiedByteSize!),
+        checksumSha256: Value(upload.verifiedChecksumSha256),
+        uploadState: const Value('uploaded'),
+        uploadGeneration: Value(upload.uploadGeneration),
+        uploadedAt: Value(_now),
+        multipartContext: const Value(null),
+        updatedAt: Value(_now),
+        isDirty: const Value(false),
+      ),
+    );
+    if (changed != 1) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+  }
+
+  Future<String> _nextAfterUpload(
+    WorkQueueRow work,
+    ItemWithPayload item,
+  ) async {
+    final stage = _shouldProcess(item)
+        ? kWorkStageEnqueueProcessing
+        : kWorkStageUploadOnlyComplete;
+    if (!await _advance(work, stage, 0.9)) {
+      throw const _BlockedWork(kWorkBlockCore);
+    }
+    return stage;
   }
 
   Future<String?> _egressHold(ItemWithPayload item) async {
@@ -368,6 +692,18 @@ class UploadQueue {
       await _block(work, error.reason);
       return;
     }
+    final current = await _work.getForItem(work.itemId, kWorkKindFileUpload);
+    if (error is ApiException &&
+        _refreshesUpload(error.code) &&
+        current != null &&
+        const {
+          kWorkStageRequestUpload,
+          kWorkStageUploadSingle,
+          kWorkStageUploadParts,
+          kWorkStageCompleteUpload,
+        }.contains(current.stage)) {
+      await _advance(work, kWorkStageRequestUpload, 0.2);
+    }
     final failure = _classify(error);
     if (failure.blocked) {
       await _block(work, failure.blockedReason!);
@@ -423,6 +759,9 @@ class UploadQueue {
         );
       }
       final status = error.statusCode;
+      if (_refreshesUpload(error.code)) {
+        return const _WorkFailure(kWorkErrorTransport, retryable: true);
+      }
       if (status == null) {
         return const _WorkFailure(
           kWorkErrorTransport,
@@ -452,6 +791,14 @@ class UploadQueue {
     final jitter = _jitter().clamp(0.0, 1.0);
     return Duration(milliseconds: (ceiling * jitter).floor());
   }
+
+  bool _refreshesUpload(String? code) => const {
+    'upload_expired',
+    'stale_upload_generation',
+    'upload_failed',
+    'upload_missing_etag',
+    'verification_failed',
+  }.contains(code);
 
   Future<void> _markItemHeld(
     String itemId,
@@ -489,6 +836,71 @@ class UploadQueue {
   }
 
   int get _now => _clock().millisecondsSinceEpoch;
+}
+
+bool _defaultProcessingEligibility(ItemWithPayload item) =>
+    const {'audio', 'image', 'document'}.contains(item.file?.mediaType);
+
+class _LocalUploadContext {
+  const _LocalUploadContext({
+    required this.uploadId,
+    required this.uploadGeneration,
+    required this.mode,
+    required this.partSize,
+    required this.etag,
+    required this.parts,
+  });
+
+  factory _LocalUploadContext.fromMap(Map<String, dynamic> json) {
+    final rawParts = json['accepted_parts'];
+    return _LocalUploadContext(
+      uploadId: json['upload_id'] as String,
+      uploadGeneration: json['upload_generation'] as int,
+      mode: json['mode'] == 'multipart'
+          ? UploadMode.multipart
+          : UploadMode.single,
+      partSize: json['part_size'] as int?,
+      etag: json['etag'] as String?,
+      parts: rawParts is List
+          ? rawParts
+                .whereType<Map<String, dynamic>>()
+                .map(UploadPart.fromJson)
+                .toList(growable: false)
+          : const [],
+    );
+  }
+
+  static _LocalUploadContext? fromJson(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(value);
+      return decoded is Map<String, dynamic>
+          ? _LocalUploadContext.fromMap(decoded)
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  final String uploadId;
+  final int uploadGeneration;
+  final UploadMode mode;
+  final int? partSize;
+  final String? etag;
+  final List<UploadPart> parts;
+
+  String toJson() {
+    final sortedParts = [...parts]
+      ..sort((left, right) => left.partNumber.compareTo(right.partNumber));
+    return jsonEncode(<String, dynamic>{
+      'upload_id': uploadId,
+      'upload_generation': uploadGeneration,
+      'mode': mode.name,
+      'part_size': partSize,
+      'etag': etag,
+      'accepted_parts': sortedParts.map((part) => part.toJson()).toList(),
+    });
+  }
 }
 
 class _BlockedWork implements Exception {

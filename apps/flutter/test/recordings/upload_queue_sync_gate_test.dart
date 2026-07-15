@@ -39,6 +39,7 @@ import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import '../support/fake_parent_sync.dart';
 import '../support/item_fixtures.dart';
+import '../support/verified_upload_repository_fake.dart';
 
 void main() {
   Future<RecordingResult> pollAwaiter({
@@ -468,7 +469,8 @@ void main() {
 /// A repository that COUNTS egress (createRecording / uploadFile) and records
 /// which LOCAL ids reached the sink, so the gate invariants assert against a
 /// real counting sink rather than logs. Always "Core up"; resolves `done`.
-class _CountingRepository extends RecordingsRepository {
+class _CountingRepository extends RecordingsRepository
+    with VerifiedSingleUploadRepositoryFake {
   _CountingRepository({required super.apiClient});
 
   int createCalls = 0;
@@ -500,6 +502,7 @@ class _CountingRepository extends RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     createCalls++;
     final id = _nextCoreId++;

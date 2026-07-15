@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,12 +78,21 @@ void main() {
       expect(child.processingStatus, 'processing');
       expect(child.summary, isNull);
       expect(core.uploadedBytes, const [1, 3, 3, 7]);
-      expect(core.calls, ['parent', 'item', 'upload', 'process']);
+      expect(core.calls, [
+        'parent',
+        'item',
+        'request_upload',
+        'upload',
+        'complete_upload',
+        'process',
+      ]);
       expect(core.parentRequest.containsKey('workspace_id'), isFalse);
       expect(core.itemRequest['client_id'], 'rec_local_e2e');
       for (final path in const [
         '/api/matomes',
         '/api/matomes/11/items',
+        '/api/v1/items/42/uploads',
+        '/api/v1/uploads/item-42-upload-1/complete',
         '/api/items/42/process',
       ]) {
         expect(
@@ -181,8 +191,61 @@ class _ContractCore {
         <int>[],
         (bytes, chunk) => bytes..addAll(chunk),
       );
+      request.response.headers.set('etag', '"e2e-etag"');
       request.response.statusCode = HttpStatus.ok;
       await request.response.close();
+      return;
+    }
+
+    if (request.method == 'POST' && path == '/api/v1/items/42/uploads') {
+      calls.add('request_upload');
+      final body = await _jsonBody(request);
+      final checksum = sha256.convert(const [1, 3, 3, 7]).toString();
+      if (body['byte_size'] != 4 || body['checksum_sha256'] != checksum) {
+        await _json(request, HttpStatus.unprocessableEntity, {
+          'error': 'checksum_mismatch',
+        });
+        return;
+      }
+      await _json(request, HttpStatus.ok, {
+        'contract_version': '1',
+        'upload': {
+          'upload_id': 'item-42-upload-1',
+          'upload_generation': 1,
+          'mode': 'single',
+          'state': 'uploading',
+          'request': {
+            'method': 'PUT',
+            'url': '$baseUrl/upload',
+            'headers': {'content-length': '4'},
+          },
+        },
+      });
+      return;
+    }
+
+    if (request.method == 'POST' &&
+        path == '/api/v1/uploads/item-42-upload-1/complete') {
+      calls.add('complete_upload');
+      final body = await _jsonBody(request);
+      final checksum = sha256.convert(const [1, 3, 3, 7]).toString();
+      if (body['etag'] != 'e2e-etag' || body['checksum_sha256'] != checksum) {
+        await _json(request, HttpStatus.unprocessableEntity, {
+          'error': 'verification_failed',
+        });
+        return;
+      }
+      await _json(request, HttpStatus.ok, {
+        'contract_version': '1',
+        'upload': {
+          'upload_id': 'item-42-upload-1',
+          'upload_generation': 1,
+          'mode': 'single',
+          'state': 'uploaded',
+          'verified_byte_size': 4,
+          'verified_checksum_sha256': checksum,
+        },
+      });
       return;
     }
 

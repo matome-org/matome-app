@@ -24,6 +24,7 @@ import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 import '../support/item_fixtures.dart';
+import '../support/verified_upload_repository_fake.dart';
 
 void main() {
   // A poll-driven awaiter that resolves from GET (no live socket). The fake
@@ -526,7 +527,8 @@ void main() {
 /// A repository whose Core reachability + processing outcome are toggleable, so
 /// the queue's drain/retry/failure/idempotency paths can be driven without a
 /// live Core. Counts createRecording calls to assert single-create semantics.
-class _ToggleRepository extends RecordingsRepository {
+class _ToggleRepository extends RecordingsRepository
+    with VerifiedSingleUploadRepositoryFake {
   _ToggleRepository({required super.apiClient});
 
   bool coreUp = true;
@@ -561,6 +563,7 @@ class _ToggleRepository extends RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     if (createDelay > Duration.zero) await Future<void>.delayed(createDelay);
     if (unauthorized) {

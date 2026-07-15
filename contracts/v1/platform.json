@@ -79,6 +79,18 @@
       "processing_state": "not_requested",
       "work_state": "succeeded"
     },
+    "device_upload_stages": [
+      "reconcile_parent",
+      "hash_file",
+      "create_remote",
+      "request_upload",
+      "upload_single_or_missing_parts",
+      "complete_upload",
+      "enqueue_processing_or_upload_only_complete"
+    ],
+    "capture_rule": "The canonical Item and work row are created only after capture finalization; recording and paused capture states perform no upload or Core request.",
+    "upload_progress_rule": "Persist progress only from Core/provider-accepted part byte sizes; never report uploaded before Core verifies exact size and SHA-256.",
+    "processing_policy": "Enqueue only when the input kind is enabled by the client capability policy; otherwise complete as upload-only without awaiting AI.",
     "parent_rule": "Reconcile the parent before the child; parent work is queued automatically and a missing parent Core id is never a silent terminal skip."
   },
   "upload": {
@@ -101,6 +113,7 @@
       "part_retry": "same_upload_id_generation_and_part_number",
       "resume": "request and inspect return provider-accepted parts plus only the missing part numbers for the active generation",
       "active_context": "one bounded JSONB context on file_blobs; no upload_sessions table",
+      "device_persistence": "Drift file_blobs.multipart_context stores only upload id, generation, mode, geometry, ETags, checksums, and accepted byte sizes; signed URLs and headers are memory-only.",
       "expiry": "presign expiry retains the provider upload for resume; context expiry aborts provider state before clearing Core context"
     },
     "limits_source": "MatomeApi.Storage.UploadPolicy runtime configuration",

@@ -50,6 +50,7 @@ import 'package:matome_flutter/features/spaces/space_promotion.dart';
 import 'package:matome_flutter/features/spaces/spaces_repository.dart';
 
 import '../support/item_fixtures.dart';
+import '../support/verified_upload_repository_fake.dart';
 
 void main() {
   late Directory tmp;
@@ -535,7 +536,8 @@ class _CountingMatomesRepo extends MatomesRepository {
 }
 
 /// Counts idempotent item creates and PUT uploads; resolves `done`.
-class _CountingRecordingsRepo extends RecordingsRepository {
+class _CountingRecordingsRepo extends RecordingsRepository
+    with VerifiedSingleUploadRepositoryFake {
   _CountingRecordingsRepo({required super.apiClient});
 
   int createCalls = 0;
@@ -562,6 +564,7 @@ class _CountingRecordingsRepo extends RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     createCalls++;
     final id = _nextCoreId++;
@@ -624,6 +627,7 @@ class _FlakyRecordingsRepo extends _CountingRecordingsRepo {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     if (failCreateForTitleOnce && !_failedOnce) {
       _failedOnce = true;

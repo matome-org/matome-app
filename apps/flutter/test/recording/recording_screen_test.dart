@@ -30,6 +30,7 @@ import 'package:record/record.dart' show Amplitude, AudioEncoder, RecordState;
 
 import 'audio_recording_service_test.dart' show FakeRecorderBackend;
 import '../support/fake_parent_sync.dart';
+import '../support/verified_upload_repository_fake.dart';
 
 /// A [FakeRecorderBackend] for widget tests that emits NO stream events. The
 /// production fake's `Stream.periodic` amplitude + broadcast state controller
@@ -282,12 +283,22 @@ void main() {
     await tapAsync(tester, find.byKey(const Key('record-primary-button')));
     expect(find.text(t.recording.title), findsOneWidget);
     expect(find.byKey(const Key('finish-button')), findsOneWidget);
+    expect(
+      await db.workQueueDao.listAll(),
+      isEmpty,
+      reason: 'active capture has no upload work and cannot reach the network',
+    );
 
     // Pause.
     await tapAsync(tester, find.byKey(const Key('pause-button')));
     expect(find.text(t.recording.paused), findsOneWidget);
     // Pause autosaved a recovery draft.
     expect(await db.recordingDraftsDao.loadDraft(), isNotNull);
+    expect(
+      await db.workQueueDao.listAll(),
+      isEmpty,
+      reason: 'paused capture is still unfinalized and cannot upload',
+    );
 
     // Resume.
     await tapAsync(tester, find.byKey(const Key('resume-button')));
@@ -530,9 +541,13 @@ void main() {
       // Finish enters processing after the durable Item/work insert; upload is
       // still gated.
       await tapAsync(tester, find.byKey(const Key('finish-button')));
-      await tester.runAsync(
-        () => uploadStarted.future.timeout(const Duration(seconds: 1)),
-      );
+      for (var i = 0; i < 100 && !uploadStarted.isCompleted; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+      expect(uploadStarted.isCompleted, isTrue);
       expect(find.text(t.recording.processing), findsOneWidget);
       expect(
         find.byKey(const Key('processing-background-button')),
@@ -588,7 +603,8 @@ void main() {
   });
 }
 
-class _StubUploadRepository extends RecordingsRepository {
+class _StubUploadRepository extends RecordingsRepository
+    with VerifiedSingleUploadRepositoryFake {
   _StubUploadRepository({
     required super.apiClient,
     this.uploadGate,

@@ -68,6 +68,25 @@ and provider-verified part SHA-256 values before assembling. It then HEADs the
 object and compares exact total size plus SHA-256 metadata/checksum before setting
 `uploaded_at`; processing continues to reject every non-verified state.
 
+### Flutter device execution
+
+Flutter drives this contract from the canonical Drift `work_queue`. Capture
+creates no queue work until the recorder has finalized and the local Item/file
+commit is durable, so recording and paused sessions have no network path. The
+worker then reconciles the parent, hashes the stable local file, idempotently
+creates the item, requests fresh upload state, uploads either the whole file or
+only Core-reported missing ranges, and asks Core to verify completion.
+
+`file_blobs.multipart_context` on the device stores bounded resume evidence
+(logical upload id/generation, geometry, accepted part ETags/checksums/sizes or
+the single PUT ETag). Presigned URLs and signed headers remain memory-only. A
+restart re-requests credentials and trusts Core/provider accepted parts rather
+than duplicating them. Progress counts accepted bytes only; local `uploaded` is
+written only from Core's verified size and checksum response. Upload-only media
+ends at `uploaded/not_requested`; capable media releases the device lease once
+Core accepts processing, without polling or awaiting AI. The canonical local
+file is retained in both cases.
+
 ### Presign addressing (path-style)
 
 `MatomeApi.Storage.Presigner` signs **path-style** URLs:

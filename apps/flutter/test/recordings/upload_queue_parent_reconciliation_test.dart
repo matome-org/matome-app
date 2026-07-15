@@ -19,6 +19,7 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import '../support/item_fixtures.dart';
+import '../support/verified_upload_repository_fake.dart';
 
 void main() {
   test('drain reconciles an unreconciled parent before its child', () async {
@@ -136,7 +137,8 @@ class _ParentRepository extends MatomesRepository {
   }
 }
 
-class _ChildRepository extends RecordingsRepository {
+class _ChildRepository extends RecordingsRepository
+    with VerifiedSingleUploadRepositoryFake {
   _ChildRepository({required super.apiClient, required this.calls});
 
   final List<String> calls;
@@ -158,6 +160,7 @@ class _ChildRepository extends RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     calls.add('child');
     expect(matomeId, 101);

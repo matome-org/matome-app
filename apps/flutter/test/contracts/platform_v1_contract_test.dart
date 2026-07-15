@@ -31,6 +31,17 @@ void main() {
       'processing_state': 'not_requested',
       'work_state': 'succeeded',
     });
+    expect(work['device_upload_stages'], <String>[
+      'reconcile_parent',
+      'hash_file',
+      'create_remote',
+      'request_upload',
+      'upload_single_or_missing_parts',
+      'complete_upload',
+      'enqueue_processing_or_upload_only_complete',
+    ]);
+    expect(work['capture_rule'], contains('no upload or Core request'));
+    expect(work['upload_progress_rule'], contains('provider-accepted'));
 
     final states = (work['states'] as List<dynamic>).cast<String>().toSet();
     final transitions = (work['legal_transitions'] as Map<String, dynamic>);
@@ -54,6 +65,10 @@ void main() {
       'complete',
       'abort',
     ]);
+    expect(
+      contract['upload']['multipart']['device_persistence'],
+      contains('signed URLs and headers are memory-only'),
+    );
   });
 
   test('loads bounded event and desired/applied config contracts', () {

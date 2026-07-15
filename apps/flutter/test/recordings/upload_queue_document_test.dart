@@ -25,6 +25,7 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import '../support/item_fixtures.dart';
+import '../support/verified_upload_repository_fake.dart';
 
 /// CHARACTERIZATION TEST (task #1451).
 ///
@@ -333,7 +334,8 @@ void main() {
 /// `super`) so the genuine `_uploadStream` PUTs to the loopback [presignUrl].
 /// This keeps the queue + the real upload transport under test while not
 /// requiring a live Core.
-class _DocCapturingRepository extends RecordingsRepository {
+class _DocCapturingRepository extends RecordingsRepository
+    with VerifiedSingleUploadRepositoryFake {
   _DocCapturingRepository({required super.apiClient, required this.presignUrl});
 
   final String presignUrl;
@@ -343,6 +345,17 @@ class _DocCapturingRepository extends RecordingsRepository {
   String? createdMediaType;
   int? createdContentLength;
   final int coreIdMinted = 7777;
+
+  @override
+  UploadDescriptor descriptorForVerifiedUpload(int itemId) => UploadDescriptor(
+    method: 'PUT',
+    url: presignUrl,
+    storageKey: 'owners/1/recordings/$itemId/media',
+    uploadId: 'item-$itemId-upload-1',
+    uploadGeneration: 1,
+    mode: UploadMode.single,
+    state: UploadState.uploading,
+  );
 
   Recording _recording({required String status, String? summary}) {
     return Recording.fromJson(<String, dynamic>{
@@ -364,6 +377,7 @@ class _DocCapturingRepository extends RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     createCalls++;
     createdMediaType = mediaType;

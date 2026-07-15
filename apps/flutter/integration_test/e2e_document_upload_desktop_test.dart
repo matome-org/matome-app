@@ -412,6 +412,7 @@ class _StubCoreDocRepo extends RecordingsRepository {
     String mediaType = 'audio',
     int? workspaceId,
     int? contentLength,
+    String? checksumSha256,
   }) async {
     return RecordingCreateResult(
       recording: _recording(status: 'pending'),
