@@ -12,5 +12,7 @@ defmodule MatomeApi.Content.TextContent do
     text_content
     |> cast(attrs, [:body])
     |> validate_required([:body])
+    |> validate_length(:body, min: 1, max: 200_000)
+    |> check_constraint(:body, name: :text_contents_body_check)
   end
 end

@@ -1,6 +1,6 @@
 # Matome — Architecture
 
-> Status: agreed · Last updated: 2026-07-03
+> Status: agreed · Last updated: 2026-07-15
 > One Flutter client, one Elixir Core API, one external Python AI Engine, one
 > ingestion contract. This is the single architecture record: the decisions that
 > used to live in separate ADRs are folded into §11 (Decision log) so nothing is
@@ -216,18 +216,23 @@ A single Flutter codebase (`apps/flutter`) targets mobile, Linux desktop, and we
 
 ## 8. Data model
 
-Server-authoritative store in Core Postgres; mirrored in Drift. The central entity is the **Matome** — a per-happening collection of items.
+Server-authoritative store in Core Postgres; mirrored in Drift. Items may be
+loose, directly filed, or grouped under the central **Matome** aggregate.
 
 ```
-recordings
-  id          uuid pk      -- Core id; local rows keep rec_local_<uuid> until reconciled
-  owner_id    uuid (users)
-  matome_id   uuid (matomes)    -- nullable: item may be loose
-  workspace_id uuid (workspaces) -- nullable: filed-directly space (shadowed when in a matome)
-  title / summary / transcript / notes  text
-  media_type  text          -- audio | meeting | image | ...
-  storage_key text
-  status      text          -- pending | processing | done | failed
+items
+  id / owner_id / client_id
+  matome_id (nullable) / workspace_id (nullable, shadowed by matome) / position
+  item_type / title / notes / metadata (render hints only)
+  processing_state / processing_run_id / source_revision / processing_config_revision
+  processing_outputs jsonb / processing_error jsonb
+  file_blob_id xor text_content_id
+file_blobs
+  storage_key / filename / content_type / byte_size / checksum_sha256
+  media_type / duration / upload_state / upload_generation / uploaded_at
+  multipart_context jsonb (one bounded active generation)
+text_contents
+  body
 matomes
   id / owner_id / space_id (nullable ⇒ draft) / title / happened_at
   aggregated_summary / summary_stale / archived_at (soft-delete) / core_id
@@ -237,6 +242,11 @@ contacts (+ matome_contacts, space_contacts, matome_shares, space_members)
 ```
 
 - Authorization is enforced in Ecto query scopes by `owner_id`.
+- Composite owner/placement foreign keys prevent cross-owner Matome or direct
+  Space assignment even when application validation is bypassed.
+- Processing attempts/derivations/upload sessions are deliberately absent:
+  current state is scalar/JSONB, physical attempts are in Oban, and one active
+  multipart context lives on the file row.
 - The Drift store is a per-user offline mirror, reconciled by `core_id`; a Matome's sync chip rolls up from its items (`onDevice → partial → cloud`).
 
 ---

@@ -152,10 +152,19 @@ defmodule MatomeApiWeb.ItemController do
       id: item.id,
       owner_id: item.owner_id,
       client_id: item.client_id,
+      workspace_id: item.workspace_id,
       matome_id: item.matome_id,
       position: item.position,
       item_type: Atom.to_string(item.item_type),
+      title: item.title,
+      notes: item.notes,
       metadata: item.metadata,
+      processing_state: Atom.to_string(item.processing_state),
+      processing_run_id: item.processing_run_id,
+      source_revision: item.source_revision,
+      processing_config_revision: item.processing_config_revision,
+      processing_outputs: item.processing_outputs,
+      processing_error: item.processing_error,
       file: file_json(item.file_blob),
       text: text_json(item.text_content),
       inserted_at: item.inserted_at,
@@ -168,11 +177,15 @@ defmodule MatomeApiWeb.ItemController do
   defp file_json(file_blob) do
     %{
       id: file_blob.id,
+      filename: file_blob.filename,
+      content_type: file_blob.content_type,
       byte_size: file_blob.byte_size,
+      checksum_sha256: file_blob.checksum_sha256,
       media_type: file_blob.media_type,
       duration: file_blob.duration,
-      transcript: file_blob.transcript,
-      summary: file_blob.summary
+      upload_state: file_blob.upload_state,
+      upload_generation: file_blob.upload_generation,
+      uploaded_at: file_blob.uploaded_at
     }
   end
 
@@ -187,10 +200,10 @@ defmodule MatomeApiWeb.ItemController do
       end
 
     %{
-      upload_id: "item-#{item.id}-upload-1",
-      upload_generation: 1,
+      upload_id: "item-#{item.id}-upload-#{item.file_blob.upload_generation}",
+      upload_generation: item.file_blob.upload_generation,
       mode: "single",
-      state: "pending",
+      state: item.file_blob.upload_state,
       expires_at: presign.expires_at,
       request: %{
         method: presign.method,

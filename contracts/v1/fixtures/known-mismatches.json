@@ -3,18 +3,6 @@
   "purpose": "Executable characterization of current behavior. These fixtures must be rejected by v1 consumers until their owning W1+ implementation lands.",
   "mismatches": [
     {
-      "id": "pending_status",
-      "owner_wave": "W2/W5",
-      "current": {
-        "timeline": [
-          {"action": "create", "status": "pending"},
-          {"action": "enqueue", "status": "pending"},
-          {"action": "callback_succeeded", "status": "pending"}
-        ]
-      },
-      "expected_violation": "processing.status_stuck_pending"
-    },
-    {
       "id": "retry",
       "owner_wave": "W5",
       "current": {

@@ -247,7 +247,7 @@ defmodule MatomeApiWeb.ApiSpec do
   defp item_request_body do
     Operation.request_body("Item", "application/json", %OpenApiSpex.Schema{
       type: :object,
-      required: [:item_type, :position],
+      required: [:item_type],
       discriminator: %{propertyName: "item_type"},
       properties: %{
         client_id: %OpenApiSpex.Schema{
@@ -259,8 +259,21 @@ defmodule MatomeApiWeb.ApiSpec do
         },
         item_type: %OpenApiSpex.Schema{type: :string, enum: ["file", "text"]},
         position: %OpenApiSpex.Schema{type: :integer, minimum: 0},
+        workspace_id: %OpenApiSpex.Schema{
+          type: :integer,
+          nullable: true,
+          description: "Direct Space placement; shadowed while matome_id is set"
+        },
+        title: %OpenApiSpex.Schema{type: :string, minLength: 1, maxLength: 255},
+        notes: %OpenApiSpex.Schema{type: :string, nullable: true},
         metadata: %OpenApiSpex.Schema{type: :object},
         body: %OpenApiSpex.Schema{type: :string, description: "Required when item_type is text"},
+        filename: %OpenApiSpex.Schema{type: :string, maxLength: 1024},
+        content_type: %OpenApiSpex.Schema{type: :string, maxLength: 255},
+        checksum_sha256: %OpenApiSpex.Schema{
+          type: :string,
+          pattern: "^[0-9a-f]{64}$"
+        },
         byte_size: %OpenApiSpex.Schema{
           type: :integer,
           minimum: 1,

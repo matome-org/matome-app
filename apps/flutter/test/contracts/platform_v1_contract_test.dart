@@ -108,7 +108,7 @@ void main() {
     };
 
     expect(detected, expected);
-    expect(detected.keys.toSet(), <String>{'pending_status', 'retry'});
+    expect(detected.keys.toSet(), <String>{'retry'});
   });
 
   test('pins the reset-safe 1:1 payload model decision', () {
@@ -136,13 +136,6 @@ String? _detectViolation(Map<String, dynamic> mismatch) {
   final current = mismatch['current'] as Map<String, dynamic>;
 
   switch (mismatch['id']) {
-    case 'pending_status':
-      final timeline = (current['timeline'] as List<dynamic>)
-          .cast<Map<String, dynamic>>();
-      if (timeline.last['status'] == 'pending' &&
-          timeline.any((entry) => entry['action'] == 'callback_succeeded')) {
-        return 'processing.status_stuck_pending';
-      }
     case 'retry':
       if (current['jobs_after_second_process'] == 1 &&
           current['first_job_identity'] == current['second_job_identity'] &&

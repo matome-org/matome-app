@@ -315,11 +315,10 @@ defmodule MatomeApi.Content do
 
   def list_items(%User{id: owner_id}) do
     Item
-    |> join(:inner, [item], matome in Matome, on: matome.id == item.matome_id)
-    |> where([item, matome], matome.owner_id == ^owner_id)
-    |> order_by([item, _matome], desc: item.inserted_at)
+    |> where([item], item.owner_id == ^owner_id)
+    |> order_by([item], desc: item.inserted_at)
     |> Repo.all()
-    |> Repo.preload([:matome, :file_blob, :text_content])
+    |> Repo.preload([:workspace, :matome, :file_blob, :text_content])
   end
 
   def list_items(%User{} = owner, matome_id) do
@@ -328,40 +327,42 @@ defmodule MatomeApi.Content do
       |> where([item], item.matome_id == ^matome.id)
       |> order_by([item], asc: item.position)
       |> Repo.all()
-      |> Repo.preload([:matome, :file_blob, :text_content])
+      |> Repo.preload([:workspace, :matome, :file_blob, :text_content])
     end
   end
 
   def get_item(%User{id: owner_id}, id) do
     Item
-    |> join(:inner, [item], matome in Matome, on: matome.id == item.matome_id)
-    |> where([item, matome], item.id == ^id and matome.owner_id == ^owner_id)
+    |> where([item], item.id == ^id and item.owner_id == ^owner_id)
     |> Repo.one()
     |> case do
       nil -> nil
-      item -> Repo.preload(item, [:matome, :file_blob, :text_content])
+      item -> Repo.preload(item, [:workspace, :matome, :file_blob, :text_content])
     end
   end
 
   def create_text_item(%User{} = owner, matome_id, attrs) do
-    with %Matome{} = matome <- get_matome(owner, matome_id) do
+    with {:ok, placement} <- resolve_item_placement(owner, matome_id, attrs) do
       client_id = item_client_id(attrs)
-      fingerprint = item_create_fingerprint(:text, matome.id, attrs, client_id)
+      fingerprint = item_create_fingerprint(:text, placement, attrs, client_id)
 
       idempotent_item_create(owner, client_id, fingerprint, fn ->
         Ecto.Multi.new()
         |> Ecto.Multi.insert(:text_content, TextContent.changeset(%TextContent{}, attrs))
         |> Ecto.Multi.run(:position, fn repo, _changes ->
-          next_item_position(repo, matome.id, attrs)
+          next_item_position(repo, placement.matome_id, attrs)
         end)
         |> Ecto.Multi.insert(:item, fn %{text_content: text_content, position: position} ->
           item_attrs = %{
             owner_id: owner.id,
             client_id: client_id,
             client_fingerprint: fingerprint,
-            matome_id: matome.id,
+            workspace_id: placement.workspace_id,
+            matome_id: placement.matome_id,
             position: position,
             item_type: :text,
+            title: item_title(attrs),
+            notes: item_attr(attrs, :notes),
             metadata: Map.get(attrs, :metadata) || Map.get(attrs, "metadata") || %{},
             text_content_id: text_content.id
           }
@@ -371,43 +372,49 @@ defmodule MatomeApi.Content do
         |> Repo.transaction()
         |> case do
           {:ok, %{item: item}} ->
-            {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
+            {:ok, Repo.preload(item, [:workspace, :matome, :file_blob, :text_content])}
 
           {:error, _step, changeset, _changes} ->
             {:error, changeset}
         end
       end)
+    else
+      {:error, :not_found} -> nil
     end
   end
 
   def create_file_item(%User{} = owner, matome_id, attrs) do
-    with %Matome{} = matome <- get_matome(owner, matome_id) do
+    with {:ok, placement} <- resolve_item_placement(owner, matome_id, attrs) do
       attrs =
         attrs
         |> put_byte_size_from_content_length()
+        |> drop_server_file_state()
         |> put_storage_key(storage_key(owner.id))
 
       incoming = incoming_byte_size(attrs)
       client_id = item_client_id(attrs)
-      fingerprint = item_create_fingerprint(:file, matome.id, attrs, client_id)
+      fingerprint = item_create_fingerprint(:file, placement, attrs, client_id)
 
       idempotent_item_create(owner, client_id, fingerprint, fn ->
         Ecto.Multi.new()
         |> Ecto.Multi.run(:quota, fn repo, _changes ->
-          reserve_workspace_quota(repo, matome.workspace_id, incoming)
+          reserve_workspace_quota(repo, placement.effective_workspace_id, incoming)
         end)
         |> Ecto.Multi.insert(:file_blob, FileBlob.changeset(%FileBlob{}, attrs))
         |> Ecto.Multi.run(:position, fn repo, _changes ->
-          next_item_position(repo, matome.id, attrs)
+          next_item_position(repo, placement.matome_id, attrs)
         end)
         |> Ecto.Multi.insert(:item, fn %{file_blob: file_blob, position: position} ->
           item_attrs = %{
             owner_id: owner.id,
             client_id: client_id,
             client_fingerprint: fingerprint,
-            matome_id: matome.id,
+            workspace_id: placement.workspace_id,
+            matome_id: placement.matome_id,
             position: position,
             item_type: :file,
+            title: item_title(attrs),
+            notes: item_attr(attrs, :notes),
             metadata: item_metadata(attrs),
             file_blob_id: file_blob.id
           }
@@ -417,7 +424,7 @@ defmodule MatomeApi.Content do
         |> Repo.transaction()
         |> case do
           {:ok, %{item: item}} ->
-            {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
+            {:ok, Repo.preload(item, [:workspace, :matome, :file_blob, :text_content])}
 
           {:error, :quota, reason, _changes} when is_atom(reason) ->
             {:error, reason}
@@ -426,6 +433,8 @@ defmodule MatomeApi.Content do
             {:error, changeset}
         end
       end)
+    else
+      {:error, :not_found} -> nil
     end
   end
 
@@ -456,17 +465,17 @@ defmodule MatomeApi.Content do
 
   def update_item(%User{} = owner, id, attrs) do
     with %Item{} = item <- get_item(owner, id) do
-      Ecto.Multi.new()
-      |> maybe_update_item_matome(owner, item, attrs)
-      |> Ecto.Multi.update(
-        :item,
-        Item.changeset(item, %{metadata: merge_item_metadata(item, attrs)})
-      )
-      |> maybe_update_file_blob(item, attrs)
-      |> Repo.transaction()
+      Repo.transaction(fn ->
+        with {:ok, patch} <- item_update_attrs(owner, item, attrs),
+             {:ok, _updated} <- item |> Item.changeset(patch) |> Repo.update() do
+          get_item(owner, id)
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
       |> case do
-        {:ok, _changes} -> {:ok, get_item(owner, id)}
-        {:error, _step, reason, _changes} -> {:error, reason}
+        {:ok, updated} -> {:ok, updated}
+        {:error, reason} -> {:error, reason}
       end
     end
   end
@@ -474,31 +483,28 @@ defmodule MatomeApi.Content do
   def enqueue_item_processing(%User{} = owner, id) do
     with %Item{item_type: :file, file_blob: %FileBlob{} = file_blob} = item <-
            get_item(owner, id),
-         true <- file_blob.media_type in @ai_media_types do
-      %{item_id: item.id, file_blob_id: file_blob.id}
-      |> DispatchJob.new(queue: :ai)
-      |> Oban.insert()
-      |> case do
-        {:ok, _job} -> {:ok, item}
-        {:error, reason} -> {:error, reason}
-      end
+         true <- file_blob.media_type in @ai_media_types,
+         true <- file_blob.upload_state == "uploaded" || {:error, :upload_not_complete} do
+      queue_item_processing(item, file_blob)
     else
       %Item{item_type: :text} -> {:error, :text_item_not_processable}
       false -> {:error, :unsupported_media_type}
+      {:error, reason} -> {:error, reason}
       nil -> nil
     end
   end
 
   def update_file_item_result(item_id, file_blob_id, attrs) do
-    with %Item{item_type: :file, file_blob: %FileBlob{id: ^file_blob_id} = file_blob} <-
+    with %Item{item_type: :file, file_blob: %FileBlob{id: ^file_blob_id}} = item <-
            Item
            |> where([item], item.id == ^item_id and item.file_blob_id == ^file_blob_id)
            |> Repo.one()
            |> Repo.preload(:file_blob) do
-      file_blob
-      |> FileBlob.changeset(%{
-        transcript: Map.get(attrs, "transcript") || Map.get(attrs, :transcript),
-        summary: Map.get(attrs, "summary") || Map.get(attrs, :summary)
+      item
+      |> Item.processing_changeset(%{
+        processing_state: :succeeded,
+        processing_outputs: processing_outputs(attrs),
+        processing_error: nil
       })
       |> Repo.update()
     else
@@ -512,7 +518,12 @@ defmodule MatomeApi.Content do
            |> where([item], item.id == ^item_id and item.file_blob_id == ^file_blob_id)
            |> Repo.one()
            |> Repo.preload(:file_blob),
-         {:ok, media} <- Presigner.presign_download(file_blob.storage_key) do
+         true <- file_blob.upload_state == "uploaded",
+         {:ok, media} <- Presigner.presign_download(file_blob.storage_key),
+         {:ok, item} <-
+           item
+           |> Item.processing_changeset(%{processing_state: :processing})
+           |> Repo.update() do
       job_id = item_job_id(item.id, file_blob.id)
 
       {:ok,
@@ -531,6 +542,7 @@ defmodule MatomeApi.Content do
        }}
     else
       nil -> {:discard, :missing_item}
+      false -> {:discard, :upload_not_complete}
       {:error, reason} -> {:error, reason}
     end
   end
@@ -613,9 +625,18 @@ defmodule MatomeApi.Content do
   defp release_workspace_quota(repo, %Item{
          item_type: :file,
          file_blob: %FileBlob{byte_size: byte_size},
-         matome: %Matome{workspace_id: workspace_id}
+         matome: matome,
+         workspace_id: direct_workspace_id
        })
-       when is_integer(workspace_id) and is_integer(byte_size) and byte_size > 0 do
+       when is_integer(byte_size) and byte_size > 0 do
+    workspace_id = if matome, do: matome.workspace_id, else: direct_workspace_id
+
+    release_workspace_quota(repo, workspace_id, byte_size)
+  end
+
+  defp release_workspace_quota(_repo, _item), do: {:ok, :noop}
+
+  defp release_workspace_quota(repo, workspace_id, byte_size) when is_integer(workspace_id) do
     workspace =
       Workspace
       |> where([w], w.id == ^workspace_id)
@@ -635,7 +656,7 @@ defmodule MatomeApi.Content do
     end
   end
 
-  defp release_workspace_quota(_repo, _item), do: {:ok, :noop}
+  defp release_workspace_quota(_repo, _workspace_id, _byte_size), do: {:ok, :noop}
 
   defp incoming_byte_size(attrs) do
     case Map.get(attrs, :byte_size) || Map.get(attrs, "byte_size") do
@@ -848,7 +869,7 @@ defmodule MatomeApi.Content do
     |> Repo.one()
     |> case do
       nil -> nil
-      item -> Repo.preload(item, [:matome, :file_blob, :text_content])
+      item -> Repo.preload(item, [:workspace, :matome, :file_blob, :text_content])
     end
   end
 
@@ -857,28 +878,201 @@ defmodule MatomeApi.Content do
 
   defp replay_item(%Item{}, _fingerprint), do: {:error, :client_id_conflict}
 
+  defp resolve_item_placement(%User{} = owner, matome_id, attrs) do
+    with {:ok, matome} <- resolve_item_matome(owner, matome_id),
+         {:ok, workspace_id} <- resolve_direct_workspace(owner, attrs) do
+      {:ok,
+       %{
+         matome_id: matome && matome.id,
+         workspace_id: workspace_id,
+         effective_workspace_id: if(matome, do: matome.workspace_id, else: workspace_id)
+       }}
+    end
+  end
+
+  defp resolve_item_matome(_owner, nil), do: {:ok, nil}
+
+  defp resolve_item_matome(owner, matome_id) do
+    case get_matome(owner, matome_id) do
+      %Matome{} = matome -> {:ok, matome}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  defp resolve_direct_workspace(%User{id: owner_id}, attrs) do
+    case fetch_item_attr(attrs, :workspace_id) do
+      :error ->
+        {:ok, nil}
+
+      {:ok, nil} ->
+        {:ok, nil}
+
+      {:ok, workspace_id} ->
+        case Repo.get_by(Workspace, id: workspace_id, owner_id: owner_id) do
+          %Workspace{} -> {:ok, workspace_id}
+          nil -> {:error, :not_found}
+        end
+    end
+  end
+
+  defp item_update_attrs(owner, item, attrs) do
+    patch =
+      [:title, :notes]
+      |> Enum.reduce(%{}, fn key, acc ->
+        case fetch_item_attr(attrs, key) do
+          {:ok, value} -> Map.put(acc, key, value)
+          :error -> acc
+        end
+      end)
+      |> maybe_merge_metadata(item, attrs)
+
+    with {:ok, patch} <- put_matome_update(patch, owner, item, attrs),
+         {:ok, patch} <- put_workspace_update(patch, owner, attrs) do
+      {:ok, patch}
+    end
+  end
+
+  defp maybe_merge_metadata(patch, item, attrs) do
+    case fetch_item_attr(attrs, :metadata) do
+      {:ok, metadata} when is_map(metadata) ->
+        Map.put(patch, :metadata, Map.merge(item.metadata || %{}, metadata))
+
+      _ ->
+        patch
+    end
+  end
+
+  defp put_matome_update(patch, owner, item, attrs) do
+    case fetch_item_attr(attrs, :matome_id) do
+      :error ->
+        {:ok, patch}
+
+      {:ok, nil} ->
+        {:ok, Map.merge(patch, %{matome_id: nil, position: nil})}
+
+      {:ok, matome_id} when matome_id == item.matome_id ->
+        {:ok, patch}
+
+      {:ok, matome_id} ->
+        case get_matome(owner, matome_id) do
+          %Matome{} ->
+            {:ok, position} = next_item_position(Repo, matome_id, %{})
+            {:ok, Map.merge(patch, %{matome_id: matome_id, position: position})}
+
+          nil ->
+            {:error, :not_found}
+        end
+    end
+  end
+
+  defp put_workspace_update(patch, %User{id: owner_id}, attrs) do
+    case fetch_item_attr(attrs, :workspace_id) do
+      :error ->
+        {:ok, patch}
+
+      {:ok, nil} ->
+        {:ok, Map.put(patch, :workspace_id, nil)}
+
+      {:ok, workspace_id} ->
+        case Repo.get_by(Workspace, id: workspace_id, owner_id: owner_id) do
+          %Workspace{} -> {:ok, Map.put(patch, :workspace_id, workspace_id)}
+          nil -> {:error, :not_found}
+        end
+    end
+  end
+
+  defp queue_item_processing(item, file_blob) do
+    Repo.transaction(fn ->
+      with {:ok, item} <- mark_item_processing_queued(item),
+           {:ok, _job} <-
+             %{item_id: item.id, file_blob_id: file_blob.id}
+             |> DispatchJob.new(queue: :ai)
+             |> Oban.insert() do
+        Repo.preload(item, [:workspace, :matome, :file_blob, :text_content], force: true)
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, item} -> {:ok, item}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp mark_item_processing_queued(%Item{processing_state: :not_requested} = item) do
+    item
+    |> Item.processing_changeset(%{
+      processing_state: :queued,
+      processing_run_id: Ecto.UUID.generate(),
+      processing_outputs: %{},
+      processing_error: nil
+    })
+    |> Repo.update()
+  end
+
+  defp mark_item_processing_queued(%Item{processing_state: :failed} = item) do
+    item
+    |> Item.processing_changeset(%{
+      processing_state: :queued,
+      processing_outputs: %{},
+      processing_error: nil
+    })
+    |> Repo.update()
+  end
+
+  defp mark_item_processing_queued(%Item{} = item), do: {:ok, item}
+
+  defp processing_outputs(attrs) do
+    %{}
+    |> maybe_put_output(
+      "transcript",
+      Map.get(attrs, "transcript") || Map.get(attrs, :transcript),
+      "text"
+    )
+    |> maybe_put_output(
+      "summary",
+      Map.get(attrs, "summary") || Map.get(attrs, :summary),
+      "markdown"
+    )
+  end
+
+  defp maybe_put_output(outputs, _type, nil, _value_key), do: outputs
+
+  defp maybe_put_output(outputs, type, value, value_key) do
+    Map.put(outputs, type, %{"type" => type, value_key => value})
+  end
+
   defp item_client_id(attrs), do: item_attr(attrs, :client_id)
 
-  defp item_create_fingerprint(_type, _matome_id, _attrs, nil), do: nil
+  defp item_create_fingerprint(_type, _placement, _attrs, nil), do: nil
 
-  defp item_create_fingerprint(:text, matome_id, attrs, _client_id) do
+  defp item_create_fingerprint(:text, placement, attrs, _client_id) do
     {
       :text,
-      matome_id,
+      placement.matome_id,
+      placement.workspace_id,
       item_attr(attrs, :position),
+      item_title(attrs),
+      item_attr(attrs, :notes),
       item_attr(attrs, :body),
       item_attr(attrs, :metadata) || %{}
     }
     |> fingerprint()
   end
 
-  defp item_create_fingerprint(:file, matome_id, attrs, _client_id) do
+  defp item_create_fingerprint(:file, placement, attrs, _client_id) do
     {
       :file,
-      matome_id,
+      placement.matome_id,
+      placement.workspace_id,
       item_attr(attrs, :position),
+      item_title(attrs),
+      item_attr(attrs, :notes),
       item_attr(attrs, :media_type),
+      item_attr(attrs, :filename),
+      item_attr(attrs, :content_type),
       incoming_byte_size(attrs),
+      item_attr(attrs, :checksum_sha256),
       item_attr(attrs, :duration),
       item_metadata(attrs)
     }
@@ -906,7 +1100,24 @@ defmodule MatomeApi.Content do
 
   defp canonical_term(value), do: value
 
-  defp item_attr(attrs, key), do: Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
+  defp fetch_item_attr(attrs, key) do
+    cond do
+      Map.has_key?(attrs, key) -> Map.fetch(attrs, key)
+      Map.has_key?(attrs, Atom.to_string(key)) -> Map.fetch(attrs, Atom.to_string(key))
+      true -> :error
+    end
+  end
+
+  defp item_attr(attrs, key) do
+    case fetch_item_attr(attrs, key) do
+      {:ok, value} -> value
+      :error -> nil
+    end
+  end
+
+  defp item_title(attrs), do: item_attr(attrs, :title) || "Untitled"
+
+  defp next_item_position(_repo, nil, _attrs), do: {:ok, nil}
 
   defp next_item_position(repo, matome_id, attrs) do
     case Map.get(attrs, :position) || Map.get(attrs, "position") do
@@ -930,77 +1141,8 @@ defmodule MatomeApi.Content do
   end
 
   defp item_metadata(attrs) do
-    (Map.get(attrs, :metadata) || Map.get(attrs, "metadata") || %{})
-    |> Map.merge(present_metadata(attrs, ~w(title badge notes status workspace_id)a))
+    Map.get(attrs, :metadata) || Map.get(attrs, "metadata") || %{}
   end
-
-  defp present_metadata(attrs, keys) do
-    Enum.reduce(keys, %{}, fn key, acc ->
-      string_key = Atom.to_string(key)
-
-      cond do
-        Map.has_key?(attrs, key) -> Map.put(acc, string_key, Map.fetch!(attrs, key))
-        Map.has_key?(attrs, string_key) -> Map.put(acc, string_key, Map.fetch!(attrs, string_key))
-        true -> acc
-      end
-    end)
-  end
-
-  defp merge_item_metadata(%Item{metadata: metadata}, attrs) do
-    Map.merge(metadata || %{}, item_metadata(attrs))
-  end
-
-  defp maybe_update_item_matome(multi, owner, item, attrs) do
-    case Map.get(attrs, :matome_id) || Map.get(attrs, "matome_id") do
-      nil ->
-        multi
-
-      matome_id ->
-        case get_matome(owner, matome_id) do
-          nil ->
-            Ecto.Multi.error(multi, :matome, :not_found)
-
-          %Matome{} ->
-            # A move keeps the item's stored position by default, which collides
-            # with the target matome's items_matome_id_position_index. Recompute
-            # position = MAX(position)+1 on the target so the move lands after the
-            # existing items instead of clashing with one of them.
-            Ecto.Multi.run(multi, :move_item, fn repo, _changes ->
-              position =
-                Item
-                |> where([item], item.matome_id == ^matome_id)
-                |> select([item], coalesce(max(item.position), -1) + 1)
-                |> repo.one()
-
-              item
-              |> Item.changeset(%{matome_id: matome_id, position: position})
-              |> repo.update()
-            end)
-        end
-    end
-  end
-
-  defp maybe_update_file_blob(
-         multi,
-         %Item{item_type: :file, file_blob: %FileBlob{} = file_blob},
-         attrs
-       ) do
-    patch =
-      %{
-        transcript: Map.get(attrs, :transcript) || Map.get(attrs, "transcript"),
-        summary: Map.get(attrs, :summary) || Map.get(attrs, "summary")
-      }
-      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-      |> Map.new()
-
-    if map_size(patch) == 0 do
-      multi
-    else
-      Ecto.Multi.update(multi, :file_blob, FileBlob.changeset(file_blob, patch))
-    end
-  end
-
-  defp maybe_update_file_blob(multi, _item, _attrs), do: multi
 
   defp validate_workspace_owner(changeset, owner) do
     workspace_id = Changeset.get_field(changeset, :workspace_id)
@@ -1045,6 +1187,19 @@ defmodule MatomeApi.Content do
     else
       Map.put(attrs, "storage_key", storage_key)
     end
+  end
+
+  defp drop_server_file_state(attrs) do
+    Map.drop(attrs, [
+      :upload_state,
+      "upload_state",
+      :upload_generation,
+      "upload_generation",
+      :uploaded_at,
+      "uploaded_at",
+      :multipart_context,
+      "multipart_context"
+    ])
   end
 
   defp maybe_filter_workspace(query, nil), do: query

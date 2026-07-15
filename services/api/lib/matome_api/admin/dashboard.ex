@@ -144,32 +144,70 @@ defmodule MatomeApi.Admin.Dashboard do
   end
 
   defp storage_breakdown do
-    by_workspace =
-      from(w in Workspace,
+    usage_by_workspace =
+      from(i in Item,
         left_join: m in Matome,
-        on: m.workspace_id == w.id,
-        left_join: i in Item,
-        on: i.matome_id == m.id and i.item_type == :file,
-        left_join: fb in FileBlob,
+        on: m.id == i.matome_id,
+        join: fb in FileBlob,
         on: fb.id == i.file_blob_id,
-        group_by: [w.id, w.name],
-        order_by: [desc: coalesce(sum(fb.byte_size), 0), asc: w.name],
-        select: %{
-          id: w.id,
-          name: w.name,
-          bytes: coalesce(sum(fb.byte_size), 0)
+        where: i.item_type == :file,
+        where:
+          not is_nil(
+            fragment(
+              "CASE WHEN ? IS NOT NULL THEN ? ELSE ? END",
+              i.matome_id,
+              m.workspace_id,
+              i.workspace_id
+            )
+          ),
+        group_by:
+          fragment(
+            "CASE WHEN ? IS NOT NULL THEN ? ELSE ? END",
+            i.matome_id,
+            m.workspace_id,
+            i.workspace_id
+          ),
+        select: {
+          fragment(
+            "CASE WHEN ? IS NOT NULL THEN ? ELSE ? END",
+            i.matome_id,
+            m.workspace_id,
+            i.workspace_id
+          ),
+          coalesce(sum(fb.byte_size), 0)
         }
       )
       |> Repo.all()
-      |> Enum.map(fn row -> %{row | bytes: to_non_neg_int(row.bytes)} end)
+      |> Map.new(fn {workspace_id, bytes} -> {workspace_id, to_non_neg_int(bytes)} end)
+
+    by_workspace =
+      Workspace
+      |> Repo.all()
+      |> Enum.map(fn workspace ->
+        %{
+          id: workspace.id,
+          name: workspace.name,
+          bytes: Map.get(usage_by_workspace, workspace.id, 0)
+        }
+      end)
+      |> Enum.sort_by(&{-&1.bytes, &1.name})
 
     unfiled_bytes =
-      from(m in Matome,
-        where: is_nil(m.workspace_id),
-        left_join: i in Item,
-        on: i.matome_id == m.id and i.item_type == :file,
-        left_join: fb in FileBlob,
+      from(i in Item,
+        left_join: m in Matome,
+        on: m.id == i.matome_id,
+        join: fb in FileBlob,
         on: fb.id == i.file_blob_id,
+        where: i.item_type == :file,
+        where:
+          is_nil(
+            fragment(
+              "CASE WHEN ? IS NOT NULL THEN ? ELSE ? END",
+              i.matome_id,
+              m.workspace_id,
+              i.workspace_id
+            )
+          ),
         select: coalesce(sum(fb.byte_size), 0)
       )
       |> Repo.one()

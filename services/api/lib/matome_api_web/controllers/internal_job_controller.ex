@@ -11,7 +11,7 @@ defmodule MatomeApiWeb.InternalJobController do
         nil ->
           conn |> put_status(:not_found) |> json(%{error: "not_found"})
 
-        {:ok, _file_blob} ->
+        {:ok, _item} ->
           send_resp(conn, :no_content, "")
 
         {:error, changeset} ->

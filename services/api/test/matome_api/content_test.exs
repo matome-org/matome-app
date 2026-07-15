@@ -104,7 +104,13 @@ defmodule MatomeApi.ContentTest do
           "byte_size",
           "transcript",
           "summary",
-          "body"
+          "body",
+          "title",
+          "notes",
+          "status",
+          "workspace_id",
+          "processing_state",
+          "upload_state"
         ] do
       assert {:error, changeset} =
                Content.create_text_item(owner, matome.id, %{

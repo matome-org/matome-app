@@ -17,6 +17,12 @@ defmodule MatomeApiWeb.ItemControllerTest do
       post(owner_conn, ~p"/api/matomes/#{matome["id"]}/items", %{
         client_id: "rec_local_contract",
         item_type: "file",
+        title: "Contract recording",
+        notes: "User-authored note",
+        workspace_id: nil,
+        filename: "contract.wav",
+        content_type: "audio/wav",
+        checksum_sha256: String.duplicate("a", 64),
         byte_size: 1234,
         media_type: "audio"
       })
@@ -24,6 +30,23 @@ defmodule MatomeApiWeb.ItemControllerTest do
 
     assert response["contract_version"] == "1"
     assert response["item"]["client_id"] == "rec_local_contract"
+    assert response["item"]["title"] == "Contract recording"
+    assert response["item"]["notes"] == "User-authored note"
+    assert response["item"]["workspace_id"] == nil
+    assert response["item"]["processing_state"] == "not_requested"
+    assert response["item"]["source_revision"] == 1
+    assert response["item"]["metadata"] == %{}
+
+    assert response["item"]["file"]
+           |> Map.take(~w(filename content_type checksum_sha256 upload_state upload_generation)) ==
+             %{
+               "filename" => "contract.wav",
+               "content_type" => "audio/wav",
+               "checksum_sha256" => String.duplicate("a", 64),
+               "upload_state" => "pending",
+               "upload_generation" => 1
+             }
+
     refute Map.has_key?(response["item"], "presign")
 
     assert %{
@@ -60,7 +83,8 @@ defmodule MatomeApiWeb.ItemControllerTest do
       item_type: "file",
       content_length: 1234,
       media_type: "audio",
-      metadata: %{title: "Replay"}
+      title: "Replay",
+      metadata: %{display: "compact"}
     }
 
     first =
@@ -311,7 +335,9 @@ defmodule MatomeApiWeb.ItemControllerTest do
     assert %{"errors" => %{"metadata" => [_ | _]}} = response
   end
 
-  test "file item preserves upload callback transcript and summary round-trip", %{conn: conn} do
+  test "file processing requires a verified upload and stores callback outputs on the item", %{
+    conn: conn
+  } do
     %{conn: owner_conn} = register_conn(conn)
     matome = create_matome!(owner_conn)
 
@@ -330,7 +356,23 @@ defmodule MatomeApiWeb.ItemControllerTest do
     assert Repo.aggregate(Oban.Job, :count, :id) == 0
 
     assert post(owner_conn, ~p"/api/items/#{item["id"]}/process", %{})
-           |> json_response(202)
+           |> json_response(422) == %{"error" => "upload_not_complete"}
+
+    Repo.get!(MatomeApi.Content.FileBlob, item["file"]["id"])
+    |> Ecto.Changeset.change(
+      upload_state: "uploaded",
+      uploaded_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    )
+    |> Repo.update!()
+
+    queued =
+      post(owner_conn, ~p"/api/items/#{item["id"]}/process", %{})
+      |> json_response(202)
+      |> Map.fetch!("item")
+
+    assert queued["processing_state"] == "queued"
+    assert is_binary(queued["processing_run_id"])
+    assert queued["file"]["upload_state"] == "uploaded"
 
     assert Repo.aggregate(Oban.Job, :count, :id) == 1
 
@@ -352,8 +394,15 @@ defmodule MatomeApiWeb.ItemControllerTest do
     reloaded =
       get(owner_conn, ~p"/api/items/#{item["id"]}") |> json_response(200) |> Map.fetch!("item")
 
-    assert reloaded["file"]["transcript"] == "hello world"
-    assert reloaded["file"]["summary"] == "short summary"
+    assert reloaded["processing_state"] == "succeeded"
+
+    assert reloaded["processing_outputs"] == %{
+             "summary" => %{"markdown" => "short summary", "type" => "summary"},
+             "transcript" => %{"text" => "hello world", "type" => "transcript"}
+           }
+
+    refute Map.has_key?(reloaded["file"], "transcript")
+    refute Map.has_key?(reloaded["file"], "summary")
   end
 
   test "callback route job id must match persisted dispatch args", %{conn: conn} do
@@ -469,6 +518,13 @@ defmodule MatomeApiWeb.ItemControllerTest do
       |> Map.fetch!("item")
 
     assert Repo.aggregate(Oban.Job, :count, :id) == 0
+
+    Repo.get!(MatomeApi.Content.FileBlob, item["file"]["id"])
+    |> Ecto.Changeset.change(
+      upload_state: "uploaded",
+      uploaded_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    )
+    |> Repo.update!()
 
     assert post(owner_conn, ~p"/api/items/#{item["id"]}/process", %{}) |> json_response(202)
     assert post(owner_conn, ~p"/api/items/#{item["id"]}/process", %{}) |> json_response(202)

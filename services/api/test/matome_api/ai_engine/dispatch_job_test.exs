@@ -35,6 +35,15 @@ defmodule MatomeApi.AIEngine.DispatchJobTest do
     {:ok, item} =
       Content.create_file_item(user, matome.id, %{byte_size: 123, media_type: "audio"})
 
+    item.file_blob
+    |> Ecto.Changeset.change(
+      upload_state: "uploaded",
+      uploaded_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    )
+    |> MatomeApi.Repo.update!()
+
+    assert {:ok, _queued_item} = Content.enqueue_item_processing(user, item.id)
+
     assert :ok =
              DispatchJob.perform(%Oban.Job{
                args: %{"item_id" => item.id, "file_blob_id" => item.file_blob_id}

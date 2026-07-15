@@ -149,13 +149,33 @@ defmodule MatomeApi.Admin.DashboardTest do
                  byte_size: 2_500_000
                })
 
+      assert {:ok, _} =
+               Content.create_file_item(owner, nil, %{
+                 workspace_id: workspace.id,
+                 media_type: "audio",
+                 byte_size: 750_000
+               })
+
+      assert {:ok, _} =
+               Content.create_file_item(owner, nil, %{
+                 media_type: "audio",
+                 byte_size: 250_000
+               })
+
+      assert {:ok, _} =
+               Content.create_file_item(owner, unfiled.id, %{
+                 workspace_id: workspace.id,
+                 media_type: "audio",
+                 byte_size: 125_000
+               })
+
       %{storage: storage} = Admin.dashboard_stats()
 
-      assert storage.total_bytes == 12_500_000
-      assert storage.unfiled_bytes == 2_500_000
+      assert storage.total_bytes == 13_625_000
+      assert storage.unfiled_bytes == 2_875_000
 
       research = Enum.find(storage.by_workspace, &(&1.name == "Research"))
-      assert research.bytes == 10_000_000
+      assert research.bytes == 10_750_000
     end
   end
 end

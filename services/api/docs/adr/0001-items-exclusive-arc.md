@@ -20,10 +20,18 @@ matomes and are not folded into `items`.
 
 Use an `items` table with:
 
-- `matome_id` and `position` for ownership and ordering.
+- `owner_id` plus optional `client_id`; `(owner_id, client_id)` is the remote
+  idempotency key and its create fingerprint detects conflicting replays.
+- Nullable `matome_id` and direct `workspace_id`. Both may be set because Matome
+  placement shadows, rather than destroys, direct Space placement. A nullable
+  `position` is present only while the item is in a Matome.
 - `item_type` as the discriminator.
+- Scalar `title` and user-authored `notes`.
 - `metadata jsonb` for display/render hints only.
 - Nullable payload foreign keys, currently `file_blob_id` and `text_content_id`.
+- The current `processing_state`, one `processing_run_id`, source/config
+  revisions, and bounded current outputs/error JSONB. Executor attempts remain
+  in Oban; no processing-attempt or derivation table exists.
 
 The database owns the exclusive arc:
 
@@ -51,7 +59,29 @@ Current key inventory:
   and client layout hints.
 
 Metadata must not hold contact IDs, storage keys, byte sizes, media classes,
-transcripts, summaries, or text bodies.
+transcripts, summaries, text bodies, title, notes, status, workspace placement,
+upload state, or processing state.
+
+## File and Current-State Contract
+
+`file_blobs` owns the stable storage key, filename, MIME content type, declared
+byte size, SHA-256 checksum, media class/duration, upload state/generation,
+`uploaded_at`, and at most one active multipart context JSONB. It does not own
+transcripts, summaries, user notes, or workspace placement.
+
+The database enforces supported item/media/upload/processing states, the 1:1
+payload arc, positive source/upload generations, SHA-256 shape, uploaded-state
+timestamp coherence, and owner-matching Matome/Space foreign keys. Current
+processing outputs are limited to 4 MiB, processing errors to 16 KiB, and the
+single multipart context to 256 KiB. Application transitions additionally
+reject file processing until `upload_state = uploaded`.
+
+Text bodies are non-empty and capped at 200,000 characters. No
+`processing_attempts`, `derivations`, or `upload_sessions` tables are created.
+
+This is a destructive rewrite of the original item migration. There has been no
+production deployment and there is no production data, so there is deliberately
+no backfill, dual-write, compatibility migration, or legacy metadata fallback.
 
 ## Rejected Alternatives
 
@@ -62,6 +92,9 @@ transcripts, summaries, or text bodies.
   a single FK that points to multiple payload tables.
 - Store all payloads in JSONB: rejected because queried or validated data would
   lose column constraints, indexes, and clear ownership semantics.
+- Add processing/upload history tables: rejected for the current model. One
+  current run lives on `items`, one active upload generation lives on
+  `file_blobs`, and physical attempt history remains in Oban/events.
 - Fold contacts into items: rejected because contacts are participants attached
   M:N to a matome, not ordered renderable payloads.
 

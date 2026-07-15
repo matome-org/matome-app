@@ -127,18 +127,20 @@ compatibility.
 
 ## Executable evidence
 
-`fixtures/known-mismatches.json` captures two current failures without making
+`fixtures/known-mismatches.json` captures one current failure without making
 the default suites red:
 
-1. Item metadata remains `pending` after enqueue and a successful callback.
-2. Oban uniqueness includes completed jobs forever, so manual retry reuses the
+1. Oban uniqueness includes completed jobs forever, so manual retry reuses the
    completed identity instead of creating a run.
-Core and Flutter tests execute detectors against those fixtures and assert the
-specific v1 violation. The canonical item-create fixture now supplies live W1
+Core and Flutter tests execute a detector against that fixture and assert the
+specific v1 violation. Core W2 now supplies live current-state conformance:
+processing is rejected until a file upload is verified, then persists
+`queued`/`processing`/`succeeded` independently of upload state, with machine
+outputs on `items`. The canonical item-create fixture supplies live W1
 conformance for the top-level `upload.request` envelope and permanent
 `client_id`. Flutter's parent/Core boundary test supplies live W1 conformance
 for automatic parent-first reconciliation, immediate child drain, streamed
 upload, and restart-safe replay while preserving explicit durable block reasons.
 The AI-stub suite executes the shared capabilities, job, and typed-callback
-fixtures. Later waves replace each remaining characterization with live
-conformance as its owning behavior lands.
+fixtures. W5 replaces the remaining retry characterization with live
+conformance.

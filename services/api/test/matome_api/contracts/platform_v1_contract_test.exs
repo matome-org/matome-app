@@ -124,16 +124,7 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
 
     assert detected == expected
 
-    assert Map.keys(detected) |> Enum.sort() == ~w(pending_status retry)
-  end
-
-  defp detect_violation(%{"id" => "pending_status", "current" => current}) do
-    statuses = Enum.map(current["timeline"], & &1["status"])
-
-    if List.last(statuses) == "pending" and
-         "callback_succeeded" in Enum.map(current["timeline"], & &1["action"]) do
-      "processing.status_stuck_pending"
-    end
+    assert Map.keys(detected) == ["retry"]
   end
 
   defp detect_violation(%{"id" => "retry", "current" => current}) do

@@ -139,3 +139,12 @@ mix phx.server
 ```
 
 Oban shares `MatomeApi.Repo` (same Postgres).
+
+## Undeployed schema reset
+
+The current item model is a clean, destructive schema rewrite. Matome has never
+been deployed and has no production users or production data, so there is no
+production migration, backfill, dual write, or compatibility path for the old
+recordings/item shape. Existing local development volumes must be recreated
+with `mise run nuke` (or the equivalent explicit database drop/create/migrate)
+rather than carried across this reset.
