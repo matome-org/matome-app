@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { test } from "node:test";
 import { createAiStubServer } from "./server.js";
+
+const contractRoot = new URL("../../../contracts/v1/", import.meta.url);
 
 test("accepts a valid job and posts a canned success callback", async () => {
   const callbacks = [];
@@ -131,6 +134,45 @@ test("processes document media types with a clearly placeholder summary", async 
   }
 });
 
+test("shared v1 fixtures pin capabilities, every input kind, and typed callbacks", async () => {
+  const contract = await readContractJson("platform.json");
+  const fixtures = await readContractJson("fixtures/canonical.json");
+  const ai = fixtures.ai;
+
+  assert.equal(contract.wire_version, "1");
+  assert.equal(contract.ai.auth, "bearer_service_token");
+  assert.deepEqual(contract.ai.input_kinds, ["audio", "image", "document", "text"]);
+  assert.deepEqual(Object.keys(ai.capabilities.inputs), contract.ai.input_kinds);
+  assert.deepEqual(Object.keys(ai.jobs), contract.ai.input_kinds);
+
+  for (const kind of contract.ai.input_kinds) {
+    const job = ai.jobs[kind];
+    assert.equal(job.contract_version, "1");
+    assert.equal(job.input.kind, kind);
+    assert.equal(job.callback.method, "POST");
+    assert.match(job.callback.url, /^https:/);
+    assert.deepEqual(
+      job.requested_outputs,
+      contract.ai.typed_outputs[kind],
+      `${kind} requested outputs must match the capability contract`
+    );
+    assert.deepEqual(ai.capabilities.inputs[kind].outputs, job.requested_outputs);
+
+    const callback = ai.callbacks[kind];
+    assert.equal(callback.status, "done");
+    assert.equal(callback.run_id, job.run_id);
+    assert.equal(callback.input_revision, job.input_revision);
+    assert.deepEqual(
+      callback.outputs.map((output) => output.type),
+      contract.ai.typed_outputs[kind]
+    );
+  }
+
+  assert.deepEqual(Object.keys(ai.jobs.text.input), ["kind", "body"]);
+  assert.equal(ai.callbacks.failed.status, "failed");
+  assert.equal(typeof ai.callbacks.failed.error.retryable, "boolean");
+});
+
 function job(callbackUrl) {
   return {
     job_id: "job-1",
@@ -150,6 +192,10 @@ function job(callbackUrl) {
       attempt: 1
     }
   };
+}
+
+async function readContractJson(relativePath) {
+  return JSON.parse(await readFile(new URL(relativePath, contractRoot), "utf8"));
 }
 
 async function readJson(req) {

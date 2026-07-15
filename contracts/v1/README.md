@@ -1,0 +1,137 @@
+# Matome platform contract v1
+
+This directory is the normative W0 contract for device work, Core state,
+uploads, AI jobs, events, and non-secret system policy. `platform.json` is the
+machine-readable catalog; `system-config.schema.json` is the executable JSON
+Schema; `fixtures/canonical.json` contains valid shared envelopes.
+
+Breaking wire changes create `contracts/v2`. Additive fields may be introduced
+in v1 only when existing consumers ignore unknown response fields; requests and
+event payloads remain closed and reject unknown keys.
+
+## Work lifecycle
+
+The canonical flow is:
+
+```text
+local_saved -> work_queued -> parent_item_reconciled
+  -> uploading -> uploaded
+  -> processing_queued -> processing
+  -> succeeded | failed
+```
+
+Text work skips upload. Upload-only file work finishes as `succeeded` with
+`upload_state=uploaded` and `processing_state=not_requested`. Upload and
+processing are independent axes: a processing failure never rolls a verified
+upload backward.
+
+Drift owns local durability, user-authored fields, and the device queue. Core
+owns remote identity, verified upload state, the current processing run, and
+accepted machine outputs. Oban executes Core work but is not product-state
+authority. In particular, an Oban `completed` row does not mean a later manual
+retry is complete.
+
+Each work row is deduped by item, operation, and input revision. A worker may
+act only while it owns an unexpired lease. Expired current work is requeued;
+results from a stale run or input revision are acknowledged without mutation.
+Transient automatic retries use exponential full jitter. Manual retry creates
+a new run id and resets its executor attempt count; the failed run remains an
+immutable terminal observation rather than being reused.
+
+Parent reconciliation is work, not a precondition that can silently skip a
+child forever. Queue the parent first, reconcile it, then create/reconcile the
+child.
+
+## Upload v1
+
+All upload envelopes carry `contract_version=1`, the item input revision, and
+an idempotency key. Core selects single or multipart for `mode=auto` using the
+desired upload policy and declared byte size.
+
+- `request` creates or resumes one active upload generation.
+- `complete` verifies object byte size and SHA-256 before marking `uploaded`.
+- `abort` is idempotent and applies only to the named active generation.
+- Multipart parts are contiguous and 1-based. Retrying a part keeps the same
+  upload id, generation, and part number. A resumed request reports accepted
+  parts.
+
+`upload_id` is a logical envelope handle, not a requirement for an
+`upload_sessions` domain table. The active bounded multipart context belongs on
+the `file_blobs` row. S3 ETags are transport evidence, not content integrity.
+
+## AI HTTP v1
+
+Core and the external processor authenticate both job dispatch and callback
+with `Authorization: Bearer <service token>`. The token comes from runtime
+secret configuration and never appears in a job, event, or `system_config`.
+
+- `GET /v1/capabilities` advertises enabled input kinds, accepted content
+  types, limits, and typed outputs.
+- `POST /v1/jobs` returns `202` with the same job and run ids.
+- The processor posts exactly one terminal `done` or `failed` callback to
+  `job.callback.url`.
+- Core accepts a callback only when job id, run id, and input revision match the
+  current run. Duplicate terminal callbacks are no-ops.
+
+Audio, image, document, and text item jobs share one envelope. File inputs use
+a short-lived Core-issued GET URL. Text input contains only the user-authored
+text item body. File notes and Matome notes are never automatic AI input.
+Capabilities and global policy both apply; the lower limit wins. Outputs are a
+typed list, not arbitrary result JSON. Error messages are sanitized and carry
+a stable code plus a `retryable` boolean.
+
+## Events and catalog
+
+One event envelope and one event table cover security, operational, and product
+events. Catalog entries pin class, schema version, enablement, retention, and a
+payload allowlist. Unknown payload keys and payloads over 4096 bytes are
+rejected. Required security/operational events cannot be disabled.
+
+The initial retention floors are 365 days for security, 90 for operational,
+and 30 for product. Payloads never contain credentials, URLs with signatures,
+item content, notes, transcripts, or summaries. Events about local Spaces never
+egress with a Space id or content. Only the disabled-by-default aggregate
+product fixture is eligible after opt-in.
+
+## Desired and applied configuration
+
+`system_config` is one versioned, non-secret global JSON document. Admin writes
+`desired` at a monotonic revision using compare-and-swap `base_revision`.
+Core marks that revision applied only when the policy write and mandatory audit
+event commit together.
+
+Devices fetch desired policy when online and report a separate sanitized
+application snapshot. An offline device keeps its last `applied_revision`; the
+admin may display it as stale but must not present desired policy as applied or
+send an individual device command. Rejected keys are explicit. Credentials and
+signing material remain runtime secrets.
+
+## Data model decisions
+
+Keep `items` and exactly one 1:1 payload row in `file_blobs` or
+`text_contents`. Do not add processing-attempt, derivation, or upload-session
+domain tables. Device attempts live on Drift `work_queue`, physical Core
+attempts live in Oban, current run fields live on `items`, and one active
+multipart context lives on `file_blobs`.
+
+There are no users and no deployment. The W2 schema work may therefore reset
+Postgres and Drift cleanly instead of adding backfills, dual writes, or legacy
+compatibility.
+
+## Executable evidence
+
+`fixtures/known-mismatches.json` captures four current failures without making
+the default suites red:
+
+1. Core nests `presign` under `item`; Flutter reads a top-level `presign`, while
+   v1 names the top-level envelope `upload`.
+2. Item metadata remains `pending` after enqueue and a successful callback.
+3. Oban uniqueness includes completed jobs forever, so manual retry reuses the
+   completed identity instead of creating a run.
+4. An unfiled local parent is skipped while its child waits for the missing Core
+   parent id.
+
+Core and Flutter tests execute detectors against those fixtures and assert the
+specific v1 violation. The AI-stub suite executes the shared capabilities,
+job, and typed-callback fixtures. W1+ replaces each characterization with live
+conformance as its owning behavior lands.

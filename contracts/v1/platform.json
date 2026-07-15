@@ -1,0 +1,265 @@
+{
+  "name": "matome-local-first-platform",
+  "version": "1.0.0",
+  "wire_version": "1",
+  "compatibility": "A wire-incompatible change requires a new contracts/vN directory.",
+  "work": {
+    "states": [
+      "local_saved",
+      "work_queued",
+      "parent_item_reconciled",
+      "uploading",
+      "uploaded",
+      "processing_queued",
+      "processing",
+      "succeeded",
+      "failed"
+    ],
+    "legal_transitions": {
+      "local_saved": ["work_queued"],
+      "work_queued": ["parent_item_reconciled", "failed"],
+      "parent_item_reconciled": ["uploading", "processing_queued", "succeeded", "failed"],
+      "uploading": ["uploaded", "work_queued", "failed"],
+      "uploaded": ["processing_queued", "succeeded"],
+      "processing_queued": ["processing", "failed"],
+      "processing": ["succeeded", "failed"],
+      "succeeded": [],
+      "failed": []
+    },
+    "upload_states": ["not_required", "pending", "uploading", "uploaded", "failed", "aborted"],
+    "processing_states": ["not_requested", "queued", "processing", "succeeded", "failed"],
+    "authorities": {
+      "drift": [
+        "local item and parent identity before reconciliation",
+        "user-authored content and notes",
+        "device work queue, attempts, leases, and next-run time",
+        "local file durability"
+      ],
+      "core": [
+        "remote item and parent identity",
+        "current input revision and processing run",
+        "verified upload state",
+        "accepted machine outputs and sanitized error codes",
+        "global desired system configuration"
+      ],
+      "oban": [
+        "physical execution and retry scheduling for Core work only",
+        "never product lifecycle state or user-content authority"
+      ]
+    },
+    "dedupe_keys": {
+      "device_work": ["item_local_id", "operation", "input_revision"],
+      "core_item_create": ["owner_id", "device_id", "item_local_id", "input_revision"],
+      "upload": ["item_id", "input_revision", "upload_generation"],
+      "processing": ["item_id", "input_revision", "run_id"]
+    },
+    "lease": {
+      "owner_field": "lease_owner",
+      "expiry_field": "lease_expires_at",
+      "acquire_rule": "queued_or_expired_and_next_run_at_due",
+      "renew_rule": "same_owner_and_run_is_current",
+      "expiry_action": "requeue_if_run_is_current"
+    },
+    "retry": {
+      "strategy": "exponential_full_jitter",
+      "attempt_field": "attempt",
+      "delay_formula": "random(0,min(max_delay,base_delay*2^(attempt-1)))",
+      "retryable_classes": ["transport", "timeout", "rate_limited", "server_unavailable"],
+      "terminal_classes": ["validation", "unauthorized", "unsupported", "content_rejected"],
+      "manual_retry_creates_new_run": true,
+      "manual_retry_resets_attempt": true
+    },
+    "stale_run": {
+      "accept_when": "run_id_and_input_revision_match_current",
+      "otherwise": "acknowledge_without_mutation",
+      "duplicate_terminal_callback": "idempotent_noop"
+    },
+    "upload_only_completion": {
+      "upload_state": "uploaded",
+      "processing_state": "not_requested",
+      "work_state": "succeeded"
+    },
+    "parent_rule": "Reconcile the parent before the child; parent work is queued automatically and a missing parent Core id is never a silent terminal skip."
+  },
+  "upload": {
+    "contract_version": "1",
+    "modes": ["single", "multipart"],
+    "operations": ["request", "complete", "abort"],
+    "paths": {
+      "request": "POST /api/v1/items/{item_id}/uploads",
+      "complete": "POST /api/v1/uploads/{upload_id}/complete",
+      "abort": "POST /api/v1/uploads/{upload_id}/abort"
+    },
+    "auth": "owner_bearer_token",
+    "mode_selection": "Core selects single or multipart from desired system_config and byte_size when mode is auto.",
+    "generation_rule": "Only the active upload_generation may complete or abort; stale generations are idempotent noops.",
+    "verification": "Complete succeeds only after Core verifies object size and SHA-256; an ETag alone is insufficient.",
+    "multipart": {
+      "part_numbers": "contiguous_1_based",
+      "part_retry": "same_upload_id_generation_and_part_number",
+      "resume": "request returns already accepted parts for the active generation"
+    },
+    "limits_source": "system_config.desired.uploads"
+  },
+  "ai": {
+    "contract_version": "1",
+    "paths": {
+      "capabilities": "GET /v1/capabilities",
+      "jobs": "POST /v1/jobs",
+      "callback": "job.callback.url"
+    },
+    "auth": "bearer_service_token",
+    "token_source": "runtime_secret_only",
+    "accepted_response": "202 with contract_version, job_id, run_id, and accepted=true",
+    "input_kinds": ["audio", "image", "document", "text"],
+    "callback_statuses": ["done", "failed"],
+    "terminal_callback_count": 1,
+    "idempotency_key": ["job_id", "run_id", "input_revision"],
+    "limits_rule": "Core uses the lower of system_config policy and the advertised capability limit.",
+    "metadata_allowlist": ["locale"],
+    "automatic_text_rule": "Only text item body is sent automatically; file notes and Matome notes are excluded.",
+    "typed_outputs": {
+      "audio": ["transcript", "summary", "title"],
+      "image": ["ocr_text", "description", "summary", "title"],
+      "document": ["extracted_text", "summary", "title"],
+      "text": ["summary", "title"]
+    },
+    "output_value_types": {
+      "transcript": "text_with_optional_language_and_duration_ms",
+      "ocr_text": "text_with_optional_language",
+      "description": "text",
+      "extracted_text": "text_with_optional_language",
+      "summary": "markdown",
+      "title": "text"
+    },
+    "failure": {
+      "required": ["code", "message", "retryable"],
+      "message_rule": "sanitized_no_secrets_or_input_content"
+    }
+  },
+  "events": {
+    "contract_version": "1",
+    "classes": ["security", "operational", "product"],
+    "envelope_required": [
+      "event_id",
+      "event_name",
+      "event_version",
+      "event_class",
+      "occurred_at",
+      "source",
+      "correlation_id",
+      "payload"
+    ],
+    "max_payload_bytes": 4096,
+    "reject_unknown_payload_keys": true,
+    "prohibited_payload_keys": [
+      "access_token",
+      "refresh_token",
+      "authorization",
+      "password",
+      "secret",
+      "body",
+      "notes",
+      "transcript",
+      "summary",
+      "storage_url",
+      "local_space_id"
+    ],
+    "local_space_egress": "No local Space id or content may leave a device; only opt-in aggregate product events are eligible.",
+    "catalog": [
+      {
+        "event_name": "security.admin_auth_verified",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["method", "result"]
+      },
+      {
+        "event_name": "security.admin_config_changed",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["revision", "changed_keys", "result"]
+      },
+      {
+        "event_name": "operational.work_transition",
+        "event_class": "operational",
+        "event_version": 1,
+        "required": true,
+        "enabled": true,
+        "retention_days": 90,
+        "payload_allowlist": [
+          "operation",
+          "input_kind",
+          "from_state",
+          "to_state",
+          "attempt",
+          "duration_ms",
+          "error_code"
+        ]
+      },
+      {
+        "event_name": "operational.upload_completed",
+        "event_class": "operational",
+        "event_version": 1,
+        "required": false,
+        "enabled": true,
+        "retention_days": 90,
+        "payload_allowlist": ["mode", "byte_size", "part_count", "duration_ms", "result", "error_code"]
+      },
+      {
+        "event_name": "operational.processing_completed",
+        "event_class": "operational",
+        "event_version": 1,
+        "required": false,
+        "enabled": true,
+        "retention_days": 90,
+        "payload_allowlist": ["input_kind", "output_types", "duration_ms", "attempt", "result", "error_code"]
+      },
+      {
+        "event_name": "product.capture_completed",
+        "event_class": "product",
+        "event_version": 1,
+        "required": false,
+        "enabled": false,
+        "retention_days": 30,
+        "payload_allowlist": ["input_kind", "duration_bucket", "size_bucket", "platform", "result"]
+      },
+      {
+        "event_name": "product.local_space_aggregate",
+        "event_class": "product",
+        "event_version": 1,
+        "required": false,
+        "enabled": false,
+        "retention_days": 30,
+        "payload_allowlist": ["period", "item_count_bucket", "byte_size_bucket", "platform"]
+      }
+    ]
+  },
+  "system_config": {
+    "schema": "system-config.schema.json",
+    "singleton_key": "global",
+    "non_secret": true,
+    "desired_semantics": "Admin writes policy intent at a new monotonic revision; this does not assert that an offline device applied it.",
+    "applied_semantics": {
+      "core": "Core reports applied only after the config transaction and mandatory audit event commit together.",
+      "device": "Each device reports its own last applied revision and rejected keys in a sanitized snapshot.",
+      "offline": "Keep the last applied revision and report it as stale; never copy desired into applied."
+    },
+    "stale_write_rule": "Reject a desired update whose base_revision does not equal current revision.",
+    "secret_rule": "Tokens, credentials, and signing material remain in runtime environment or a secret store."
+  },
+  "data_model_decisions": {
+    "retain": ["items", "file_blobs", "text_contents"],
+    "relationship": "Each item has exactly one 1:1 payload row: file_blob or text_content.",
+    "avoid_domain_tables": ["processing_attempts", "derivations", "upload_sessions"],
+    "attempt_storage": "Executor metadata stays in Drift work_queue or Oban; current Core run stays on items.",
+    "upload_storage": "One bounded active multipart context stays on file_blobs.",
+    "migration_policy": "clean_schema_reset",
+    "reason": "no_users_and_no_deployment"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "contract_version": "1",
+  "purpose": "Executable characterization of current behavior. These fixtures must be rejected by v1 consumers until their owning W1+ implementation lands.",
+  "mismatches": [
+    {
+      "id": "create_response",
+      "owner_wave": "W1",
+      "current": {
+        "core_response": {
+          "item": {
+            "id": 42,
+            "metadata": {"status": "pending"},
+            "presign": {"method": "PUT", "url": "https://storage.invalid/legacy"}
+          }
+        },
+        "flutter_item_path": "$.item",
+        "flutter_upload_path": "$.presign"
+      },
+      "expected_violation": "create_response.upload_envelope_disagrees"
+    },
+    {
+      "id": "pending_status",
+      "owner_wave": "W2/W5",
+      "current": {
+        "timeline": [
+          {"action": "create", "status": "pending"},
+          {"action": "enqueue", "status": "pending"},
+          {"action": "callback_succeeded", "status": "pending"}
+        ]
+      },
+      "expected_violation": "processing.status_stuck_pending"
+    },
+    {
+      "id": "retry",
+      "owner_wave": "W5",
+      "current": {
+        "first_job_identity": "item:42:file_blob:9",
+        "second_job_identity": "item:42:file_blob:9",
+        "jobs_after_second_process": 1,
+        "dedupe_period": "infinity",
+        "dedupe_states": ["available", "scheduled", "executing", "retryable", "suspended", "completed"]
+      },
+      "expected_violation": "processing.retry_reuses_completed_run"
+    },
+    {
+      "id": "parent_sync",
+      "owner_wave": "W1",
+      "current": {
+        "parent": {"local_id": "matome_local_1", "core_id": null, "space_id": null},
+        "child": {
+          "local_id": "item_local_1",
+          "core_id": null,
+          "parent_local_id": "matome_local_1",
+          "status": "pending_upload"
+        },
+        "parent_sync_result": "skipped_unfiled_parent",
+        "child_work_result": "blocked_missing_parent_core_id"
+      },
+      "expected_violation": "sync.parent_child_deadlock"
+    }
+  ]
+}

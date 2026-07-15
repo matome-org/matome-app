@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://matome.app/contracts/v1/system-config.schema.json",
+  "title": "Matome system_config v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "revision", "desired", "applied"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "revision": {"type": "integer", "minimum": 1},
+    "desired": {"$ref": "#/$defs/desired"},
+    "applied": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_revision", "core_applied_at"],
+      "properties": {
+        "core_revision": {"type": "integer", "minimum": 0},
+        "core_applied_at": {"type": ["string", "null"], "format": "date-time"}
+      }
+    }
+  },
+  "$defs": {
+    "desired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queue", "retry", "uploads", "ai", "clients"],
+      "properties": {
+        "queue": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lease_seconds", "max_concurrency", "snapshot_interval_seconds"],
+          "properties": {
+            "lease_seconds": {"type": "integer", "minimum": 15, "maximum": 3600},
+            "max_concurrency": {"type": "integer", "minimum": 1, "maximum": 16},
+            "snapshot_interval_seconds": {"type": "integer", "minimum": 60, "maximum": 86400}
+          }
+        },
+        "retry": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_attempts", "base_delay_seconds", "max_delay_seconds"],
+          "properties": {
+            "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
+            "base_delay_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+            "max_delay_seconds": {"type": "integer", "minimum": 1, "maximum": 86400}
+          }
+        },
+        "uploads": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["single_max_bytes", "multipart_part_bytes", "max_bytes"],
+          "properties": {
+            "single_max_bytes": {"type": "integer", "minimum": 1},
+            "multipart_part_bytes": {"type": "integer", "minimum": 5242880},
+            "max_bytes": {"type": "integer", "minimum": 1}
+          }
+        },
+        "ai": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled_input_kinds", "job_timeout_seconds"],
+          "properties": {
+            "enabled_input_kinds": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["audio", "image", "document", "text"]}
+            },
+            "job_timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 86400}
+          }
+        },
+        "clients": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimum_wire_version", "poll_interval_seconds"],
+          "properties": {
+            "minimum_wire_version": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+            "poll_interval_seconds": {"type": "integer", "minimum": 1, "maximum": 3600}
+          }
+        }
+      }
+    }
+  }
+}
