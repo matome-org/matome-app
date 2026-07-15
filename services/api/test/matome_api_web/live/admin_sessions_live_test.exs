@@ -11,9 +11,9 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
 
   import Ecto.Query
 
-  alias MatomeApi.Admin.AuditEvent
   alias MatomeApi.Auth
   alias MatomeApi.Auth.RefreshToken
+  alias MatomeApi.Events.Event
   alias MatomeApi.Repo
   alias MatomeApiWeb.AdminLive.Sessions
 
@@ -117,7 +117,12 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
 
       assert %RefreshToken{revoked_at: %DateTime{}} = Repo.get_by!(RefreshToken, jti: jti)
 
-      audit = Repo.one!(from e in AuditEvent, where: e.action == "admin.session_revoked")
+      audit =
+        Repo.one!(
+          from e in Event,
+            where: e.event_key == "security.admin.session_revoked.v1"
+        )
+
       assert audit.actor_id == nil
       assert audit.actor_email == admin.email
       assert audit.remote_ip == "192.0.2.99"
@@ -143,7 +148,11 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
       assert to =~ "return_to="
 
       assert %RefreshToken{revoked_at: nil} = Repo.get_by!(RefreshToken, jti: jti)
-      refute Repo.exists?(from e in AuditEvent, where: e.action == "admin.session_revoked")
+
+      refute Repo.exists?(
+               from e in Event,
+                 where: e.event_key == "security.admin.session_revoked.v1"
+             )
     end
 
     test "unknown jti flashes an error" do

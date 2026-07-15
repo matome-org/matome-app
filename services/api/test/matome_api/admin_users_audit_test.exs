@@ -1,15 +1,16 @@
 defmodule MatomeApi.AdminUsersAuditTest do
   @moduledoc """
   W7 (#1875) context layer: the §9.6 users directory (methods / MFA /
-  last-login) and the filtered `admin_audit_events` reader that feed the
+  last-login) and the filtered security event reader that feed the
   Users + Audit LiveViews.
   """
   use MatomeApi.DataCase, async: true
 
   alias MatomeApi.Admin
-  alias MatomeApi.Admin.AuditEvent
   alias MatomeApi.Auth
   alias MatomeApi.Auth.RefreshToken
+  alias MatomeApi.Events
+  alias MatomeApi.Events.Event
 
   defp register!(email, meta \\ %{}) do
     {:ok, auth} =
@@ -100,17 +101,26 @@ defmodule MatomeApi.AdminUsersAuditTest do
       insert_audit!(admin_b, "admin.logout", %{"target" => "self"}, late)
 
       all = Admin.list_audit_events()
-      assert Enum.map(all, & &1.action) == [
-               "admin.logout",
-               "admin.session_revoked",
-               "admin.login"
+
+      assert Enum.map(all, & &1.event_key) == [
+               "security.admin.logout.v1",
+               "security.admin.session_revoked.v1",
+               "security.admin.login.v1"
              ]
 
       by_admin = Admin.list_audit_events(actor_id: admin_a.id)
-      assert Enum.map(by_admin, & &1.action) == ["admin.session_revoked", "admin.login"]
+
+      assert Enum.map(by_admin, & &1.event_key) == [
+               "security.admin.session_revoked.v1",
+               "security.admin.login.v1"
+             ]
 
       by_email = Admin.list_audit_events(actor_email: admin_a.email)
-      assert Enum.map(by_email, & &1.action) == ["admin.session_revoked", "admin.login"]
+
+      assert Enum.map(by_email, & &1.event_key) == [
+               "security.admin.session_revoked.v1",
+               "security.admin.login.v1"
+             ]
 
       by_action = Admin.list_audit_events(action: "admin.logout")
       assert length(by_action) == 1
@@ -119,14 +129,14 @@ defmodule MatomeApi.AdminUsersAuditTest do
 
       by_target = Admin.list_audit_events(target: "42")
       assert length(by_target) == 1
-      assert hd(by_target).action == "admin.session_revoked"
+      assert hd(by_target).event_key == "security.admin.session_revoked.v1"
 
       by_time = Admin.list_audit_events(since: mid, until: late)
-      assert Enum.map(by_time, & &1.action) == ["admin.session_revoked"]
+      assert Enum.map(by_time, & &1.event_key) == ["security.admin.session_revoked.v1"]
     end
 
     test "blank filters are no-ops" do
-      Admin.audit!("admin.login", metadata: %{"email" => "x@example.com"})
+      Admin.audit!("admin.login", metadata: %{"via" => "otp"})
 
       assert length(
                Admin.list_audit_events(
@@ -140,14 +150,28 @@ defmodule MatomeApi.AdminUsersAuditTest do
   end
 
   defp insert_audit!(actor, action, metadata, inserted_at) do
-    %AuditEvent{}
-    |> AuditEvent.changeset(%{
-      actor_id: actor.id,
-      actor_email: actor.email,
-      action: action,
-      metadata: metadata
-    })
-    |> Ecto.Changeset.put_change(:inserted_at, inserted_at)
+    {:ok, event_key} = Events.admin_event_key(action)
+
+    attrs =
+      case action do
+        "admin.session_revoked" ->
+          %{subject_type: "user", subject_id: to_string(metadata["user_id"]), details: %{}}
+
+        "admin.login" ->
+          %{details: %{"via" => metadata["target"]}}
+
+        _action ->
+          %{details: %{}}
+      end
+
+    %Event{event_key: event_key}
+    |> Event.changeset(
+      Map.merge(attrs, %{
+        actor_id: actor.id,
+        actor_email: actor.email,
+        occurred_at: inserted_at
+      })
+    )
     |> Repo.insert!()
   end
 end

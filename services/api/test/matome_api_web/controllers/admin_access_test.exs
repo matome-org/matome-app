@@ -13,7 +13,7 @@ defmodule MatomeApiWeb.AdminAccessTest do
   import Ecto.Query
   import Swoosh.TestAssertions
 
-  alias MatomeApi.Admin.AuditEvent
+  alias MatomeApi.Events.Event
   alias MatomeApi.Repo
   alias MatomeApiWeb.AdminAuth
 
@@ -48,10 +48,10 @@ defmodule MatomeApiWeb.AdminAccessTest do
 
   defp audit_actions(email) do
     Repo.all(
-      from e in AuditEvent,
+      from e in Event,
         where: e.actor_email == ^email,
         order_by: e.id,
-        select: e.action
+        select: e.event_key
     )
   end
 
@@ -112,8 +112,8 @@ defmodule MatomeApiWeb.AdminAccessTest do
       assert redirected_to(conn) == "/admin"
 
       assert conn |> get("/admin") |> html_response(200) =~ "Admin"
-      assert "admin.login_otp_requested" in audit_actions(@allowlisted)
-      assert "admin.login" in audit_actions(@allowlisted)
+      assert "security.admin.login_otp_requested.v1" in audit_actions(@allowlisted)
+      assert "security.admin.login.v1" in audit_actions(@allowlisted)
     end
 
     test "OTP is one-shot — reuse fails", %{conn: conn} do
@@ -132,7 +132,7 @@ defmodule MatomeApiWeb.AdminAccessTest do
       {conn, _code} = request_and_code!(conn, @allowlisted)
       conn = post(conn, "/admin/otp", %{"code" => "000000"})
       assert redirected_to(conn) =~ "/admin/otp"
-      assert "admin.login_failed" in audit_actions(@allowlisted)
+      assert "security.admin.login_failed.v1" in audit_actions(@allowlisted)
     end
 
     test "expired admin session is rejected", %{conn: conn} do

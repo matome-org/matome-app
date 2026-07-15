@@ -7,8 +7,8 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
   use MatomeApiWeb.ConnCase
 
   alias MatomeApi.Admin
-  alias MatomeApi.Admin.AuditEvent
   alias MatomeApi.Auth
+  alias MatomeApi.Events.Event
   alias MatomeApi.Repo
   alias MatomeApiWeb.AdminLive.Audit
 
@@ -98,6 +98,7 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
   describe "handle_event filter" do
     test "narrows events by action and target" do
       admin = admin!("filter-admin@example.com")
+      victim = register!("filter-victim@example.com").user
 
       Admin.audit!("admin.login",
         actor: %{email: admin.email},
@@ -106,7 +107,7 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
 
       Admin.audit!("admin.session_revoked",
         actor: %{email: admin.email},
-        metadata: %{"user_id" => 99, "jti" => "tok-xyz"}
+        metadata: %{"user_id" => victim.id, "jti" => "tok-xyz"}
       )
 
       {:noreply, socket} =
@@ -114,16 +115,16 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
           "filter",
           %{
             "action" => "admin.session_revoked",
-            "target" => "99",
+            "target" => to_string(victim.id),
             "actor_email" => ""
           },
           socket(admin)
         )
 
       assert length(socket.assigns.events) == 1
-      assert hd(socket.assigns.events).action == "admin.session_revoked"
+      assert hd(socket.assigns.events).event_key == "security.admin.session_revoked.v1"
       assert socket.assigns.filters.action == "admin.session_revoked"
-      assert socket.assigns.filters.target == "99"
+      assert socket.assigns.filters.target == to_string(victim.id)
     end
 
     test "clear resets filters and reloads the full trail" do
@@ -140,7 +141,9 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
             since: nil,
             until: nil
           },
-          events: Repo.all(AuditEvent) |> Enum.filter(&(&1.action == "admin.login"))
+          events:
+            Repo.all(Event)
+            |> Enum.filter(&(&1.event_key == "security.admin.login.v1"))
         })
 
       {:noreply, socket} = Audit.handle_event("clear", %{}, seeded)

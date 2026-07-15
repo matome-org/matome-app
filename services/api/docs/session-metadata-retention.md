@@ -79,7 +79,7 @@ decision to keep data indefinitely.**
   LiveView) will show a user's own sessions/devices behind the full W3
   admin gate (network allowlist → role → TOTP → audit); every admin read
   of another user's session metadata must be audited via
-  `admin_audit_events` like any other admin action.
+  the canonical security `events` trail like any other admin action.
 - Raw `ip`/`user_agent` never appear in application logs as part of this
   capture path (nothing is logged on login beyond what Phoenix already
   logs).

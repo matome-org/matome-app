@@ -279,6 +279,7 @@
     "work_transition": {
       "contract_version": "1",
       "event_id": "evt_01J00000000000000000000000",
+      "catalog_key": "operational.work_transition.v1",
       "event_name": "operational.work_transition",
       "event_version": 1,
       "event_class": "operational",
@@ -291,6 +292,7 @@
     "local_space_aggregate": {
       "contract_version": "1",
       "event_id": "evt_01J00000000000000000000001",
+      "catalog_key": "product.local_space_aggregate.v1",
       "event_name": "product.local_space_aggregate",
       "event_version": 1,
       "event_class": "product",

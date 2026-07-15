@@ -7,7 +7,7 @@ replaces password + authenticator TOTP. Staff identity does **not** require a
 ## Assets
 
 - Admin capability (sessions revoke, future mutations).
-- The audit trail (`admin_audit_events`).
+- Security-class rows in the canonical `events` trail.
 - Metadata visible in Users / Audit / Sessions LiveViews.
 
 ## Layers (defense in depth)
@@ -20,7 +20,7 @@ replaces password + authenticator TOTP. Staff identity does **not** require a
 | 4 | Email OTP | `Admin.request_login_otp/2` + `verify_login_otp/2` | 6-digit code, SHA-256 at rest, 30-min TTL, one-shot consume; wrong code audited as `admin.login_failed` |
 | 5 | Session | `MatomeApiWeb.AdminAuth` | Cookie session keyed by `admin_email`; absolute TTL (default 30 min); no sliding renewal |
 | 6 | Sensitive re-auth | OTP freshness (`admin_otp_verified_at`, default 5 min) | Stale revoke → `/admin/otp?return_to=…` |
-| 7 | Append-only audit | `admin_audit_events` + raise-triggers | `actor_id` nullable; `actor_email` always set from the allowlisted address |
+| 7 | Append-only audit | canonical `events` + raise-triggers | `actor_id` nullable; `actor_email` snapshotted from the allowlisted address |
 
 ### LiveView
 

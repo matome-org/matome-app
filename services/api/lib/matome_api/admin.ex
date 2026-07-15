@@ -5,14 +5,15 @@ defmodule MatomeApi.Admin do
   - **Panel kill switch** — `ADMIN_PANEL_ENABLED` (see `NetworkPolicy`).
   - **Email allowlist** — `ADMIN_EMAIL_ALLOWLIST`; no `users` row required.
   - **One-shot email OTP** — hashed in `admin_login_otps`, 30-min TTL.
-  - **Day-one audit** — `audit!/2` writes append-only `admin_audit_events`.
+  - **Day-one audit** — `audit!/2` writes fail-closed security events.
   """
 
   import Ecto.Query
 
-  alias MatomeApi.Admin.{AuditEvent, Dashboard, LoginOtp, NetworkPolicy, Notifier, TotpSecret}
+  alias MatomeApi.Admin.{Dashboard, LoginOtp, NetworkPolicy, Notifier, TotpSecret}
   alias MatomeApi.Auth
   alias MatomeApi.Auth.{RefreshToken, User}
+  alias MatomeApi.Events
   alias MatomeApi.RateLimiter
   alias MatomeApi.Repo
 
@@ -213,23 +214,26 @@ defmodule MatomeApi.Admin do
   end
 
   @doc """
-  Appends an admin audit event; raises on failure.
+  Appends a mandatory security event; raises on failure.
 
   `opts`: `:actor` (`%{email: ...}`, `%User{}`, or nil), `:metadata`, `:remote_ip`.
   """
   def audit!(action, opts \\ []) when is_binary(action) do
     actor = Keyword.get(opts, :actor)
     {actor_id, actor_email} = actor_fields(actor)
+    {:ok, event_key} = Events.admin_event_key(action)
 
-    %AuditEvent{}
-    |> AuditEvent.changeset(%{
-      actor_id: actor_id,
-      actor_email: actor_email,
-      action: action,
-      metadata: Keyword.get(opts, :metadata, %{}),
-      remote_ip: Keyword.get(opts, :remote_ip)
-    })
-    |> Repo.insert!()
+    attrs =
+      action
+      |> admin_event_attrs(Keyword.get(opts, :metadata, %{}))
+      |> Map.merge(%{
+        actor_id: actor_id,
+        actor_email: actor_email,
+        remote_ip: Keyword.get(opts, :remote_ip),
+        severity: if(action == "admin.login_failed", do: "warning", else: "info")
+      })
+
+    Events.write_security!(event_key, attrs)
   end
 
   defp actor_fields(%User{id: id, email: email}), do: {id, email}
@@ -287,7 +291,7 @@ defmodule MatomeApi.Admin do
   end
 
   @doc """
-  Read the append-only `admin_audit_events` trail, newest first.
+  Read security-class events for the existing admin audit view, newest first.
   """
   def list_audit_events(opts \\ []) do
     actor_id = Keyword.get(opts, :actor_id)
@@ -297,13 +301,24 @@ defmodule MatomeApi.Admin do
     since = Keyword.get(opts, :since)
     until = Keyword.get(opts, :until)
 
-    from(e in AuditEvent, order_by: [desc: e.inserted_at])
-    |> maybe_where_actor(actor_id)
-    |> maybe_where_actor_email(actor_email)
-    |> maybe_where_action(action)
-    |> maybe_where_since(since)
-    |> maybe_where_until(until)
-    |> Repo.all()
+    event_key =
+      case action && Events.admin_event_key(action) do
+        {:ok, key} -> key
+        _other -> action
+      end
+
+    [
+      limit: 100,
+      event_class: "security",
+      actor_id: actor_id,
+      actor_email: actor_email && String.downcase(actor_email),
+      event_key: event_key,
+      since: since,
+      until: until
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Events.list_events()
+    |> Map.fetch!(:entries)
     |> maybe_filter_target(target)
   end
 
@@ -318,34 +333,95 @@ defmodule MatomeApi.Admin do
 
   defp blank_to_nil(value), do: value
 
-  defp maybe_where_actor(query, nil), do: query
-  defp maybe_where_actor(query, actor_id), do: where(query, [e], e.actor_id == ^actor_id)
-
-  defp maybe_where_actor_email(query, nil), do: query
-
-  defp maybe_where_actor_email(query, email),
-    do: where(query, [e], e.actor_email == ^String.downcase(email))
-
-  defp maybe_where_action(query, nil), do: query
-  defp maybe_where_action(query, action), do: where(query, [e], e.action == ^action)
-
-  defp maybe_where_since(query, nil), do: query
-  defp maybe_where_since(query, since), do: where(query, [e], e.inserted_at >= ^since)
-
-  defp maybe_where_until(query, nil), do: query
-  defp maybe_where_until(query, until), do: where(query, [e], e.inserted_at < ^until)
-
   defp maybe_filter_target(events, nil), do: events
 
   defp maybe_filter_target(events, target) do
     needle = String.downcase(target)
 
     Enum.filter(events, fn event ->
-      event.metadata
-      |> Jason.encode!()
-      |> String.downcase()
-      |> String.contains?(needle)
+      subject_matches? =
+        event.subject_id && String.contains?(String.downcase(event.subject_id), needle)
+
+      owner_matches? = event.owner_id && String.contains?(to_string(event.owner_id), needle)
+
+      details_match? =
+        event.details
+        |> Jason.encode!()
+        |> String.downcase()
+        |> String.contains?(needle)
+
+      subject_matches? || owner_matches? || details_match?
     end)
+  end
+
+  defp admin_event_attrs(action, metadata) do
+    metadata = stringify_keys(metadata)
+
+    case action do
+      "admin.session_revoked" ->
+        %{}
+        |> put_present(:owner_id, metadata["user_id"])
+        |> put_present(:device_id, metadata["device_id"])
+        |> put_present(:correlation_id, metadata["family_id"])
+        |> put_subject("session", metadata["jti"])
+
+      "admin.space_updated" ->
+        changed_keys =
+          metadata
+          |> Map.get("changes", %{})
+          |> Map.keys()
+          |> Enum.map(&to_string/1)
+          |> Enum.sort()
+
+        %{}
+        |> put_subject("workspace", metadata["workspace_id"])
+        |> Map.put(:details, %{"changed_keys" => changed_keys})
+
+      "admin.space_member_added" ->
+        %{
+          details: Map.take(metadata, ~w(workspace_id user_id role))
+        }
+        |> put_subject("workspace", metadata["workspace_id"])
+
+      "admin.space_member_revoked" ->
+        %{
+          details: Map.take(metadata, ~w(workspace_id user_id))
+        }
+        |> put_subject("space_member", metadata["member_id"])
+
+      "admin.space_lifecycle" ->
+        %{details: Map.take(metadata, ~w(to_status))}
+        |> put_subject("workspace", metadata["workspace_id"])
+
+      "admin.login" ->
+        %{details: Map.take(metadata, ~w(method result via))}
+
+      "admin.login_failed" ->
+        %{details: Map.take(metadata, ~w(method reason result))}
+
+      "admin.reauth" ->
+        %{details: Map.take(metadata, ~w(method result))}
+
+      _other ->
+        %{details: %{}}
+    end
+  end
+
+  defp stringify_keys(metadata) when is_map(metadata) do
+    Map.new(metadata, fn {key, value} -> {to_string(key), value} end)
+  end
+
+  defp stringify_keys(_metadata), do: %{}
+
+  defp put_present(attrs, _key, nil), do: attrs
+  defp put_present(attrs, key, value), do: Map.put(attrs, key, value)
+
+  defp put_subject(attrs, _type, nil), do: attrs
+
+  defp put_subject(attrs, type, id) do
+    attrs
+    |> Map.put(:subject_type, type)
+    |> Map.put(:subject_id, to_string(id))
   end
 
   @doc """

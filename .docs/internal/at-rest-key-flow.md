@@ -450,7 +450,7 @@ Defense in depth — every layer must pass:
 | Identity | **hard allowlist** — `ADMIN_EMAIL_ALLOWLIST` env CSV; no `users` row required | NOT self-service; non-members get total silence |
 | Auth strength | **email OTP mandatory** — one-shot code, 30-min TTL | password + authenticator TOTP retired for /admin |
 | Session | short admin session TTL, re-auth on sensitive actions | absolute TTL; OTP freshness for revoke |
-| Audit | every admin login + action written to `admin_audit_events` | immutable log; `actor_email` always set |
+| Audit | every admin login + action written to security-class `events` | immutable log; `actor_email` snapshotted |
 
 ```mermaid
 sequenceDiagram
@@ -460,7 +460,7 @@ sequenceDiagram
     participant LV as Backoffice (/admin)
     participant AL as ADMIN_EMAIL_ALLOWLIST
     participant Mail as Swoosh OTP
-    participant AUD as admin_audit_events
+    participant AUD as events (security class)
 
     A->>NET: reach /admin
     NET-->>A: 404 if panel disabled
@@ -565,7 +565,7 @@ spaces. (Quota and expiration are pure metadata, so admin controls those freely.
 | `totp_secrets` / `recovery_codes` *(new)* | MFA factors |
 | `spaces` | `+ quota_bytes, used_bytes, expires_at, status, owner_id` |
 | `space_members` *(new)* | `space_id, user_id, role, granted_at, revoked_at` |
-| `admin_audit_events` *(new)* | `admin_user_id, action, target_type, target_id, metadata, ip, inserted_at` |
+| `events` *(canonical)* | indexed actor/owner/subject/device/run/correlation dimensions plus bounded details |
 
 ### 9.6 Effort (after the doc's auth layer exists)
 
@@ -577,7 +577,7 @@ spaces. (Quota and expiration are pure metadata, so admin controls those freely.
 | 4 | Hard-allowlist revocation + per-request check + cache (§9.3) | M ~2-3d |
 | 5 | Sessions LiveView (hierarchy + Presence + revoke, real-time) | M ~3-4d |
 | 6 | Users LiveView (methods, MFA status, last login) | M ~2-3d |
-| 7 | Audit log viewer (`admin_audit_events`) | S/M ~2d |
+| 7 | Audit log viewer (security-class `events`) | S/M ~2d |
 | 8 | Spaces admin (quota, expiration, lifecycle, Oban jobs) | L ~1wk |
 | 9 | Space access mgmt (membership + roles + key-share UX) | M ~3-4d |
 

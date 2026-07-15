@@ -142,6 +142,7 @@
     "classes": ["security", "operational", "product"],
     "envelope_required": [
       "event_id",
+      "catalog_key",
       "event_name",
       "event_version",
       "event_class",
@@ -168,28 +169,155 @@
     "local_space_egress": "No local Space id or content may leave a device; only opt-in aggregate product events are eligible.",
     "catalog": [
       {
-        "event_name": "security.admin_auth_verified",
+        "catalog_key": "security.event_catalog.changed.v1",
+        "event_name": "security.event_catalog.changed",
         "event_class": "security",
         "event_version": 1,
         "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["changed_fields"]
+      },
+      {
+        "catalog_key": "security.admin.login_otp_requested.v1",
+        "event_name": "security.admin.login_otp_requested",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": []
+      },
+      {
+        "catalog_key": "security.admin.login.v1",
+        "event_name": "security.admin.login",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["method", "result", "via"]
+      },
+      {
+        "catalog_key": "security.admin.login_failed.v1",
+        "event_name": "security.admin.login_failed",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["method", "reason", "result"]
+      },
+      {
+        "catalog_key": "security.admin.logout.v1",
+        "event_name": "security.admin.logout",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": []
+      },
+      {
+        "catalog_key": "security.admin.reauth.v1",
+        "event_name": "security.admin.reauth",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
         "enabled": true,
         "retention_days": 365,
         "payload_allowlist": ["method", "result"]
       },
       {
+        "catalog_key": "security.admin.session_revoked.v1",
+        "event_name": "security.admin.session_revoked",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": []
+      },
+      {
+        "catalog_key": "security.admin.space_updated.v1",
+        "event_name": "security.admin.space_updated",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["changed_keys"]
+      },
+      {
+        "catalog_key": "security.admin.space_member_added.v1",
+        "event_name": "security.admin.space_member_added",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["workspace_id", "user_id", "role"]
+      },
+      {
+        "catalog_key": "security.admin.space_member_revoked.v1",
+        "event_name": "security.admin.space_member_revoked",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["workspace_id", "user_id"]
+      },
+      {
+        "catalog_key": "security.admin.space_lifecycle.v1",
+        "event_name": "security.admin.space_lifecycle",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["to_status"]
+      },
+      {
+        "catalog_key": "security.admin_auth_verified.v1",
+        "event_name": "security.admin_auth_verified",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["method", "result"]
+      },
+      {
+        "catalog_key": "security.admin_config_changed.v1",
         "event_name": "security.admin_config_changed",
         "event_class": "security",
         "event_version": 1,
         "required": true,
+        "locked": true,
         "enabled": true,
         "retention_days": 365,
         "payload_allowlist": ["revision", "changed_keys", "result"]
       },
       {
+        "catalog_key": "operational.work_transition.v1",
         "event_name": "operational.work_transition",
         "event_class": "operational",
         "event_version": 1,
         "required": true,
+        "locked": true,
         "enabled": true,
         "retention_days": 90,
         "payload_allowlist": [
@@ -203,42 +331,62 @@
         ]
       },
       {
+        "catalog_key": "operational.upload_completed.v1",
         "event_name": "operational.upload_completed",
         "event_class": "operational",
         "event_version": 1,
         "required": false,
+        "locked": false,
         "enabled": true,
         "retention_days": 90,
         "payload_allowlist": ["mode", "byte_size", "part_count", "duration_ms", "result", "error_code"]
       },
       {
+        "catalog_key": "operational.processing_completed.v1",
         "event_name": "operational.processing_completed",
         "event_class": "operational",
         "event_version": 1,
         "required": false,
+        "locked": false,
         "enabled": true,
         "retention_days": 90,
         "payload_allowlist": ["input_kind", "output_types", "duration_ms", "attempt", "result", "error_code"]
       },
       {
+        "catalog_key": "product.capture_completed.v1",
         "event_name": "product.capture_completed",
         "event_class": "product",
         "event_version": 1,
         "required": false,
+        "locked": false,
         "enabled": false,
         "retention_days": 30,
         "payload_allowlist": ["input_kind", "duration_bucket", "size_bucket", "platform", "result"]
       },
       {
+        "catalog_key": "product.local_space_aggregate.v1",
         "event_name": "product.local_space_aggregate",
         "event_class": "product",
         "event_version": 1,
         "required": false,
+        "locked": false,
         "enabled": false,
         "retention_days": 30,
         "payload_allowlist": ["period", "item_count_bucket", "byte_size_bucket", "platform"]
       }
-    ]
+    ],
+    "admin_action_map": {
+      "admin.login_otp_requested": "security.admin.login_otp_requested.v1",
+      "admin.login": "security.admin.login.v1",
+      "admin.login_failed": "security.admin.login_failed.v1",
+      "admin.logout": "security.admin.logout.v1",
+      "admin.reauth": "security.admin.reauth.v1",
+      "admin.session_revoked": "security.admin.session_revoked.v1",
+      "admin.space_updated": "security.admin.space_updated.v1",
+      "admin.space_member_added": "security.admin.space_member_added.v1",
+      "admin.space_member_revoked": "security.admin.space_member_revoked.v1",
+      "admin.space_lifecycle": "security.admin.space_lifecycle.v1"
+    }
   },
   "system_config": {
     "schema": "system-config.schema.json",

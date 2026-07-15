@@ -1,7 +1,7 @@
 defmodule MatomeApiWeb.AdminLive.Audit do
   @moduledoc """
-  The §9.6 audit-log viewer: read-only window onto append-only
-  `admin_audit_events`. Actor filter is by email (email-OTP gate).
+  The §9.6 audit-log viewer: read-only window onto append-only security events.
+  Actor filter is by email (email-OTP gate).
   """
   use MatomeApiWeb, :live_view
 
@@ -9,7 +9,7 @@ defmodule MatomeApiWeb.AdminLive.Audit do
   import MatomeApiWeb.MatomeComposites
 
   alias MatomeApi.Admin
-  alias MatomeApi.Admin.AuditEvent
+  alias MatomeApi.Events.Event
   alias MatomeApi.Admin.NetworkPolicy
   alias MatomeApi.Repo
 
@@ -100,15 +100,15 @@ defmodule MatomeApiWeb.AdminLive.Audit do
       </.empty_state>
 
       <.data_table :if={@events != []} rows={@events} row_id={& &1.id}>
-        <:col :let={event} label="When" width="when">{format_time(event.inserted_at)}</:col>
+        <:col :let={event} label="When" width="when">{format_time(event.occurred_at)}</:col>
         <:col :let={event} label="Admin">
           <.table_primary_cell
             title={event.actor_email || "—"}
             summary={if event.actor_id, do: "id #{event.actor_id}", else: "email OTP"}
           />
         </:col>
-        <:col :let={event} label="Action" width="matome">{event.action}</:col>
-        <:col :let={event} label="Target" width="items">{format_target(event.metadata)}</:col>
+        <:col :let={event} label="Action" width="matome">{event.event_key}</:col>
+        <:col :let={event} label="Target" width="items">{format_target(event)}</:col>
         <:col :let={event} label="IP" width="space">{event.remote_ip || "—"}</:col>
       </.data_table>
     </div>
@@ -135,7 +135,7 @@ defmodule MatomeApiWeb.AdminLive.Audit do
 
   defp list_admins do
     from_events =
-      from(e in AuditEvent,
+      from(e in Event,
         where: not is_nil(e.actor_email),
         distinct: true,
         select: e.actor_email,
@@ -188,11 +188,13 @@ defmodule MatomeApiWeb.AdminLive.Audit do
   defp format_time(nil), do: "—"
   defp format_time(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
 
-  defp format_target(metadata) when metadata == %{}, do: "—"
+  defp format_target(%Event{subject_type: type, subject_id: id})
+       when is_binary(type) and is_binary(id),
+       do: "#{type}=#{id}"
 
-  defp format_target(metadata) when is_map(metadata) do
-    metadata
-    |> Enum.map(fn {k, v} -> "#{k}=#{v}" end)
-    |> Enum.join(" · ")
+  defp format_target(%Event{details: details}) when details == %{}, do: "—"
+
+  defp format_target(%Event{details: details}) do
+    details |> Enum.map(fn {key, value} -> "#{key}=#{value}" end) |> Enum.join(" · ")
   end
 end

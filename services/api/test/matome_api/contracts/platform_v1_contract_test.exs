@@ -77,13 +77,30 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
     assert contract["events"]["reject_unknown_payload_keys"]
     assert contract["events"]["max_payload_bytes"] == 4096
 
+    assert Enum.all?(Map.values(fixtures["events"]), fn fixture ->
+             Enum.all?(contract["events"]["envelope_required"], &Map.has_key?(fixture, &1))
+           end)
+
     required_catalog_entries =
       contract["events"]["catalog"]
       |> Enum.filter(& &1["required"])
 
     assert required_catalog_entries != []
     assert Enum.all?(required_catalog_entries, & &1["enabled"])
+    assert Enum.all?(required_catalog_entries, & &1["locked"])
     assert Enum.all?(contract["events"]["catalog"], &is_list(&1["payload_allowlist"]))
+
+    catalog_keys = Enum.map(contract["events"]["catalog"], & &1["catalog_key"])
+    assert length(catalog_keys) == MapSet.size(MapSet.new(catalog_keys))
+
+    assert Enum.all?(catalog_keys, fn key ->
+             Regex.match?(~r/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+\.v[1-9][0-9]*$/, key)
+           end)
+
+    assert MapSet.subset?(
+             contract["events"]["admin_action_map"] |> Map.values() |> MapSet.new(),
+             MapSet.new(catalog_keys)
+           )
 
     prohibited = MapSet.new(contract["events"]["prohibited_payload_keys"])
 

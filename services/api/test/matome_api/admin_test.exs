@@ -8,9 +8,10 @@ defmodule MatomeApi.AdminTest do
   import Swoosh.TestAssertions
 
   alias MatomeApi.Admin
-  alias MatomeApi.Admin.{AuditEvent, LoginOtp, NetworkPolicy}
+  alias MatomeApi.Admin.{LoginOtp, NetworkPolicy}
   alias MatomeApi.Auth
   alias MatomeApi.Auth.User
+  alias MatomeApi.Events.Event
 
   @allowlisted "otp-admin@example.com"
 
@@ -105,8 +106,13 @@ defmodule MatomeApi.AdminTest do
           metadata: %{"via" => "otp"}
         )
 
-      assert %AuditEvent{actor_id: nil, actor_email: @allowlisted, action: "admin.login"} = event
-      assert event.metadata["via"] == "otp"
+      assert %Event{
+               actor_id: nil,
+               actor_email: @allowlisted,
+               event_key: "security.admin.login.v1"
+             } = event
+
+      assert event.details["via"] == "otp"
     end
   end
 end

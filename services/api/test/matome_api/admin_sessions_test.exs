@@ -6,9 +6,9 @@ defmodule MatomeApi.AdminSessionsTest do
   use MatomeApi.DataCase, async: true
 
   alias MatomeApi.Admin
-  alias MatomeApi.Admin.AuditEvent
   alias MatomeApi.Auth
   alias MatomeApi.Auth.RefreshToken
+  alias MatomeApi.Events.Event
 
   defp register!(email, meta \\ %{}) do
     {:ok, auth} =
@@ -114,12 +114,16 @@ defmodule MatomeApi.AdminSessionsTest do
       assert live_in_family == 0
 
       audit =
-        Repo.one!(from e in AuditEvent, where: e.action == "admin.session_revoked")
+        Repo.one!(
+          from e in Event,
+            where: e.event_key == "security.admin.session_revoked.v1"
+        )
 
       assert audit.actor_id == admin.id
       assert audit.remote_ip == "192.0.2.1"
-      assert audit.metadata["jti"] == jti
-      assert audit.metadata["user_id"] == user.id
+      assert audit.subject_type == "session"
+      assert audit.subject_id == jti
+      assert audit.owner_id == user.id
     end
 
     test "returns {:error, :not_found} for an unknown jti and audits nothing" do
@@ -128,7 +132,10 @@ defmodule MatomeApi.AdminSessionsTest do
       assert {:error, :not_found} =
                Admin.revoke_session(admin, Ecto.UUID.generate(), remote_ip: nil)
 
-      refute Repo.exists?(from e in AuditEvent, where: e.action == "admin.session_revoked")
+      refute Repo.exists?(
+               from e in Event,
+                 where: e.event_key == "security.admin.session_revoked.v1"
+             )
     end
   end
 end

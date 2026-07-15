@@ -89,13 +89,17 @@ a stable code plus a `retryable` boolean.
 
 ## Events and catalog
 
-One event envelope and one event table cover security, operational, and product
-events. Catalog entries pin class, schema version, enablement, retention, and a
-payload allowlist. Unknown payload keys and payloads over 4096 bytes are
-rejected. Required security/operational events cannot be disabled.
+One event envelope and one append-only `events` table cover security,
+operational, and product events. The separate `event_catalog` config table uses
+stable keys such as `operational.work_transition.v1` and pins class, schema
+version, enablement, retention, and a payload allowlist. Unknown payload keys,
+nested objects, and payloads over 4096 bytes are rejected. Locked
+security/operational events cannot be disabled.
 
-The initial retention floors are 365 days for security, 90 for operational,
-and 30 for product. Payloads never contain credentials, URLs with signatures,
+The retention floors are 365 days for security, 90 for operational, and 30 for
+product. Each event snapshots class and expiry at write time, so catalog edits
+apply only to future rows and emit `security.event_catalog.changed.v1` in the
+same transaction. Payloads never contain credentials, URLs with signatures,
 item content, notes, transcripts, or summaries. Events about local Spaces never
 egress with a Space id or content. Only the disabled-by-default aggregate
 product fixture is eligible after opt-in.

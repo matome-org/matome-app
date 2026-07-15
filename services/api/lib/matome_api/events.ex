@@ -1,0 +1,222 @@
+defmodule MatomeApi.Events do
+  @moduledoc """
+  Canonical event collection, catalog policy, retention, and pagination.
+
+  Security writes are fail-closed through `write_security!/2`. Operational and
+  product callers use `write_optional/2`; disabled or malformed optional events
+  never block the product operation that attempted to report them.
+  """
+
+  import Ecto.Query
+  require Logger
+
+  alias MatomeApi.Events.{Event, EventCatalog}
+  alias MatomeApi.Repo
+
+  @max_page_size 100
+  @default_page_size 50
+
+  @detail_keys %{
+    "security.event_catalog.changed.v1" => ~w(changed_fields),
+    "security.admin.login_otp_requested.v1" => [],
+    "security.admin.login.v1" => ~w(method result via),
+    "security.admin.login_failed.v1" => ~w(method reason result),
+    "security.admin.logout.v1" => [],
+    "security.admin.reauth.v1" => ~w(method result),
+    "security.admin.session_revoked.v1" => [],
+    "security.admin.space_updated.v1" => ~w(changed_keys),
+    "security.admin.space_member_added.v1" => ~w(workspace_id user_id role),
+    "security.admin.space_member_revoked.v1" => ~w(workspace_id user_id),
+    "security.admin.space_lifecycle.v1" => ~w(to_status),
+    "security.admin_auth_verified.v1" => ~w(method result),
+    "security.admin_config_changed.v1" => ~w(revision changed_keys result),
+    "operational.work_transition.v1" =>
+      ~w(operation input_kind from_state to_state attempt duration_ms error_code),
+    "operational.upload_completed.v1" =>
+      ~w(mode byte_size part_count duration_ms result error_code),
+    "operational.processing_completed.v1" =>
+      ~w(input_kind output_types duration_ms attempt result error_code),
+    "product.capture_completed.v1" => ~w(input_kind duration_bucket size_bucket platform result),
+    "product.local_space_aggregate.v1" => ~w(period item_count_bucket byte_size_bucket platform)
+  }
+
+  @admin_action_keys %{
+    "admin.login_otp_requested" => "security.admin.login_otp_requested.v1",
+    "admin.login" => "security.admin.login.v1",
+    "admin.login_failed" => "security.admin.login_failed.v1",
+    "admin.logout" => "security.admin.logout.v1",
+    "admin.reauth" => "security.admin.reauth.v1",
+    "admin.session_revoked" => "security.admin.session_revoked.v1",
+    "admin.space_updated" => "security.admin.space_updated.v1",
+    "admin.space_member_added" => "security.admin.space_member_added.v1",
+    "admin.space_member_revoked" => "security.admin.space_member_revoked.v1",
+    "admin.space_lifecycle" => "security.admin.space_lifecycle.v1"
+  }
+
+  def detail_keys(key), do: Map.fetch(@detail_keys, key)
+  def admin_event_key(action), do: Map.fetch(@admin_action_keys, action)
+
+  @doc "Writes a mandatory security event or raises without allowing the caller to continue."
+  def write_security!(key, attrs \\ %{}) do
+    attrs = normalize_attrs(attrs)
+
+    case Repo.get(EventCatalog, key) do
+      %EventCatalog{event_class: "security", enabled: true} ->
+        %Event{event_key: key}
+        |> Event.changeset(attrs)
+        |> Repo.insert!()
+
+      %EventCatalog{event_class: "security"} ->
+        raise "security event is disabled: #{key}"
+
+      %EventCatalog{} ->
+        raise ArgumentError, "event is not security-class: #{key}"
+
+      nil ->
+        raise ArgumentError, "unknown security event: #{key}"
+    end
+  end
+
+  @doc "Best-effort write for operational and product events. Never raises."
+  def write_optional(key, attrs \\ %{}) do
+    case Repo.get(EventCatalog, key) do
+      nil ->
+        {:error, :unknown_event}
+
+      %EventCatalog{event_class: "security"} ->
+        {:error, :security_requires_fail_closed}
+
+      %EventCatalog{enabled: false} ->
+        {:ok, :disabled}
+
+      %EventCatalog{} ->
+        changeset = Event.changeset(%Event{event_key: key}, normalize_attrs(attrs))
+
+        if changeset.valid? do
+          case Repo.insert(changeset) do
+            {:ok, event} -> {:ok, event}
+            {:error, _changeset} -> {:error, :write_failed}
+          end
+        else
+          {:error, :invalid_event}
+        end
+    end
+  rescue
+    exception ->
+      Logger.warning("optional event write dropped",
+        event_key: key,
+        reason: exception.__struct__
+      )
+
+      {:error, :write_failed}
+  end
+
+  @doc "Updates mutable catalog policy and records the change in the same transaction."
+  def update_catalog!(key, attrs, event_attrs \\ []) do
+    {:ok, catalog} =
+      Repo.transaction(fn ->
+        catalog = Repo.get!(EventCatalog, key, lock: "FOR UPDATE")
+        changeset = EventCatalog.changeset(catalog, normalize_attrs(attrs))
+        changed_fields = changeset.changes |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
+
+        if changed_fields == [] do
+          raise ArgumentError, "catalog update has no changes"
+        end
+
+        updated = Repo.update!(changeset)
+
+        event_attrs =
+          event_attrs
+          |> normalize_attrs()
+          |> Map.put(:subject_type, "event_catalog")
+          |> Map.put(:subject_id, key)
+          |> Map.put(:details, %{changed_fields: changed_fields})
+
+        write_security!("security.event_catalog.changed.v1", event_attrs)
+        updated
+      end)
+
+    catalog
+  end
+
+  @doc "Deletes only rows whose snapshotted retention deadline has passed."
+  def prune_expired!(cutoff \\ DateTime.utc_now()) do
+    %{rows: [[count]]} = Repo.query!("SELECT prune_expired_events($1)", [cutoff])
+    count
+  end
+
+  @doc "Lists immutable events newest-first using an opaque `(occurred_at, id)` cursor."
+  def list_events(opts \\ []) do
+    limit = opts |> Keyword.get(:limit, @default_page_size) |> normalize_limit()
+
+    query =
+      from(e in Event, order_by: [desc: e.occurred_at, desc: e.id])
+      |> filter(:event_key, Keyword.get(opts, :event_key))
+      |> filter(:event_class, Keyword.get(opts, :event_class))
+      |> filter(:actor_id, Keyword.get(opts, :actor_id))
+      |> filter(:actor_email, Keyword.get(opts, :actor_email))
+      |> filter(:owner_id, Keyword.get(opts, :owner_id))
+      |> filter(:subject_type, Keyword.get(opts, :subject_type))
+      |> filter(:subject_id, Keyword.get(opts, :subject_id))
+      |> filter(:device_id, Keyword.get(opts, :device_id))
+      |> filter(:run_id, Keyword.get(opts, :run_id))
+      |> filter(:correlation_id, Keyword.get(opts, :correlation_id))
+      |> filter(:severity, Keyword.get(opts, :severity))
+      |> filter_since(Keyword.get(opts, :since))
+      |> filter_until(Keyword.get(opts, :until))
+      |> filter_after(Keyword.get(opts, :after))
+      |> limit(^(limit + 1))
+
+    rows = Repo.all(query)
+    entries = Enum.take(rows, limit)
+    next_cursor = if length(rows) > limit, do: entries |> List.last() |> encode_cursor()
+
+    %{entries: entries, next_cursor: next_cursor}
+  end
+
+  defp normalize_attrs(attrs) when is_map(attrs), do: attrs
+  defp normalize_attrs(attrs) when is_list(attrs), do: Map.new(attrs)
+
+  defp normalize_limit(limit) when is_integer(limit), do: limit |> max(1) |> min(@max_page_size)
+  defp normalize_limit(_limit), do: @default_page_size
+
+  defp filter(query, _field, nil), do: query
+  defp filter(query, field, value), do: where(query, [e], field(e, ^field) == ^value)
+
+  defp filter_since(query, nil), do: query
+  defp filter_since(query, since), do: where(query, [e], e.occurred_at >= ^since)
+
+  defp filter_until(query, nil), do: query
+  defp filter_until(query, until), do: where(query, [e], e.occurred_at < ^until)
+
+  defp filter_after(query, nil), do: query
+
+  defp filter_after(query, cursor) do
+    {occurred_at, id} = decode_cursor!(cursor)
+
+    where(
+      query,
+      [e],
+      e.occurred_at < ^occurred_at or (e.occurred_at == ^occurred_at and e.id < ^id)
+    )
+  end
+
+  defp encode_cursor(%Event{occurred_at: occurred_at, id: id}) do
+    "#{DateTime.to_unix(occurred_at, :microsecond)}:#{id}"
+    |> Base.url_encode64(padding: false)
+  end
+
+  defp decode_cursor!(cursor) when is_binary(cursor) do
+    with {:ok, decoded} <- Base.url_decode64(cursor, padding: false),
+         [micros, id] <- String.split(decoded, ":", parts: 2),
+         {micros, ""} <- Integer.parse(micros),
+         {id, ""} <- Integer.parse(id),
+         {:ok, occurred_at} <- DateTime.from_unix(micros, :microsecond) do
+      {occurred_at, id}
+    else
+      _error -> raise ArgumentError, "invalid event cursor"
+    end
+  end
+
+  defp decode_cursor!(_cursor), do: raise(ArgumentError, "invalid event cursor")
+end
