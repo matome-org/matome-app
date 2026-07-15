@@ -12,11 +12,13 @@ import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
+import 'package:matome_flutter/features/recordings/processing_error.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -47,6 +49,7 @@ void main() {
     AppDatabase db,
     Directory tmp, {
     int? coreId,
+    String? notes,
   }) async {
     final localId = mintLocalRecordingId();
     final audio = File('${tmp.path}/$localId.m4a');
@@ -82,6 +85,7 @@ void main() {
         createdAt: Value(now.millisecondsSinceEpoch),
         mediaType: const Value('audio'),
         processingStatus: const Value(kProcessingStatusPendingUpload),
+        notes: Value(notes),
       ),
     );
     return (localId, audio);
@@ -99,6 +103,7 @@ void main() {
     AppDatabase db,
     RecordingsRepository repo, {
     AudioCleanup? cleanupAudio,
+    RecordingResultAwaiter? awaitResult,
   }) {
     return ProviderContainer(
       overrides: [
@@ -107,7 +112,7 @@ void main() {
         uploadQueueProvider.overrideWith(
           (ref) => UploadQueue(
             ref,
-            awaitResult: pollAwaiter,
+            awaitResult: awaitResult ?? pollAwaiter,
             cleanupAudio: cleanupAudio ?? deleteAudioFile,
           ),
         ),
@@ -129,7 +134,8 @@ void main() {
     final container = containerFor(db, repo);
     addTearDown(container.dispose);
 
-    final (localId, audio) = await seedPendingRow(db, tmp);
+    const userNotes = '  Offline-safe note.\nSecond line.  ';
+    final (localId, audio) = await seedPendingRow(db, tmp, notes: userNotes);
     final queue = container.read(uploadQueueProvider);
 
     // CORE DOWN: drain persists an explicit durable block, coreId null, audio kept.
@@ -143,6 +149,7 @@ void main() {
       reason: 'Core-down keeps the row retriable with an explicit reason',
     );
     expect(row.coreId, isNull, reason: 'no Core id minted while down');
+    expect(row.notes, userNotes, reason: 'blocked upload preserves user notes');
     expect(await audio.exists(), isTrue, reason: 'audio kept while down');
     expect(repo.createCalls, 0, reason: 'create never succeeded while down');
 
@@ -159,6 +166,11 @@ void main() {
     expect(row.processingStatus, 'done');
     expect(row.isProcessing, 0);
     expect(row.summary, 'A memo');
+    expect(
+      row.notes,
+      userNotes,
+      reason: 'eventual success preserves exact user-note bytes',
+    );
     expect(
       repo.lastClientId,
       localId,
@@ -195,7 +207,8 @@ void main() {
       final container = containerFor(db, repo);
       addTearDown(container.dispose);
 
-      final (localId, audio) = await seedPendingRow(db, tmp);
+      const userNotes = '  My upload note.\nSecond line.  ';
+      final (localId, audio) = await seedPendingRow(db, tmp, notes: userNotes);
       await container.read(uploadQueueProvider).drain();
 
       final row = await db.recordingsDao.getRecordingById(localId);
@@ -205,11 +218,48 @@ void main() {
         reason: 'terminal failure persists',
       );
       expect(row.coreId, repo.coreIdMinted, reason: 'create did happen');
+      expect(row.processingErrorCode, kProcessingErrorFailed);
+      expect(
+        row.notes,
+        userNotes,
+        reason: 'terminal processing failure must not mutate user notes',
+      );
       expect(
         await audio.exists(),
         isTrue,
         reason: 'audio KEPT on failure for inspection / retry',
       );
+    },
+  );
+
+  test(
+    'processing timeout persists only a bounded code and preserves notes',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repo = _ToggleRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
+      final container = containerFor(
+        db,
+        repo,
+        awaitResult:
+            ({required recording, required poll, required ref}) async =>
+                const RecordingResult.failed('timeout'),
+      );
+      addTearDown(container.dispose);
+
+      const userNotes = '  Timeout note\nkept byte-for-byte.  ';
+      final (localId, _) = await seedPendingRow(db, tmp, notes: userNotes);
+      await container.read(uploadQueueProvider).drain();
+
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(row!.processingStatus, 'failed');
+      expect(row.processingErrorCode, kProcessingErrorTimeout);
+      expect(row.notes, userNotes);
     },
   );
 
@@ -235,15 +285,16 @@ void main() {
     final container = containerFor(db, repo);
     addTearDown(container.dispose);
 
-    final (localId, audio) = await seedPendingRow(db, tmp);
+    const userNotes = '  Offline-safe note.\nSecond line.  ';
+    final (localId, audio) = await seedPendingRow(db, tmp, notes: userNotes);
     await container.read(uploadQueueProvider).drain();
 
     final row = await db.recordingsDao.getRecordingById(localId);
     expect(row!.processingStatus, kProcessingStatusBlockedOffline);
     expect(
       row.notes,
-      isNull,
-      reason: 'a retryable transport block is status, not user notes',
+      userNotes,
+      reason: 'a retryable transport block must preserve user notes',
     );
     expect(
       row.notes,
@@ -277,14 +328,15 @@ void main() {
       final container = containerFor(db, repo);
       addTearDown(container.dispose);
 
-      final (localId, _) = await seedPendingRow(db, tmp);
+      const userNotes = '  Private note\nwith exact bytes.  ';
+      final (localId, _) = await seedPendingRow(db, tmp, notes: userNotes);
       await container.read(uploadQueueProvider).drain();
 
       final row = await db.recordingsDao.getRecordingById(localId);
       expect(row!.processingStatus, kProcessingStatusBlockedCore);
       expect(
         row.notes,
-        isNull,
+        userNotes,
         reason: 'retry orchestration never overwrites user-authored notes',
       );
     },
@@ -307,27 +359,33 @@ void main() {
             ..coreUp = true
             // A raw StateError carries a sensitive .toString() that must NOT leak.
             ..throwRawOnEnqueue = StateError(
-              'secret host 10.0.0.5:7001 internal trace',
+              'secret host 10.0.0.5:7001 '
+              'https://s3.invalid/object?X-Amz-Credential=secret',
             );
 
       final container = containerFor(db, repo);
       addTearDown(container.dispose);
 
-      final (localId, _) = await seedPendingRow(db, tmp);
+      const userNotes = '  Private note\nwith exact bytes.  ';
+      final (localId, _) = await seedPendingRow(db, tmp, notes: userNotes);
       await container.read(uploadQueueProvider).drain();
 
       final row = await db.recordingsDao.getRecordingById(localId);
       expect(row!.processingStatus, 'failed');
+      expect(row.processingErrorCode, kProcessingErrorUploadFailed);
       expect(
         row.notes,
-        t.cardStatus.failed,
-        reason: 'non-ApiException → generic reason, not error.toString()',
+        userNotes,
+        reason: 'queue exceptions must not overwrite user notes',
       );
       expect(
         row.notes,
         isNot(contains('10.0.0.5')),
         reason: 'raw toString() detail must never reach notes',
       );
+      final persisted = row.toJson().values.join('\n');
+      expect(persisted, isNot(contains('10.0.0.5')));
+      expect(persisted, isNot(contains('X-Amz-Credential')));
     },
   );
 
@@ -353,6 +411,7 @@ void main() {
         db,
         tmp,
         coreId: repo.coreIdMinted,
+        notes: '  Restart note.\nExact bytes.  ',
       );
       await container.read(uploadQueueProvider).drainRow(localId);
 
@@ -447,12 +506,14 @@ void main() {
         db,
         tmp,
         coreId: repo.coreIdMinted,
+        notes: '  Restart note.\nExact bytes.  ',
       );
       await db.recordingsDao.updateRecording(
         localId,
         const RecordingsCompanion(
           processingStatus: Value('processing'),
           isProcessing: Value(1),
+          processingErrorCode: Value(kProcessingErrorUploadFailed),
         ),
       );
 
@@ -466,6 +527,8 @@ void main() {
       expect(repo.lastClientId, localId);
       expect(row!.coreId, repo.coreIdMinted);
       expect(row.processingStatus, 'done');
+      expect(row.processingErrorCode, isNull);
+      expect(row.notes, '  Restart note.\nExact bytes.  ');
     },
   );
 }

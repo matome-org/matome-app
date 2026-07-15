@@ -32,6 +32,7 @@ import '../details/details_controller.dart';
 import '../details/file_detail_screen.dart' show mediaKindForType;
 import '../details/file_view.dart';
 import '../home/inbox_controller.dart';
+import '../recordings/processing_error.dart';
 import 'files_providers.dart';
 import 'widgets/files_grid.dart';
 import 'widgets/files_table.dart';
@@ -489,6 +490,12 @@ class _FilesPaneDetail extends ConsumerWidget {
             contentsText: mediaKind == FileMediaKind.image
                 ? null
                 : row.transcript,
+            contentsState: row.processingStatus == 'failed'
+                ? ContentsState.failed
+                : null,
+            errorMessage: row.processingErrorCode == null
+                ? null
+                : processingErrorMessage(row.processingErrorCode),
             notesText: row.notes,
           ),
           // The pane is a read surface — the editable Notes lifecycle stays on

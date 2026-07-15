@@ -1,6 +1,7 @@
 import 'app_database.dart';
 import '../../features/items/matome_item_type.dart';
 import '../../features/recordings/recording_ids.dart';
+import '../../features/recordings/processing_error.dart' as processing_error;
 
 /// UI-facing recording item, ported from the RN home card data shape
 /// (apps/mobile/processes/homeData + recordToCard in recordingService.ts).
@@ -24,6 +25,7 @@ class RecordingItem {
     this.workspaceName,
     this.coreId,
     this.filePath,
+    this.processingErrorCode,
   });
 
   final String id;
@@ -37,6 +39,10 @@ class RecordingItem {
   final MatomeItemType itemType;
   final String mediaType;
   final String processingStatus;
+  final String? processingErrorCode;
+
+  String get processingErrorMessage =>
+      processing_error.processingErrorMessage(processingErrorCode);
 
   /// The reconciled Core id, or null while the row is still local-only.
   ///
@@ -80,6 +86,7 @@ class RecordingItem {
       processingStatus: row.processingStatus.isNotEmpty
           ? row.processingStatus
           : (row.isProcessing == 1 ? 'processing' : 'done'),
+      processingErrorCode: row.processingErrorCode,
       workspaceName: workspaceName,
       coreId: row.coreId,
       filePath: row.audioFilePath,

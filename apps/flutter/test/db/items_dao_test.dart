@@ -15,8 +15,8 @@ void main() {
   setUp(() => db = _memDb());
   tearDown(() => db.close());
 
-  test('schemaVersion is 20 (items rebuild-clean + #1855 media encryption)', () {
-    expect(db.schemaVersion, 20);
+  test('schemaVersion is 21 (bounded processing error state)', () {
+    expect(db.schemaVersion, 21);
   });
 
   test(
@@ -74,7 +74,7 @@ void main() {
     final upgraded = AppDatabase.forTesting(NativeDatabase(file));
     addTearDown(upgraded.close);
 
-    expect(upgraded.schemaVersion, 20);
+    expect(upgraded.schemaVersion, 21);
     final names = await upgraded
         .customSelect(
           "SELECT name FROM sqlite_master WHERE type='table' "

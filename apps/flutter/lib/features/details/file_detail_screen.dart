@@ -13,6 +13,7 @@ import '../../ui/app_dialog.dart';
 import '../../ui/file_type_chip.dart';
 import '../../ui/loading_indicator.dart';
 import '../items/matome_item_type.dart';
+import '../recordings/processing_error.dart';
 import '../recordings/recording_ids.dart';
 import 'audio_player_bar.dart';
 import 'details_controller.dart';
@@ -324,6 +325,7 @@ class _ImageDetailHost extends StatelessWidget {
       place = item.workspaceName,
       coreId = item.coreId,
       processingStatus = item.processingStatus,
+      processingErrorCode = item.processingErrorCode,
       path = item.filePath,
       notes = item.notes,
       mediaKind = mediaKindForType(item.mediaType),
@@ -347,6 +349,7 @@ class _ImageDetailHost extends StatelessWidget {
   }) : title = row.title,
        coreId = row.coreId,
        processingStatus = row.processingStatus,
+       processingErrorCode = row.processingErrorCode,
        // The image's on-disk path lives in the `audioFilePath` column (the
        // generic media-path column shared across kinds).
        path = row.audioFilePath,
@@ -365,6 +368,7 @@ class _ImageDetailHost extends StatelessWidget {
   final String? place;
   final int? coreId;
   final String? processingStatus;
+  final String? processingErrorCode;
   final String? path;
   final String? notes;
 
@@ -431,6 +435,9 @@ class _ImageDetailHost extends StatelessWidget {
       contentsState: mediaKind == FileMediaKind.doc
           ? _docContentsState()
           : ContentsState.empty,
+      errorMessage: processingErrorCode == null
+          ? null
+          : processingErrorMessage(processingErrorCode),
       notesText: notes,
     );
   }
@@ -670,6 +677,9 @@ class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
       // recording's OWN fields — not a backend producer.
       contentsText: row?.transcript,
       contentsState: _contentsState(state),
+      errorMessage: row?.processingErrorCode == null
+          ? null
+          : processingErrorMessage(row?.processingErrorCode),
       onContentsRetry: _onRetry,
       // Notes seed is unused here — the host owns [_notesController] so dirty
       // tracking and save work — but kept for parity with the image path.

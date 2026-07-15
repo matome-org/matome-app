@@ -18,6 +18,7 @@ import '../../core/db/db_encryption.dart'
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../recordings/recording_ids.dart';
+import '../recordings/processing_error.dart';
 import '../recordings/recordings_repository.dart';
 import '../recordings/upload_queue.dart';
 import '../home/inbox_controller.dart';
@@ -372,6 +373,7 @@ class DetailsController extends StateNotifier<DetailsState> {
       const RecordingsCompanion(
         isProcessing: Value(1),
         processingStatus: Value('processing'),
+        processingErrorCode: Value(null),
       ),
     );
     state = state.copyWith(isProcessing: true, processingFailed: false);
@@ -386,7 +388,10 @@ class DetailsController extends StateNotifier<DetailsState> {
         ref: _ref,
       );
       if (result.failed) {
-        await _applyTerminal(failed: true);
+        await _applyTerminal(
+          failed: true,
+          errorCode: processingErrorCodeForTerminal(result.errorReason),
+        );
       } else {
         final done = result.recording;
         // WRITE-AUTHORITY (#1435): the machine transcript routes to the
@@ -406,7 +411,7 @@ class DetailsController extends StateNotifier<DetailsState> {
         e,
         st,
       );
-      await _applyTerminal(failed: true);
+      await _applyTerminal(failed: true, errorCode: kProcessingErrorFailed);
     }
   }
 
@@ -429,6 +434,7 @@ class DetailsController extends StateNotifier<DetailsState> {
     required bool failed,
     String? summary,
     String? transcript,
+    String? errorCode,
   }) async {
     // Merge, not null-overwrite (B3): a sparse socket `done` event can carry a
     // null summary/transcript even after good data exists, so [mergeText] leaves
@@ -443,6 +449,9 @@ class DetailsController extends StateNotifier<DetailsState> {
         processingStatus: Value(failed ? 'failed' : 'done'),
         summary: failed ? const Value.absent() : mergeText(summary),
         transcript: failed ? const Value.absent() : mergeText(transcript),
+        processingErrorCode: Value(
+          failed ? normalizeProcessingErrorCode(errorCode) : null,
+        ),
       ),
     );
     final row = await _dao.getRecordingById(state.id);

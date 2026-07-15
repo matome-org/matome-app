@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/recordings/processing_error.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_card.dart';
@@ -17,6 +18,7 @@ void main() {
     bool isProcessing = false,
     String? summary,
     int? coreId,
+    String? processingErrorCode,
   }) {
     return RecordingItem(
       id: id,
@@ -29,6 +31,7 @@ void main() {
       mediaType: 'audio',
       processingStatus: processingStatus,
       coreId: coreId,
+      processingErrorCode: processingErrorCode,
     );
   }
 
@@ -137,6 +140,22 @@ void main() {
     expect(retry, findsOneWidget, reason: 'failed card offers manual retry');
     await tester.tap(retry);
     expect(retried, isTrue, reason: 'tapping retry fires the re-enqueue hook');
+  });
+
+  testWidgets('failed renders the bounded error message outside user notes', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      card(
+        id: '42',
+        processingStatus: 'failed',
+        processingErrorCode: kProcessingErrorTimeout,
+      ),
+    );
+
+    expect(find.text('Processing timed out'), findsOneWidget);
+    expect(find.text('Upload failed'), findsNothing);
   });
 
   testWidgets('failed without an onRetry hook hides the retry button', (

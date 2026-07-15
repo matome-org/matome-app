@@ -82,6 +82,8 @@
     "pendingUpload": "端末に保存済み · アップロード待ち",
     "processing": "文字起こし中…",
     "failed": "アップロードに失敗しました",
+    "processingFailed": "処理に失敗しました",
+    "processingTimedOut": "処理がタイムアウトしました",
     "retry": "再試行",
     "onDevice": "端末内",
     "cloud": "同期済み",

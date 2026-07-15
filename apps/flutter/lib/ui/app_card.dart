@@ -550,7 +550,7 @@ class _RecordingBody extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                t.cardStatus.failed,
+                card.processingErrorMessage,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 12, color: colors.failed),

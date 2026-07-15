@@ -23,6 +23,7 @@ import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
+import 'package:matome_flutter/features/recordings/processing_error.dart';
 
 /// An injected [RecordingResultAwaiter] that resolves immediately with a fixed
 /// terminal [result], standing in for the socket-vs-poll race outcome.
@@ -89,6 +90,7 @@ Future<void> _seedDone(AppDatabase db) {
       summary: const Value('good summary'),
       notes: const Value('good notes'),
       processingStatus: const Value('failed'),
+      processingErrorCode: const Value(kProcessingErrorUploadFailed),
     ),
   );
 }
@@ -150,6 +152,7 @@ void main() {
       final row = await db.recordingsDao.getRecordingById('5');
       expect(row!.summary, 'good summary'); // preserved, not null-wiped
       expect(row.notes, 'good notes'); // preserved, not null-wiped
+      expect(row.processingErrorCode, isNull);
       expect(row.processingStatus, 'done');
       expect(row.isProcessing, 0);
     },
@@ -188,6 +191,28 @@ void main() {
         'good notes',
       ); // user note untouched by the terminal apply
       expect(row.processingStatus, 'done');
+      expect(row.processingErrorCode, isNull);
+    },
+  );
+
+  test(
+    'retry timeout preserves notes and stores only the bounded timeout code',
+    () async {
+      await _seedDone(db);
+      final container = _container(db);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        _controllerProvider(
+          _awaiterReturning(const RecordingResult.failed('timeout')),
+        ),
+      );
+
+      await controller.retry();
+
+      final row = await db.recordingsDao.getRecordingById('5');
+      expect(row!.notes, 'good notes');
+      expect(row.processingStatus, 'failed');
+      expect(row.processingErrorCode, kProcessingErrorTimeout);
     },
   );
 

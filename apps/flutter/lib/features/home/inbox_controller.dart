@@ -12,6 +12,7 @@ import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../files/files_providers.dart';
 import '../recordings/recording_ids.dart';
+import '../recordings/processing_error.dart';
 import '../recordings/recordings_repository.dart';
 import '../recordings/upload_queue.dart';
 import '../spaces/current_caller.dart';
@@ -353,11 +354,8 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   /// Apply a terminal upload outcome to the local row (done/failed), then
   /// re-render. Used by the upload flow once the F4 pipeline resolves.
   ///
-  /// On failure, [errorReason] (the underlying error message) is persisted to
-  /// `notes` so the failed card carries a real, inspectable reason instead of a
-  /// bare "failed" status. The Drift schema has no dedicated error column, so
-  /// `notes` is reused as the failure detail surface (it is unused for a
-  /// recording that never transcribed).
+  /// On failure, [errorCode] is normalized to the bounded app-owned set and
+  /// persisted separately from user-authored `notes`.
   ///
   /// On success, [summary]/[transcript] are merge-written (B3): a sparse socket
   /// `done` event can carry nulls even after good data exists, so [mergeText]
@@ -365,15 +363,14 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   ///
   /// WRITE-AUTHORITY (task #1435): the machine [transcript] lands in the
   /// `transcript` column, NOT the user-owned `notes` column — a `done` apply
-  /// must never overwrite a user note. The `notes` column is only written on
-  /// FAILURE, where it carries the [errorReason] failure-detail surface (the
-  /// schema has no dedicated error column).
+  /// must never overwrite a user note. Failure, success and timeout all leave
+  /// `notes` absent from the update.
   Future<void> applyUploadResult(
     String recordingId, {
     required bool failed,
     String? summary,
     String? transcript,
-    String? errorReason,
+    String? errorCode,
   }) async {
     await _dao.updateRecording(
       recordingId,
@@ -382,7 +379,9 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         processingStatus: Value(failed ? 'failed' : 'done'),
         summary: failed ? const Value.absent() : mergeText(summary),
         transcript: failed ? const Value.absent() : mergeText(transcript),
-        notes: failed ? Value(errorReason) : const Value.absent(),
+        processingErrorCode: Value(
+          failed ? normalizeProcessingErrorCode(errorCode) : null,
+        ),
       ),
     );
     await reloadFromLocal();
@@ -395,6 +394,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
       const RecordingsCompanion(
         isProcessing: Value(1),
         processingStatus: Value('processing'),
+        processingErrorCode: Value(null),
       ),
     );
     await reloadFromLocal();
@@ -406,9 +406,9 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   ///
   /// A `failed` row has already left `pending_upload`, so the queue's
   /// status-gate ([UploadQueue.drainRow] only drains `pending_upload`) would
-  /// no-op on it. We first flip the row back to `pending_upload` (clearing the
-  /// failure reason persisted in `notes`), re-render so the card immediately
-  /// reads as safe-and-pending, then hand off to the queue. The audio file was
+  /// no-op on it. We first flip the row back to `pending_upload` and clear only
+  /// its machine-owned error code, re-render so the card immediately reads as
+  /// safe-and-pending, then hand off to the queue. The audio file was
   /// kept on every non-confirmed outcome, so the re-upload has a file to send.
   Future<void> retryUpload(String recordingId) async {
     await _dao.updateRecording(
@@ -416,7 +416,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
       const RecordingsCompanion(
         isProcessing: Value(0),
         processingStatus: Value(kProcessingStatusPendingUpload),
-        notes: Value(null),
+        processingErrorCode: Value(null),
       ),
     );
     await reloadFromLocal();

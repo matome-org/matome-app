@@ -171,6 +171,18 @@ class Recordings extends Table {
   TextColumn get fileNoncePrefix =>
       text().named('file_nonce_prefix').nullable()();
 
+  // m021 (#1446, W1) — bounded, machine-owned upload/processing failure code.
+  // Only app-defined codes from `processing_error.dart` are written. Raw
+  // exceptions, backend content and presigned URLs remain log-only; user-owned
+  // `notes` is never reused as an error surface. NULL means no terminal error.
+  //
+  // This is intentionally the smallest compatibility seam for the current
+  // W0/W1 `recordings` model. W2's planned schema/queue reset must carry the
+  // invariant forward with a first-class bounded error code on its replacement
+  // item state; it must not copy this value into item metadata or user notes.
+  TextColumn get processingErrorCode =>
+      text().named('processing_error_code').nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

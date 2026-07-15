@@ -236,7 +236,15 @@ part 'app_database.g.dart';
 ///   -- `recordings` without `wrapped_fek`/`file_nonce_prefix` via a copy
 ///   -- table. Leaving the columns in place is otherwise harmless.
 ///   PRAGMA user_version = 19;
-const int kSchemaVersion = 20;
+///
+/// v21 (m021, bounded processing error — #1446 W1) adds nullable
+/// `recordings.processing_error_code`. It stores only an app-owned safe code;
+/// raw exceptions, backend payloads and presigned URLs are never persisted, and
+/// the user-owned `notes` column is byte-conserved. Existing rows backfill NULL.
+/// This is a compatibility seam for the current W0/W1 recordings queue, not an
+/// expansion of W2's rebuild-clean schema: W2 must carry the invariant into its
+/// replacement item state without moving this value into metadata or notes.
+const int kSchemaVersion = 21;
 
 /// The offline-first local store.
 ///
@@ -678,6 +686,14 @@ class AppDatabase extends _$AppDatabase {
       if (from < 20) {
         await m.addColumn(recordings, recordings.wrappedFek);
         await m.addColumn(recordings, recordings.fileNoncePrefix);
+      }
+      // m021 — bounded processing error state (#1446 W1). Additive + nullable:
+      // existing rows backfill NULL and every pre-existing column, especially
+      // user-owned `notes`, is untouched. Runtime writers normalize all inputs
+      // to the app-owned code set before persistence; localized messages are
+      // derived at render time and never stored.
+      if (from < 21) {
+        await m.addColumn(recordings, recordings.processingErrorCode);
       }
     },
     beforeOpen: (details) async {

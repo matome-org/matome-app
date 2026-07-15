@@ -70,9 +70,9 @@ void main() {
   // (a) Schema + migration version (mirrors migrations.unit.test.ts)
   // -------------------------------------------------------------------------
   group('schema & migration version', () {
-    test('schemaVersion is 20 '
-        '(…m019 items rebuild-clean foundation + m020 media encryption columns)', () {
-      expect(db.schemaVersion, 20);
+    test('schemaVersion is 21 '
+        '(…m020 media encryption + m021 bounded processing error)', () {
+      expect(db.schemaVersion, 21);
     });
 
     test(
@@ -151,6 +151,7 @@ void main() {
           'transcript', // m010
           'notes_legacy_raw', // m011
           'original_extension', // m012
+          'processing_error_code', // m021
         ]),
       );
     });
@@ -569,7 +570,7 @@ void main() {
 
       // A v4-seeded DB now migrates through m005..m009, so the live
       // schemaVersion getter reports the current constant.
-      expect(upgraded.schemaVersion, 20);
+      expect(upgraded.schemaVersion, 21);
 
       // coreId column now exists on the migrated table.
       final cols = await upgraded
@@ -691,7 +692,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         // m006 columns now exist on workspaces.
         final wsCols = await upgraded
@@ -846,7 +847,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 20);
+      expect(upgraded.schemaVersion, 21);
 
       final tables = await upgraded
           .customSelect(
@@ -1171,7 +1172,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         final tables = await upgraded
             .customSelect(
@@ -1227,7 +1228,7 @@ void main() {
       // Re-opening at v8 must not re-run m008 (no duplicate-table crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final tables = await second
           .customSelect(
             "SELECT name FROM sqlite_master WHERE type='table' "
@@ -1380,7 +1381,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(matomes)')
@@ -1422,7 +1423,7 @@ void main() {
       // Re-opening at v9 must not re-run m009 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final cols = await second
           .customSelect('PRAGMA table_info(matomes)')
           .map((r) => r.read<String>('name'))
@@ -1583,7 +1584,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(recordings)')
@@ -1630,7 +1631,7 @@ void main() {
       // Re-opening at v10 must not re-run m010 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -1859,7 +1860,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(recordings)')
@@ -1979,7 +1980,7 @@ void main() {
         // must not re-snapshot or re-copy (values already settled stay settled).
         final second = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(second.close);
-        expect(second.schemaVersion, 20);
+        expect(second.schemaVersion, 21);
 
         final r = await second.recordingsDao.getRecordingById(
           'rec_audio_has_tx',
@@ -2194,7 +2195,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(recordings)')
@@ -2242,7 +2243,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2408,7 +2409,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 20);
+      expect(upgraded.schemaVersion, 21);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(contacts)')
@@ -2457,7 +2458,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final cols = await second
           .customSelect('PRAGMA table_info(contacts)')
           .map((r) => r.read<String>('name'))
@@ -2551,7 +2552,7 @@ void main() {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
 
-      expect(upgraded.schemaVersion, 20);
+      expect(upgraded.schemaVersion, 21);
 
       final cols = await upgraded
           .customSelect('PRAGMA table_info(recordings)')
@@ -2592,7 +2593,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
@@ -2708,7 +2709,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         final tables = await upgraded
             .customSelect("SELECT name FROM sqlite_master WHERE type='table'")
@@ -2743,7 +2744,7 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final tables = await second
           .customSelect("SELECT name FROM sqlite_master WHERE type='table'")
           .map((r) => r.read<String>('name'))
@@ -2886,7 +2887,7 @@ void main() {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         // is_local column now exists on workspaces.
         final cols = await upgraded
@@ -2954,7 +2955,7 @@ void main() {
       // Re-opening at v17 must not re-run m017 (no duplicate-column crash).
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final all = await second
           .customSelect('SELECT id, is_local FROM workspaces')
           .map((r) => r.read<int>('is_local'))
@@ -3141,7 +3142,7 @@ void main() {
         '(§4 M1/M3/M6 per-space labels)', () async {
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
-      expect(upgraded.schemaVersion, 20);
+      expect(upgraded.schemaVersion, 21);
 
       final byId = await isLocalById(upgraded);
       // M1 — filed-matome space syncs today ⇒ CLOUD (0).
@@ -3259,7 +3260,7 @@ void main() {
       // identical.
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
 
       // Explicit re-run of the corrective backfill is a no-op too (the CLOUD
       // set is re-derived; already-cloud rows are skipped by the WHERE guard).
@@ -3392,7 +3393,7 @@ void main() {
 
       final upgraded = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(upgraded.close);
-      expect(upgraded.schemaVersion, 20);
+      expect(upgraded.schemaVersion, 21);
 
       final audit = await upgraded.dryRunW5Backfill();
       expect(audit.looseRecordings, 0);
@@ -3522,13 +3523,13 @@ void main() {
     tearDown(() => dir.deleteSync(recursive: true));
 
     test(
-      'opening a v18 db migrates to v20: wrapped_fek/file_nonce_prefix are '
+      'opening a v18 db migrates through v21: wrapped_fek/file_nonce_prefix are '
       'added and the pre-existing (plaintext) row backfills to NULL on both',
       () async {
         final upgraded = AppDatabase.forTesting(NativeDatabase(file));
         addTearDown(upgraded.close);
 
-        expect(upgraded.schemaVersion, 20);
+        expect(upgraded.schemaVersion, 21);
 
         final cols = await upgraded
             .customSelect('PRAGMA table_info(recordings)')
@@ -3536,7 +3537,7 @@ void main() {
             .get();
         expect(cols, containsAll(<String>['wrapped_fek', 'file_nonce_prefix']));
 
-        // m019 also ran as part of this same 18->20 upgrade.
+        // m019 also ran as part of this same 18->21 upgrade.
         final tables = await upgraded
             .customSelect(
               "SELECT name FROM sqlite_master WHERE type='table'",
@@ -3589,13 +3590,91 @@ void main() {
 
       final second = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(second.close);
-      expect(second.schemaVersion, 20);
+      expect(second.schemaVersion, 21);
       final cols = await second
           .customSelect('PRAGMA table_info(recordings)')
           .map((r) => r.read<String>('name'))
           .get();
       expect(cols, containsAll(<String>['wrapped_fek', 'file_nonce_prefix']));
     });
+  });
+
+  group('m021 v20→v21 migration (bounded processing error)', () {
+    late Directory dir;
+    late File file;
+
+    void seedV20Database() {
+      final sdb = raw.sqlite3.open(file.path);
+      sdb.execute('''
+        CREATE TABLE recordings (
+          id TEXT NOT NULL PRIMARY KEY,
+          title TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          duration TEXT NOT NULL,
+          badge TEXT NOT NULL DEFAULT 'Inbox',
+          isProcessing INTEGER NOT NULL DEFAULT 1,
+          audioFilePath TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          notes TEXT,
+          mediaType TEXT NOT NULL DEFAULT 'audio',
+          processingStatus TEXT NOT NULL DEFAULT 'done',
+          wrapped_fek TEXT,
+          file_nonce_prefix TEXT
+        );
+        INSERT INTO recordings (
+          id, title, timestamp, duration, audioFilePath, createdAt, notes
+        ) VALUES (
+          'rec_pre21', 'Legacy note', '9:00 AM', '0:30', '/tmp/a.m4a', 100,
+          '  User note' || char(10) || 'exact bytes.  '
+        );
+        PRAGMA user_version = 20;
+      ''');
+      sdb.dispose();
+    }
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('matome_m021');
+      file = File('${dir.path}/matome.sqlite');
+      seedV20Database();
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test(
+      'adds nullable error code without changing notes, then survives reopen',
+      () async {
+        final first = AppDatabase.forTesting(NativeDatabase(file));
+        expect(first.schemaVersion, 21);
+
+        var stored = await first
+            .customSelect(
+              'SELECT notes, processing_error_code FROM recordings '
+              "WHERE id = 'rec_pre21'",
+            )
+            .getSingle();
+        expect(stored.read<String>('notes'), '  User note\nexact bytes.  ');
+        expect(stored.readNullable<String>('processing_error_code'), isNull);
+
+        await first.customUpdate(
+          "UPDATE recordings SET processing_error_code = 'processing_timeout' "
+          "WHERE id = 'rec_pre21'",
+        );
+        await first.close();
+
+        final second = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(second.close);
+        stored = await second
+            .customSelect(
+              'SELECT notes, processing_error_code FROM recordings '
+              "WHERE id = 'rec_pre21'",
+            )
+            .getSingle();
+        expect(stored.read<String>('notes'), '  User note\nexact bytes.  ');
+        expect(
+          stored.read<String>('processing_error_code'),
+          'processing_timeout',
+        );
+      },
+    );
   });
 
   // -------------------------------------------------------------------------

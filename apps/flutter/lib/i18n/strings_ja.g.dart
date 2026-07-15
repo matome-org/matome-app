@@ -182,6 +182,8 @@ class _Translations$cardStatus$ja extends Translations$cardStatus$en {
 	@override String get pendingUpload => '端末に保存済み · アップロード待ち';
 	@override String get processing => '文字起こし中…';
 	@override String get failed => 'アップロードに失敗しました';
+	@override String get processingFailed => '処理に失敗しました';
+	@override String get processingTimedOut => '処理がタイムアウトしました';
 	@override String get retry => '再試行';
 	@override String get onDevice => '端末内';
 	@override String get cloud => '同期済み';
@@ -831,6 +833,8 @@ extension on TranslationsJa {
 			'cardStatus.pendingUpload' => '端末に保存済み · アップロード待ち',
 			'cardStatus.processing' => '文字起こし中…',
 			'cardStatus.failed' => 'アップロードに失敗しました',
+			'cardStatus.processingFailed' => '処理に失敗しました',
+			'cardStatus.processingTimedOut' => '処理がタイムアウトしました',
 			'cardStatus.retry' => '再試行',
 			'cardStatus.onDevice' => '端末内',
 			'cardStatus.cloud' => '同期済み',

@@ -246,6 +246,17 @@ class $RecordingsTable extends Recordings
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _processingErrorCodeMeta =
+      const VerificationMeta('processingErrorCode');
+  @override
+  late final GeneratedColumn<String> processingErrorCode =
+      GeneratedColumn<String>(
+        'processing_error_code',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -270,6 +281,7 @@ class $RecordingsTable extends Recordings
     byteSize,
     wrappedFek,
     fileNoncePrefix,
+    processingErrorCode,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -445,6 +457,15 @@ class $RecordingsTable extends Recordings
         ),
       );
     }
+    if (data.containsKey('processing_error_code')) {
+      context.handle(
+        _processingErrorCodeMeta,
+        processingErrorCode.isAcceptableOrUnknown(
+          data['processing_error_code']!,
+          _processingErrorCodeMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -542,6 +563,10 @@ class $RecordingsTable extends Recordings
         DriftSqlType.string,
         data['${effectivePrefix}file_nonce_prefix'],
       ),
+      processingErrorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}processing_error_code'],
+      ),
     );
   }
 
@@ -574,6 +599,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
   final int? byteSize;
   final String? wrappedFek;
   final String? fileNoncePrefix;
+  final String? processingErrorCode;
   const RecordingRow({
     required this.id,
     required this.title,
@@ -597,6 +623,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     this.byteSize,
     this.wrappedFek,
     this.fileNoncePrefix,
+    this.processingErrorCode,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -646,6 +673,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     }
     if (!nullToAbsent || fileNoncePrefix != null) {
       map['file_nonce_prefix'] = Variable<String>(fileNoncePrefix);
+    }
+    if (!nullToAbsent || processingErrorCode != null) {
+      map['processing_error_code'] = Variable<String>(processingErrorCode);
     }
     return map;
   }
@@ -698,6 +728,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       fileNoncePrefix: fileNoncePrefix == null && nullToAbsent
           ? const Value.absent()
           : Value(fileNoncePrefix),
+      processingErrorCode: processingErrorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processingErrorCode),
     );
   }
 
@@ -731,6 +764,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       byteSize: serializer.fromJson<int?>(json['byteSize']),
       wrappedFek: serializer.fromJson<String?>(json['wrappedFek']),
       fileNoncePrefix: serializer.fromJson<String?>(json['fileNoncePrefix']),
+      processingErrorCode: serializer.fromJson<String?>(
+        json['processingErrorCode'],
+      ),
     );
   }
   @override
@@ -759,6 +795,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       'byteSize': serializer.toJson<int?>(byteSize),
       'wrappedFek': serializer.toJson<String?>(wrappedFek),
       'fileNoncePrefix': serializer.toJson<String?>(fileNoncePrefix),
+      'processingErrorCode': serializer.toJson<String?>(processingErrorCode),
     };
   }
 
@@ -785,6 +822,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     Value<int?> byteSize = const Value.absent(),
     Value<String?> wrappedFek = const Value.absent(),
     Value<String?> fileNoncePrefix = const Value.absent(),
+    Value<String?> processingErrorCode = const Value.absent(),
   }) => RecordingRow(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -814,6 +852,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     fileNoncePrefix: fileNoncePrefix.present
         ? fileNoncePrefix.value
         : this.fileNoncePrefix,
+    processingErrorCode: processingErrorCode.present
+        ? processingErrorCode.value
+        : this.processingErrorCode,
   );
   RecordingRow copyWithCompanion(RecordingsCompanion data) {
     return RecordingRow(
@@ -857,6 +898,9 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
       fileNoncePrefix: data.fileNoncePrefix.present
           ? data.fileNoncePrefix.value
           : this.fileNoncePrefix,
+      processingErrorCode: data.processingErrorCode.present
+          ? data.processingErrorCode.value
+          : this.processingErrorCode,
     );
   }
 
@@ -884,7 +928,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           ..write('ownerId: $ownerId, ')
           ..write('byteSize: $byteSize, ')
           ..write('wrappedFek: $wrappedFek, ')
-          ..write('fileNoncePrefix: $fileNoncePrefix')
+          ..write('fileNoncePrefix: $fileNoncePrefix, ')
+          ..write('processingErrorCode: $processingErrorCode')
           ..write(')'))
         .toString();
   }
@@ -913,6 +958,7 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
     byteSize,
     wrappedFek,
     fileNoncePrefix,
+    processingErrorCode,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -939,7 +985,8 @@ class RecordingRow extends DataClass implements Insertable<RecordingRow> {
           other.ownerId == this.ownerId &&
           other.byteSize == this.byteSize &&
           other.wrappedFek == this.wrappedFek &&
-          other.fileNoncePrefix == this.fileNoncePrefix);
+          other.fileNoncePrefix == this.fileNoncePrefix &&
+          other.processingErrorCode == this.processingErrorCode);
 }
 
 class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
@@ -965,6 +1012,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
   final Value<int?> byteSize;
   final Value<String?> wrappedFek;
   final Value<String?> fileNoncePrefix;
+  final Value<String?> processingErrorCode;
   final Value<int> rowid;
   const RecordingsCompanion({
     this.id = const Value.absent(),
@@ -989,6 +1037,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.byteSize = const Value.absent(),
     this.wrappedFek = const Value.absent(),
     this.fileNoncePrefix = const Value.absent(),
+    this.processingErrorCode = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   RecordingsCompanion.insert({
@@ -1014,6 +1063,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     this.byteSize = const Value.absent(),
     this.wrappedFek = const Value.absent(),
     this.fileNoncePrefix = const Value.absent(),
+    this.processingErrorCode = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title),
@@ -1044,6 +1094,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Expression<int>? byteSize,
     Expression<String>? wrappedFek,
     Expression<String>? fileNoncePrefix,
+    Expression<String>? processingErrorCode,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1069,6 +1120,8 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       if (byteSize != null) 'byte_size': byteSize,
       if (wrappedFek != null) 'wrapped_fek': wrappedFek,
       if (fileNoncePrefix != null) 'file_nonce_prefix': fileNoncePrefix,
+      if (processingErrorCode != null)
+        'processing_error_code': processingErrorCode,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1096,6 +1149,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     Value<int?>? byteSize,
     Value<String?>? wrappedFek,
     Value<String?>? fileNoncePrefix,
+    Value<String?>? processingErrorCode,
     Value<int>? rowid,
   }) {
     return RecordingsCompanion(
@@ -1121,6 +1175,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
       byteSize: byteSize ?? this.byteSize,
       wrappedFek: wrappedFek ?? this.wrappedFek,
       fileNoncePrefix: fileNoncePrefix ?? this.fileNoncePrefix,
+      processingErrorCode: processingErrorCode ?? this.processingErrorCode,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1194,6 +1249,11 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
     if (fileNoncePrefix.present) {
       map['file_nonce_prefix'] = Variable<String>(fileNoncePrefix.value);
     }
+    if (processingErrorCode.present) {
+      map['processing_error_code'] = Variable<String>(
+        processingErrorCode.value,
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1225,6 +1285,7 @@ class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
           ..write('byteSize: $byteSize, ')
           ..write('wrappedFek: $wrappedFek, ')
           ..write('fileNoncePrefix: $fileNoncePrefix, ')
+          ..write('processingErrorCode: $processingErrorCode, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -6516,6 +6577,7 @@ typedef $$RecordingsTableCreateCompanionBuilder =
       Value<int?> byteSize,
       Value<String?> wrappedFek,
       Value<String?> fileNoncePrefix,
+      Value<String?> processingErrorCode,
       Value<int> rowid,
     });
 typedef $$RecordingsTableUpdateCompanionBuilder =
@@ -6542,6 +6604,7 @@ typedef $$RecordingsTableUpdateCompanionBuilder =
       Value<int?> byteSize,
       Value<String?> wrappedFek,
       Value<String?> fileNoncePrefix,
+      Value<String?> processingErrorCode,
       Value<int> rowid,
     });
 
@@ -6661,6 +6724,11 @@ class $$RecordingsTableFilterComposer
 
   ColumnFilters<String> get fileNoncePrefix => $composableBuilder(
     column: $table.fileNoncePrefix,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get processingErrorCode => $composableBuilder(
+    column: $table.processingErrorCode,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -6783,6 +6851,11 @@ class $$RecordingsTableOrderingComposer
     column: $table.fileNoncePrefix,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get processingErrorCode => $composableBuilder(
+    column: $table.processingErrorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RecordingsTableAnnotationComposer
@@ -6877,6 +6950,11 @@ class $$RecordingsTableAnnotationComposer
     column: $table.fileNoncePrefix,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get processingErrorCode => $composableBuilder(
+    column: $table.processingErrorCode,
+    builder: (column) => column,
+  );
 }
 
 class $$RecordingsTableTableManager
@@ -6932,6 +7010,7 @@ class $$RecordingsTableTableManager
                 Value<int?> byteSize = const Value.absent(),
                 Value<String?> wrappedFek = const Value.absent(),
                 Value<String?> fileNoncePrefix = const Value.absent(),
+                Value<String?> processingErrorCode = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion(
                 id: id,
@@ -6956,6 +7035,7 @@ class $$RecordingsTableTableManager
                 byteSize: byteSize,
                 wrappedFek: wrappedFek,
                 fileNoncePrefix: fileNoncePrefix,
+                processingErrorCode: processingErrorCode,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -6982,6 +7062,7 @@ class $$RecordingsTableTableManager
                 Value<int?> byteSize = const Value.absent(),
                 Value<String?> wrappedFek = const Value.absent(),
                 Value<String?> fileNoncePrefix = const Value.absent(),
+                Value<String?> processingErrorCode = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RecordingsCompanion.insert(
                 id: id,
@@ -7006,6 +7087,7 @@ class $$RecordingsTableTableManager
                 byteSize: byteSize,
                 wrappedFek: wrappedFek,
                 fileNoncePrefix: fileNoncePrefix,
+                processingErrorCode: processingErrorCode,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

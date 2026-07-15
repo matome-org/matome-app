@@ -18,14 +18,15 @@ import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
+import 'package:matome_flutter/features/recordings/processing_error.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 /// W5 (plan #43): the manual retry affordance must RE-ENQUEUE through the same
 /// auto-retry upload queue (drainRow), not a parallel pipeline. A `failed` row
 /// has already left `pending_upload`, so the queue would otherwise no-op on it;
-/// [InboxController.retryUpload] flips it back to `pending_upload`, clears the
-/// failure reason in `notes`, then drains.
+/// [InboxController.retryUpload] flips it back to `pending_upload` and drains
+/// without touching the user-owned `notes` field.
 void main() {
   Future<RecordingResult> pollAwaiter({
     required Recording recording,
@@ -80,6 +81,7 @@ void main() {
         createdAt: Value(DateTime.now().millisecondsSinceEpoch),
         mediaType: const Value('audio'),
         processingStatus: const Value('failed'),
+        processingErrorCode: const Value(kProcessingErrorUploadFailed),
         notes: Value(notes),
       ),
     );
@@ -137,10 +139,11 @@ void main() {
     // Its parent is also reconciled so #2033 can replay item create for a fresh
     // upload descriptor without minting a duplicate item.
     final matomeId = await seedReconciledMatome(db, coreId: 42);
+    const userNotes = '  My retry note.\nSecond line.  ';
     final (localId, audio) = await seedFailedRow(
       db,
       coreId: 999,
-      notes: 'backend exploded',
+      notes: userNotes,
       matomeId: matomeId,
     );
 
@@ -151,10 +154,15 @@ void main() {
     expect(row!.processingStatus, 'done', reason: 'retry drove it to done');
     expect(
       row.notes,
-      isNot('backend exploded'),
-      reason: 'the persisted failure reason was cleared on retry',
+      userNotes,
+      reason: 'retry and eventual success must preserve exact user-note bytes',
     );
     expect(row.coreId, 999, reason: 'no double-create — kept the coreId');
+    expect(
+      row.processingErrorCode,
+      isNull,
+      reason: 'retry success clears only the machine-owned error code',
+    );
     expect(
       repo.createCalls,
       1,

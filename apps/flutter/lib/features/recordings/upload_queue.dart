@@ -13,7 +13,6 @@ import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
-import '../../i18n/strings.g.dart';
 import '../home/inbox_controller.dart';
 import '../home/inbox_upload.dart';
 import '../matome/matome_sync_service.dart';
@@ -21,6 +20,7 @@ import '../spaces/current_caller.dart';
 import '../spaces/effective_space.dart';
 import '../spaces/space_ref_mapping.dart';
 import '../spaces/sync_policy.dart';
+import 'processing_error.dart';
 import 'recording_ids.dart';
 import 'recordings_repository.dart';
 import 'upload_descriptor.dart';
@@ -314,6 +314,9 @@ class UploadQueue {
         // `transcript` column — the previous `notes: done?.transcript` alias
         // overwrote any user note on every `done`.
         transcript: done?.transcript,
+        errorCode: result.failed
+            ? processingErrorCodeForTerminal(result.errorReason)
+            : null,
       );
       // RETENTION (plan #46, W2 / #871): reaching a confirmed `done` MUST NOT
       // delete any local file. This intentionally REVERSES the #43 W4 decision
@@ -352,14 +355,9 @@ class UploadQueue {
       await _markBlocked(localId, _blockedStatusFor(e));
     } catch (e, st) {
       // Terminal processing failure (the row already carries a coreId, so this
-      // is a genuine post-create failure, not "Core unreachable"). Persist a
-      // SANITIZED reason and KEEP the audio for inspection / a manual retry.
-      //
-      // `errorReason` lands in the `notes` column (no dedicated error column),
-      // which is rendered in Details AND (post-#1435) PATCHable up to Core as
-      // `notes` — so raw `error.toString()` / an arbitrary transport message
-      // must NEVER reach it. We persist a curated string and keep the full
-      // detail in the developer log only.
+      // is a genuine post-create failure, not "Core unreachable"). Persist only
+      // a bounded app-owned code and KEEP the audio for inspection / retry.
+      // Raw exception text remains in developer logs and never reaches Drift.
       AppLog.error(
         LogCat.upload,
         '_drainRow: terminal processing failure $localId',
@@ -374,7 +372,7 @@ class UploadQueue {
       await _inbox.applyUploadResult(
         localId,
         failed: true,
-        errorReason: _sanitizeFailureReason(e),
+        errorCode: kProcessingErrorUploadFailed,
       );
     }
   }
@@ -397,34 +395,6 @@ class UploadQueue {
     }
     return kProcessingStatusBlockedCore;
   }
-
-  /// Map a drain failure to a SAFE, user-visible reason for the `notes` column.
-  ///
-  /// Only a curated [ApiException.message] for a KNOWN [ApiException.code] is
-  /// whitelisted through (those messages are app-authored, not raw transport
-  /// text). Everything else — an ApiException with no/unknown code, or any
-  /// non-ApiException — collapses to a generic localized string. Never returns
-  /// `error.toString()`. Full detail stays in `developer.log` (logged above).
-  static String _sanitizeFailureReason(Object error) {
-    if (error is ApiException) {
-      final code = error.code;
-      if (code != null &&
-          _knownErrorCodes.contains(code) &&
-          error.message.isNotEmpty) {
-        return error.message;
-      }
-    }
-    return t.cardStatus.failed;
-  }
-
-  /// Backend/app error slugs whose [ApiException.message] is curated and safe to
-  /// surface in `notes`. Kept narrow on purpose — anything not listed here gets
-  /// the generic fallback rather than leaking raw text into a Core-synced field.
-  static const Set<String> _knownErrorCodes = <String>{
-    'unauthorized',
-    'upload_failed',
-    'malformed_response',
-  };
 
   /// Best-effort re-derive the duration (seconds) for a Core create from the
   /// row's `m:ss`-style duration TEXT. Unknown ⇒ 0 (the file-picker path also

@@ -39,6 +39,7 @@ FileViewData _data({
   String contentsTag = 'Transcript',
   String? contentsText = 'Machine transcript line.',
   ContentsState? contentsState,
+  String? errorMessage,
   VoidCallback? onContentsRetry,
   String? notesText = 'My own note.',
 }) {
@@ -52,6 +53,7 @@ FileViewData _data({
     contentsTag: contentsTag,
     contentsText: contentsText,
     contentsState: contentsState,
+    errorMessage: errorMessage,
     onContentsRetry: onContentsRetry,
     notesText: notesText,
   );
@@ -217,6 +219,34 @@ void main() {
       await tester.tap(retry);
       await tester.pump();
       expect(retried, isTrue);
+    });
+
+    testWidgets('failed renders safe error copy separately from notes', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _data(
+          contentsText: null,
+          contentsState: ContentsState.failed,
+          errorMessage: 'Processing timed out',
+          notesText: 'My private note',
+        ),
+      );
+
+      final failure = find.byKey(const ValueKey('file-view-contents-failed'));
+      expect(
+        find.descendant(
+          of: failure,
+          matching: find.text('Processing timed out'),
+        ),
+        findsOneWidget,
+      );
+      final notes = find.byKey(const ValueKey('file-view-notes'));
+      expect(
+        find.descendant(of: notes, matching: find.text('My private note')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('empty → "No transcript yet"', (tester) async {

@@ -82,6 +82,8 @@
     "pendingUpload": "Saved on device · waiting to upload",
     "processing": "Transcribing…",
     "failed": "Upload failed",
+    "processingFailed": "Processing failed",
+    "processingTimedOut": "Processing timed out",
     "retry": "Retry",
     "onDevice": "On device",
     "cloud": "Synced",

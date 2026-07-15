@@ -328,6 +328,12 @@ class Translations$cardStatus$en {
 	/// en: 'Upload failed'
 	String get failed => 'Upload failed';
 
+	/// en: 'Processing failed'
+	String get processingFailed => 'Processing failed';
+
+	/// en: 'Processing timed out'
+	String get processingTimedOut => 'Processing timed out';
+
 	/// en: 'Retry'
 	String get retry => 'Retry';
 
@@ -1715,6 +1721,8 @@ extension on Translations {
 			'cardStatus.pendingUpload' => 'Saved on device · waiting to upload',
 			'cardStatus.processing' => 'Transcribing…',
 			'cardStatus.failed' => 'Upload failed',
+			'cardStatus.processingFailed' => 'Processing failed',
+			'cardStatus.processingTimedOut' => 'Processing timed out',
 			'cardStatus.retry' => 'Retry',
 			'cardStatus.onDevice' => 'On device',
 			'cardStatus.cloud' => 'Synced',

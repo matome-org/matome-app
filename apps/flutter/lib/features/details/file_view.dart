@@ -57,6 +57,7 @@ class FileViewData {
     this.contentsTag,
     this.contentsText,
     this.contentsState,
+    this.errorMessage,
     this.onContentsRetry,
     this.notesText,
   });
@@ -95,6 +96,10 @@ class FileViewData {
   /// [ContentsState.empty]. Hosts pass an explicit value to surface
   /// processing / failed without needing a producer to exist.
   final ContentsState? contentsState;
+
+  /// Safe failure copy derived from the bounded persisted error code. It is
+  /// rendered in Contents, never in the user-owned Notes field.
+  final String? errorMessage;
 
   /// Retry handler for the [ContentsState.failed] state. When null the failed
   /// body renders without an actionable Retry button.
@@ -259,6 +264,7 @@ class _FileViewState extends State<FileView> {
           mediaKind: data.mediaKind,
           state: data.resolvedContentsState,
           text: data.contentsText,
+          errorMessage: data.errorMessage,
           onRetry: data.onContentsRetry,
         ),
         SizedBox(height: spacing.lg),
@@ -450,6 +456,7 @@ class _ContentsSection extends StatelessWidget {
     required this.mediaKind,
     required this.state,
     required this.text,
+    required this.errorMessage,
     required this.onRetry,
   });
 
@@ -457,6 +464,7 @@ class _ContentsSection extends StatelessWidget {
   final FileMediaKind mediaKind;
   final ContentsState state;
   final String? text;
+  final String? errorMessage;
   final VoidCallback? onRetry;
 
   @override
@@ -525,7 +533,7 @@ class _ContentsSection extends StatelessWidget {
       ContentsState.ready => _ReadyBody(text: text!),
       ContentsState.processing => _ProcessingBody(label: status.processing),
       ContentsState.failed => _FailedBody(
-        label: status.failed,
+        label: errorMessage ?? status.failed,
         onRetry: onRetry,
       ),
       ContentsState.empty => _EmptyBody(label: status.empty),
