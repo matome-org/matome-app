@@ -42,9 +42,36 @@ void main() {
       await queue.networkRecovery.future.timeout(const Duration(seconds: 1));
 
       expect(probedEndpoints, contains('http://127.0.0.1:7999'));
-      expect(queue.drains, 2, reason: 'unreachable to reachable drains once');
+      expect(
+        queue.drains,
+        greaterThanOrEqualTo(2),
+        reason: 'reachable ticks keep due durable retries moving',
+      );
     },
   );
+
+  test('steady reachability keeps due queue retries moving', () async {
+    final queue = _RecordingQueue();
+    final container = ProviderContainer(
+      overrides: [
+        settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
+        uploadQueueProvider.overrideWithValue(queue),
+        uploadRetryServiceProvider.overrideWith(
+          (ref) => UploadRetryService(
+            ref,
+            interval: const Duration(milliseconds: 5),
+            probe: (_) async => true,
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(uploadRetryServiceProvider).start();
+    await queue.networkRecovery.future.timeout(const Duration(seconds: 1));
+
+    expect(queue.drains, greaterThanOrEqualTo(2));
+  });
 }
 
 class _RecordingQueue extends UploadQueue {

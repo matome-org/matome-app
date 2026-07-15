@@ -6426,6 +6426,966 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
   }
 }
 
+class $WorkQueueTable extends WorkQueue
+    with TableInfo<$WorkQueueTable, WorkQueueRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WorkQueueTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _itemIdMeta = const VerificationMeta('itemId');
+  @override
+  late final GeneratedColumn<String> itemId = GeneratedColumn<String>(
+    'item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dedupeKeyMeta = const VerificationMeta(
+    'dedupeKey',
+  );
+  @override
+  late final GeneratedColumn<String> dedupeKey = GeneratedColumn<String>(
+    'dedupe_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _stageMeta = const VerificationMeta('stage');
+  @override
+  late final GeneratedColumn<String> stage = GeneratedColumn<String>(
+    'stage',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dependsOnMeta = const VerificationMeta(
+    'dependsOn',
+  );
+  @override
+  late final GeneratedColumn<String> dependsOn = GeneratedColumn<String>(
+    'depends_on',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _attemptMeta = const VerificationMeta(
+    'attempt',
+  );
+  @override
+  late final GeneratedColumn<int> attempt = GeneratedColumn<int>(
+    'attempt',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _availableAtMeta = const VerificationMeta(
+    'availableAt',
+  );
+  @override
+  late final GeneratedColumn<int> availableAt = GeneratedColumn<int>(
+    'available_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _leaseOwnerMeta = const VerificationMeta(
+    'leaseOwner',
+  );
+  @override
+  late final GeneratedColumn<String> leaseOwner = GeneratedColumn<String>(
+    'lease_owner',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _leaseUntilMeta = const VerificationMeta(
+    'leaseUntil',
+  );
+  @override
+  late final GeneratedColumn<int> leaseUntil = GeneratedColumn<int>(
+    'lease_until',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _progressMeta = const VerificationMeta(
+    'progress',
+  );
+  @override
+  late final GeneratedColumn<double> progress = GeneratedColumn<double>(
+    'progress',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _errorCodeMeta = const VerificationMeta(
+    'errorCode',
+  );
+  @override
+  late final GeneratedColumn<String> errorCode = GeneratedColumn<String>(
+    'error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _blockedReasonMeta = const VerificationMeta(
+    'blockedReason',
+  );
+  @override
+  late final GeneratedColumn<String> blockedReason = GeneratedColumn<String>(
+    'blocked_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _configRevisionMeta = const VerificationMeta(
+    'configRevision',
+  );
+  @override
+  late final GeneratedColumn<int> configRevision = GeneratedColumn<int>(
+    'config_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    kind,
+    itemId,
+    dedupeKey,
+    state,
+    stage,
+    dependsOn,
+    attempt,
+    availableAt,
+    leaseOwner,
+    leaseUntil,
+    progress,
+    errorCode,
+    blockedReason,
+    configRevision,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'work_queue';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WorkQueueRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('item_id')) {
+      context.handle(
+        _itemIdMeta,
+        itemId.isAcceptableOrUnknown(data['item_id']!, _itemIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_itemIdMeta);
+    }
+    if (data.containsKey('dedupe_key')) {
+      context.handle(
+        _dedupeKeyMeta,
+        dedupeKey.isAcceptableOrUnknown(data['dedupe_key']!, _dedupeKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dedupeKeyMeta);
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    if (data.containsKey('stage')) {
+      context.handle(
+        _stageMeta,
+        stage.isAcceptableOrUnknown(data['stage']!, _stageMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stageMeta);
+    }
+    if (data.containsKey('depends_on')) {
+      context.handle(
+        _dependsOnMeta,
+        dependsOn.isAcceptableOrUnknown(data['depends_on']!, _dependsOnMeta),
+      );
+    }
+    if (data.containsKey('attempt')) {
+      context.handle(
+        _attemptMeta,
+        attempt.isAcceptableOrUnknown(data['attempt']!, _attemptMeta),
+      );
+    }
+    if (data.containsKey('available_at')) {
+      context.handle(
+        _availableAtMeta,
+        availableAt.isAcceptableOrUnknown(
+          data['available_at']!,
+          _availableAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_availableAtMeta);
+    }
+    if (data.containsKey('lease_owner')) {
+      context.handle(
+        _leaseOwnerMeta,
+        leaseOwner.isAcceptableOrUnknown(data['lease_owner']!, _leaseOwnerMeta),
+      );
+    }
+    if (data.containsKey('lease_until')) {
+      context.handle(
+        _leaseUntilMeta,
+        leaseUntil.isAcceptableOrUnknown(data['lease_until']!, _leaseUntilMeta),
+      );
+    }
+    if (data.containsKey('progress')) {
+      context.handle(
+        _progressMeta,
+        progress.isAcceptableOrUnknown(data['progress']!, _progressMeta),
+      );
+    }
+    if (data.containsKey('error_code')) {
+      context.handle(
+        _errorCodeMeta,
+        errorCode.isAcceptableOrUnknown(data['error_code']!, _errorCodeMeta),
+      );
+    }
+    if (data.containsKey('blocked_reason')) {
+      context.handle(
+        _blockedReasonMeta,
+        blockedReason.isAcceptableOrUnknown(
+          data['blocked_reason']!,
+          _blockedReasonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('config_revision')) {
+      context.handle(
+        _configRevisionMeta,
+        configRevision.isAcceptableOrUnknown(
+          data['config_revision']!,
+          _configRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {dedupeKey},
+  ];
+  @override
+  WorkQueueRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WorkQueueRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      itemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}item_id'],
+      )!,
+      dedupeKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}dedupe_key'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      stage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stage'],
+      )!,
+      dependsOn: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}depends_on'],
+      ),
+      attempt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempt'],
+      )!,
+      availableAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}available_at'],
+      )!,
+      leaseOwner: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}lease_owner'],
+      ),
+      leaseUntil: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}lease_until'],
+      ),
+      progress: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}progress'],
+      )!,
+      errorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_code'],
+      ),
+      blockedReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}blocked_reason'],
+      ),
+      configRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}config_revision'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $WorkQueueTable createAlias(String alias) {
+    return $WorkQueueTable(attachedDatabase, alias);
+  }
+}
+
+class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
+  final String id;
+  final String kind;
+  final String itemId;
+  final String dedupeKey;
+  final String state;
+  final String stage;
+  final String? dependsOn;
+  final int attempt;
+  final int availableAt;
+  final String? leaseOwner;
+  final int? leaseUntil;
+  final double progress;
+  final String? errorCode;
+  final String? blockedReason;
+  final int configRevision;
+  final int createdAt;
+  final int updatedAt;
+  const WorkQueueRow({
+    required this.id,
+    required this.kind,
+    required this.itemId,
+    required this.dedupeKey,
+    required this.state,
+    required this.stage,
+    this.dependsOn,
+    required this.attempt,
+    required this.availableAt,
+    this.leaseOwner,
+    this.leaseUntil,
+    required this.progress,
+    this.errorCode,
+    this.blockedReason,
+    required this.configRevision,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['kind'] = Variable<String>(kind);
+    map['item_id'] = Variable<String>(itemId);
+    map['dedupe_key'] = Variable<String>(dedupeKey);
+    map['state'] = Variable<String>(state);
+    map['stage'] = Variable<String>(stage);
+    if (!nullToAbsent || dependsOn != null) {
+      map['depends_on'] = Variable<String>(dependsOn);
+    }
+    map['attempt'] = Variable<int>(attempt);
+    map['available_at'] = Variable<int>(availableAt);
+    if (!nullToAbsent || leaseOwner != null) {
+      map['lease_owner'] = Variable<String>(leaseOwner);
+    }
+    if (!nullToAbsent || leaseUntil != null) {
+      map['lease_until'] = Variable<int>(leaseUntil);
+    }
+    map['progress'] = Variable<double>(progress);
+    if (!nullToAbsent || errorCode != null) {
+      map['error_code'] = Variable<String>(errorCode);
+    }
+    if (!nullToAbsent || blockedReason != null) {
+      map['blocked_reason'] = Variable<String>(blockedReason);
+    }
+    map['config_revision'] = Variable<int>(configRevision);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  WorkQueueCompanion toCompanion(bool nullToAbsent) {
+    return WorkQueueCompanion(
+      id: Value(id),
+      kind: Value(kind),
+      itemId: Value(itemId),
+      dedupeKey: Value(dedupeKey),
+      state: Value(state),
+      stage: Value(stage),
+      dependsOn: dependsOn == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dependsOn),
+      attempt: Value(attempt),
+      availableAt: Value(availableAt),
+      leaseOwner: leaseOwner == null && nullToAbsent
+          ? const Value.absent()
+          : Value(leaseOwner),
+      leaseUntil: leaseUntil == null && nullToAbsent
+          ? const Value.absent()
+          : Value(leaseUntil),
+      progress: Value(progress),
+      errorCode: errorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorCode),
+      blockedReason: blockedReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(blockedReason),
+      configRevision: Value(configRevision),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory WorkQueueRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WorkQueueRow(
+      id: serializer.fromJson<String>(json['id']),
+      kind: serializer.fromJson<String>(json['kind']),
+      itemId: serializer.fromJson<String>(json['itemId']),
+      dedupeKey: serializer.fromJson<String>(json['dedupeKey']),
+      state: serializer.fromJson<String>(json['state']),
+      stage: serializer.fromJson<String>(json['stage']),
+      dependsOn: serializer.fromJson<String?>(json['dependsOn']),
+      attempt: serializer.fromJson<int>(json['attempt']),
+      availableAt: serializer.fromJson<int>(json['availableAt']),
+      leaseOwner: serializer.fromJson<String?>(json['leaseOwner']),
+      leaseUntil: serializer.fromJson<int?>(json['leaseUntil']),
+      progress: serializer.fromJson<double>(json['progress']),
+      errorCode: serializer.fromJson<String?>(json['errorCode']),
+      blockedReason: serializer.fromJson<String?>(json['blockedReason']),
+      configRevision: serializer.fromJson<int>(json['configRevision']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'kind': serializer.toJson<String>(kind),
+      'itemId': serializer.toJson<String>(itemId),
+      'dedupeKey': serializer.toJson<String>(dedupeKey),
+      'state': serializer.toJson<String>(state),
+      'stage': serializer.toJson<String>(stage),
+      'dependsOn': serializer.toJson<String?>(dependsOn),
+      'attempt': serializer.toJson<int>(attempt),
+      'availableAt': serializer.toJson<int>(availableAt),
+      'leaseOwner': serializer.toJson<String?>(leaseOwner),
+      'leaseUntil': serializer.toJson<int?>(leaseUntil),
+      'progress': serializer.toJson<double>(progress),
+      'errorCode': serializer.toJson<String?>(errorCode),
+      'blockedReason': serializer.toJson<String?>(blockedReason),
+      'configRevision': serializer.toJson<int>(configRevision),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  WorkQueueRow copyWith({
+    String? id,
+    String? kind,
+    String? itemId,
+    String? dedupeKey,
+    String? state,
+    String? stage,
+    Value<String?> dependsOn = const Value.absent(),
+    int? attempt,
+    int? availableAt,
+    Value<String?> leaseOwner = const Value.absent(),
+    Value<int?> leaseUntil = const Value.absent(),
+    double? progress,
+    Value<String?> errorCode = const Value.absent(),
+    Value<String?> blockedReason = const Value.absent(),
+    int? configRevision,
+    int? createdAt,
+    int? updatedAt,
+  }) => WorkQueueRow(
+    id: id ?? this.id,
+    kind: kind ?? this.kind,
+    itemId: itemId ?? this.itemId,
+    dedupeKey: dedupeKey ?? this.dedupeKey,
+    state: state ?? this.state,
+    stage: stage ?? this.stage,
+    dependsOn: dependsOn.present ? dependsOn.value : this.dependsOn,
+    attempt: attempt ?? this.attempt,
+    availableAt: availableAt ?? this.availableAt,
+    leaseOwner: leaseOwner.present ? leaseOwner.value : this.leaseOwner,
+    leaseUntil: leaseUntil.present ? leaseUntil.value : this.leaseUntil,
+    progress: progress ?? this.progress,
+    errorCode: errorCode.present ? errorCode.value : this.errorCode,
+    blockedReason: blockedReason.present
+        ? blockedReason.value
+        : this.blockedReason,
+    configRevision: configRevision ?? this.configRevision,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  WorkQueueRow copyWithCompanion(WorkQueueCompanion data) {
+    return WorkQueueRow(
+      id: data.id.present ? data.id.value : this.id,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      itemId: data.itemId.present ? data.itemId.value : this.itemId,
+      dedupeKey: data.dedupeKey.present ? data.dedupeKey.value : this.dedupeKey,
+      state: data.state.present ? data.state.value : this.state,
+      stage: data.stage.present ? data.stage.value : this.stage,
+      dependsOn: data.dependsOn.present ? data.dependsOn.value : this.dependsOn,
+      attempt: data.attempt.present ? data.attempt.value : this.attempt,
+      availableAt: data.availableAt.present
+          ? data.availableAt.value
+          : this.availableAt,
+      leaseOwner: data.leaseOwner.present
+          ? data.leaseOwner.value
+          : this.leaseOwner,
+      leaseUntil: data.leaseUntil.present
+          ? data.leaseUntil.value
+          : this.leaseUntil,
+      progress: data.progress.present ? data.progress.value : this.progress,
+      errorCode: data.errorCode.present ? data.errorCode.value : this.errorCode,
+      blockedReason: data.blockedReason.present
+          ? data.blockedReason.value
+          : this.blockedReason,
+      configRevision: data.configRevision.present
+          ? data.configRevision.value
+          : this.configRevision,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkQueueRow(')
+          ..write('id: $id, ')
+          ..write('kind: $kind, ')
+          ..write('itemId: $itemId, ')
+          ..write('dedupeKey: $dedupeKey, ')
+          ..write('state: $state, ')
+          ..write('stage: $stage, ')
+          ..write('dependsOn: $dependsOn, ')
+          ..write('attempt: $attempt, ')
+          ..write('availableAt: $availableAt, ')
+          ..write('leaseOwner: $leaseOwner, ')
+          ..write('leaseUntil: $leaseUntil, ')
+          ..write('progress: $progress, ')
+          ..write('errorCode: $errorCode, ')
+          ..write('blockedReason: $blockedReason, ')
+          ..write('configRevision: $configRevision, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    kind,
+    itemId,
+    dedupeKey,
+    state,
+    stage,
+    dependsOn,
+    attempt,
+    availableAt,
+    leaseOwner,
+    leaseUntil,
+    progress,
+    errorCode,
+    blockedReason,
+    configRevision,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WorkQueueRow &&
+          other.id == this.id &&
+          other.kind == this.kind &&
+          other.itemId == this.itemId &&
+          other.dedupeKey == this.dedupeKey &&
+          other.state == this.state &&
+          other.stage == this.stage &&
+          other.dependsOn == this.dependsOn &&
+          other.attempt == this.attempt &&
+          other.availableAt == this.availableAt &&
+          other.leaseOwner == this.leaseOwner &&
+          other.leaseUntil == this.leaseUntil &&
+          other.progress == this.progress &&
+          other.errorCode == this.errorCode &&
+          other.blockedReason == this.blockedReason &&
+          other.configRevision == this.configRevision &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
+  final Value<String> id;
+  final Value<String> kind;
+  final Value<String> itemId;
+  final Value<String> dedupeKey;
+  final Value<String> state;
+  final Value<String> stage;
+  final Value<String?> dependsOn;
+  final Value<int> attempt;
+  final Value<int> availableAt;
+  final Value<String?> leaseOwner;
+  final Value<int?> leaseUntil;
+  final Value<double> progress;
+  final Value<String?> errorCode;
+  final Value<String?> blockedReason;
+  final Value<int> configRevision;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const WorkQueueCompanion({
+    this.id = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.itemId = const Value.absent(),
+    this.dedupeKey = const Value.absent(),
+    this.state = const Value.absent(),
+    this.stage = const Value.absent(),
+    this.dependsOn = const Value.absent(),
+    this.attempt = const Value.absent(),
+    this.availableAt = const Value.absent(),
+    this.leaseOwner = const Value.absent(),
+    this.leaseUntil = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.errorCode = const Value.absent(),
+    this.blockedReason = const Value.absent(),
+    this.configRevision = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WorkQueueCompanion.insert({
+    required String id,
+    required String kind,
+    required String itemId,
+    required String dedupeKey,
+    required String state,
+    required String stage,
+    this.dependsOn = const Value.absent(),
+    this.attempt = const Value.absent(),
+    required int availableAt,
+    this.leaseOwner = const Value.absent(),
+    this.leaseUntil = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.errorCode = const Value.absent(),
+    this.blockedReason = const Value.absent(),
+    this.configRevision = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       kind = Value(kind),
+       itemId = Value(itemId),
+       dedupeKey = Value(dedupeKey),
+       state = Value(state),
+       stage = Value(stage),
+       availableAt = Value(availableAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<WorkQueueRow> custom({
+    Expression<String>? id,
+    Expression<String>? kind,
+    Expression<String>? itemId,
+    Expression<String>? dedupeKey,
+    Expression<String>? state,
+    Expression<String>? stage,
+    Expression<String>? dependsOn,
+    Expression<int>? attempt,
+    Expression<int>? availableAt,
+    Expression<String>? leaseOwner,
+    Expression<int>? leaseUntil,
+    Expression<double>? progress,
+    Expression<String>? errorCode,
+    Expression<String>? blockedReason,
+    Expression<int>? configRevision,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (kind != null) 'kind': kind,
+      if (itemId != null) 'item_id': itemId,
+      if (dedupeKey != null) 'dedupe_key': dedupeKey,
+      if (state != null) 'state': state,
+      if (stage != null) 'stage': stage,
+      if (dependsOn != null) 'depends_on': dependsOn,
+      if (attempt != null) 'attempt': attempt,
+      if (availableAt != null) 'available_at': availableAt,
+      if (leaseOwner != null) 'lease_owner': leaseOwner,
+      if (leaseUntil != null) 'lease_until': leaseUntil,
+      if (progress != null) 'progress': progress,
+      if (errorCode != null) 'error_code': errorCode,
+      if (blockedReason != null) 'blocked_reason': blockedReason,
+      if (configRevision != null) 'config_revision': configRevision,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WorkQueueCompanion copyWith({
+    Value<String>? id,
+    Value<String>? kind,
+    Value<String>? itemId,
+    Value<String>? dedupeKey,
+    Value<String>? state,
+    Value<String>? stage,
+    Value<String?>? dependsOn,
+    Value<int>? attempt,
+    Value<int>? availableAt,
+    Value<String?>? leaseOwner,
+    Value<int?>? leaseUntil,
+    Value<double>? progress,
+    Value<String?>? errorCode,
+    Value<String?>? blockedReason,
+    Value<int>? configRevision,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return WorkQueueCompanion(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      itemId: itemId ?? this.itemId,
+      dedupeKey: dedupeKey ?? this.dedupeKey,
+      state: state ?? this.state,
+      stage: stage ?? this.stage,
+      dependsOn: dependsOn ?? this.dependsOn,
+      attempt: attempt ?? this.attempt,
+      availableAt: availableAt ?? this.availableAt,
+      leaseOwner: leaseOwner ?? this.leaseOwner,
+      leaseUntil: leaseUntil ?? this.leaseUntil,
+      progress: progress ?? this.progress,
+      errorCode: errorCode ?? this.errorCode,
+      blockedReason: blockedReason ?? this.blockedReason,
+      configRevision: configRevision ?? this.configRevision,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (itemId.present) {
+      map['item_id'] = Variable<String>(itemId.value);
+    }
+    if (dedupeKey.present) {
+      map['dedupe_key'] = Variable<String>(dedupeKey.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (stage.present) {
+      map['stage'] = Variable<String>(stage.value);
+    }
+    if (dependsOn.present) {
+      map['depends_on'] = Variable<String>(dependsOn.value);
+    }
+    if (attempt.present) {
+      map['attempt'] = Variable<int>(attempt.value);
+    }
+    if (availableAt.present) {
+      map['available_at'] = Variable<int>(availableAt.value);
+    }
+    if (leaseOwner.present) {
+      map['lease_owner'] = Variable<String>(leaseOwner.value);
+    }
+    if (leaseUntil.present) {
+      map['lease_until'] = Variable<int>(leaseUntil.value);
+    }
+    if (progress.present) {
+      map['progress'] = Variable<double>(progress.value);
+    }
+    if (errorCode.present) {
+      map['error_code'] = Variable<String>(errorCode.value);
+    }
+    if (blockedReason.present) {
+      map['blocked_reason'] = Variable<String>(blockedReason.value);
+    }
+    if (configRevision.present) {
+      map['config_revision'] = Variable<int>(configRevision.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WorkQueueCompanion(')
+          ..write('id: $id, ')
+          ..write('kind: $kind, ')
+          ..write('itemId: $itemId, ')
+          ..write('dedupeKey: $dedupeKey, ')
+          ..write('state: $state, ')
+          ..write('stage: $stage, ')
+          ..write('dependsOn: $dependsOn, ')
+          ..write('attempt: $attempt, ')
+          ..write('availableAt: $availableAt, ')
+          ..write('leaseOwner: $leaseOwner, ')
+          ..write('leaseUntil: $leaseUntil, ')
+          ..write('progress: $progress, ')
+          ..write('errorCode: $errorCode, ')
+          ..write('blockedReason: $blockedReason, ')
+          ..write('configRevision: $configRevision, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ItemContactsTable extends ItemContacts
     with TableInfo<$ItemContactsTable, ItemContactRow> {
   @override
@@ -6706,6 +7666,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $FileBlobsTable fileBlobs = $FileBlobsTable(this);
   late final $TextContentsTable textContents = $TextContentsTable(this);
   late final $ItemsTable items = $ItemsTable(this);
+  late final $WorkQueueTable workQueue = $WorkQueueTable(this);
   late final $ItemContactsTable itemContacts = $ItemContactsTable(this);
   late final WorkspacesDao workspacesDao = WorkspacesDao(this as AppDatabase);
   late final RecordingDraftsDao recordingDraftsDao = RecordingDraftsDao(
@@ -6715,6 +7676,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final MatomesDao matomesDao = MatomesDao(this as AppDatabase);
   late final ContactsDao contactsDao = ContactsDao(this as AppDatabase);
   late final ItemsDao itemsDao = ItemsDao(this as AppDatabase);
+  late final WorkQueueDao workQueueDao = WorkQueueDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6732,6 +7694,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     fileBlobs,
     textContents,
     items,
+    workQueue,
     itemContacts,
   ];
 }
@@ -9948,6 +10911,444 @@ typedef $$ItemsTableProcessedTableManager =
       ItemRow,
       PrefetchHooks Function()
     >;
+typedef $$WorkQueueTableCreateCompanionBuilder =
+    WorkQueueCompanion Function({
+      required String id,
+      required String kind,
+      required String itemId,
+      required String dedupeKey,
+      required String state,
+      required String stage,
+      Value<String?> dependsOn,
+      Value<int> attempt,
+      required int availableAt,
+      Value<String?> leaseOwner,
+      Value<int?> leaseUntil,
+      Value<double> progress,
+      Value<String?> errorCode,
+      Value<String?> blockedReason,
+      Value<int> configRevision,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$WorkQueueTableUpdateCompanionBuilder =
+    WorkQueueCompanion Function({
+      Value<String> id,
+      Value<String> kind,
+      Value<String> itemId,
+      Value<String> dedupeKey,
+      Value<String> state,
+      Value<String> stage,
+      Value<String?> dependsOn,
+      Value<int> attempt,
+      Value<int> availableAt,
+      Value<String?> leaseOwner,
+      Value<int?> leaseUntil,
+      Value<double> progress,
+      Value<String?> errorCode,
+      Value<String?> blockedReason,
+      Value<int> configRevision,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$WorkQueueTableFilterComposer
+    extends Composer<_$AppDatabase, $WorkQueueTable> {
+  $$WorkQueueTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dedupeKey => $composableBuilder(
+    column: $table.dedupeKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stage => $composableBuilder(
+    column: $table.stage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dependsOn => $composableBuilder(
+    column: $table.dependsOn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attempt => $composableBuilder(
+    column: $table.attempt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get leaseOwner => $composableBuilder(
+    column: $table.leaseOwner,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get leaseUntil => $composableBuilder(
+    column: $table.leaseUntil,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get progress => $composableBuilder(
+    column: $table.progress,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorCode => $composableBuilder(
+    column: $table.errorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get blockedReason => $composableBuilder(
+    column: $table.blockedReason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get configRevision => $composableBuilder(
+    column: $table.configRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$WorkQueueTableOrderingComposer
+    extends Composer<_$AppDatabase, $WorkQueueTable> {
+  $$WorkQueueTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dedupeKey => $composableBuilder(
+    column: $table.dedupeKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stage => $composableBuilder(
+    column: $table.stage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dependsOn => $composableBuilder(
+    column: $table.dependsOn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempt => $composableBuilder(
+    column: $table.attempt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get leaseOwner => $composableBuilder(
+    column: $table.leaseOwner,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get leaseUntil => $composableBuilder(
+    column: $table.leaseUntil,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get progress => $composableBuilder(
+    column: $table.progress,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorCode => $composableBuilder(
+    column: $table.errorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get blockedReason => $composableBuilder(
+    column: $table.blockedReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get configRevision => $composableBuilder(
+    column: $table.configRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$WorkQueueTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WorkQueueTable> {
+  $$WorkQueueTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get itemId =>
+      $composableBuilder(column: $table.itemId, builder: (column) => column);
+
+  GeneratedColumn<String> get dedupeKey =>
+      $composableBuilder(column: $table.dedupeKey, builder: (column) => column);
+
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<String> get stage =>
+      $composableBuilder(column: $table.stage, builder: (column) => column);
+
+  GeneratedColumn<String> get dependsOn =>
+      $composableBuilder(column: $table.dependsOn, builder: (column) => column);
+
+  GeneratedColumn<int> get attempt =>
+      $composableBuilder(column: $table.attempt, builder: (column) => column);
+
+  GeneratedColumn<int> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get leaseOwner => $composableBuilder(
+    column: $table.leaseOwner,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get leaseUntil => $composableBuilder(
+    column: $table.leaseUntil,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get progress =>
+      $composableBuilder(column: $table.progress, builder: (column) => column);
+
+  GeneratedColumn<String> get errorCode =>
+      $composableBuilder(column: $table.errorCode, builder: (column) => column);
+
+  GeneratedColumn<String> get blockedReason => $composableBuilder(
+    column: $table.blockedReason,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get configRevision => $composableBuilder(
+    column: $table.configRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$WorkQueueTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $WorkQueueTable,
+          WorkQueueRow,
+          $$WorkQueueTableFilterComposer,
+          $$WorkQueueTableOrderingComposer,
+          $$WorkQueueTableAnnotationComposer,
+          $$WorkQueueTableCreateCompanionBuilder,
+          $$WorkQueueTableUpdateCompanionBuilder,
+          (
+            WorkQueueRow,
+            BaseReferences<_$AppDatabase, $WorkQueueTable, WorkQueueRow>,
+          ),
+          WorkQueueRow,
+          PrefetchHooks Function()
+        > {
+  $$WorkQueueTableTableManager(_$AppDatabase db, $WorkQueueTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WorkQueueTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WorkQueueTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WorkQueueTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String> itemId = const Value.absent(),
+                Value<String> dedupeKey = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<String> stage = const Value.absent(),
+                Value<String?> dependsOn = const Value.absent(),
+                Value<int> attempt = const Value.absent(),
+                Value<int> availableAt = const Value.absent(),
+                Value<String?> leaseOwner = const Value.absent(),
+                Value<int?> leaseUntil = const Value.absent(),
+                Value<double> progress = const Value.absent(),
+                Value<String?> errorCode = const Value.absent(),
+                Value<String?> blockedReason = const Value.absent(),
+                Value<int> configRevision = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WorkQueueCompanion(
+                id: id,
+                kind: kind,
+                itemId: itemId,
+                dedupeKey: dedupeKey,
+                state: state,
+                stage: stage,
+                dependsOn: dependsOn,
+                attempt: attempt,
+                availableAt: availableAt,
+                leaseOwner: leaseOwner,
+                leaseUntil: leaseUntil,
+                progress: progress,
+                errorCode: errorCode,
+                blockedReason: blockedReason,
+                configRevision: configRevision,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String kind,
+                required String itemId,
+                required String dedupeKey,
+                required String state,
+                required String stage,
+                Value<String?> dependsOn = const Value.absent(),
+                Value<int> attempt = const Value.absent(),
+                required int availableAt,
+                Value<String?> leaseOwner = const Value.absent(),
+                Value<int?> leaseUntil = const Value.absent(),
+                Value<double> progress = const Value.absent(),
+                Value<String?> errorCode = const Value.absent(),
+                Value<String?> blockedReason = const Value.absent(),
+                Value<int> configRevision = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => WorkQueueCompanion.insert(
+                id: id,
+                kind: kind,
+                itemId: itemId,
+                dedupeKey: dedupeKey,
+                state: state,
+                stage: stage,
+                dependsOn: dependsOn,
+                attempt: attempt,
+                availableAt: availableAt,
+                leaseOwner: leaseOwner,
+                leaseUntil: leaseUntil,
+                progress: progress,
+                errorCode: errorCode,
+                blockedReason: blockedReason,
+                configRevision: configRevision,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$WorkQueueTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $WorkQueueTable,
+      WorkQueueRow,
+      $$WorkQueueTableFilterComposer,
+      $$WorkQueueTableOrderingComposer,
+      $$WorkQueueTableAnnotationComposer,
+      $$WorkQueueTableCreateCompanionBuilder,
+      $$WorkQueueTableUpdateCompanionBuilder,
+      (
+        WorkQueueRow,
+        BaseReferences<_$AppDatabase, $WorkQueueTable, WorkQueueRow>,
+      ),
+      WorkQueueRow,
+      PrefetchHooks Function()
+    >;
 typedef $$ItemContactsTableCreateCompanionBuilder =
     ItemContactsCompanion Function({
       required String id,
@@ -10138,6 +11539,8 @@ class $AppDatabaseManager {
       $$TextContentsTableTableManager(_db, _db.textContents);
   $$ItemsTableTableManager get items =>
       $$ItemsTableTableManager(_db, _db.items);
+  $$WorkQueueTableTableManager get workQueue =>
+      $$WorkQueueTableTableManager(_db, _db.workQueue);
   $$ItemContactsTableTableManager get itemContacts =>
       $$ItemContactsTableTableManager(_db, _db.itemContacts);
 }

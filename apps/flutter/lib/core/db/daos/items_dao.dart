@@ -98,6 +98,7 @@ class ItemWithWorkspace {
     MatomeContacts,
     Contacts,
     ItemContacts,
+    WorkQueue,
   ],
 )
 class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
@@ -106,11 +107,13 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
   Future<void> createFileItem({
     required ItemsCompanion item,
     required FileBlobsCompanion file,
+    WorkQueueCompanion? initialWork,
   }) {
     _requirePayloadArc(item, MatomeItemType.file);
     return transaction(() async {
       await into(fileBlobs).insert(file);
       await into(items).insert(await _normalizePlacement(item));
+      if (initialWork != null) await into(workQueue).insert(initialWork);
     });
   }
 
@@ -129,6 +132,7 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
     required ItemsCompanion item,
     required FileBlobsCompanion file,
     bool ensureMatome = false,
+    WorkQueueCompanion? initialWork,
   }) {
     _requirePayloadArc(item, MatomeItemType.file);
     return transaction(() async {
@@ -167,6 +171,9 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
       await into(
         items,
       ).insertOnConflictUpdate(await _normalizePlacement(normalized));
+      if (initialWork != null) {
+        await into(workQueue).insert(initialWork);
+      }
       final matomeId = normalized.matomeId.present
           ? normalized.matomeId.value
           : null;
@@ -283,6 +290,9 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
     return transaction(() async {
       final row = await getById(itemId, ownerId);
       if (row == null) return 0;
+      await (delete(
+        workQueue,
+      )..where((work) => work.itemId.equals(itemId))).go();
       await (delete(
         itemContacts,
       )..where((edge) => edge.itemId.equals(itemId))).go();

@@ -224,7 +224,7 @@ void main() {
         expect(r.uploadedIds, hasLength(1));
         expect(
           (await db.itemsDao.getById(draftChild, 'owner-1'))!.processingStatus,
-          'done',
+          'processing',
         );
         // Missing-parent and LOCAL-space rows remain durably blocked.
         final pending = await db.itemsDao.listPendingUploads('owner-1');

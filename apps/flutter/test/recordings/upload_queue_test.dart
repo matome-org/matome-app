@@ -119,125 +119,124 @@ void main() {
     );
   }
 
-  test('Core-down → row stays pending + audio kept → Core-up → drains → '
-      'reconciled done → audio RETAINED (W2 #871 retention)', () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-
-    final repo = _ToggleRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    );
-    final container = containerFor(db, repo);
-    addTearDown(container.dispose);
-
-    const userNotes = '  Offline-safe note.\nSecond line.  ';
-    final (localId, audio) = await seedPendingRow(db, tmp, notes: userNotes);
-    final queue = container.read(uploadQueueProvider);
-
-    // CORE DOWN: drain persists an explicit durable block, coreId null, audio kept.
-    repo.coreUp = false;
-    await queue.drain();
-
-    var row = await db.itemsDao.getById(localId, '1');
-    expect(
-      row!.processingStatus,
-      kProcessingStatusBlockedOffline,
-      reason: 'Core-down keeps the row retriable with an explicit reason',
-    );
-    expect(row.coreId, isNull, reason: 'no Core id minted while down');
-    expect(row.notes, userNotes, reason: 'blocked upload preserves user notes');
-    expect(await audio.exists(), isTrue, reason: 'audio kept while down');
-    expect(repo.createCalls, 0, reason: 'create never succeeded while down');
-
-    // CORE UP: drain reconciles coreId, resolves done — but RETAINS the audio.
-    repo.coreUp = true;
-    await queue.drain();
-
-    row = await db.itemsDao.getById(localId, '1');
-    expect(
-      row!.coreId,
-      repo.coreIdMinted,
-      reason: 'coreId reconciled on drain',
-    );
-    expect(row.processingStatus, 'done');
-    expect(row.isProcessing, isFalse);
-    expect(row.summary, 'A memo');
-    expect(row.file?.uploadState, 'uploaded');
-    expect(row.file?.uploadedAt, isNotNull);
-    expect(row.file?.isDirty, isFalse);
-    expect(
-      row.notes,
-      userNotes,
-      reason: 'eventual success preserves exact user-note bytes',
-    );
-    expect(
-      repo.lastClientId,
-      localId,
-      reason: 'local row id is the Core client_id',
-    );
-    // W2 / #871 RETENTION (reverses #43 W4): reaching `done` must NOT delete the
-    // local audio. `done` proves Core accepted the upload, not that the user can
-    // play a cloud copy, so the local-first file is the source of truth and
-    // persists until the user explicitly deletes the recording.
-    expect(
-      await audio.exists(),
-      isTrue,
-      reason:
-          'audio RETAINED after confirmed done (local-first; user-only delete)',
-    );
-  });
-
   test(
-    'failure path: terminal failure keeps the row + audio + reason',
+    'Core-down holds work; Core-up uploads and stops after process acceptance',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      final repo =
-          _ToggleRepository(
-              apiClient: ApiClient(
-                tokenStore: InMemoryTokenStore(),
-                dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-              ),
-            )
-            ..coreUp = true
-            ..failProcessing = true; // GET returns status `failed`.
-
+      final repo = _ToggleRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
       final container = containerFor(db, repo);
       addTearDown(container.dispose);
 
-      const userNotes = '  My upload note.\nSecond line.  ';
+      const userNotes = '  Offline-safe note.\nSecond line.  ';
       final (localId, audio) = await seedPendingRow(db, tmp, notes: userNotes);
-      await container.read(uploadQueueProvider).drain();
+      final queue = container.read(uploadQueueProvider);
 
-      final row = await db.itemsDao.getById(localId, '1');
+      // CORE DOWN: drain persists an explicit durable block, coreId null, audio kept.
+      repo.coreUp = false;
+      await queue.drain();
+
+      var row = await db.itemsDao.getById(localId, '1');
       expect(
         row!.processingStatus,
-        'failed',
-        reason: 'terminal failure persists',
+        kProcessingStatusBlockedOffline,
+        reason: 'Core-down keeps the row retriable with an explicit reason',
       );
-      expect(row.coreId, repo.coreIdMinted, reason: 'create did happen');
-      expect(row.file?.uploadState, 'uploaded');
-      expect(row.file?.uploadedAt, isNotNull);
-      expect(row.processingErrorCode, kProcessingErrorFailed);
+      expect(row.coreId, isNull, reason: 'no Core id minted while down');
       expect(
         row.notes,
         userNotes,
-        reason: 'terminal processing failure must not mutate user notes',
+        reason: 'blocked upload preserves user notes',
       );
+      expect(await audio.exists(), isTrue, reason: 'audio kept while down');
+      expect(repo.createCalls, 0, reason: 'create never succeeded while down');
+
+      // CORE UP: drain reconciles coreId and hands processing to Core.
+      repo.coreUp = true;
+      await queue.drain();
+
+      row = await db.itemsDao.getById(localId, '1');
+      expect(
+        row!.coreId,
+        repo.coreIdMinted,
+        reason: 'coreId reconciled on drain',
+      );
+      expect(row.processingStatus, 'processing');
+      expect(row.isProcessing, isTrue);
+      expect(row.summary, isNull);
+      expect(row.file?.uploadState, 'uploaded');
+      expect(row.file?.uploadedAt, isNotNull);
+      expect(row.file?.isDirty, isFalse);
+      expect(
+        row.notes,
+        userNotes,
+        reason: 'eventual success preserves exact user-note bytes',
+      );
+      expect(
+        repo.lastClientId,
+        localId,
+        reason: 'local row id is the Core client_id',
+      );
+      // W2 / #871 RETENTION (reverses #43 W4): reaching `done` must NOT delete the
+      // local audio. `done` proves Core accepted the upload, not that the user can
+      // play a cloud copy, so the local-first file is the source of truth and
+      // persists until the user explicitly deletes the recording.
       expect(
         await audio.exists(),
         isTrue,
-        reason: 'audio KEPT on failure for inspection / retry',
+        reason:
+            'audio RETAINED after confirmed done (local-first; user-only delete)',
       );
     },
   );
 
+  test('device work does not wait for a terminal AI failure', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+
+    final repo =
+        _ToggleRepository(
+            apiClient: ApiClient(
+              tokenStore: InMemoryTokenStore(),
+              dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+            ),
+          )
+          ..coreUp = true
+          ..failProcessing = true; // GET returns status `failed`.
+
+    final container = containerFor(db, repo);
+    addTearDown(container.dispose);
+
+    const userNotes = '  My upload note.\nSecond line.  ';
+    final (localId, audio) = await seedPendingRow(db, tmp, notes: userNotes);
+    await container.read(uploadQueueProvider).drain();
+
+    final row = await db.itemsDao.getById(localId, '1');
+    expect(row!.processingStatus, 'processing');
+    expect(row.coreId, repo.coreIdMinted, reason: 'create did happen');
+    expect(row.file?.uploadState, 'uploaded');
+    expect(row.file?.uploadedAt, isNotNull);
+    expect(row.processingErrorCode, isNull);
+    expect(
+      row.notes,
+      userNotes,
+      reason: 'terminal processing failure must not mutate user notes',
+    );
+    expect(
+      await audio.exists(),
+      isTrue,
+      reason: 'audio KEPT on failure for inspection / retry',
+    );
+  });
+
   test(
-    'processing timeout persists only a bounded code and preserves notes',
+    'legacy terminal awaiter is ignored and notes remain device-owned',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
@@ -261,8 +260,8 @@ void main() {
       await container.read(uploadQueueProvider).drain();
 
       final row = await db.itemsDao.getById(localId, '1');
-      expect(row!.processingStatus, 'failed');
-      expect(row.processingErrorCode, kProcessingErrorTimeout);
+      expect(row!.processingStatus, 'processing');
+      expect(row.processingErrorCode, isNull);
       expect(row.notes, userNotes);
     },
   );
@@ -375,8 +374,7 @@ void main() {
       await container.read(uploadQueueProvider).drain();
 
       final row = await db.itemsDao.getById(localId, '1');
-      expect(row!.processingStatus, 'failed');
-      expect(row.processingErrorCode, kProcessingErrorUploadFailed);
+      expect(row!.processingStatus, kProcessingStatusBlockedCore);
       expect(
         row.notes,
         userNotes,
@@ -393,47 +391,35 @@ void main() {
     },
   );
 
-  test(
-    'restart after item reconcile replays idempotent create for a fresh presign',
-    () async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
+  test('restart after verified upload resumes at process acceptance', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
 
-      final repo = _ToggleRepository(
-        apiClient: ApiClient(
-          tokenStore: InMemoryTokenStore(),
-          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-        ),
-      )..coreUp = true;
+    final repo = _ToggleRepository(
+      apiClient: ApiClient(
+        tokenStore: InMemoryTokenStore(),
+        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+      ),
+    )..coreUp = true;
 
-      final container = containerFor(db, repo);
-      addTearDown(container.dispose);
+    final container = containerFor(db, repo);
+    addTearDown(container.dispose);
 
-      // Row already reconciled a coreId (a prior attempt created on Core but the
-      // upload/await didn't finish) — but is STILL pending_upload.
-      final (localId, _) = await seedPendingRow(
-        db,
-        tmp,
-        coreId: repo.coreIdMinted,
-        notes: '  Restart note.\nExact bytes.  ',
-      );
-      await container.read(uploadQueueProvider).drainRow(localId);
+    // Row already reconciled a coreId (a prior attempt created on Core but the
+    // upload/await didn't finish) — but is STILL pending_upload.
+    final (localId, _) = await seedPendingRow(
+      db,
+      tmp,
+      coreId: repo.coreIdMinted,
+      notes: '  Restart note.\nExact bytes.  ',
+    );
+    await container.read(uploadQueueProvider).drainRow(localId);
 
-      expect(
-        repo.createCalls,
-        1,
-        reason: '#2033 replay returns the same item plus a fresh presign',
-      );
-      expect(repo.lastClientId, localId);
-      final row = await db.itemsDao.getById(localId, '1');
-      expect(
-        row!.coreId,
-        repo.coreIdMinted,
-        reason: 'keeps the existing coreId',
-      );
-      expect(row.processingStatus, 'done');
-    },
-  );
+    expect(repo.createCalls, 0, reason: 'verified upload is not repeated');
+    final row = await db.itemsDao.getById(localId, '1');
+    expect(row!.coreId, repo.coreIdMinted, reason: 'keeps the existing coreId');
+    expect(row.processingStatus, 'processing');
+  });
 
   test(
     'single-flight: concurrent drains of the same row create only once',
@@ -490,7 +476,7 @@ void main() {
       await container.read(uploadQueueProvider).drain();
 
       row = await db.itemsDao.getById(localId, '1');
-      expect(row!.processingStatus, 'done');
+      expect(row!.processingStatus, 'processing');
       expect(row.coreId, repo.coreIdMinted);
     },
   );
@@ -528,10 +514,9 @@ void main() {
       await container.read(uploadQueueProvider).drain();
 
       final row = await db.itemsDao.getById(localId, '1');
-      expect(repo.createCalls, 1);
-      expect(repo.lastClientId, localId);
+      expect(repo.createCalls, 0);
       expect(row!.coreId, repo.coreIdMinted);
-      expect(row.processingStatus, 'done');
+      expect(row.processingStatus, 'processing');
       expect(row.processingErrorCode, isNull);
       expect(row.notes, '  Restart note.\nExact bytes.  ');
     },

@@ -15,7 +15,7 @@ void main() {
   tearDown(() => db.close());
 
   test('schema version is the canonical destructive reset', () {
-    expect(db.schemaVersion, 22);
+    expect(db.schemaVersion, 23);
   });
 
   test('fresh schema keeps recording drafts separate from Items', () async {
@@ -33,6 +33,7 @@ void main() {
         'file_blobs',
         'text_contents',
         'recording_drafts',
+        'work_queue',
         'workspaces',
         'matomes',
       ]),

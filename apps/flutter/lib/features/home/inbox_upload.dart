@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/audio/audio_playback.dart';
+import '../../core/config/endpoint_controller.dart';
 import '../../core/crypto/key_material.dart' show Dek;
 import '../../core/crypto/media_cipher.dart'
     show encodeNoncePrefix, encryptFileToFile, kMediaEncryptionEnabled;
@@ -14,6 +15,7 @@ import '../../core/db/db_encryption.dart'
 import '../../core/observability/app_log.dart';
 import '../../core/storage/app_storage.dart';
 import '../../core/db/app_database.dart';
+import '../../core/db/daos/work_queue_dao.dart';
 import '../auth/current_owner.dart';
 import '../items/matome_item_type.dart';
 import '../recordings/recording.dart';
@@ -243,18 +245,10 @@ String mediaTypeForPath(String path) {
 /// is written BEFORE any Core call, so a Core-create failure can never leave the
 /// captured audio orphaned with no row (the #828 root cause). The flow is:
 ///
-///  1. Mint a local `rec_local_<uuid>` id and INSERT the local Drift row
-///     immediately — `coreId = null`, status `pending_upload`, audio path on
-///     disk — so the Inbox card shows up regardless of Core reachability.
-///  2. Hand the persisted row off to the [UploadQueue] (plan #43, W4), which
-///     runs the failure-tolerant `POST /api/recordings` → reconcile `coreId` →
-///     stream-upload → enqueue → await terminal → apply pipeline. On any Core
-///     failure the queue leaves the row `pending_upload` with the audio on disk
-///     and retries it on the next trigger (app start / connectivity regained);
-///     on a confirmed `done` the queue drops the on-disk audio.
-///
-/// The Core id reconcile is centralised in [InboxController.reconcileCoreId];
-/// the create→upload→reconcile drain lives in [UploadQueue].
+///  1. Atomically insert the Item, file payload, and initial durable work row.
+///  2. Hand the persisted work to [UploadQueue], which reconciles the parent and
+///     Item, uploads, and ends once Core accepts server-owned processing. Local
+///     media remains durable through blocks, retries, and Core processing.
 class InboxUploader {
   InboxUploader(
     this._ref, {
@@ -280,21 +274,12 @@ class InboxUploader {
 
   /// Persists [picked] locally FIRST, then best-effort uploads to Core.
   ///
-  /// 1. Insert a local `rec_local_<uuid>` row (`pending_upload`, `coreId` null,
-  ///    audio path on disk) — this NEVER depends on Core and shows the Inbox
-  ///    card immediately.
-  /// 2. Hand off to the [UploadQueue]: create → reconcile `coreId` → upload →
-  ///    enqueue → await → apply, all failure-tolerant. Any Core failure leaves
-  ///    the row `pending_upload` + audio on disk for the queue to retry; a
-  ///    confirmed `done` drops the on-disk audio.
+  /// 1. Atomically insert a local Item, file payload, and deduped work row.
+  /// 2. Hand off to [UploadQueue] for the restart-safe Core handoff. The device
+  ///    never waits for AI completion and never deletes the local source file.
   ///
   /// [durationSeconds] is the known audio length (seconds) for a captured
   /// recording; the Inbox file-picker path leaves it 0 (unknown).
-  ///
-  /// [onConfirmed], when given, is registered on the queue as a post-upload
-  /// cleanup hook for this row — run ONCE the upload is confirmed `done` (the
-  /// capture finisher passes `service.discardSegments` so crash-recovery
-  /// segments + the draft are dropped only after a confirmed upload).
   ///
   /// Returns the **local** Drift id (`rec_local_<uuid>`). NOTE (W3): callers
   /// must not assume this equals the Core id — it no longer does. The Core id,
@@ -304,7 +289,6 @@ class InboxUploader {
   Future<String> upload(
     PickedUpload picked, {
     int durationSeconds = 0,
-    Future<void> Function()? onConfirmed,
     bool importFromExternalSource = false,
   }) async {
     AppLog.event(
@@ -365,11 +349,11 @@ class InboxUploader {
     //    never be orphaned (the #828 root cause). The card appears immediately.
     final localId = mintLocalRecordingId();
     final pending = _pendingCompanions(localId, stored, resolvedDuration);
-    await _inbox.insertLocalUpload(item: pending.item, file: pending.file);
-
-    // Register the post-confirm cleanup BEFORE draining so the queue runs it the
-    // moment this row reconciles `done` (closes the #828 orphan-WAV seam).
-    if (onConfirmed != null) _queue.onConfirmed(localId, onConfirmed);
+    await _inbox.insertLocalUpload(
+      item: pending.item,
+      file: pending.file,
+      initialWork: pending.work,
+    );
 
     // 2. Hand the persisted row to the retry queue, which drives the Core
     //    handoff and is itself the connectivity-driven background drain. This
@@ -381,11 +365,8 @@ class InboxUploader {
     return localId;
   }
 
-  ({ItemsCompanion item, FileBlobsCompanion file}) _pendingCompanions(
-    String localId,
-    PickedUpload picked,
-    int durationSeconds,
-  ) {
+  ({ItemsCompanion item, FileBlobsCompanion file, WorkQueueCompanion work})
+  _pendingCompanions(String localId, PickedUpload picked, int durationSeconds) {
     final now = DateTime.now();
     final ownerId = _ref.read(currentOwnerIdProvider);
     if (ownerId == null) {
@@ -416,6 +397,14 @@ class InboxUploader {
         fileNoncePrefix: Value(picked.fileNoncePrefixBase64),
         createdAt: timestamp,
         updatedAt: timestamp,
+      ),
+      work: fileUploadWork(
+        itemId: localId,
+        sourceRevision: 1,
+        now: timestamp,
+        configRevision: workConfigRevisionForEndpoint(
+          _ref.read(endpointConfigProvider),
+        ),
       ),
     );
   }

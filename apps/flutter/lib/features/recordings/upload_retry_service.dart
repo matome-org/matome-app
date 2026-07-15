@@ -45,9 +45,9 @@ Future<bool> probeApiReachability(String baseUrl) async {
 
 /// Drives the [UploadQueue] on production recovery triggers:
 ///  (a) app start — drain once immediately,
-///  (b) connectivity regained — a lightweight periodic reachability probe to
-///      the current [endpointConfigProvider] value re-drains on an
-///      unreachable→reachable edge,
+///  (b) connectivity/due retry — a lightweight periodic reachability probe to
+///      the current [endpointConfigProvider] drains while reachable, with the
+///      durable queue's `available_at` enforcing backoff,
 ///  (c) auth success, foreground/resume, and endpoint changes — wired by the
 ///      app root through [drainNow],
 ///  (d) after a finish() — handled in-line by `InboxUploader.upload`'s drain.
@@ -77,8 +77,8 @@ class UploadRetryService {
 
   UploadQueue get _queue => _ref.read(uploadQueueProvider);
 
-  /// Start the service: drain once (app-start trigger) then poll reachability,
-  /// re-draining whenever connectivity is regained. Idempotent.
+  /// Start the service: drain once, then poll reachability and let due durable
+  /// retries advance while Core remains reachable. Idempotent.
   Future<void> start() async {
     if (_started) return;
     AppLog.event(LogCat.upload, 'start: retry service starting');
@@ -92,7 +92,9 @@ class UploadRetryService {
     // tick if Core was already up at start.
     _lastReachable = await _safeProbe();
 
-    // (b) Connectivity-regained trigger — poll and drain on the rising edge.
+    // (b) Connectivity + due-retry trigger. The queue itself rejects work whose
+    //     available_at is still in the future, so steady reachability does not
+    //     bypass exponential backoff.
     _timer = Timer.periodic(interval, (_) => _tick());
   }
 
@@ -100,8 +102,13 @@ class UploadRetryService {
     final reachable = await _safeProbe();
     final regained = reachable && !_lastReachable;
     _lastReachable = reachable;
-    if (regained) {
-      AppLog.event(LogCat.upload, '_tick: connectivity regained, draining');
+    if (reachable) {
+      AppLog.event(
+        LogCat.upload,
+        regained
+            ? '_tick: connectivity regained, draining'
+            : '_tick: reachable, draining due work',
+      );
       unawaited(_queue.drain());
     }
   }

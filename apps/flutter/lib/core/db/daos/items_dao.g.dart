@@ -12,6 +12,7 @@ mixin _$ItemsDaoMixin on DatabaseAccessor<AppDatabase> {
   $MatomeContactsTable get matomeContacts => attachedDatabase.matomeContacts;
   $ContactsTable get contacts => attachedDatabase.contacts;
   $ItemContactsTable get itemContacts => attachedDatabase.itemContacts;
+  $WorkQueueTable get workQueue => attachedDatabase.workQueue;
   ItemsDaoManager get managers => ItemsDaoManager(this);
 }
 
@@ -37,4 +38,6 @@ class ItemsDaoManager {
       $$ContactsTableTableManager(_db.attachedDatabase, _db.contacts);
   $$ItemContactsTableTableManager get itemContacts =>
       $$ItemContactsTableTableManager(_db.attachedDatabase, _db.itemContacts);
+  $$WorkQueueTableTableManager get workQueue =>
+      $$WorkQueueTableTableManager(_db.attachedDatabase, _db.workQueue);
 }

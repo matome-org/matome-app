@@ -1,435 +1,526 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:math';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/config/endpoint_controller.dart';
 import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
+import '../../core/db/daos/work_queue_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../home/inbox_controller.dart';
-import '../home/inbox_upload.dart';
+import '../home/inbox_upload.dart' show RecordingResultAwaiter;
 import '../matome/matome_sync_service.dart';
 import '../spaces/current_caller.dart';
 import '../spaces/effective_space.dart';
 import '../spaces/space_ref_mapping.dart';
 import '../spaces/sync_policy.dart';
-import 'processing_error.dart';
 import 'recording_ids.dart';
 import 'recordings_repository.dart';
 import 'upload_descriptor.dart';
 
-/// Best-effort delete of an on-disk audio file by path.
-///
-/// RETIRED on the `done` path (plan #46, W2 / #871): the queue NO LONGER deletes
-/// the durable `audioFilePath` when an upload reaches `done` — see the retention
-/// note in [_drainRow]. This typedef + the [UploadQueue.cleanupAudio] injection
-/// seam are kept only so the now-retired behavior stays explicit and testable;
-/// the live drain never invokes it. The real, EXPLICIT-USER deletion lives in
-/// `DetailsController.delete` (file + row + Core).
 typedef AudioCleanup = Future<void> Function(String audioFilePath);
 
-/// Default [AudioCleanup]: best-effort delete of a finalized audio file by path.
-/// Never throws. No longer wired into the confirmed-`done` path (W2 retention);
-/// retained for the user-controlled delete affordance to reuse.
 Future<void> deleteAudioFile(String audioFilePath) async {
   if (audioFilePath.isEmpty) return;
-  AppLog.event(LogCat.upload, 'deleteAudioFile: $audioFilePath');
   try {
     final file = File(audioFilePath);
     if (await file.exists()) await file.delete();
-  } catch (e, st) {
+  } catch (error, stack) {
     AppLog.error(
       LogCat.upload,
-      'deleteAudioFile: best-effort delete failed for $audioFilePath',
-      e,
-      st,
-    );
-    developer.log(
-      'upload-queue audio cleanup failed',
-      name: 'upload.queue',
-      error: e,
+      'deleteAudioFile: best-effort delete failed',
+      error,
+      stack,
     );
   }
 }
 
-/// Async, failure-tolerant uploader that drains legacy upload-work recording
-/// rows. It runs on app/auth/lifecycle/config/network triggers and after local
-/// capture while W2's canonical `work_queue` replacement is still pending.
-///
-/// For each row it reconciles the parent first, replays #2033's owner-scoped
-/// idempotent item create for a fresh presign, then uploads, dispatches, awaits,
-/// and applies the terminal result.
-///
-/// Failure policy (closing #828 end-to-end):
-///  * Parent/Core/auth/transport hold ⇒ row stores an explicit `blocked_*`
-///    status, audio stays durable, and the next trigger retries it.
-///  * Terminal *processing* failure ⇒ row marked `failed` + reason persisted,
-///    audio KEPT (a failed transcription is still re-inspectable; W5 surfaces
-///    the reason). Not auto-retried (it is a real processing failure, not a
-///    transport blip).
-///  * Confirmed `done` ⇒ status reconciled, audio RETAINED (plan #46, W2 /
-///    #871). The queue NEVER deletes a local file. `done` proves Core accepted
-///    the upload, NOT that the user can retrieve + play a cloud copy, so the
-///    local-first `audioFilePath` is the source of truth and persists until the
-///    user explicitly deletes the recording. See the retention note in
-///    [_drainRow].
-///
-/// Idempotency / single-flight:
-///  * A row that already has a `coreId` replays the same permanent `client_id`;
-///    Core returns the same item and a fresh upload descriptor.
-///  * Concurrent drains of the same row are guarded by [_inFlight]; a second
-///    trigger that arrives mid-drain is a no-op for that row.
+/// Single-flight device executor backed by Drift's one durable [WorkQueue]
+/// table. The current file-upload operation persists every restart boundary and
+/// finishes as soon as Core accepts processing; Core/Oban own AI execution and
+/// result lifecycle from that point onward.
 class UploadQueue {
   UploadQueue(
     this._ref, {
-    RecordingResultAwaiter awaitResult = liveRecordingResultAwaiter,
+    DateTime Function()? clock,
+    double Function()? jitter,
+    int Function()? configRevision,
+    this.baseRetryDelay = const Duration(seconds: 2),
+    this.maxRetryDelay = const Duration(minutes: 5),
+    this.leaseDuration = const Duration(minutes: 6),
+    this.maxAttempts = 5,
+    // Retained as source-compatible injection seams for current callers. Device
+    // work intentionally never invokes either one after the W2 cutover.
+    RecordingResultAwaiter? awaitResult,
     this.cleanupAudio = deleteAudioFile,
-  }) : _awaitTerminal = awaitResult;
+  }) : _clock = clock ?? DateTime.now,
+       _jitter = jitter ?? Random().nextDouble,
+       _configRevision =
+           configRevision ??
+           (() => workConfigRevisionForEndpoint(
+             _ref.read(endpointConfigProvider),
+           )),
+       _leaseOwner =
+           'device-${DateTime.now().microsecondsSinceEpoch}-'
+           '${Random().nextInt(1 << 32)}';
 
   final Ref _ref;
-  final RecordingResultAwaiter _awaitTerminal;
-
-  /// RETIRED (plan #46, W2 / #871): formerly how a confirmed-`done` row's
-  /// on-disk audio was dropped. The drain no longer invokes this — `done`
-  /// retains the local file (see [_drainRow]). Kept as an injectable seam so the
-  /// retired path stays explicit/testable; not read by the live drain.
+  final DateTime Function() _clock;
+  final double Function() _jitter;
+  final int Function() _configRevision;
+  final String _leaseOwner;
+  final Duration baseRetryDelay;
+  final Duration maxRetryDelay;
+  final Duration leaseDuration;
+  final int maxAttempts;
   final AudioCleanup cleanupAudio;
 
-  /// Local ids currently being drained — single-flight guard against concurrent
-  /// triggers racing the same row (e.g. an app-start drain overlapping a
-  /// connectivity-regained drain).
-  final Set<String> _inFlight = <String>{};
+  Future<void>? _activeDrain;
+  bool _drainRequested = false;
 
+  ItemsDao get _items => _ref.read(itemsDaoProvider);
+  WorkQueueDao get _work => _ref.read(workQueueDaoProvider);
+  WorkspacesDao get _workspaces => _ref.read(workspacesDaoProvider);
+  MatomesDao get _matomes => _ref.read(matomesDaoProvider);
   RecordingsRepository get _repo => _ref.read(recordingsRepositoryProvider);
-  ItemsDao get _dao => _ref.read(itemsDaoProvider);
-  WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
-  MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
   InboxController get _inbox => _ref.read(inboxControllerProvider.notifier);
   MatomeSyncService get _matomeSync => _ref.read(matomeSyncServiceProvider);
 
-  /// Per-local-id hooks registered by callers that own recorder-session
-  /// resources (the finish flow registers `service.discardSegmentPaths`).
-  ///
-  /// RETIRED on `done` (plan #46, W2 / #871): the hook is NO LONGER RUN when a
-  /// row reaches confirmed `done` — running it would discard the snapshotted
-  /// session segments, and with the single-file finish flow the durable
-  /// `audioFilePath` IS one of those segments, so it would delete the
-  /// local-first copy. The registration is now just dropped (not invoked) on
-  /// `done`. Kept registerable so the seam stays explicit; entries are cleared
-  /// to avoid an unbounded map. Keyed so a queued retry across app restarts
-  /// (recorder session gone) simply has no hook.
-  final Map<String, Future<void> Function()> _confirmHooks =
-      <String, Future<void> Function()>{};
+  /// Coalesces all triggers into one process-local runner. Persisted leases also
+  /// serialize separate executor instances against the same database.
+  Future<void> drain() {
+    _drainRequested = true;
+    final active = _activeDrain;
+    if (active != null) return active;
 
-  /// Register a [hook] for [localId]. RETIRED on `done` (W2 / #871): the hook is
-  /// no longer invoked when the row reaches `done` (see [_confirmHooks]) — the
-  /// entry is simply cleared. Retained so the finish flow's registration
-  /// compiles and the seam stays explicit.
-  void onConfirmed(String localId, Future<void> Function() hook) {
-    _confirmHooks[localId] = hook;
+    late final Future<void> run;
+    run = _runDrainLoop().whenComplete(() {
+      if (identical(_activeDrain, run)) _activeDrain = null;
+    });
+    _activeDrain = run;
+    return run;
   }
 
-  /// Drain every pending, blocked, or interrupted local upload row once.
-  Future<void> drain() async {
-    AppLog.event(LogCat.upload, 'drain: start');
+  /// Ensures temporary pre-W2 pending rows acquire durable work, then runs the
+  /// fair global drain. New capture/import rows already insert both atomically.
+  Future<void> drainRow(String localId) async {
     final ownerId = _ref.read(currentOwnerIdProvider);
     if (ownerId == null) return;
-    final List<ItemWithPayload> pending;
+    final item = await _items.getById(localId, ownerId);
+    if (item == null) return;
+    await _ensureWork(item);
+    await drain();
+  }
+
+  /// Explicit user resume makes held/delayed upload work due without erasing its
+  /// attempt history. The normal automatic drain still honors backoff.
+  Future<void> resumeNow() async {
+    await _work.makeDue(kWorkKindFileUpload, _now);
+    await drain();
+  }
+
+  Future<void> _runDrainLoop() async {
+    do {
+      _drainRequested = false;
+      await _drainPass();
+    } while (_drainRequested);
+  }
+
+  Future<void> _drainPass() async {
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final now = _now;
+
     try {
-      pending = await _dao.listPendingUploads(ownerId);
-    } catch (e, st) {
-      AppLog.error(LogCat.upload, 'drain: could not read pending rows', e, st);
-      developer.log(
-        'upload-queue could not read pending rows',
-        name: 'upload.queue',
-        error: e,
+      for (final item in await _items.listPendingUploads(ownerId)) {
+        await _ensureWork(item);
+      }
+      await _work.prepareDrain(now: now, configRevision: _configRevision());
+    } catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'work queue preparation failed',
+        error,
+        stack,
       );
       return;
     }
-    AppLog.event(LogCat.upload, 'drain: ${pending.length} pending rows');
-    // Sequential drain: keeps Core load modest and avoids interleaving socket
-    // waiters. Single-flight still guards the same row across overlapping calls.
-    for (final row in pending) {
-      await drainRow(row.id);
+
+    final visited = <String>{};
+    while (true) {
+      final work = await _work.claimNext(
+        leaseOwner: _leaseOwner,
+        now: _now,
+        leaseDuration: leaseDuration,
+        excludedIds: visited,
+        kinds: const {kWorkKindFileUpload},
+      );
+      if (work == null) return;
+      visited.add(work.id);
+      await _execute(work, ownerId);
     }
   }
 
-  /// Drain a single row by its local id. Idempotent + single-flight: a row that
-  /// is mid-drain, terminal, or missing is a no-op.
-  Future<void> drainRow(String localId) async {
-    if (_inFlight.contains(localId)) return;
-    AppLog.event(LogCat.upload, 'drainRow: $localId');
-    _inFlight.add(localId);
-    try {
-      final ownerId = _ref.read(currentOwnerIdProvider);
-      if (ownerId == null) return;
-      final row = await _dao.getById(localId, ownerId);
-      if (row == null) return;
-      // A locally-minted `processing` row is resumable: the app may have died
-      // after reconciling its Core id but before upload/enqueue completed.
-      final resumableProcessing =
-          row.processingStatus == 'processing' &&
-          row.coreId != null &&
-          isLocalRecordingId(row.id);
-      if (!isUploadQueuePendingStatus(row.processingStatus) &&
-          !resumableProcessing) {
-        return;
-      }
-      // W0 parent rule: an Inbox Matome may be created without a workspace, but
-      // a missing parent or explicitly local Space is durably blocked. Cloud
-      // policy still routes through SyncPolicy when the feature is enabled.
-      final blocked = await _syncBlockReason(row);
-      if (blocked != null) {
-        AppLog.event(LogCat.upload, 'drainRow: HELD ($blocked) $localId');
-        await _markBlocked(localId, blocked);
-        return;
-      }
-      await _drainRow(row);
-    } finally {
-      _inFlight.remove(localId);
-    }
-  }
-
-  /// Returns a durable block status, or null when the row may advance. W0 permits
-  /// an Inbox Matome parent with no Space, requires a parent for every child,
-  /// and holds explicit local/unknown Spaces. Cloud decisions continue through
-  /// [EffectiveSpace] and [SyncPolicy.can].
-  Future<String?> _syncBlockReason(ItemWithPayload row) async {
-    // matome WINS: if the row is in a matome, the matome's space_id is the
-    // authoritative effective space and the row's own workspaceId is shadowed.
-    final matomeId = row.matomeId;
-    if (matomeId == null) return kProcessingStatusBlockedParent;
-    final matome = await _matomesDao.getById(matomeId);
-    if (matome == null) return kProcessingStatusBlockedParent;
-    final matomeSpaceId = matome.spaceId;
-
-    // W0 parent work may create an Inbox Matome on Core without a workspace.
-    // A Matome explicitly filed into a local/unknown Space must never egress.
-    if (matomeSpaceId == null) return null;
-    final membership = ItemMembership(
-      matomeSpaceId: matomeSpaceId,
-      workspaceId: row.workspaceId,
+  Future<void> _ensureWork(ItemWithPayload item) async {
+    final existing = await _work.getForItem(item.id, kWorkKindFileUpload);
+    if (existing != null) return;
+    await _work.enqueueOrIgnore(
+      fileUploadWork(
+        itemId: item.id,
+        sourceRevision: item.item.sourceRevision,
+        now: _now,
+        configRevision: _configRevision(),
+        stage: _resumeStage(item),
+      ),
     );
-    final spaceId = EffectiveSpace.effectiveSpaceId(membership);
-    if (spaceId == null) return null;
+  }
 
-    final spaceRow = await _workspacesDao.getWorkspaceById(spaceId);
-    // Fail-closed: an effective space id with no known `workspaces` row is
-    // treated as not-syncable (never silently uploaded).
-    if (spaceRow == null || spaceRow.isLocal == 1) {
-      return kProcessingStatusBlockedLocalSpace;
+  String _resumeStage(ItemWithPayload item) {
+    if (item.file?.uploadState == 'uploaded' && item.coreId != null) {
+      return kWorkStageEnqueueProcessing;
     }
+    if (item.coreId != null) return kWorkStageUpload;
+    return kWorkStageReconcileParent;
+  }
 
+  Future<void> _execute(WorkQueueRow work, String ownerId) async {
+    if (work.kind != kWorkKindFileUpload) return;
+    try {
+      var item = await _items.getById(work.itemId, ownerId);
+      if (item == null || item.file == null) {
+        throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+      }
+
+      final hold = await _egressHold(item);
+      if (hold != null) {
+        await _block(work, hold);
+        return;
+      }
+
+      var stage = work.stage;
+      RecordingCreateResult? created;
+
+      if (stage == kWorkStageReconcileParent) {
+        await _requireCoreParent(item);
+        if (!await _advance(work, kWorkStageCreateRemote, 0.2)) return;
+        stage = kWorkStageCreateRemote;
+      }
+
+      if (stage == kWorkStageCreateRemote) {
+        created = await _createRemote(item);
+        await _inbox.markCoreCreated(item.id, created.recording.id);
+        if (!await _advance(work, kWorkStageUpload, 0.4)) return;
+        stage = kWorkStageUpload;
+        item = (await _items.getById(work.itemId, ownerId))!;
+      }
+
+      if (stage == kWorkStageUpload) {
+        final hold = await _egressHold(item);
+        if (hold != null) {
+          await _block(work, hold);
+          return;
+        }
+        created ??= await _createRemote(item);
+        if (item.coreId != null && item.coreId != created.recording.id) {
+          throw const _PermanentWorkFailure(kWorkErrorContentRejected);
+        }
+        if (item.coreId == null) {
+          await _inbox.markCoreCreated(item.id, created.recording.id);
+        }
+        final localPath = item.localPath;
+        if (localPath == null || localPath.isEmpty) {
+          throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+        }
+        if (!await _renew(work)) return;
+        await _inbox.markFileUploading(item.id);
+        await _repo.uploadFile(created.upload, File(localPath));
+        await _inbox.markFileUploaded(item.id);
+        if (!await _advance(work, kWorkStageEnqueueProcessing, 0.85)) return;
+        stage = kWorkStageEnqueueProcessing;
+      }
+
+      if (stage == kWorkStageEnqueueProcessing) {
+        item = (await _items.getById(work.itemId, ownerId))!;
+        final coreId = item.coreId;
+        if (coreId == null) {
+          throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+        }
+        if (!await _renew(work)) return;
+        await _repo.enqueueProcessing(coreId);
+        final completed = await _work.completeProcessingAccepted(
+          work.id,
+          itemId: item.id,
+          ownerId: ownerId,
+          leaseOwner: _leaseOwner,
+          now: _now,
+        );
+        if (completed) await _inbox.reloadFromLocal();
+      }
+    } catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'durable work failed kind=${work.kind} stage=${work.stage}',
+        error,
+        stack,
+      );
+      developer.log(
+        'durable work attempt failed',
+        name: 'work.queue',
+        error: error,
+      );
+      await _handleFailure(work, error, ownerId);
+    }
+  }
+
+  Future<int> _requireCoreParent(ItemWithPayload item) async {
+    final matomeId = item.matomeId;
+    if (matomeId == null) throw const _BlockedWork(kWorkBlockParent);
+    final existing = (await _matomes.getById(matomeId))?.coreId;
+    if (existing != null) return existing;
+    final reconciled = await _matomeSync.reconcileParent(matomeId);
+    if (reconciled == null) throw const _BlockedWork(kWorkBlockParent);
+    return reconciled;
+  }
+
+  Future<RecordingCreateResult> _createRemote(ItemWithPayload item) async {
+    final coreMatomeId = await _requireCoreParent(item);
+    final localPath = item.localPath;
+    if (localPath == null || localPath.isEmpty) {
+      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+    }
+    return _repo.createItemRecording(
+      title: item.title,
+      matomeId: coreMatomeId,
+      clientId: item.id,
+      durationSeconds: item.durationSeconds ?? 0,
+      mediaType: item.mediaType,
+      contentLength: await _byteSizeOf(localPath),
+    );
+  }
+
+  Future<String?> _egressHold(ItemWithPayload item) async {
+    final matomeId = item.matomeId;
+    if (matomeId == null) return kWorkBlockParent;
+    final matome = await _matomes.getById(matomeId);
+    if (matome == null) return kWorkBlockParent;
+    final matomeSpaceId = matome.spaceId;
+    if (matomeSpaceId == null) return null;
+
+    final spaceId = EffectiveSpace.effectiveSpaceId(
+      ItemMembership(
+        matomeSpaceId: matomeSpaceId,
+        workspaceId: item.workspaceId,
+      ),
+    );
+    if (spaceId == null) return null;
+    final space = await _workspaces.getWorkspaceById(spaceId);
+    if (space == null || space.isLocal == 1) return kWorkBlockLocalSpace;
     if (FeatureFlags.localFirstSpaces &&
         !SyncPolicy.can(
           currentCaller(_ref),
           Operation.spaceSync,
-          spaceRefFromRow(spaceRow),
+          spaceRefFromRow(space),
         )) {
-      return kProcessingStatusBlockedLocalSpace;
+      return kWorkBlockLocalSpace;
     }
     return null;
   }
 
-  Future<void> _drainRow(ItemWithPayload row) async {
-    final localId = row.id;
-
-    // Resume point: a row may already carry a Core id from a prior attempt.
-    // Replaying its permanent client id is idempotent and refreshes the presign.
-    final localMatomeId = row.matomeId;
-    if (localMatomeId == null) {
-      await _markBlocked(localId, kProcessingStatusBlockedParent);
-      return;
-    }
-
-    int? coreMatomeId = (await _matomesDao.getById(localMatomeId))?.coreId;
-    if (coreMatomeId == null) {
-      try {
-        coreMatomeId = await _matomeSync.reconcileParent(localMatomeId);
-      } catch (e, st) {
-        AppLog.error(
-          LogCat.upload,
-          '_drainRow: parent reconcile failed $localId',
-          e,
-          st,
-        );
-        await _markBlocked(localId, _blockedStatusFor(e));
-        return;
-      }
-      if (coreMatomeId == null) {
-        await _markBlocked(localId, kProcessingStatusBlockedParent);
-        return;
-      }
-    }
-
-    // Replay the permanent client id on every non-terminal attempt. #2033 makes
-    // this idempotent and returns a fresh upload descriptor, so a restart after
-    // item reconcile, PUT, or dispatch can safely resume without duplicate work.
-    final localPath = row.localPath;
-    if (localPath == null || localPath.isEmpty) {
-      await _markBlocked(localId, kProcessingStatusBlockedCore);
-      return;
-    }
-    final contentLength = await _byteSizeOf(localPath);
-    final RecordingCreateResult created;
-    try {
-      created = await _repo.createItemRecording(
-        title: row.title,
-        matomeId: coreMatomeId,
-        clientId: localId,
-        durationSeconds: _durationSecondsFor(row),
-        mediaType: row.mediaType,
-        contentLength: contentLength,
-      );
-    } catch (e, st) {
-      AppLog.error(
-        LogCat.upload,
-        '_drainRow: createRecording failed (retry later) $localId',
-        e,
-        st,
-      );
-      await _markBlocked(localId, _blockedStatusFor(e));
-      return;
-    }
-    final recording = created.recording;
-    final coreId = recording.id;
-    if (row.coreId != null && row.coreId != coreId) {
-      await _markBlocked(localId, kProcessingStatusBlockedCore);
-      return;
-    }
-    await _inbox.reconcileCoreId(localId, coreId);
-
-    try {
-      try {
-        await _repo.uploadFile(created.upload, File(localPath));
-      } catch (_) {
-        await _inbox.markFileUploadFailed(localId);
-        rethrow;
-      }
-      await _inbox.markFileUploaded(localId);
-      await _repo.enqueueProcessing(coreId);
-      final result = await _awaitTerminal(
-        recording: recording,
-        poll: () => _repo.fetchRecording(coreId),
-        ref: _ref,
-      );
-      final done = result.recording;
-      await _inbox.applyUploadResult(
-        localId,
-        failed: result.failed,
-        summary: done?.summary,
-        // WRITE-AUTHORITY (#1435): route the machine transcript to the
-        // `transcript` column — the previous `notes: done?.transcript` alias
-        // overwrote any user note on every `done`.
-        transcript: done?.transcript,
-        errorCode: result.failed
-            ? processingErrorCodeForTerminal(result.errorReason)
-            : null,
-      );
-      // RETENTION (plan #46, W2 / #871): reaching a confirmed `done` MUST NOT
-      // delete any local file. This intentionally REVERSES the #43 W4 decision
-      // that dropped the on-disk audio here.
-      //
-      // Why `done` no longer deletes:
-      //  * LOCAL-FIRST source of truth — the row's durable `audioFilePath` is the
-      //    canonical copy. A reconciled `done` proves Core ACCEPTED the upload; it
-      //    does NOT prove the user can retrieve + PLAY a cloud copy on demand
-      //    (verified: coreId=11 reached `done` yet its `import_*.wav` was gone and
-      //    the recording was unplayable). `done` ≠ proof of a playable cloud copy.
-      //  * The USER decides whether the local copy is freed — deletion is now an
-      //    explicit user action only (Details delete → DetailsController.delete,
-      //    which removes the file + row + Core). The queue never auto-evicts.
-      //
-      // The confirm hook (segment/draft discard) is likewise NOT run on `done`:
-      // with the single-file finish flow the durable `audioFilePath` IS one of the
-      // snapshotted session segments, so discarding them would delete the durable
-      // copy too. Segment/draft sweeping still happens on the interactive
-      // cancel/discard paths (cancelRecording / discardSegments) and on stale
-      // crash-recovery drafts (detectRecoverableDraft) — i.e. files with NO
-      // durable DB row, the original #828 orphan-WAV concern, remain sweepable.
-      //
-      // FOLLOW-UP (storage growth): local audio now accumulates for the life of
-      // the row. A future user-facing "free up space" / cache-eviction policy
-      // should let the user reclaim disk for already-synced recordings. Do NOT
-      // auto-evict here — that reintroduces exactly the data-loss this reverses.
-      _confirmHooks.remove(localId);
-    } on ApiException catch (e, st) {
-      AppLog.error(
-        LogCat.upload,
-        '_drainRow: retryable Core failure $localId',
-        e,
-        st,
-      );
-      await _markBlocked(localId, _blockedStatusFor(e));
-    } catch (e, st) {
-      // Terminal processing failure (the row already carries a coreId, so this
-      // is a genuine post-create failure, not "Core unreachable"). Persist only
-      // a bounded app-owned code and KEEP the audio for inspection / retry.
-      // Raw exception text remains in developer logs and never reaches Drift.
-      AppLog.error(
-        LogCat.upload,
-        '_drainRow: terminal processing failure $localId',
-        e,
-        st,
-      );
-      developer.log(
-        'upload-queue terminal failure',
-        name: 'upload.queue',
-        error: e,
-      );
-      await _inbox.applyUploadResult(
-        localId,
-        failed: true,
-        errorCode: kProcessingErrorUploadFailed,
-      );
-    }
+  Future<bool> _advance(WorkQueueRow work, String stage, double progress) {
+    return _work.advance(
+      work.id,
+      leaseOwner: _leaseOwner,
+      stage: stage,
+      progress: progress,
+      now: _now,
+    );
   }
 
-  Future<void> _markBlocked(String localId, String status) async {
+  Future<bool> _renew(WorkQueueRow work) {
+    return _work.renew(
+      work.id,
+      leaseOwner: _leaseOwner,
+      now: _now,
+      leaseDuration: leaseDuration,
+    );
+  }
+
+  Future<void> _block(WorkQueueRow work, String reason) async {
+    final changed = await _work.block(
+      work.id,
+      leaseOwner: _leaseOwner,
+      reason: reason,
+      errorCode: reason == kWorkBlockSignedOut ? kWorkErrorUnauthorized : null,
+      now: _now,
+    );
+    if (changed) await _markItemHeld(work.itemId, reason);
+  }
+
+  Future<void> _handleFailure(
+    WorkQueueRow work,
+    Object error,
+    String ownerId,
+  ) async {
+    if (error is _BlockedWork) {
+      await _block(work, error.reason);
+      return;
+    }
+    final failure = _classify(error);
+    if (failure.blocked) {
+      await _block(work, failure.blockedReason!);
+      return;
+    }
+
+    final nextAttempt = work.attempt + 1;
+    final availableAt = _now + _retryDelay(nextAttempt).inMilliseconds;
+    final changed = await _work.retry(
+      work.id,
+      leaseOwner: _leaseOwner,
+      errorCode: failure.code,
+      blockedReason: failure.blockedReason,
+      availableAt: availableAt,
+      maxAttempts: failure.retryable ? maxAttempts : nextAttempt,
+      now: _now,
+    );
+    if (!changed) return;
+
+    final updated = await _work.getForItem(work.itemId, kWorkKindFileUpload);
+    if (updated?.state == kWorkStateDead) {
+      await _items.updateItem(
+        work.itemId,
+        ownerId,
+        ItemsCompanion(
+          processingState: const Value('failed'),
+          syncState: const Value('failed'),
+          processingErrorCode: Value(failure.code),
+          isDirty: const Value(true),
+        ),
+      );
+    } else {
+      await _markItemHeld(
+        work.itemId,
+        failure.blockedReason ?? kWorkBlockCore,
+        errorCode: failure.code,
+      );
+    }
+    await _inbox.reloadFromLocal();
+  }
+
+  _WorkFailure _classify(Object error) {
+    if (error is _PermanentWorkFailure) {
+      return _WorkFailure(error.code, retryable: false);
+    }
+    if (error is ApiException) {
+      if (error.isUnauthorized) {
+        return const _WorkFailure(
+          kWorkErrorUnauthorized,
+          retryable: false,
+          blocked: true,
+          blockedReason: kWorkBlockSignedOut,
+        );
+      }
+      final status = error.statusCode;
+      if (status == null) {
+        return const _WorkFailure(
+          kWorkErrorTransport,
+          retryable: false,
+          blocked: true,
+          blockedReason: kWorkBlockOffline,
+        );
+      }
+      if (status == 408) {
+        return const _WorkFailure(kWorkErrorTimeout, retryable: true);
+      }
+      if (status == 429) {
+        return const _WorkFailure(kWorkErrorRateLimited, retryable: true);
+      }
+      if (status >= 500) {
+        return const _WorkFailure(kWorkErrorServerUnavailable, retryable: true);
+      }
+      return const _WorkFailure(kWorkErrorContentRejected, retryable: false);
+    }
+    return const _WorkFailure(kWorkErrorUnexpected, retryable: true);
+  }
+
+  Duration _retryDelay(int attempt) {
+    final exponent = min(max(attempt - 1, 0), 30);
+    final exponential = baseRetryDelay.inMilliseconds * (1 << exponent);
+    final ceiling = min(maxRetryDelay.inMilliseconds, exponential);
+    final jitter = _jitter().clamp(0.0, 1.0);
+    return Duration(milliseconds: (ceiling * jitter).floor());
+  }
+
+  Future<void> _markItemHeld(
+    String itemId,
+    String reason, {
+    String? errorCode,
+  }) async {
     final ownerId = _ref.read(currentOwnerIdProvider);
     if (ownerId == null) return;
-    await _dao.updateItem(
-      localId,
+    final status = switch (reason) {
+      kWorkBlockSignedOut => kProcessingStatusBlockedSignedOut,
+      kWorkBlockOffline => kProcessingStatusBlockedOffline,
+      kWorkBlockLocalSpace => kProcessingStatusBlockedLocalSpace,
+      kWorkBlockParent => kProcessingStatusBlockedParent,
+      _ => kProcessingStatusBlockedCore,
+    };
+    await _items.updateItem(
+      itemId,
       ownerId,
-      ItemsCompanion(syncState: Value(status), isDirty: const Value(true)),
+      ItemsCompanion(
+        syncState: Value(status),
+        processingErrorCode: Value(errorCode),
+        isDirty: const Value(true),
+      ),
     );
     await _inbox.reloadFromLocal();
   }
 
-  static String _blockedStatusFor(Object error) {
-    if (error is ApiException) {
-      if (error.isUnauthorized) return kProcessingStatusBlockedSignedOut;
-      if (error.statusCode == null) return kProcessingStatusBlockedOffline;
-    }
-    return kProcessingStatusBlockedCore;
-  }
-
-  /// Best-effort re-derive the duration (seconds) for a Core create from the
-  /// row's `m:ss`-style duration TEXT. Unknown ⇒ 0 (the file-picker path also
-  /// uploads with an unknown duration), so this never blocks a drain.
-  int _durationSecondsFor(ItemWithPayload row) => row.durationSeconds ?? 0;
-
-  /// Best-effort on-disk size in bytes of [path] (#1471), or null if the file is
-  /// absent/unreadable. Declared as `content_length` on create so Core persists
-  /// `byte_size` for the Files view; never throws (a real upload failure surfaces
-  /// later on the actual PUT, not here).
   Future<int?> _byteSizeOf(String path) async {
-    if (path.isEmpty) return null;
     try {
       final file = File(path);
-      if (!await file.exists()) return null;
-      return await file.length();
+      return await file.exists() ? file.length() : null;
     } catch (_) {
       return null;
     }
   }
+
+  int get _now => _clock().millisecondsSinceEpoch;
+}
+
+class _BlockedWork implements Exception {
+  const _BlockedWork(this.reason);
+
+  final String reason;
+}
+
+class _PermanentWorkFailure implements Exception {
+  const _PermanentWorkFailure(this.code);
+
+  final String code;
+}
+
+class _WorkFailure {
+  const _WorkFailure(
+    this.code, {
+    required this.retryable,
+    this.blocked = false,
+    this.blockedReason,
+  });
+
+  final String code;
+  final bool retryable;
+  final bool blocked;
+  final String? blockedReason;
 }
 
 final uploadQueueProvider = Provider<UploadQueue>((ref) => UploadQueue(ref));

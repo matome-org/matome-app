@@ -9,6 +9,7 @@ import 'daos/matomes_dao.dart';
 import 'daos/recording_drafts_dao.dart';
 import 'daos/spaces_dao.dart';
 import 'daos/workspaces_dao.dart';
+import 'daos/work_queue_dao.dart';
 import 'tables.dart';
 
 part 'app_database.g.dart';
@@ -16,7 +17,7 @@ part 'app_database.g.dart';
 /// Destructive canonical-Items reset. There are no deployed databases, so v22
 /// intentionally rebuilds the local store instead of carrying legacy data,
 /// aliases, or dual reads forward.
-const int kSchemaVersion = 22;
+const int kSchemaVersion = 23;
 
 @DriftDatabase(
   tables: [
@@ -32,6 +33,7 @@ const int kSchemaVersion = 22;
     FileBlobs,
     TextContents,
     Items,
+    WorkQueue,
     ItemContacts,
   ],
   daos: [
@@ -41,6 +43,7 @@ const int kSchemaVersion = 22;
     MatomesDao,
     ContactsDao,
     ItemsDao,
+    WorkQueueDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -67,6 +70,7 @@ class AppDatabase extends _$AppDatabase {
       // they have no table definitions or runtime read path in the new model.
       for (final table in <String>[
         'recording_contacts',
+        'work_queue',
         'item_contacts',
         'matome_shares',
         'space_contacts',

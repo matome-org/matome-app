@@ -214,8 +214,8 @@ void main() {
   // ── The core characterization: drain a document row end-to-end ────────────
   for (final ext in const ['txt', 'md', 'pdf', 'docx']) {
     test(
-      'document[$ext] drains pending_upload → done end-to-end '
-      '(create → reconcile coreId → uploadFile → enqueue → done); '
+      'document[$ext] drains through Core processing acceptance '
+      '(create → reconcile coreId → uploadFile → enqueue); '
       'PUT preserves the document bytes; row resolves to the DOC host',
       () async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -290,15 +290,14 @@ void main() {
               'extension is carried by originalExtension, not this header',
         );
 
-        // 3. Terminal state: reconciled coreId + done; media_type still document;
-        //    original extension preserved on the row.
+        // 3. Device-terminal state: Core owns processing from acceptance onward.
         final row = await db.itemsDao.getById(localId, '1');
         expect(
           row!.processingStatus,
-          'done',
-          reason: 'document row reached terminal done',
+          'processing',
+          reason: 'document row stopped after Core accepted processing',
         );
-        expect(row.isProcessing, isFalse);
+        expect(row.isProcessing, isTrue);
         expect(row.coreId, repo.coreIdMinted, reason: 'coreId reconciled');
         expect(
           row.mediaType,
@@ -313,7 +312,7 @@ void main() {
         expect(
           await file.exists(),
           isTrue,
-          reason: 'local file retained after done (W2 #871 retention)',
+          reason: 'local file retained after the Core handoff',
         );
 
         // 4. After draining, the row still resolves to the DOCUMENT host.

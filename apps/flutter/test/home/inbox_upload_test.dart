@@ -32,7 +32,7 @@ void main() {
   });
 
   test(
-    'upload creates a Core recording, inserts a local row, then resolves done',
+    'upload creates a local row and stops after Core accepts processing',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
@@ -161,13 +161,13 @@ void main() {
       final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       expect(row!.coreId, 321);
-      expect(row.processingStatus, 'done');
-      expect(row.isProcessing, isFalse);
-      expect(row.summary, 'A short memo');
+      expect(row.processingStatus, 'processing');
+      expect(row.isProcessing, isTrue);
+      expect(row.summary, isNull);
 
       final items = container.read(inboxControllerProvider).requireValue;
       expect(items.single.id, localId);
-      expect(items.single.card.isProcessing, isFalse);
+      expect(items.single.card.isProcessing, isTrue);
     },
   );
 
@@ -334,9 +334,9 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
-          appDatabaseProvider.overrideWithValue(db),
-          currentOwnerIdProvider.overrideWithValue('1'),
-          testParentSyncOverride(),
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+        testParentSyncOverride(),
         recordingsRepositoryProvider.overrideWithValue(repo),
         inboxUploaderProvider.overrideWith(
           (ref) => InboxUploader(

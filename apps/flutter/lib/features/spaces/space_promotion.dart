@@ -60,8 +60,8 @@
 // trigger (app-start / connectivity / finish), reads the items FRESH, so the
 // NEXT drain pass after the flip picks up the full item set — there is no
 // snapshot taken at consent time that could go stale.
-//   * IN-FLIGHT item: an item already mid-upload in the upload queue is guarded
-//     by that queue's per-id single-flight (`_inFlight`); promotion never
+//   * IN-FLIGHT item: an item already mid-upload is guarded by the queue's
+//     persisted lease; promotion never
 //     interrupts or double-sends it — the in-flight attempt runs to completion
 //     and promotion's drain simply sees it already has (or gets) its Core id.
 //   * NEW item filed into the space AFTER the flip: it lands in a now-cloud
@@ -305,7 +305,7 @@ class SpacePromotionService {
       AppLog.error(LogCat.sync, 'promote: matome push pass failed', e, st);
     }
     try {
-      await _uploadQueue.drain();
+      await _uploadQueue.resumeNow();
     } catch (e, st) {
       AppLog.error(LogCat.sync, 'promote: upload drain pass failed', e, st);
     }

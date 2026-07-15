@@ -185,8 +185,7 @@ void main() {
     (ref) => UploadQueue(ref, awaitResult: awaiter, cleanupAudio: cleanupAudio),
   );
 
-  test('finish: F3 file → Core create → Drift processing row → done → cleanup '
-      '(poll fallback resolves when socket is absent)', () async {
+  test('finish persists locally and stops after Core accepts processing', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
@@ -239,13 +238,13 @@ void main() {
     // W2: local-first id (rec_local_<uuid>), NOT the Core id.
     expect(isLocalRecordingId(localId), isTrue);
 
-    // Inbox row keeps its local PK; coreId reconciled to the item id 321, done.
+    // Inbox row keeps its local PK; Core owns processing after acceptance.
     final row = await db.itemsDao.getById(localId, '1');
     expect(row, isNotNull);
     expect(row!.coreId, 321);
-    expect(row.processingStatus, 'done');
-    expect(row.isProcessing, isFalse);
-    expect(row.summary, 'A memo');
+    expect(row.processingStatus, 'processing');
+    expect(row.isProcessing, isTrue);
+    expect(row.summary, isNull);
 
     // It appears in the Inbox list (workspaceId IS NULL).
     final items = container.read(inboxControllerProvider).requireValue;
@@ -253,7 +252,7 @@ void main() {
   });
 
   test(
-    'W2 #871 RETENTION: finish → confirmed done RETAINS the durable local '
+    'W2 #871 RETENTION: Core handoff RETAINS the durable local '
     'audio file (reverses #43 W4; uses the REAL deleteAudioFile cleanup)',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -312,8 +311,8 @@ void main() {
       expect(row, isNotNull);
       expect(
         row!.processingStatus,
-        'done',
-        reason: 'upload reconciled to done',
+        'processing',
+        reason: 'device work stopped after Core accepted processing',
       );
 
       // The local-first source of truth must survive a confirmed done.
@@ -327,7 +326,7 @@ void main() {
   );
 
   test(
-    'stale-draft fix: finish → done CLEARS the crash-recovery draft row but '
+    'stale-draft fix: finish clears the crash-recovery draft row but '
     'KEEPS the durable segment file (no "recover already-saved" prompt)',
     () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -385,10 +384,10 @@ void main() {
           .read(recordingFinisherProvider)
           .finish(title: 'Saved memo');
 
-      // The recording is saved + uploaded done.
+      // The recording is saved, uploaded, and handed to Core processing.
       final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
-      expect(row!.processingStatus, 'done');
+      expect(row!.processingStatus, 'processing');
 
       // FIX: the draft row is cleared on a confirmed finish — so a next launch
       // does NOT prompt to "recover" this already-saved recording.
@@ -470,8 +469,7 @@ void main() {
     },
   );
 
-  test('finish: realtime socket event drives processing→done (poll stays '
-      'processing — proves the F4 realtime waiter is wired into finish)', () async {
+  test('finish does not wait on the legacy realtime/poll awaiter', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
@@ -540,8 +538,8 @@ void main() {
 
     expect(
       awaiterCalled,
-      isTrue,
-      reason: 'finish must use the realtime waiter',
+      isFalse,
+      reason: 'device work ends before server-owned AI result polling',
     );
 
     final row = await db.itemsDao.getById(localId, '1');
@@ -549,14 +547,12 @@ void main() {
     expect(row!.coreId, 321);
     expect(
       row.processingStatus,
-      'done',
-      reason: 'socket event must drive processing→done',
+      'processing',
+      reason: 'Core owns the processing lifecycle after acceptance',
     );
-    expect(row.isProcessing, isFalse);
-    expect(row.summary, 'From socket');
-    // WRITE-AUTHORITY (#1435): the machine transcript from the socket `done`
-    // lands in the `transcript` column, not the user-owned `notes` column.
-    expect(row.transcript, 'realtime');
+    expect(row.isProcessing, isTrue);
+    expect(row.summary, isNull);
+    expect(row.transcript, isNull);
     expect(row.notes, isNull);
   });
 }

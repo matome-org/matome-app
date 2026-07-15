@@ -97,6 +97,9 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 final itemsDaoProvider = Provider(
   (ref) => ref.watch(appDatabaseProvider).itemsDao,
 );
+final workQueueDaoProvider = Provider(
+  (ref) => ref.watch(appDatabaseProvider).workQueueDao,
+);
 final workspacesDaoProvider = Provider(
   (ref) => ref.watch(appDatabaseProvider).workspacesDao,
 );

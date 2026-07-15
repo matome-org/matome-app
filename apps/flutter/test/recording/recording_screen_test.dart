@@ -127,7 +127,10 @@ void main() {
   // /api/matomes/{coreMatomeId}/items and returns an ITEM + W0 upload; processing
   // is POST /api/items/{id}/process; the poll-fallback source is GET
   // /api/items/{id}. The minted-matome coreId is 900; the created item id is 42.
-  RecordingsRepository stubRepo() {
+  RecordingsRepository stubRepo({
+    Future<void>? uploadGate,
+    Completer<void>? uploadStarted,
+  }) {
     final dio = Dio(
       BaseOptions(
         baseUrl: 'http://localhost:7001',
@@ -183,6 +186,8 @@ void main() {
     );
     return _StubUploadRepository(
       apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+      uploadGate: uploadGate,
+      uploadStarted: uploadStarted,
     );
   }
 
@@ -288,8 +293,7 @@ void main() {
     await tapAsync(tester, find.byKey(const Key('resume-button')));
     expect(find.text(t.recording.title), findsOneWidget);
 
-    // Finish → finalize, then the upload pipeline runs (create + upload +
-    // enqueue + await done) → modal closes (router moves to /inbox).
+    // Finish → finalize, upload, and Core process acceptance → modal closes.
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('finish-button')));
       await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -299,12 +303,12 @@ void main() {
     }
     expect(find.text('inbox'), findsOneWidget);
 
-    // The new recording landed in the Inbox (Drift), done. W2: local-first PK,
+    // The new recording landed in Drift with server-owned processing active.
     // so look it up by the reconciled coreId (item id 42), not by a Core-id PK.
     final row = await db.itemsDao.getByCoreId(42, '1');
     expect(row, isNotNull);
     expect(isLocalRecordingId(row!.id), isTrue);
-    expect(row.processingStatus, 'done');
+    expect(row.processingStatus, 'processing');
   });
 
   testWidgets('meeting binding (no pause): primary button finishes while recording, '
@@ -502,19 +506,10 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      // A gated awaiter: the terminal result only resolves once we release it, so
-      // the modal stays in `processing` long enough to background it (mirrors the
-      // real up-to-10-min await window).
+      // Gate the device-owned upload leg so the modal stays in `processing` long
+      // enough to background it. AI result waiting is server-owned after W2.
       final release = Completer<void>();
-      Future<RecordingResult> gatedAwaiter({
-        required Recording recording,
-        required Future<Recording?> Function() poll,
-        required Ref ref,
-      }) async {
-        await release.future;
-        final done = await poll();
-        return RecordingResult.done(done);
-      }
+      final uploadStarted = Completer<void>();
 
       final container = ProviderContainer(
         overrides: [
@@ -522,13 +517,8 @@ void main() {
           currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(coreId: 900),
           audioRecordingServiceProvider.overrideWithValue(svc(db)),
-          recordingsRepositoryProvider.overrideWithValue(stubRepo()),
-          uploadQueueProvider.overrideWith(
-            (ref) => UploadQueue(
-              ref,
-              awaitResult: gatedAwaiter,
-              cleanupAudio: (_) async {},
-            ),
+          recordingsRepositoryProvider.overrideWithValue(
+            stubRepo(uploadGate: release.future, uploadStarted: uploadStarted),
           ),
         ],
       );
@@ -537,20 +527,23 @@ void main() {
       await pumpEntry(tester, app(container));
       await tapAsync(tester, find.byKey(const Key('record-primary-button')));
 
-      // Finish → enters processing; the upload row is inserted immediately but
-      // the terminal await is still gated.
+      // Finish enters processing after the durable Item/work insert; upload is
+      // still gated.
       await tapAsync(tester, find.byKey(const Key('finish-button')));
+      await tester.runAsync(
+        () => uploadStarted.future.timeout(const Duration(seconds: 1)),
+      );
       expect(find.text(t.recording.processing), findsOneWidget);
       expect(
         find.byKey(const Key('processing-background-button')),
         findsOneWidget,
       );
-      // Parent and item ids reconcile before the terminal processing wait, which
-      // remains gated so the user can background the modal.
+      // Parent and item ids reconcile before the upload wait, which remains
+      // gated so the user can background the modal.
       final pending = await db.itemsDao.getByCoreId(42, '1');
       expect(pending, isNotNull);
       expect(isLocalRecordingId(pending!.id), isTrue);
-      expect(pending.processingStatus, 'processing');
+      expect(pending.processingStatus, kProcessingStatusPendingUpload);
 
       // Background to the Inbox: the modal is dismissed even though the upload
       // hasn't resolved.
@@ -560,14 +553,13 @@ void main() {
       );
       expect(find.text('inbox'), findsOneWidget);
 
-      // The pipeline keeps running off the (still-alive) provider; release it and
-      // the row flips to done.
+      // Release upload; device work then ends at Core processing acceptance.
       await tester.runAsync(() async {
         release.complete();
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       final row = await db.itemsDao.getByCoreId(42, '1');
-      expect(row!.processingStatus, 'done');
+      expect(row!.processingStatus, 'processing');
     },
   );
 
@@ -597,10 +589,21 @@ void main() {
 }
 
 class _StubUploadRepository extends RecordingsRepository {
-  _StubUploadRepository({required super.apiClient});
+  _StubUploadRepository({
+    required super.apiClient,
+    this.uploadGate,
+    this.uploadStarted,
+  });
+
+  final Future<void>? uploadGate;
+  final Completer<void>? uploadStarted;
 
   @override
-  Future<void> uploadFile(UploadDescriptor upload, File file) async {}
+  Future<void> uploadFile(UploadDescriptor upload, File file) async {
+    if (!(uploadStarted?.isCompleted ?? true)) uploadStarted!.complete();
+    final gate = uploadGate;
+    if (gate != null) await gate;
+  }
 }
 
 /// Socket-absent awaiter: an empty event stream so only the poll fallback

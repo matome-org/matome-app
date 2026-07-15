@@ -19,7 +19,7 @@ import '../support/item_fixtures.dart';
 
 void main() {
   test(
-    'Inbox parent -> Core parent -> idempotent item -> PUT -> done',
+    'Inbox parent -> Core parent -> idempotent item -> PUT -> process accepted',
     () async {
       final core = await _ContractCore.start();
       addTearDown(core.close);
@@ -74,17 +74,16 @@ void main() {
       final child = await db.itemsDao.getById('rec_local_e2e', '1');
       expect(parent!.coreId, 11);
       expect(child!.coreId, 42);
-      expect(child.processingStatus, 'done');
-      expect(child.summary, 'Contract path complete');
+      expect(child.processingStatus, 'processing');
+      expect(child.summary, isNull);
       expect(core.uploadedBytes, const [1, 3, 3, 7]);
-      expect(core.calls, ['parent', 'item', 'upload', 'process', 'poll']);
+      expect(core.calls, ['parent', 'item', 'upload', 'process']);
       expect(core.parentRequest.containsKey('workspace_id'), isFalse);
       expect(core.itemRequest['client_id'], 'rec_local_e2e');
       for (final path in const [
         '/api/matomes',
         '/api/matomes/11/items',
         '/api/items/42/process',
-        '/api/items/42',
       ]) {
         expect(
           core.authByPath[path],

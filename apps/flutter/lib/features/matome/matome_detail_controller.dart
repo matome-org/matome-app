@@ -6,11 +6,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/config/endpoint_controller.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart';
 import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
 import '../../core/db/daos/spaces_dao.dart';
+import '../../core/db/daos/work_queue_dao.dart';
 import '../../core/db/file_row.dart';
 import '../../core/db/matome_card.dart';
 import '../../core/observability/app_log.dart';
@@ -308,8 +310,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// Import an arbitrary [file] as an Item of this Matome — the generic
   /// document/photo import (#1449). Reuses the local-first upload insert path:
   /// the bytes are copied to durable app storage, then a `rec_local_<uuid>` row
-  /// is inserted with this Matome's id via [ItemsDao.createFileItem]. The
-  /// Matome's triage state
+  /// and its initial work row are inserted atomically with this Matome's id via
+  /// [ItemsDao.createFileItem]. The Matome's triage state
   /// (spaceId) is untouched.
   ///
   /// The `mediaType` is DERIVED from the file extension via [mediaTypeForPath]
@@ -377,12 +379,20 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
         createdAt: timestamp,
         updatedAt: timestamp,
       ),
+      initialWork: fileUploadWork(
+        itemId: recordingId,
+        sourceRevision: 1,
+        now: timestamp,
+        configRevision: workConfigRevisionForEndpoint(
+          _ref.read(endpointConfigProvider),
+        ),
+      ),
     );
     if (!mounted) return;
     await load();
 
-    // KICK THE UPLOAD QUEUE for the just-inserted row (#1457). The insert above
-    // only lands a `pending_upload` row — without this drain the doc/photo would
+    // KICK THE UPLOAD QUEUE for the just-inserted durable work row (#1457).
+    // Without this drain the doc/photo would
     // sit "Saved on device · waiting to upload" until an unrelated trigger
     // (app-start / connectivity rising-edge) fires, because `addFile` matches
     // none of the `UploadRetryService` triggers (unlike the recorder path, which

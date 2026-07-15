@@ -263,6 +263,42 @@ class Items extends Table {
   ];
 }
 
+/// Durable executor state for every device-owned asynchronous operation.
+/// Operation-specific payload remains on the canonical local entity; this row
+/// only owns scheduling, resumability, and bounded failure metadata.
+@DataClassName('WorkQueueRow')
+class WorkQueue extends Table {
+  @override
+  String get tableName => 'work_queue';
+
+  TextColumn get id => text()();
+  TextColumn get kind => text()();
+  TextColumn get itemId => text().named('item_id')();
+  TextColumn get dedupeKey => text().named('dedupe_key')();
+  TextColumn get state => text()();
+  TextColumn get stage => text()();
+  TextColumn get dependsOn => text().named('depends_on').nullable()();
+  IntColumn get attempt => integer().withDefault(const Constant(0))();
+  IntColumn get availableAt => integer().named('available_at')();
+  TextColumn get leaseOwner => text().named('lease_owner').nullable()();
+  IntColumn get leaseUntil => integer().named('lease_until').nullable()();
+  RealColumn get progress => real().withDefault(const Constant(0))();
+  TextColumn get errorCode => text().named('error_code').nullable()();
+  TextColumn get blockedReason => text().named('blocked_reason').nullable()();
+  IntColumn get configRevision =>
+      integer().named('config_revision').withDefault(const Constant(0))();
+  IntColumn get createdAt => integer().named('created_at')();
+  IntColumn get updatedAt => integer().named('updated_at')();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {dedupeKey},
+  ];
+}
+
 /// Device-side direct Item-to-Contact relation retained for current Files and
 /// Contacts behavior. It does not recreate the removed recording domain.
 @DataClassName('ItemContactRow')

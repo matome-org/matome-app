@@ -94,7 +94,7 @@ void main() {
     );
     final child = await db.itemsDao.getById('rec_local_child', 'owner-1');
     expect(child!.coreId, recordings.coreId);
-    expect(child.processingStatus, 'done');
+    expect(child.processingStatus, 'processing');
   });
 }
 

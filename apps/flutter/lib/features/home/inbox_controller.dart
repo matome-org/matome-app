@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/items_dao.dart';
+import '../../core/db/daos/work_queue_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
@@ -158,6 +159,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   Future<void> insertLocalUpload({
     required ItemsCompanion item,
     required FileBlobsCompanion file,
+    WorkQueueCompanion? initialWork,
   }) async {
     if (item.ownerId.value != _requireOwner()) {
       throw StateError(
@@ -165,9 +167,18 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
       );
     }
     if (FeatureFlags.localFirstSpaces) {
-      await _dao.createFileItem(item: item, file: file);
+      await _dao.createFileItem(
+        item: item,
+        file: file,
+        initialWork: initialWork,
+      );
     } else {
-      await _dao.upsertFileItem(item: item, file: file, ensureMatome: true);
+      await _dao.upsertFileItem(
+        item: item,
+        file: file,
+        ensureMatome: true,
+        initialWork: initialWork,
+      );
     }
     await reloadFromLocal();
   }
@@ -207,6 +218,33 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         isDirty: const Value(false),
       ),
     );
+  }
+
+  Future<void> markFileUploading(String itemId) async {
+    await _dao.updateFile(
+      itemId,
+      _requireOwner(),
+      const FileBlobsCompanion(
+        uploadState: Value('uploading'),
+        uploadedAt: Value(null),
+        isDirty: Value(true),
+      ),
+    );
+  }
+
+  Future<void> markCoreCreated(String itemId, int coreId) async {
+    await _dao.updateItem(
+      itemId,
+      _requireOwner(),
+      ItemsCompanion(
+        coreId: Value(coreId),
+        syncState: const Value(kProcessingStatusPendingUpload),
+        processingState: const Value('not_requested'),
+        processingErrorCode: const Value(null),
+        isDirty: const Value(false),
+      ),
+    );
+    await reloadFromLocal();
   }
 
   Future<void> markFileUploadFailed(String itemId) async {
@@ -277,6 +315,23 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         isDirty: Value(true),
       ),
     );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final workDao = _ref.read(workQueueDaoProvider);
+    final existing = await workDao.getForItem(itemId, kWorkKindFileUpload);
+    if (existing == null) {
+      final item = await _dao.getById(itemId, _requireOwner());
+      if (item != null) {
+        await workDao.enqueueOrIgnore(
+          fileUploadWork(
+            itemId: itemId,
+            sourceRevision: item.item.sourceRevision,
+            now: now,
+          ),
+        );
+      }
+    } else {
+      await workDao.resetForManualRetry(itemId, now);
+    }
     await reloadFromLocal();
     await _ref.read(uploadQueueProvider).drainRow(itemId);
   }

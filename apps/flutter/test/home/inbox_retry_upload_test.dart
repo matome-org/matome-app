@@ -117,7 +117,7 @@ void main() {
     );
   }
 
-  test('manual retry of a failed row re-enqueues via the queue → done', () async {
+  test('manual retry re-enqueues through Core processing acceptance', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
@@ -147,7 +147,11 @@ void main() {
 
     final row = await db.itemsDao.getById(localId, '1');
     // Re-enqueued through the queue and resolved to done (NOT a new pipeline).
-    expect(row!.processingStatus, 'done', reason: 'retry drove it to done');
+    expect(
+      row!.processingStatus,
+      'processing',
+      reason: 'retry stopped when Core accepted processing',
+    );
     expect(
       row.notes,
       userNotes,
@@ -207,7 +211,7 @@ void main() {
         repo.coreIdMinted,
         reason: 'create happened on retry',
       );
-      expect(row.processingStatus, 'done');
+      expect(row.processingStatus, 'processing');
       expect(
         repo.createCalls,
         1,

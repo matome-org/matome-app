@@ -40,9 +40,8 @@ bool isLocalRecordingId(String id) => id.startsWith(kLocalRecordingIdPrefix);
 /// retry queue clears it once the recording reconciles.
 const String kProcessingStatusPendingUpload = 'pending_upload';
 
-/// Durable reasons why legacy upload work cannot currently advance. W2 replaces
-/// these row statuses with typed `work_queue` records; until then they keep a
-/// blocked item discoverable across restarts instead of silently returning.
+/// Item-level display projections for durable queue holds. Typed scheduling and
+/// retry state lives on `work_queue`; these values keep existing cards explicit.
 const String kProcessingStatusBlockedSignedOut = 'blocked_signed_out';
 const String kProcessingStatusBlockedOffline = 'blocked_offline';
 const String kProcessingStatusBlockedLocalSpace = 'blocked_local_space';
