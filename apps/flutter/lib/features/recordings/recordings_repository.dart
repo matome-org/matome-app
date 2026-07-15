@@ -90,8 +90,7 @@ class RecordingsRepository {
     }
   }
 
-  /// `POST /api/recordings` (Bearer). Creates a pending recording and returns
-  /// it together with the presigned [UploadDescriptor].
+  /// Creates a pending file item and returns its W0 upload envelope.
   Future<RecordingCreateResult> createRecording({
     required String title,
     int? durationSeconds,
@@ -109,6 +108,7 @@ class RecordingsRepository {
   Future<RecordingCreateResult> createItemRecording({
     required String title,
     required int matomeId,
+    required String clientId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',
@@ -120,6 +120,7 @@ class RecordingsRepository {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/api/matomes/$matomeId/items',
         data: <String, dynamic>{
+          'client_id': clientId,
           'item_type': 'file',
           'media_type': mediaType,
           'metadata': <String, dynamic>{
@@ -152,9 +153,10 @@ class RecordingsRepository {
       }
       final data = response.data ?? const <String, dynamic>{};
       final recordingRaw = data['item'];
-      final uploadRaw = data['presign'];
+      final uploadRaw = data['upload'];
       if (recordingRaw is! Map<String, dynamic> ||
-          uploadRaw is! Map<String, dynamic>) {
+          uploadRaw is! Map<String, dynamic> ||
+          uploadRaw['request'] is! Map<String, dynamic>) {
         throw const ApiException(
           'Malformed create-recording response.',
           statusCode: 201,

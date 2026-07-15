@@ -466,7 +466,11 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     // un-reconciled Matome never reaches this method (the action is UI-gated on
     // `coreId != null` and the guard above throws), so it stays local-only.
     try {
-      await _matomesRepo.createTextItem(matomeId: coreMatomeId, body: text);
+      await _matomesRepo.createTextItem(
+        matomeId: coreMatomeId,
+        clientId: 'text_local_$localPayloadId',
+        body: text,
+      );
     } catch (e, st) {
       AppLog.error(
         LogCat.sync,

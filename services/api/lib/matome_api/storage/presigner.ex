@@ -82,7 +82,7 @@ defmodule MatomeApi.Storage.Presigner do
        when method in [:put, :get, :delete] and is_binary(storage_key) do
     expires_in = opts[:expires_in]
     content_length = opts[:content_length]
-    now = Keyword.get(opts, :now, DateTime.utc_now())
+    now = Keyword.get(opts, :now, DateTime.utc_now()) |> DateTime.truncate(:second)
     config = storage_config()
     endpoint = URI.parse(config.endpoint)
     amz_date = Calendar.strftime(now, "%Y%m%dT%H%M%SZ")
@@ -124,6 +124,7 @@ defmodule MatomeApi.Storage.Presigner do
       method: method |> Atom.to_string() |> String.upcase(),
       url: URI.to_string(%{endpoint | path: canonical_uri, query: canonical_query_string(query)}),
       expires_in: expires_in,
+      expires_at: DateTime.add(now, expires_in, :second),
       storage_key: storage_key,
       content_length: content_length,
       max_bytes: @max_upload_bytes

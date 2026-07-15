@@ -34,6 +34,19 @@ defmodule MatomeApiWeb.OpenApiTest do
 
     assert item_schema["discriminator"] == %{"propertyName" => "item_type"}
     assert item_schema["properties"]["item_type"]["enum"] == ["file", "text"]
+    assert item_schema["properties"]["client_id"]["type"] == "string"
+
+    item_create = body["paths"]["/api/matomes/{matome_id}/items"]["post"]
+    assert item_create["responses"]["409"]["description"] == "Client id conflict"
+
+    create_schema =
+      get_in(item_create, ["responses", "201", "content", "application/json", "schema"])
+
+    assert create_schema["required"] == ["contract_version", "item"]
+
+    assert create_schema["properties"]["upload"]["properties"]["request"]["required"] ==
+             ["method", "url", "headers"]
+
     refute Map.has_key?(body["paths"], "/api/recordings")
     refute Map.has_key?(body["paths"], "/api/recordings/search")
     refute Map.has_key?(body["paths"], "/api/recordings/{id}")

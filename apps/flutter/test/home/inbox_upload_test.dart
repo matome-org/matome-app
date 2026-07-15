@@ -47,7 +47,7 @@ void main() {
     final adapter = DioAdapter(dio: dio);
 
     // 1. create item under the reconciled matome (coreId 42) -> item id 321 +
-    //    presign to a stub URL.
+    //    W0 upload request to a stub URL.
     adapter.onPost(
       '/api/matomes/42/items',
       (server) => server.reply(201, {
@@ -59,11 +59,12 @@ void main() {
           'metadata': {'title': 'Voice memo', 'status': 'pending'},
           'file': {'media_type': 'audio'},
         },
-        'presign': {
-          'method': 'PUT',
-          'url': 'http://127.0.0.1:9/upload',
-          'storage_key': 'k',
-          'expires_in': 900,
+        'upload': {
+          'request': {
+            'method': 'PUT',
+            'url': 'http://127.0.0.1:9/upload',
+            'headers': <String, String>{},
+          },
         },
       }),
       data: Matchers.any,

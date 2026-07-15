@@ -44,7 +44,9 @@ void main() {
 
     final create = fixtures['item_create_response'] as Map<String, dynamic>;
     expect(create['upload'], isA<Map<String, dynamic>>());
-    expect((create['item'] as Map<String, dynamic>)['presign'], isNull);
+    final item = create['item'] as Map<String, dynamic>;
+    expect(item['client_id'], startsWith('rec_local_'));
+    expect(item['presign'], isNull);
     expect(contract['upload']['operations'], <String>[
       'request',
       'complete',
@@ -107,7 +109,6 @@ void main() {
 
     expect(detected, expected);
     expect(detected.keys.toSet(), <String>{
-      'create_response',
       'pending_status',
       'retry',
       'parent_sync',
@@ -139,14 +140,6 @@ String? _detectViolation(Map<String, dynamic> mismatch) {
   final current = mismatch['current'] as Map<String, dynamic>;
 
   switch (mismatch['id']) {
-    case 'create_response':
-      final response = current['core_response'] as Map<String, dynamic>;
-      final item = response['item'] as Map<String, dynamic>;
-      if (item['presign'] is Map<String, dynamic> &&
-          response['upload'] == null &&
-          current['flutter_upload_path'] == r'$.presign') {
-        return 'create_response.upload_envelope_disagrees';
-      }
     case 'pending_status':
       final timeline = (current['timeline'] as List<dynamic>)
           .cast<Map<String, dynamic>>();

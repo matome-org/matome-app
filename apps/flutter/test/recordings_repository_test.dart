@@ -121,10 +121,17 @@ void main() {
           'metadata': {'title': 'Upload', 'status': 'pending'},
           'file': {'id': 7, 'media_type': 'audio', 'byte_size': 12},
         },
-        'presign': {
-          'method': 'PUT',
-          'url': 'http://storage.test/upload',
-          'expires_in': 900,
+        'upload': {
+          'upload_id': 'item-9-upload-1',
+          'upload_generation': 1,
+          'mode': 'single',
+          'state': 'pending',
+          'expires_at': '2026-07-15T12:15:00Z',
+          'request': {
+            'method': 'PUT',
+            'url': 'http://storage.test/upload',
+            'headers': <String, String>{},
+          },
         },
       }),
       data: Matchers.any,
@@ -160,6 +167,7 @@ void main() {
     final created = await repo.createItemRecording(
       title: 'Upload',
       matomeId: 42,
+      clientId: 'rec_local_upload',
     );
     expect(created.recording.id, 9);
     expect(created.upload.url, 'http://storage.test/upload');

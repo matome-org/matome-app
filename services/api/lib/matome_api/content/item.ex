@@ -2,6 +2,7 @@ defmodule MatomeApi.Content.Item do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias MatomeApi.Auth.User
   alias MatomeApi.Content.{FileBlob, Matome, TextContent}
 
   @item_types [:file, :text]
@@ -29,7 +30,10 @@ defmodule MatomeApi.Content.Item do
     field :position, :integer
     field :item_type, Ecto.Enum, values: @item_types
     field :metadata, :map, default: %{}
+    field :client_id, :string
+    field :client_fingerprint, :string
 
+    belongs_to :owner, User
     belongs_to :matome, Matome
     belongs_to :file_blob, FileBlob
     belongs_to :text_content, TextContent
@@ -39,14 +43,26 @@ defmodule MatomeApi.Content.Item do
 
   def changeset(item, attrs) do
     item
-    |> cast(attrs, [:matome_id, :position, :item_type, :metadata, :file_blob_id, :text_content_id])
-    |> validate_required([:matome_id, :position, :item_type, :metadata])
+    |> cast(attrs, [
+      :owner_id,
+      :client_id,
+      :client_fingerprint,
+      :matome_id,
+      :position,
+      :item_type,
+      :metadata,
+      :file_blob_id,
+      :text_content_id
+    ])
+    |> validate_required([:owner_id, :matome_id, :position, :item_type, :metadata])
+    |> validate_length(:client_id, min: 1, max: 255)
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_metadata_render_hints_only()
     |> foreign_key_constraint(:matome_id)
     |> foreign_key_constraint(:file_blob_id)
     |> foreign_key_constraint(:text_content_id)
     |> unique_constraint(:position, name: :items_matome_id_position_index)
+    |> unique_constraint([:owner_id, :client_id], name: :items_owner_id_client_id_index)
     |> unique_constraint(:file_blob_id, name: :items_file_blob_id_index)
     |> unique_constraint(:text_content_id, name: :items_text_content_id_index)
     |> check_constraint(:item_type, name: :items_item_type_check)

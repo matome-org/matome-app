@@ -25,9 +25,17 @@ defmodule MatomeApiWeb.ItemController do
 
   def create(conn, %{"matome_id" => matome_id, "item_type" => "text"} = params) do
     case Content.create_text_item(conn.assigns.current_user, matome_id, params) do
-      nil -> not_found(conn)
-      {:ok, item} -> conn |> put_status(:created) |> json(%{item: item_json(item)})
-      {:error, changeset} -> validation_error(conn, changeset)
+      nil ->
+        not_found(conn)
+
+      {:ok, item} ->
+        conn |> put_status(:created) |> json(%{contract_version: "1", item: item_json(item)})
+
+      {:error, :client_id_conflict} ->
+        conn |> put_status(:conflict) |> json(%{error: "client_id_conflict"})
+
+      {:error, changeset} ->
+        validation_error(conn, changeset)
     end
   end
 
@@ -39,7 +47,13 @@ defmodule MatomeApiWeb.ItemController do
       {:ok, item} ->
         case Content.presign_item_upload(conn.assigns.current_user, item.id) do
           {:ok, presign} ->
-            conn |> put_status(:created) |> json(%{item: item_json(item, presign)})
+            conn
+            |> put_status(:created)
+            |> json(%{
+              contract_version: "1",
+              item: item_json(item),
+              upload: upload_json(item, presign)
+            })
 
           {:error, reason} ->
             conn |> put_status(:unprocessable_entity) |> json(%{error: to_string(reason)})
@@ -50,6 +64,9 @@ defmodule MatomeApiWeb.ItemController do
 
       {:error, :space_not_writable} ->
         conn |> put_status(:forbidden) |> json(%{error: "space_not_writable"})
+
+      {:error, :client_id_conflict} ->
+        conn |> put_status(:conflict) |> json(%{error: "client_id_conflict"})
 
       {:error, reason} when is_atom(reason) ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: to_string(reason)})
@@ -130,10 +147,11 @@ defmodule MatomeApiWeb.ItemController do
     end
   end
 
-  defp item_json(item, presign \\ nil) do
+  defp item_json(item) do
     %{
       id: item.id,
-      owner_id: item.matome && item.matome.owner_id,
+      owner_id: item.owner_id,
+      client_id: item.client_id,
       matome_id: item.matome_id,
       position: item.position,
       item_type: Atom.to_string(item.item_type),
@@ -143,7 +161,6 @@ defmodule MatomeApiWeb.ItemController do
       inserted_at: item.inserted_at,
       updated_at: item.updated_at
     }
-    |> maybe_put_presign(presign)
   end
 
   defp file_json(nil), do: nil
@@ -162,8 +179,26 @@ defmodule MatomeApiWeb.ItemController do
   defp text_json(nil), do: nil
   defp text_json(text_content), do: %{id: text_content.id, body: text_content.body}
 
-  defp maybe_put_presign(item, nil), do: item
-  defp maybe_put_presign(item, presign), do: Map.put(item, :presign, presign_json(presign))
+  defp upload_json(item, presign) do
+    headers =
+      case presign.content_length do
+        nil -> %{}
+        content_length -> %{"content-length" => to_string(content_length)}
+      end
+
+    %{
+      upload_id: "item-#{item.id}-upload-1",
+      upload_generation: 1,
+      mode: "single",
+      state: "pending",
+      expires_at: presign.expires_at,
+      request: %{
+        method: presign.method,
+        url: presign.url,
+        headers: headers
+      }
+    }
+  end
 
   defp presign_json(presign) do
     %{

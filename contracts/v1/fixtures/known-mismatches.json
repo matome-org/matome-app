@@ -3,22 +3,6 @@
   "purpose": "Executable characterization of current behavior. These fixtures must be rejected by v1 consumers until their owning W1+ implementation lands.",
   "mismatches": [
     {
-      "id": "create_response",
-      "owner_wave": "W1",
-      "current": {
-        "core_response": {
-          "item": {
-            "id": 42,
-            "metadata": {"status": "pending"},
-            "presign": {"method": "PUT", "url": "https://storage.invalid/legacy"}
-          }
-        },
-        "flutter_item_path": "$.item",
-        "flutter_upload_path": "$.presign"
-      },
-      "expected_violation": "create_response.upload_envelope_disagrees"
-    },
-    {
       "id": "pending_status",
       "owner_wave": "W2/W5",
       "current": {

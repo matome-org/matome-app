@@ -169,7 +169,7 @@ defmodule MatomeApiWeb.ApiSpec do
           summary: "Create a text or file item for one authenticated-user-owned matome",
           parameters: [matome_id_parameter()],
           requestBody: item_request_body(),
-          responses: resource_responses("Item", 201)
+          responses: item_create_responses()
         }
       },
       "/api/items/{id}" => %PathItem{
@@ -250,6 +250,13 @@ defmodule MatomeApiWeb.ApiSpec do
       required: [:item_type, :position],
       discriminator: %{propertyName: "item_type"},
       properties: %{
+        client_id: %OpenApiSpex.Schema{
+          type: :string,
+          minLength: 1,
+          maxLength: 255,
+          description:
+            "Permanent client item id. Replays are owner-scoped; conflicting reuse returns 409."
+        },
         item_type: %OpenApiSpex.Schema{type: :string, enum: ["file", "text"]},
         position: %OpenApiSpex.Schema{type: :integer, minimum: 0},
         metadata: %OpenApiSpex.Schema{type: :object},
@@ -275,6 +282,60 @@ defmodule MatomeApiWeb.ApiSpec do
         byte_size: %OpenApiSpex.Schema{type: :integer, minimum: 1}
       }
     })
+  end
+
+  defp item_create_responses do
+    %{
+      201 =>
+        Operation.response(
+          "Item created or replayed",
+          "application/json",
+          item_create_response_schema()
+        ),
+      401 => Operation.response("Unauthorized", "application/json", nil),
+      404 => Operation.response("Not found", "application/json", nil),
+      409 => Operation.response("Client id conflict", "application/json", nil),
+      413 => Operation.response("Quota exceeded", "application/json", nil),
+      422 => Operation.response("Validation error", "application/json", nil)
+    }
+  end
+
+  defp item_create_response_schema do
+    %OpenApiSpex.Schema{
+      type: :object,
+      required: [:contract_version, :item],
+      properties: %{
+        contract_version: %OpenApiSpex.Schema{type: :string, enum: ["1"]},
+        item: %OpenApiSpex.Schema{type: :object},
+        upload: %OpenApiSpex.Schema{
+          type: :object,
+          required: [
+            :upload_id,
+            :upload_generation,
+            :mode,
+            :state,
+            :expires_at,
+            :request
+          ],
+          properties: %{
+            upload_id: %OpenApiSpex.Schema{type: :string},
+            upload_generation: %OpenApiSpex.Schema{type: :integer, minimum: 1},
+            mode: %OpenApiSpex.Schema{type: :string, enum: ["single"]},
+            state: %OpenApiSpex.Schema{type: :string, enum: ["pending"]},
+            expires_at: %OpenApiSpex.Schema{type: :string, format: :"date-time"},
+            request: %OpenApiSpex.Schema{
+              type: :object,
+              required: [:method, :url, :headers],
+              properties: %{
+                method: %OpenApiSpex.Schema{type: :string, enum: ["PUT"]},
+                url: %OpenApiSpex.Schema{type: :string, format: :uri},
+                headers: %OpenApiSpex.Schema{type: :object}
+              }
+            }
+          }
+        }
+      }
+    }
   end
 
   defp resource_responses(description, success_status \\ 200) do

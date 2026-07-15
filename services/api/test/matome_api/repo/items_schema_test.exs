@@ -99,8 +99,9 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
   defp insert_item!(matome_id, position, item_type, file_blob_id, text_content_id) do
     Repo.query!(
       """
-      INSERT INTO items (matome_id, position, item_type, metadata, file_blob_id, text_content_id, inserted_at, updated_at)
-      VALUES ($1, $2, $3, '{}'::jsonb, $4, $5, now(), now())
+      INSERT INTO items (owner_id, matome_id, position, item_type, metadata, file_blob_id, text_content_id, inserted_at, updated_at)
+      SELECT owner_id, id, $2, $3, '{}'::jsonb, $4, $5, now(), now()
+      FROM matomes WHERE id = $1
       """,
       [matome_id, position, item_type, file_blob_id, text_content_id]
     )

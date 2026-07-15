@@ -42,6 +42,13 @@ Parent reconciliation is work, not a precondition that can silently skip a
 child forever. Queue the parent first, reconcile it, then create/reconcile the
 child.
 
+Core item creation accepts the device's permanent local item identity as
+`client_id`. The key is scoped by authenticated owner: an exact replay returns
+the existing item, a conflicting payload returns `409 client_id_conflict`, and
+the same identifier under another owner is independent. File replays issue a
+new valid upload descriptor without reserving quota or inserting another
+payload row.
+
 ## Upload v1
 
 All upload envelopes carry `contract_version=1`, the item input revision, and
@@ -120,18 +127,18 @@ compatibility.
 
 ## Executable evidence
 
-`fixtures/known-mismatches.json` captures four current failures without making
+`fixtures/known-mismatches.json` captures three current failures without making
 the default suites red:
 
-1. Core nests `presign` under `item`; Flutter reads a top-level `presign`, while
-   v1 names the top-level envelope `upload`.
-2. Item metadata remains `pending` after enqueue and a successful callback.
-3. Oban uniqueness includes completed jobs forever, so manual retry reuses the
+1. Item metadata remains `pending` after enqueue and a successful callback.
+2. Oban uniqueness includes completed jobs forever, so manual retry reuses the
    completed identity instead of creating a run.
-4. An unfiled local parent is skipped while its child waits for the missing Core
+3. An unfiled local parent is skipped while its child waits for the missing Core
    parent id.
 
 Core and Flutter tests execute detectors against those fixtures and assert the
-specific v1 violation. The AI-stub suite executes the shared capabilities,
-job, and typed-callback fixtures. W1+ replaces each characterization with live
-conformance as its owning behavior lands.
+specific v1 violation. The canonical item-create fixture now supplies live W1
+conformance for the top-level `upload.request` envelope and permanent
+`client_id`. The AI-stub suite executes the shared capabilities, job, and
+typed-callback fixtures. Later waves replace each remaining characterization
+with live conformance as its owning behavior lands.

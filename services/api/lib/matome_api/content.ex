@@ -345,27 +345,38 @@ defmodule MatomeApi.Content do
 
   def create_text_item(%User{} = owner, matome_id, attrs) do
     with %Matome{} = matome <- get_matome(owner, matome_id) do
-      Ecto.Multi.new()
-      |> Ecto.Multi.insert(:text_content, TextContent.changeset(%TextContent{}, attrs))
-      |> Ecto.Multi.run(:position, fn repo, _changes ->
-        next_item_position(repo, matome.id, attrs)
-      end)
-      |> Ecto.Multi.insert(:item, fn %{text_content: text_content, position: position} ->
-        item_attrs = %{
-          matome_id: matome.id,
-          position: position,
-          item_type: :text,
-          metadata: Map.get(attrs, :metadata) || Map.get(attrs, "metadata") || %{},
-          text_content_id: text_content.id
-        }
+      client_id = item_client_id(attrs)
+      fingerprint = item_create_fingerprint(:text, matome.id, attrs, client_id)
 
-        Item.changeset(%Item{}, item_attrs)
+      idempotent_item_create(owner, client_id, fingerprint, fn ->
+        Ecto.Multi.new()
+        |> Ecto.Multi.insert(:text_content, TextContent.changeset(%TextContent{}, attrs))
+        |> Ecto.Multi.run(:position, fn repo, _changes ->
+          next_item_position(repo, matome.id, attrs)
+        end)
+        |> Ecto.Multi.insert(:item, fn %{text_content: text_content, position: position} ->
+          item_attrs = %{
+            owner_id: owner.id,
+            client_id: client_id,
+            client_fingerprint: fingerprint,
+            matome_id: matome.id,
+            position: position,
+            item_type: :text,
+            metadata: Map.get(attrs, :metadata) || Map.get(attrs, "metadata") || %{},
+            text_content_id: text_content.id
+          }
+
+          Item.changeset(%Item{}, item_attrs)
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{item: item}} ->
+            {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
+
+          {:error, _step, changeset, _changes} ->
+            {:error, changeset}
+        end
       end)
-      |> Repo.transaction()
-      |> case do
-        {:ok, %{item: item}} -> {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
-        {:error, _step, changeset, _changes} -> {:error, changeset}
-      end
     end
   end
 
@@ -377,32 +388,44 @@ defmodule MatomeApi.Content do
         |> put_storage_key(storage_key(owner.id))
 
       incoming = incoming_byte_size(attrs)
+      client_id = item_client_id(attrs)
+      fingerprint = item_create_fingerprint(:file, matome.id, attrs, client_id)
 
-      Ecto.Multi.new()
-      |> Ecto.Multi.run(:quota, fn repo, _changes ->
-        reserve_workspace_quota(repo, matome.workspace_id, incoming)
-      end)
-      |> Ecto.Multi.insert(:file_blob, FileBlob.changeset(%FileBlob{}, attrs))
-      |> Ecto.Multi.run(:position, fn repo, _changes ->
-        next_item_position(repo, matome.id, attrs)
-      end)
-      |> Ecto.Multi.insert(:item, fn %{file_blob: file_blob, position: position} ->
-        item_attrs = %{
-          matome_id: matome.id,
-          position: position,
-          item_type: :file,
-          metadata: item_metadata(attrs),
-          file_blob_id: file_blob.id
-        }
+      idempotent_item_create(owner, client_id, fingerprint, fn ->
+        Ecto.Multi.new()
+        |> Ecto.Multi.run(:quota, fn repo, _changes ->
+          reserve_workspace_quota(repo, matome.workspace_id, incoming)
+        end)
+        |> Ecto.Multi.insert(:file_blob, FileBlob.changeset(%FileBlob{}, attrs))
+        |> Ecto.Multi.run(:position, fn repo, _changes ->
+          next_item_position(repo, matome.id, attrs)
+        end)
+        |> Ecto.Multi.insert(:item, fn %{file_blob: file_blob, position: position} ->
+          item_attrs = %{
+            owner_id: owner.id,
+            client_id: client_id,
+            client_fingerprint: fingerprint,
+            matome_id: matome.id,
+            position: position,
+            item_type: :file,
+            metadata: item_metadata(attrs),
+            file_blob_id: file_blob.id
+          }
 
-        Item.changeset(%Item{}, item_attrs)
+          Item.changeset(%Item{}, item_attrs)
+        end)
+        |> Repo.transaction()
+        |> case do
+          {:ok, %{item: item}} ->
+            {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
+
+          {:error, :quota, reason, _changes} when is_atom(reason) ->
+            {:error, reason}
+
+          {:error, _step, changeset, _changes} ->
+            {:error, changeset}
+        end
       end)
-      |> Repo.transaction()
-      |> case do
-        {:ok, %{item: item}} -> {:ok, Repo.preload(item, [:matome, :file_blob, :text_content])}
-        {:error, :quota, reason, _changes} when is_atom(reason) -> {:error, reason}
-        {:error, _step, changeset, _changes} -> {:error, changeset}
-      end
     end
   end
 
@@ -797,6 +820,93 @@ defmodule MatomeApi.Content do
   defp delete_storage_objects(storage_keys) do
     Enum.each(storage_keys, &ObjectStore.delete_object/1)
   end
+
+  defp idempotent_item_create(_owner, nil, _fingerprint, create), do: create.()
+
+  defp idempotent_item_create(%User{} = owner, client_id, fingerprint, create) do
+    case get_item_by_client_id(owner, client_id) do
+      nil ->
+        case create.() do
+          {:error, _reason} = error ->
+            case get_item_by_client_id(owner, client_id) do
+              nil -> error
+              item -> replay_item(item, fingerprint)
+            end
+
+          result ->
+            result
+        end
+
+      item ->
+        replay_item(item, fingerprint)
+    end
+  end
+
+  defp get_item_by_client_id(%User{id: owner_id}, client_id) do
+    Item
+    |> where([item], item.owner_id == ^owner_id and item.client_id == ^client_id)
+    |> Repo.one()
+    |> case do
+      nil -> nil
+      item -> Repo.preload(item, [:matome, :file_blob, :text_content])
+    end
+  end
+
+  defp replay_item(%Item{client_fingerprint: fingerprint} = item, fingerprint),
+    do: {:ok, item}
+
+  defp replay_item(%Item{}, _fingerprint), do: {:error, :client_id_conflict}
+
+  defp item_client_id(attrs), do: item_attr(attrs, :client_id)
+
+  defp item_create_fingerprint(_type, _matome_id, _attrs, nil), do: nil
+
+  defp item_create_fingerprint(:text, matome_id, attrs, _client_id) do
+    {
+      :text,
+      matome_id,
+      item_attr(attrs, :position),
+      item_attr(attrs, :body),
+      item_attr(attrs, :metadata) || %{}
+    }
+    |> fingerprint()
+  end
+
+  defp item_create_fingerprint(:file, matome_id, attrs, _client_id) do
+    {
+      :file,
+      matome_id,
+      item_attr(attrs, :position),
+      item_attr(attrs, :media_type),
+      incoming_byte_size(attrs),
+      item_attr(attrs, :duration),
+      item_metadata(attrs)
+    }
+    |> fingerprint()
+  end
+
+  defp fingerprint(value) do
+    value
+    |> canonical_term()
+    |> :erlang.term_to_binary()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp canonical_term(value) when is_map(value) do
+    value
+    |> Enum.map(fn {key, nested} -> {to_string(key), canonical_term(nested)} end)
+    |> Enum.sort()
+  end
+
+  defp canonical_term(value) when is_list(value), do: Enum.map(value, &canonical_term/1)
+
+  defp canonical_term(value) when is_tuple(value),
+    do: value |> Tuple.to_list() |> canonical_term()
+
+  defp canonical_term(value), do: value
+
+  defp item_attr(attrs, key), do: Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
 
   defp next_item_position(repo, matome_id, attrs) do
     case Map.get(attrs, :position) || Map.get(attrs, "position") do

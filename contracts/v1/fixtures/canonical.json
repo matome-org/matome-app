@@ -4,6 +4,7 @@
     "contract_version": "1",
     "item": {
       "id": 42,
+      "client_id": "rec_local_00000000-0000-4000-8000-000000000000",
       "parent_id": 11,
       "item_type": "file",
       "input_kind": "audio",

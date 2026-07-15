@@ -2,10 +2,132 @@ defmodule MatomeApiWeb.ItemControllerTest do
   use MatomeApiWeb.ConnCase, async: false
 
   alias MatomeApi.Auth
+  alias MatomeApi.Content
+  alias MatomeApi.Content.Workspace
   alias MatomeApi.Repo
 
   @password "correct horse battery staple"
   @token "dev-ai-token"
+
+  test "file create returns the W0 top-level upload envelope", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+    matome = create_matome!(owner_conn)
+
+    response =
+      post(owner_conn, ~p"/api/matomes/#{matome["id"]}/items", %{
+        client_id: "rec_local_contract",
+        item_type: "file",
+        byte_size: 1234,
+        media_type: "audio"
+      })
+      |> json_response(201)
+
+    assert response["contract_version"] == "1"
+    assert response["item"]["client_id"] == "rec_local_contract"
+    refute Map.has_key?(response["item"], "presign")
+
+    assert %{
+             "upload_id" => upload_id,
+             "upload_generation" => 1,
+             "mode" => "single",
+             "state" => "pending",
+             "expires_at" => expires_at,
+             "request" => %{
+               "method" => "PUT",
+               "url" => url,
+               "headers" => %{"content-length" => "1234"}
+             }
+           } = response["upload"]
+
+    assert is_binary(upload_id)
+    assert {:ok, _expires_at, 0} = DateTime.from_iso8601(expires_at)
+    assert url =~ "X-Amz-Signature="
+  end
+
+  test "replaying owner client_id returns one item, one quota reservation, and a fresh upload",
+       %{conn: conn} do
+    %{conn: owner_conn, user: owner} = register_conn(conn)
+    {:ok, workspace} = Content.create_workspace(owner, %{name: "Replay quota"})
+
+    workspace
+    |> Workspace.admin_changeset(%{quota_bytes: 10_000})
+    |> Repo.update!()
+
+    matome = create_matome!(owner_conn, %{workspace_id: workspace.id})
+
+    params = %{
+      client_id: "rec_local_replay",
+      item_type: "file",
+      content_length: 1234,
+      media_type: "audio",
+      metadata: %{title: "Replay"}
+    }
+
+    first =
+      post(owner_conn, ~p"/api/matomes/#{matome["id"]}/items", params)
+      |> json_response(201)
+
+    Process.sleep(1_100)
+
+    second =
+      post(owner_conn, ~p"/api/matomes/#{matome["id"]}/items", params)
+      |> json_response(201)
+
+    assert second["item"]["id"] == first["item"]["id"]
+    assert second["upload"]["upload_id"] == first["upload"]["upload_id"]
+    assert second["upload"]["expires_at"] > first["upload"]["expires_at"]
+    refute second["upload"]["request"]["url"] == first["upload"]["request"]["url"]
+    assert Repo.aggregate(MatomeApi.Content.Item, :count, :id) == 1
+    assert Repo.aggregate(MatomeApi.Content.FileBlob, :count, :id) == 1
+    assert Repo.get!(Workspace, workspace.id).used_bytes == 1234
+  end
+
+  test "conflicting owner client_id reuse returns stable 409", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+    matome = create_matome!(owner_conn)
+
+    assert post(owner_conn, ~p"/api/matomes/#{matome["id"]}/items", %{
+             client_id: "rec_local_conflict",
+             item_type: "file",
+             byte_size: 123,
+             media_type: "audio"
+           })
+           |> json_response(201)
+
+    assert post(owner_conn, ~p"/api/matomes/#{matome["id"]}/items", %{
+             client_id: "rec_local_conflict",
+             item_type: "file",
+             byte_size: 456,
+             media_type: "audio"
+           })
+           |> json_response(409) == %{"error" => "client_id_conflict"}
+
+    assert Repo.aggregate(MatomeApi.Content.Item, :count, :id) == 1
+    assert Repo.aggregate(MatomeApi.Content.FileBlob, :count, :id) == 1
+  end
+
+  test "the same client_id is isolated between owners", %{conn: conn} do
+    %{conn: first_conn} = register_conn(conn)
+    %{conn: second_conn} = register_conn(build_conn())
+    first_matome = create_matome!(first_conn)
+    second_matome = create_matome!(second_conn)
+
+    create = fn owner_conn, matome ->
+      post(owner_conn, ~p"/api/matomes/#{matome["id"]}/items", %{
+        client_id: "rec_local_shared",
+        item_type: "file",
+        byte_size: 123,
+        media_type: "audio"
+      })
+      |> json_response(201)
+    end
+
+    first = create.(first_conn, first_matome)
+    second = create.(second_conn, second_matome)
+
+    refute first["item"]["id"] == second["item"]["id"]
+    assert Repo.aggregate(MatomeApi.Content.Item, :count, :id) == 2
+  end
 
   test "creates text items without presign, upload queue, or AI dispatch", %{conn: conn} do
     %{conn: owner_conn} = register_conn(conn)
@@ -80,7 +202,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
     assert post(owner_conn, ~p"/api/items/#{text_item["id"]}/presign", %{"byte_size" => 12})
            |> json_response(422) == %{"error" => "text_item_not_presignable"}
 
-    file_item =
+    file_response =
       post(owner_conn, ~p"/api/matomes/#{matome["id"]}/items", %{
         item_type: "file",
         position: 1,
@@ -89,11 +211,12 @@ defmodule MatomeApiWeb.ItemControllerTest do
         duration: 7
       })
       |> json_response(201)
-      |> Map.fetch!("item")
+
+    file_item = Map.fetch!(file_response, "item")
 
     refute Map.has_key?(file_item["file"], "storage_key")
-    refute Map.has_key?(file_item["presign"], "storage_key")
-    assert file_item["presign"]["method"] == "PUT"
+    refute Map.has_key?(file_response["upload"]["request"], "storage_key")
+    assert file_response["upload"]["request"]["method"] == "PUT"
 
     assert post(owner_conn, ~p"/api/items/#{file_item["id"]}/presign", %{"byte_size" => -1})
            |> json_response(422) == %{"error" => "invalid_content_length"}
@@ -393,8 +516,8 @@ defmodule MatomeApiWeb.ItemControllerTest do
     end
   end
 
-  defp create_matome!(conn) do
-    post(conn, ~p"/api/matomes", %{title: "Kickoff"})
+  defp create_matome!(conn, attrs \\ %{}) do
+    post(conn, ~p"/api/matomes", Map.put(attrs, :title, "Kickoff"))
     |> json_response(201)
     |> Map.fetch!("matome")
   end

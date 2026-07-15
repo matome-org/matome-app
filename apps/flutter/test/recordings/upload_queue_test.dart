@@ -147,6 +147,8 @@ void main() {
     expect(row.processingStatus, 'done');
     expect(row.isProcessing, 0);
     expect(row.summary, 'A memo');
+    expect(repo.lastClientId, localId,
+        reason: 'local row id is the Core client_id');
     // W2 / #871 RETENTION (reverses #43 W4): reaching `done` must NOT delete the
     // local audio. `done` proves Core accepted the upload, not that the user can
     // play a cloud copy, so the local-first file is the source of truth and
@@ -343,6 +345,7 @@ class _ToggleRepository extends RecordingsRepository {
   Duration createDelay = Duration.zero;
 
   int createCalls = 0;
+  String? lastClientId;
   final int coreIdMinted = 999;
 
   Recording _recording({required String status, String? summary, String? tx}) {
@@ -360,6 +363,7 @@ class _ToggleRepository extends RecordingsRepository {
   Future<RecordingCreateResult> createItemRecording({
     required String title,
     required int matomeId,
+    required String clientId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',
@@ -369,6 +373,7 @@ class _ToggleRepository extends RecordingsRepository {
     if (createDelay > Duration.zero) await Future<void>.delayed(createDelay);
     if (!coreUp) throw const ApiException('Core unreachable');
     createCalls++;
+    lastClientId = clientId;
     return RecordingCreateResult(
       recording: _recording(status: 'pending'),
       upload: const UploadDescriptor(

@@ -198,6 +198,7 @@ class _ToggleRepository extends RecordingsRepository {
   Future<RecordingCreateResult> createItemRecording({
     required String title,
     required int matomeId,
+    required String clientId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',

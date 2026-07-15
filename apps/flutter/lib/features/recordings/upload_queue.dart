@@ -258,6 +258,7 @@ class UploadQueue {
         created = await _repo.createItemRecording(
           title: row.title,
           matomeId: coreMatomeId,
+          clientId: localId,
           durationSeconds: _durationSecondsFor(row),
           mediaType: row.mediaType,
           contentLength: contentLength,

@@ -124,7 +124,7 @@ void main() {
   }
 
   // Modern items contract (recordings→items migration): the create leg POSTs to
-  // /api/matomes/{coreMatomeId}/items and returns an ITEM (+presign); processing
+  // /api/matomes/{coreMatomeId}/items and returns an ITEM + W0 upload; processing
   // is POST /api/items/{id}/process; the poll-fallback source is GET
   // /api/items/{id}. The minted-matome coreId is 900; the created item id is 42.
   RecordingsRepository stubRepo() {
@@ -146,11 +146,12 @@ void main() {
           'metadata': {'title': 'New Recording', 'status': 'pending'},
           'file': {'media_type': 'audio'},
         },
-        'presign': {
-          'method': 'PUT',
-          'url': 'http://127.0.0.1:9/upload',
-          'storage_key': 'k',
-          'expires_in': 900,
+        'upload': {
+          'request': {
+            'method': 'PUT',
+            'url': 'http://127.0.0.1:9/upload',
+            'headers': <String, String>{},
+          },
         },
       }),
       data: Matchers.any,

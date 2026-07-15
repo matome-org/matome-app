@@ -105,8 +105,13 @@ void main() {
       ),
     );
 
-    final id = await matomesRepo.createTextItem(matomeId: 7, body: 'A durable note');
+    final id = await matomesRepo.createTextItem(
+      matomeId: 7,
+      clientId: 'text_local_1',
+      body: 'A durable note',
+    );
     expect(id, 555);
+    expect(sentBody?['client_id'], 'text_local_1');
     expect(sentBody?['item_type'], 'text');
     expect(sentBody?['body'], 'A durable note');
   });
@@ -124,7 +129,11 @@ void main() {
       data: Matchers.any,
     );
     expect(
-      matomesRepo.createTextItem(matomeId: 7, body: ''),
+      matomesRepo.createTextItem(
+        matomeId: 7,
+        clientId: 'text_local_2',
+        body: '',
+      ),
       throwsA(isA<ApiException>()
           .having((e) => e.statusCode, 'statusCode', 422)),
     );

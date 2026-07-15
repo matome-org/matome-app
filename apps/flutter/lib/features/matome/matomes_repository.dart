@@ -83,12 +83,17 @@ class MatomesRepository {
   /// item's concern, [RecordingsRepository.createItemRecording]).
   Future<int> createTextItem({
     required int matomeId,
+    required String clientId,
     required String body,
   }) async {
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/api/matomes/$matomeId/items',
-        data: <String, dynamic>{'item_type': 'text', 'body': body},
+        data: <String, dynamic>{
+          'client_id': clientId,
+          'item_type': 'text',
+          'body': body,
+        },
       );
       final status = response.statusCode ?? 0;
       if (status == 401) throw _unauthorized;

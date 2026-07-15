@@ -1,12 +1,12 @@
 import '../../core/http/json_utils.dart';
 import 'recording.dart';
 
-/// Presigned upload descriptor returned by `POST /api/recordings`.
+/// Presigned request inside Core's W0 item-create `upload` envelope.
 ///
-/// Mirrors `MatomeApi.Storage.Presigner.presign_upload/2`:
+/// The wire shape is:
 ///
 /// ```elixir
-/// %{method: "PUT", url: "...", storage_key: "...", expires_in: 900}
+/// {upload: {request: {method: "PUT", url: "...", headers: {...}}}}
 /// ```
 ///
 /// The client PUTs (or POSTs, per [method]) the raw media bytes straight to
@@ -30,16 +30,20 @@ class UploadDescriptor {
   bool get isPost => method.toUpperCase() == 'POST';
 
   factory UploadDescriptor.fromJson(Map<String, dynamic> json) {
+    final request = json['request'];
+    final requestJson = request is Map<String, dynamic>
+        ? request
+        : const <String, dynamic>{};
     return UploadDescriptor(
-      method: asString(json['method'], fallback: 'PUT').toUpperCase(),
-      url: asString(json['url']),
-      storageKey: asString(json['storage_key'], fallback: ''),
+      method: asString(requestJson['method'], fallback: 'PUT').toUpperCase(),
+      url: asString(requestJson['url']),
+      storageKey: '',
       expiresIn: asIntOrNull(json['expires_in']),
     );
   }
 }
 
-/// Combined response of `POST /api/recordings`:
+/// Combined response of `POST /api/matomes/{id}/items`:
 /// the created [recording] plus its presigned [upload] descriptor.
 class RecordingCreateResult {
   const RecordingCreateResult({required this.recording, required this.upload});

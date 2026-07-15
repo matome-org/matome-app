@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
@@ -25,45 +28,32 @@ void main() {
   });
 
   group('createItemRecording', () {
-    test('parses recording + presign descriptor from 201', () async {
+    test('parses the W0 item + upload envelope from 201', () async {
       await tokenStore.saveTokens(accessToken: 'tok');
+      final fixture =
+          (jsonDecode(File('../../contracts/v1/fixtures/canonical.json')
+                      .readAsStringSync()) as Map<String, dynamic>)[
+                  'item_create_response']
+              as Map<String, dynamic>;
       adapter.onPost(
         '/api/matomes/42/items',
-        (server) => server.reply(201, {
-          'item': {
-            'id': 6,
-            'owner_id': 1,
-            'matome_id': 42,
-            'item_type': 'file',
-            'metadata': {'title': 'F4 test', 'status': 'pending'},
-            'file': {
-              'media_type': 'audio',
-              'storage_key': 'owners/1/recordings/6/media',
-            },
-          },
-          'presign': {
-            'method': 'PUT',
-            'url': 'http://127.0.0.1:7010/storage/v1/s3/media/x?sig=1',
-            'storage_key': 'owners/1/recordings/6/media',
-            'expires_in': 900,
-          },
-        }),
+        (server) => server.reply(201, fixture),
         data: Matchers.any,
       );
 
       final result = await repo.createItemRecording(
         title: 'F4 test',
         matomeId: 42,
+        clientId: 'rec_local_test',
         durationSeconds: 3,
         badge: 'test',
       );
 
-      expect(result.recording.id, 6);
+      expect(result.recording.id, 42);
       expect(result.recording.status, RecordingStatus.pending);
       expect(result.upload.method, 'PUT');
       expect(result.upload.isPost, isFalse);
-      expect(result.upload.url, contains('storage/v1/s3'));
-      expect(result.upload.expiresIn, 900);
+      expect(result.upload.url, contains('signature=redacted'));
     });
   });
 

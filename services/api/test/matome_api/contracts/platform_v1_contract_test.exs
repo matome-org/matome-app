@@ -116,7 +116,7 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
     assert decisions["reason"] == "no_users_and_no_deployment"
   end
 
-  test "the four current cross-runtime mismatches are executable failing proofs" do
+  test "the remaining cross-runtime mismatches are executable failing proofs" do
     mismatches = read_json!(@mismatches_path)["mismatches"]
 
     detected = Map.new(mismatches, &{&1["id"], detect_violation(&1)})
@@ -124,18 +124,7 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
 
     assert detected == expected
 
-    assert Map.keys(detected) |> Enum.sort() ==
-             ~w(create_response parent_sync pending_status retry)
-  end
-
-  defp detect_violation(%{"id" => "create_response", "current" => current}) do
-    response = current["core_response"]
-
-    if is_map(get_in(response, ["item", "presign"])) and
-         is_nil(response["upload"]) and
-         current["flutter_upload_path"] == "$.presign" do
-      "create_response.upload_envelope_disagrees"
-    end
+    assert Map.keys(detected) |> Enum.sort() == ~w(parent_sync pending_status retry)
   end
 
   defp detect_violation(%{"id" => "pending_status", "current" => current}) do

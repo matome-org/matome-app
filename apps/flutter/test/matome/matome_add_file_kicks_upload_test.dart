@@ -242,6 +242,8 @@ void main() {
       reason: 'a reconciled Matome must push the note to Core for durability',
     );
     expect(matomesRepo.textItemPosts.single.matomeId, 7001);
+    expect(matomesRepo.textItemPosts.single.clientId,
+        startsWith('text_local_-'));
     expect(matomesRepo.textItemPosts.single.body, 'A durable typed note');
 
     // The local mirror still exists regardless of the Core leg (local-first).
@@ -282,14 +284,15 @@ class _RecordingMatomesRepo extends MatomesRepository {
       );
 
   final bool throwOnPost;
-  final List<({int matomeId, String body})> textItemPosts = [];
+  final List<({int matomeId, String clientId, String body})> textItemPosts = [];
 
   @override
   Future<int> createTextItem({
     required int matomeId,
+    required String clientId,
     required String body,
   }) async {
-    textItemPosts.add((matomeId: matomeId, body: body));
+    textItemPosts.add((matomeId: matomeId, clientId: clientId, body: body));
     if (throwOnPost) {
       throw StateError('simulated Core POST failure (offline / 5xx)');
     }
