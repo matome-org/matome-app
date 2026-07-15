@@ -56,6 +56,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         uploadQueueProvider.overrideWithValue(queue),
         // W1 (#1830): addTextNote now issues a best-effort Core POST — inject a
         // recording fake so no real HTTP is attempted and the POST is asserted.
@@ -101,7 +102,7 @@ void main() {
   /// The local id of the single recording row the controller inserted for
   /// [matomeId] — the row the queue should have been kicked for.
   Future<String> insertedRowId(String matomeId) async {
-    final matome = await db.matomesDao.getMatomeWithRecordings(matomeId);
+    final matome = await db.matomesDao.getMatomeWithItems(matomeId, '1');
     return matome!.recordings.single.id;
   }
 
@@ -180,9 +181,9 @@ void main() {
 
     // ...and the local-first insert survived: the row is present and stayed
     // pending_upload so a later trigger retries it.
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_throws');
+    final matome = await db.matomesDao.getMatomeWithItems('m_throws', '1');
     final item = matome!.recordings.single;
-    final row = await db.recordingsDao.getRecordingById(item.id);
+    final row = await db.itemsDao.getById(item.id, '1');
     expect(
       row!.processingStatus,
       kProcessingStatusPendingUpload,
@@ -210,12 +211,15 @@ void main() {
     expect(durableCopy.calls, 0, reason: 'text notes have no file to copy');
     expect(queue.drainAttempts, 0, reason: 'text notes must not kick uploads');
     expect(
-      (await db.recordingsDao.recordingsForMatome('m_text')),
+      (await db.itemsDao.listForMatome(
+        'm_text',
+        '1',
+      )).where((item) => item.file != null),
       isEmpty,
       reason: 'file-less text notes must not create legacy recording rows',
     );
 
-    final rows = await db.itemsDao.listForMatome(7001);
+    final rows = await db.itemsDao.listForMatome('m_text', '1');
     expect(rows, hasLength(1));
     expect(rows.single.item.id, itemId);
     expect(rows.single.type, MatomeItemType.text);
@@ -242,12 +246,14 @@ void main() {
       reason: 'a reconciled Matome must push the note to Core for durability',
     );
     expect(matomesRepo.textItemPosts.single.matomeId, 7001);
-    expect(matomesRepo.textItemPosts.single.clientId,
-        startsWith('text_local_-'));
+    expect(
+      matomesRepo.textItemPosts.single.clientId,
+      startsWith('text_local_'),
+    );
     expect(matomesRepo.textItemPosts.single.body, 'A durable typed note');
 
     // The local mirror still exists regardless of the Core leg (local-first).
-    final rows = await db.itemsDao.listForMatome(7001);
+    final rows = await db.itemsDao.listForMatome('m_text_post', '1');
     expect(rows, hasLength(1));
     expect(rows.single.text?.body, 'A durable typed note');
   });
@@ -266,8 +272,12 @@ void main() {
     // The POST throws, but addTextNote completes and the local row survives.
     final itemId = await controller.addTextNote('kept locally');
 
-    expect(matomesRepo.textItemPosts, hasLength(1), reason: 'the POST was tried');
-    final rows = await db.itemsDao.listForMatome(7001);
+    expect(
+      matomesRepo.textItemPosts,
+      hasLength(1),
+      reason: 'the POST was tried',
+    );
+    final rows = await db.itemsDao.listForMatome('m_text_fail', '1');
     expect(rows, hasLength(1));
     expect(rows.single.item.id, itemId);
     expect(rows.single.text?.body, 'kept locally');
@@ -280,7 +290,10 @@ void main() {
 class _RecordingMatomesRepo extends MatomesRepository {
   _RecordingMatomesRepo({this.throwOnPost = false})
     : super(
-        apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: Dio()..close()),
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio()..close(),
+        ),
       );
 
   final bool throwOnPost;

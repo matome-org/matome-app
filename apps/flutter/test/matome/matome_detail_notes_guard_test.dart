@@ -34,7 +34,10 @@ void main() {
 
   ProviderContainer container() {
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
     return c;

@@ -17,6 +17,8 @@ import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 /// Seeds a Matome plus [recordingCount] child Items (recordings).
 Future<void> _seedMatome(
   AppDatabase db, {
@@ -45,23 +47,19 @@ Future<void> _seedMatome(
   );
 
   for (var i = 0; i < recordingCount; i += 1) {
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: Value('rec_$i'),
-        matomeId: Value(id),
-        title: Value('Item $i'),
-        summary: Value(itemSummary),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value('0:30'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value(''),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + i),
-        mediaType: const Value('audio'),
-        processingStatus: const Value('done'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_$i',
+      matomeId: id,
+      title: 'Item $i',
+      summary: itemSummary,
+      durationSeconds: 30,
+      localPath: '',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + i,
+      mediaType: 'audio',
     );
   }
+  await db.matomesDao.markSummaryStale(id, summaryStale);
 }
 
 Widget _app(ProviderContainer container, {required String id}) {
@@ -137,7 +135,10 @@ void main() {
 
   ProviderContainer container() {
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
     return c;
@@ -315,20 +316,15 @@ void main() {
       if (tmp.existsSync()) tmp.deleteSync();
     });
 
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: const Value('rec_img'),
-        matomeId: const Value('m_img'),
-        title: const Value('whiteboard'),
-        timestamp: const Value('9:05 AM'),
-        duration: const Value(''),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: Value(tmp.path),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + 99),
-        mediaType: const Value('image'),
-        processingStatus: const Value('pending_upload'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_img',
+      matomeId: 'm_img',
+      title: 'whiteboard',
+      localPath: tmp.path,
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 99,
+      mediaType: 'image',
+      processingStatus: 'pending_upload',
     );
 
     await tester.pumpWidget(_app(container(), id: 'm_img'));
@@ -383,20 +379,14 @@ void main() {
         if (tmp.existsSync()) tmp.deleteSync();
       });
 
-      await db.recordingsDao.insertRecording(
-        RecordingsCompanion(
-          id: const Value('rec_img'),
-          matomeId: const Value('m_dispatch'),
-          title: const Value('whiteboard'),
-          timestamp: const Value('9:05 AM'),
-          duration: const Value(''),
-          badge: const Value('Inbox'),
-          isProcessing: const Value(0),
-          audioFilePath: Value(tmp.path),
-          createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + 5),
-          mediaType: const Value('image'),
-          processingStatus: const Value('done'),
-        ),
+      await insertTestFileItem(
+        db,
+        id: 'rec_img',
+        matomeId: 'm_dispatch',
+        title: 'whiteboard',
+        localPath: tmp.path,
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 5,
+        mediaType: 'image',
       );
 
       // Drive the REAL go_router routes (not a plain MaterialApp): the image
@@ -431,22 +421,15 @@ void main() {
     (tester) async {
       await _seedMatome(db, id: 'm_doc', recordingCount: 0);
 
-      await db.recordingsDao.insertRecording(
-        RecordingsCompanion(
-          id: const Value('rec_doc'),
-          matomeId: const Value('m_doc'),
-          title: const Value('Quarterly report'),
-          timestamp: const Value('9:05 AM'),
-          duration: const Value(''),
-          badge: const Value('Inbox'),
-          isProcessing: const Value(0),
-          audioFilePath: const Value('/tmp/report.pdf'),
-          createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + 5),
-          // The picker (#1449) stores documents as mediaType='document'.
-          mediaType: const Value('document'),
-          originalExtension: const Value('pdf'),
-          processingStatus: const Value('done'),
-        ),
+      await insertTestFileItem(
+        db,
+        id: 'rec_doc',
+        matomeId: 'm_doc',
+        title: 'Quarterly report',
+        localPath: '/tmp/report.pdf',
+        filename: 'report.pdf',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 5,
+        mediaType: 'document',
       );
 
       await tester.pumpWidget(_routerApp(container(), id: 'm_doc'));

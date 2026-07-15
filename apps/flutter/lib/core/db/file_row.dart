@@ -1,5 +1,5 @@
 import '../../features/spaces/effective_space.dart';
-import 'app_database.dart';
+import 'daos/items_dao.dart';
 import 'matome_card.dart';
 import 'recording_card.dart';
 
@@ -9,7 +9,7 @@ import 'recording_card.dart';
 /// proposal (`matome_files_proposal.dart`) uses.
 enum FileKind { audio, image, document, video }
 
-/// Maps a persisted `recordings.mediaType` string to a [FileKind]. The third
+/// Maps a persisted `file_blobs.media_type` string to a [FileKind]. The third
 /// bucket (`document`) catches anything that is not audio/image — matching
 /// `mediaTypeForPath`'s own third bucket — so an imported pdf/docx/md Item is a
 /// document, never silently dropped.
@@ -28,7 +28,7 @@ FileKind fileKindFromMediaType(String mediaType) {
 }
 
 /// UI-facing **File** row for the Files view (DR-003 / #1461) — the display-ready
-/// view of a [RecordingRow] (a "file" is an Item / recording of `mediaType`
+/// view of an [ItemWithPayload] whose canonical payload is a file
 /// audio|image|document) joined with its three INDEPENDENT relations (matome,
 /// space, people) and a sync rollup.
 ///
@@ -39,11 +39,11 @@ FileKind fileKindFromMediaType(String mediaType) {
 ///   * [contacts] empty   ⟺  nobody tagged.
 ///
 /// PEOPLE (#1472 — the #1461 schema gap is now CLOSED): the per-file
-/// `recording_contacts` direct edge exists and is the SOURCE OF TRUTH. [contacts]
+/// `item_contacts` direct edge exists and is the SOURCE OF TRUTH. [contacts]
 /// is the UNION of the file's DIRECT contacts and its matome's tagged contacts
 /// (matome-mediated, #1461), de-duplicated by name (DR-003). An Unfiled file can
 /// now carry people via the direct edge; it is only EMPTY when nobody is linked
-/// either way. See `RecordingsDao.filesForOwner`.
+/// either way. See [ItemsDao.filesForOwner].
 ///
 /// SIZE (#1471): the recording's byte size IS now persisted end-to-end — captured
 /// client-side at upload (`content_length`), stored in Core (`byte_size`) and
@@ -78,8 +78,8 @@ class FileRow {
   final FileKind kind;
 
   /// Lower-case source extension, no leading dot (`pdf`, `m4a`, `jpg`). From
-  /// `recordings.original_extension` for documents (#1449); null when the row
-  /// carries none (legacy / audio / image rows disambiguated by [kind]).
+  /// the canonical filename for documents (#1449); null when the payload
+  /// carries no extension.
   final String? ext;
 
   /// Human size label (e.g. "2.4 MB"), produced by [formatBytes] from the row's
@@ -104,7 +104,7 @@ class FileRow {
   final String? space;
 
   /// people linked to the file (contact display names). UNION of the file's
-  /// DIRECT contacts (`recording_contacts`, #1472 — source of truth) and its
+  /// DIRECT contacts (`item_contacts`, #1472 — source of truth) and its
   /// matome's tagged contacts, de-duplicated (see class doc); empty ⟺ nobody.
   final List<String> contacts;
 
@@ -140,13 +140,13 @@ class FileRow {
   /// of [effectiveInSpace]. The Files filter's Loose partition.
   bool get loose => !effectiveInSpace;
 
-  /// Maps a persisted [RecordingRow] plus its resolved relation display values
+  /// Maps a persisted canonical Item plus its resolved relation display values
   /// to the UI row. [matomeTitle] / [spaceName] come from the owner-scoped
   /// query's joins (null when Unfiled / Inbox); [contacts] is the UNION of the
-  /// file's direct `recording_contacts` and its matome's `matome_contacts`
+  /// file's direct `item_contacts` and its matome's `matome_contacts`
   /// (#1472, DR-003) — empty only when nobody is linked either way.
-  factory FileRow.fromRow(
-    RecordingRow row, {
+  factory FileRow.fromItem(
+    ItemWithPayload row, {
     String? matomeTitle,
     String? spaceName,
     String? matomeSpaceId,
@@ -178,7 +178,9 @@ class FileRow {
       effectiveInSpace: effectiveSpaceId != null,
       contacts: contacts,
       rollup: _rollupForRow(row),
-      duration: kind == FileKind.audio ? row.duration : null,
+      duration: kind == FileKind.audio
+          ? _formatDuration(row.durationSeconds)
+          : null,
     );
   }
 
@@ -230,9 +232,16 @@ class FileRow {
   /// per-tile badge and [MatomeItem.syncRollup] use — so a file row's pill can
   /// never contradict the matome rollup. A file is either fully on cloud or on
   /// device (it has no children to be "partial" over).
-  static MatomeSyncRollup _rollupForRow(RecordingRow row) {
-    return RecordingItem.fromRow(row).isOnCloud
+  static MatomeSyncRollup _rollupForRow(ItemWithPayload row) {
+    return RecordingItem.fromItem(row).isOnCloud
         ? MatomeSyncRollup.cloud
         : MatomeSyncRollup.onDevice;
+  }
+
+  static String? _formatDuration(int? seconds) {
+    if (seconds == null || seconds <= 0) return null;
+    final minutes = seconds ~/ 60;
+    final remainder = seconds % 60;
+    return '$minutes:${remainder.toString().padLeft(2, '0')}';
   }
 }

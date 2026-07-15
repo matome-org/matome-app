@@ -249,6 +249,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
@@ -300,7 +301,7 @@ void main() {
 
     // The new recording landed in the Inbox (Drift), done. W2: local-first PK,
     // so look it up by the reconciled coreId (item id 42), not by a Core-id PK.
-    final row = await db.recordingsDao.recordingByCoreId(42);
+    final row = await db.itemsDao.getByCoreId(42, '1');
     expect(row, isNotNull);
     expect(isLocalRecordingId(row!.id), isTrue);
     expect(row.processingStatus, 'done');
@@ -317,6 +318,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
@@ -386,6 +388,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
@@ -430,6 +433,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
@@ -455,6 +459,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(coreId: 900),
           audioRecordingServiceProvider.overrideWithValue(svc(db)),
           recordingsRepositoryProvider.overrideWithValue(stubRepo()),
@@ -514,6 +519,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(coreId: 900),
           audioRecordingServiceProvider.overrideWithValue(svc(db)),
           recordingsRepositoryProvider.overrideWithValue(stubRepo()),
@@ -541,7 +547,7 @@ void main() {
       );
       // Parent and item ids reconcile before the terminal processing wait, which
       // remains gated so the user can background the modal.
-      final pending = await db.recordingsDao.recordingByCoreId(42);
+      final pending = await db.itemsDao.getByCoreId(42, '1');
       expect(pending, isNotNull);
       expect(isLocalRecordingId(pending!.id), isTrue);
       expect(pending.processingStatus, 'processing');
@@ -560,7 +566,7 @@ void main() {
         release.complete();
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
-      final row = await db.recordingsDao.recordingByCoreId(42);
+      final row = await db.itemsDao.getByCoreId(42, '1');
       expect(row!.processingStatus, 'done');
     },
   );
@@ -573,6 +579,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(
           svc(db, supported: false),

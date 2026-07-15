@@ -5,7 +5,6 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../app/auth_state.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart';
 import '../../core/observability/app_log.dart';
@@ -15,7 +14,7 @@ const _uuid = Uuid();
 
 /// Placeholder owner id used when no authenticated user is resolved (e.g. in
 /// widget tests, or before session restore completes). Real ownership keys off
-/// the signed-in user's Core id (`user_<id>`); contacts minted under the
+/// the same stringified Core user id as canonical Items; contacts minted under the
 /// placeholder are still listed by the same owner so the directory is never
 /// empty for the lack of an id. Linked-user / sharing / ACL stays deferred
 /// (#1373) — `owner_id` is unenforced metadata today.
@@ -24,8 +23,8 @@ const String kPlaceholderContactOwnerId = 'user_local';
 /// Drives the Contacts tab (#1374): the owner's manual directory of [Contact],
 /// backed by Drift via [ContactsDao]. Display source is ALWAYS Drift.
 ///
-/// Owner id is derived from the authenticated user ([authStateProvider]) —
-/// `user_<coreId>` — and falls back to [kPlaceholderContactOwnerId] when no
+/// Owner id is derived from [currentOwnerIdProvider] and falls back to
+/// [kPlaceholderContactOwnerId] when no
 /// session is resolved. Manual CRUD only; the linked-user / sharing / ACL
 /// surface is deferred per #1373.
 class ContactsController extends StateNotifier<AsyncValue<List<ContactRow>>> {
@@ -37,12 +36,9 @@ class ContactsController extends StateNotifier<AsyncValue<List<ContactRow>>> {
 
   ContactsDao get _dao => _ref.read(contactsDaoProvider);
 
-  /// The current owner id: `user_<coreId>` for a signed-in user, otherwise the
-  /// single-user placeholder.
-  String get ownerId {
-    final user = _ref.read(authStateProvider).user;
-    return user == null ? kPlaceholderContactOwnerId : 'user_${user.id}';
-  }
+  /// The current Core owner id, or the single-user placeholder when signed out.
+  String get ownerId =>
+      _ref.read(currentOwnerIdProvider) ?? kPlaceholderContactOwnerId;
 
   /// (Re)load the owner's contacts and publish them. Mounted-guarded so a load
   /// that resolves after the notifier is disposed (e.g. a fast test tear-down)

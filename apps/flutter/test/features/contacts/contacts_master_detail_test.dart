@@ -30,6 +30,7 @@ const _flagOn = bool.fromEnvironment(
   'ff.masterDetailLayout',
   defaultValue: false,
 );
+const _ownerId = '1';
 
 /// A reading-pane controller pinned to a fixed mode (in-memory store, the mode
 /// set synchronously so the pumped tree sees it on the first frame).
@@ -46,6 +47,7 @@ ProviderContainer _container(
 }) {
   final c = ProviderContainer(overrides: [
     appDatabaseProvider.overrideWithValue(db),
+    currentOwnerIdProvider.overrideWithValue(_ownerId),
     if (mode != null)
       readingPaneModeProvider(ReadingPaneSurface.contacts)
           .overrideWith((ref) => _StubReadingPane(mode)),
@@ -92,7 +94,7 @@ Widget _app(ProviderContainer container, _RouteSpy spy) {
 ContactsCompanion _contact({required String id, required String name}) {
   return ContactsCompanion.insert(
     id: id,
-    ownerId: kPlaceholderContactOwnerId,
+    ownerId: _ownerId,
     displayName: name,
     createdAt: DateTime(2026, 6, 24).millisecondsSinceEpoch,
   );

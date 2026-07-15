@@ -218,6 +218,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(),
         audioRecordingServiceProvider.overrideWithValue(service),
         recordingsRepositoryProvider.overrideWithValue(repo),
@@ -239,11 +240,11 @@ void main() {
     expect(isLocalRecordingId(localId), isTrue);
 
     // Inbox row keeps its local PK; coreId reconciled to the item id 321, done.
-    final row = await db.recordingsDao.getRecordingById(localId);
+    final row = await db.itemsDao.getById(localId, '1');
     expect(row, isNotNull);
     expect(row!.coreId, 321);
     expect(row.processingStatus, 'done');
-    expect(row.isProcessing, 0);
+    expect(row.isProcessing, isFalse);
     expect(row.summary, 'A memo');
 
     // It appears in the Inbox list (workspaceId IS NULL).
@@ -287,6 +288,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           audioRecordingServiceProvider.overrideWithValue(service),
           recordingsRepositoryProvider.overrideWithValue(repo),
@@ -306,7 +308,7 @@ void main() {
           .read(recordingFinisherProvider)
           .finish(title: 'Retained memo');
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       expect(
         row!.processingStatus,
@@ -315,9 +317,9 @@ void main() {
       );
 
       // The local-first source of truth must survive a confirmed done.
-      expect(row.audioFilePath, isNotEmpty);
+      expect(row.localPath, isNotEmpty);
       expect(
-        await File(row.audioFilePath).exists(),
+        await File(row.localPath!).exists(),
         isTrue,
         reason: 'done must NOT auto-delete the durable local audio (W2 #871)',
       );
@@ -359,6 +361,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           audioRecordingServiceProvider.overrideWithValue(service),
           recordingsRepositoryProvider.overrideWithValue(repo),
@@ -383,7 +386,7 @@ void main() {
           .finish(title: 'Saved memo');
 
       // The recording is saved + uploaded done.
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       expect(row!.processingStatus, 'done');
 
@@ -402,9 +405,9 @@ void main() {
 
       // RETENTION (W2): the durable segment file STAYS on disk (draft-clear is
       // split from file-delete) — the audio remains playable.
-      expect(row.audioFilePath, isNotEmpty);
+      expect(row.localPath, isNotEmpty);
       expect(
-        await File(row.audioFilePath).exists(),
+        await File(row.localPath!).exists(),
         isTrue,
         reason: 'clearing the draft must NOT delete the durable audio (W2)',
       );
@@ -430,6 +433,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           audioRecordingServiceProvider.overrideWithValue(service),
           recordingsRepositoryProvider.overrideWithValue(repo),
@@ -450,15 +454,15 @@ void main() {
       expect(isLocalRecordingId(localId), isTrue);
 
       // The local row survives with a durable retryable Core block, coreId NULL.
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       expect(row!.coreId, isNull);
       expect(row.processingStatus, kProcessingStatusBlockedOffline);
-      expect(row.isProcessing, 0);
+      expect(row.isProcessing, isFalse);
 
       // The captured audio is on disk and NOT orphaned (the #828 symptom).
-      expect(row.audioFilePath, isNotEmpty);
-      expect(await File(row.audioFilePath).exists(), isTrue);
+      expect(row.localPath, isNotEmpty);
+      expect(await File(row.localPath!).exists(), isTrue);
 
       // The card is visible in the Inbox.
       final items = container.read(inboxControllerProvider).requireValue;
@@ -514,6 +518,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(),
         audioRecordingServiceProvider.overrideWithValue(service),
         recordingsRepositoryProvider.overrideWithValue(repo),
@@ -539,7 +544,7 @@ void main() {
       reason: 'finish must use the realtime waiter',
     );
 
-    final row = await db.recordingsDao.getRecordingById(localId);
+    final row = await db.itemsDao.getById(localId, '1');
     expect(row, isNotNull);
     expect(row!.coreId, 321);
     expect(
@@ -547,7 +552,7 @@ void main() {
       'done',
       reason: 'socket event must drive processing→done',
     );
-    expect(row.isProcessing, 0);
+    expect(row.isProcessing, isFalse);
     expect(row.summary, 'From socket');
     // WRITE-AUTHORITY (#1435): the machine transcript from the socket `done`
     // lands in the `transcript` column, not the user-owned `notes` column.

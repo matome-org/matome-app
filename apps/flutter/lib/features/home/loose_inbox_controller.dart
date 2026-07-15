@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/feature_flags.dart';
-import '../../core/db/app_database.dart';
-import '../../core/db/daos/recordings_dao.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/providers.dart';
 import 'inbox_controller.dart';
 import 'inbox_effective_view.dart';
@@ -10,7 +9,7 @@ import 'inbox_item.dart';
 
 /// Drives the LOOSE half of the W3 Inbox VIEW (local-first-spaces #102 W3,
 /// .docs/internal/architecture.md §5): bare items whose effective space is NULL — a recording with no
-/// matome and no space ([RecordingsDao.getLooseRecordings]).
+/// matome and no space ([ItemsDao.listLoose]).
 ///
 /// Gated behind [FeatureFlags.localFirstSpaces]: with the flag OFF this
 /// controller publishes an EMPTY list and never queries — the Inbox stays the
@@ -40,10 +39,12 @@ class LooseInboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
 
   final Ref _ref;
 
-  RecordingsDao get _dao => _ref.read(recordingsDaoProvider);
+  ItemsDao get _dao => _ref.read(itemsDaoProvider);
 
   Future<List<InboxItem>> _loadItems() async {
-    final rows = await _dao.getLooseRecordings();
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return const [];
+    final rows = await _dao.listLoose(ownerId);
     // Pair each item with its SOURCE row so the resolver-confirm reads the row's
     // REAL membership, not constant nulls. `getLooseRecordings` narrows to
     // `matomeId IS NULL AND workspaceId IS NULL`, so the confirm normally passes
@@ -53,8 +54,8 @@ class LooseInboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     // `workspaceId` resolves to a non-null effective space and is correctly
     // EXCLUDED from the loose Inbox, instead of the previous inert no-op (#74712,
     // spec R1.2 — never an inline re-derivation).
-    final byId = <String, RecordingRow>{for (final row in rows) row.id: row};
-    final items = rows.map(InboxItem.fromRow).toList(growable: false);
+    final byId = <String, ItemWithPayload>{for (final row in rows) row.id: row};
+    final items = rows.map(InboxItem.fromItem).toList(growable: false);
     return inboxLooseItems(
       items,
       // A loose recording has no matome wrapper, so its matome-space side is

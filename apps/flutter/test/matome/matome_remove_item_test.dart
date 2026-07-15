@@ -11,6 +11,8 @@ import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 /// W7 letter format gathers the detailed sections (Items, contacts, notes,
 /// Share) behind a "Show more" toggle. Reveal them before reaching item keys.
 Future<void> revealDetails(WidgetTester tester) async {
@@ -52,32 +54,28 @@ void main() {
         createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
       ),
     );
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: const Value('rec_img'),
-        matomeId: const Value('m_rm'),
-        title: const Value('screenshot'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value(''),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        // Empty path → removeItem skips the file delete, so the whole flow stays
-        // in the fake-async zone (no real I/O, no runAsync needed).
-        audioFilePath: const Value(''),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-        mediaType: const Value('image'),
-        processingStatus: const Value('done'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_img',
+      matomeId: 'm_rm',
+      title: 'screenshot',
+      localPath: '',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      mediaType: 'image',
     );
     return 'rec_img';
   }
 
-  testWidgets('confirming Remove deletes the image Item and drops its tile',
-      (tester) async {
+  testWidgets('confirming Remove deletes the image Item and drops its tile', (
+    tester,
+  ) async {
     await seedMatomeWithImage();
 
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
 
@@ -96,10 +94,7 @@ void main() {
     await revealDetails(tester);
 
     // The image tile is present before removal.
-    expect(
-      find.byKey(const ValueKey('matome-image-rec_img')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('matome-image-rec_img')), findsOneWidget);
 
     // Open the confirm dialog via the standardized '…' overflow → Delete.
     await openItemDelete(tester, 'rec_img');
@@ -110,21 +105,20 @@ void main() {
     await tester.pumpAndSettle();
 
     // Row is gone from the DB and the tile no longer renders.
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_rm');
+    final matome = await db.matomesDao.getMatomeWithItems('m_rm', '1');
     expect(matome!.recordings, isEmpty);
-    expect(
-      find.byKey(const ValueKey('matome-image-rec_img')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('matome-image-rec_img')), findsNothing);
   });
 
   testWidgets('Remove still works when a background reload deactivates the tile '
-      'while the dialog is open (was: dialog stuck / app frozen)',
-      (tester) async {
+      'while the dialog is open (was: dialog stuck / app frozen)', (tester) async {
     await seedMatomeWithImage();
 
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
 
@@ -151,7 +145,7 @@ void main() {
     // the upload waiter induces when it republishes the list mid-dialog. The old
     // code called Navigator.of on that dead context inside the button callback,
     // which throws → the pop never runs → the dialog is stuck open → frozen.
-    await db.recordingsDao.deleteRecording('rec_img');
+    await db.itemsDao.deleteWithPayload('rec_img', '1');
     // ignore: unawaited_futures
     c.read(matomeDetailControllerProvider('m_rm').notifier).load();
     await tester.pumpAndSettle();
@@ -176,7 +170,10 @@ void main() {
     await seedMatomeWithImage();
 
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
 
@@ -198,11 +195,8 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
 
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_rm');
+    final matome = await db.matomesDao.getMatomeWithItems('m_rm', '1');
     expect(matome!.recordings, hasLength(1));
-    expect(
-      find.byKey(const ValueKey('matome-image-rec_img')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('matome-image-rec_img')), findsOneWidget);
   });
 }

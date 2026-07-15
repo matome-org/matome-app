@@ -27,7 +27,6 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/matome/matome_ids.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
@@ -39,6 +38,7 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import '../support/fake_parent_sync.dart';
+import '../support/item_fixtures.dart';
 
 void main() {
   Future<RecordingResult> pollAwaiter({
@@ -96,22 +96,19 @@ void main() {
     final localId = mintLocalRecordingId();
     final audio = File('${tmp.path}/$localId.m4a');
     await audio.writeAsBytes(List<int>.filled(16, 0));
-    await db.recordingsDao.upsertRecording(
-      RecordingsCompanion(
-        id: Value(localId),
-        coreId: Value(coreId),
-        title: const Value('Memo'),
-        timestamp: const Value('1:00 PM'),
-        duration: const Value('34s'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(1),
-        audioFilePath: Value(audio.path),
-        workspaceId: Value(workspaceId),
-        matomeId: Value(matomeId),
-        createdAt: Value(DateTime.now().millisecondsSinceEpoch),
-        mediaType: const Value('audio'),
-        processingStatus: const Value(kProcessingStatusPendingUpload),
-      ),
+    await insertTestFileItem(
+      db,
+      id: localId,
+      ownerId: 'owner-1',
+      coreId: coreId,
+      title: 'Memo',
+      durationSeconds: 34,
+      localPath: audio.path,
+      workspaceId: workspaceId,
+      matomeId: matomeId,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+      mediaType: 'audio',
+      processingStatus: kProcessingStatusPendingUpload,
     );
     return localId;
   }
@@ -175,7 +172,7 @@ void main() {
   Future<Set<String>> drainedIds(AppDatabase db, Iterable<String> all) async {
     final out = <String>{};
     for (final id in all) {
-      final row = await db.recordingsDao.getRecordingById(id);
+      final row = await db.itemsDao.getById(id, 'owner-1');
       if (row != null && row.coreId != null) out.add(id);
     }
     return out;
@@ -226,13 +223,11 @@ void main() {
         );
         expect(r.uploadedIds, hasLength(1));
         expect(
-          (await db.recordingsDao.getRecordingById(
-            draftChild,
-          ))!.processingStatus,
+          (await db.itemsDao.getById(draftChild, 'owner-1'))!.processingStatus,
           'done',
         );
         // Missing-parent and LOCAL-space rows remain durably blocked.
-        final pending = await db.recordingsDao.getPendingUploadRecordings();
+        final pending = await db.itemsDao.listPendingUploads('owner-1');
         expect(pending.length, 3);
         for (final row in pending) {
           expect(row.coreId, isNull, reason: 'held rows never create on Core');
@@ -351,16 +346,14 @@ void main() {
       // A reconciled row (coreId set) so the legacy numeric-id gate would PATCH.
       Future<String> seedReconciled() async {
         final id = mintLocalRecordingId();
-        await db.recordingsDao.insertRecording(
-          RecordingsCompanion.insert(
-            id: id,
-            coreId: const Value(900),
-            title: 't',
-            timestamp: '9',
-            duration: '1',
-            audioFilePath: '/tmp/a',
-            createdAt: DateTime.now().millisecondsSinceEpoch,
-          ),
+        await insertTestFileItem(
+          db,
+          id: id,
+          ownerId: 'owner-1',
+          coreId: 900,
+          title: 't',
+          localPath: '/tmp/a',
+          createdAt: DateTime.now().millisecondsSinceEpoch,
         );
         return id;
       }
@@ -375,7 +368,7 @@ void main() {
         0,
         reason: 'filing into a LOCAL space must NOT egress (#74712)',
       );
-      final localRow = await db.recordingsDao.getRecordingById(toLocal);
+      final localRow = await db.itemsDao.getById(toLocal, 'owner-1');
       expect(
         localRow!.workspaceId,
         localSpace,
@@ -419,8 +412,8 @@ void main() {
         reason: 'a row with a coreId is never recreated',
       );
       // Both rows resolved without throwing; the gate tolerated the duplicate.
-      final rowA = await db.recordingsDao.getRecordingById(a);
-      final rowB = await db.recordingsDao.getRecordingById(b);
+      final rowA = await db.itemsDao.getById(a, 'owner-1');
+      final rowB = await db.itemsDao.getById(b, 'owner-1');
       expect(rowA, isNotNull);
       expect(rowB, isNotNull);
     });
@@ -464,9 +457,7 @@ void main() {
           reason: 'only the Inbox-parented item creates',
         );
         expect(
-          (await db.recordingsDao.getRecordingById(
-            localFiled,
-          ))!.processingStatus,
+          (await db.itemsDao.getById(localFiled, 'owner-1'))!.processingStatus,
           kProcessingStatusBlockedLocalSpace,
         );
       },

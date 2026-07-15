@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -15,6 +14,8 @@ import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/items/matome_item_type.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
+
+import '../../support/item_fixtures.dart';
 
 /// Builds an image [RecordingItem]. The path points at a non-existent file on
 /// purpose: `Image.file` falls back to its `errorBuilder` in the test
@@ -206,7 +207,10 @@ void main() {
     setUp(() {
       db = AppDatabase.forTesting(NativeDatabase.memory());
       container = ProviderContainer(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
       );
     });
 
@@ -215,21 +219,14 @@ void main() {
       await db.close();
     });
 
-    Future<void> seedDoc(String id) => db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: Value(id),
-        title: const Value('Quarterly report'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value(''),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value('/tmp/report.pdf'),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-        // The picker (#1449) stores documents as mediaType='document'.
-        mediaType: const Value('document'),
-        originalExtension: const Value('pdf'),
-        processingStatus: const Value('done'),
-      ),
+    Future<void> seedDoc(String id) => insertTestFileItem(
+      db,
+      id: id,
+      title: 'Quarterly report',
+      localPath: '/tmp/report.pdf',
+      filename: 'report.pdf',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      mediaType: 'document',
     );
 
     Widget app(String id) => UncontrolledProviderScope(
@@ -339,7 +336,10 @@ void main() {
     setUp(() {
       db = AppDatabase.forTesting(NativeDatabase.memory());
       container = ProviderContainer(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
       );
     });
 
@@ -348,20 +348,15 @@ void main() {
       await db.close();
     });
 
-    Future<void> seedVideo(String id) => db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: Value(id),
-        title: const Value('Launch clip'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value('0:05'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value('/tmp/launch.mp4'),
-        createdAt: Value(DateTime(2026, 7, 2).millisecondsSinceEpoch),
-        mediaType: const Value('video'),
-        originalExtension: const Value('mp4'),
-        processingStatus: const Value('done'),
-      ),
+    Future<void> seedVideo(String id) => insertTestFileItem(
+      db,
+      id: id,
+      title: 'Launch clip',
+      localPath: '/tmp/launch.mp4',
+      filename: 'launch.mp4',
+      durationSeconds: 5,
+      createdAt: DateTime(2026, 7, 2).millisecondsSinceEpoch,
+      mediaType: 'video',
     );
 
     Widget app(String id) => UncontrolledProviderScope(
@@ -405,7 +400,10 @@ void main() {
     setUp(() {
       db = AppDatabase.forTesting(NativeDatabase.memory());
       container = ProviderContainer(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
       );
       LocaleSettings.setLocaleSync(AppLocale.en);
     });
@@ -424,21 +422,16 @@ void main() {
       String? transcript,
       bool isProcessing = false,
       String processingStatus = 'done',
-    }) => db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: Value(id),
-        title: const Value('Quarterly report'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value(''),
-        badge: const Value('Inbox'),
-        isProcessing: Value(isProcessing ? 1 : 0),
-        audioFilePath: const Value('/tmp/report.pdf'),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-        mediaType: const Value('document'),
-        originalExtension: const Value('pdf'),
-        transcript: Value(transcript),
-        processingStatus: Value(processingStatus),
-      ),
+    }) => insertTestFileItem(
+      db,
+      id: id,
+      title: 'Quarterly report',
+      localPath: '/tmp/report.pdf',
+      filename: 'report.pdf',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      mediaType: 'document',
+      transcript: transcript,
+      processingStatus: isProcessing ? 'processing' : processingStatus,
     );
 
     Widget app(String id) => UncontrolledProviderScope(

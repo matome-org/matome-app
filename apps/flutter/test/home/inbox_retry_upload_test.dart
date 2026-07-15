@@ -22,6 +22,8 @@ import 'package:matome_flutter/features/recordings/processing_error.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
+import '../support/item_fixtures.dart';
+
 /// W5 (plan #43): the manual retry affordance must RE-ENQUEUE through the same
 /// auto-retry upload queue (drainRow), not a parallel pipeline. A `failed` row
 /// has already left `pending_upload`, so the queue would otherwise no-op on it;
@@ -64,26 +66,19 @@ void main() {
     final localId = mintLocalRecordingId();
     final audio = File('${tmp.path}/$localId.m4a');
     await audio.writeAsBytes(List<int>.filled(16, 0));
-    await db.recordingsDao.upsertRecording(
-      RecordingsCompanion(
-        id: Value(localId),
-        coreId: Value(coreId),
-        // A coreId-less retry re-runs the CREATE leg, which now targets the
-        // recording's parent matome (POST /api/matomes/{coreMatomeId}/items), so
-        // the row must be parented to a Core-reconciled matome to egress.
-        matomeId: Value(matomeId),
-        title: const Value('Memo'),
-        timestamp: const Value('1:00 PM'),
-        duration: const Value('34s'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: Value(audio.path),
-        createdAt: Value(DateTime.now().millisecondsSinceEpoch),
-        mediaType: const Value('audio'),
-        processingStatus: const Value('failed'),
-        processingErrorCode: const Value(kProcessingErrorUploadFailed),
-        notes: Value(notes),
-      ),
+    await insertTestFileItem(
+      db,
+      id: localId,
+      coreId: coreId,
+      matomeId: matomeId,
+      title: 'Memo',
+      durationSeconds: 34,
+      localPath: audio.path,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+      mediaType: 'audio',
+      processingStatus: 'failed',
+      processingErrorCode: kProcessingErrorUploadFailed,
+      notes: notes,
     );
     return (localId, audio);
   }
@@ -113,6 +108,7 @@ void main() {
     return ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         recordingsRepositoryProvider.overrideWithValue(repo),
         uploadQueueProvider.overrideWith(
           (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
@@ -149,7 +145,7 @@ void main() {
 
     await container.read(inboxControllerProvider.notifier).retryUpload(localId);
 
-    final row = await db.recordingsDao.getRecordingById(localId);
+    final row = await db.itemsDao.getById(localId, '1');
     // Re-enqueued through the queue and resolved to done (NOT a new pipeline).
     expect(row!.processingStatus, 'done', reason: 'retry drove it to done');
     expect(
@@ -205,7 +201,7 @@ void main() {
           .read(inboxControllerProvider.notifier)
           .retryUpload(localId);
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(
         row!.coreId,
         repo.coreIdMinted,

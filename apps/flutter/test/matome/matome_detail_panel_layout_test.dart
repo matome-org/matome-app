@@ -14,6 +14,8 @@ import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/app_card.dart';
 import 'package:matome_flutter/ui/matome_detail_panel.dart';
 
+import '../support/item_fixtures.dart';
+
 /// #1458 — the live Details panel (`_MatomeDetails`, the SINGLE composition
 /// point for BOTH the desktop side panel AND the mobile sheet) must render the
 /// owner-APPROVED sectioned layout: labeled, divider-framed
@@ -53,21 +55,16 @@ Future<void> _seedItem(
   String? originalExtension,
   int order = 0,
 }) async {
-  await db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: Value(id),
-      matomeId: Value(matomeId),
-      title: Value(title),
-      timestamp: const Value('2026-06-08T09:00:00Z'),
-      duration: const Value('0:30'),
-      badge: const Value('Inbox'),
-      isProcessing: const Value(0),
-      audioFilePath: const Value('/tmp/does-not-exist.bin'),
-      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + order),
-      mediaType: Value(mediaType),
-      originalExtension: Value(originalExtension),
-      processingStatus: const Value('done'),
-    ),
+  await insertTestFileItem(
+    db,
+    id: id,
+    matomeId: matomeId,
+    position: order,
+    title: title,
+    mediaType: mediaType,
+    filename: originalExtension == null ? title : '$title.$originalExtension',
+    localPath: '/tmp/does-not-exist.bin',
+    createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + order,
   );
 }
 
@@ -106,7 +103,10 @@ void main() {
 
   ProviderContainer container() {
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
     return c;

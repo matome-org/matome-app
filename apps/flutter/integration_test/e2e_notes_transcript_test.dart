@@ -67,10 +67,7 @@ RecordingResultAwaiter _noopAwaiter() =>
 /// pull is a FULL-STATE snapshot: every refresh carries the machine `transcript`
 /// again (and Core `notes` is whatever Core last stored). [notes] lets a test
 /// simulate Core echoing the user's pushed note on a later pull.
-Map<String, dynamic> _coreRow({
-  required String transcript,
-  String? notes,
-}) {
+Map<String, dynamic> _coreRow({required String transcript, String? notes}) {
   return {
     'id': 5,
     'owner_id': 1,
@@ -87,8 +84,7 @@ Map<String, dynamic> _coreRow({
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-      'e2e #1443: import → sync → edit notes → re-sync — the machine '
+  testWidgets('e2e #1443: import → sync → edit notes → re-sync — the machine '
       'transcript survives and the user note persists (notes edit never '
       'wipes the transcript)', (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -100,28 +96,31 @@ void main() {
     // round-tripped the user's note. The save PATCH (`PATCH /api/recordings/5`)
     // is captured so we can assert the WRITE-AUTHORITY contract on the wire:
     // notes is sent, transcript is NOT.
-    final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:7001',
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: 'http://localhost:7001',
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
 
     // The body the next `GET /api/recordings` should serve. Step 1 (import/sync)
     // serves the machine transcript with NO Core note yet.
     var listBody = <String, dynamic>{
-      'recordings': [
-        _coreRow(transcript: 'MACHINE TRANSCRIPT v1'),
-      ],
+      'recordings': [_coreRow(transcript: 'MACHINE TRANSCRIPT v1')],
     };
 
     Map<String, dynamic>? patchBody;
-    dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        if (options.method == 'PATCH' && options.path == '/api/recordings/5') {
-          patchBody = options.data as Map<String, dynamic>;
-        }
-        handler.next(options);
-      },
-    ));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (options.method == 'PATCH' &&
+              options.path == '/api/recordings/5') {
+            patchBody = options.data as Map<String, dynamic>;
+          }
+          handler.next(options);
+        },
+      ),
+    );
 
     final adapter = DioAdapter(dio: dio);
     adapter
@@ -146,10 +145,13 @@ void main() {
       apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
     );
 
-    final container = ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+        recordingsRepositoryProvider.overrideWithValue(repo),
+      ],
+    );
     addTearDown(container.dispose);
 
     // ------------------------------------------------------------------------
@@ -161,13 +163,19 @@ void main() {
     final inbox = container.read(inboxControllerProvider.notifier);
     await inbox.refresh();
 
-    var row = await db.recordingsDao.getRecordingById('5');
+    var row = await db.itemsDao.getById('5', '1');
     expect(row, isNotNull, reason: 'sync reconciled the Core recording');
-    expect(row!.transcript, 'MACHINE TRANSCRIPT v1',
-        reason: 'first sync populated the machine transcript column');
+    expect(
+      row!.transcript,
+      'MACHINE TRANSCRIPT v1',
+      reason: 'first sync populated the machine transcript column',
+    );
     // First-sync seeds notes from Core (which carried none) → empty/null.
-    expect(row.notes ?? '', isEmpty,
-        reason: 'no user note yet — Core carried none on the import pull');
+    expect(
+      row.notes ?? '',
+      isEmpty,
+      reason: 'no user note yet — Core carried none on the import pull',
+    );
 
     // ------------------------------------------------------------------------
     // STEP 2 — EDIT NOTES: the user types a note and saves. save() writes the
@@ -182,25 +190,34 @@ void main() {
     for (var i = 0; i < 40 && details.state.isLoading; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
-    expect(details.state.row?.transcript, 'MACHINE TRANSCRIPT v1',
-        reason: 'details loaded the synced row with its transcript');
+    expect(
+      details.state.row?.transcript,
+      'MACHINE TRANSCRIPT v1',
+      reason: 'details loaded the synced row with its transcript',
+    );
 
     await details.save('USER NOTES v1');
 
     // (A) The machine transcript is UNTOUCHED by the notes save. Pre-W1 the save
     //     aliased the buffer into the transcript and this would read back
     //     'USER NOTES v1' → FAIL.
-    row = await db.recordingsDao.getRecordingById('5');
-    expect(row!.transcript, 'MACHINE TRANSCRIPT v1',
-        reason: 'save(notes) must leave the machine transcript intact');
+    row = await db.itemsDao.getById('5', '1');
+    expect(
+      row!.transcript,
+      'MACHINE TRANSCRIPT v1',
+      reason: 'save(notes) must leave the machine transcript intact',
+    );
     expect(row.notes, 'USER NOTES v1', reason: 'the user note was persisted');
 
     // WRITE-AUTHORITY on the wire: the Core PATCH carries `notes`, never
     // `transcript` (the historic data-loss PATCH).
     expect(patchBody, isNotNull, reason: 'a Core PATCH was issued by save()');
     expect(patchBody!['notes'], 'USER NOTES v1');
-    expect(patchBody!.containsKey('transcript'), isFalse,
-        reason: 'save() must not PATCH Core transcript');
+    expect(
+      patchBody!.containsKey('transcript'),
+      isFalse,
+      reason: 'save() must not PATCH Core transcript',
+    );
 
     // ------------------------------------------------------------------------
     // STEP 3 — RE-SYNC: a SECOND Core list pull arrives carrying the machine
@@ -217,17 +234,23 @@ void main() {
 
     await inbox.refresh();
 
-    row = await db.recordingsDao.getRecordingById('5');
+    row = await db.itemsDao.getById('5', '1');
 
     // FINAL ASSERTIONS — both halves survive the full round-trip:
     //   transcript intact (Core re-asserted it; the merge adopts it unchanged)
     //   notes intact (the pull did NOT clobber the locally-edited note).
-    expect(row!.transcript, 'MACHINE TRANSCRIPT v1',
-        reason: 'transcript survives the re-sync unchanged');
+    expect(
+      row!.transcript,
+      'MACHINE TRANSCRIPT v1',
+      reason: 'transcript survives the re-sync unchanged',
+    );
     // (B) Pre-W1 the pull aliased Core transcript into the notes column, so this
     //     would read 'MACHINE TRANSCRIPT v1' → FAIL.
-    expect(row.notes, 'USER NOTES v1',
-        reason: 're-sync must NOT clobber the locally-edited user note');
+    expect(
+      row.notes,
+      'USER NOTES v1',
+      reason: 're-sync must NOT clobber the locally-edited user note',
+    );
 
     // ------------------------------------------------------------------------
     // STEP 4 — RE-SYNC where Core HAS round-tripped the note (notes echoed):
@@ -243,12 +266,18 @@ void main() {
 
     await inbox.refresh();
 
-    row = await db.recordingsDao.getRecordingById('5');
+    row = await db.itemsDao.getById('5', '1');
     // Core re-processed the audio → an UPDATED transcript is adopted (Core owns
     // it), and the note is still the user's, never crossed into the transcript.
-    expect(row!.transcript, 'MACHINE TRANSCRIPT v2',
-        reason: 'Core owns the transcript; an updated machine transcript wins');
-    expect(row.notes, 'USER NOTES v1',
-        reason: 'the user note remains the user note across the whole loop');
+    expect(
+      row!.transcript,
+      'MACHINE TRANSCRIPT v2',
+      reason: 'Core owns the transcript; an updated machine transcript wins',
+    );
+    expect(
+      row.notes,
+      'USER NOTES v1',
+      reason: 'the user note remains the user note across the whole loop',
+    );
   });
 }

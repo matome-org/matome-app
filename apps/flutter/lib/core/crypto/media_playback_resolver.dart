@@ -14,7 +14,7 @@
 // broken.
 //
 // THE SEAM: gate strictly on whether the recording's `wrapped_fek` column is
-// non-null (mirrors `RecordingsDaoMediaMigrationStore.fetchCandidates`'s
+// non-null (mirrors `ItemsDaoMediaMigrationStore.fetchCandidates`'s
 // identical gate on the write/migration side):
 //   wrappedFekBase64 == null -> passthrough. Returns [sourcePath] unchanged
 //                               — byte-identical to the pre-#1866 behavior,

@@ -16,7 +16,7 @@ const double _kTextNoteReadingWidth = 720;
 class TextItemHost extends ConsumerStatefulWidget {
   const TextItemHost({super.key, required this.itemId});
 
-  final int itemId;
+  final String itemId;
 
   @override
   ConsumerState<TextItemHost> createState() => _TextItemHostState();
@@ -24,7 +24,7 @@ class TextItemHost extends ConsumerStatefulWidget {
 
 class _TextItemHostState extends ConsumerState<TextItemHost> {
   late final TextEditingController _field;
-  Future<MatomeItemWithPayload?>? _load;
+  Future<ItemWithPayload?>? _load;
   bool _editing = false;
 
   @override
@@ -39,14 +39,18 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
     super.dispose();
   }
 
-  Future<MatomeItemWithPayload?> _loadItem() =>
-      ref.read(appDatabaseProvider).itemsDao.getWithPayload(widget.itemId);
+  Future<ItemWithPayload?> _loadItem() {
+    final ownerId = ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return Future.value(null);
+    return ref.read(itemsDaoProvider).getById(widget.itemId, ownerId);
+  }
 
-  Future<void> _save(int textContentId) async {
+  Future<void> _save() async {
+    final ownerId = ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
     await ref
-        .read(appDatabaseProvider)
-        .itemsDao
-        .updateTextBody(textContentId, _field.text.trim());
+        .read(itemsDaoProvider)
+        .updateTextBody(widget.itemId, ownerId, _field.text.trim());
     if (!mounted) return;
     setState(() {
       _editing = false;
@@ -68,7 +72,7 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
         surfaceTintColor: colors.background,
         title: const Text('Text note'),
       ),
-      body: FutureBuilder<MatomeItemWithPayload?>(
+      body: FutureBuilder<ItemWithPayload?>(
         future: _load,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -136,7 +140,7 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
                       alignment: Alignment.centerRight,
                       child: PrimaryButton(
                         key: const ValueKey('text-item-save'),
-                        onPressed: () => _save(text.id),
+                        onPressed: _save,
                         child: const Text('Save'),
                       ),
                     ),

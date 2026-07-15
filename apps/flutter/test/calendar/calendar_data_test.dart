@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/features/calendar/calendar_data.dart';
 
+import '../support/item_fixtures.dart';
+
 /// Unit tests for features/calendar/calendar_data.dart under the matome-centric
 /// model (#1378): the Calendar groups **matomes** by `happened_at`, against a
 /// real in-memory Drift DB.
@@ -30,22 +32,19 @@ Future<void> _seedMatome(
   );
 }
 
-Future<void> _seedRecording(
+Future<void> _seedItem(
   AppDatabase db, {
   required String id,
   required String matomeId,
   required int createdAt,
 }) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion.insert(
-      id: id,
-      title: 'Rec',
-      timestamp: '9:00 AM',
-      duration: '0:30',
-      audioFilePath: '/tmp/$id.m4a',
-      createdAt: createdAt,
-      matomeId: Value(matomeId),
-    ),
+  return insertTestFileItem(
+    db,
+    id: id,
+    title: 'Rec',
+    localPath: '/tmp/$id.m4a',
+    createdAt: createdAt,
+    matomeId: matomeId,
   );
 }
 
@@ -56,7 +55,7 @@ void main() {
 
     setUp(() {
       db = AppDatabase.forTesting(NativeDatabase.memory());
-      data = CalendarData(db.matomesDao);
+      data = CalendarData(db.matomesDao, '1');
     });
     tearDown(() => db.close());
 
@@ -117,13 +116,13 @@ void main() {
         title: 'Meeting',
         happenedAt: _epoch(2026, 4, 10, 9),
       );
-      await _seedRecording(
+      await _seedItem(
         db,
         id: 'r1',
         matomeId: 'm-1',
         createdAt: _epoch(2026, 4, 10, 9),
       );
-      await _seedRecording(
+      await _seedItem(
         db,
         id: 'r2',
         matomeId: 'm-1',
@@ -138,11 +137,7 @@ void main() {
     });
 
     test('spaceName is null for inbox matomes', () async {
-      await _seedMatome(
-        db,
-        id: 'm-inbox',
-        happenedAt: _epoch(2026, 4, 10, 9),
-      );
+      await _seedMatome(db, id: 'm-inbox', happenedAt: _epoch(2026, 4, 10, 9));
       final result = await data.fetchDayMatomes(
         DateTime(2026, 4, 10),
         spaceNames: const {},
@@ -167,16 +162,26 @@ void main() {
       expect(result.single.spaceId, ws.id);
     });
 
-    test('preserves the DB ordering (newest first) without re-sorting',
-        () async {
-      await _seedMatome(db, id: 'm-early', happenedAt: _epoch(2026, 4, 10, 9));
-      await _seedMatome(db, id: 'm-late', happenedAt: _epoch(2026, 4, 10, 18));
-      final result = await data.fetchDayMatomes(
-        DateTime(2026, 4, 10),
-        spaceNames: const {},
-      );
-      expect(result.map((m) => m.id).toList(), ['m-late', 'm-early']);
-    });
+    test(
+      'preserves the DB ordering (newest first) without re-sorting',
+      () async {
+        await _seedMatome(
+          db,
+          id: 'm-early',
+          happenedAt: _epoch(2026, 4, 10, 9),
+        );
+        await _seedMatome(
+          db,
+          id: 'm-late',
+          happenedAt: _epoch(2026, 4, 10, 18),
+        );
+        final result = await data.fetchDayMatomes(
+          DateTime(2026, 4, 10),
+          spaceNames: const {},
+        );
+        expect(result.map((m) => m.id).toList(), ['m-late', 'm-early']);
+      },
+    );
 
     test('only returns matomes within the target day window', () async {
       await _seedMatome(db, id: 'prev', happenedAt: _epoch(2026, 4, 9, 23, 59));

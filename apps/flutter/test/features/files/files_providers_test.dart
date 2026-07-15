@@ -1,10 +1,11 @@
-import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/files/files_providers.dart';
+
+import '../../support/item_fixtures.dart';
 
 // ---------------------------------------------------------------------------
 // filesForCurrentOwnerProvider — proves the provider returns the CURRENT
@@ -16,41 +17,40 @@ import 'package:matome_flutter/features/files/files_providers.dart';
 AppDatabase _memDb() => AppDatabase.forTesting(NativeDatabase.memory());
 
 Future<void> _seed(AppDatabase db) async {
-  await db.matomesDao.create(MatomesCompanion.insert(
-    id: 'm_a',
-    title: 'A matome',
-    happenedAt: 1000,
-    createdAt: 1000,
-  ));
+  await db.matomesDao.create(
+    MatomesCompanion.insert(
+      id: 'm_a',
+      title: 'A matome',
+      happenedAt: 1000,
+      createdAt: 1000,
+    ),
+  );
   // owner A: filed + unfiled. owner B: one file that must never leak.
-  await db.recordingsDao.insertRecording(RecordingsCompanion.insert(
+  await insertTestFileItem(
+    db,
     id: 'a_filed',
     title: 'A filed',
-    timestamp: '9:00 AM',
-    duration: '0:30',
-    audioFilePath: '/tmp/a_filed.m4a',
+    localPath: '/tmp/a_filed.m4a',
     createdAt: 100,
-    ownerId: const Value('1'),
-    matomeId: const Value('m_a'),
-  ));
-  await db.recordingsDao.insertRecording(RecordingsCompanion.insert(
+    ownerId: '1',
+    matomeId: 'm_a',
+  );
+  await insertTestFileItem(
+    db,
     id: 'a_loose',
     title: 'A loose',
-    timestamp: '9:00 AM',
-    duration: '0:30',
-    audioFilePath: '/tmp/a_loose.m4a',
+    localPath: '/tmp/a_loose.m4a',
     createdAt: 200,
-    ownerId: const Value('1'),
-  ));
-  await db.recordingsDao.insertRecording(RecordingsCompanion.insert(
+    ownerId: '1',
+  );
+  await insertTestFileItem(
+    db,
     id: 'b_loose',
     title: 'B loose',
-    timestamp: '9:00 AM',
-    duration: '0:30',
-    audioFilePath: '/tmp/b_loose.m4a',
+    localPath: '/tmp/b_loose.m4a',
     createdAt: 300,
-    ownerId: const Value('2'),
-  ));
+    ownerId: '2',
+  );
 }
 
 void main() {
@@ -60,10 +60,12 @@ void main() {
   tearDown(() => db.close());
 
   ProviderContainer containerFor(String? ownerId) {
-    return ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      currentOwnerIdProvider.overrideWithValue(ownerId),
-    ]);
+    return ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue(ownerId),
+      ],
+    );
   }
 
   test('returns the current owner files across matomes + unfiled', () async {

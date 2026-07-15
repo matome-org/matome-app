@@ -37,6 +37,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         // Identity durable copy — keep the test off-disk; the real copy is
         // covered by matome_add_photo_e2e_test.
         matomeDetailControllerProvider.overrideWith(
@@ -94,12 +95,12 @@ void main() {
     final pdf = tempFile('report.pdf');
     await controller.addFile(file: pdf, name: 'report.pdf');
 
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_pdf');
+    final matome = await db.matomesDao.getMatomeWithItems('m_pdf', '1');
     final item = matome!.recordings.single;
     // mediaType is derived, NOT the old hardcoded 'image'.
     expect(item.mediaType, 'document');
 
-    final row = await db.recordingsDao.getRecordingById(item.id);
+    final row = await db.itemsDao.getById(item.id, '1');
     expect(row!.originalExtension, 'pdf');
     expect(row.title, 'report');
     // Enqueued for upload (local-first pending_upload, no Core id yet).
@@ -123,37 +124,28 @@ void main() {
         name: 'report.pdf',
       );
 
-      // The file import is represented by its `recordings` row only — the
-      // former `_insertFileItemMirror` write is gone, so no items/file_blobs
-      // rows are created (they were never read and leaked on removeItem).
-      expect(
-        await db.itemsDao.listForMatome(77),
-        isEmpty,
-        reason: 'a file import must not write an items mirror row',
-      );
-      expect(
-        await db.select(db.fileBlobs).get(),
-        isEmpty,
-        reason: 'a file import must not write a file_blobs mirror row',
-      );
+      final inserted = await db.itemsDao.listForMatome('m_items', '1');
+      expect(inserted, hasLength(1));
+      expect(inserted.single.file, isNotNull);
+      expect(await db.select(db.fileBlobs).get(), hasLength(1));
 
       // Remove the file and confirm nothing is left behind anywhere.
-      final rec = (await db.matomesDao.getMatomeWithRecordings(
+      final rec = (await db.matomesDao.getMatomeWithItems(
         'm_items',
+        '1',
       ))!.recordings.single;
       await controller.removeItem(rec.id);
 
       expect(
-        (await db.matomesDao.getMatomeWithRecordings('m_items'))!.recordings,
+        (await db.matomesDao.getMatomeWithItems('m_items', '1'))!.recordings,
         isEmpty,
       );
-      expect(await db.itemsDao.listForMatome(77), isEmpty);
+      expect(await db.itemsDao.listForMatome('m_items', '1'), isEmpty);
       expect(await db.select(db.fileBlobs).get(), isEmpty);
     },
   );
 
-  test('W1: addTextNote on an UNRECONCILED (local-only) Matome stays '
-      'local-only — it is gated off and never reaches a Core POST', () async {
+  test('addTextNote on an UNRECONCILED Matome stays local-only', () async {
     await seedMatome('m_local'); // no coreId
     final c = containerFor('m_local');
     final controller = c.read(
@@ -161,12 +153,13 @@ void main() {
     );
     await controller.load();
 
-    // The reconcile guard throws BEFORE any Core POST could be issued — the
-    // items schema is Core-id-keyed, so a local-only note has nowhere to land.
-    await expectLater(
-      controller.addTextNote('a note with no home yet'),
-      throwsStateError,
-    );
+    final itemId = await controller.addTextNote('a note with no home yet');
+
+    final rows = await db.itemsDao.listForMatome('m_local', '1');
+    expect(rows, hasLength(1));
+    expect(rows.single.id, itemId);
+    expect(rows.single.text?.body, 'a note with no home yet');
+    expect(rows.single.coreId, isNull);
   });
 
   test('addFile of a .png still stores mediaType=image (derivation, not a doc '
@@ -178,11 +171,12 @@ void main() {
 
     await controller.addFile(file: tempFile('shot.png'), name: 'shot.png');
 
-    final item = (await db.matomesDao.getMatomeWithRecordings(
+    final item = (await db.matomesDao.getMatomeWithItems(
       'm_png',
+      '1',
     ))!.recordings.single;
     expect(item.mediaType, 'image');
-    final row = await db.recordingsDao.getRecordingById(item.id);
+    final row = await db.itemsDao.getById(item.id, '1');
     expect(row!.originalExtension, 'png');
   });
 
@@ -198,8 +192,9 @@ void main() {
 
       await controller.addPhoto(file: tempFile('pic.jpg'), name: 'pic.jpg');
 
-      final item = (await db.matomesDao.getMatomeWithRecordings(
+      final item = (await db.matomesDao.getMatomeWithItems(
         'm_photo',
+        '1',
       ))!.recordings.single;
       expect(item.mediaType, 'image');
     },
@@ -220,7 +215,7 @@ void main() {
       throwsA(isA<FileTooLargeException>()),
     );
 
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_big');
+    final matome = await db.matomesDao.getMatomeWithItems('m_big', '1');
     expect(
       matome!.recordings,
       isEmpty,
@@ -240,7 +235,7 @@ void main() {
     await controller.addFile(file: atCap, name: 'cap.pdf');
 
     expect(
-      (await db.matomesDao.getMatomeWithRecordings('m_edge'))!.recordings,
+      (await db.matomesDao.getMatomeWithItems('m_edge', '1'))!.recordings,
       hasLength(1),
     );
   });
@@ -256,7 +251,7 @@ void main() {
       await controller.load();
       await controller.addFile(file: tempFile('a.pdf'), name: 'a.pdf');
 
-      final inboxCards = await db.matomesDao.listInboxMatomeItems();
+      final inboxCards = await db.matomesDao.listInboxMatomeItems('1');
       final card = inboxCards.firstWhere((m) => m.id == 'm_mix');
       expect(card.documentCount, 1);
       expect(card.imageCount, 0);
@@ -284,7 +279,10 @@ void main() {
 
     await seedSyncedMatome('m_flag', 7001);
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
 
@@ -338,7 +336,10 @@ void main() {
   ) async {
     await seedMatome('m_local_text');
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
 

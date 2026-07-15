@@ -60,10 +60,12 @@ void main() {
   }
 
   Dio stubbedDio() {
-    final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:7001',
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: 'http://localhost:7001',
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
     final adapter = DioAdapter(dio: dio);
     adapter.onPost(
       '/api/recordings',
@@ -122,11 +124,14 @@ void main() {
       apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: stubbedDio()),
     );
 
-    final container = ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      audioRecordingServiceProvider.overrideWithValue(service),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+        audioRecordingServiceProvider.overrideWithValue(service),
+        recordingsRepositoryProvider.overrideWithValue(repo),
+      ],
+    );
     addTearDown(container.dispose);
 
     final controller = container.read(recordingControllerProvider.notifier);
@@ -142,8 +147,9 @@ void main() {
     await controller.resume();
     expect(controller.state.phase, RecordingPhase.recording);
 
-    final localId =
-        await container.read(recordingFinisherProvider).finish(title: 'Memo');
+    final localId = await container
+        .read(recordingFinisherProvider)
+        .finish(title: 'Memo');
     // #43 local-first: finish() returns the stable LOCAL id (`rec_local_<uuid>`);
     // the Core id is reconciled into the `coreId` column on upload — the PK is
     // NOT remapped to the Core id.
@@ -151,11 +157,11 @@ void main() {
 
     // Single continuous file (pause/resume collapsed to one segment), reconciled
     // to the stubbed Core id 555 with a terminal `done` status.
-    final row = await db.recordingsDao.getRecordingById(localId);
+    final row = await db.itemsDao.getById(localId, '1');
     expect(row, isNotNull);
     expect(row!.coreId, 555);
     expect(row.processingStatus, 'done');
-    expect(row.isProcessing, 0);
+    expect(row.isProcessing, isFalse);
     expect(row.summary, 'A memo');
 
     // Appears in the Inbox under its local id.
@@ -199,8 +205,9 @@ void main() {
     c2.dispose();
   });
 
-  testWidgets('discard-cleanup: discard deletes the on-disk file + the draft',
-      (tester) async {
+  testWidgets('discard-cleanup: discard deletes the on-disk file + the draft', (
+    tester,
+  ) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 

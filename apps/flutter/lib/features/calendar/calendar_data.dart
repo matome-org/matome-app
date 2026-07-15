@@ -35,9 +35,10 @@ class CalendarMatomeItem {
 /// Pure-Dart over [MatomesDao] (no HTTP). [spaceNames] resolves a matome's
 /// `spaceId` to a display name for the day-list rows.
 class CalendarData {
-  const CalendarData(this._dao);
+  const CalendarData(this._dao, this._ownerId);
 
   final MatomesDao _dao;
+  final String _ownerId;
 
   /// The set of day-of-month numbers (1–31) that have at least one matome in
   /// [month] of [year] ([month] is 0-indexed, 0 = January).
@@ -72,7 +73,7 @@ class CalendarData {
     ).millisecondsSinceEpoch;
     final dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1;
 
-    final rows = await _dao.matomeItemsByDateRange(dayStart, dayEnd);
+    final rows = await _dao.matomeItemsByDateRange(dayStart, dayEnd, _ownerId);
 
     return rows
         .map(

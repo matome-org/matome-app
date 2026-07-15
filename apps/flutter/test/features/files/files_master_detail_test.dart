@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +15,8 @@ import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/files/files_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/master_detail_scaffold.dart';
+
+import '../../support/item_fixtures.dart';
 
 /// W3 (#1542): the Files surface renders through the unified
 /// [MasterDetailScaffold] behind `FeatureFlags.masterDetailLayout`. The flag is
@@ -99,18 +100,14 @@ Future<void> _seedFile(
   String mediaType = 'audio',
   int createdAt = 1000,
 }) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion.insert(
-      id: id,
-      title: title,
-      timestamp: '9:00 AM',
-      duration: '0:30',
-      audioFilePath: '/tmp/$id.m4a',
-      createdAt: createdAt,
-      ownerId: const Value(_owner),
-      mediaType: Value(mediaType),
-      processingStatus: const Value('done'),
-    ),
+  return insertTestFileItem(
+    db,
+    id: id,
+    title: title,
+    localPath: '/tmp/$id.m4a',
+    createdAt: createdAt,
+    ownerId: _owner,
+    mediaType: mediaType,
   );
 }
 
@@ -292,7 +289,7 @@ void main() {
 
         // The selected file is removed and the owner-scoped provider re-reads —
         // the pane must NOT keep pointing at the now-absent file.
-        await db.recordingsDao.deleteRecording('r1');
+        await db.itemsDao.deleteWithPayload('r1', _owner);
         container.invalidate(filesForCurrentOwnerProvider);
         await tester.pumpAndSettle();
 

@@ -22,6 +22,8 @@ import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 /// A no-op [UploadQueue] override (#1457): `addFile`/`addPhoto` now KICK the
 /// upload queue after the local-first insert, so these persistence-focused e2e
 /// tests must stub the queue — otherwise the real queue reaches for Core /
@@ -124,8 +126,7 @@ class _DeferredFilePicker extends FilePicker with MockPlatformInterfaceMixin {
     bool withReadStream = false,
     bool lockParentWindow = false,
     bool readSequential = false,
-  }) =>
-      completer.future;
+  }) => completer.future;
 }
 
 /// End-to-end proof of the photo import path WITHOUT the GUI: the picker result
@@ -162,6 +163,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
       ],
     );
@@ -183,7 +185,7 @@ void main() {
     await controller.addPhoto(file: source, name: 'whiteboard.png');
 
     // 1. An image Item row exists under THIS matome.
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_e2e');
+    final matome = await db.matomesDao.getMatomeWithItems('m_e2e', '1');
     expect(matome!.recordings, hasLength(1));
     final item = matome.recordings.single;
     expect(item.mediaType, 'image');
@@ -191,13 +193,13 @@ void main() {
 
     // 2. The stored path is a REAL durable copy inside <documents>/Matome — not
     //    the original source path — and the file actually exists on disk.
-    final row = await db.recordingsDao.getRecordingById(item.id);
-    final storedPath = row!.audioFilePath;
+    final row = await db.itemsDao.getById(item.id, '1');
+    final storedPath = row!.localPath;
     expect(storedPath, isNotNull);
     expect(storedPath, startsWith('${docsRoot.path}/Matome/'));
     expect(storedPath, isNot(source.path));
     expect(
-      File(storedPath).existsSync(),
+      File(storedPath!).existsSync(),
       isTrue,
       reason: 'the durable copy must exist on disk',
     );
@@ -217,25 +219,21 @@ void main() {
         createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
       ),
     );
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: const Value('rec_audio'),
-        matomeId: const Value('m_live'),
-        title: const Value('Audio note'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value('0:30'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value(''),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-        mediaType: const Value('audio'),
-        processingStatus: const Value('done'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_audio',
+      matomeId: 'm_live',
+      title: 'Audio note',
+      durationSeconds: 30,
+      localPath: '',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      mediaType: 'audio',
     );
 
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
       ],
     );
@@ -264,14 +262,15 @@ void main() {
     // against a real source file + the production durable copy.
     // A REAL 1x1 PNG so Image.file decodes and pumpAndSettle settles (invalid
     // bytes route through errorBuilder but can leave the frame pump spinning).
-    final source = File(
-      '${Directory.systemTemp.path}/e2e_live_${DateTime.now().microsecondsSinceEpoch}.png',
-    )..writeAsBytesSync(
-        base64Decode(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
-          '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
-        ),
-      );
+    final source =
+        File(
+          '${Directory.systemTemp.path}/e2e_live_${DateTime.now().microsecondsSinceEpoch}.png',
+        )..writeAsBytesSync(
+          base64Decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+            '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+          ),
+        );
     addTearDown(() {
       if (source.existsSync()) source.deleteSync();
     });
@@ -290,10 +289,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    final imageItem =
-        (await db.matomesDao.getMatomeWithRecordings('m_live'))!
-            .recordings
-            .firstWhere((r) => r.mediaType == 'image');
+    final imageItem = (await db.matomesDao.getMatomeWithItems(
+      'm_live',
+      '1',
+    ))!.recordings.firstWhere((r) => r.mediaType == 'image');
     expect(
       find.byKey(ValueKey('matome-image-${imageItem.id}')),
       findsOneWidget,
@@ -309,9 +308,7 @@ void main() {
   });
 
   testWidgets('TAPPING the Add photo button imports the picked image and renders '
-      'its tile — full GUI flow through _addPhoto + a fake picker', (
-    tester,
-  ) async {
+      'its tile — full GUI flow through _addPhoto + a fake picker', (tester) async {
     await db.matomesDao.create(
       MatomesCompanion(
         id: const Value('m_btn'),
@@ -320,30 +317,26 @@ void main() {
         createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
       ),
     );
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: const Value('rec_btn_audio'),
-        matomeId: const Value('m_btn'),
-        title: const Value('Audio note'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value('0:30'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value(''),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-        mediaType: const Value('audio'),
-        processingStatus: const Value('done'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_btn_audio',
+      matomeId: 'm_btn',
+      title: 'Audio note',
+      durationSeconds: 30,
+      localPath: '',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      mediaType: 'audio',
     );
 
-    final source = File(
-      '${Directory.systemTemp.path}/e2e_btn_${DateTime.now().microsecondsSinceEpoch}.png',
-    )..writeAsBytesSync(
-        base64Decode(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
-          '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
-        ),
-      );
+    final source =
+        File(
+          '${Directory.systemTemp.path}/e2e_btn_${DateTime.now().microsecondsSinceEpoch}.png',
+        )..writeAsBytesSync(
+          base64Decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+            '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+          ),
+        );
     addTearDown(() {
       if (source.existsSync()) source.deleteSync();
     });
@@ -355,6 +348,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
         // "Add item" now reads the owner id (authStateProvider → AuthController),
         // which touches the secure token store on creation — give it an in-memory
@@ -389,10 +383,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('relationship-create-menu')));
     await tester.pumpAndSettle();
-    final addPhoto =
-        find.byKey(const ValueKey('relationship-action-photo'));
-    expect(addPhoto, findsOneWidget,
-        reason: 'the picker "+" menu must surface the Add photo action');
+    final addPhoto = find.byKey(const ValueKey('relationship-action-photo'));
+    expect(
+      addPhoto,
+      findsOneWidget,
+      reason: 'the picker "+" menu must surface the Add photo action',
+    );
     // Tap the Add-photo menu entry and drive _addPhoto end to end inside
     // runAsync (the real durable copy does file I/O). The menu item is in an
     // overlay route, so pump a frame inside runAsync to dispatch its onPressed
@@ -411,10 +407,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    final imageItem =
-        (await db.matomesDao.getMatomeWithRecordings('m_btn'))!
-            .recordings
-            .firstWhere((r) => r.mediaType == 'image');
+    final imageItem = (await db.matomesDao.getMatomeWithItems(
+      'm_btn',
+      '1',
+    ))!.recordings.firstWhere((r) => r.mediaType == 'image');
     expect(
       find.byKey(ValueKey('matome-image-${imageItem.id}')),
       findsOneWidget,
@@ -455,6 +451,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         uploadQueueProvider.overrideWithValue(_NoopUploadQueue()),
         tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
         matomeDetailControllerProvider.overrideWith(
@@ -512,9 +509,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_race');
-    final images =
-        matome!.recordings.where((r) => r.mediaType == 'image').toList();
+    final matome = await db.matomesDao.getMatomeWithItems('m_race', '1');
+    final images = matome!.recordings
+        .where((r) => r.mediaType == 'image')
+        .toList();
     expect(
       images,
       hasLength(1),

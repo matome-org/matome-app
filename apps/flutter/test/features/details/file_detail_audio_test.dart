@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +14,8 @@ import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+
+import '../../support/item_fixtures.dart';
 
 /// Audio detail path migrated onto the unified [FileDetailScreen] host + the
 /// presentational [FileView] (#1439). These tests pin the four acceptance
@@ -53,7 +54,12 @@ ProviderContainer _container(AppDatabase db, _Recorder rec) {
   adapter.onGet(
     RegExp(r'/api/recordings/\d+$'),
     (server) => server.reply(200, {
-      'recording': {'id': 5, 'owner_id': 1, 'title': 'Standup', 'status': 'done'},
+      'recording': {
+        'id': 5,
+        'owner_id': 1,
+        'title': 'Standup',
+        'status': 'done',
+      },
     }),
   );
 
@@ -63,6 +69,7 @@ ProviderContainer _container(AppDatabase db, _Recorder rec) {
   return ProviderContainer(
     overrides: [
       appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue('1'),
       recordingsRepositoryProvider.overrideWithValue(repo),
     ],
   );
@@ -73,21 +80,15 @@ Future<void> _seed(
   String notes = 'my own notes',
   String transcript = 'the spoken transcript',
 }) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: const Value('5'),
-      title: const Value('Standup'),
-      timestamp: const Value('9:00 AM'),
-      duration: const Value('0:30'),
-      badge: const Value('Inbox'),
-      isProcessing: const Value(0),
-      audioFilePath: const Value(''),
-      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-      notes: Value(notes),
-      transcript: Value(transcript),
-      mediaType: const Value('audio/m4a'),
-      processingStatus: const Value('done'),
-    ),
+  return insertTestFileItem(
+    db,
+    id: '5',
+    title: 'Standup',
+    localPath: '',
+    createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+    notes: notes,
+    transcript: transcript,
+    mediaType: 'audio/m4a',
   );
 }
 
@@ -182,7 +183,7 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
 
-    final row = await db.recordingsDao.getRecordingById('5');
+    final row = await db.itemsDao.getById('5', '1');
     expect(row!.notes, 'edited note');
     // Transcript untouched by a notes save.
     expect(row.transcript, 'the spoken transcript');
@@ -226,7 +227,9 @@ void main() {
       await tester.pumpAndSettle();
 
       final overflow = find.byWidgetPredicate(
-        (w) => w is IconButton && w.icon is Icon &&
+        (w) =>
+            w is IconButton &&
+            w.icon is Icon &&
             (w.icon as Icon).icon == Icons.more_horiz,
       );
       expect(overflow, findsOneWidget);

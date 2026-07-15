@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +7,8 @@ import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/items/text_item_host.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+
+import '../support/item_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -24,33 +25,24 @@ void main() {
   testWidgets('TextItemHost renders and saves a plain-text item', (
     tester,
   ) async {
-    await db
-        .into(db.textContents)
-        .insert(
-          TextContentsCompanion.insert(
-            id: const Value(20),
-            body: 'Original note',
-          ),
-        );
-    await db
-        .into(db.items)
-        .insert(
-          ItemsCompanion.insert(
-            id: const Value(100),
-            matomeId: 7,
-            position: 1,
-            itemType: 'text',
-            textContentId: const Value(20),
-          ),
-        );
+    await insertTestTextItem(
+      db,
+      id: '100',
+      body: 'Original note',
+      matomeId: '7',
+      position: 1,
+    );
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
         child: TranslationProvider(
           child: MaterialApp(
             theme: buildLightTheme(),
-            home: const TextItemHost(itemId: 100),
+            home: const TextItemHost(itemId: '100'),
           ),
         ),
       ),
@@ -71,7 +63,7 @@ void main() {
 
     final row = await (db.select(
       db.textContents,
-    )..where((tbl) => tbl.id.equals(20))).getSingle();
+    )..where((tbl) => tbl.id.equals('text_content_100'))).getSingle();
     expect(row.body, 'Updated plain text');
     expect(find.text('Updated plain text'), findsOneWidget);
   });

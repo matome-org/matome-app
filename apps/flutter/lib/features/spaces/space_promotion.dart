@@ -74,8 +74,8 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
-import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
@@ -160,7 +160,7 @@ class SpacePromotionService {
 
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
   MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
-  RecordingsDao get _recordingsDao => _ref.read(recordingsDaoProvider);
+  ItemsDao get _itemsDao => _ref.read(itemsDaoProvider);
   SpacesRepository get _repo => _ref.read(spacesRepositoryProvider);
   MatomeSyncService get _matomeSync => _ref.read(matomeSyncServiceProvider);
   UploadQueue get _uploadQueue => _ref.read(uploadQueueProvider);
@@ -179,6 +179,15 @@ class SpacePromotionService {
   /// recordings, and a recording wrapped in a matome is counted under the matome
   /// (not double-counted) — its egress rides its matome.
   Future<PromotionConsent> consentFor(String spaceId) async {
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) {
+      return PromotionConsent(
+        spaceId: spaceId,
+        spaceName: '',
+        recordingCount: 0,
+        matomeCount: 0,
+      );
+    }
     final space = await _workspacesDao.getWorkspaceById(spaceId);
     final matomes = await _matomesDao.listMatomesInSpace(spaceId);
 
@@ -197,13 +206,11 @@ class SpacePromotionService {
     var pendingRecordings = 0;
 
     for (final m in matomes) {
-      final children = await _recordingsDao.recordingsForMatome(m.id);
+      final children = await _itemsDao.listForMatome(m.id, ownerId);
       pendingRecordings += children.where((r) => r.coreId == null).length;
     }
 
-    final directlyFiled = await _recordingsDao.getRecordingsInWorkspace(
-      spaceId,
-    );
+    final directlyFiled = await _itemsDao.listForSpace(spaceId, ownerId);
     for (final r in directlyFiled) {
       // matome WINS (R1.1): a recording wrapped in one of this space's matomes
       // is already counted under that matome — do not double-count it here.
@@ -310,19 +317,19 @@ class SpacePromotionService {
   /// each of its children counts if the child lacks one; directly-filed loose
   /// recordings count likewise (matome children are not double-counted).
   Future<int> _remainingItemCount(String cloudSpaceId) async {
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return 0;
     final matomes = await _matomesDao.listMatomesInSpace(cloudSpaceId);
     final matomeIds = matomes.map((m) => m.id).toSet();
     var remaining = 0;
 
     for (final m in matomes) {
       if (m.coreId == null) remaining += 1;
-      final children = await _recordingsDao.recordingsForMatome(m.id);
+      final children = await _itemsDao.listForMatome(m.id, ownerId);
       remaining += children.where((r) => r.coreId == null).length;
     }
 
-    final directlyFiled = await _recordingsDao.getRecordingsInWorkspace(
-      cloudSpaceId,
-    );
+    final directlyFiled = await _itemsDao.listForSpace(cloudSpaceId, ownerId);
     for (final r in directlyFiled) {
       if (r.matomeId != null && matomeIds.contains(r.matomeId)) continue;
       if (r.coreId == null) remaining += 1;

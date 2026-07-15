@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,12 +7,13 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/files/files_screen.dart';
 import 'package:matome_flutter/features/files/widgets/files_grid.dart';
 import 'package:matome_flutter/features/files/widgets/files_table.dart';
 import 'package:matome_flutter/features/files/widgets/files_view_shared.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+
+import '../../support/item_fixtures.dart';
 
 // ---------------------------------------------------------------------------
 // Files view — move-to-matome interaction tests (#1473). Per Maes: real
@@ -34,14 +34,12 @@ Widget _app(AppDatabase db, {String? owner = _owner, String view = 'table'}) {
     overrides: [
       appDatabaseProvider.overrideWithValue(db),
       currentOwnerIdProvider.overrideWithValue(owner),
-      settingsStoreProvider
-          .overrideWithValue(InMemorySettingsStore({'matome.files_view': view})),
+      settingsStoreProvider.overrideWithValue(
+        InMemorySettingsStore({'matome.files_view': view}),
+      ),
     ],
     child: TranslationProvider(
-      child: MaterialApp(
-        theme: buildLightTheme(),
-        home: const FilesScreen(),
-      ),
+      child: MaterialApp(theme: buildLightTheme(), home: const FilesScreen()),
     ),
   );
 }
@@ -54,25 +52,22 @@ MatomesCompanion _matome({required String id, required String title}) =>
       createdAt: 1000,
     );
 
-RecordingsCompanion _rec({
+Future<void> _seedFile(
+  AppDatabase db, {
   required String id,
   required String ownerId,
   String title = 'File',
   String? matomeId,
   int createdAt = 1000,
-}) =>
-    RecordingsCompanion.insert(
-      id: id,
-      title: title,
-      timestamp: '9:00 AM',
-      duration: '0:30',
-      audioFilePath: '/tmp/$id.m4a',
-      createdAt: createdAt,
-      ownerId: Value(ownerId),
-      matomeId: Value(matomeId),
-      mediaType: const Value('audio'),
-      processingStatus: const Value('done'),
-    );
+}) => insertTestFileItem(
+  db,
+  id: id,
+  ownerId: ownerId,
+  title: title,
+  matomeId: matomeId,
+  createdAt: createdAt,
+  localPath: '/tmp/$id.m4a',
+);
 
 /// Select a table row by tapping its checkbox. The whole row is a
 /// [GestureDetector]; walking up from the file name to that detector and back
@@ -80,13 +75,12 @@ RecordingsCompanion _rec({
 /// not collide with the header checkbox.
 Future<void> _selectRow(WidgetTester tester, String fileName) async {
   final rowDetector = find
-      .ancestor(
-        of: find.text(fileName),
-        matching: find.byType(GestureDetector),
-      )
+      .ancestor(of: find.text(fileName), matching: find.byType(GestureDetector))
       .first;
-  final checkbox =
-      find.descendant(of: rowDetector, matching: find.byType(Checkbox));
+  final checkbox = find.descendant(
+    of: rowDetector,
+    matching: find.byType(Checkbox),
+  );
   await tester.tap(checkbox.first);
   await tester.pumpAndSettle();
 }
@@ -98,69 +92,105 @@ void main() {
   tearDown(() => db.close());
 
   testWidgets(
-      'bulk move: select files → picker → reassignment persists; Undo restores',
-      (tester) async {
+    'bulk move: select files → picker → reassignment persists; Undo restores',
+    (tester) async {
+      await db.matomesDao.create(_matome(id: 'm_src', title: 'Source'));
+      await db.matomesDao.create(_matome(id: 'm_dst', title: 'Dest'));
+      await _seedFile(
+        db,
+        id: 'r1',
+        ownerId: _owner,
+        title: 'Alpha',
+        matomeId: 'm_src',
+      );
+      await _seedFile(
+        db,
+        id: 'r2',
+        ownerId: _owner,
+        title: 'Beta',
+        matomeId: 'm_src',
+        createdAt: 900,
+      );
+      // Dest already holds an owner file so it is a picker target (the picker
+      // lists matomes the owner has recordings in — owner-scoped, #1473).
+      await _seedFile(
+        db,
+        id: 'seed_dst',
+        ownerId: _owner,
+        title: 'Gamma',
+        matomeId: 'm_dst',
+        createdAt: 800,
+      );
+
+      await tester.pumpWidget(_app(db));
+      await tester.pumpAndSettle();
+
+      await _selectRow(tester, 'Alpha');
+      await _selectRow(tester, 'Beta');
+
+      // Bulk bar visible → tap Move.
+      expect(find.byKey(const ValueKey('files-bulk-bar')), findsOneWidget);
+      await tester.tap(find.text(t.files.moveToMatome).first);
+      await tester.pumpAndSettle();
+
+      // Picker is open (its Unfiled tile is unique) → pick Dest.
+      expect(
+        find.byKey(const ValueKey('files-move-target-unfiled')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('files-move-target-m_dst')));
+      await tester.pumpAndSettle();
+
+      // Persisted: both files now in Dest.
+      var files = await db.itemsDao.filesForOwner(_owner);
+      expect(files.firstWhere((f) => f.id == 'r1').matome, 'Dest');
+      expect(files.firstWhere((f) => f.id == 'r2').matome, 'Dest');
+
+      // Undo restores prior matome.
+      expect(find.text(t.files.movedMsg(n: 2)), findsOneWidget);
+      await tester.tap(find.text(t.files.undo));
+      await tester.pumpAndSettle();
+
+      files = await db.itemsDao.filesForOwner(_owner);
+      expect(files.firstWhere((f) => f.id == 'r1').matome, 'Source');
+      expect(files.firstWhere((f) => f.id == 'r2').matome, 'Source');
+    },
+  );
+
+  testWidgets('per-row move: overflow menu → picker → reassigns one file', (
+    tester,
+  ) async {
     await db.matomesDao.create(_matome(id: 'm_src', title: 'Source'));
     await db.matomesDao.create(_matome(id: 'm_dst', title: 'Dest'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm_src'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r2', ownerId: _owner, title: 'Beta', matomeId: 'm_src', createdAt: 900));
-    // Dest already holds an owner file so it is a picker target (the picker
-    // lists matomes the owner has recordings in — owner-scoped, #1473).
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'seed_dst', ownerId: _owner, title: 'Gamma', matomeId: 'm_dst', createdAt: 800));
-
-    await tester.pumpWidget(_app(db));
-    await tester.pumpAndSettle();
-
-    await _selectRow(tester, 'Alpha');
-    await _selectRow(tester, 'Beta');
-
-    // Bulk bar visible → tap Move.
-    expect(find.byKey(const ValueKey('files-bulk-bar')), findsOneWidget);
-    await tester.tap(find.text(t.files.moveToMatome).first);
-    await tester.pumpAndSettle();
-
-    // Picker is open (its Unfiled tile is unique) → pick Dest.
-    expect(
-        find.byKey(const ValueKey('files-move-target-unfiled')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('files-move-target-m_dst')));
-    await tester.pumpAndSettle();
-
-    // Persisted: both files now in Dest.
-    var files = await db.recordingsDao.filesForOwner(_owner);
-    expect(files.firstWhere((f) => f.id == 'r1').matome, 'Dest');
-    expect(files.firstWhere((f) => f.id == 'r2').matome, 'Dest');
-
-    // Undo restores prior matome.
-    expect(find.text(t.files.movedMsg(n: 2)), findsOneWidget);
-    await tester.tap(find.text(t.files.undo));
-    await tester.pumpAndSettle();
-
-    files = await db.recordingsDao.filesForOwner(_owner);
-    expect(files.firstWhere((f) => f.id == 'r1').matome, 'Source');
-    expect(files.firstWhere((f) => f.id == 'r2').matome, 'Source');
-  });
-
-  testWidgets('per-row move: overflow menu → picker → reassigns one file',
-      (tester) async {
-    await db.matomesDao.create(_matome(id: 'm_src', title: 'Source'));
-    await db.matomesDao.create(_matome(id: 'm_dst', title: 'Dest'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm_src'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'seed_dst', ownerId: _owner, title: 'Gamma', matomeId: 'm_dst', createdAt: 800));
+    await _seedFile(
+      db,
+      id: 'r1',
+      ownerId: _owner,
+      title: 'Alpha',
+      matomeId: 'm_src',
+    );
+    await _seedFile(
+      db,
+      id: 'seed_dst',
+      ownerId: _owner,
+      title: 'Gamma',
+      matomeId: 'm_dst',
+      createdAt: 800,
+    );
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
 
     // Open the Alpha row overflow menu, then Move to matome.
     final alphaRow = find
-        .ancestor(of: find.text('Alpha'), matching: find.byType(GestureDetector))
+        .ancestor(
+          of: find.text('Alpha'),
+          matching: find.byType(GestureDetector),
+        )
         .first;
     await tester.tap(
-        find.descendant(of: alphaRow, matching: find.byIcon(Icons.more_horiz)));
+      find.descendant(of: alphaRow, matching: find.byIcon(Icons.more_horiz)),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text(t.files.moveToMatome).last);
     await tester.pumpAndSettle();
@@ -168,14 +198,19 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('files-move-target-m_dst')));
     await tester.pumpAndSettle();
 
-    final files = await db.recordingsDao.filesForOwner(_owner);
+    final files = await db.itemsDao.filesForOwner(_owner);
     expect(files.firstWhere((f) => f.id == 'r1').matome, 'Dest');
   });
 
   testWidgets('move to Unfiled clears the matome', (tester) async {
     await db.matomesDao.create(_matome(id: 'm_src', title: 'Source'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm_src'));
+    await _seedFile(
+      db,
+      id: 'r1',
+      ownerId: _owner,
+      title: 'Alpha',
+      matomeId: 'm_src',
+    );
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
@@ -186,19 +221,31 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('files-move-target-unfiled')));
     await tester.pumpAndSettle();
 
-    final files = await db.recordingsDao.filesForOwner(_owner);
+    final files = await db.itemsDao.filesForOwner(_owner);
     expect(files.single.unfiled, isTrue);
   });
 
-  testWidgets('cross-owner: picker offers ONLY the owner matomes', (tester) async {
+  testWidgets('cross-owner: picker offers ONLY the owner matomes', (
+    tester,
+  ) async {
     // Owner 1 owns a file in m_a; owner 2 owns one in m_b. The picker for owner 1
     // must list m_a (and Unfiled) but NOT m_b — a cross-owner target.
     await db.matomesDao.create(_matome(id: 'm_a', title: 'Mine'));
     await db.matomesDao.create(_matome(id: 'm_b', title: 'Theirs'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm_a'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r2', ownerId: _otherOwner, title: 'Beta', matomeId: 'm_b'));
+    await _seedFile(
+      db,
+      id: 'r1',
+      ownerId: _owner,
+      title: 'Alpha',
+      matomeId: 'm_a',
+    );
+    await _seedFile(
+      db,
+      id: 'r2',
+      ownerId: _otherOwner,
+      title: 'Beta',
+      matomeId: 'm_b',
+    );
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
@@ -212,11 +259,17 @@ void main() {
     expect(find.text('Theirs'), findsNothing);
   });
 
-  testWidgets('download remains the unchanged stub (not available notice)',
-      (tester) async {
+  testWidgets('download remains the unchanged stub (not available notice)', (
+    tester,
+  ) async {
     await db.matomesDao.create(_matome(id: 'm1', title: 'M1'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm1'));
+    await _seedFile(
+      db,
+      id: 'r1',
+      ownerId: _owner,
+      title: 'Alpha',
+      matomeId: 'm1',
+    );
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
@@ -227,12 +280,13 @@ void main() {
 
     // Still the stub: surfaces the "not available" notice, no DB mutation.
     expect(find.text(t.files.downloadUnavailable), findsOneWidget);
-    final files = await db.recordingsDao.filesForOwner(_owner);
+    final files = await db.itemsDao.filesForOwner(_owner);
     expect(files.single.matome, 'M1'); // unchanged
   });
 
-  testWidgets('FileAction enum still exposes the download stub action',
-      (tester) async {
+  testWidgets('FileAction enum still exposes the download stub action', (
+    tester,
+  ) async {
     // Belt-and-suspenders: the download affordance is still wired (not removed).
     expect(FileAction.values, contains(FileAction.download));
   });
@@ -241,8 +295,13 @@ void main() {
   // control. The AppBar no longer carries the grid/table segments.
   testWidgets('no on-screen files view toggle in the AppBar', (tester) async {
     await db.matomesDao.create(_matome(id: 'm1', title: 'M1'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm1'));
+    await _seedFile(
+      db,
+      id: 'r1',
+      ownerId: _owner,
+      title: 'Alpha',
+      matomeId: 'm1',
+    );
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
@@ -253,11 +312,17 @@ void main() {
 
   // The screen still renders whatever view the provider holds: a stored "table"
   // preference shows the table, a stored "grid" preference shows the grid.
-  testWidgets('renders the view the provider holds (no toggle to change it)',
-      (tester) async {
+  testWidgets('renders the view the provider holds (no toggle to change it)', (
+    tester,
+  ) async {
     await db.matomesDao.create(_matome(id: 'm1', title: 'M1'));
-    await db.recordingsDao
-        .insertRecording(_rec(id: 'r1', ownerId: _owner, title: 'Alpha', matomeId: 'm1'));
+    await _seedFile(
+      db,
+      id: 'r1',
+      ownerId: _owner,
+      title: 'Alpha',
+      matomeId: 'm1',
+    );
 
     await tester.pumpWidget(_app(db, view: 'table'));
     await tester.pumpAndSettle();

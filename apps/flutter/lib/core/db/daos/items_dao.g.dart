@@ -7,6 +7,11 @@ mixin _$ItemsDaoMixin on DatabaseAccessor<AppDatabase> {
   $ItemsTable get items => attachedDatabase.items;
   $FileBlobsTable get fileBlobs => attachedDatabase.fileBlobs;
   $TextContentsTable get textContents => attachedDatabase.textContents;
+  $WorkspacesTable get workspaces => attachedDatabase.workspaces;
+  $MatomesTable get matomes => attachedDatabase.matomes;
+  $MatomeContactsTable get matomeContacts => attachedDatabase.matomeContacts;
+  $ContactsTable get contacts => attachedDatabase.contacts;
+  $ItemContactsTable get itemContacts => attachedDatabase.itemContacts;
   ItemsDaoManager get managers => ItemsDaoManager(this);
 }
 
@@ -19,4 +24,17 @@ class ItemsDaoManager {
       $$FileBlobsTableTableManager(_db.attachedDatabase, _db.fileBlobs);
   $$TextContentsTableTableManager get textContents =>
       $$TextContentsTableTableManager(_db.attachedDatabase, _db.textContents);
+  $$WorkspacesTableTableManager get workspaces =>
+      $$WorkspacesTableTableManager(_db.attachedDatabase, _db.workspaces);
+  $$MatomesTableTableManager get matomes =>
+      $$MatomesTableTableManager(_db.attachedDatabase, _db.matomes);
+  $$MatomeContactsTableTableManager get matomeContacts =>
+      $$MatomeContactsTableTableManager(
+        _db.attachedDatabase,
+        _db.matomeContacts,
+      );
+  $$ContactsTableTableManager get contacts =>
+      $$ContactsTableTableManager(_db.attachedDatabase, _db.contacts);
+  $$ItemContactsTableTableManager get itemContacts =>
+      $$ItemContactsTableTableManager(_db.attachedDatabase, _db.itemContacts);
 }

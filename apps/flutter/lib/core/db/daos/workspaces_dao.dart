@@ -8,7 +8,7 @@ import '../tables.dart';
 part 'workspaces_dao.g.dart';
 
 /// DAO for `workspaces`, porting workspaceService.ts.
-@DriftAccessor(tables: [Workspaces, Recordings, Matomes])
+@DriftAccessor(tables: [Workspaces, Items, Matomes])
 class WorkspacesDao extends DatabaseAccessor<AppDatabase>
     with _$WorkspacesDaoMixin {
   WorkspacesDao(super.db);
@@ -101,8 +101,11 @@ class WorkspacesDao extends DatabaseAccessor<AppDatabase>
       await (update(matomes)..where((m) => m.spaceId.equals(oldId))).write(
         MatomesCompanion(spaceId: Value(newId)),
       );
-      await (update(recordings)..where((r) => r.workspaceId.equals(oldId)))
-          .write(RecordingsCompanion(workspaceId: Value(newId)));
+      await (update(
+        items,
+      )..where((item) => item.workspaceId.equals(oldId))).write(
+        ItemsCompanion(workspaceId: Value(newId), isDirty: const Value(true)),
+      );
       return true;
     });
   }
@@ -112,8 +115,8 @@ class WorkspacesDao extends DatabaseAccessor<AppDatabase>
   /// `deleteWorkspace`. Wrapped in a transaction so the two writes are atomic.
   Future<void> deleteWorkspace(String id) {
     return transaction(() async {
-      await (update(recordings)..where((r) => r.workspaceId.equals(id))).write(
-        const RecordingsCompanion(workspaceId: Value(null)),
+      await (update(items)..where((item) => item.workspaceId.equals(id))).write(
+        const ItemsCompanion(workspaceId: Value(null), isDirty: Value(true)),
       );
       await (delete(workspaces)..where((w) => w.id.equals(id))).go();
     });

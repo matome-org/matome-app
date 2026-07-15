@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
-import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
@@ -47,7 +47,7 @@ class MatomeSyncService {
 
   MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
   ContactsDao get _contactsDao => _ref.read(contactsDaoProvider);
-  RecordingsDao get _recordingsDao => _ref.read(recordingsDaoProvider);
+  ItemsDao get _itemsDao => _ref.read(itemsDaoProvider);
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
   MatomesRepository get _matomesRepo => _ref.read(matomesRepositoryProvider);
   ContactsRepository get _contactsRepo => _ref.read(contactsRepositoryProvider);
@@ -379,7 +379,9 @@ class MatomeSyncService {
   /// `matome_id` once it reconciles, never before (so Core never sees a dangling
   /// matome reference).
   Future<void> _pushChildren(String matomeId, int matomeCoreId) async {
-    final children = await _recordingsDao.recordingsForMatome(matomeId);
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final children = await _itemsDao.listForMatome(matomeId, ownerId);
     for (final rec in children) {
       final recCoreId = rec.coreId;
       if (recCoreId == null) continue; // not reconciled — do not send matome_id

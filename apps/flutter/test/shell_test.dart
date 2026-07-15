@@ -116,6 +116,7 @@ Widget _pumpApp({SettingsStore? store, required AppDatabase db}) {
       // (settings screen reads authStateProvider) resolves to signed-out
       // without touching the secure-storage platform channel.
       tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
+      currentOwnerIdProvider.overrideWithValue('1'),
       // The Calendar branch (built eagerly by the indexed-stack shell) reads
       // the Drift DAOs — back them with an in-memory DB so no native file opens.
       appDatabaseProvider.overrideWithValue(db),

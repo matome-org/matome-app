@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/db/daos/recordings_dao.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
@@ -25,15 +25,17 @@ class SpacesController extends StateNotifier<AsyncValue<List<SpaceCard>>> {
   final Ref _ref;
 
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
-  RecordingsDao get _recordingsDao => _ref.read(recordingsDaoProvider);
+  ItemsDao get _itemsDao => _ref.read(itemsDaoProvider);
 
   /// Re-reads workspaces + per-workspace recording counts from Drift.
   /// Ports `fetchSpacesData`.
   Future<List<SpaceCard>> _loadCards() async {
     final workspaces = await _workspacesDao.getWorkspaces();
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return const [];
     final cards = <SpaceCard>[];
     for (final ws in workspaces) {
-      final recordings = await _recordingsDao.getRecordingsInWorkspace(ws.id);
+      final recordings = await _itemsDao.listForSpace(ws.id, ownerId);
       cards.add(
         SpaceCard(
           id: ws.id,

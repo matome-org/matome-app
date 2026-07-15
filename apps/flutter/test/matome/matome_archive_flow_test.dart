@@ -80,7 +80,11 @@ void main() {
 
   ProviderContainer container({List<Override> extra = const []}) {
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db), ...extra],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+        ...extra,
+      ],
     );
     addTearDown(c.dispose);
     return c;

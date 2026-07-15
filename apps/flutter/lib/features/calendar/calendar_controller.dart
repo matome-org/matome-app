@@ -100,7 +100,10 @@ class CalendarController extends StateNotifier<CalendarState> {
 
   final Ref _ref;
 
-  CalendarData get _data => CalendarData(_ref.read(matomesDaoProvider));
+  CalendarData get _data => CalendarData(
+    _ref.read(matomesDaoProvider),
+    _ref.read(currentOwnerIdProvider) ?? '',
+  );
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
 
   /// spaceId → workspace name, refreshed by [loadSpaces]. Used to label the

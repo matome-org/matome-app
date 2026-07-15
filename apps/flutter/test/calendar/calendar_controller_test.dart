@@ -41,6 +41,7 @@ Future<void> _seed(
   final container = ProviderContainer(
     overrides: [
       appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue('1'),
       if (now != null)
         calendarNowProvider.overrideWithValue(() => now),
     ],

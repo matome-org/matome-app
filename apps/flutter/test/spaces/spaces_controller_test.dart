@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,36 +6,34 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/spaces/spaces_controller.dart';
 
+import '../support/item_fixtures.dart';
+
 /// Unit tests for the Spaces controller (S5, #784): recording counts per space
 /// (mirrors processes/spacesData), create adds, delete removes AND returns the
 /// space's recordings to the Inbox (workspaceId NULL), mirroring
 /// services/workspaceService.deleteWorkspace.
 
-Future<void> _seedRecording(
+Future<void> _seedItem(
   AppDatabase db, {
   required String id,
   String? workspaceId,
 }) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: Value(id),
-      title: Value('rec $id'),
-      timestamp: const Value(''),
-      duration: const Value(''),
-      badge: const Value('Inbox'),
-      isProcessing: const Value(0),
-      audioFilePath: const Value(''),
-      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-      mediaType: const Value('audio'),
-      processingStatus: const Value('done'),
-      workspaceId: Value(workspaceId),
-    ),
+  return insertTestFileItem(
+    db,
+    id: id,
+    title: 'rec $id',
+    localPath: '',
+    createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+    workspaceId: workspaceId,
   );
 }
 
 ProviderContainer _container(AppDatabase db) {
   return ProviderContainer(
-    overrides: [appDatabaseProvider.overrideWithValue(db)],
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue('1'),
+    ],
   );
 }
 
@@ -63,10 +60,10 @@ void main() {
   test('lists spaces with per-space recording counts', () async {
     final work = await db.workspacesDao.createWorkspace('Work');
     final ideas = await db.workspacesDao.createWorkspace('Ideas');
-    await _seedRecording(db, id: 'a', workspaceId: work.id);
-    await _seedRecording(db, id: 'b', workspaceId: work.id);
-    await _seedRecording(db, id: 'c', workspaceId: ideas.id);
-    await _seedRecording(db, id: 'd'); // inbox — counted nowhere
+    await _seedItem(db, id: 'a', workspaceId: work.id);
+    await _seedItem(db, id: 'b', workspaceId: work.id);
+    await _seedItem(db, id: 'c', workspaceId: ideas.id);
+    await _seedItem(db, id: 'd'); // inbox — counted nowhere
 
     final container = _container(db);
     addTearDown(container.dispose);
@@ -103,36 +100,40 @@ void main() {
     expect((await _awaitCards(container)).map((c) => c.name), [defaultName]);
   });
 
-  test('deleteSpace removes the space and returns its recordings to the Inbox',
-      () async {
-    final work = await db.workspacesDao.createWorkspace('Work');
-    await _seedRecording(db, id: 'a', workspaceId: work.id);
-    await _seedRecording(db, id: 'b', workspaceId: work.id);
+  test(
+    'deleteSpace removes the space and returns its recordings to the Inbox',
+    () async {
+      final work = await db.workspacesDao.createWorkspace('Work');
+      await _seedItem(db, id: 'a', workspaceId: work.id);
+      await _seedItem(db, id: 'b', workspaceId: work.id);
 
-    final container = _container(db);
-    addTearDown(container.dispose);
-    final controller = container.read(spacesControllerProvider.notifier);
+      final container = _container(db);
+      addTearDown(container.dispose);
+      final controller = container.read(spacesControllerProvider.notifier);
 
-    await controller.load();
-    expect(
-      (await _awaitCards(container)).firstWhere((c) => c.name == 'Work').count,
-      2,
-    );
+      await controller.load();
+      expect(
+        (await _awaitCards(
+          container,
+        )).firstWhere((c) => c.name == 'Work').count,
+        2,
+      );
 
-    await controller.deleteSpace(work.id);
+      await controller.deleteSpace(work.id);
 
-    // Space gone from the list (only the seeded default remains).
-    expect(
-      (await _awaitCards(container)).map((c) => c.name),
-      isNot(contains('Work')),
-    );
-    expect(await db.workspacesDao.getWorkspaceById(work.id), isNull);
+      // Space gone from the list (only the seeded default remains).
+      expect(
+        (await _awaitCards(container)).map((c) => c.name),
+        isNot(contains('Work')),
+      );
+      expect(await db.workspacesDao.getWorkspaceById(work.id), isNull);
 
-    // Recordings returned to the Inbox (workspaceId NULL).
-    final inbox = await db.recordingsDao.getInboxRecordings();
-    expect(inbox.map((r) => r.id), containsAll(<String>['a', 'b']));
-    for (final r in inbox) {
-      expect(r.workspaceId, isNull);
-    }
-  });
+      // Recordings returned to the Inbox (workspaceId NULL).
+      final inbox = await db.itemsDao.listInbox('1');
+      expect(inbox.map((r) => r.id), containsAll(<String>['a', 'b']));
+      for (final r in inbox) {
+        expect(r.workspaceId, isNull);
+      }
+    },
+  );
 }

@@ -63,7 +63,7 @@
 // Matome storage dir) IS the progress marker. [MediaMigrationRunner.run]:
 //   - fetches candidates (rows with `wrapped_fek IS NULL` whose
 //     `audio_file_path` still exists on local disk — see
-//     [RecordingsDaoMediaMigrationStore.fetchCandidates]),
+//     [ItemsDaoMediaMigrationStore.fetchCandidates]),
 //   - skips any candidate whose manifest entry is already `done`,
 //   - drives every other candidate through [_advance] until `done`.
 // Re-running a fully migrated set is a no-op: `wrapped_fek` is no longer
@@ -354,7 +354,7 @@ class MediaMigrationManifestStore {
 
 // ---------------------------------------------------------------------------
 // Candidate row + the DB-facing seam (kept abstract so this module is
-// unit-testable without a real Drift database; [RecordingsDaoMediaMigrationStore]
+// unit-testable without a real Drift database; [ItemsDaoMediaMigrationStore]
 // below is the real production adapter).
 // ---------------------------------------------------------------------------
 

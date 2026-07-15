@@ -130,6 +130,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             appDatabaseProvider.overrideWithValue(db),
+            currentOwnerIdProvider.overrideWithValue('1'),
             testParentSyncOverride(),
             audioRecordingServiceProvider.overrideWithValue(service),
             recordingsRepositoryProvider.overrideWithValue(repo),
@@ -139,7 +140,7 @@ void main() {
 
         final localId = await finishASession(container, title: 'Standup');
 
-        final row = await db.recordingsDao.getRecordingById(localId);
+        final row = await db.itemsDao.getById(localId, '1');
         expect(row, isNotNull);
         // LOOSE: no matome, no space. Its effective space is therefore NULL ⇒
         // Inbox (INBOX ⟺ effectiveSpace == NULL, spec R1.3).
@@ -183,6 +184,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             appDatabaseProvider.overrideWithValue(db),
+            currentOwnerIdProvider.overrideWithValue('1'),
             testParentSyncOverride(),
             audioRecordingServiceProvider.overrideWithValue(service),
             recordingsRepositoryProvider.overrideWithValue(repo),
@@ -200,7 +202,7 @@ void main() {
           isTrue,
           reason: 'finish returns a local id; PK is never the Core id (#43)',
         );
-        final row = await db.recordingsDao.getRecordingById(localId);
+        final row = await db.itemsDao.getById(localId, '1');
         expect(row!.id, localId);
         expect(
           row.coreId,
@@ -210,7 +212,7 @@ void main() {
 
         // A by-coreId lookup must not crash and must find nothing yet (the
         // tolerate-duplicates query, d8cc85d, sees no row for an unminted id).
-        expect(await db.recordingsDao.recordingByCoreId(999), isNull);
+        expect(await db.itemsDao.getByCoreId(999, '1'), isNull);
       },
       skip: _flagOn ? false : 'ON-only lane',
     );
@@ -236,6 +238,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             appDatabaseProvider.overrideWithValue(db),
+            currentOwnerIdProvider.overrideWithValue('1'),
             testParentSyncOverride(),
             audioRecordingServiceProvider.overrideWithValue(service),
             recordingsRepositoryProvider.overrideWithValue(repo),
@@ -252,7 +255,7 @@ void main() {
 
         final localId = await finishASession(container, title: 'Synced');
 
-        final row = await db.recordingsDao.getRecordingById(localId);
+        final row = await db.itemsDao.getById(localId, '1');
         expect(row, isNotNull);
         // Loose membership: capture is decoupled from organization.
         expect(
@@ -279,7 +282,7 @@ void main() {
         );
         // No row was created on Core, so no by-coreId row exists (no dup, and
         // no leak): the loose item produced ZERO Core state.
-        final byCore = await db.recordingsDao.recordingByCoreId(777);
+        final byCore = await db.itemsDao.getByCoreId(777, '1');
         expect(
           byCore,
           isNull,
@@ -308,6 +311,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           audioRecordingServiceProvider.overrideWithValue(service),
           recordingsRepositoryProvider.overrideWithValue(repo),
@@ -317,7 +321,7 @@ void main() {
 
       final localId = await finishASession(container, title: 'Standup');
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       // OFF: the forced-mint invariant holds — a Matome was minted and the
       // recording points at it.

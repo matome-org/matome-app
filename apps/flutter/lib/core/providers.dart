@@ -13,6 +13,8 @@ import 'http/api_exception.dart';
 import 'http/token_store.dart';
 import 'settings/settings_store.dart';
 
+export '../features/auth/current_owner.dart' show currentOwnerIdProvider;
+
 /// Secure token store. Overridden in tests with an in-memory implementation.
 final tokenStoreProvider = Provider<TokenStore>((ref) => SecureTokenStore());
 
@@ -92,8 +94,8 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 
 /// Typed DAO providers for the local store — the plain-Dart persistence
 /// surface the UI/sync layer (Wave 3) drives.
-final recordingsDaoProvider = Provider(
-  (ref) => ref.watch(appDatabaseProvider).recordingsDao,
+final itemsDaoProvider = Provider(
+  (ref) => ref.watch(appDatabaseProvider).itemsDao,
 );
 final workspacesDaoProvider = Provider(
   (ref) => ref.watch(appDatabaseProvider).workspacesDao,

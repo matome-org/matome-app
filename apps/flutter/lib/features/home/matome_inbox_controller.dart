@@ -33,7 +33,11 @@ class MatomeInboxController
 
   MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
 
-  Future<List<MatomeItem>> _loadItems() => _matomesDao.listInboxMatomeItems();
+  Future<List<MatomeItem>> _loadItems() async {
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return const [];
+    return _matomesDao.listInboxMatomeItems(ownerId);
+  }
 
   /// Re-reads the inbox matomes from Drift and publishes them.
   Future<void> reloadFromLocal() async {

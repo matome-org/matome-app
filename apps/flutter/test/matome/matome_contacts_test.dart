@@ -8,7 +8,6 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
-import 'package:matome_flutter/features/contacts/contacts_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
@@ -24,8 +23,8 @@ Future<void> revealDetails(WidgetTester tester) async {
 
 /// #1375 — attaching contacts to a Matome. Exercises the controller's
 /// attach/detach actions (the `matome_contacts` edge), the header chip render,
-/// and the directory picker. The owner-id falls back to the placeholder (no
-/// signed-in user under `flutter test`), matching the Contacts tab.
+/// and the directory picker. The container supplies the same owner id used by
+/// canonical Items and Contacts.
 void main() {
   // The controller reads authStateProvider, whose AuthController touches the
   // (secure) token store on creation — give it a network-free in-memory store
@@ -54,7 +53,7 @@ void main() {
   Future<void> seedContact(
     String id, {
     required String name,
-    String ownerId = kPlaceholderContactOwnerId,
+    String ownerId = '1',
   }) {
     return db.contactsDao.create(
       ContactsCompanion.insert(
@@ -70,6 +69,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         tokenStoreProvider.overrideWithValue(InMemoryTokenStore()),
       ],
     );
@@ -89,29 +89,31 @@ void main() {
     );
   }
 
-  test('attachContact persists a matome_contacts edge; detachContact removes it',
-      () async {
-    await seedMatome('m1');
-    await seedContact('c1', name: 'Ada');
-    final c = container();
-    final controller = c.read(matomeDetailControllerProvider('m1').notifier);
-    await controller.load();
+  test(
+    'attachContact persists a matome_contacts edge; detachContact removes it',
+    () async {
+      await seedMatome('m1');
+      await seedContact('c1', name: 'Ada');
+      final c = container();
+      final controller = c.read(matomeDetailControllerProvider('m1').notifier);
+      await controller.load();
 
-    await controller.attachContact('c1');
+      await controller.attachContact('c1');
 
-    final after = await db.contactsDao.listContactsForMatome('m1');
-    expect(after, hasLength(1));
-    expect(after.single.contact.id, 'c1');
-    expect(after.single.role, 'attendee');
-    expect(
-      c.read(matomeDetailControllerProvider('m1')).contacts,
-      hasLength(1),
-    );
+      final after = await db.contactsDao.listContactsForMatome('m1');
+      expect(after, hasLength(1));
+      expect(after.single.contact.id, 'c1');
+      expect(after.single.role, 'attendee');
+      expect(
+        c.read(matomeDetailControllerProvider('m1')).contacts,
+        hasLength(1),
+      );
 
-    await controller.detachContact('c1');
-    expect(await db.contactsDao.listContactsForMatome('m1'), isEmpty);
-    expect(c.read(matomeDetailControllerProvider('m1')).contacts, isEmpty);
-  });
+      await controller.detachContact('c1');
+      expect(await db.contactsDao.listContactsForMatome('m1'), isEmpty);
+      expect(c.read(matomeDetailControllerProvider('m1')).contacts, isEmpty);
+    },
+  );
 
   test('attachContact is idempotent (UNIQUE matome_id+contact_id)', () async {
     await seedMatome('m2');
@@ -140,8 +142,9 @@ void main() {
     expect(dir.map((e) => e.id), isNot(contains('c3')));
   });
 
-  testWidgets('attaching via the picker renders a chip; detach removes it',
-      (tester) async {
+  testWidgets('attaching via the picker renders a chip; detach removes it', (
+    tester,
+  ) async {
     await seedMatome('m4');
     await seedContact('c1', name: 'Ada');
     final c = container();
@@ -183,8 +186,9 @@ void main() {
     expect(await db.contactsDao.listContactsForMatome('m4'), isEmpty);
   });
 
-  testWidgets('the tag-contacts coming-soon stub is replaced; Share remains',
-      (tester) async {
+  testWidgets('the tag-contacts coming-soon stub is replaced; Share remains', (
+    tester,
+  ) async {
     await seedMatome('m5');
     final c = container();
 

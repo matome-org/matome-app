@@ -14,13 +14,14 @@ import '../../core/db/db_encryption.dart'
 import '../../core/observability/app_log.dart';
 import '../../core/storage/app_storage.dart';
 import '../../core/db/app_database.dart';
+import '../auth/current_owner.dart';
+import '../items/matome_item_type.dart';
 import '../recordings/recording.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recording_result_waiter.dart';
 import '../recordings/recording_status_event.dart';
 import '../recordings/upload_queue.dart';
 import 'inbox_controller.dart';
-import 'inbox_sync.dart';
 
 /// Awaits a recording's terminal result by polling `GET /api/recordings/{id}`
 /// until it is `done` / `failed` (or times out). Injectable so the
@@ -59,7 +60,7 @@ class PickedUpload {
   /// [kMediaEncryptionEnabled] was on at import time). NULL means [file] is a
   /// plaintext file, which is every import today (the flag is dark). Mirrors
   /// `recordings.wrapped_fek` / `recordings.file_nonce_prefix` — see
-  /// `tables.dart` ([Recordings.wrappedFek]) for the exact contract.
+  /// `tables.dart` ([FileBlobs.wrappedFek]) for the exact contract.
   final String? wrappedFekBase64;
   final String? fileNoncePrefixBase64;
 }
@@ -363,9 +364,8 @@ class InboxUploader {
     // 1. LOCAL-FIRST: persist the row before touching Core so the capture can
     //    never be orphaned (the #828 root cause). The card appears immediately.
     final localId = mintLocalRecordingId();
-    await _inbox.insertLocalUpload(
-      _pendingCompanion(localId, stored, resolvedDuration),
-    );
+    final pending = _pendingCompanions(localId, stored, resolvedDuration);
+    await _inbox.insertLocalUpload(item: pending.item, file: pending.file);
 
     // Register the post-confirm cleanup BEFORE draining so the queue runs it the
     // moment this row reconciles `done` (closes the #828 orphan-WAV seam).
@@ -381,30 +381,42 @@ class InboxUploader {
     return localId;
   }
 
-  RecordingsCompanion _pendingCompanion(
+  ({ItemsCompanion item, FileBlobsCompanion file}) _pendingCompanions(
     String localId,
     PickedUpload picked,
     int durationSeconds,
   ) {
     final now = DateTime.now();
-    return RecordingsCompanion(
-      id: Value(localId),
-      coreId: const Value(null),
-      title: Value(picked.title),
-      timestamp: Value(formatClock(now)),
-      duration: Value(formatDurationText(durationSeconds)),
-      badge: const Value('Inbox'),
-      isProcessing: const Value(1),
-      audioFilePath: Value(picked.file.path),
-      createdAt: Value(now.millisecondsSinceEpoch),
-      mediaType: Value(picked.mediaType),
-      processingStatus: const Value(kProcessingStatusPendingUpload),
-      // Media encryption metadata (#1855, plan #131 W4) — NULL unless
-      // [durableImportCopy] ran the (dark by default) encrypted branch, in
-      // which case these mirror the ciphertext file's wrapped FEK + nonce
-      // prefix (see [PickedUpload.wrappedFekBase64] doc).
-      wrappedFek: Value(picked.wrappedFekBase64),
-      fileNoncePrefix: Value(picked.fileNoncePrefixBase64),
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) {
+      throw StateError('An authenticated owner is required to create an Item');
+    }
+    final timestamp = now.millisecondsSinceEpoch;
+    final fileId = 'file_$localId';
+    return (
+      item: ItemsCompanion.insert(
+        id: localId,
+        ownerId: ownerId,
+        clientId: localId,
+        itemType: MatomeItemType.file.wireName,
+        title: Value(picked.title),
+        fileBlobId: Value(fileId),
+        processingState: const Value('not_requested'),
+        syncState: const Value(kProcessingStatusPendingUpload),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      ),
+      file: FileBlobsCompanion.insert(
+        id: fileId,
+        filename: Value(picked.title),
+        mediaType: picked.mediaType,
+        duration: Value(durationSeconds > 0 ? durationSeconds : null),
+        localPath: Value(picked.file.path),
+        wrappedFek: Value(picked.wrappedFekBase64),
+        fileNoncePrefix: Value(picked.fileNoncePrefixBase64),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      ),
     );
   }
 }

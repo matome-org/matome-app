@@ -13,10 +13,13 @@ import 'package:matome_flutter/core/db/app_database.dart'
     show
         AppDatabase,
         ContactRow,
+        FileBlobRow,
+        ItemRow,
         ItemsCompanion,
-        RecordingRow,
         TextContentsCompanion,
         WorkspaceRow;
+import 'package:matome_flutter/core/db/daos/items_dao.dart'
+    show ItemWithPayload;
 import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
@@ -29,7 +32,11 @@ import 'package:matome_flutter/features/auth/auth_models.dart' show AuthSession;
 import 'package:matome_flutter/core/audio/audio_playback.dart';
 import 'package:matome_flutter/core/db/file_row.dart';
 import 'package:matome_flutter/core/providers.dart'
-    show appDatabaseProvider, settingsStoreProvider, tokenStoreProvider;
+    show
+        appDatabaseProvider,
+        currentOwnerIdProvider,
+        settingsStoreProvider,
+        tokenStoreProvider;
 import 'package:matome_flutter/core/settings/settings_store.dart'
     show InMemorySettingsStore;
 import 'package:matome_flutter/features/contacts/contact_detail_screen.dart'
@@ -63,6 +70,8 @@ import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_item.dart';
 import 'package:matome_flutter/features/home/loose_inbox_controller.dart';
 import 'package:matome_flutter/features/home/matome_inbox_controller.dart';
+import 'package:matome_flutter/features/items/matome_item_type.dart'
+    show MatomeItemType;
 import 'package:matome_flutter/features/matome/matome_actions_menu.dart';
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart'
     show
@@ -2318,8 +2327,11 @@ Widget _textItemPageScene() {
         return const Center(child: CircularProgressIndicator());
       }
       return ProviderScope(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
-        child: const TextItemPage(id: -9001),
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('widgetbook-owner'),
+        ],
+        child: const TextItemPage(id: 'widgetbook-text-note'),
       );
     },
   );
@@ -2333,20 +2345,26 @@ Future<AppDatabase> _seedTextItemDb() async {
       .into(db.textContents)
       .insert(
         TextContentsCompanion.insert(
-          id: const Value(-9001),
+          id: 'widgetbook-text-note-content',
           body:
               'Plain text note\n\nThis file-less item is stored in text_contents and joined through items by MatomeItemType.text.',
+          createdAt: _journeyTimestamp,
+          updatedAt: _journeyTimestamp,
         ),
       );
   await db
       .into(db.items)
       .insert(
         ItemsCompanion.insert(
-          id: const Value(-9001),
-          matomeId: -7001,
-          position: 1,
+          id: 'widgetbook-text-note',
+          ownerId: 'widgetbook-owner',
+          clientId: 'widgetbook-text-note',
+          matomeId: const Value('widgetbook-matome-text'),
+          position: const Value(1),
           itemType: 'text',
-          textContentId: const Value(-9001),
+          textContentId: const Value('widgetbook-text-note-content'),
+          createdAt: _journeyTimestamp,
+          updatedAt: _journeyTimestamp,
         ),
       );
   return db;
@@ -2808,28 +2826,45 @@ const _widgetbookContactRows = <ContactRow>[
   ),
 ];
 
-const _journeyAudioRow = RecordingRow(
-  id: 'widgetbook-audio-review',
-  title: 'Weekly product review',
-  summary: 'Decision log, launch risks, and owners captured from the review.',
-  timestamp: 'Today 09:24',
-  duration: '12:04',
-  badge: 'Product',
-  isProcessing: 0,
-  audioFilePath: '',
-  createdAt: _journeyTimestamp,
-  notes: 'Follow up with design on empty states before Friday.',
-  workspaceId: 'widgetbook-space-work',
-  mediaType: 'audio',
-  processingStatus: 'done',
-  coreId: 501,
-  matomeId: 'widgetbook-matome-review',
-  transcript:
-      'We confirmed the launch checklist, kept analytics instrumentation as the '
-      'highest risk, and assigned owners for support docs, billing copy, and the '
-      'Friday go/no-go review.',
-  ownerId: 'widgetbook-owner',
-  byteSize: 2480000,
+const _journeyAudioRow = ItemWithPayload(
+  type: MatomeItemType.file,
+  item: ItemRow(
+    id: 'widgetbook-audio-review',
+    coreId: 501,
+    ownerId: 'widgetbook-owner',
+    clientId: 'widgetbook-audio-review',
+    workspaceId: 'widgetbook-space-work',
+    matomeId: 'widgetbook-matome-review',
+    itemType: 'file',
+    title: 'Weekly product review',
+    notes: 'Follow up with design on empty states before Friday.',
+    metadata: '{}',
+    processingState: 'succeeded',
+    sourceRevision: 1,
+    processingOutputs:
+        '{"summary":"Decision log, launch risks, and owners captured from the review.","transcript":"We confirmed the launch checklist, kept analytics instrumentation as the highest risk, and assigned owners for support docs, billing copy, and the Friday go/no-go review."}',
+    fileBlobId: 'widgetbook-audio-review-blob',
+    isDirty: false,
+    syncState: 'synced',
+    createdAt: _journeyTimestamp,
+    updatedAt: _journeyTimestamp,
+  ),
+  file: FileBlobRow(
+    id: 'widgetbook-audio-review-blob',
+    coreId: 501,
+    filename: 'weekly-product-review.m4a',
+    contentType: 'audio/mp4',
+    byteSize: 2480000,
+    mediaType: 'audio',
+    duration: 724,
+    uploadState: 'uploaded',
+    uploadGeneration: 1,
+    uploadedAt: _journeyTimestamp,
+    localPath: '',
+    isDirty: false,
+    createdAt: _journeyTimestamp,
+    updatedAt: _journeyTimestamp,
+  ),
 );
 
 class _WidgetbookInboxController extends InboxController {

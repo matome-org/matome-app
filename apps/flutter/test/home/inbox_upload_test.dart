@@ -130,6 +130,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           recordingsRepositoryProvider.overrideWithValue(repo),
           // W4: the terminal-result awaiter moved from InboxUploader onto the queue.
@@ -157,11 +158,11 @@ void main() {
 
       // Production orchestration reconciled the parent first, then immediately
       // drained the child without a test-only/manual reconciliation step.
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       expect(row!.coreId, 321);
       expect(row.processingStatus, 'done');
-      expect(row.isProcessing, 0);
+      expect(row.isProcessing, isFalse);
       expect(row.summary, 'A short memo');
 
       final items = container.read(inboxControllerProvider).requireValue;
@@ -195,6 +196,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           recordingsRepositoryProvider.overrideWithValue(repo),
         ],
@@ -211,12 +213,12 @@ void main() {
       expect(isLocalRecordingId(localId), isTrue);
 
       // The local row survives with an explicit retryable Core block.
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       expect(row!.coreId, isNull);
       expect(row.processingStatus, kProcessingStatusBlockedOffline);
-      expect(row.isProcessing, 0);
-      expect(row.audioFilePath, tmp.path);
+      expect(row.isProcessing, isFalse);
+      expect(row.localPath, tmp.path);
 
       // The card is visible in the Inbox.
       final items = container.read(inboxControllerProvider).requireValue;
@@ -269,6 +271,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(),
         recordingsRepositoryProvider.overrideWithValue(repo),
         inboxUploaderProvider.overrideWith(
@@ -292,18 +295,18 @@ void main() {
       importFromExternalSource: true,
     );
 
-    final row = await db.recordingsDao.getRecordingById(localId);
+    final row = await db.itemsDao.getById(localId, '1');
     expect(row, isNotNull);
     // Stored path is the DURABLE copy, NOT the picker source.
-    expect(row!.audioFilePath, isNot(source.path));
-    expect(row.audioFilePath.startsWith(durableDir.path), isTrue);
-    expect(File(row.audioFilePath).existsSync(), isTrue);
+    expect(row!.localPath, isNot(source.path));
+    expect(row.localPath!.startsWith(durableDir.path), isTrue);
+    expect(File(row.localPath!).existsSync(), isTrue);
 
     // Delete the SOURCE — the durable copy must still be a playable local file.
     await source.delete();
     expect(await source.exists(), isFalse);
-    expect(File(row.audioFilePath).existsSync(), isTrue);
-    expect(await File(row.audioFilePath).length(), 32);
+    expect(File(row.localPath!).existsSync(), isTrue);
+    expect(await File(row.localPath!).length(), 32);
   });
 
   test('WEB import is cloud-direct: durableImportCopy returns the picked file '
@@ -331,8 +334,9 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        testParentSyncOverride(),
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+          testParentSyncOverride(),
         recordingsRepositoryProvider.overrideWithValue(repo),
         inboxUploaderProvider.overrideWith(
           (ref) => InboxUploader(
@@ -353,9 +357,9 @@ void main() {
           importFromExternalSource: true,
         );
 
-    final row = await db.recordingsDao.getRecordingById(localId);
+    final row = await db.itemsDao.getById(localId, '1');
     // No durable copy: the stored path is the picked file itself (cloud-direct).
-    expect(row!.audioFilePath, source.path);
+    expect(row!.localPath, source.path);
   });
 
   test(
@@ -389,6 +393,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           recordingsRepositoryProvider.overrideWithValue(repo),
           inboxUploaderProvider.overrideWith(
@@ -406,8 +411,8 @@ void main() {
             // importFromExternalSource omitted → defaults false (recorder path).
           );
 
-      final row = await db.recordingsDao.getRecordingById(localId);
-      expect(row!.audioFilePath, segment.path);
+      final row = await db.itemsDao.getById(localId, '1');
+      expect(row!.localPath, segment.path);
       expect(
         copyCalled,
         isFalse,
@@ -466,6 +471,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           recordingsRepositoryProvider.overrideWithValue(repo),
           inboxUploaderProvider.overrideWith(
@@ -490,13 +496,13 @@ void main() {
             importFromExternalSource: true,
           );
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       // Stored duration is the probed length, formatted as the card renders it.
-      expect(row!.duration, '3m 25s');
+      expect(row!.durationSeconds, 205);
       // The probe read the DURABLE copy, not the (deletable) picker source.
       expect(probedPath, isNot(source.path));
-      expect(probedPath, row.audioFilePath);
+      expect(probedPath, row.localPath);
 
       // The Inbox card surfaces the same (non-empty) duration string → renders it.
       final item = container.read(inboxControllerProvider).requireValue.single;
@@ -529,6 +535,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(),
         recordingsRepositoryProvider.overrideWithValue(repo),
         inboxUploaderProvider.overrideWith(
@@ -550,8 +557,8 @@ void main() {
           importFromExternalSource: true,
         );
 
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.duration, '12s');
+    final row = await db.itemsDao.getById(localId, '1');
+    expect(row!.durationSeconds, 12);
     expect(
       probeCalled,
       isFalse,

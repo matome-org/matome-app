@@ -12,7 +12,6 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
@@ -24,6 +23,7 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import '../support/fake_parent_sync.dart';
+import '../support/item_fixtures.dart';
 
 /// Local-first-spaces #102 W2 — imports land LOOSE behind the flag, the
 /// flag-off path is byte-for-byte unchanged, and the existing synced (upload)
@@ -81,6 +81,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           recordingsRepositoryProvider.overrideWithValue(repo),
         ],
@@ -93,7 +94,7 @@ void main() {
             PickedUpload(file: tmp, title: 'Imported', mediaType: 'audio'),
           );
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       // LOOSE: no matome, no space. Its effective space is therefore NULL ⇒
       // Inbox (INBOX ⟺ effectiveSpace == NULL, spec R1.3).
@@ -221,25 +222,22 @@ void main() {
         // because the effective space resolves to CLOUD; the loose-import change
         // must not stop the synced path.
         const localId = 'rec_local_cloud_filed';
-        await db.recordingsDao.insertRecording(
-          RecordingsCompanion(
-            id: const Value(localId),
-            coreId: const Value(null),
-            title: const Value('Filed memo'),
-            timestamp: const Value('12:00'),
-            duration: const Value('5s'),
-            isProcessing: const Value(1),
-            audioFilePath: Value(tmp.path),
-            createdAt: Value(DateTime.now().millisecondsSinceEpoch),
-            workspaceId: const Value('7'), // a CLOUD space (numeric Core id)
-            mediaType: const Value('audio'),
-            processingStatus: const Value('pending_upload'),
-          ),
+        await insertTestFileItem(
+          db,
+          id: localId,
+          ownerId: 'owner-1',
+          title: 'Filed memo',
+          durationSeconds: 5,
+          localPath: tmp.path,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+          workspaceId: '7',
+          mediaType: 'audio',
+          processingStatus: 'pending_upload',
         );
 
         await container.read(uploadQueueProvider).drainRow(localId);
 
-        final row = await db.recordingsDao.getRecordingById(localId);
+        final row = await db.itemsDao.getById(localId, 'owner-1');
         expect(row, isNotNull);
         // W1 does not invent organization for a loose item: W2 owns the
         // canonical parent/work_queue cutover. The durable reason prevents a
@@ -275,6 +273,7 @@ void main() {
         final container = ProviderContainer(
           overrides: [
             appDatabaseProvider.overrideWithValue(db),
+            currentOwnerIdProvider.overrideWithValue('1'),
             testParentSyncOverride(),
             recordingsRepositoryProvider.overrideWithValue(repo),
           ],
@@ -287,7 +286,7 @@ void main() {
               PickedUpload(file: tmp, title: 'Imported', mediaType: 'audio'),
             );
 
-        final row = await db.recordingsDao.getRecordingById(localId);
+        final row = await db.itemsDao.getById(localId, '1');
         expect(row, isNotNull);
         // OFF: the forced-mint invariant holds — a Matome was minted and the
         // recording points at it.

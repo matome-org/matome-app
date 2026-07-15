@@ -27,12 +27,13 @@ import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/contacts/contact.dart';
 import 'package:matome_flutter/features/contacts/contacts_repository.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/matome/matome.dart';
 import 'package:matome_flutter/features/matome/matome_sync_service.dart';
 import 'package:matome_flutter/features/matome/matomes_repository.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
+
+import '../support/item_fixtures.dart';
 
 ApiClient _client() =>
     ApiClient(tokenStore: InMemoryTokenStore(), dio: Dio()..close());
@@ -212,17 +213,15 @@ void main() {
         final localSpace = await _seedSpace(db, isLocal: true, id: 33);
         await _seedMatome(db, id: 'mat_local_kids', spaceId: localSpace);
         // A reconciled child (coreId 7) — under the legacy path it would PATCH.
-        await db.recordingsDao.upsertRecordingWithMatome(
-          RecordingsCompanion.insert(
-            id: 'rec_child',
-            title: 'Child',
-            timestamp: '9',
-            duration: '1',
-            audioFilePath: '/tmp/a.m4a',
-            createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-            coreId: const Value(7),
-            matomeId: const Value('mat_local_kids'),
-          ),
+        await insertTestFileItem(
+          db,
+          id: 'rec_child',
+          ownerId: 'owner-1',
+          title: 'Child',
+          localPath: '/tmp/a.m4a',
+          createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+          coreId: 7,
+          matomeId: 'mat_local_kids',
         );
 
         final matomes = _CountingMatomesRepository();

@@ -13,7 +13,6 @@ import 'package:matome_flutter/core/settings/reading_pane.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/home/matome_inbox_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
@@ -71,29 +70,26 @@ Future<void> _seedMatome(
   );
 }
 
-ProviderContainer _container(
-  AppDatabase db, {
-  ReadingPaneMode? mode,
-}) {
-  final c = ProviderContainer(overrides: [
-    appDatabaseProvider.overrideWithValue(db),
-    recordingsRepositoryProvider.overrideWithValue(
-      _EmptyRepo(
-        apiClient: ApiClient(
-          tokenStore: InMemoryTokenStore(),
-          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+ProviderContainer _container(AppDatabase db, {ReadingPaneMode? mode}) {
+  final c = ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      recordingsRepositoryProvider.overrideWithValue(
+        _EmptyRepo(
+          apiClient: ApiClient(
+            tokenStore: InMemoryTokenStore(),
+            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+          ),
         ),
       ),
-    ),
-    currentOwnerIdProvider.overrideWithValue('1'),
-    uploadRetryServiceProvider.overrideWith(
-      (ref) => _InertRetryService(ref),
-    ),
-    if (mode != null)
-      readingPaneModeProvider(ReadingPaneSurface.inbox).overrideWith(
-        (ref) => _StubReadingPane(ReadingPaneSurface.inbox, mode),
-      ),
-  ]);
+      currentOwnerIdProvider.overrideWithValue('1'),
+      uploadRetryServiceProvider.overrideWith((ref) => _InertRetryService(ref)),
+      if (mode != null)
+        readingPaneModeProvider(ReadingPaneSurface.inbox).overrideWith(
+          (ref) => _StubReadingPane(ReadingPaneSurface.inbox, mode),
+        ),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -102,7 +98,7 @@ ProviderContainer _container(
 /// set synchronously so the pumped tree sees it on the first frame).
 class _StubReadingPane extends ReadingPaneModeController {
   _StubReadingPane(ReadingPaneSurface surface, ReadingPaneMode mode)
-      : super(InMemorySettingsStore(), surface) {
+    : super(InMemorySettingsStore(), surface) {
     state = mode;
   }
 }
@@ -111,10 +107,7 @@ Widget _app(ProviderContainer container) {
   return UncontrolledProviderScope(
     container: container,
     child: TranslationProvider(
-      child: MaterialApp(
-        theme: buildLightTheme(),
-        home: const HomeScreen(),
-      ),
+      child: MaterialApp(theme: buildLightTheme(), home: const HomeScreen()),
     ),
   );
 }

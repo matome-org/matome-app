@@ -24,6 +24,8 @@ import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
+import '../support/item_fixtures.dart';
+
 /// CHARACTERIZATION TEST (task #1451).
 ///
 /// Proves an end-to-end claim that was previously UNPROVEN: that the #43
@@ -106,6 +108,7 @@ void main() {
     return ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         recordingsRepositoryProvider.overrideWithValue(repo),
         uploadQueueProvider.overrideWith(
           (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
@@ -130,37 +133,33 @@ void main() {
     // The queue's create leg (createItemRecording) needs that reconciled matome —
     // POST /api/matomes/{coreMatomeId}/items — so seed one here.
     final matomeId = 'mat_local_$localId';
-    await db.into(db.matomes).insert(
-      MatomesCompanion.insert(
-        id: matomeId,
-        title: 'Docs',
-        happenedAt: DateTime.now().millisecondsSinceEpoch,
-        createdAt: DateTime.now().millisecondsSinceEpoch,
-        coreId: const Value(42),
-      ),
-    );
+    await db
+        .into(db.matomes)
+        .insert(
+          MatomesCompanion.insert(
+            id: matomeId,
+            title: 'Docs',
+            happenedAt: DateTime.now().millisecondsSinceEpoch,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+            coreId: const Value(42),
+          ),
+        );
     // Durable copy uses an opaque `import_*.<ext>` name (see durableImportCopy);
     // reproduce that — the extension survives the rename via originalExtension.
     final durable = File('${tmp.path}/import_${localId}_doc.$extension');
     final bytes = utf8.encode('DOC[$extension] body for $localId');
     await durable.writeAsBytes(bytes);
     final now = DateTime.now();
-    await db.recordingsDao.upsertRecording(
-      RecordingsCompanion(
-        id: Value(localId),
-        coreId: const Value(null),
-        matomeId: Value(matomeId),
-        title: Value('Report.$extension'),
-        timestamp: const Value('1:00 PM'),
-        duration: const Value(''),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: Value(durable.path),
-        createdAt: Value(now.millisecondsSinceEpoch),
-        mediaType: const Value('document'),
-        originalExtension: Value(extension),
-        processingStatus: const Value(kProcessingStatusPendingUpload),
-      ),
+    await insertTestFileItem(
+      db,
+      id: localId,
+      matomeId: matomeId,
+      title: 'Report.$extension',
+      localPath: durable.path,
+      filename: 'Report.$extension',
+      createdAt: now.millisecondsSinceEpoch,
+      mediaType: 'document',
+      processingStatus: kProcessingStatusPendingUpload,
     );
     return (localId, durable, bytes);
   }
@@ -293,13 +292,13 @@ void main() {
 
         // 3. Terminal state: reconciled coreId + done; media_type still document;
         //    original extension preserved on the row.
-        final row = await db.recordingsDao.getRecordingById(localId);
+        final row = await db.itemsDao.getById(localId, '1');
         expect(
           row!.processingStatus,
           'done',
           reason: 'document row reached terminal done',
         );
-        expect(row.isProcessing, 0);
+        expect(row.isProcessing, isFalse);
         expect(row.coreId, repo.coreIdMinted, reason: 'coreId reconciled');
         expect(
           row.mediaType,

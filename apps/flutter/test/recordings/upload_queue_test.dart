@@ -23,6 +23,8 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 void main() {
   // A poll-driven awaiter that resolves from GET (no live socket). The fake
   // repo's fetchRecording supplies the terminal result.
@@ -71,22 +73,18 @@ void main() {
             coreId: const Value(42),
           ),
         );
-    await db.recordingsDao.upsertRecording(
-      RecordingsCompanion(
-        id: Value(localId),
-        coreId: Value(coreId),
-        matomeId: Value(matomeId),
-        title: const Value('Memo'),
-        timestamp: const Value('1:00 PM'),
-        duration: const Value('34s'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(1),
-        audioFilePath: Value(audio.path),
-        createdAt: Value(now.millisecondsSinceEpoch),
-        mediaType: const Value('audio'),
-        processingStatus: const Value(kProcessingStatusPendingUpload),
-        notes: Value(notes),
-      ),
+    await insertTestFileItem(
+      db,
+      id: localId,
+      coreId: coreId,
+      matomeId: matomeId,
+      title: 'Memo',
+      durationSeconds: 34,
+      localPath: audio.path,
+      createdAt: now.millisecondsSinceEpoch,
+      mediaType: 'audio',
+      processingStatus: kProcessingStatusPendingUpload,
+      notes: notes,
     );
     return (localId, audio);
   }
@@ -108,6 +106,7 @@ void main() {
     return ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         recordingsRepositoryProvider.overrideWithValue(repo),
         uploadQueueProvider.overrideWith(
           (ref) => UploadQueue(
@@ -142,7 +141,7 @@ void main() {
     repo.coreUp = false;
     await queue.drain();
 
-    var row = await db.recordingsDao.getRecordingById(localId);
+    var row = await db.itemsDao.getById(localId, '1');
     expect(
       row!.processingStatus,
       kProcessingStatusBlockedOffline,
@@ -157,15 +156,18 @@ void main() {
     repo.coreUp = true;
     await queue.drain();
 
-    row = await db.recordingsDao.getRecordingById(localId);
+    row = await db.itemsDao.getById(localId, '1');
     expect(
       row!.coreId,
       repo.coreIdMinted,
       reason: 'coreId reconciled on drain',
     );
     expect(row.processingStatus, 'done');
-    expect(row.isProcessing, 0);
+    expect(row.isProcessing, isFalse);
     expect(row.summary, 'A memo');
+    expect(row.file?.uploadState, 'uploaded');
+    expect(row.file?.uploadedAt, isNotNull);
+    expect(row.file?.isDirty, isFalse);
     expect(
       row.notes,
       userNotes,
@@ -211,13 +213,15 @@ void main() {
       final (localId, audio) = await seedPendingRow(db, tmp, notes: userNotes);
       await container.read(uploadQueueProvider).drain();
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(
         row!.processingStatus,
         'failed',
         reason: 'terminal failure persists',
       );
       expect(row.coreId, repo.coreIdMinted, reason: 'create did happen');
+      expect(row.file?.uploadState, 'uploaded');
+      expect(row.file?.uploadedAt, isNotNull);
       expect(row.processingErrorCode, kProcessingErrorFailed);
       expect(
         row.notes,
@@ -256,7 +260,7 @@ void main() {
       final (localId, _) = await seedPendingRow(db, tmp, notes: userNotes);
       await container.read(uploadQueueProvider).drain();
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row!.processingStatus, 'failed');
       expect(row.processingErrorCode, kProcessingErrorTimeout);
       expect(row.notes, userNotes);
@@ -289,7 +293,7 @@ void main() {
     final (localId, audio) = await seedPendingRow(db, tmp, notes: userNotes);
     await container.read(uploadQueueProvider).drain();
 
-    final row = await db.recordingsDao.getRecordingById(localId);
+    final row = await db.itemsDao.getById(localId, '1');
     expect(row!.processingStatus, kProcessingStatusBlockedOffline);
     expect(
       row.notes,
@@ -332,7 +336,7 @@ void main() {
       final (localId, _) = await seedPendingRow(db, tmp, notes: userNotes);
       await container.read(uploadQueueProvider).drain();
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row!.processingStatus, kProcessingStatusBlockedCore);
       expect(
         row.notes,
@@ -370,7 +374,7 @@ void main() {
       final (localId, _) = await seedPendingRow(db, tmp, notes: userNotes);
       await container.read(uploadQueueProvider).drain();
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(row!.processingStatus, 'failed');
       expect(row.processingErrorCode, kProcessingErrorUploadFailed);
       expect(
@@ -383,7 +387,7 @@ void main() {
         isNot(contains('10.0.0.5')),
         reason: 'raw toString() detail must never reach notes',
       );
-      final persisted = row.toJson().values.join('\n');
+      final persisted = '${row.item.toJson()} ${row.file?.toJson()}';
       expect(persisted, isNot(contains('10.0.0.5')));
       expect(persisted, isNot(contains('X-Amz-Credential')));
     },
@@ -421,7 +425,7 @@ void main() {
         reason: '#2033 replay returns the same item plus a fresh presign',
       );
       expect(repo.lastClientId, localId);
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(
         row!.coreId,
         repo.coreIdMinted,
@@ -477,7 +481,7 @@ void main() {
 
       await container.read(uploadQueueProvider).drain();
 
-      var row = await db.recordingsDao.getRecordingById(localId);
+      var row = await db.itemsDao.getById(localId, '1');
       expect(row!.processingStatus, kProcessingStatusBlockedSignedOut);
       expect(row.coreId, isNull);
       expect(await audio.exists(), isTrue);
@@ -485,7 +489,7 @@ void main() {
       repo.unauthorized = false;
       await container.read(uploadQueueProvider).drain();
 
-      row = await db.recordingsDao.getRecordingById(localId);
+      row = await db.itemsDao.getById(localId, '1');
       expect(row!.processingStatus, 'done');
       expect(row.coreId, repo.coreIdMinted);
     },
@@ -508,11 +512,12 @@ void main() {
         coreId: repo.coreIdMinted,
         notes: '  Restart note.\nExact bytes.  ',
       );
-      await db.recordingsDao.updateRecording(
+      await db.itemsDao.updateItem(
         localId,
-        const RecordingsCompanion(
-          processingStatus: Value('processing'),
-          isProcessing: Value(1),
+        '1',
+        const ItemsCompanion(
+          processingState: Value('processing'),
+          syncState: Value('processing'),
           processingErrorCode: Value(kProcessingErrorUploadFailed),
         ),
       );
@@ -522,7 +527,7 @@ void main() {
       addTearDown(container.dispose);
       await container.read(uploadQueueProvider).drain();
 
-      final row = await db.recordingsDao.getRecordingById(localId);
+      final row = await db.itemsDao.getById(localId, '1');
       expect(repo.createCalls, 1);
       expect(repo.lastClientId, localId);
       expect(row!.coreId, repo.coreIdMinted);

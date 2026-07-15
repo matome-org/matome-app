@@ -3,1295 +3,6 @@
 part of 'app_database.dart';
 
 // ignore_for_file: type=lint
-class $RecordingsTable extends Recordings
-    with TableInfo<$RecordingsTable, RecordingRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $RecordingsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _titleMeta = const VerificationMeta('title');
-  @override
-  late final GeneratedColumn<String> title = GeneratedColumn<String>(
-    'title',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _summaryMeta = const VerificationMeta(
-    'summary',
-  );
-  @override
-  late final GeneratedColumn<String> summary = GeneratedColumn<String>(
-    'summary',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _timestampMeta = const VerificationMeta(
-    'timestamp',
-  );
-  @override
-  late final GeneratedColumn<String> timestamp = GeneratedColumn<String>(
-    'timestamp',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _durationMeta = const VerificationMeta(
-    'duration',
-  );
-  @override
-  late final GeneratedColumn<String> duration = GeneratedColumn<String>(
-    'duration',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _badgeMeta = const VerificationMeta('badge');
-  @override
-  late final GeneratedColumn<String> badge = GeneratedColumn<String>(
-    'badge',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('Inbox'),
-  );
-  static const VerificationMeta _isProcessingMeta = const VerificationMeta(
-    'isProcessing',
-  );
-  @override
-  late final GeneratedColumn<int> isProcessing = GeneratedColumn<int>(
-    'isProcessing',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(1),
-  );
-  static const VerificationMeta _audioFilePathMeta = const VerificationMeta(
-    'audioFilePath',
-  );
-  @override
-  late final GeneratedColumn<String> audioFilePath = GeneratedColumn<String>(
-    'audioFilePath',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
-    'createdAt',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
-  @override
-  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
-    'notes',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
-    'workspaceId',
-  );
-  @override
-  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
-    'workspaceId',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _mediaTypeMeta = const VerificationMeta(
-    'mediaType',
-  );
-  @override
-  late final GeneratedColumn<String> mediaType = GeneratedColumn<String>(
-    'mediaType',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('audio'),
-  );
-  static const VerificationMeta _processingStatusMeta = const VerificationMeta(
-    'processingStatus',
-  );
-  @override
-  late final GeneratedColumn<String> processingStatus = GeneratedColumn<String>(
-    'processingStatus',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('done'),
-  );
-  static const VerificationMeta _coreIdMeta = const VerificationMeta('coreId');
-  @override
-  late final GeneratedColumn<int> coreId = GeneratedColumn<int>(
-    'coreId',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _matomeIdMeta = const VerificationMeta(
-    'matomeId',
-  );
-  @override
-  late final GeneratedColumn<String> matomeId = GeneratedColumn<String>(
-    'matome_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _transcriptMeta = const VerificationMeta(
-    'transcript',
-  );
-  @override
-  late final GeneratedColumn<String> transcript = GeneratedColumn<String>(
-    'transcript',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _notesLegacyRawMeta = const VerificationMeta(
-    'notesLegacyRaw',
-  );
-  @override
-  late final GeneratedColumn<String> notesLegacyRaw = GeneratedColumn<String>(
-    'notes_legacy_raw',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _originalExtensionMeta = const VerificationMeta(
-    'originalExtension',
-  );
-  @override
-  late final GeneratedColumn<String> originalExtension =
-      GeneratedColumn<String>(
-        'original_extension',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _ownerIdMeta = const VerificationMeta(
-    'ownerId',
-  );
-  @override
-  late final GeneratedColumn<String> ownerId = GeneratedColumn<String>(
-    'owner_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _byteSizeMeta = const VerificationMeta(
-    'byteSize',
-  );
-  @override
-  late final GeneratedColumn<int> byteSize = GeneratedColumn<int>(
-    'byte_size',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _wrappedFekMeta = const VerificationMeta(
-    'wrappedFek',
-  );
-  @override
-  late final GeneratedColumn<String> wrappedFek = GeneratedColumn<String>(
-    'wrapped_fek',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _fileNoncePrefixMeta = const VerificationMeta(
-    'fileNoncePrefix',
-  );
-  @override
-  late final GeneratedColumn<String> fileNoncePrefix = GeneratedColumn<String>(
-    'file_nonce_prefix',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _processingErrorCodeMeta =
-      const VerificationMeta('processingErrorCode');
-  @override
-  late final GeneratedColumn<String> processingErrorCode =
-      GeneratedColumn<String>(
-        'processing_error_code',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    title,
-    summary,
-    timestamp,
-    duration,
-    badge,
-    isProcessing,
-    audioFilePath,
-    createdAt,
-    notes,
-    workspaceId,
-    mediaType,
-    processingStatus,
-    coreId,
-    matomeId,
-    transcript,
-    notesLegacyRaw,
-    originalExtension,
-    ownerId,
-    byteSize,
-    wrappedFek,
-    fileNoncePrefix,
-    processingErrorCode,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'recordings';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<RecordingRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('title')) {
-      context.handle(
-        _titleMeta,
-        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_titleMeta);
-    }
-    if (data.containsKey('summary')) {
-      context.handle(
-        _summaryMeta,
-        summary.isAcceptableOrUnknown(data['summary']!, _summaryMeta),
-      );
-    }
-    if (data.containsKey('timestamp')) {
-      context.handle(
-        _timestampMeta,
-        timestamp.isAcceptableOrUnknown(data['timestamp']!, _timestampMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_timestampMeta);
-    }
-    if (data.containsKey('duration')) {
-      context.handle(
-        _durationMeta,
-        duration.isAcceptableOrUnknown(data['duration']!, _durationMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_durationMeta);
-    }
-    if (data.containsKey('badge')) {
-      context.handle(
-        _badgeMeta,
-        badge.isAcceptableOrUnknown(data['badge']!, _badgeMeta),
-      );
-    }
-    if (data.containsKey('isProcessing')) {
-      context.handle(
-        _isProcessingMeta,
-        isProcessing.isAcceptableOrUnknown(
-          data['isProcessing']!,
-          _isProcessingMeta,
-        ),
-      );
-    }
-    if (data.containsKey('audioFilePath')) {
-      context.handle(
-        _audioFilePathMeta,
-        audioFilePath.isAcceptableOrUnknown(
-          data['audioFilePath']!,
-          _audioFilePathMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_audioFilePathMeta);
-    }
-    if (data.containsKey('createdAt')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['createdAt']!, _createdAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtMeta);
-    }
-    if (data.containsKey('notes')) {
-      context.handle(
-        _notesMeta,
-        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
-      );
-    }
-    if (data.containsKey('workspaceId')) {
-      context.handle(
-        _workspaceIdMeta,
-        workspaceId.isAcceptableOrUnknown(
-          data['workspaceId']!,
-          _workspaceIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('mediaType')) {
-      context.handle(
-        _mediaTypeMeta,
-        mediaType.isAcceptableOrUnknown(data['mediaType']!, _mediaTypeMeta),
-      );
-    }
-    if (data.containsKey('processingStatus')) {
-      context.handle(
-        _processingStatusMeta,
-        processingStatus.isAcceptableOrUnknown(
-          data['processingStatus']!,
-          _processingStatusMeta,
-        ),
-      );
-    }
-    if (data.containsKey('coreId')) {
-      context.handle(
-        _coreIdMeta,
-        coreId.isAcceptableOrUnknown(data['coreId']!, _coreIdMeta),
-      );
-    }
-    if (data.containsKey('matome_id')) {
-      context.handle(
-        _matomeIdMeta,
-        matomeId.isAcceptableOrUnknown(data['matome_id']!, _matomeIdMeta),
-      );
-    }
-    if (data.containsKey('transcript')) {
-      context.handle(
-        _transcriptMeta,
-        transcript.isAcceptableOrUnknown(data['transcript']!, _transcriptMeta),
-      );
-    }
-    if (data.containsKey('notes_legacy_raw')) {
-      context.handle(
-        _notesLegacyRawMeta,
-        notesLegacyRaw.isAcceptableOrUnknown(
-          data['notes_legacy_raw']!,
-          _notesLegacyRawMeta,
-        ),
-      );
-    }
-    if (data.containsKey('original_extension')) {
-      context.handle(
-        _originalExtensionMeta,
-        originalExtension.isAcceptableOrUnknown(
-          data['original_extension']!,
-          _originalExtensionMeta,
-        ),
-      );
-    }
-    if (data.containsKey('owner_id')) {
-      context.handle(
-        _ownerIdMeta,
-        ownerId.isAcceptableOrUnknown(data['owner_id']!, _ownerIdMeta),
-      );
-    }
-    if (data.containsKey('byte_size')) {
-      context.handle(
-        _byteSizeMeta,
-        byteSize.isAcceptableOrUnknown(data['byte_size']!, _byteSizeMeta),
-      );
-    }
-    if (data.containsKey('wrapped_fek')) {
-      context.handle(
-        _wrappedFekMeta,
-        wrappedFek.isAcceptableOrUnknown(data['wrapped_fek']!, _wrappedFekMeta),
-      );
-    }
-    if (data.containsKey('file_nonce_prefix')) {
-      context.handle(
-        _fileNoncePrefixMeta,
-        fileNoncePrefix.isAcceptableOrUnknown(
-          data['file_nonce_prefix']!,
-          _fileNoncePrefixMeta,
-        ),
-      );
-    }
-    if (data.containsKey('processing_error_code')) {
-      context.handle(
-        _processingErrorCodeMeta,
-        processingErrorCode.isAcceptableOrUnknown(
-          data['processing_error_code']!,
-          _processingErrorCodeMeta,
-        ),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  RecordingRow map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return RecordingRow(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      title: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}title'],
-      )!,
-      summary: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}summary'],
-      ),
-      timestamp: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}timestamp'],
-      )!,
-      duration: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}duration'],
-      )!,
-      badge: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}badge'],
-      )!,
-      isProcessing: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}isProcessing'],
-      )!,
-      audioFilePath: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}audioFilePath'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}createdAt'],
-      )!,
-      notes: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}notes'],
-      ),
-      workspaceId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}workspaceId'],
-      ),
-      mediaType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}mediaType'],
-      )!,
-      processingStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}processingStatus'],
-      )!,
-      coreId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}coreId'],
-      ),
-      matomeId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}matome_id'],
-      ),
-      transcript: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}transcript'],
-      ),
-      notesLegacyRaw: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}notes_legacy_raw'],
-      ),
-      originalExtension: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}original_extension'],
-      ),
-      ownerId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}owner_id'],
-      ),
-      byteSize: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}byte_size'],
-      ),
-      wrappedFek: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}wrapped_fek'],
-      ),
-      fileNoncePrefix: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}file_nonce_prefix'],
-      ),
-      processingErrorCode: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}processing_error_code'],
-      ),
-    );
-  }
-
-  @override
-  $RecordingsTable createAlias(String alias) {
-    return $RecordingsTable(attachedDatabase, alias);
-  }
-}
-
-class RecordingRow extends DataClass implements Insertable<RecordingRow> {
-  final String id;
-  final String title;
-  final String? summary;
-  final String timestamp;
-  final String duration;
-  final String badge;
-  final int isProcessing;
-  final String audioFilePath;
-  final int createdAt;
-  final String? notes;
-  final String? workspaceId;
-  final String mediaType;
-  final String processingStatus;
-  final int? coreId;
-  final String? matomeId;
-  final String? transcript;
-  final String? notesLegacyRaw;
-  final String? originalExtension;
-  final String? ownerId;
-  final int? byteSize;
-  final String? wrappedFek;
-  final String? fileNoncePrefix;
-  final String? processingErrorCode;
-  const RecordingRow({
-    required this.id,
-    required this.title,
-    this.summary,
-    required this.timestamp,
-    required this.duration,
-    required this.badge,
-    required this.isProcessing,
-    required this.audioFilePath,
-    required this.createdAt,
-    this.notes,
-    this.workspaceId,
-    required this.mediaType,
-    required this.processingStatus,
-    this.coreId,
-    this.matomeId,
-    this.transcript,
-    this.notesLegacyRaw,
-    this.originalExtension,
-    this.ownerId,
-    this.byteSize,
-    this.wrappedFek,
-    this.fileNoncePrefix,
-    this.processingErrorCode,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['title'] = Variable<String>(title);
-    if (!nullToAbsent || summary != null) {
-      map['summary'] = Variable<String>(summary);
-    }
-    map['timestamp'] = Variable<String>(timestamp);
-    map['duration'] = Variable<String>(duration);
-    map['badge'] = Variable<String>(badge);
-    map['isProcessing'] = Variable<int>(isProcessing);
-    map['audioFilePath'] = Variable<String>(audioFilePath);
-    map['createdAt'] = Variable<int>(createdAt);
-    if (!nullToAbsent || notes != null) {
-      map['notes'] = Variable<String>(notes);
-    }
-    if (!nullToAbsent || workspaceId != null) {
-      map['workspaceId'] = Variable<String>(workspaceId);
-    }
-    map['mediaType'] = Variable<String>(mediaType);
-    map['processingStatus'] = Variable<String>(processingStatus);
-    if (!nullToAbsent || coreId != null) {
-      map['coreId'] = Variable<int>(coreId);
-    }
-    if (!nullToAbsent || matomeId != null) {
-      map['matome_id'] = Variable<String>(matomeId);
-    }
-    if (!nullToAbsent || transcript != null) {
-      map['transcript'] = Variable<String>(transcript);
-    }
-    if (!nullToAbsent || notesLegacyRaw != null) {
-      map['notes_legacy_raw'] = Variable<String>(notesLegacyRaw);
-    }
-    if (!nullToAbsent || originalExtension != null) {
-      map['original_extension'] = Variable<String>(originalExtension);
-    }
-    if (!nullToAbsent || ownerId != null) {
-      map['owner_id'] = Variable<String>(ownerId);
-    }
-    if (!nullToAbsent || byteSize != null) {
-      map['byte_size'] = Variable<int>(byteSize);
-    }
-    if (!nullToAbsent || wrappedFek != null) {
-      map['wrapped_fek'] = Variable<String>(wrappedFek);
-    }
-    if (!nullToAbsent || fileNoncePrefix != null) {
-      map['file_nonce_prefix'] = Variable<String>(fileNoncePrefix);
-    }
-    if (!nullToAbsent || processingErrorCode != null) {
-      map['processing_error_code'] = Variable<String>(processingErrorCode);
-    }
-    return map;
-  }
-
-  RecordingsCompanion toCompanion(bool nullToAbsent) {
-    return RecordingsCompanion(
-      id: Value(id),
-      title: Value(title),
-      summary: summary == null && nullToAbsent
-          ? const Value.absent()
-          : Value(summary),
-      timestamp: Value(timestamp),
-      duration: Value(duration),
-      badge: Value(badge),
-      isProcessing: Value(isProcessing),
-      audioFilePath: Value(audioFilePath),
-      createdAt: Value(createdAt),
-      notes: notes == null && nullToAbsent
-          ? const Value.absent()
-          : Value(notes),
-      workspaceId: workspaceId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(workspaceId),
-      mediaType: Value(mediaType),
-      processingStatus: Value(processingStatus),
-      coreId: coreId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(coreId),
-      matomeId: matomeId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(matomeId),
-      transcript: transcript == null && nullToAbsent
-          ? const Value.absent()
-          : Value(transcript),
-      notesLegacyRaw: notesLegacyRaw == null && nullToAbsent
-          ? const Value.absent()
-          : Value(notesLegacyRaw),
-      originalExtension: originalExtension == null && nullToAbsent
-          ? const Value.absent()
-          : Value(originalExtension),
-      ownerId: ownerId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(ownerId),
-      byteSize: byteSize == null && nullToAbsent
-          ? const Value.absent()
-          : Value(byteSize),
-      wrappedFek: wrappedFek == null && nullToAbsent
-          ? const Value.absent()
-          : Value(wrappedFek),
-      fileNoncePrefix: fileNoncePrefix == null && nullToAbsent
-          ? const Value.absent()
-          : Value(fileNoncePrefix),
-      processingErrorCode: processingErrorCode == null && nullToAbsent
-          ? const Value.absent()
-          : Value(processingErrorCode),
-    );
-  }
-
-  factory RecordingRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return RecordingRow(
-      id: serializer.fromJson<String>(json['id']),
-      title: serializer.fromJson<String>(json['title']),
-      summary: serializer.fromJson<String?>(json['summary']),
-      timestamp: serializer.fromJson<String>(json['timestamp']),
-      duration: serializer.fromJson<String>(json['duration']),
-      badge: serializer.fromJson<String>(json['badge']),
-      isProcessing: serializer.fromJson<int>(json['isProcessing']),
-      audioFilePath: serializer.fromJson<String>(json['audioFilePath']),
-      createdAt: serializer.fromJson<int>(json['createdAt']),
-      notes: serializer.fromJson<String?>(json['notes']),
-      workspaceId: serializer.fromJson<String?>(json['workspaceId']),
-      mediaType: serializer.fromJson<String>(json['mediaType']),
-      processingStatus: serializer.fromJson<String>(json['processingStatus']),
-      coreId: serializer.fromJson<int?>(json['coreId']),
-      matomeId: serializer.fromJson<String?>(json['matomeId']),
-      transcript: serializer.fromJson<String?>(json['transcript']),
-      notesLegacyRaw: serializer.fromJson<String?>(json['notesLegacyRaw']),
-      originalExtension: serializer.fromJson<String?>(
-        json['originalExtension'],
-      ),
-      ownerId: serializer.fromJson<String?>(json['ownerId']),
-      byteSize: serializer.fromJson<int?>(json['byteSize']),
-      wrappedFek: serializer.fromJson<String?>(json['wrappedFek']),
-      fileNoncePrefix: serializer.fromJson<String?>(json['fileNoncePrefix']),
-      processingErrorCode: serializer.fromJson<String?>(
-        json['processingErrorCode'],
-      ),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'title': serializer.toJson<String>(title),
-      'summary': serializer.toJson<String?>(summary),
-      'timestamp': serializer.toJson<String>(timestamp),
-      'duration': serializer.toJson<String>(duration),
-      'badge': serializer.toJson<String>(badge),
-      'isProcessing': serializer.toJson<int>(isProcessing),
-      'audioFilePath': serializer.toJson<String>(audioFilePath),
-      'createdAt': serializer.toJson<int>(createdAt),
-      'notes': serializer.toJson<String?>(notes),
-      'workspaceId': serializer.toJson<String?>(workspaceId),
-      'mediaType': serializer.toJson<String>(mediaType),
-      'processingStatus': serializer.toJson<String>(processingStatus),
-      'coreId': serializer.toJson<int?>(coreId),
-      'matomeId': serializer.toJson<String?>(matomeId),
-      'transcript': serializer.toJson<String?>(transcript),
-      'notesLegacyRaw': serializer.toJson<String?>(notesLegacyRaw),
-      'originalExtension': serializer.toJson<String?>(originalExtension),
-      'ownerId': serializer.toJson<String?>(ownerId),
-      'byteSize': serializer.toJson<int?>(byteSize),
-      'wrappedFek': serializer.toJson<String?>(wrappedFek),
-      'fileNoncePrefix': serializer.toJson<String?>(fileNoncePrefix),
-      'processingErrorCode': serializer.toJson<String?>(processingErrorCode),
-    };
-  }
-
-  RecordingRow copyWith({
-    String? id,
-    String? title,
-    Value<String?> summary = const Value.absent(),
-    String? timestamp,
-    String? duration,
-    String? badge,
-    int? isProcessing,
-    String? audioFilePath,
-    int? createdAt,
-    Value<String?> notes = const Value.absent(),
-    Value<String?> workspaceId = const Value.absent(),
-    String? mediaType,
-    String? processingStatus,
-    Value<int?> coreId = const Value.absent(),
-    Value<String?> matomeId = const Value.absent(),
-    Value<String?> transcript = const Value.absent(),
-    Value<String?> notesLegacyRaw = const Value.absent(),
-    Value<String?> originalExtension = const Value.absent(),
-    Value<String?> ownerId = const Value.absent(),
-    Value<int?> byteSize = const Value.absent(),
-    Value<String?> wrappedFek = const Value.absent(),
-    Value<String?> fileNoncePrefix = const Value.absent(),
-    Value<String?> processingErrorCode = const Value.absent(),
-  }) => RecordingRow(
-    id: id ?? this.id,
-    title: title ?? this.title,
-    summary: summary.present ? summary.value : this.summary,
-    timestamp: timestamp ?? this.timestamp,
-    duration: duration ?? this.duration,
-    badge: badge ?? this.badge,
-    isProcessing: isProcessing ?? this.isProcessing,
-    audioFilePath: audioFilePath ?? this.audioFilePath,
-    createdAt: createdAt ?? this.createdAt,
-    notes: notes.present ? notes.value : this.notes,
-    workspaceId: workspaceId.present ? workspaceId.value : this.workspaceId,
-    mediaType: mediaType ?? this.mediaType,
-    processingStatus: processingStatus ?? this.processingStatus,
-    coreId: coreId.present ? coreId.value : this.coreId,
-    matomeId: matomeId.present ? matomeId.value : this.matomeId,
-    transcript: transcript.present ? transcript.value : this.transcript,
-    notesLegacyRaw: notesLegacyRaw.present
-        ? notesLegacyRaw.value
-        : this.notesLegacyRaw,
-    originalExtension: originalExtension.present
-        ? originalExtension.value
-        : this.originalExtension,
-    ownerId: ownerId.present ? ownerId.value : this.ownerId,
-    byteSize: byteSize.present ? byteSize.value : this.byteSize,
-    wrappedFek: wrappedFek.present ? wrappedFek.value : this.wrappedFek,
-    fileNoncePrefix: fileNoncePrefix.present
-        ? fileNoncePrefix.value
-        : this.fileNoncePrefix,
-    processingErrorCode: processingErrorCode.present
-        ? processingErrorCode.value
-        : this.processingErrorCode,
-  );
-  RecordingRow copyWithCompanion(RecordingsCompanion data) {
-    return RecordingRow(
-      id: data.id.present ? data.id.value : this.id,
-      title: data.title.present ? data.title.value : this.title,
-      summary: data.summary.present ? data.summary.value : this.summary,
-      timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
-      duration: data.duration.present ? data.duration.value : this.duration,
-      badge: data.badge.present ? data.badge.value : this.badge,
-      isProcessing: data.isProcessing.present
-          ? data.isProcessing.value
-          : this.isProcessing,
-      audioFilePath: data.audioFilePath.present
-          ? data.audioFilePath.value
-          : this.audioFilePath,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      notes: data.notes.present ? data.notes.value : this.notes,
-      workspaceId: data.workspaceId.present
-          ? data.workspaceId.value
-          : this.workspaceId,
-      mediaType: data.mediaType.present ? data.mediaType.value : this.mediaType,
-      processingStatus: data.processingStatus.present
-          ? data.processingStatus.value
-          : this.processingStatus,
-      coreId: data.coreId.present ? data.coreId.value : this.coreId,
-      matomeId: data.matomeId.present ? data.matomeId.value : this.matomeId,
-      transcript: data.transcript.present
-          ? data.transcript.value
-          : this.transcript,
-      notesLegacyRaw: data.notesLegacyRaw.present
-          ? data.notesLegacyRaw.value
-          : this.notesLegacyRaw,
-      originalExtension: data.originalExtension.present
-          ? data.originalExtension.value
-          : this.originalExtension,
-      ownerId: data.ownerId.present ? data.ownerId.value : this.ownerId,
-      byteSize: data.byteSize.present ? data.byteSize.value : this.byteSize,
-      wrappedFek: data.wrappedFek.present
-          ? data.wrappedFek.value
-          : this.wrappedFek,
-      fileNoncePrefix: data.fileNoncePrefix.present
-          ? data.fileNoncePrefix.value
-          : this.fileNoncePrefix,
-      processingErrorCode: data.processingErrorCode.present
-          ? data.processingErrorCode.value
-          : this.processingErrorCode,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('RecordingRow(')
-          ..write('id: $id, ')
-          ..write('title: $title, ')
-          ..write('summary: $summary, ')
-          ..write('timestamp: $timestamp, ')
-          ..write('duration: $duration, ')
-          ..write('badge: $badge, ')
-          ..write('isProcessing: $isProcessing, ')
-          ..write('audioFilePath: $audioFilePath, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('notes: $notes, ')
-          ..write('workspaceId: $workspaceId, ')
-          ..write('mediaType: $mediaType, ')
-          ..write('processingStatus: $processingStatus, ')
-          ..write('coreId: $coreId, ')
-          ..write('matomeId: $matomeId, ')
-          ..write('transcript: $transcript, ')
-          ..write('notesLegacyRaw: $notesLegacyRaw, ')
-          ..write('originalExtension: $originalExtension, ')
-          ..write('ownerId: $ownerId, ')
-          ..write('byteSize: $byteSize, ')
-          ..write('wrappedFek: $wrappedFek, ')
-          ..write('fileNoncePrefix: $fileNoncePrefix, ')
-          ..write('processingErrorCode: $processingErrorCode')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hashAll([
-    id,
-    title,
-    summary,
-    timestamp,
-    duration,
-    badge,
-    isProcessing,
-    audioFilePath,
-    createdAt,
-    notes,
-    workspaceId,
-    mediaType,
-    processingStatus,
-    coreId,
-    matomeId,
-    transcript,
-    notesLegacyRaw,
-    originalExtension,
-    ownerId,
-    byteSize,
-    wrappedFek,
-    fileNoncePrefix,
-    processingErrorCode,
-  ]);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is RecordingRow &&
-          other.id == this.id &&
-          other.title == this.title &&
-          other.summary == this.summary &&
-          other.timestamp == this.timestamp &&
-          other.duration == this.duration &&
-          other.badge == this.badge &&
-          other.isProcessing == this.isProcessing &&
-          other.audioFilePath == this.audioFilePath &&
-          other.createdAt == this.createdAt &&
-          other.notes == this.notes &&
-          other.workspaceId == this.workspaceId &&
-          other.mediaType == this.mediaType &&
-          other.processingStatus == this.processingStatus &&
-          other.coreId == this.coreId &&
-          other.matomeId == this.matomeId &&
-          other.transcript == this.transcript &&
-          other.notesLegacyRaw == this.notesLegacyRaw &&
-          other.originalExtension == this.originalExtension &&
-          other.ownerId == this.ownerId &&
-          other.byteSize == this.byteSize &&
-          other.wrappedFek == this.wrappedFek &&
-          other.fileNoncePrefix == this.fileNoncePrefix &&
-          other.processingErrorCode == this.processingErrorCode);
-}
-
-class RecordingsCompanion extends UpdateCompanion<RecordingRow> {
-  final Value<String> id;
-  final Value<String> title;
-  final Value<String?> summary;
-  final Value<String> timestamp;
-  final Value<String> duration;
-  final Value<String> badge;
-  final Value<int> isProcessing;
-  final Value<String> audioFilePath;
-  final Value<int> createdAt;
-  final Value<String?> notes;
-  final Value<String?> workspaceId;
-  final Value<String> mediaType;
-  final Value<String> processingStatus;
-  final Value<int?> coreId;
-  final Value<String?> matomeId;
-  final Value<String?> transcript;
-  final Value<String?> notesLegacyRaw;
-  final Value<String?> originalExtension;
-  final Value<String?> ownerId;
-  final Value<int?> byteSize;
-  final Value<String?> wrappedFek;
-  final Value<String?> fileNoncePrefix;
-  final Value<String?> processingErrorCode;
-  final Value<int> rowid;
-  const RecordingsCompanion({
-    this.id = const Value.absent(),
-    this.title = const Value.absent(),
-    this.summary = const Value.absent(),
-    this.timestamp = const Value.absent(),
-    this.duration = const Value.absent(),
-    this.badge = const Value.absent(),
-    this.isProcessing = const Value.absent(),
-    this.audioFilePath = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.notes = const Value.absent(),
-    this.workspaceId = const Value.absent(),
-    this.mediaType = const Value.absent(),
-    this.processingStatus = const Value.absent(),
-    this.coreId = const Value.absent(),
-    this.matomeId = const Value.absent(),
-    this.transcript = const Value.absent(),
-    this.notesLegacyRaw = const Value.absent(),
-    this.originalExtension = const Value.absent(),
-    this.ownerId = const Value.absent(),
-    this.byteSize = const Value.absent(),
-    this.wrappedFek = const Value.absent(),
-    this.fileNoncePrefix = const Value.absent(),
-    this.processingErrorCode = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  RecordingsCompanion.insert({
-    required String id,
-    required String title,
-    this.summary = const Value.absent(),
-    required String timestamp,
-    required String duration,
-    this.badge = const Value.absent(),
-    this.isProcessing = const Value.absent(),
-    required String audioFilePath,
-    required int createdAt,
-    this.notes = const Value.absent(),
-    this.workspaceId = const Value.absent(),
-    this.mediaType = const Value.absent(),
-    this.processingStatus = const Value.absent(),
-    this.coreId = const Value.absent(),
-    this.matomeId = const Value.absent(),
-    this.transcript = const Value.absent(),
-    this.notesLegacyRaw = const Value.absent(),
-    this.originalExtension = const Value.absent(),
-    this.ownerId = const Value.absent(),
-    this.byteSize = const Value.absent(),
-    this.wrappedFek = const Value.absent(),
-    this.fileNoncePrefix = const Value.absent(),
-    this.processingErrorCode = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       title = Value(title),
-       timestamp = Value(timestamp),
-       duration = Value(duration),
-       audioFilePath = Value(audioFilePath),
-       createdAt = Value(createdAt);
-  static Insertable<RecordingRow> custom({
-    Expression<String>? id,
-    Expression<String>? title,
-    Expression<String>? summary,
-    Expression<String>? timestamp,
-    Expression<String>? duration,
-    Expression<String>? badge,
-    Expression<int>? isProcessing,
-    Expression<String>? audioFilePath,
-    Expression<int>? createdAt,
-    Expression<String>? notes,
-    Expression<String>? workspaceId,
-    Expression<String>? mediaType,
-    Expression<String>? processingStatus,
-    Expression<int>? coreId,
-    Expression<String>? matomeId,
-    Expression<String>? transcript,
-    Expression<String>? notesLegacyRaw,
-    Expression<String>? originalExtension,
-    Expression<String>? ownerId,
-    Expression<int>? byteSize,
-    Expression<String>? wrappedFek,
-    Expression<String>? fileNoncePrefix,
-    Expression<String>? processingErrorCode,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (title != null) 'title': title,
-      if (summary != null) 'summary': summary,
-      if (timestamp != null) 'timestamp': timestamp,
-      if (duration != null) 'duration': duration,
-      if (badge != null) 'badge': badge,
-      if (isProcessing != null) 'isProcessing': isProcessing,
-      if (audioFilePath != null) 'audioFilePath': audioFilePath,
-      if (createdAt != null) 'createdAt': createdAt,
-      if (notes != null) 'notes': notes,
-      if (workspaceId != null) 'workspaceId': workspaceId,
-      if (mediaType != null) 'mediaType': mediaType,
-      if (processingStatus != null) 'processingStatus': processingStatus,
-      if (coreId != null) 'coreId': coreId,
-      if (matomeId != null) 'matome_id': matomeId,
-      if (transcript != null) 'transcript': transcript,
-      if (notesLegacyRaw != null) 'notes_legacy_raw': notesLegacyRaw,
-      if (originalExtension != null) 'original_extension': originalExtension,
-      if (ownerId != null) 'owner_id': ownerId,
-      if (byteSize != null) 'byte_size': byteSize,
-      if (wrappedFek != null) 'wrapped_fek': wrappedFek,
-      if (fileNoncePrefix != null) 'file_nonce_prefix': fileNoncePrefix,
-      if (processingErrorCode != null)
-        'processing_error_code': processingErrorCode,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  RecordingsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? title,
-    Value<String?>? summary,
-    Value<String>? timestamp,
-    Value<String>? duration,
-    Value<String>? badge,
-    Value<int>? isProcessing,
-    Value<String>? audioFilePath,
-    Value<int>? createdAt,
-    Value<String?>? notes,
-    Value<String?>? workspaceId,
-    Value<String>? mediaType,
-    Value<String>? processingStatus,
-    Value<int?>? coreId,
-    Value<String?>? matomeId,
-    Value<String?>? transcript,
-    Value<String?>? notesLegacyRaw,
-    Value<String?>? originalExtension,
-    Value<String?>? ownerId,
-    Value<int?>? byteSize,
-    Value<String?>? wrappedFek,
-    Value<String?>? fileNoncePrefix,
-    Value<String?>? processingErrorCode,
-    Value<int>? rowid,
-  }) {
-    return RecordingsCompanion(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      summary: summary ?? this.summary,
-      timestamp: timestamp ?? this.timestamp,
-      duration: duration ?? this.duration,
-      badge: badge ?? this.badge,
-      isProcessing: isProcessing ?? this.isProcessing,
-      audioFilePath: audioFilePath ?? this.audioFilePath,
-      createdAt: createdAt ?? this.createdAt,
-      notes: notes ?? this.notes,
-      workspaceId: workspaceId ?? this.workspaceId,
-      mediaType: mediaType ?? this.mediaType,
-      processingStatus: processingStatus ?? this.processingStatus,
-      coreId: coreId ?? this.coreId,
-      matomeId: matomeId ?? this.matomeId,
-      transcript: transcript ?? this.transcript,
-      notesLegacyRaw: notesLegacyRaw ?? this.notesLegacyRaw,
-      originalExtension: originalExtension ?? this.originalExtension,
-      ownerId: ownerId ?? this.ownerId,
-      byteSize: byteSize ?? this.byteSize,
-      wrappedFek: wrappedFek ?? this.wrappedFek,
-      fileNoncePrefix: fileNoncePrefix ?? this.fileNoncePrefix,
-      processingErrorCode: processingErrorCode ?? this.processingErrorCode,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (title.present) {
-      map['title'] = Variable<String>(title.value);
-    }
-    if (summary.present) {
-      map['summary'] = Variable<String>(summary.value);
-    }
-    if (timestamp.present) {
-      map['timestamp'] = Variable<String>(timestamp.value);
-    }
-    if (duration.present) {
-      map['duration'] = Variable<String>(duration.value);
-    }
-    if (badge.present) {
-      map['badge'] = Variable<String>(badge.value);
-    }
-    if (isProcessing.present) {
-      map['isProcessing'] = Variable<int>(isProcessing.value);
-    }
-    if (audioFilePath.present) {
-      map['audioFilePath'] = Variable<String>(audioFilePath.value);
-    }
-    if (createdAt.present) {
-      map['createdAt'] = Variable<int>(createdAt.value);
-    }
-    if (notes.present) {
-      map['notes'] = Variable<String>(notes.value);
-    }
-    if (workspaceId.present) {
-      map['workspaceId'] = Variable<String>(workspaceId.value);
-    }
-    if (mediaType.present) {
-      map['mediaType'] = Variable<String>(mediaType.value);
-    }
-    if (processingStatus.present) {
-      map['processingStatus'] = Variable<String>(processingStatus.value);
-    }
-    if (coreId.present) {
-      map['coreId'] = Variable<int>(coreId.value);
-    }
-    if (matomeId.present) {
-      map['matome_id'] = Variable<String>(matomeId.value);
-    }
-    if (transcript.present) {
-      map['transcript'] = Variable<String>(transcript.value);
-    }
-    if (notesLegacyRaw.present) {
-      map['notes_legacy_raw'] = Variable<String>(notesLegacyRaw.value);
-    }
-    if (originalExtension.present) {
-      map['original_extension'] = Variable<String>(originalExtension.value);
-    }
-    if (ownerId.present) {
-      map['owner_id'] = Variable<String>(ownerId.value);
-    }
-    if (byteSize.present) {
-      map['byte_size'] = Variable<int>(byteSize.value);
-    }
-    if (wrappedFek.present) {
-      map['wrapped_fek'] = Variable<String>(wrappedFek.value);
-    }
-    if (fileNoncePrefix.present) {
-      map['file_nonce_prefix'] = Variable<String>(fileNoncePrefix.value);
-    }
-    if (processingErrorCode.present) {
-      map['processing_error_code'] = Variable<String>(
-        processingErrorCode.value,
-      );
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('RecordingsCompanion(')
-          ..write('id: $id, ')
-          ..write('title: $title, ')
-          ..write('summary: $summary, ')
-          ..write('timestamp: $timestamp, ')
-          ..write('duration: $duration, ')
-          ..write('badge: $badge, ')
-          ..write('isProcessing: $isProcessing, ')
-          ..write('audioFilePath: $audioFilePath, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('notes: $notes, ')
-          ..write('workspaceId: $workspaceId, ')
-          ..write('mediaType: $mediaType, ')
-          ..write('processingStatus: $processingStatus, ')
-          ..write('coreId: $coreId, ')
-          ..write('matomeId: $matomeId, ')
-          ..write('transcript: $transcript, ')
-          ..write('notesLegacyRaw: $notesLegacyRaw, ')
-          ..write('originalExtension: $originalExtension, ')
-          ..write('ownerId: $ownerId, ')
-          ..write('byteSize: $byteSize, ')
-          ..write('wrappedFek: $wrappedFek, ')
-          ..write('fileNoncePrefix: $fileNoncePrefix, ')
-          ..write('processingErrorCode: $processingErrorCode, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $WorkspacesTable extends Workspaces
     with TableInfo<$WorkspacesTable, WorkspaceRow> {
   @override
@@ -4808,12 +3519,12 @@ class MatomeSharesCompanion extends UpdateCompanion<MatomeShareRow> {
   }
 }
 
-class $RecordingContactsTable extends RecordingContacts
-    with TableInfo<$RecordingContactsTable, RecordingContactRow> {
+class $FileBlobsTable extends FileBlobs
+    with TableInfo<$FileBlobsTable, FileBlobRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $RecordingContactsTable(this.attachedDatabase, [this._alias]);
+  $FileBlobsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -4823,277 +3534,12 @@ class $RecordingContactsTable extends RecordingContacts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _recordingIdMeta = const VerificationMeta(
-    'recordingId',
-  );
+  static const VerificationMeta _coreIdMeta = const VerificationMeta('coreId');
   @override
-  late final GeneratedColumn<String> recordingId = GeneratedColumn<String>(
-    'recording_id',
+  late final GeneratedColumn<int> coreId = GeneratedColumn<int>(
+    'core_id',
     aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _contactIdMeta = const VerificationMeta(
-    'contactId',
-  );
-  @override
-  late final GeneratedColumn<String> contactId = GeneratedColumn<String>(
-    'contact_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [id, recordingId, contactId];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'recording_contacts';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<RecordingContactRow> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('recording_id')) {
-      context.handle(
-        _recordingIdMeta,
-        recordingId.isAcceptableOrUnknown(
-          data['recording_id']!,
-          _recordingIdMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_recordingIdMeta);
-    }
-    if (data.containsKey('contact_id')) {
-      context.handle(
-        _contactIdMeta,
-        contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_contactIdMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  List<Set<GeneratedColumn>> get uniqueKeys => [
-    {recordingId, contactId},
-  ];
-  @override
-  RecordingContactRow map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return RecordingContactRow(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      recordingId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}recording_id'],
-      )!,
-      contactId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}contact_id'],
-      )!,
-    );
-  }
-
-  @override
-  $RecordingContactsTable createAlias(String alias) {
-    return $RecordingContactsTable(attachedDatabase, alias);
-  }
-}
-
-class RecordingContactRow extends DataClass
-    implements Insertable<RecordingContactRow> {
-  final String id;
-  final String recordingId;
-  final String contactId;
-  const RecordingContactRow({
-    required this.id,
-    required this.recordingId,
-    required this.contactId,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['recording_id'] = Variable<String>(recordingId);
-    map['contact_id'] = Variable<String>(contactId);
-    return map;
-  }
-
-  RecordingContactsCompanion toCompanion(bool nullToAbsent) {
-    return RecordingContactsCompanion(
-      id: Value(id),
-      recordingId: Value(recordingId),
-      contactId: Value(contactId),
-    );
-  }
-
-  factory RecordingContactRow.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return RecordingContactRow(
-      id: serializer.fromJson<String>(json['id']),
-      recordingId: serializer.fromJson<String>(json['recordingId']),
-      contactId: serializer.fromJson<String>(json['contactId']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'recordingId': serializer.toJson<String>(recordingId),
-      'contactId': serializer.toJson<String>(contactId),
-    };
-  }
-
-  RecordingContactRow copyWith({
-    String? id,
-    String? recordingId,
-    String? contactId,
-  }) => RecordingContactRow(
-    id: id ?? this.id,
-    recordingId: recordingId ?? this.recordingId,
-    contactId: contactId ?? this.contactId,
-  );
-  RecordingContactRow copyWithCompanion(RecordingContactsCompanion data) {
-    return RecordingContactRow(
-      id: data.id.present ? data.id.value : this.id,
-      recordingId: data.recordingId.present
-          ? data.recordingId.value
-          : this.recordingId,
-      contactId: data.contactId.present ? data.contactId.value : this.contactId,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('RecordingContactRow(')
-          ..write('id: $id, ')
-          ..write('recordingId: $recordingId, ')
-          ..write('contactId: $contactId')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(id, recordingId, contactId);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is RecordingContactRow &&
-          other.id == this.id &&
-          other.recordingId == this.recordingId &&
-          other.contactId == this.contactId);
-}
-
-class RecordingContactsCompanion extends UpdateCompanion<RecordingContactRow> {
-  final Value<String> id;
-  final Value<String> recordingId;
-  final Value<String> contactId;
-  final Value<int> rowid;
-  const RecordingContactsCompanion({
-    this.id = const Value.absent(),
-    this.recordingId = const Value.absent(),
-    this.contactId = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  RecordingContactsCompanion.insert({
-    required String id,
-    required String recordingId,
-    required String contactId,
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       recordingId = Value(recordingId),
-       contactId = Value(contactId);
-  static Insertable<RecordingContactRow> custom({
-    Expression<String>? id,
-    Expression<String>? recordingId,
-    Expression<String>? contactId,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (recordingId != null) 'recording_id': recordingId,
-      if (contactId != null) 'contact_id': contactId,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  RecordingContactsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? recordingId,
-    Value<String>? contactId,
-    Value<int>? rowid,
-  }) {
-    return RecordingContactsCompanion(
-      id: id ?? this.id,
-      recordingId: recordingId ?? this.recordingId,
-      contactId: contactId ?? this.contactId,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (recordingId.present) {
-      map['recording_id'] = Variable<String>(recordingId.value);
-    }
-    if (contactId.present) {
-      map['contact_id'] = Variable<String>(contactId.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('RecordingContactsCompanion(')
-          ..write('id: $id, ')
-          ..write('recordingId: $recordingId, ')
-          ..write('contactId: $contactId, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $FileBlobsTable extends FileBlobs
-    with TableInfo<$FileBlobsTable, FileBlobRow> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $FileBlobsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
-    'id',
-    aliasedName,
-    false,
+    true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
@@ -5104,9 +3550,31 @@ class $FileBlobsTable extends FileBlobs
   late final GeneratedColumn<String> storageKey = GeneratedColumn<String>(
     'storage_key',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _filenameMeta = const VerificationMeta(
+    'filename',
+  );
+  @override
+  late final GeneratedColumn<String> filename = GeneratedColumn<String>(
+    'filename',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contentTypeMeta = const VerificationMeta(
+    'contentType',
+  );
+  @override
+  late final GeneratedColumn<String> contentType = GeneratedColumn<String>(
+    'content_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _byteSizeMeta = const VerificationMeta(
     'byteSize',
@@ -5117,7 +3585,19 @@ class $FileBlobsTable extends FileBlobs
     aliasedName,
     false,
     type: DriftSqlType.int,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _checksumSha256Meta = const VerificationMeta(
+    'checksumSha256',
+  );
+  @override
+  late final GeneratedColumn<String> checksumSha256 = GeneratedColumn<String>(
+    'checksum_sha256',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _mediaTypeMeta = const VerificationMeta(
     'mediaType',
@@ -5141,60 +3621,142 @@ class $FileBlobsTable extends FileBlobs
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _transcriptMeta = const VerificationMeta(
-    'transcript',
+  static const VerificationMeta _uploadStateMeta = const VerificationMeta(
+    'uploadState',
   );
   @override
-  late final GeneratedColumn<String> transcript = GeneratedColumn<String>(
-    'transcript',
+  late final GeneratedColumn<String> uploadState = GeneratedColumn<String>(
+    'upload_state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  static const VerificationMeta _uploadGenerationMeta = const VerificationMeta(
+    'uploadGeneration',
+  );
+  @override
+  late final GeneratedColumn<int> uploadGeneration = GeneratedColumn<int>(
+    'upload_generation',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _uploadedAtMeta = const VerificationMeta(
+    'uploadedAt',
+  );
+  @override
+  late final GeneratedColumn<int> uploadedAt = GeneratedColumn<int>(
+    'uploaded_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _multipartContextMeta = const VerificationMeta(
+    'multipartContext',
+  );
+  @override
+  late final GeneratedColumn<String> multipartContext = GeneratedColumn<String>(
+    'multipart_context',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _summaryMeta = const VerificationMeta(
-    'summary',
+  static const VerificationMeta _localPathMeta = const VerificationMeta(
+    'localPath',
   );
   @override
-  late final GeneratedColumn<String> summary = GeneratedColumn<String>(
-    'summary',
+  late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
+    'local_path',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _insertedAtMeta = const VerificationMeta(
-    'insertedAt',
+  static const VerificationMeta _wrappedFekMeta = const VerificationMeta(
+    'wrappedFek',
   );
   @override
-  late final GeneratedColumn<String> insertedAt = GeneratedColumn<String>(
-    'inserted_at',
+  late final GeneratedColumn<String> wrappedFek = GeneratedColumn<String>(
+    'wrapped_fek',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fileNoncePrefixMeta = const VerificationMeta(
+    'fileNoncePrefix',
+  );
+  @override
+  late final GeneratedColumn<String> fileNoncePrefix = GeneratedColumn<String>(
+    'file_nonce_prefix',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isDirtyMeta = const VerificationMeta(
+    'isDirty',
+  );
+  @override
+  late final GeneratedColumn<bool> isDirty = GeneratedColumn<bool>(
+    'is_dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
   @override
-  late final GeneratedColumn<String> updatedAt = GeneratedColumn<String>(
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
     'updated_at',
     aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
   );
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    coreId,
     storageKey,
+    filename,
+    contentType,
     byteSize,
+    checksumSha256,
     mediaType,
     duration,
-    transcript,
-    summary,
-    insertedAt,
+    uploadState,
+    uploadGeneration,
+    uploadedAt,
+    multipartContext,
+    localPath,
+    wrappedFek,
+    fileNoncePrefix,
+    isDirty,
+    createdAt,
     updatedAt,
   ];
   @override
@@ -5211,22 +3773,50 @@ class $FileBlobsTable extends FileBlobs
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('core_id')) {
+      context.handle(
+        _coreIdMeta,
+        coreId.isAcceptableOrUnknown(data['core_id']!, _coreIdMeta),
+      );
     }
     if (data.containsKey('storage_key')) {
       context.handle(
         _storageKeyMeta,
         storageKey.isAcceptableOrUnknown(data['storage_key']!, _storageKeyMeta),
       );
-    } else if (isInserting) {
-      context.missing(_storageKeyMeta);
+    }
+    if (data.containsKey('filename')) {
+      context.handle(
+        _filenameMeta,
+        filename.isAcceptableOrUnknown(data['filename']!, _filenameMeta),
+      );
+    }
+    if (data.containsKey('content_type')) {
+      context.handle(
+        _contentTypeMeta,
+        contentType.isAcceptableOrUnknown(
+          data['content_type']!,
+          _contentTypeMeta,
+        ),
+      );
     }
     if (data.containsKey('byte_size')) {
       context.handle(
         _byteSizeMeta,
         byteSize.isAcceptableOrUnknown(data['byte_size']!, _byteSizeMeta),
       );
-    } else if (isInserting) {
-      context.missing(_byteSizeMeta);
+    }
+    if (data.containsKey('checksum_sha256')) {
+      context.handle(
+        _checksumSha256Meta,
+        checksumSha256.isAcceptableOrUnknown(
+          data['checksum_sha256']!,
+          _checksumSha256Meta,
+        ),
+      );
     }
     if (data.containsKey('media_type')) {
       context.handle(
@@ -5242,29 +3832,81 @@ class $FileBlobsTable extends FileBlobs
         duration.isAcceptableOrUnknown(data['duration']!, _durationMeta),
       );
     }
-    if (data.containsKey('transcript')) {
+    if (data.containsKey('upload_state')) {
       context.handle(
-        _transcriptMeta,
-        transcript.isAcceptableOrUnknown(data['transcript']!, _transcriptMeta),
+        _uploadStateMeta,
+        uploadState.isAcceptableOrUnknown(
+          data['upload_state']!,
+          _uploadStateMeta,
+        ),
       );
     }
-    if (data.containsKey('summary')) {
+    if (data.containsKey('upload_generation')) {
       context.handle(
-        _summaryMeta,
-        summary.isAcceptableOrUnknown(data['summary']!, _summaryMeta),
+        _uploadGenerationMeta,
+        uploadGeneration.isAcceptableOrUnknown(
+          data['upload_generation']!,
+          _uploadGenerationMeta,
+        ),
       );
     }
-    if (data.containsKey('inserted_at')) {
+    if (data.containsKey('uploaded_at')) {
       context.handle(
-        _insertedAtMeta,
-        insertedAt.isAcceptableOrUnknown(data['inserted_at']!, _insertedAtMeta),
+        _uploadedAtMeta,
+        uploadedAt.isAcceptableOrUnknown(data['uploaded_at']!, _uploadedAtMeta),
       );
+    }
+    if (data.containsKey('multipart_context')) {
+      context.handle(
+        _multipartContextMeta,
+        multipartContext.isAcceptableOrUnknown(
+          data['multipart_context']!,
+          _multipartContextMeta,
+        ),
+      );
+    }
+    if (data.containsKey('local_path')) {
+      context.handle(
+        _localPathMeta,
+        localPath.isAcceptableOrUnknown(data['local_path']!, _localPathMeta),
+      );
+    }
+    if (data.containsKey('wrapped_fek')) {
+      context.handle(
+        _wrappedFekMeta,
+        wrappedFek.isAcceptableOrUnknown(data['wrapped_fek']!, _wrappedFekMeta),
+      );
+    }
+    if (data.containsKey('file_nonce_prefix')) {
+      context.handle(
+        _fileNoncePrefixMeta,
+        fileNoncePrefix.isAcceptableOrUnknown(
+          data['file_nonce_prefix']!,
+          _fileNoncePrefixMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_dirty')) {
+      context.handle(
+        _isDirtyMeta,
+        isDirty.isAcceptableOrUnknown(data['is_dirty']!, _isDirtyMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
     }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
         updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
       );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
     }
     return context;
   }
@@ -5276,17 +3918,33 @@ class $FileBlobsTable extends FileBlobs
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return FileBlobRow(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      coreId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}core_id'],
+      ),
       storageKey: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}storage_key'],
-      )!,
+      ),
+      filename: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}filename'],
+      ),
+      contentType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_type'],
+      ),
       byteSize: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}byte_size'],
       )!,
+      checksumSha256: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}checksum_sha256'],
+      ),
       mediaType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}media_type'],
@@ -5295,22 +3953,46 @@ class $FileBlobsTable extends FileBlobs
         DriftSqlType.int,
         data['${effectivePrefix}duration'],
       ),
-      transcript: attachedDatabase.typeMapping.read(
+      uploadState: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}transcript'],
+        data['${effectivePrefix}upload_state'],
+      )!,
+      uploadGeneration: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}upload_generation'],
+      )!,
+      uploadedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}uploaded_at'],
       ),
-      summary: attachedDatabase.typeMapping.read(
+      multipartContext: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}summary'],
+        data['${effectivePrefix}multipart_context'],
       ),
-      insertedAt: attachedDatabase.typeMapping.read(
+      localPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}inserted_at'],
+        data['${effectivePrefix}local_path'],
       ),
+      wrappedFek: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}wrapped_fek'],
+      ),
+      fileNoncePrefix: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_nonce_prefix'],
+      ),
+      isDirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_dirty'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
+        DriftSqlType.int,
         data['${effectivePrefix}updated_at'],
-      ),
+      )!,
     );
   }
 
@@ -5321,72 +4003,136 @@ class $FileBlobsTable extends FileBlobs
 }
 
 class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
-  final int id;
-  final String storageKey;
+  final String id;
+  final int? coreId;
+  final String? storageKey;
+  final String? filename;
+  final String? contentType;
   final int byteSize;
+  final String? checksumSha256;
   final String mediaType;
   final int? duration;
-  final String? transcript;
-  final String? summary;
-  final String? insertedAt;
-  final String? updatedAt;
+  final String uploadState;
+  final int uploadGeneration;
+  final int? uploadedAt;
+  final String? multipartContext;
+  final String? localPath;
+  final String? wrappedFek;
+  final String? fileNoncePrefix;
+  final bool isDirty;
+  final int createdAt;
+  final int updatedAt;
   const FileBlobRow({
     required this.id,
-    required this.storageKey,
+    this.coreId,
+    this.storageKey,
+    this.filename,
+    this.contentType,
     required this.byteSize,
+    this.checksumSha256,
     required this.mediaType,
     this.duration,
-    this.transcript,
-    this.summary,
-    this.insertedAt,
-    this.updatedAt,
+    required this.uploadState,
+    required this.uploadGeneration,
+    this.uploadedAt,
+    this.multipartContext,
+    this.localPath,
+    this.wrappedFek,
+    this.fileNoncePrefix,
+    required this.isDirty,
+    required this.createdAt,
+    required this.updatedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
-    map['storage_key'] = Variable<String>(storageKey);
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || coreId != null) {
+      map['core_id'] = Variable<int>(coreId);
+    }
+    if (!nullToAbsent || storageKey != null) {
+      map['storage_key'] = Variable<String>(storageKey);
+    }
+    if (!nullToAbsent || filename != null) {
+      map['filename'] = Variable<String>(filename);
+    }
+    if (!nullToAbsent || contentType != null) {
+      map['content_type'] = Variable<String>(contentType);
+    }
     map['byte_size'] = Variable<int>(byteSize);
+    if (!nullToAbsent || checksumSha256 != null) {
+      map['checksum_sha256'] = Variable<String>(checksumSha256);
+    }
     map['media_type'] = Variable<String>(mediaType);
     if (!nullToAbsent || duration != null) {
       map['duration'] = Variable<int>(duration);
     }
-    if (!nullToAbsent || transcript != null) {
-      map['transcript'] = Variable<String>(transcript);
+    map['upload_state'] = Variable<String>(uploadState);
+    map['upload_generation'] = Variable<int>(uploadGeneration);
+    if (!nullToAbsent || uploadedAt != null) {
+      map['uploaded_at'] = Variable<int>(uploadedAt);
     }
-    if (!nullToAbsent || summary != null) {
-      map['summary'] = Variable<String>(summary);
+    if (!nullToAbsent || multipartContext != null) {
+      map['multipart_context'] = Variable<String>(multipartContext);
     }
-    if (!nullToAbsent || insertedAt != null) {
-      map['inserted_at'] = Variable<String>(insertedAt);
+    if (!nullToAbsent || localPath != null) {
+      map['local_path'] = Variable<String>(localPath);
     }
-    if (!nullToAbsent || updatedAt != null) {
-      map['updated_at'] = Variable<String>(updatedAt);
+    if (!nullToAbsent || wrappedFek != null) {
+      map['wrapped_fek'] = Variable<String>(wrappedFek);
     }
+    if (!nullToAbsent || fileNoncePrefix != null) {
+      map['file_nonce_prefix'] = Variable<String>(fileNoncePrefix);
+    }
+    map['is_dirty'] = Variable<bool>(isDirty);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
     return map;
   }
 
   FileBlobsCompanion toCompanion(bool nullToAbsent) {
     return FileBlobsCompanion(
       id: Value(id),
-      storageKey: Value(storageKey),
+      coreId: coreId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coreId),
+      storageKey: storageKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(storageKey),
+      filename: filename == null && nullToAbsent
+          ? const Value.absent()
+          : Value(filename),
+      contentType: contentType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentType),
       byteSize: Value(byteSize),
+      checksumSha256: checksumSha256 == null && nullToAbsent
+          ? const Value.absent()
+          : Value(checksumSha256),
       mediaType: Value(mediaType),
       duration: duration == null && nullToAbsent
           ? const Value.absent()
           : Value(duration),
-      transcript: transcript == null && nullToAbsent
+      uploadState: Value(uploadState),
+      uploadGeneration: Value(uploadGeneration),
+      uploadedAt: uploadedAt == null && nullToAbsent
           ? const Value.absent()
-          : Value(transcript),
-      summary: summary == null && nullToAbsent
+          : Value(uploadedAt),
+      multipartContext: multipartContext == null && nullToAbsent
           ? const Value.absent()
-          : Value(summary),
-      insertedAt: insertedAt == null && nullToAbsent
+          : Value(multipartContext),
+      localPath: localPath == null && nullToAbsent
           ? const Value.absent()
-          : Value(insertedAt),
-      updatedAt: updatedAt == null && nullToAbsent
+          : Value(localPath),
+      wrappedFek: wrappedFek == null && nullToAbsent
           ? const Value.absent()
-          : Value(updatedAt),
+          : Value(wrappedFek),
+      fileNoncePrefix: fileNoncePrefix == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fileNoncePrefix),
+      isDirty: Value(isDirty),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
     );
   }
 
@@ -5396,70 +4142,138 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return FileBlobRow(
-      id: serializer.fromJson<int>(json['id']),
-      storageKey: serializer.fromJson<String>(json['storageKey']),
+      id: serializer.fromJson<String>(json['id']),
+      coreId: serializer.fromJson<int?>(json['coreId']),
+      storageKey: serializer.fromJson<String?>(json['storageKey']),
+      filename: serializer.fromJson<String?>(json['filename']),
+      contentType: serializer.fromJson<String?>(json['contentType']),
       byteSize: serializer.fromJson<int>(json['byteSize']),
+      checksumSha256: serializer.fromJson<String?>(json['checksumSha256']),
       mediaType: serializer.fromJson<String>(json['mediaType']),
       duration: serializer.fromJson<int?>(json['duration']),
-      transcript: serializer.fromJson<String?>(json['transcript']),
-      summary: serializer.fromJson<String?>(json['summary']),
-      insertedAt: serializer.fromJson<String?>(json['insertedAt']),
-      updatedAt: serializer.fromJson<String?>(json['updatedAt']),
+      uploadState: serializer.fromJson<String>(json['uploadState']),
+      uploadGeneration: serializer.fromJson<int>(json['uploadGeneration']),
+      uploadedAt: serializer.fromJson<int?>(json['uploadedAt']),
+      multipartContext: serializer.fromJson<String?>(json['multipartContext']),
+      localPath: serializer.fromJson<String?>(json['localPath']),
+      wrappedFek: serializer.fromJson<String?>(json['wrappedFek']),
+      fileNoncePrefix: serializer.fromJson<String?>(json['fileNoncePrefix']),
+      isDirty: serializer.fromJson<bool>(json['isDirty']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
-      'storageKey': serializer.toJson<String>(storageKey),
+      'id': serializer.toJson<String>(id),
+      'coreId': serializer.toJson<int?>(coreId),
+      'storageKey': serializer.toJson<String?>(storageKey),
+      'filename': serializer.toJson<String?>(filename),
+      'contentType': serializer.toJson<String?>(contentType),
       'byteSize': serializer.toJson<int>(byteSize),
+      'checksumSha256': serializer.toJson<String?>(checksumSha256),
       'mediaType': serializer.toJson<String>(mediaType),
       'duration': serializer.toJson<int?>(duration),
-      'transcript': serializer.toJson<String?>(transcript),
-      'summary': serializer.toJson<String?>(summary),
-      'insertedAt': serializer.toJson<String?>(insertedAt),
-      'updatedAt': serializer.toJson<String?>(updatedAt),
+      'uploadState': serializer.toJson<String>(uploadState),
+      'uploadGeneration': serializer.toJson<int>(uploadGeneration),
+      'uploadedAt': serializer.toJson<int?>(uploadedAt),
+      'multipartContext': serializer.toJson<String?>(multipartContext),
+      'localPath': serializer.toJson<String?>(localPath),
+      'wrappedFek': serializer.toJson<String?>(wrappedFek),
+      'fileNoncePrefix': serializer.toJson<String?>(fileNoncePrefix),
+      'isDirty': serializer.toJson<bool>(isDirty),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
     };
   }
 
   FileBlobRow copyWith({
-    int? id,
-    String? storageKey,
+    String? id,
+    Value<int?> coreId = const Value.absent(),
+    Value<String?> storageKey = const Value.absent(),
+    Value<String?> filename = const Value.absent(),
+    Value<String?> contentType = const Value.absent(),
     int? byteSize,
+    Value<String?> checksumSha256 = const Value.absent(),
     String? mediaType,
     Value<int?> duration = const Value.absent(),
-    Value<String?> transcript = const Value.absent(),
-    Value<String?> summary = const Value.absent(),
-    Value<String?> insertedAt = const Value.absent(),
-    Value<String?> updatedAt = const Value.absent(),
+    String? uploadState,
+    int? uploadGeneration,
+    Value<int?> uploadedAt = const Value.absent(),
+    Value<String?> multipartContext = const Value.absent(),
+    Value<String?> localPath = const Value.absent(),
+    Value<String?> wrappedFek = const Value.absent(),
+    Value<String?> fileNoncePrefix = const Value.absent(),
+    bool? isDirty,
+    int? createdAt,
+    int? updatedAt,
   }) => FileBlobRow(
     id: id ?? this.id,
-    storageKey: storageKey ?? this.storageKey,
+    coreId: coreId.present ? coreId.value : this.coreId,
+    storageKey: storageKey.present ? storageKey.value : this.storageKey,
+    filename: filename.present ? filename.value : this.filename,
+    contentType: contentType.present ? contentType.value : this.contentType,
     byteSize: byteSize ?? this.byteSize,
+    checksumSha256: checksumSha256.present
+        ? checksumSha256.value
+        : this.checksumSha256,
     mediaType: mediaType ?? this.mediaType,
     duration: duration.present ? duration.value : this.duration,
-    transcript: transcript.present ? transcript.value : this.transcript,
-    summary: summary.present ? summary.value : this.summary,
-    insertedAt: insertedAt.present ? insertedAt.value : this.insertedAt,
-    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+    uploadState: uploadState ?? this.uploadState,
+    uploadGeneration: uploadGeneration ?? this.uploadGeneration,
+    uploadedAt: uploadedAt.present ? uploadedAt.value : this.uploadedAt,
+    multipartContext: multipartContext.present
+        ? multipartContext.value
+        : this.multipartContext,
+    localPath: localPath.present ? localPath.value : this.localPath,
+    wrappedFek: wrappedFek.present ? wrappedFek.value : this.wrappedFek,
+    fileNoncePrefix: fileNoncePrefix.present
+        ? fileNoncePrefix.value
+        : this.fileNoncePrefix,
+    isDirty: isDirty ?? this.isDirty,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
   );
   FileBlobRow copyWithCompanion(FileBlobsCompanion data) {
     return FileBlobRow(
       id: data.id.present ? data.id.value : this.id,
+      coreId: data.coreId.present ? data.coreId.value : this.coreId,
       storageKey: data.storageKey.present
           ? data.storageKey.value
           : this.storageKey,
+      filename: data.filename.present ? data.filename.value : this.filename,
+      contentType: data.contentType.present
+          ? data.contentType.value
+          : this.contentType,
       byteSize: data.byteSize.present ? data.byteSize.value : this.byteSize,
+      checksumSha256: data.checksumSha256.present
+          ? data.checksumSha256.value
+          : this.checksumSha256,
       mediaType: data.mediaType.present ? data.mediaType.value : this.mediaType,
       duration: data.duration.present ? data.duration.value : this.duration,
-      transcript: data.transcript.present
-          ? data.transcript.value
-          : this.transcript,
-      summary: data.summary.present ? data.summary.value : this.summary,
-      insertedAt: data.insertedAt.present
-          ? data.insertedAt.value
-          : this.insertedAt,
+      uploadState: data.uploadState.present
+          ? data.uploadState.value
+          : this.uploadState,
+      uploadGeneration: data.uploadGeneration.present
+          ? data.uploadGeneration.value
+          : this.uploadGeneration,
+      uploadedAt: data.uploadedAt.present
+          ? data.uploadedAt.value
+          : this.uploadedAt,
+      multipartContext: data.multipartContext.present
+          ? data.multipartContext.value
+          : this.multipartContext,
+      localPath: data.localPath.present ? data.localPath.value : this.localPath,
+      wrappedFek: data.wrappedFek.present
+          ? data.wrappedFek.value
+          : this.wrappedFek,
+      fileNoncePrefix: data.fileNoncePrefix.present
+          ? data.fileNoncePrefix.value
+          : this.fileNoncePrefix,
+      isDirty: data.isDirty.present ? data.isDirty.value : this.isDirty,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -5468,13 +4282,23 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
   String toString() {
     return (StringBuffer('FileBlobRow(')
           ..write('id: $id, ')
+          ..write('coreId: $coreId, ')
           ..write('storageKey: $storageKey, ')
+          ..write('filename: $filename, ')
+          ..write('contentType: $contentType, ')
           ..write('byteSize: $byteSize, ')
+          ..write('checksumSha256: $checksumSha256, ')
           ..write('mediaType: $mediaType, ')
           ..write('duration: $duration, ')
-          ..write('transcript: $transcript, ')
-          ..write('summary: $summary, ')
-          ..write('insertedAt: $insertedAt, ')
+          ..write('uploadState: $uploadState, ')
+          ..write('uploadGeneration: $uploadGeneration, ')
+          ..write('uploadedAt: $uploadedAt, ')
+          ..write('multipartContext: $multipartContext, ')
+          ..write('localPath: $localPath, ')
+          ..write('wrappedFek: $wrappedFek, ')
+          ..write('fileNoncePrefix: $fileNoncePrefix, ')
+          ..write('isDirty: $isDirty, ')
+          ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
@@ -5483,13 +4307,23 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
   @override
   int get hashCode => Object.hash(
     id,
+    coreId,
     storageKey,
+    filename,
+    contentType,
     byteSize,
+    checksumSha256,
     mediaType,
     duration,
-    transcript,
-    summary,
-    insertedAt,
+    uploadState,
+    uploadGeneration,
+    uploadedAt,
+    multipartContext,
+    localPath,
+    wrappedFek,
+    fileNoncePrefix,
+    isDirty,
+    createdAt,
     updatedAt,
   );
   @override
@@ -5497,95 +4331,183 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       identical(this, other) ||
       (other is FileBlobRow &&
           other.id == this.id &&
+          other.coreId == this.coreId &&
           other.storageKey == this.storageKey &&
+          other.filename == this.filename &&
+          other.contentType == this.contentType &&
           other.byteSize == this.byteSize &&
+          other.checksumSha256 == this.checksumSha256 &&
           other.mediaType == this.mediaType &&
           other.duration == this.duration &&
-          other.transcript == this.transcript &&
-          other.summary == this.summary &&
-          other.insertedAt == this.insertedAt &&
+          other.uploadState == this.uploadState &&
+          other.uploadGeneration == this.uploadGeneration &&
+          other.uploadedAt == this.uploadedAt &&
+          other.multipartContext == this.multipartContext &&
+          other.localPath == this.localPath &&
+          other.wrappedFek == this.wrappedFek &&
+          other.fileNoncePrefix == this.fileNoncePrefix &&
+          other.isDirty == this.isDirty &&
+          other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
 
 class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
-  final Value<int> id;
-  final Value<String> storageKey;
+  final Value<String> id;
+  final Value<int?> coreId;
+  final Value<String?> storageKey;
+  final Value<String?> filename;
+  final Value<String?> contentType;
   final Value<int> byteSize;
+  final Value<String?> checksumSha256;
   final Value<String> mediaType;
   final Value<int?> duration;
-  final Value<String?> transcript;
-  final Value<String?> summary;
-  final Value<String?> insertedAt;
-  final Value<String?> updatedAt;
+  final Value<String> uploadState;
+  final Value<int> uploadGeneration;
+  final Value<int?> uploadedAt;
+  final Value<String?> multipartContext;
+  final Value<String?> localPath;
+  final Value<String?> wrappedFek;
+  final Value<String?> fileNoncePrefix;
+  final Value<bool> isDirty;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
   const FileBlobsCompanion({
     this.id = const Value.absent(),
+    this.coreId = const Value.absent(),
     this.storageKey = const Value.absent(),
+    this.filename = const Value.absent(),
+    this.contentType = const Value.absent(),
     this.byteSize = const Value.absent(),
+    this.checksumSha256 = const Value.absent(),
     this.mediaType = const Value.absent(),
     this.duration = const Value.absent(),
-    this.transcript = const Value.absent(),
-    this.summary = const Value.absent(),
-    this.insertedAt = const Value.absent(),
+    this.uploadState = const Value.absent(),
+    this.uploadGeneration = const Value.absent(),
+    this.uploadedAt = const Value.absent(),
+    this.multipartContext = const Value.absent(),
+    this.localPath = const Value.absent(),
+    this.wrappedFek = const Value.absent(),
+    this.fileNoncePrefix = const Value.absent(),
+    this.isDirty = const Value.absent(),
+    this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   FileBlobsCompanion.insert({
-    this.id = const Value.absent(),
-    required String storageKey,
-    required int byteSize,
+    required String id,
+    this.coreId = const Value.absent(),
+    this.storageKey = const Value.absent(),
+    this.filename = const Value.absent(),
+    this.contentType = const Value.absent(),
+    this.byteSize = const Value.absent(),
+    this.checksumSha256 = const Value.absent(),
     required String mediaType,
     this.duration = const Value.absent(),
-    this.transcript = const Value.absent(),
-    this.summary = const Value.absent(),
-    this.insertedAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-  }) : storageKey = Value(storageKey),
-       byteSize = Value(byteSize),
-       mediaType = Value(mediaType);
+    this.uploadState = const Value.absent(),
+    this.uploadGeneration = const Value.absent(),
+    this.uploadedAt = const Value.absent(),
+    this.multipartContext = const Value.absent(),
+    this.localPath = const Value.absent(),
+    this.wrappedFek = const Value.absent(),
+    this.fileNoncePrefix = const Value.absent(),
+    this.isDirty = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       mediaType = Value(mediaType),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
   static Insertable<FileBlobRow> custom({
-    Expression<int>? id,
+    Expression<String>? id,
+    Expression<int>? coreId,
     Expression<String>? storageKey,
+    Expression<String>? filename,
+    Expression<String>? contentType,
     Expression<int>? byteSize,
+    Expression<String>? checksumSha256,
     Expression<String>? mediaType,
     Expression<int>? duration,
-    Expression<String>? transcript,
-    Expression<String>? summary,
-    Expression<String>? insertedAt,
-    Expression<String>? updatedAt,
+    Expression<String>? uploadState,
+    Expression<int>? uploadGeneration,
+    Expression<int>? uploadedAt,
+    Expression<String>? multipartContext,
+    Expression<String>? localPath,
+    Expression<String>? wrappedFek,
+    Expression<String>? fileNoncePrefix,
+    Expression<bool>? isDirty,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (coreId != null) 'core_id': coreId,
       if (storageKey != null) 'storage_key': storageKey,
+      if (filename != null) 'filename': filename,
+      if (contentType != null) 'content_type': contentType,
       if (byteSize != null) 'byte_size': byteSize,
+      if (checksumSha256 != null) 'checksum_sha256': checksumSha256,
       if (mediaType != null) 'media_type': mediaType,
       if (duration != null) 'duration': duration,
-      if (transcript != null) 'transcript': transcript,
-      if (summary != null) 'summary': summary,
-      if (insertedAt != null) 'inserted_at': insertedAt,
+      if (uploadState != null) 'upload_state': uploadState,
+      if (uploadGeneration != null) 'upload_generation': uploadGeneration,
+      if (uploadedAt != null) 'uploaded_at': uploadedAt,
+      if (multipartContext != null) 'multipart_context': multipartContext,
+      if (localPath != null) 'local_path': localPath,
+      if (wrappedFek != null) 'wrapped_fek': wrappedFek,
+      if (fileNoncePrefix != null) 'file_nonce_prefix': fileNoncePrefix,
+      if (isDirty != null) 'is_dirty': isDirty,
+      if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   FileBlobsCompanion copyWith({
-    Value<int>? id,
-    Value<String>? storageKey,
+    Value<String>? id,
+    Value<int?>? coreId,
+    Value<String?>? storageKey,
+    Value<String?>? filename,
+    Value<String?>? contentType,
     Value<int>? byteSize,
+    Value<String?>? checksumSha256,
     Value<String>? mediaType,
     Value<int?>? duration,
-    Value<String?>? transcript,
-    Value<String?>? summary,
-    Value<String?>? insertedAt,
-    Value<String?>? updatedAt,
+    Value<String>? uploadState,
+    Value<int>? uploadGeneration,
+    Value<int?>? uploadedAt,
+    Value<String?>? multipartContext,
+    Value<String?>? localPath,
+    Value<String?>? wrappedFek,
+    Value<String?>? fileNoncePrefix,
+    Value<bool>? isDirty,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
   }) {
     return FileBlobsCompanion(
       id: id ?? this.id,
+      coreId: coreId ?? this.coreId,
       storageKey: storageKey ?? this.storageKey,
+      filename: filename ?? this.filename,
+      contentType: contentType ?? this.contentType,
       byteSize: byteSize ?? this.byteSize,
+      checksumSha256: checksumSha256 ?? this.checksumSha256,
       mediaType: mediaType ?? this.mediaType,
       duration: duration ?? this.duration,
-      transcript: transcript ?? this.transcript,
-      summary: summary ?? this.summary,
-      insertedAt: insertedAt ?? this.insertedAt,
+      uploadState: uploadState ?? this.uploadState,
+      uploadGeneration: uploadGeneration ?? this.uploadGeneration,
+      uploadedAt: uploadedAt ?? this.uploadedAt,
+      multipartContext: multipartContext ?? this.multipartContext,
+      localPath: localPath ?? this.localPath,
+      wrappedFek: wrappedFek ?? this.wrappedFek,
+      fileNoncePrefix: fileNoncePrefix ?? this.fileNoncePrefix,
+      isDirty: isDirty ?? this.isDirty,
+      createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -5593,13 +4515,25 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
+    }
+    if (coreId.present) {
+      map['core_id'] = Variable<int>(coreId.value);
     }
     if (storageKey.present) {
       map['storage_key'] = Variable<String>(storageKey.value);
     }
+    if (filename.present) {
+      map['filename'] = Variable<String>(filename.value);
+    }
+    if (contentType.present) {
+      map['content_type'] = Variable<String>(contentType.value);
+    }
     if (byteSize.present) {
       map['byte_size'] = Variable<int>(byteSize.value);
+    }
+    if (checksumSha256.present) {
+      map['checksum_sha256'] = Variable<String>(checksumSha256.value);
     }
     if (mediaType.present) {
       map['media_type'] = Variable<String>(mediaType.value);
@@ -5607,17 +4541,38 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     if (duration.present) {
       map['duration'] = Variable<int>(duration.value);
     }
-    if (transcript.present) {
-      map['transcript'] = Variable<String>(transcript.value);
+    if (uploadState.present) {
+      map['upload_state'] = Variable<String>(uploadState.value);
     }
-    if (summary.present) {
-      map['summary'] = Variable<String>(summary.value);
+    if (uploadGeneration.present) {
+      map['upload_generation'] = Variable<int>(uploadGeneration.value);
     }
-    if (insertedAt.present) {
-      map['inserted_at'] = Variable<String>(insertedAt.value);
+    if (uploadedAt.present) {
+      map['uploaded_at'] = Variable<int>(uploadedAt.value);
+    }
+    if (multipartContext.present) {
+      map['multipart_context'] = Variable<String>(multipartContext.value);
+    }
+    if (localPath.present) {
+      map['local_path'] = Variable<String>(localPath.value);
+    }
+    if (wrappedFek.present) {
+      map['wrapped_fek'] = Variable<String>(wrappedFek.value);
+    }
+    if (fileNoncePrefix.present) {
+      map['file_nonce_prefix'] = Variable<String>(fileNoncePrefix.value);
+    }
+    if (isDirty.present) {
+      map['is_dirty'] = Variable<bool>(isDirty.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
     }
     if (updatedAt.present) {
-      map['updated_at'] = Variable<String>(updatedAt.value);
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
     }
     return map;
   }
@@ -5626,14 +4581,25 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
   String toString() {
     return (StringBuffer('FileBlobsCompanion(')
           ..write('id: $id, ')
+          ..write('coreId: $coreId, ')
           ..write('storageKey: $storageKey, ')
+          ..write('filename: $filename, ')
+          ..write('contentType: $contentType, ')
           ..write('byteSize: $byteSize, ')
+          ..write('checksumSha256: $checksumSha256, ')
           ..write('mediaType: $mediaType, ')
           ..write('duration: $duration, ')
-          ..write('transcript: $transcript, ')
-          ..write('summary: $summary, ')
-          ..write('insertedAt: $insertedAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('uploadState: $uploadState, ')
+          ..write('uploadGeneration: $uploadGeneration, ')
+          ..write('uploadedAt: $uploadedAt, ')
+          ..write('multipartContext: $multipartContext, ')
+          ..write('localPath: $localPath, ')
+          ..write('wrappedFek: $wrappedFek, ')
+          ..write('fileNoncePrefix: $fileNoncePrefix, ')
+          ..write('isDirty: $isDirty, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -5647,10 +4613,19 @@ class $TextContentsTable extends TextContents
   $TextContentsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _coreIdMeta = const VerificationMeta('coreId');
+  @override
+  late final GeneratedColumn<int> coreId = GeneratedColumn<int>(
+    'core_id',
+    aliasedName,
+    true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
@@ -5663,30 +4638,52 @@ class $TextContentsTable extends TextContents
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _insertedAtMeta = const VerificationMeta(
-    'insertedAt',
+  static const VerificationMeta _isDirtyMeta = const VerificationMeta(
+    'isDirty',
   );
   @override
-  late final GeneratedColumn<String> insertedAt = GeneratedColumn<String>(
-    'inserted_at',
+  late final GeneratedColumn<bool> isDirty = GeneratedColumn<bool>(
+    'is_dirty',
     aliasedName,
-    true,
-    type: DriftSqlType.string,
+    false,
+    type: DriftSqlType.bool,
     requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
   @override
-  late final GeneratedColumn<String> updatedAt = GeneratedColumn<String>(
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
     'updated_at',
     aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [id, body, insertedAt, updatedAt];
+  List<GeneratedColumn> get $columns => [
+    id,
+    coreId,
+    body,
+    isDirty,
+    createdAt,
+    updatedAt,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -5701,6 +4698,14 @@ class $TextContentsTable extends TextContents
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('core_id')) {
+      context.handle(
+        _coreIdMeta,
+        coreId.isAcceptableOrUnknown(data['core_id']!, _coreIdMeta),
+      );
     }
     if (data.containsKey('body')) {
       context.handle(
@@ -5710,17 +4715,27 @@ class $TextContentsTable extends TextContents
     } else if (isInserting) {
       context.missing(_bodyMeta);
     }
-    if (data.containsKey('inserted_at')) {
+    if (data.containsKey('is_dirty')) {
       context.handle(
-        _insertedAtMeta,
-        insertedAt.isAcceptableOrUnknown(data['inserted_at']!, _insertedAtMeta),
+        _isDirtyMeta,
+        isDirty.isAcceptableOrUnknown(data['is_dirty']!, _isDirtyMeta),
       );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
     }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
         updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
       );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
     }
     return context;
   }
@@ -5732,21 +4747,29 @@ class $TextContentsTable extends TextContents
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return TextContentRow(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      coreId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}core_id'],
+      ),
       body: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}body'],
       )!,
-      insertedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}inserted_at'],
-      ),
+      isDirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_dirty'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
+        DriftSqlType.int,
         data['${effectivePrefix}updated_at'],
-      ),
+      )!,
     );
   }
 
@@ -5757,40 +4780,44 @@ class $TextContentsTable extends TextContents
 }
 
 class TextContentRow extends DataClass implements Insertable<TextContentRow> {
-  final int id;
+  final String id;
+  final int? coreId;
   final String body;
-  final String? insertedAt;
-  final String? updatedAt;
+  final bool isDirty;
+  final int createdAt;
+  final int updatedAt;
   const TextContentRow({
     required this.id,
+    this.coreId,
     required this.body,
-    this.insertedAt,
-    this.updatedAt,
+    required this.isDirty,
+    required this.createdAt,
+    required this.updatedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || coreId != null) {
+      map['core_id'] = Variable<int>(coreId);
+    }
     map['body'] = Variable<String>(body);
-    if (!nullToAbsent || insertedAt != null) {
-      map['inserted_at'] = Variable<String>(insertedAt);
-    }
-    if (!nullToAbsent || updatedAt != null) {
-      map['updated_at'] = Variable<String>(updatedAt);
-    }
+    map['is_dirty'] = Variable<bool>(isDirty);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
     return map;
   }
 
   TextContentsCompanion toCompanion(bool nullToAbsent) {
     return TextContentsCompanion(
       id: Value(id),
+      coreId: coreId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coreId),
       body: Value(body),
-      insertedAt: insertedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(insertedAt),
-      updatedAt: updatedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(updatedAt),
+      isDirty: Value(isDirty),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
     );
   }
 
@@ -5800,41 +4827,49 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return TextContentRow(
-      id: serializer.fromJson<int>(json['id']),
+      id: serializer.fromJson<String>(json['id']),
+      coreId: serializer.fromJson<int?>(json['coreId']),
       body: serializer.fromJson<String>(json['body']),
-      insertedAt: serializer.fromJson<String?>(json['insertedAt']),
-      updatedAt: serializer.fromJson<String?>(json['updatedAt']),
+      isDirty: serializer.fromJson<bool>(json['isDirty']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'id': serializer.toJson<String>(id),
+      'coreId': serializer.toJson<int?>(coreId),
       'body': serializer.toJson<String>(body),
-      'insertedAt': serializer.toJson<String?>(insertedAt),
-      'updatedAt': serializer.toJson<String?>(updatedAt),
+      'isDirty': serializer.toJson<bool>(isDirty),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
     };
   }
 
   TextContentRow copyWith({
-    int? id,
+    String? id,
+    Value<int?> coreId = const Value.absent(),
     String? body,
-    Value<String?> insertedAt = const Value.absent(),
-    Value<String?> updatedAt = const Value.absent(),
+    bool? isDirty,
+    int? createdAt,
+    int? updatedAt,
   }) => TextContentRow(
     id: id ?? this.id,
+    coreId: coreId.present ? coreId.value : this.coreId,
     body: body ?? this.body,
-    insertedAt: insertedAt.present ? insertedAt.value : this.insertedAt,
-    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+    isDirty: isDirty ?? this.isDirty,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
   );
   TextContentRow copyWithCompanion(TextContentsCompanion data) {
     return TextContentRow(
       id: data.id.present ? data.id.value : this.id,
+      coreId: data.coreId.present ? data.coreId.value : this.coreId,
       body: data.body.present ? data.body.value : this.body,
-      insertedAt: data.insertedAt.present
-          ? data.insertedAt.value
-          : this.insertedAt,
+      isDirty: data.isDirty.present ? data.isDirty.value : this.isDirty,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -5843,67 +4878,96 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
   String toString() {
     return (StringBuffer('TextContentRow(')
           ..write('id: $id, ')
+          ..write('coreId: $coreId, ')
           ..write('body: $body, ')
-          ..write('insertedAt: $insertedAt, ')
+          ..write('isDirty: $isDirty, ')
+          ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, body, insertedAt, updatedAt);
+  int get hashCode =>
+      Object.hash(id, coreId, body, isDirty, createdAt, updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is TextContentRow &&
           other.id == this.id &&
+          other.coreId == this.coreId &&
           other.body == this.body &&
-          other.insertedAt == this.insertedAt &&
+          other.isDirty == this.isDirty &&
+          other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
 
 class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
-  final Value<int> id;
+  final Value<String> id;
+  final Value<int?> coreId;
   final Value<String> body;
-  final Value<String?> insertedAt;
-  final Value<String?> updatedAt;
+  final Value<bool> isDirty;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
   const TextContentsCompanion({
     this.id = const Value.absent(),
+    this.coreId = const Value.absent(),
     this.body = const Value.absent(),
-    this.insertedAt = const Value.absent(),
+    this.isDirty = const Value.absent(),
+    this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   TextContentsCompanion.insert({
-    this.id = const Value.absent(),
+    required String id,
+    this.coreId = const Value.absent(),
     required String body,
-    this.insertedAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-  }) : body = Value(body);
+    this.isDirty = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       body = Value(body),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
   static Insertable<TextContentRow> custom({
-    Expression<int>? id,
+    Expression<String>? id,
+    Expression<int>? coreId,
     Expression<String>? body,
-    Expression<String>? insertedAt,
-    Expression<String>? updatedAt,
+    Expression<bool>? isDirty,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (coreId != null) 'core_id': coreId,
       if (body != null) 'body': body,
-      if (insertedAt != null) 'inserted_at': insertedAt,
+      if (isDirty != null) 'is_dirty': isDirty,
+      if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   TextContentsCompanion copyWith({
-    Value<int>? id,
+    Value<String>? id,
+    Value<int?>? coreId,
     Value<String>? body,
-    Value<String?>? insertedAt,
-    Value<String?>? updatedAt,
+    Value<bool>? isDirty,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
   }) {
     return TextContentsCompanion(
       id: id ?? this.id,
+      coreId: coreId ?? this.coreId,
       body: body ?? this.body,
-      insertedAt: insertedAt ?? this.insertedAt,
+      isDirty: isDirty ?? this.isDirty,
+      createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -5911,16 +4975,25 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
+    }
+    if (coreId.present) {
+      map['core_id'] = Variable<int>(coreId.value);
     }
     if (body.present) {
       map['body'] = Variable<String>(body.value);
     }
-    if (insertedAt.present) {
-      map['inserted_at'] = Variable<String>(insertedAt.value);
+    if (isDirty.present) {
+      map['is_dirty'] = Variable<bool>(isDirty.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
     }
     if (updatedAt.present) {
-      map['updated_at'] = Variable<String>(updatedAt.value);
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
     }
     return map;
   }
@@ -5929,9 +5002,12 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
   String toString() {
     return (StringBuffer('TextContentsCompanion(')
           ..write('id: $id, ')
+          ..write('coreId: $coreId, ')
           ..write('body: $body, ')
-          ..write('insertedAt: $insertedAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('isDirty: $isDirty, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -5944,23 +5020,77 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
   $ItemsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
     aliasedName,
     false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _coreIdMeta = const VerificationMeta('coreId');
+  @override
+  late final GeneratedColumn<int> coreId = GeneratedColumn<int>(
+    'core_id',
+    aliasedName,
+    true,
     type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ownerIdMeta = const VerificationMeta(
+    'ownerId',
+  );
+  @override
+  late final GeneratedColumn<String> ownerId = GeneratedColumn<String>(
+    'owner_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clientIdMeta = const VerificationMeta(
+    'clientId',
+  );
+  @override
+  late final GeneratedColumn<String> clientId = GeneratedColumn<String>(
+    'client_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _clientFingerprintMeta = const VerificationMeta(
+    'clientFingerprint',
+  );
+  @override
+  late final GeneratedColumn<String> clientFingerprint =
+      GeneratedColumn<String>(
+        'client_fingerprint',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _workspaceIdMeta = const VerificationMeta(
+    'workspaceId',
+  );
+  @override
+  late final GeneratedColumn<String> workspaceId = GeneratedColumn<String>(
+    'workspace_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _matomeIdMeta = const VerificationMeta(
     'matomeId',
   );
   @override
-  late final GeneratedColumn<int> matomeId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> matomeId = GeneratedColumn<String>(
     'matome_id',
     aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _positionMeta = const VerificationMeta(
     'position',
@@ -5969,9 +5099,9 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
   late final GeneratedColumn<int> position = GeneratedColumn<int>(
     'position',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.int,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _itemTypeMeta = const VerificationMeta(
     'itemType',
@@ -5983,6 +5113,25 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Untitled'),
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _metadataMeta = const VerificationMeta(
     'metadata',
@@ -5996,60 +5145,184 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant('{}'),
   );
+  static const VerificationMeta _processingStateMeta = const VerificationMeta(
+    'processingState',
+  );
+  @override
+  late final GeneratedColumn<String> processingState = GeneratedColumn<String>(
+    'processing_state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('not_requested'),
+  );
+  static const VerificationMeta _processingRunIdMeta = const VerificationMeta(
+    'processingRunId',
+  );
+  @override
+  late final GeneratedColumn<String> processingRunId = GeneratedColumn<String>(
+    'processing_run_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceRevisionMeta = const VerificationMeta(
+    'sourceRevision',
+  );
+  @override
+  late final GeneratedColumn<int> sourceRevision = GeneratedColumn<int>(
+    'source_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _processingConfigRevisionMeta =
+      const VerificationMeta('processingConfigRevision');
+  @override
+  late final GeneratedColumn<int> processingConfigRevision =
+      GeneratedColumn<int>(
+        'processing_config_revision',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _processingOutputsMeta = const VerificationMeta(
+    'processingOutputs',
+  );
+  @override
+  late final GeneratedColumn<String> processingOutputs =
+      GeneratedColumn<String>(
+        'processing_outputs',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('{}'),
+      );
+  static const VerificationMeta _processingErrorMeta = const VerificationMeta(
+    'processingError',
+  );
+  @override
+  late final GeneratedColumn<String> processingError = GeneratedColumn<String>(
+    'processing_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _processingErrorCodeMeta =
+      const VerificationMeta('processingErrorCode');
+  @override
+  late final GeneratedColumn<String> processingErrorCode =
+      GeneratedColumn<String>(
+        'processing_error_code',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _fileBlobIdMeta = const VerificationMeta(
     'fileBlobId',
   );
   @override
-  late final GeneratedColumn<int> fileBlobId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> fileBlobId = GeneratedColumn<String>(
     'file_blob_id',
     aliasedName,
     true,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _textContentIdMeta = const VerificationMeta(
     'textContentId',
   );
   @override
-  late final GeneratedColumn<int> textContentId = GeneratedColumn<int>(
+  late final GeneratedColumn<String> textContentId = GeneratedColumn<String>(
     'text_content_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _insertedAtMeta = const VerificationMeta(
-    'insertedAt',
-  );
-  @override
-  late final GeneratedColumn<String> insertedAt = GeneratedColumn<String>(
-    'inserted_at',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isDirtyMeta = const VerificationMeta(
+    'isDirty',
+  );
+  @override
+  late final GeneratedColumn<bool> isDirty = GeneratedColumn<bool>(
+    'is_dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _syncStateMeta = const VerificationMeta(
+    'syncState',
+  );
+  @override
+  late final GeneratedColumn<String> syncState = GeneratedColumn<String>(
+    'sync_state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('local_saved'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _updatedAtMeta = const VerificationMeta(
     'updatedAt',
   );
   @override
-  late final GeneratedColumn<String> updatedAt = GeneratedColumn<String>(
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
     'updated_at',
     aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
   );
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    coreId,
+    ownerId,
+    clientId,
+    clientFingerprint,
+    workspaceId,
     matomeId,
     position,
     itemType,
+    title,
+    notes,
     metadata,
+    processingState,
+    processingRunId,
+    sourceRevision,
+    processingConfigRevision,
+    processingOutputs,
+    processingError,
+    processingErrorCode,
     fileBlobId,
     textContentId,
-    insertedAt,
+    isDirty,
+    syncState,
+    createdAt,
     updatedAt,
   ];
   @override
@@ -6066,22 +5339,60 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('core_id')) {
+      context.handle(
+        _coreIdMeta,
+        coreId.isAcceptableOrUnknown(data['core_id']!, _coreIdMeta),
+      );
+    }
+    if (data.containsKey('owner_id')) {
+      context.handle(
+        _ownerIdMeta,
+        ownerId.isAcceptableOrUnknown(data['owner_id']!, _ownerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ownerIdMeta);
+    }
+    if (data.containsKey('client_id')) {
+      context.handle(
+        _clientIdMeta,
+        clientId.isAcceptableOrUnknown(data['client_id']!, _clientIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_clientIdMeta);
+    }
+    if (data.containsKey('client_fingerprint')) {
+      context.handle(
+        _clientFingerprintMeta,
+        clientFingerprint.isAcceptableOrUnknown(
+          data['client_fingerprint']!,
+          _clientFingerprintMeta,
+        ),
+      );
+    }
+    if (data.containsKey('workspace_id')) {
+      context.handle(
+        _workspaceIdMeta,
+        workspaceId.isAcceptableOrUnknown(
+          data['workspace_id']!,
+          _workspaceIdMeta,
+        ),
+      );
     }
     if (data.containsKey('matome_id')) {
       context.handle(
         _matomeIdMeta,
         matomeId.isAcceptableOrUnknown(data['matome_id']!, _matomeIdMeta),
       );
-    } else if (isInserting) {
-      context.missing(_matomeIdMeta);
     }
     if (data.containsKey('position')) {
       context.handle(
         _positionMeta,
         position.isAcceptableOrUnknown(data['position']!, _positionMeta),
       );
-    } else if (isInserting) {
-      context.missing(_positionMeta);
     }
     if (data.containsKey('item_type')) {
       context.handle(
@@ -6091,10 +5402,85 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     } else if (isInserting) {
       context.missing(_itemTypeMeta);
     }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
     if (data.containsKey('metadata')) {
       context.handle(
         _metadataMeta,
         metadata.isAcceptableOrUnknown(data['metadata']!, _metadataMeta),
+      );
+    }
+    if (data.containsKey('processing_state')) {
+      context.handle(
+        _processingStateMeta,
+        processingState.isAcceptableOrUnknown(
+          data['processing_state']!,
+          _processingStateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('processing_run_id')) {
+      context.handle(
+        _processingRunIdMeta,
+        processingRunId.isAcceptableOrUnknown(
+          data['processing_run_id']!,
+          _processingRunIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_revision')) {
+      context.handle(
+        _sourceRevisionMeta,
+        sourceRevision.isAcceptableOrUnknown(
+          data['source_revision']!,
+          _sourceRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('processing_config_revision')) {
+      context.handle(
+        _processingConfigRevisionMeta,
+        processingConfigRevision.isAcceptableOrUnknown(
+          data['processing_config_revision']!,
+          _processingConfigRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('processing_outputs')) {
+      context.handle(
+        _processingOutputsMeta,
+        processingOutputs.isAcceptableOrUnknown(
+          data['processing_outputs']!,
+          _processingOutputsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('processing_error')) {
+      context.handle(
+        _processingErrorMeta,
+        processingError.isAcceptableOrUnknown(
+          data['processing_error']!,
+          _processingErrorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('processing_error_code')) {
+      context.handle(
+        _processingErrorCodeMeta,
+        processingErrorCode.isAcceptableOrUnknown(
+          data['processing_error_code']!,
+          _processingErrorCodeMeta,
+        ),
       );
     }
     if (data.containsKey('file_blob_id')) {
@@ -6115,17 +5501,33 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
         ),
       );
     }
-    if (data.containsKey('inserted_at')) {
+    if (data.containsKey('is_dirty')) {
       context.handle(
-        _insertedAtMeta,
-        insertedAt.isAcceptableOrUnknown(data['inserted_at']!, _insertedAtMeta),
+        _isDirtyMeta,
+        isDirty.isAcceptableOrUnknown(data['is_dirty']!, _isDirtyMeta),
       );
+    }
+    if (data.containsKey('sync_state')) {
+      context.handle(
+        _syncStateMeta,
+        syncState.isAcceptableOrUnknown(data['sync_state']!, _syncStateMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
     }
     if (data.containsKey('updated_at')) {
       context.handle(
         _updatedAtMeta,
         updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
       );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
     }
     return context;
   }
@@ -6134,48 +5536,113 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
   List<Set<GeneratedColumn>> get uniqueKeys => [
-    {matomeId, position},
+    {ownerId, matomeId, position},
+    {ownerId, clientId},
   ];
   @override
   ItemRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return ItemRow(
       id: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
-      matomeId: attachedDatabase.typeMapping.read(
+      coreId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}matome_id'],
+        data['${effectivePrefix}core_id'],
+      ),
+      ownerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_id'],
       )!,
+      clientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_id'],
+      )!,
+      clientFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_fingerprint'],
+      ),
+      workspaceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}workspace_id'],
+      ),
+      matomeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}matome_id'],
+      ),
       position: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}position'],
-      )!,
+      ),
       itemType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}item_type'],
       )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
       metadata: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}metadata'],
       )!,
-      fileBlobId: attachedDatabase.typeMapping.read(
+      processingState: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}processing_state'],
+      )!,
+      processingRunId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}processing_run_id'],
+      ),
+      sourceRevision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
+        data['${effectivePrefix}source_revision'],
+      )!,
+      processingConfigRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}processing_config_revision'],
+      ),
+      processingOutputs: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}processing_outputs'],
+      )!,
+      processingError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}processing_error'],
+      ),
+      processingErrorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}processing_error_code'],
+      ),
+      fileBlobId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
         data['${effectivePrefix}file_blob_id'],
       ),
       textContentId: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
+        DriftSqlType.string,
         data['${effectivePrefix}text_content_id'],
       ),
-      insertedAt: attachedDatabase.typeMapping.read(
+      isDirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_dirty'],
+      )!,
+      syncState: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}inserted_at'],
-      ),
+        data['${effectivePrefix}sync_state'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
       updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
+        DriftSqlType.int,
         data['${effectivePrefix}updated_at'],
-      ),
+      )!,
     );
   }
 
@@ -6186,68 +5653,166 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
 }
 
 class ItemRow extends DataClass implements Insertable<ItemRow> {
-  final int id;
-  final int matomeId;
-  final int position;
+  final String id;
+  final int? coreId;
+  final String ownerId;
+  final String clientId;
+  final String? clientFingerprint;
+  final String? workspaceId;
+  final String? matomeId;
+  final int? position;
   final String itemType;
+  final String title;
+  final String? notes;
   final String metadata;
-  final int? fileBlobId;
-  final int? textContentId;
-  final String? insertedAt;
-  final String? updatedAt;
+  final String processingState;
+  final String? processingRunId;
+  final int sourceRevision;
+  final int? processingConfigRevision;
+  final String processingOutputs;
+  final String? processingError;
+  final String? processingErrorCode;
+  final String? fileBlobId;
+  final String? textContentId;
+  final bool isDirty;
+  final String syncState;
+  final int createdAt;
+  final int updatedAt;
   const ItemRow({
     required this.id,
-    required this.matomeId,
-    required this.position,
+    this.coreId,
+    required this.ownerId,
+    required this.clientId,
+    this.clientFingerprint,
+    this.workspaceId,
+    this.matomeId,
+    this.position,
     required this.itemType,
+    required this.title,
+    this.notes,
     required this.metadata,
+    required this.processingState,
+    this.processingRunId,
+    required this.sourceRevision,
+    this.processingConfigRevision,
+    required this.processingOutputs,
+    this.processingError,
+    this.processingErrorCode,
     this.fileBlobId,
     this.textContentId,
-    this.insertedAt,
-    this.updatedAt,
+    required this.isDirty,
+    required this.syncState,
+    required this.createdAt,
+    required this.updatedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
-    map['matome_id'] = Variable<int>(matomeId);
-    map['position'] = Variable<int>(position);
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || coreId != null) {
+      map['core_id'] = Variable<int>(coreId);
+    }
+    map['owner_id'] = Variable<String>(ownerId);
+    map['client_id'] = Variable<String>(clientId);
+    if (!nullToAbsent || clientFingerprint != null) {
+      map['client_fingerprint'] = Variable<String>(clientFingerprint);
+    }
+    if (!nullToAbsent || workspaceId != null) {
+      map['workspace_id'] = Variable<String>(workspaceId);
+    }
+    if (!nullToAbsent || matomeId != null) {
+      map['matome_id'] = Variable<String>(matomeId);
+    }
+    if (!nullToAbsent || position != null) {
+      map['position'] = Variable<int>(position);
+    }
     map['item_type'] = Variable<String>(itemType);
+    map['title'] = Variable<String>(title);
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
     map['metadata'] = Variable<String>(metadata);
+    map['processing_state'] = Variable<String>(processingState);
+    if (!nullToAbsent || processingRunId != null) {
+      map['processing_run_id'] = Variable<String>(processingRunId);
+    }
+    map['source_revision'] = Variable<int>(sourceRevision);
+    if (!nullToAbsent || processingConfigRevision != null) {
+      map['processing_config_revision'] = Variable<int>(
+        processingConfigRevision,
+      );
+    }
+    map['processing_outputs'] = Variable<String>(processingOutputs);
+    if (!nullToAbsent || processingError != null) {
+      map['processing_error'] = Variable<String>(processingError);
+    }
+    if (!nullToAbsent || processingErrorCode != null) {
+      map['processing_error_code'] = Variable<String>(processingErrorCode);
+    }
     if (!nullToAbsent || fileBlobId != null) {
-      map['file_blob_id'] = Variable<int>(fileBlobId);
+      map['file_blob_id'] = Variable<String>(fileBlobId);
     }
     if (!nullToAbsent || textContentId != null) {
-      map['text_content_id'] = Variable<int>(textContentId);
+      map['text_content_id'] = Variable<String>(textContentId);
     }
-    if (!nullToAbsent || insertedAt != null) {
-      map['inserted_at'] = Variable<String>(insertedAt);
-    }
-    if (!nullToAbsent || updatedAt != null) {
-      map['updated_at'] = Variable<String>(updatedAt);
-    }
+    map['is_dirty'] = Variable<bool>(isDirty);
+    map['sync_state'] = Variable<String>(syncState);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
     return map;
   }
 
   ItemsCompanion toCompanion(bool nullToAbsent) {
     return ItemsCompanion(
       id: Value(id),
-      matomeId: Value(matomeId),
-      position: Value(position),
+      coreId: coreId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coreId),
+      ownerId: Value(ownerId),
+      clientId: Value(clientId),
+      clientFingerprint: clientFingerprint == null && nullToAbsent
+          ? const Value.absent()
+          : Value(clientFingerprint),
+      workspaceId: workspaceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(workspaceId),
+      matomeId: matomeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(matomeId),
+      position: position == null && nullToAbsent
+          ? const Value.absent()
+          : Value(position),
       itemType: Value(itemType),
+      title: Value(title),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
       metadata: Value(metadata),
+      processingState: Value(processingState),
+      processingRunId: processingRunId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processingRunId),
+      sourceRevision: Value(sourceRevision),
+      processingConfigRevision: processingConfigRevision == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processingConfigRevision),
+      processingOutputs: Value(processingOutputs),
+      processingError: processingError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processingError),
+      processingErrorCode: processingErrorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processingErrorCode),
       fileBlobId: fileBlobId == null && nullToAbsent
           ? const Value.absent()
           : Value(fileBlobId),
       textContentId: textContentId == null && nullToAbsent
           ? const Value.absent()
           : Value(textContentId),
-      insertedAt: insertedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(insertedAt),
-      updatedAt: updatedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(updatedAt),
+      isDirty: Value(isDirty),
+      syncState: Value(syncState),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
     );
   }
 
@@ -6257,72 +5822,186 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ItemRow(
-      id: serializer.fromJson<int>(json['id']),
-      matomeId: serializer.fromJson<int>(json['matomeId']),
-      position: serializer.fromJson<int>(json['position']),
+      id: serializer.fromJson<String>(json['id']),
+      coreId: serializer.fromJson<int?>(json['coreId']),
+      ownerId: serializer.fromJson<String>(json['ownerId']),
+      clientId: serializer.fromJson<String>(json['clientId']),
+      clientFingerprint: serializer.fromJson<String?>(
+        json['clientFingerprint'],
+      ),
+      workspaceId: serializer.fromJson<String?>(json['workspaceId']),
+      matomeId: serializer.fromJson<String?>(json['matomeId']),
+      position: serializer.fromJson<int?>(json['position']),
       itemType: serializer.fromJson<String>(json['itemType']),
+      title: serializer.fromJson<String>(json['title']),
+      notes: serializer.fromJson<String?>(json['notes']),
       metadata: serializer.fromJson<String>(json['metadata']),
-      fileBlobId: serializer.fromJson<int?>(json['fileBlobId']),
-      textContentId: serializer.fromJson<int?>(json['textContentId']),
-      insertedAt: serializer.fromJson<String?>(json['insertedAt']),
-      updatedAt: serializer.fromJson<String?>(json['updatedAt']),
+      processingState: serializer.fromJson<String>(json['processingState']),
+      processingRunId: serializer.fromJson<String?>(json['processingRunId']),
+      sourceRevision: serializer.fromJson<int>(json['sourceRevision']),
+      processingConfigRevision: serializer.fromJson<int?>(
+        json['processingConfigRevision'],
+      ),
+      processingOutputs: serializer.fromJson<String>(json['processingOutputs']),
+      processingError: serializer.fromJson<String?>(json['processingError']),
+      processingErrorCode: serializer.fromJson<String?>(
+        json['processingErrorCode'],
+      ),
+      fileBlobId: serializer.fromJson<String?>(json['fileBlobId']),
+      textContentId: serializer.fromJson<String?>(json['textContentId']),
+      isDirty: serializer.fromJson<bool>(json['isDirty']),
+      syncState: serializer.fromJson<String>(json['syncState']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
-      'matomeId': serializer.toJson<int>(matomeId),
-      'position': serializer.toJson<int>(position),
+      'id': serializer.toJson<String>(id),
+      'coreId': serializer.toJson<int?>(coreId),
+      'ownerId': serializer.toJson<String>(ownerId),
+      'clientId': serializer.toJson<String>(clientId),
+      'clientFingerprint': serializer.toJson<String?>(clientFingerprint),
+      'workspaceId': serializer.toJson<String?>(workspaceId),
+      'matomeId': serializer.toJson<String?>(matomeId),
+      'position': serializer.toJson<int?>(position),
       'itemType': serializer.toJson<String>(itemType),
+      'title': serializer.toJson<String>(title),
+      'notes': serializer.toJson<String?>(notes),
       'metadata': serializer.toJson<String>(metadata),
-      'fileBlobId': serializer.toJson<int?>(fileBlobId),
-      'textContentId': serializer.toJson<int?>(textContentId),
-      'insertedAt': serializer.toJson<String?>(insertedAt),
-      'updatedAt': serializer.toJson<String?>(updatedAt),
+      'processingState': serializer.toJson<String>(processingState),
+      'processingRunId': serializer.toJson<String?>(processingRunId),
+      'sourceRevision': serializer.toJson<int>(sourceRevision),
+      'processingConfigRevision': serializer.toJson<int?>(
+        processingConfigRevision,
+      ),
+      'processingOutputs': serializer.toJson<String>(processingOutputs),
+      'processingError': serializer.toJson<String?>(processingError),
+      'processingErrorCode': serializer.toJson<String?>(processingErrorCode),
+      'fileBlobId': serializer.toJson<String?>(fileBlobId),
+      'textContentId': serializer.toJson<String?>(textContentId),
+      'isDirty': serializer.toJson<bool>(isDirty),
+      'syncState': serializer.toJson<String>(syncState),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
     };
   }
 
   ItemRow copyWith({
-    int? id,
-    int? matomeId,
-    int? position,
+    String? id,
+    Value<int?> coreId = const Value.absent(),
+    String? ownerId,
+    String? clientId,
+    Value<String?> clientFingerprint = const Value.absent(),
+    Value<String?> workspaceId = const Value.absent(),
+    Value<String?> matomeId = const Value.absent(),
+    Value<int?> position = const Value.absent(),
     String? itemType,
+    String? title,
+    Value<String?> notes = const Value.absent(),
     String? metadata,
-    Value<int?> fileBlobId = const Value.absent(),
-    Value<int?> textContentId = const Value.absent(),
-    Value<String?> insertedAt = const Value.absent(),
-    Value<String?> updatedAt = const Value.absent(),
+    String? processingState,
+    Value<String?> processingRunId = const Value.absent(),
+    int? sourceRevision,
+    Value<int?> processingConfigRevision = const Value.absent(),
+    String? processingOutputs,
+    Value<String?> processingError = const Value.absent(),
+    Value<String?> processingErrorCode = const Value.absent(),
+    Value<String?> fileBlobId = const Value.absent(),
+    Value<String?> textContentId = const Value.absent(),
+    bool? isDirty,
+    String? syncState,
+    int? createdAt,
+    int? updatedAt,
   }) => ItemRow(
     id: id ?? this.id,
-    matomeId: matomeId ?? this.matomeId,
-    position: position ?? this.position,
+    coreId: coreId.present ? coreId.value : this.coreId,
+    ownerId: ownerId ?? this.ownerId,
+    clientId: clientId ?? this.clientId,
+    clientFingerprint: clientFingerprint.present
+        ? clientFingerprint.value
+        : this.clientFingerprint,
+    workspaceId: workspaceId.present ? workspaceId.value : this.workspaceId,
+    matomeId: matomeId.present ? matomeId.value : this.matomeId,
+    position: position.present ? position.value : this.position,
     itemType: itemType ?? this.itemType,
+    title: title ?? this.title,
+    notes: notes.present ? notes.value : this.notes,
     metadata: metadata ?? this.metadata,
+    processingState: processingState ?? this.processingState,
+    processingRunId: processingRunId.present
+        ? processingRunId.value
+        : this.processingRunId,
+    sourceRevision: sourceRevision ?? this.sourceRevision,
+    processingConfigRevision: processingConfigRevision.present
+        ? processingConfigRevision.value
+        : this.processingConfigRevision,
+    processingOutputs: processingOutputs ?? this.processingOutputs,
+    processingError: processingError.present
+        ? processingError.value
+        : this.processingError,
+    processingErrorCode: processingErrorCode.present
+        ? processingErrorCode.value
+        : this.processingErrorCode,
     fileBlobId: fileBlobId.present ? fileBlobId.value : this.fileBlobId,
     textContentId: textContentId.present
         ? textContentId.value
         : this.textContentId,
-    insertedAt: insertedAt.present ? insertedAt.value : this.insertedAt,
-    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+    isDirty: isDirty ?? this.isDirty,
+    syncState: syncState ?? this.syncState,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
   );
   ItemRow copyWithCompanion(ItemsCompanion data) {
     return ItemRow(
       id: data.id.present ? data.id.value : this.id,
+      coreId: data.coreId.present ? data.coreId.value : this.coreId,
+      ownerId: data.ownerId.present ? data.ownerId.value : this.ownerId,
+      clientId: data.clientId.present ? data.clientId.value : this.clientId,
+      clientFingerprint: data.clientFingerprint.present
+          ? data.clientFingerprint.value
+          : this.clientFingerprint,
+      workspaceId: data.workspaceId.present
+          ? data.workspaceId.value
+          : this.workspaceId,
       matomeId: data.matomeId.present ? data.matomeId.value : this.matomeId,
       position: data.position.present ? data.position.value : this.position,
       itemType: data.itemType.present ? data.itemType.value : this.itemType,
+      title: data.title.present ? data.title.value : this.title,
+      notes: data.notes.present ? data.notes.value : this.notes,
       metadata: data.metadata.present ? data.metadata.value : this.metadata,
+      processingState: data.processingState.present
+          ? data.processingState.value
+          : this.processingState,
+      processingRunId: data.processingRunId.present
+          ? data.processingRunId.value
+          : this.processingRunId,
+      sourceRevision: data.sourceRevision.present
+          ? data.sourceRevision.value
+          : this.sourceRevision,
+      processingConfigRevision: data.processingConfigRevision.present
+          ? data.processingConfigRevision.value
+          : this.processingConfigRevision,
+      processingOutputs: data.processingOutputs.present
+          ? data.processingOutputs.value
+          : this.processingOutputs,
+      processingError: data.processingError.present
+          ? data.processingError.value
+          : this.processingError,
+      processingErrorCode: data.processingErrorCode.present
+          ? data.processingErrorCode.value
+          : this.processingErrorCode,
       fileBlobId: data.fileBlobId.present
           ? data.fileBlobId.value
           : this.fileBlobId,
       textContentId: data.textContentId.present
           ? data.textContentId.value
           : this.textContentId,
-      insertedAt: data.insertedAt.present
-          ? data.insertedAt.value
-          : this.insertedAt,
+      isDirty: data.isDirty.present ? data.isDirty.value : this.isDirty,
+      syncState: data.syncState.present ? data.syncState.value : this.syncState,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
@@ -6331,124 +6010,297 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
   String toString() {
     return (StringBuffer('ItemRow(')
           ..write('id: $id, ')
+          ..write('coreId: $coreId, ')
+          ..write('ownerId: $ownerId, ')
+          ..write('clientId: $clientId, ')
+          ..write('clientFingerprint: $clientFingerprint, ')
+          ..write('workspaceId: $workspaceId, ')
           ..write('matomeId: $matomeId, ')
           ..write('position: $position, ')
           ..write('itemType: $itemType, ')
+          ..write('title: $title, ')
+          ..write('notes: $notes, ')
           ..write('metadata: $metadata, ')
+          ..write('processingState: $processingState, ')
+          ..write('processingRunId: $processingRunId, ')
+          ..write('sourceRevision: $sourceRevision, ')
+          ..write('processingConfigRevision: $processingConfigRevision, ')
+          ..write('processingOutputs: $processingOutputs, ')
+          ..write('processingError: $processingError, ')
+          ..write('processingErrorCode: $processingErrorCode, ')
           ..write('fileBlobId: $fileBlobId, ')
           ..write('textContentId: $textContentId, ')
-          ..write('insertedAt: $insertedAt, ')
+          ..write('isDirty: $isDirty, ')
+          ..write('syncState: $syncState, ')
+          ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
+    coreId,
+    ownerId,
+    clientId,
+    clientFingerprint,
+    workspaceId,
     matomeId,
     position,
     itemType,
+    title,
+    notes,
     metadata,
+    processingState,
+    processingRunId,
+    sourceRevision,
+    processingConfigRevision,
+    processingOutputs,
+    processingError,
+    processingErrorCode,
     fileBlobId,
     textContentId,
-    insertedAt,
+    isDirty,
+    syncState,
+    createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ItemRow &&
           other.id == this.id &&
+          other.coreId == this.coreId &&
+          other.ownerId == this.ownerId &&
+          other.clientId == this.clientId &&
+          other.clientFingerprint == this.clientFingerprint &&
+          other.workspaceId == this.workspaceId &&
           other.matomeId == this.matomeId &&
           other.position == this.position &&
           other.itemType == this.itemType &&
+          other.title == this.title &&
+          other.notes == this.notes &&
           other.metadata == this.metadata &&
+          other.processingState == this.processingState &&
+          other.processingRunId == this.processingRunId &&
+          other.sourceRevision == this.sourceRevision &&
+          other.processingConfigRevision == this.processingConfigRevision &&
+          other.processingOutputs == this.processingOutputs &&
+          other.processingError == this.processingError &&
+          other.processingErrorCode == this.processingErrorCode &&
           other.fileBlobId == this.fileBlobId &&
           other.textContentId == this.textContentId &&
-          other.insertedAt == this.insertedAt &&
+          other.isDirty == this.isDirty &&
+          other.syncState == this.syncState &&
+          other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
 
 class ItemsCompanion extends UpdateCompanion<ItemRow> {
-  final Value<int> id;
-  final Value<int> matomeId;
-  final Value<int> position;
+  final Value<String> id;
+  final Value<int?> coreId;
+  final Value<String> ownerId;
+  final Value<String> clientId;
+  final Value<String?> clientFingerprint;
+  final Value<String?> workspaceId;
+  final Value<String?> matomeId;
+  final Value<int?> position;
   final Value<String> itemType;
+  final Value<String> title;
+  final Value<String?> notes;
   final Value<String> metadata;
-  final Value<int?> fileBlobId;
-  final Value<int?> textContentId;
-  final Value<String?> insertedAt;
-  final Value<String?> updatedAt;
+  final Value<String> processingState;
+  final Value<String?> processingRunId;
+  final Value<int> sourceRevision;
+  final Value<int?> processingConfigRevision;
+  final Value<String> processingOutputs;
+  final Value<String?> processingError;
+  final Value<String?> processingErrorCode;
+  final Value<String?> fileBlobId;
+  final Value<String?> textContentId;
+  final Value<bool> isDirty;
+  final Value<String> syncState;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
   const ItemsCompanion({
     this.id = const Value.absent(),
+    this.coreId = const Value.absent(),
+    this.ownerId = const Value.absent(),
+    this.clientId = const Value.absent(),
+    this.clientFingerprint = const Value.absent(),
+    this.workspaceId = const Value.absent(),
     this.matomeId = const Value.absent(),
     this.position = const Value.absent(),
     this.itemType = const Value.absent(),
+    this.title = const Value.absent(),
+    this.notes = const Value.absent(),
     this.metadata = const Value.absent(),
+    this.processingState = const Value.absent(),
+    this.processingRunId = const Value.absent(),
+    this.sourceRevision = const Value.absent(),
+    this.processingConfigRevision = const Value.absent(),
+    this.processingOutputs = const Value.absent(),
+    this.processingError = const Value.absent(),
+    this.processingErrorCode = const Value.absent(),
     this.fileBlobId = const Value.absent(),
     this.textContentId = const Value.absent(),
-    this.insertedAt = const Value.absent(),
+    this.isDirty = const Value.absent(),
+    this.syncState = const Value.absent(),
+    this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   ItemsCompanion.insert({
-    this.id = const Value.absent(),
-    required int matomeId,
-    required int position,
+    required String id,
+    this.coreId = const Value.absent(),
+    required String ownerId,
+    required String clientId,
+    this.clientFingerprint = const Value.absent(),
+    this.workspaceId = const Value.absent(),
+    this.matomeId = const Value.absent(),
+    this.position = const Value.absent(),
     required String itemType,
+    this.title = const Value.absent(),
+    this.notes = const Value.absent(),
     this.metadata = const Value.absent(),
+    this.processingState = const Value.absent(),
+    this.processingRunId = const Value.absent(),
+    this.sourceRevision = const Value.absent(),
+    this.processingConfigRevision = const Value.absent(),
+    this.processingOutputs = const Value.absent(),
+    this.processingError = const Value.absent(),
+    this.processingErrorCode = const Value.absent(),
     this.fileBlobId = const Value.absent(),
     this.textContentId = const Value.absent(),
-    this.insertedAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-  }) : matomeId = Value(matomeId),
-       position = Value(position),
-       itemType = Value(itemType);
+    this.isDirty = const Value.absent(),
+    this.syncState = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       ownerId = Value(ownerId),
+       clientId = Value(clientId),
+       itemType = Value(itemType),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
   static Insertable<ItemRow> custom({
-    Expression<int>? id,
-    Expression<int>? matomeId,
+    Expression<String>? id,
+    Expression<int>? coreId,
+    Expression<String>? ownerId,
+    Expression<String>? clientId,
+    Expression<String>? clientFingerprint,
+    Expression<String>? workspaceId,
+    Expression<String>? matomeId,
     Expression<int>? position,
     Expression<String>? itemType,
+    Expression<String>? title,
+    Expression<String>? notes,
     Expression<String>? metadata,
-    Expression<int>? fileBlobId,
-    Expression<int>? textContentId,
-    Expression<String>? insertedAt,
-    Expression<String>? updatedAt,
+    Expression<String>? processingState,
+    Expression<String>? processingRunId,
+    Expression<int>? sourceRevision,
+    Expression<int>? processingConfigRevision,
+    Expression<String>? processingOutputs,
+    Expression<String>? processingError,
+    Expression<String>? processingErrorCode,
+    Expression<String>? fileBlobId,
+    Expression<String>? textContentId,
+    Expression<bool>? isDirty,
+    Expression<String>? syncState,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (coreId != null) 'core_id': coreId,
+      if (ownerId != null) 'owner_id': ownerId,
+      if (clientId != null) 'client_id': clientId,
+      if (clientFingerprint != null) 'client_fingerprint': clientFingerprint,
+      if (workspaceId != null) 'workspace_id': workspaceId,
       if (matomeId != null) 'matome_id': matomeId,
       if (position != null) 'position': position,
       if (itemType != null) 'item_type': itemType,
+      if (title != null) 'title': title,
+      if (notes != null) 'notes': notes,
       if (metadata != null) 'metadata': metadata,
+      if (processingState != null) 'processing_state': processingState,
+      if (processingRunId != null) 'processing_run_id': processingRunId,
+      if (sourceRevision != null) 'source_revision': sourceRevision,
+      if (processingConfigRevision != null)
+        'processing_config_revision': processingConfigRevision,
+      if (processingOutputs != null) 'processing_outputs': processingOutputs,
+      if (processingError != null) 'processing_error': processingError,
+      if (processingErrorCode != null)
+        'processing_error_code': processingErrorCode,
       if (fileBlobId != null) 'file_blob_id': fileBlobId,
       if (textContentId != null) 'text_content_id': textContentId,
-      if (insertedAt != null) 'inserted_at': insertedAt,
+      if (isDirty != null) 'is_dirty': isDirty,
+      if (syncState != null) 'sync_state': syncState,
+      if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   ItemsCompanion copyWith({
-    Value<int>? id,
-    Value<int>? matomeId,
-    Value<int>? position,
+    Value<String>? id,
+    Value<int?>? coreId,
+    Value<String>? ownerId,
+    Value<String>? clientId,
+    Value<String?>? clientFingerprint,
+    Value<String?>? workspaceId,
+    Value<String?>? matomeId,
+    Value<int?>? position,
     Value<String>? itemType,
+    Value<String>? title,
+    Value<String?>? notes,
     Value<String>? metadata,
-    Value<int?>? fileBlobId,
-    Value<int?>? textContentId,
-    Value<String?>? insertedAt,
-    Value<String?>? updatedAt,
+    Value<String>? processingState,
+    Value<String?>? processingRunId,
+    Value<int>? sourceRevision,
+    Value<int?>? processingConfigRevision,
+    Value<String>? processingOutputs,
+    Value<String?>? processingError,
+    Value<String?>? processingErrorCode,
+    Value<String?>? fileBlobId,
+    Value<String?>? textContentId,
+    Value<bool>? isDirty,
+    Value<String>? syncState,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
   }) {
     return ItemsCompanion(
       id: id ?? this.id,
+      coreId: coreId ?? this.coreId,
+      ownerId: ownerId ?? this.ownerId,
+      clientId: clientId ?? this.clientId,
+      clientFingerprint: clientFingerprint ?? this.clientFingerprint,
+      workspaceId: workspaceId ?? this.workspaceId,
       matomeId: matomeId ?? this.matomeId,
       position: position ?? this.position,
       itemType: itemType ?? this.itemType,
+      title: title ?? this.title,
+      notes: notes ?? this.notes,
       metadata: metadata ?? this.metadata,
+      processingState: processingState ?? this.processingState,
+      processingRunId: processingRunId ?? this.processingRunId,
+      sourceRevision: sourceRevision ?? this.sourceRevision,
+      processingConfigRevision:
+          processingConfigRevision ?? this.processingConfigRevision,
+      processingOutputs: processingOutputs ?? this.processingOutputs,
+      processingError: processingError ?? this.processingError,
+      processingErrorCode: processingErrorCode ?? this.processingErrorCode,
       fileBlobId: fileBlobId ?? this.fileBlobId,
       textContentId: textContentId ?? this.textContentId,
-      insertedAt: insertedAt ?? this.insertedAt,
+      isDirty: isDirty ?? this.isDirty,
+      syncState: syncState ?? this.syncState,
+      createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
     );
   }
 
@@ -6456,10 +6308,25 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<int>(id.value);
+      map['id'] = Variable<String>(id.value);
+    }
+    if (coreId.present) {
+      map['core_id'] = Variable<int>(coreId.value);
+    }
+    if (ownerId.present) {
+      map['owner_id'] = Variable<String>(ownerId.value);
+    }
+    if (clientId.present) {
+      map['client_id'] = Variable<String>(clientId.value);
+    }
+    if (clientFingerprint.present) {
+      map['client_fingerprint'] = Variable<String>(clientFingerprint.value);
+    }
+    if (workspaceId.present) {
+      map['workspace_id'] = Variable<String>(workspaceId.value);
     }
     if (matomeId.present) {
-      map['matome_id'] = Variable<int>(matomeId.value);
+      map['matome_id'] = Variable<String>(matomeId.value);
     }
     if (position.present) {
       map['position'] = Variable<int>(position.value);
@@ -6467,20 +6334,60 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     if (itemType.present) {
       map['item_type'] = Variable<String>(itemType.value);
     }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
     if (metadata.present) {
       map['metadata'] = Variable<String>(metadata.value);
     }
+    if (processingState.present) {
+      map['processing_state'] = Variable<String>(processingState.value);
+    }
+    if (processingRunId.present) {
+      map['processing_run_id'] = Variable<String>(processingRunId.value);
+    }
+    if (sourceRevision.present) {
+      map['source_revision'] = Variable<int>(sourceRevision.value);
+    }
+    if (processingConfigRevision.present) {
+      map['processing_config_revision'] = Variable<int>(
+        processingConfigRevision.value,
+      );
+    }
+    if (processingOutputs.present) {
+      map['processing_outputs'] = Variable<String>(processingOutputs.value);
+    }
+    if (processingError.present) {
+      map['processing_error'] = Variable<String>(processingError.value);
+    }
+    if (processingErrorCode.present) {
+      map['processing_error_code'] = Variable<String>(
+        processingErrorCode.value,
+      );
+    }
     if (fileBlobId.present) {
-      map['file_blob_id'] = Variable<int>(fileBlobId.value);
+      map['file_blob_id'] = Variable<String>(fileBlobId.value);
     }
     if (textContentId.present) {
-      map['text_content_id'] = Variable<int>(textContentId.value);
+      map['text_content_id'] = Variable<String>(textContentId.value);
     }
-    if (insertedAt.present) {
-      map['inserted_at'] = Variable<String>(insertedAt.value);
+    if (isDirty.present) {
+      map['is_dirty'] = Variable<bool>(isDirty.value);
+    }
+    if (syncState.present) {
+      map['sync_state'] = Variable<String>(syncState.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
     }
     if (updatedAt.present) {
-      map['updated_at'] = Variable<String>(updatedAt.value);
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
     }
     return map;
   }
@@ -6489,14 +6396,294 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
   String toString() {
     return (StringBuffer('ItemsCompanion(')
           ..write('id: $id, ')
+          ..write('coreId: $coreId, ')
+          ..write('ownerId: $ownerId, ')
+          ..write('clientId: $clientId, ')
+          ..write('clientFingerprint: $clientFingerprint, ')
+          ..write('workspaceId: $workspaceId, ')
           ..write('matomeId: $matomeId, ')
           ..write('position: $position, ')
           ..write('itemType: $itemType, ')
+          ..write('title: $title, ')
+          ..write('notes: $notes, ')
           ..write('metadata: $metadata, ')
+          ..write('processingState: $processingState, ')
+          ..write('processingRunId: $processingRunId, ')
+          ..write('sourceRevision: $sourceRevision, ')
+          ..write('processingConfigRevision: $processingConfigRevision, ')
+          ..write('processingOutputs: $processingOutputs, ')
+          ..write('processingError: $processingError, ')
+          ..write('processingErrorCode: $processingErrorCode, ')
           ..write('fileBlobId: $fileBlobId, ')
           ..write('textContentId: $textContentId, ')
-          ..write('insertedAt: $insertedAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('isDirty: $isDirty, ')
+          ..write('syncState: $syncState, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ItemContactsTable extends ItemContacts
+    with TableInfo<$ItemContactsTable, ItemContactRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ItemContactsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _itemIdMeta = const VerificationMeta('itemId');
+  @override
+  late final GeneratedColumn<String> itemId = GeneratedColumn<String>(
+    'item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contactIdMeta = const VerificationMeta(
+    'contactId',
+  );
+  @override
+  late final GeneratedColumn<String> contactId = GeneratedColumn<String>(
+    'contact_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, itemId, contactId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'item_contacts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ItemContactRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('item_id')) {
+      context.handle(
+        _itemIdMeta,
+        itemId.isAcceptableOrUnknown(data['item_id']!, _itemIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_itemIdMeta);
+    }
+    if (data.containsKey('contact_id')) {
+      context.handle(
+        _contactIdMeta,
+        contactId.isAcceptableOrUnknown(data['contact_id']!, _contactIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contactIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {itemId, contactId},
+  ];
+  @override
+  ItemContactRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ItemContactRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      itemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}item_id'],
+      )!,
+      contactId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}contact_id'],
+      )!,
+    );
+  }
+
+  @override
+  $ItemContactsTable createAlias(String alias) {
+    return $ItemContactsTable(attachedDatabase, alias);
+  }
+}
+
+class ItemContactRow extends DataClass implements Insertable<ItemContactRow> {
+  final String id;
+  final String itemId;
+  final String contactId;
+  const ItemContactRow({
+    required this.id,
+    required this.itemId,
+    required this.contactId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['item_id'] = Variable<String>(itemId);
+    map['contact_id'] = Variable<String>(contactId);
+    return map;
+  }
+
+  ItemContactsCompanion toCompanion(bool nullToAbsent) {
+    return ItemContactsCompanion(
+      id: Value(id),
+      itemId: Value(itemId),
+      contactId: Value(contactId),
+    );
+  }
+
+  factory ItemContactRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ItemContactRow(
+      id: serializer.fromJson<String>(json['id']),
+      itemId: serializer.fromJson<String>(json['itemId']),
+      contactId: serializer.fromJson<String>(json['contactId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'itemId': serializer.toJson<String>(itemId),
+      'contactId': serializer.toJson<String>(contactId),
+    };
+  }
+
+  ItemContactRow copyWith({String? id, String? itemId, String? contactId}) =>
+      ItemContactRow(
+        id: id ?? this.id,
+        itemId: itemId ?? this.itemId,
+        contactId: contactId ?? this.contactId,
+      );
+  ItemContactRow copyWithCompanion(ItemContactsCompanion data) {
+    return ItemContactRow(
+      id: data.id.present ? data.id.value : this.id,
+      itemId: data.itemId.present ? data.itemId.value : this.itemId,
+      contactId: data.contactId.present ? data.contactId.value : this.contactId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ItemContactRow(')
+          ..write('id: $id, ')
+          ..write('itemId: $itemId, ')
+          ..write('contactId: $contactId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, itemId, contactId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ItemContactRow &&
+          other.id == this.id &&
+          other.itemId == this.itemId &&
+          other.contactId == this.contactId);
+}
+
+class ItemContactsCompanion extends UpdateCompanion<ItemContactRow> {
+  final Value<String> id;
+  final Value<String> itemId;
+  final Value<String> contactId;
+  final Value<int> rowid;
+  const ItemContactsCompanion({
+    this.id = const Value.absent(),
+    this.itemId = const Value.absent(),
+    this.contactId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ItemContactsCompanion.insert({
+    required String id,
+    required String itemId,
+    required String contactId,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       itemId = Value(itemId),
+       contactId = Value(contactId);
+  static Insertable<ItemContactRow> custom({
+    Expression<String>? id,
+    Expression<String>? itemId,
+    Expression<String>? contactId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (itemId != null) 'item_id': itemId,
+      if (contactId != null) 'contact_id': contactId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ItemContactsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? itemId,
+    Value<String>? contactId,
+    Value<int>? rowid,
+  }) {
+    return ItemContactsCompanion(
+      id: id ?? this.id,
+      itemId: itemId ?? this.itemId,
+      contactId: contactId ?? this.contactId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (itemId.present) {
+      map['item_id'] = Variable<String>(itemId.value);
+    }
+    if (contactId.present) {
+      map['contact_id'] = Variable<String>(contactId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ItemContactsCompanion(')
+          ..write('id: $id, ')
+          ..write('itemId: $itemId, ')
+          ..write('contactId: $contactId, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -6505,7 +6692,6 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
-  late final $RecordingsTable recordings = $RecordingsTable(this);
   late final $WorkspacesTable workspaces = $WorkspacesTable(this);
   late final $RecordingDraftsTable recordingDrafts = $RecordingDraftsTable(
     this,
@@ -6517,12 +6703,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $MatomeContactsTable matomeContacts = $MatomeContactsTable(this);
   late final $SpaceContactsTable spaceContacts = $SpaceContactsTable(this);
   late final $MatomeSharesTable matomeShares = $MatomeSharesTable(this);
-  late final $RecordingContactsTable recordingContacts =
-      $RecordingContactsTable(this);
   late final $FileBlobsTable fileBlobs = $FileBlobsTable(this);
   late final $TextContentsTable textContents = $TextContentsTable(this);
   late final $ItemsTable items = $ItemsTable(this);
-  late final RecordingsDao recordingsDao = RecordingsDao(this as AppDatabase);
+  late final $ItemContactsTable itemContacts = $ItemContactsTable(this);
   late final WorkspacesDao workspacesDao = WorkspacesDao(this as AppDatabase);
   late final RecordingDraftsDao recordingDraftsDao = RecordingDraftsDao(
     this as AppDatabase,
@@ -6536,7 +6720,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
-    recordings,
     workspaces,
     recordingDrafts,
     spaceMembers,
@@ -6546,575 +6729,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     matomeContacts,
     spaceContacts,
     matomeShares,
-    recordingContacts,
     fileBlobs,
     textContents,
     items,
+    itemContacts,
   ];
 }
 
-typedef $$RecordingsTableCreateCompanionBuilder =
-    RecordingsCompanion Function({
-      required String id,
-      required String title,
-      Value<String?> summary,
-      required String timestamp,
-      required String duration,
-      Value<String> badge,
-      Value<int> isProcessing,
-      required String audioFilePath,
-      required int createdAt,
-      Value<String?> notes,
-      Value<String?> workspaceId,
-      Value<String> mediaType,
-      Value<String> processingStatus,
-      Value<int?> coreId,
-      Value<String?> matomeId,
-      Value<String?> transcript,
-      Value<String?> notesLegacyRaw,
-      Value<String?> originalExtension,
-      Value<String?> ownerId,
-      Value<int?> byteSize,
-      Value<String?> wrappedFek,
-      Value<String?> fileNoncePrefix,
-      Value<String?> processingErrorCode,
-      Value<int> rowid,
-    });
-typedef $$RecordingsTableUpdateCompanionBuilder =
-    RecordingsCompanion Function({
-      Value<String> id,
-      Value<String> title,
-      Value<String?> summary,
-      Value<String> timestamp,
-      Value<String> duration,
-      Value<String> badge,
-      Value<int> isProcessing,
-      Value<String> audioFilePath,
-      Value<int> createdAt,
-      Value<String?> notes,
-      Value<String?> workspaceId,
-      Value<String> mediaType,
-      Value<String> processingStatus,
-      Value<int?> coreId,
-      Value<String?> matomeId,
-      Value<String?> transcript,
-      Value<String?> notesLegacyRaw,
-      Value<String?> originalExtension,
-      Value<String?> ownerId,
-      Value<int?> byteSize,
-      Value<String?> wrappedFek,
-      Value<String?> fileNoncePrefix,
-      Value<String?> processingErrorCode,
-      Value<int> rowid,
-    });
-
-class $$RecordingsTableFilterComposer
-    extends Composer<_$AppDatabase, $RecordingsTable> {
-  $$RecordingsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get title => $composableBuilder(
-    column: $table.title,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get summary => $composableBuilder(
-    column: $table.summary,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get timestamp => $composableBuilder(
-    column: $table.timestamp,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get duration => $composableBuilder(
-    column: $table.duration,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get badge => $composableBuilder(
-    column: $table.badge,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get isProcessing => $composableBuilder(
-    column: $table.isProcessing,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get audioFilePath => $composableBuilder(
-    column: $table.audioFilePath,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get notes => $composableBuilder(
-    column: $table.notes,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get workspaceId => $composableBuilder(
-    column: $table.workspaceId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get mediaType => $composableBuilder(
-    column: $table.mediaType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get processingStatus => $composableBuilder(
-    column: $table.processingStatus,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get coreId => $composableBuilder(
-    column: $table.coreId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get matomeId => $composableBuilder(
-    column: $table.matomeId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get transcript => $composableBuilder(
-    column: $table.transcript,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get notesLegacyRaw => $composableBuilder(
-    column: $table.notesLegacyRaw,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get originalExtension => $composableBuilder(
-    column: $table.originalExtension,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get ownerId => $composableBuilder(
-    column: $table.ownerId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<int> get byteSize => $composableBuilder(
-    column: $table.byteSize,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get wrappedFek => $composableBuilder(
-    column: $table.wrappedFek,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get fileNoncePrefix => $composableBuilder(
-    column: $table.fileNoncePrefix,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get processingErrorCode => $composableBuilder(
-    column: $table.processingErrorCode,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$RecordingsTableOrderingComposer
-    extends Composer<_$AppDatabase, $RecordingsTable> {
-  $$RecordingsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get title => $composableBuilder(
-    column: $table.title,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get summary => $composableBuilder(
-    column: $table.summary,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get timestamp => $composableBuilder(
-    column: $table.timestamp,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get duration => $composableBuilder(
-    column: $table.duration,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get badge => $composableBuilder(
-    column: $table.badge,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get isProcessing => $composableBuilder(
-    column: $table.isProcessing,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get audioFilePath => $composableBuilder(
-    column: $table.audioFilePath,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get notes => $composableBuilder(
-    column: $table.notes,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get workspaceId => $composableBuilder(
-    column: $table.workspaceId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get mediaType => $composableBuilder(
-    column: $table.mediaType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get processingStatus => $composableBuilder(
-    column: $table.processingStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get coreId => $composableBuilder(
-    column: $table.coreId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get matomeId => $composableBuilder(
-    column: $table.matomeId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get transcript => $composableBuilder(
-    column: $table.transcript,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get notesLegacyRaw => $composableBuilder(
-    column: $table.notesLegacyRaw,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get originalExtension => $composableBuilder(
-    column: $table.originalExtension,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get ownerId => $composableBuilder(
-    column: $table.ownerId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get byteSize => $composableBuilder(
-    column: $table.byteSize,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get wrappedFek => $composableBuilder(
-    column: $table.wrappedFek,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get fileNoncePrefix => $composableBuilder(
-    column: $table.fileNoncePrefix,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get processingErrorCode => $composableBuilder(
-    column: $table.processingErrorCode,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$RecordingsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $RecordingsTable> {
-  $$RecordingsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get title =>
-      $composableBuilder(column: $table.title, builder: (column) => column);
-
-  GeneratedColumn<String> get summary =>
-      $composableBuilder(column: $table.summary, builder: (column) => column);
-
-  GeneratedColumn<String> get timestamp =>
-      $composableBuilder(column: $table.timestamp, builder: (column) => column);
-
-  GeneratedColumn<String> get duration =>
-      $composableBuilder(column: $table.duration, builder: (column) => column);
-
-  GeneratedColumn<String> get badge =>
-      $composableBuilder(column: $table.badge, builder: (column) => column);
-
-  GeneratedColumn<int> get isProcessing => $composableBuilder(
-    column: $table.isProcessing,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get audioFilePath => $composableBuilder(
-    column: $table.audioFilePath,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  GeneratedColumn<String> get notes =>
-      $composableBuilder(column: $table.notes, builder: (column) => column);
-
-  GeneratedColumn<String> get workspaceId => $composableBuilder(
-    column: $table.workspaceId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get mediaType =>
-      $composableBuilder(column: $table.mediaType, builder: (column) => column);
-
-  GeneratedColumn<String> get processingStatus => $composableBuilder(
-    column: $table.processingStatus,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<int> get coreId =>
-      $composableBuilder(column: $table.coreId, builder: (column) => column);
-
-  GeneratedColumn<String> get matomeId =>
-      $composableBuilder(column: $table.matomeId, builder: (column) => column);
-
-  GeneratedColumn<String> get transcript => $composableBuilder(
-    column: $table.transcript,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get notesLegacyRaw => $composableBuilder(
-    column: $table.notesLegacyRaw,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get originalExtension => $composableBuilder(
-    column: $table.originalExtension,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get ownerId =>
-      $composableBuilder(column: $table.ownerId, builder: (column) => column);
-
-  GeneratedColumn<int> get byteSize =>
-      $composableBuilder(column: $table.byteSize, builder: (column) => column);
-
-  GeneratedColumn<String> get wrappedFek => $composableBuilder(
-    column: $table.wrappedFek,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get fileNoncePrefix => $composableBuilder(
-    column: $table.fileNoncePrefix,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get processingErrorCode => $composableBuilder(
-    column: $table.processingErrorCode,
-    builder: (column) => column,
-  );
-}
-
-class $$RecordingsTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $RecordingsTable,
-          RecordingRow,
-          $$RecordingsTableFilterComposer,
-          $$RecordingsTableOrderingComposer,
-          $$RecordingsTableAnnotationComposer,
-          $$RecordingsTableCreateCompanionBuilder,
-          $$RecordingsTableUpdateCompanionBuilder,
-          (
-            RecordingRow,
-            BaseReferences<_$AppDatabase, $RecordingsTable, RecordingRow>,
-          ),
-          RecordingRow,
-          PrefetchHooks Function()
-        > {
-  $$RecordingsTableTableManager(_$AppDatabase db, $RecordingsTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$RecordingsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$RecordingsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$RecordingsTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> title = const Value.absent(),
-                Value<String?> summary = const Value.absent(),
-                Value<String> timestamp = const Value.absent(),
-                Value<String> duration = const Value.absent(),
-                Value<String> badge = const Value.absent(),
-                Value<int> isProcessing = const Value.absent(),
-                Value<String> audioFilePath = const Value.absent(),
-                Value<int> createdAt = const Value.absent(),
-                Value<String?> notes = const Value.absent(),
-                Value<String?> workspaceId = const Value.absent(),
-                Value<String> mediaType = const Value.absent(),
-                Value<String> processingStatus = const Value.absent(),
-                Value<int?> coreId = const Value.absent(),
-                Value<String?> matomeId = const Value.absent(),
-                Value<String?> transcript = const Value.absent(),
-                Value<String?> notesLegacyRaw = const Value.absent(),
-                Value<String?> originalExtension = const Value.absent(),
-                Value<String?> ownerId = const Value.absent(),
-                Value<int?> byteSize = const Value.absent(),
-                Value<String?> wrappedFek = const Value.absent(),
-                Value<String?> fileNoncePrefix = const Value.absent(),
-                Value<String?> processingErrorCode = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => RecordingsCompanion(
-                id: id,
-                title: title,
-                summary: summary,
-                timestamp: timestamp,
-                duration: duration,
-                badge: badge,
-                isProcessing: isProcessing,
-                audioFilePath: audioFilePath,
-                createdAt: createdAt,
-                notes: notes,
-                workspaceId: workspaceId,
-                mediaType: mediaType,
-                processingStatus: processingStatus,
-                coreId: coreId,
-                matomeId: matomeId,
-                transcript: transcript,
-                notesLegacyRaw: notesLegacyRaw,
-                originalExtension: originalExtension,
-                ownerId: ownerId,
-                byteSize: byteSize,
-                wrappedFek: wrappedFek,
-                fileNoncePrefix: fileNoncePrefix,
-                processingErrorCode: processingErrorCode,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String title,
-                Value<String?> summary = const Value.absent(),
-                required String timestamp,
-                required String duration,
-                Value<String> badge = const Value.absent(),
-                Value<int> isProcessing = const Value.absent(),
-                required String audioFilePath,
-                required int createdAt,
-                Value<String?> notes = const Value.absent(),
-                Value<String?> workspaceId = const Value.absent(),
-                Value<String> mediaType = const Value.absent(),
-                Value<String> processingStatus = const Value.absent(),
-                Value<int?> coreId = const Value.absent(),
-                Value<String?> matomeId = const Value.absent(),
-                Value<String?> transcript = const Value.absent(),
-                Value<String?> notesLegacyRaw = const Value.absent(),
-                Value<String?> originalExtension = const Value.absent(),
-                Value<String?> ownerId = const Value.absent(),
-                Value<int?> byteSize = const Value.absent(),
-                Value<String?> wrappedFek = const Value.absent(),
-                Value<String?> fileNoncePrefix = const Value.absent(),
-                Value<String?> processingErrorCode = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => RecordingsCompanion.insert(
-                id: id,
-                title: title,
-                summary: summary,
-                timestamp: timestamp,
-                duration: duration,
-                badge: badge,
-                isProcessing: isProcessing,
-                audioFilePath: audioFilePath,
-                createdAt: createdAt,
-                notes: notes,
-                workspaceId: workspaceId,
-                mediaType: mediaType,
-                processingStatus: processingStatus,
-                coreId: coreId,
-                matomeId: matomeId,
-                transcript: transcript,
-                notesLegacyRaw: notesLegacyRaw,
-                originalExtension: originalExtension,
-                ownerId: ownerId,
-                byteSize: byteSize,
-                wrappedFek: wrappedFek,
-                fileNoncePrefix: fileNoncePrefix,
-                processingErrorCode: processingErrorCode,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$RecordingsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $RecordingsTable,
-      RecordingRow,
-      $$RecordingsTableFilterComposer,
-      $$RecordingsTableOrderingComposer,
-      $$RecordingsTableAnnotationComposer,
-      $$RecordingsTableCreateCompanionBuilder,
-      $$RecordingsTableUpdateCompanionBuilder,
-      (
-        RecordingRow,
-        BaseReferences<_$AppDatabase, $RecordingsTable, RecordingRow>,
-      ),
-      RecordingRow,
-      PrefetchHooks Function()
-    >;
 typedef $$WorkspacesTableCreateCompanionBuilder =
     WorkspacesCompanion Function({
       required String id,
@@ -9029,206 +8650,51 @@ typedef $$MatomeSharesTableProcessedTableManager =
       MatomeShareRow,
       PrefetchHooks Function()
     >;
-typedef $$RecordingContactsTableCreateCompanionBuilder =
-    RecordingContactsCompanion Function({
-      required String id,
-      required String recordingId,
-      required String contactId,
-      Value<int> rowid,
-    });
-typedef $$RecordingContactsTableUpdateCompanionBuilder =
-    RecordingContactsCompanion Function({
-      Value<String> id,
-      Value<String> recordingId,
-      Value<String> contactId,
-      Value<int> rowid,
-    });
-
-class $$RecordingContactsTableFilterComposer
-    extends Composer<_$AppDatabase, $RecordingContactsTable> {
-  $$RecordingContactsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get recordingId => $composableBuilder(
-    column: $table.recordingId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get contactId => $composableBuilder(
-    column: $table.contactId,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$RecordingContactsTableOrderingComposer
-    extends Composer<_$AppDatabase, $RecordingContactsTable> {
-  $$RecordingContactsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get recordingId => $composableBuilder(
-    column: $table.recordingId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get contactId => $composableBuilder(
-    column: $table.contactId,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$RecordingContactsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $RecordingContactsTable> {
-  $$RecordingContactsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get recordingId => $composableBuilder(
-    column: $table.recordingId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get contactId =>
-      $composableBuilder(column: $table.contactId, builder: (column) => column);
-}
-
-class $$RecordingContactsTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $RecordingContactsTable,
-          RecordingContactRow,
-          $$RecordingContactsTableFilterComposer,
-          $$RecordingContactsTableOrderingComposer,
-          $$RecordingContactsTableAnnotationComposer,
-          $$RecordingContactsTableCreateCompanionBuilder,
-          $$RecordingContactsTableUpdateCompanionBuilder,
-          (
-            RecordingContactRow,
-            BaseReferences<
-              _$AppDatabase,
-              $RecordingContactsTable,
-              RecordingContactRow
-            >,
-          ),
-          RecordingContactRow,
-          PrefetchHooks Function()
-        > {
-  $$RecordingContactsTableTableManager(
-    _$AppDatabase db,
-    $RecordingContactsTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$RecordingContactsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$RecordingContactsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$RecordingContactsTableAnnotationComposer(
-                $db: db,
-                $table: table,
-              ),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> recordingId = const Value.absent(),
-                Value<String> contactId = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => RecordingContactsCompanion(
-                id: id,
-                recordingId: recordingId,
-                contactId: contactId,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String recordingId,
-                required String contactId,
-                Value<int> rowid = const Value.absent(),
-              }) => RecordingContactsCompanion.insert(
-                id: id,
-                recordingId: recordingId,
-                contactId: contactId,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$RecordingContactsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $RecordingContactsTable,
-      RecordingContactRow,
-      $$RecordingContactsTableFilterComposer,
-      $$RecordingContactsTableOrderingComposer,
-      $$RecordingContactsTableAnnotationComposer,
-      $$RecordingContactsTableCreateCompanionBuilder,
-      $$RecordingContactsTableUpdateCompanionBuilder,
-      (
-        RecordingContactRow,
-        BaseReferences<
-          _$AppDatabase,
-          $RecordingContactsTable,
-          RecordingContactRow
-        >,
-      ),
-      RecordingContactRow,
-      PrefetchHooks Function()
-    >;
 typedef $$FileBlobsTableCreateCompanionBuilder =
     FileBlobsCompanion Function({
-      Value<int> id,
-      required String storageKey,
-      required int byteSize,
+      required String id,
+      Value<int?> coreId,
+      Value<String?> storageKey,
+      Value<String?> filename,
+      Value<String?> contentType,
+      Value<int> byteSize,
+      Value<String?> checksumSha256,
       required String mediaType,
       Value<int?> duration,
-      Value<String?> transcript,
-      Value<String?> summary,
-      Value<String?> insertedAt,
-      Value<String?> updatedAt,
+      Value<String> uploadState,
+      Value<int> uploadGeneration,
+      Value<int?> uploadedAt,
+      Value<String?> multipartContext,
+      Value<String?> localPath,
+      Value<String?> wrappedFek,
+      Value<String?> fileNoncePrefix,
+      Value<bool> isDirty,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
     });
 typedef $$FileBlobsTableUpdateCompanionBuilder =
     FileBlobsCompanion Function({
-      Value<int> id,
-      Value<String> storageKey,
+      Value<String> id,
+      Value<int?> coreId,
+      Value<String?> storageKey,
+      Value<String?> filename,
+      Value<String?> contentType,
       Value<int> byteSize,
+      Value<String?> checksumSha256,
       Value<String> mediaType,
       Value<int?> duration,
-      Value<String?> transcript,
-      Value<String?> summary,
-      Value<String?> insertedAt,
-      Value<String?> updatedAt,
+      Value<String> uploadState,
+      Value<int> uploadGeneration,
+      Value<int?> uploadedAt,
+      Value<String?> multipartContext,
+      Value<String?> localPath,
+      Value<String?> wrappedFek,
+      Value<String?> fileNoncePrefix,
+      Value<bool> isDirty,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
     });
 
 class $$FileBlobsTableFilterComposer
@@ -9240,8 +8706,13 @@ class $$FileBlobsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get coreId => $composableBuilder(
+    column: $table.coreId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9250,8 +8721,23 @@ class $$FileBlobsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get filename => $composableBuilder(
+    column: $table.filename,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentType => $composableBuilder(
+    column: $table.contentType,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get byteSize => $composableBuilder(
     column: $table.byteSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get checksumSha256 => $composableBuilder(
+    column: $table.checksumSha256,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9265,22 +8751,52 @@ class $$FileBlobsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get transcript => $composableBuilder(
-    column: $table.transcript,
+  ColumnFilters<String> get uploadState => $composableBuilder(
+    column: $table.uploadState,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get summary => $composableBuilder(
-    column: $table.summary,
+  ColumnFilters<int> get uploadGeneration => $composableBuilder(
+    column: $table.uploadGeneration,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
+  ColumnFilters<int> get uploadedAt => $composableBuilder(
+    column: $table.uploadedAt,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get updatedAt => $composableBuilder(
+  ColumnFilters<String> get multipartContext => $composableBuilder(
+    column: $table.multipartContext,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get localPath => $composableBuilder(
+    column: $table.localPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get wrappedFek => $composableBuilder(
+    column: $table.wrappedFek,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileNoncePrefix => $composableBuilder(
+    column: $table.fileNoncePrefix,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDirty => $composableBuilder(
+    column: $table.isDirty,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
@@ -9295,8 +8811,13 @@ class $$FileBlobsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get coreId => $composableBuilder(
+    column: $table.coreId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9305,8 +8826,23 @@ class $$FileBlobsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get filename => $composableBuilder(
+    column: $table.filename,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentType => $composableBuilder(
+    column: $table.contentType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get byteSize => $composableBuilder(
     column: $table.byteSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get checksumSha256 => $composableBuilder(
+    column: $table.checksumSha256,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9320,22 +8856,52 @@ class $$FileBlobsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get transcript => $composableBuilder(
-    column: $table.transcript,
+  ColumnOrderings<String> get uploadState => $composableBuilder(
+    column: $table.uploadState,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get summary => $composableBuilder(
-    column: $table.summary,
+  ColumnOrderings<int> get uploadGeneration => $composableBuilder(
+    column: $table.uploadGeneration,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
+  ColumnOrderings<int> get uploadedAt => $composableBuilder(
+    column: $table.uploadedAt,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get updatedAt => $composableBuilder(
+  ColumnOrderings<String> get multipartContext => $composableBuilder(
+    column: $table.multipartContext,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get localPath => $composableBuilder(
+    column: $table.localPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get wrappedFek => $composableBuilder(
+    column: $table.wrappedFek,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileNoncePrefix => $composableBuilder(
+    column: $table.fileNoncePrefix,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDirty => $composableBuilder(
+    column: $table.isDirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -9350,16 +8916,32 @@ class $$FileBlobsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get coreId =>
+      $composableBuilder(column: $table.coreId, builder: (column) => column);
 
   GeneratedColumn<String> get storageKey => $composableBuilder(
     column: $table.storageKey,
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get filename =>
+      $composableBuilder(column: $table.filename, builder: (column) => column);
+
+  GeneratedColumn<String> get contentType => $composableBuilder(
+    column: $table.contentType,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get byteSize =>
       $composableBuilder(column: $table.byteSize, builder: (column) => column);
+
+  GeneratedColumn<String> get checksumSha256 => $composableBuilder(
+    column: $table.checksumSha256,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get mediaType =>
       $composableBuilder(column: $table.mediaType, builder: (column) => column);
@@ -9367,20 +8949,46 @@ class $$FileBlobsTableAnnotationComposer
   GeneratedColumn<int> get duration =>
       $composableBuilder(column: $table.duration, builder: (column) => column);
 
-  GeneratedColumn<String> get transcript => $composableBuilder(
-    column: $table.transcript,
+  GeneratedColumn<String> get uploadState => $composableBuilder(
+    column: $table.uploadState,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get summary =>
-      $composableBuilder(column: $table.summary, builder: (column) => column);
-
-  GeneratedColumn<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
+  GeneratedColumn<int> get uploadGeneration => $composableBuilder(
+    column: $table.uploadGeneration,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get updatedAt =>
+  GeneratedColumn<int> get uploadedAt => $composableBuilder(
+    column: $table.uploadedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get multipartContext => $composableBuilder(
+    column: $table.multipartContext,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get localPath =>
+      $composableBuilder(column: $table.localPath, builder: (column) => column);
+
+  GeneratedColumn<String> get wrappedFek => $composableBuilder(
+    column: $table.wrappedFek,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get fileNoncePrefix => $composableBuilder(
+    column: $table.fileNoncePrefix,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isDirty =>
+      $composableBuilder(column: $table.isDirty, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
@@ -9415,47 +9023,91 @@ class $$FileBlobsTableTableManager
               $$FileBlobsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
-                Value<String> storageKey = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<int?> coreId = const Value.absent(),
+                Value<String?> storageKey = const Value.absent(),
+                Value<String?> filename = const Value.absent(),
+                Value<String?> contentType = const Value.absent(),
                 Value<int> byteSize = const Value.absent(),
+                Value<String?> checksumSha256 = const Value.absent(),
                 Value<String> mediaType = const Value.absent(),
                 Value<int?> duration = const Value.absent(),
-                Value<String?> transcript = const Value.absent(),
-                Value<String?> summary = const Value.absent(),
-                Value<String?> insertedAt = const Value.absent(),
-                Value<String?> updatedAt = const Value.absent(),
+                Value<String> uploadState = const Value.absent(),
+                Value<int> uploadGeneration = const Value.absent(),
+                Value<int?> uploadedAt = const Value.absent(),
+                Value<String?> multipartContext = const Value.absent(),
+                Value<String?> localPath = const Value.absent(),
+                Value<String?> wrappedFek = const Value.absent(),
+                Value<String?> fileNoncePrefix = const Value.absent(),
+                Value<bool> isDirty = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => FileBlobsCompanion(
                 id: id,
+                coreId: coreId,
                 storageKey: storageKey,
+                filename: filename,
+                contentType: contentType,
                 byteSize: byteSize,
+                checksumSha256: checksumSha256,
                 mediaType: mediaType,
                 duration: duration,
-                transcript: transcript,
-                summary: summary,
-                insertedAt: insertedAt,
+                uploadState: uploadState,
+                uploadGeneration: uploadGeneration,
+                uploadedAt: uploadedAt,
+                multipartContext: multipartContext,
+                localPath: localPath,
+                wrappedFek: wrappedFek,
+                fileNoncePrefix: fileNoncePrefix,
+                isDirty: isDirty,
+                createdAt: createdAt,
                 updatedAt: updatedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
-                required String storageKey,
-                required int byteSize,
+                required String id,
+                Value<int?> coreId = const Value.absent(),
+                Value<String?> storageKey = const Value.absent(),
+                Value<String?> filename = const Value.absent(),
+                Value<String?> contentType = const Value.absent(),
+                Value<int> byteSize = const Value.absent(),
+                Value<String?> checksumSha256 = const Value.absent(),
                 required String mediaType,
                 Value<int?> duration = const Value.absent(),
-                Value<String?> transcript = const Value.absent(),
-                Value<String?> summary = const Value.absent(),
-                Value<String?> insertedAt = const Value.absent(),
-                Value<String?> updatedAt = const Value.absent(),
+                Value<String> uploadState = const Value.absent(),
+                Value<int> uploadGeneration = const Value.absent(),
+                Value<int?> uploadedAt = const Value.absent(),
+                Value<String?> multipartContext = const Value.absent(),
+                Value<String?> localPath = const Value.absent(),
+                Value<String?> wrappedFek = const Value.absent(),
+                Value<String?> fileNoncePrefix = const Value.absent(),
+                Value<bool> isDirty = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
               }) => FileBlobsCompanion.insert(
                 id: id,
+                coreId: coreId,
                 storageKey: storageKey,
+                filename: filename,
+                contentType: contentType,
                 byteSize: byteSize,
+                checksumSha256: checksumSha256,
                 mediaType: mediaType,
                 duration: duration,
-                transcript: transcript,
-                summary: summary,
-                insertedAt: insertedAt,
+                uploadState: uploadState,
+                uploadGeneration: uploadGeneration,
+                uploadedAt: uploadedAt,
+                multipartContext: multipartContext,
+                localPath: localPath,
+                wrappedFek: wrappedFek,
+                fileNoncePrefix: fileNoncePrefix,
+                isDirty: isDirty,
+                createdAt: createdAt,
                 updatedAt: updatedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -9484,17 +9136,23 @@ typedef $$FileBlobsTableProcessedTableManager =
     >;
 typedef $$TextContentsTableCreateCompanionBuilder =
     TextContentsCompanion Function({
-      Value<int> id,
+      required String id,
+      Value<int?> coreId,
       required String body,
-      Value<String?> insertedAt,
-      Value<String?> updatedAt,
+      Value<bool> isDirty,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
     });
 typedef $$TextContentsTableUpdateCompanionBuilder =
     TextContentsCompanion Function({
-      Value<int> id,
+      Value<String> id,
+      Value<int?> coreId,
       Value<String> body,
-      Value<String?> insertedAt,
-      Value<String?> updatedAt,
+      Value<bool> isDirty,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
     });
 
 class $$TextContentsTableFilterComposer
@@ -9506,8 +9164,13 @@ class $$TextContentsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get coreId => $composableBuilder(
+    column: $table.coreId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9516,12 +9179,17 @@ class $$TextContentsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
+  ColumnFilters<bool> get isDirty => $composableBuilder(
+    column: $table.isDirty,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get updatedAt => $composableBuilder(
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
@@ -9536,8 +9204,13 @@ class $$TextContentsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get coreId => $composableBuilder(
+    column: $table.coreId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9546,12 +9219,17 @@ class $$TextContentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
+  ColumnOrderings<bool> get isDirty => $composableBuilder(
+    column: $table.isDirty,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get updatedAt => $composableBuilder(
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -9566,18 +9244,22 @@ class $$TextContentsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get coreId =>
+      $composableBuilder(column: $table.coreId, builder: (column) => column);
 
   GeneratedColumn<String> get body =>
       $composableBuilder(column: $table.body, builder: (column) => column);
 
-  GeneratedColumn<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
-    builder: (column) => column,
-  );
+  GeneratedColumn<bool> get isDirty =>
+      $composableBuilder(column: $table.isDirty, builder: (column) => column);
 
-  GeneratedColumn<String> get updatedAt =>
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
@@ -9612,27 +9294,39 @@ class $$TextContentsTableTableManager
               $$TextContentsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<int?> coreId = const Value.absent(),
                 Value<String> body = const Value.absent(),
-                Value<String?> insertedAt = const Value.absent(),
-                Value<String?> updatedAt = const Value.absent(),
+                Value<bool> isDirty = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => TextContentsCompanion(
                 id: id,
+                coreId: coreId,
                 body: body,
-                insertedAt: insertedAt,
+                isDirty: isDirty,
+                createdAt: createdAt,
                 updatedAt: updatedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String id,
+                Value<int?> coreId = const Value.absent(),
                 required String body,
-                Value<String?> insertedAt = const Value.absent(),
-                Value<String?> updatedAt = const Value.absent(),
+                Value<bool> isDirty = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
               }) => TextContentsCompanion.insert(
                 id: id,
+                coreId: coreId,
                 body: body,
-                insertedAt: insertedAt,
+                isDirty: isDirty,
+                createdAt: createdAt,
                 updatedAt: updatedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -9661,27 +9355,61 @@ typedef $$TextContentsTableProcessedTableManager =
     >;
 typedef $$ItemsTableCreateCompanionBuilder =
     ItemsCompanion Function({
-      Value<int> id,
-      required int matomeId,
-      required int position,
+      required String id,
+      Value<int?> coreId,
+      required String ownerId,
+      required String clientId,
+      Value<String?> clientFingerprint,
+      Value<String?> workspaceId,
+      Value<String?> matomeId,
+      Value<int?> position,
       required String itemType,
+      Value<String> title,
+      Value<String?> notes,
       Value<String> metadata,
-      Value<int?> fileBlobId,
-      Value<int?> textContentId,
-      Value<String?> insertedAt,
-      Value<String?> updatedAt,
+      Value<String> processingState,
+      Value<String?> processingRunId,
+      Value<int> sourceRevision,
+      Value<int?> processingConfigRevision,
+      Value<String> processingOutputs,
+      Value<String?> processingError,
+      Value<String?> processingErrorCode,
+      Value<String?> fileBlobId,
+      Value<String?> textContentId,
+      Value<bool> isDirty,
+      Value<String> syncState,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
     });
 typedef $$ItemsTableUpdateCompanionBuilder =
     ItemsCompanion Function({
-      Value<int> id,
-      Value<int> matomeId,
-      Value<int> position,
+      Value<String> id,
+      Value<int?> coreId,
+      Value<String> ownerId,
+      Value<String> clientId,
+      Value<String?> clientFingerprint,
+      Value<String?> workspaceId,
+      Value<String?> matomeId,
+      Value<int?> position,
       Value<String> itemType,
+      Value<String> title,
+      Value<String?> notes,
       Value<String> metadata,
-      Value<int?> fileBlobId,
-      Value<int?> textContentId,
-      Value<String?> insertedAt,
-      Value<String?> updatedAt,
+      Value<String> processingState,
+      Value<String?> processingRunId,
+      Value<int> sourceRevision,
+      Value<int?> processingConfigRevision,
+      Value<String> processingOutputs,
+      Value<String?> processingError,
+      Value<String?> processingErrorCode,
+      Value<String?> fileBlobId,
+      Value<String?> textContentId,
+      Value<bool> isDirty,
+      Value<String> syncState,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
     });
 
 class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
@@ -9692,12 +9420,37 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get id => $composableBuilder(
+  ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get matomeId => $composableBuilder(
+  ColumnFilters<int> get coreId => $composableBuilder(
+    column: $table.coreId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientFingerprint => $composableBuilder(
+    column: $table.clientFingerprint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get matomeId => $composableBuilder(
     column: $table.matomeId,
     builder: (column) => ColumnFilters(column),
   );
@@ -9712,27 +9465,82 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get metadata => $composableBuilder(
     column: $table.metadata,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get fileBlobId => $composableBuilder(
+  ColumnFilters<String> get processingState => $composableBuilder(
+    column: $table.processingState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get processingRunId => $composableBuilder(
+    column: $table.processingRunId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceRevision => $composableBuilder(
+    column: $table.sourceRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get processingConfigRevision => $composableBuilder(
+    column: $table.processingConfigRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get processingOutputs => $composableBuilder(
+    column: $table.processingOutputs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get processingError => $composableBuilder(
+    column: $table.processingError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get processingErrorCode => $composableBuilder(
+    column: $table.processingErrorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileBlobId => $composableBuilder(
     column: $table.fileBlobId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get textContentId => $composableBuilder(
+  ColumnFilters<String> get textContentId => $composableBuilder(
     column: $table.textContentId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
+  ColumnFilters<bool> get isDirty => $composableBuilder(
+    column: $table.isDirty,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get updatedAt => $composableBuilder(
+  ColumnFilters<String> get syncState => $composableBuilder(
+    column: $table.syncState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
@@ -9747,12 +9555,37 @@ class $$ItemsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get id => $composableBuilder(
+  ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get matomeId => $composableBuilder(
+  ColumnOrderings<int> get coreId => $composableBuilder(
+    column: $table.coreId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientId => $composableBuilder(
+    column: $table.clientId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientFingerprint => $composableBuilder(
+    column: $table.clientFingerprint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get matomeId => $composableBuilder(
     column: $table.matomeId,
     builder: (column) => ColumnOrderings(column),
   );
@@ -9767,27 +9600,82 @@ class $$ItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get metadata => $composableBuilder(
     column: $table.metadata,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get fileBlobId => $composableBuilder(
+  ColumnOrderings<String> get processingState => $composableBuilder(
+    column: $table.processingState,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get processingRunId => $composableBuilder(
+    column: $table.processingRunId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceRevision => $composableBuilder(
+    column: $table.sourceRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get processingConfigRevision => $composableBuilder(
+    column: $table.processingConfigRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get processingOutputs => $composableBuilder(
+    column: $table.processingOutputs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get processingError => $composableBuilder(
+    column: $table.processingError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get processingErrorCode => $composableBuilder(
+    column: $table.processingErrorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileBlobId => $composableBuilder(
     column: $table.fileBlobId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get textContentId => $composableBuilder(
+  ColumnOrderings<String> get textContentId => $composableBuilder(
     column: $table.textContentId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
+  ColumnOrderings<bool> get isDirty => $composableBuilder(
+    column: $table.isDirty,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get updatedAt => $composableBuilder(
+  ColumnOrderings<String> get syncState => $composableBuilder(
+    column: $table.syncState,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -9802,10 +9690,29 @@ class $$ItemsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<int> get id =>
+  GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<int> get matomeId =>
+  GeneratedColumn<int> get coreId =>
+      $composableBuilder(column: $table.coreId, builder: (column) => column);
+
+  GeneratedColumn<String> get ownerId =>
+      $composableBuilder(column: $table.ownerId, builder: (column) => column);
+
+  GeneratedColumn<String> get clientId =>
+      $composableBuilder(column: $table.clientId, builder: (column) => column);
+
+  GeneratedColumn<String> get clientFingerprint => $composableBuilder(
+    column: $table.clientFingerprint,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get workspaceId => $composableBuilder(
+    column: $table.workspaceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get matomeId =>
       $composableBuilder(column: $table.matomeId, builder: (column) => column);
 
   GeneratedColumn<int> get position =>
@@ -9814,25 +9721,70 @@ class $$ItemsTableAnnotationComposer
   GeneratedColumn<String> get itemType =>
       $composableBuilder(column: $table.itemType, builder: (column) => column);
 
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
   GeneratedColumn<String> get metadata =>
       $composableBuilder(column: $table.metadata, builder: (column) => column);
 
-  GeneratedColumn<int> get fileBlobId => $composableBuilder(
+  GeneratedColumn<String> get processingState => $composableBuilder(
+    column: $table.processingState,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get processingRunId => $composableBuilder(
+    column: $table.processingRunId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sourceRevision => $composableBuilder(
+    column: $table.sourceRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get processingConfigRevision => $composableBuilder(
+    column: $table.processingConfigRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get processingOutputs => $composableBuilder(
+    column: $table.processingOutputs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get processingError => $composableBuilder(
+    column: $table.processingError,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get processingErrorCode => $composableBuilder(
+    column: $table.processingErrorCode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get fileBlobId => $composableBuilder(
     column: $table.fileBlobId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get textContentId => $composableBuilder(
+  GeneratedColumn<String> get textContentId => $composableBuilder(
     column: $table.textContentId,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get insertedAt => $composableBuilder(
-    column: $table.insertedAt,
-    builder: (column) => column,
-  );
+  GeneratedColumn<bool> get isDirty =>
+      $composableBuilder(column: $table.isDirty, builder: (column) => column);
 
-  GeneratedColumn<String> get updatedAt =>
+  GeneratedColumn<String> get syncState =>
+      $composableBuilder(column: $table.syncState, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
@@ -9864,47 +9816,115 @@ class $$ItemsTableTableManager
               $$ItemsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
-                Value<int> matomeId = const Value.absent(),
-                Value<int> position = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<int?> coreId = const Value.absent(),
+                Value<String> ownerId = const Value.absent(),
+                Value<String> clientId = const Value.absent(),
+                Value<String?> clientFingerprint = const Value.absent(),
+                Value<String?> workspaceId = const Value.absent(),
+                Value<String?> matomeId = const Value.absent(),
+                Value<int?> position = const Value.absent(),
                 Value<String> itemType = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
                 Value<String> metadata = const Value.absent(),
-                Value<int?> fileBlobId = const Value.absent(),
-                Value<int?> textContentId = const Value.absent(),
-                Value<String?> insertedAt = const Value.absent(),
-                Value<String?> updatedAt = const Value.absent(),
+                Value<String> processingState = const Value.absent(),
+                Value<String?> processingRunId = const Value.absent(),
+                Value<int> sourceRevision = const Value.absent(),
+                Value<int?> processingConfigRevision = const Value.absent(),
+                Value<String> processingOutputs = const Value.absent(),
+                Value<String?> processingError = const Value.absent(),
+                Value<String?> processingErrorCode = const Value.absent(),
+                Value<String?> fileBlobId = const Value.absent(),
+                Value<String?> textContentId = const Value.absent(),
+                Value<bool> isDirty = const Value.absent(),
+                Value<String> syncState = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => ItemsCompanion(
                 id: id,
+                coreId: coreId,
+                ownerId: ownerId,
+                clientId: clientId,
+                clientFingerprint: clientFingerprint,
+                workspaceId: workspaceId,
                 matomeId: matomeId,
                 position: position,
                 itemType: itemType,
+                title: title,
+                notes: notes,
                 metadata: metadata,
+                processingState: processingState,
+                processingRunId: processingRunId,
+                sourceRevision: sourceRevision,
+                processingConfigRevision: processingConfigRevision,
+                processingOutputs: processingOutputs,
+                processingError: processingError,
+                processingErrorCode: processingErrorCode,
                 fileBlobId: fileBlobId,
                 textContentId: textContentId,
-                insertedAt: insertedAt,
+                isDirty: isDirty,
+                syncState: syncState,
+                createdAt: createdAt,
                 updatedAt: updatedAt,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
-                required int matomeId,
-                required int position,
+                required String id,
+                Value<int?> coreId = const Value.absent(),
+                required String ownerId,
+                required String clientId,
+                Value<String?> clientFingerprint = const Value.absent(),
+                Value<String?> workspaceId = const Value.absent(),
+                Value<String?> matomeId = const Value.absent(),
+                Value<int?> position = const Value.absent(),
                 required String itemType,
+                Value<String> title = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
                 Value<String> metadata = const Value.absent(),
-                Value<int?> fileBlobId = const Value.absent(),
-                Value<int?> textContentId = const Value.absent(),
-                Value<String?> insertedAt = const Value.absent(),
-                Value<String?> updatedAt = const Value.absent(),
+                Value<String> processingState = const Value.absent(),
+                Value<String?> processingRunId = const Value.absent(),
+                Value<int> sourceRevision = const Value.absent(),
+                Value<int?> processingConfigRevision = const Value.absent(),
+                Value<String> processingOutputs = const Value.absent(),
+                Value<String?> processingError = const Value.absent(),
+                Value<String?> processingErrorCode = const Value.absent(),
+                Value<String?> fileBlobId = const Value.absent(),
+                Value<String?> textContentId = const Value.absent(),
+                Value<bool> isDirty = const Value.absent(),
+                Value<String> syncState = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
               }) => ItemsCompanion.insert(
                 id: id,
+                coreId: coreId,
+                ownerId: ownerId,
+                clientId: clientId,
+                clientFingerprint: clientFingerprint,
+                workspaceId: workspaceId,
                 matomeId: matomeId,
                 position: position,
                 itemType: itemType,
+                title: title,
+                notes: notes,
                 metadata: metadata,
+                processingState: processingState,
+                processingRunId: processingRunId,
+                sourceRevision: sourceRevision,
+                processingConfigRevision: processingConfigRevision,
+                processingOutputs: processingOutputs,
+                processingError: processingError,
+                processingErrorCode: processingErrorCode,
                 fileBlobId: fileBlobId,
                 textContentId: textContentId,
-                insertedAt: insertedAt,
+                isDirty: isDirty,
+                syncState: syncState,
+                createdAt: createdAt,
                 updatedAt: updatedAt,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -9928,12 +9948,172 @@ typedef $$ItemsTableProcessedTableManager =
       ItemRow,
       PrefetchHooks Function()
     >;
+typedef $$ItemContactsTableCreateCompanionBuilder =
+    ItemContactsCompanion Function({
+      required String id,
+      required String itemId,
+      required String contactId,
+      Value<int> rowid,
+    });
+typedef $$ItemContactsTableUpdateCompanionBuilder =
+    ItemContactsCompanion Function({
+      Value<String> id,
+      Value<String> itemId,
+      Value<String> contactId,
+      Value<int> rowid,
+    });
+
+class $$ItemContactsTableFilterComposer
+    extends Composer<_$AppDatabase, $ItemContactsTable> {
+  $$ItemContactsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contactId => $composableBuilder(
+    column: $table.contactId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ItemContactsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ItemContactsTable> {
+  $$ItemContactsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get itemId => $composableBuilder(
+    column: $table.itemId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contactId => $composableBuilder(
+    column: $table.contactId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ItemContactsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ItemContactsTable> {
+  $$ItemContactsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get itemId =>
+      $composableBuilder(column: $table.itemId, builder: (column) => column);
+
+  GeneratedColumn<String> get contactId =>
+      $composableBuilder(column: $table.contactId, builder: (column) => column);
+}
+
+class $$ItemContactsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ItemContactsTable,
+          ItemContactRow,
+          $$ItemContactsTableFilterComposer,
+          $$ItemContactsTableOrderingComposer,
+          $$ItemContactsTableAnnotationComposer,
+          $$ItemContactsTableCreateCompanionBuilder,
+          $$ItemContactsTableUpdateCompanionBuilder,
+          (
+            ItemContactRow,
+            BaseReferences<_$AppDatabase, $ItemContactsTable, ItemContactRow>,
+          ),
+          ItemContactRow,
+          PrefetchHooks Function()
+        > {
+  $$ItemContactsTableTableManager(_$AppDatabase db, $ItemContactsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ItemContactsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ItemContactsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ItemContactsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> itemId = const Value.absent(),
+                Value<String> contactId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ItemContactsCompanion(
+                id: id,
+                itemId: itemId,
+                contactId: contactId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String itemId,
+                required String contactId,
+                Value<int> rowid = const Value.absent(),
+              }) => ItemContactsCompanion.insert(
+                id: id,
+                itemId: itemId,
+                contactId: contactId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ItemContactsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ItemContactsTable,
+      ItemContactRow,
+      $$ItemContactsTableFilterComposer,
+      $$ItemContactsTableOrderingComposer,
+      $$ItemContactsTableAnnotationComposer,
+      $$ItemContactsTableCreateCompanionBuilder,
+      $$ItemContactsTableUpdateCompanionBuilder,
+      (
+        ItemContactRow,
+        BaseReferences<_$AppDatabase, $ItemContactsTable, ItemContactRow>,
+      ),
+      ItemContactRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
-  $$RecordingsTableTableManager get recordings =>
-      $$RecordingsTableTableManager(_db, _db.recordings);
   $$WorkspacesTableTableManager get workspaces =>
       $$WorkspacesTableTableManager(_db, _db.workspaces);
   $$RecordingDraftsTableTableManager get recordingDrafts =>
@@ -9952,12 +10132,12 @@ class $AppDatabaseManager {
       $$SpaceContactsTableTableManager(_db, _db.spaceContacts);
   $$MatomeSharesTableTableManager get matomeShares =>
       $$MatomeSharesTableTableManager(_db, _db.matomeShares);
-  $$RecordingContactsTableTableManager get recordingContacts =>
-      $$RecordingContactsTableTableManager(_db, _db.recordingContacts);
   $$FileBlobsTableTableManager get fileBlobs =>
       $$FileBlobsTableTableManager(_db, _db.fileBlobs);
   $$TextContentsTableTableManager get textContents =>
       $$TextContentsTableTableManager(_db, _db.textContents);
   $$ItemsTableTableManager get items =>
       $$ItemsTableTableManager(_db, _db.items);
+  $$ItemContactsTableTableManager get itemContacts =>
+      $$ItemContactsTableTableManager(_db, _db.itemContacts);
 }

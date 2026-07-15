@@ -13,6 +13,7 @@ import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 
 import 'support/e2e_harness.dart';
+import '../test/support/item_fixtures.dart';
 
 /// A repo whose presigned-download call NEVER completes — simulates a real Core
 /// that is slow/unreachable for a SYNCED image (storage-key path, no local
@@ -46,31 +47,24 @@ Future<void> _seedImage(
   required String id,
   required String matomeId,
 }) async {
-  await db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: Value(id),
-      title: const Value('screenshot-2026-06-20'),
-      timestamp: const Value('2026-06-08T12:00:00Z'),
-      duration: const Value('0:00'),
-      // Match the REAL synced-image shape from the on-disk DB: a Core storage
-      // KEY (not a local file path) + a coreId. This makes the audio-centric
-      // details load call downloadUrl(coreId) for the image.
-      audioFilePath: const Value('owners/2/recordings/1/media'),
-      coreId: const Value(1),
-      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-      mediaType: const Value('image'),
-      matomeId: Value(matomeId),
-      isProcessing: const Value(0),
-      processingStatus: const Value('done'),
-    ),
+  await insertTestFileItem(
+    db,
+    id: id,
+    title: 'screenshot-2026-06-20',
+    localPath: 'owners/2/recordings/1/media',
+    coreId: 1,
+    createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+    mediaType: 'image',
+    matomeId: matomeId,
   );
 }
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('DESKTOP: tapping a seeded image opens the image viewer',
-      (tester) async {
+  testWidgets('DESKTOP: tapping a seeded image opens the image viewer', (
+    tester,
+  ) async {
     // Desktop / wide viewport — the two-pane home the screenshots show.
     tester.view.physicalSize = const Size(1400, 1000);
     tester.view.devicePixelRatio = 1.0;
@@ -85,12 +79,18 @@ void main() {
     final store = InMemoryTokenStore();
     await store.saveTokens(accessToken: 'a', refreshToken: 'r');
 
-    await tester.pumpWidget(buildE2EApp(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      tokenStoreProvider.overrideWithValue(store),
-      settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
-      authRepositoryProvider.overrideWithValue(FakeE2EAuthRepository(store)),
-    ]));
+    await tester.pumpWidget(
+      buildE2EApp(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          tokenStoreProvider.overrideWithValue(store),
+          settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
+          authRepositoryProvider.overrideWithValue(
+            FakeE2EAuthRepository(store),
+          ),
+        ],
+      ),
+    );
     await tester.pumpAndSettle();
 
     // The exact desktop scenario: select the matome in the wide inbox list →
@@ -117,72 +117,93 @@ void main() {
     // THE assertion the prior test missed: the IMAGE media header rendered —
     // i.e. the dispatch reached _ImageDetailHost, not the audio fallback.
     final imageHeader = find.byKey(const ValueKey('file-detail-image-header'));
-    expect(imageHeader, findsOneWidget,
-        reason: 'the image viewer (image media header) must render, not the '
-            'audio host fallback');
+    expect(
+      imageHeader,
+      findsOneWidget,
+      reason:
+          'the image viewer (image media header) must render, not the '
+          'audio host fallback',
+    );
     // And it is actually laid out (non-zero size), not an offstage shell.
     expect(tester.getSize(imageHeader).height, greaterThan(0));
     // It COVERS the home two-pane — the inbox list card behind is no longer
     // hit-testable (the screenshots showed the home visible *behind* a header).
-    expect(find.byKey(const ValueKey('matome-card-m1')).hitTestable(),
-        findsNothing,
-        reason: 'the image detail must cover the home, not leave it showing '
-            'behind a header');
+    expect(
+      find.byKey(const ValueKey('matome-card-m1')).hitTestable(),
+      findsNothing,
+      reason:
+          'the image detail must cover the home, not leave it showing '
+          'behind a header',
+    );
   });
 
   testWidgets(
-      'DESKTOP + slow Core: a synced image whose downloadUrl hangs still shows '
-      'the image viewer (must NOT get stuck on the audio loading host)',
-      (tester) async {
-    tester.view.physicalSize = const Size(1400, 1000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    'DESKTOP + slow Core: a synced image whose downloadUrl hangs still shows '
+    'the image viewer (must NOT get stuck on the audio loading host)',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    await _seedMatome(db, id: 'm1');
-    await _seedImage(db, id: 'img1', matomeId: 'm1');
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seedMatome(db, id: 'm1');
+      await _seedImage(db, id: 'img1', matomeId: 'm1');
 
-    final store = InMemoryTokenStore();
-    await store.saveTokens(accessToken: 'a', refreshToken: 'r');
+      final store = InMemoryTokenStore();
+      await store.saveTokens(accessToken: 'a', refreshToken: 'r');
 
-    await tester.pumpWidget(buildE2EApp(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      tokenStoreProvider.overrideWithValue(store),
-      settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
-      authRepositoryProvider.overrideWithValue(FakeE2EAuthRepository(store)),
-      recordingsRepositoryProvider.overrideWith(
-        (ref) => _HangingDownloadRepo(apiClient: ref.watch(apiClientProvider)),
-      ),
-    ]));
-    await tester.pumpAndSettle();
-
-    final card = find.byKey(const ValueKey('matome-card-m1'));
-    expect(card, findsOneWidget);
-    await tester.tap(card);
-    await tester.pumpAndSettle();
-
-    final showMore = find.byKey(const ValueKey('matome-show-more'));
-    if (showMore.evaluate().isNotEmpty) {
-      await tester.tap(showMore.first);
+      await tester.pumpWidget(
+        buildE2EApp(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            tokenStoreProvider.overrideWithValue(store),
+            settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
+            authRepositoryProvider.overrideWithValue(
+              FakeE2EAuthRepository(store),
+            ),
+            recordingsRepositoryProvider.overrideWith(
+              (ref) =>
+                  _HangingDownloadRepo(apiClient: ref.watch(apiClientProvider)),
+            ),
+          ],
+        ),
+      );
       await tester.pumpAndSettle();
-    }
 
-    final imageTile = find.byKey(const ValueKey('matome-image-img1'));
-    await tester.ensureVisible(imageTile.first);
-    await tester.pumpAndSettle();
-    await tester.tap(imageTile.first);
-    // downloadUrl hangs, so the load future never completes — do NOT
-    // pumpAndSettle (it would time out). Pump fixed frames instead.
-    for (var i = 0; i < 5; i++) {
-      await tester.pump(const Duration(milliseconds: 300));
-    }
+      final card = find.byKey(const ValueKey('matome-card-m1'));
+      expect(card, findsOneWidget);
+      await tester.tap(card);
+      await tester.pumpAndSettle();
 
-    final imageHeader = find.byKey(const ValueKey('file-detail-image-header'));
-    expect(imageHeader, findsOneWidget,
-        reason: 'image detail must render immediately from the Item in hand — '
+      final showMore = find.byKey(const ValueKey('matome-show-more'));
+      if (showMore.evaluate().isNotEmpty) {
+        await tester.tap(showMore.first);
+        await tester.pumpAndSettle();
+      }
+
+      final imageTile = find.byKey(const ValueKey('matome-image-img1'));
+      await tester.ensureVisible(imageTile.first);
+      await tester.pumpAndSettle();
+      await tester.tap(imageTile.first);
+      // downloadUrl hangs, so the load future never completes — do NOT
+      // pumpAndSettle (it would time out). Pump fixed frames instead.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
+      final imageHeader = find.byKey(
+        const ValueKey('file-detail-image-header'),
+      );
+      expect(
+        imageHeader,
+        findsOneWidget,
+        reason:
+            'image detail must render immediately from the Item in hand — '
             'it must NOT wait on the audio-source downloadUrl (which an image '
-            'does not need) and get stuck on the audio loading host');
-  });
+            'does not need) and get stuck on the audio loading host',
+      );
+    },
+  );
 }

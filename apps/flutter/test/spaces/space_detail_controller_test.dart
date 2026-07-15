@@ -18,7 +18,10 @@ void main() {
   test('family is autoDispose: notifier disposes when no longer watched',
       () async {
     final container = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(container.dispose);
 

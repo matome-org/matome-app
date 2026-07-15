@@ -108,8 +108,7 @@ void main() {
   String presignUrl() =>
       'http://${putServer.address.host}:${putServer.port}/upload';
 
-  testWidgets(
-      'DESKTOP e2e #1454: pick a document → store → upload (real PUT + stub '
+  testWidgets('DESKTOP e2e #1454: pick a document → store → upload (real PUT + stub '
       'done) → it appears as a DOCUMENT Item (doc card + file chip) with the '
       'stub summary in Contents and an editable Notes field', (tester) async {
     // Desktop / wide viewport — the two-pane home the shipping desktop uses.
@@ -167,22 +166,29 @@ void main() {
       );
     }
 
-    await tester.pumpWidget(buildE2EApp(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      tokenStoreProvider.overrideWithValue(store),
-      settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
-      authRepositoryProvider.overrideWithValue(FakeE2EAuthRepository(store)),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-      // Drive the queue with a poll-only awaiter (no live socket); the fake
-      // repo's fetchRecording supplies the terminal `done`.
-      uploadQueueProvider.overrideWith(
-        (ref) => UploadQueue(ref, awaitResult: _pollAwaiter),
+    await tester.pumpWidget(
+      buildE2EApp(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          tokenStoreProvider.overrideWithValue(store),
+          settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
+          authRepositoryProvider.overrideWithValue(
+            FakeE2EAuthRepository(store),
+          ),
+          recordingsRepositoryProvider.overrideWithValue(repo),
+          // Drive the queue with a poll-only awaiter (no live socket); the fake
+          // repo's fetchRecording supplies the terminal `done`.
+          uploadQueueProvider.overrideWith(
+            (ref) => UploadQueue(ref, awaitResult: _pollAwaiter),
+          ),
+          // The matome import controller copies through the test durableCopy.
+          matomeDetailControllerProvider.overrideWith(
+            (ref, id) =>
+                MatomeDetailController(ref, id, durableCopy: testDurableCopy),
+          ),
+        ],
       ),
-      // The matome import controller copies through the test durableCopy.
-      matomeDetailControllerProvider.overrideWith(
-        (ref, id) => MatomeDetailController(ref, id, durableCopy: testDurableCopy),
-      ),
-    ]));
+    );
     await tester.pumpAndSettle();
 
     // The app's own provider container — used to drive the PRODUCTION store +
@@ -199,20 +205,34 @@ void main() {
     final docBytes = utf8.encode('PDF body bytes for the e2e document');
     await source.writeAsBytes(docBytes);
 
-    final matomeCtl =
-        container.read(matomeDetailControllerProvider('m1').notifier);
+    final matomeCtl = container.read(
+      matomeDetailControllerProvider('m1').notifier,
+    );
     await matomeCtl.addFile(file: source, name: 'Report.pdf');
 
     // The local-first row exists, is a document, pending_upload, ext preserved.
-    var rows = await db.recordingsDao.recordingsForMatome('m1');
-    expect(rows, hasLength(1), reason: 'the imported document row was inserted');
+    var rows = await db.itemsDao.listForMatome('m1', '1');
+    expect(
+      rows,
+      hasLength(1),
+      reason: 'the imported document row was inserted',
+    );
     final localId = rows.first.id;
-    expect(rows.first.mediaType, 'document',
-        reason: 'extension-derived media type is document (not audio/image)');
-    expect(rows.first.originalExtension, 'pdf',
-        reason: 'original extension persisted through the durable rename');
-    expect(rows.first.processingStatus, 'pending_upload',
-        reason: 'stored local-first BEFORE any Core call');
+    expect(
+      rows.first.mediaType,
+      'document',
+      reason: 'extension-derived media type is document (not audio/image)',
+    );
+    expect(
+      rows.first.originalExtension,
+      'pdf',
+      reason: 'original extension persisted through the durable rename',
+    );
+    expect(
+      rows.first.processingStatus,
+      'pending_upload',
+      reason: 'stored local-first BEFORE any Core call',
+    );
 
     // ── STEP 2 — UPLOAD (real queue drain: create → real PUT → enqueue → done)
     await container.read(uploadQueueProvider).drainRow(localId);
@@ -220,17 +240,26 @@ void main() {
 
     // The real presigned PUT carried the EXACT document bytes to storage.
     expect(capturedMethod, 'PUT', reason: 'presigned PUT issued');
-    expect(capturedBody, docBytes,
-        reason: 'the document bytes were streamed through the real transport');
+    expect(
+      capturedBody,
+      docBytes,
+      reason: 'the document bytes were streamed through the real transport',
+    );
 
     // The row reconciled to done; the stub summary landed in the machine
     // transcript column (the field the doc Contents reads).
-    final doneRow = await db.recordingsDao.getRecordingById(localId);
-    expect(doneRow!.processingStatus, 'done',
-        reason: 'the document upload pipeline reached terminal done');
+    final doneRow = await db.itemsDao.getById(localId, '1');
+    expect(
+      doneRow!.processingStatus,
+      'done',
+      reason: 'the document upload pipeline reached terminal done',
+    );
     expect(doneRow.coreId, repo.coreIdMinted, reason: 'coreId reconciled');
-    expect(doneRow.transcript, _stubDocSummary,
-        reason: 'the stub document summary was stored as the machine contents');
+    expect(
+      doneRow.transcript,
+      _stubDocSummary,
+      reason: 'the stub document summary was stored as the machine contents',
+    );
 
     // ── STEP 3 — DRILL IN + RENDER assertions ──────────────────────────────
     // Open the matome hub, then tap the document card to drill into the doc
@@ -257,36 +286,62 @@ void main() {
       of: find.text('Report'),
       matching: find.byType(InkWell),
     );
-    expect(docCardInk, findsWidgets, reason: 'the document Item card is listed');
+    expect(
+      docCardInk,
+      findsWidgets,
+      reason: 'the document Item card is listed',
+    );
     await tester.ensureVisible(docCardInk.first);
     await tester.pumpAndSettle();
     await tester.tap(docCardInk.first);
     await tester.pumpAndSettle();
 
     // (a) It rendered through the unified FileView doc host.
-    expect(find.byKey(const ValueKey('file-detail-view')), findsOneWidget,
-        reason: 'the document drilled into the unified file-detail view');
+    expect(
+      find.byKey(const ValueKey('file-detail-view')),
+      findsOneWidget,
+      reason: 'the document drilled into the unified file-detail view',
+    );
 
     // (b) The DOCUMENT media header is the FileTypeChip (type icon + name +
     //     size + disabled "Open" — the doc card/file chip), NOT an image frame
     //     and NOT an audio player bar.
-    expect(find.byKey(const ValueKey('file-type-chip')), findsOneWidget,
-        reason: 'the doc media header is the file-type chip');
-    expect(find.byKey(const ValueKey('file-type-chip-open')), findsOneWidget,
-        reason: 'the file chip renders its (disabled) Open affordance');
-    expect(find.byKey(const ValueKey('file-detail-image-header')), findsNothing,
-        reason: 'a document must NOT render the image media header');
+    expect(
+      find.byKey(const ValueKey('file-type-chip')),
+      findsOneWidget,
+      reason: 'the doc media header is the file-type chip',
+    );
+    expect(
+      find.byKey(const ValueKey('file-type-chip-open')),
+      findsOneWidget,
+      reason: 'the file chip renders its (disabled) Open affordance',
+    );
+    expect(
+      find.byKey(const ValueKey('file-detail-image-header')),
+      findsNothing,
+      reason: 'a document must NOT render the image media header',
+    );
 
     // (c) The stub summary renders in the Contents READY body — the live state,
     //     not the old hardcoded "No contents yet" empty body.
-    final readyContents =
-        find.byKey(const ValueKey('file-view-contents-ready'));
-    expect(readyContents, findsOneWidget,
-        reason: 'doc Contents is in the READY state (machine summary present)');
-    expect(find.byKey(const ValueKey('file-view-contents-empty')), findsNothing,
-        reason: 'the empty placeholder must NOT show once the summary arrived');
-    expect(find.text(_stubDocSummary), findsOneWidget,
-        reason: 'the exact ai-stub document summary is shown in Contents');
+    final readyContents = find.byKey(
+      const ValueKey('file-view-contents-ready'),
+    );
+    expect(
+      readyContents,
+      findsOneWidget,
+      reason: 'doc Contents is in the READY state (machine summary present)',
+    );
+    expect(
+      find.byKey(const ValueKey('file-view-contents-empty')),
+      findsNothing,
+      reason: 'the empty placeholder must NOT show once the summary arrived',
+    );
+    expect(
+      find.text(_stubDocSummary),
+      findsOneWidget,
+      reason: 'the exact ai-stub document summary is shown in Contents',
+    );
 
     // (d) The Notes field is present and EDITABLE — typing updates it.
     final notes = find.descendant(
@@ -296,8 +351,11 @@ void main() {
     expect(notes, findsOneWidget, reason: 'the Notes field is present');
     await tester.enterText(notes, 'my doc note');
     await tester.pump();
-    expect(find.text('my doc note'), findsOneWidget,
-        reason: 'the Notes field accepted user input (editable)');
+    expect(
+      find.text('my doc note'),
+      findsOneWidget,
+      reason: 'the Notes field accepted user input (editable)',
+    );
   });
 }
 

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/db/app_database.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/db/recording_card.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
@@ -211,9 +211,11 @@ class FileDetailScreen extends StatelessWidget {
 /// renders the kind-specific host. Robust to go_router rebuilds — the id comes
 /// from the route path, not `extra`.
 final _imageRowProvider = FutureProvider.autoDispose
-    .family<RecordingRow?, String>(
-      (ref, id) => ref.watch(recordingsDaoProvider).getRecordingById(id),
-    );
+    .family<ItemWithPayload?, String>((ref, id) {
+      final ownerId = ref.watch(currentOwnerIdProvider);
+      if (ownerId == null) return null;
+      return ref.watch(itemsDaoProvider).getById(id, ownerId);
+    });
 
 /// The row-only id host shared by the image (`/items/image/:id`) and
 /// document (`/items/document/:id`, #1450) routes. Both load ONLY the row —
@@ -336,13 +338,13 @@ class _ImageDetailHost extends StatelessWidget {
       isProcessing = false,
       trailing = null;
 
-  /// Built from a loaded [RecordingRow] — the id-driven `/items/audio/:id`
+  /// Built from a loaded [ItemWithPayload] — the id-driven `/items/audio/:id`
   /// route, which now dispatches images here (#97 unification) so the image and
   /// audio tiles drill down through the SAME go_router route. [mediaKind]
   /// defaults to image but is [FileMediaKind.doc] for an imported document
   /// (#1449) so the view shows the "Document" tag (and NO inline image preview).
   _ImageDetailHost.fromRow({
-    required RecordingRow row,
+    required ItemWithPayload row,
     required this.place,
     this.trailing,
     this.mediaKind = FileMediaKind.image,
@@ -352,14 +354,14 @@ class _ImageDetailHost extends StatelessWidget {
        processingErrorCode = row.processingErrorCode,
        // The image's on-disk path lives in the `audioFilePath` column (the
        // generic media-path column shared across kinds).
-       path = row.audioFilePath,
+       path = row.localPath,
        notes = row.notes,
        // The machine-produced text (Core-owned `transcript` column — the SAME
        // column audio uses) carries the document's stub summary once the
        // pipeline resolves (#1454). The doc Contents renders it as the "ready"
        // body; image keeps it null (its description producer is deferred).
        contentsText = row.transcript,
-       isProcessing = row.isProcessing == 1,
+       isProcessing = row.isProcessing,
        // The persisted source extension (#1449) drives the doc chip's type
        // icon; null on non-document rows (and on the item-driven path).
        originalExtension = row.originalExtension;
@@ -668,7 +670,7 @@ class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
     return FileViewData(
       title: state.title,
       mediaKind: FileMediaKind.audio,
-      place: row?.badge,
+      place: state.badge,
       syncCoreId: state.coreId,
       processingStatus: row?.processingStatus,
       mediaHeader: AudioPlayerBar(source: state.audioSource),

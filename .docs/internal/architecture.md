@@ -248,6 +248,16 @@ contacts (+ matome_contacts, space_contacts, matome_shares, space_members)
   current state is scalar/JSONB, physical attempts are in Oban, and one active
   multipart context lives on the file row.
 - The Drift store is a per-user offline mirror, reconciled by `core_id`; a Matome's sync chip rolls up from its items (`onDevice → partial → cloud`).
+- Flutter schema v22 is a destructive pre-deployment reset: local content is
+  represented by `items` plus exactly one `file_blobs` or `text_contents`
+  payload. File payloads also retain device-only `local_path`, wrapped-key/nonce
+  metadata, dirty flags, and current upload reconciliation state. Capture
+  recovery remains in the separate `recording_drafts` table because draft
+  lifetime is independent from Item lifetime.
+- This reset does not implement the contract's durable `work_queue` executor.
+  The existing upload trigger continues to use bounded Item/FileBlob current
+  state until that separately scoped work lands; no attempt/history domain table
+  is introduced here.
 
 ---
 

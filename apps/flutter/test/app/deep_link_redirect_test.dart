@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 
+import '../support/item_fixtures.dart';
+
 /// Deep-link redirect (#1378): an OLD recording-centric link (`:id` is a
 /// recordingId) must resolve to its PARENT matome hub `/matome/<matomeId>` via
 /// `recording.matomeId` — deterministic by the 1-rec→1-matome invariant. When a
@@ -16,8 +17,11 @@ import 'package:matome_flutter/core/providers.dart';
 
 Future<String?> _redirect(WidgetRef ref, String? recordingId) async {
   if (recordingId == null) return null;
-  final matomeId =
-      await ref.read(matomesDaoProvider).matomeIdForRecording(recordingId);
+  final ownerId = ref.read(currentOwnerIdProvider);
+  if (ownerId == null) return null;
+  final matomeId = await ref
+      .read(matomesDaoProvider)
+      .matomeIdForItem(recordingId, ownerId);
   if (matomeId == null) return null;
   return '/matome/$matomeId';
 }
@@ -27,7 +31,10 @@ String? _resolved;
 Widget _app(AppDatabase db) {
   _resolved = null;
   return ProviderScope(
-    overrides: [appDatabaseProvider.overrideWithValue(db)],
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue('1'),
+    ],
     child: Consumer(
       builder: (context, ref, _) {
         final router = GoRouter(
@@ -39,7 +46,8 @@ Widget _app(AppDatabase db) {
             ),
             GoRoute(
               path: '/inbox/:id',
-              redirect: (_, state) => _redirect(ref, state.pathParameters['id']),
+              redirect: (_, state) =>
+                  _redirect(ref, state.pathParameters['id']),
               builder: (_, state) {
                 _resolved = '/inbox/${state.pathParameters['id']}';
                 return const Scaffold(body: Text('legacy-recording'));
@@ -75,16 +83,13 @@ void main() {
         createdAt: 1000,
       ),
     );
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: recId,
-        title: 'Child',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: '/tmp/$recId.m4a',
-        createdAt: 1000,
-        matomeId: Value(matId),
-      ),
+    await insertTestFileItem(
+      db,
+      id: recId,
+      title: 'Child',
+      localPath: '/tmp/$recId.m4a',
+      createdAt: 1000,
+      matomeId: matId,
     );
   }
 
@@ -107,15 +112,12 @@ void main() {
   testWidgets('a recording with no parent matome falls through (no redirect)', (
     tester,
   ) async {
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: 'orphan',
-        title: 'Orphan',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: '/tmp/orphan.m4a',
-        createdAt: 1000,
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'orphan',
+      title: 'Orphan',
+      localPath: '/tmp/orphan.m4a',
+      createdAt: 1000,
     );
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();

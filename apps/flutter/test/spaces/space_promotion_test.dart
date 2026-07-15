@@ -36,7 +36,6 @@ import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/matome/matome.dart';
 import 'package:matome_flutter/features/matome/matome_ids.dart';
 import 'package:matome_flutter/features/matome/matomes_repository.dart';
@@ -49,6 +48,8 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'package:matome_flutter/features/spaces/space_promotion.dart';
 import 'package:matome_flutter/features/spaces/spaces_repository.dart';
+
+import '../support/item_fixtures.dart';
 
 void main() {
   late Directory tmp;
@@ -133,21 +134,19 @@ void main() {
     final localId = mintLocalRecordingId();
     final audio = File('${tmp.path}/$localId.m4a');
     await audio.writeAsBytes(List<int>.filled(16, 0));
-    await db.recordingsDao.upsertRecording(
-      RecordingsCompanion(
-        id: Value(localId),
-        coreId: Value(coreId),
-        title: const Value('Memo'),
-        timestamp: const Value('1:00 PM'),
-        duration: const Value('34s'),
-        isProcessing: const Value(1),
-        audioFilePath: Value(audio.path),
-        workspaceId: Value(workspaceId),
-        matomeId: Value(matomeId),
-        createdAt: Value(DateTime.now().millisecondsSinceEpoch),
-        mediaType: const Value('audio'),
-        processingStatus: const Value(kProcessingStatusPendingUpload),
-      ),
+    await insertTestFileItem(
+      db,
+      id: localId,
+      ownerId: 'owner-1',
+      coreId: coreId,
+      title: 'Memo',
+      durationSeconds: 34,
+      localPath: audio.path,
+      workspaceId: workspaceId,
+      matomeId: matomeId,
+      createdAt: DateTime.now().millisecondsSinceEpoch,
+      mediaType: 'audio',
+      processingStatus: kProcessingStatusPendingUpload,
     );
     return localId;
   }
@@ -254,7 +253,7 @@ void main() {
       expect(matomesRepo.createCalls, 1, reason: 'matome created exactly once');
       expect(recordings.createCalls, 1, reason: 'child uploaded exactly once');
       expect(spacesRepo.createCalls, 1);
-      final childRow = await db.recordingsDao.getRecordingById(child);
+      final childRow = await db.itemsDao.getById(child, 'owner-1');
       expect(childRow!.coreId, isNotNull, reason: 'child acked a Core id');
     });
 
@@ -349,8 +348,8 @@ void main() {
       // The space WAS re-keyed (its succeeded item kept its Core row — no
       // rollback, spec R3.5) but is reported failed, not cloud.
       final cloudId = spacesRepo.lastId.toString();
-      final goodRow = await db.recordingsDao.getRecordingById(good);
-      final flakyRow = await db.recordingsDao.getRecordingById(flaky);
+      final goodRow = await db.itemsDao.getById(good, 'owner-1');
+      final flakyRow = await db.itemsDao.getById(flaky, 'owner-1');
       final acked = [goodRow, flakyRow].where((r) => r!.coreId != null).length;
       expect(acked, 1, reason: 'exactly one item acked before the failure');
       final createsAfterFirstPass = recordings.createCalls;

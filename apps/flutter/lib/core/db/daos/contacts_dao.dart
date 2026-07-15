@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
+import 'items_dao.dart';
 import '../tables.dart';
 
 part 'contacts_dao.g.dart';
@@ -41,8 +42,8 @@ part 'contacts_dao.g.dart';
     MatomeShares,
     Matomes,
     Workspaces,
-    Recordings,
-    RecordingContacts,
+    Items,
+    ItemContacts,
   ],
 )
 class ContactsDao extends DatabaseAccessor<AppDatabase>
@@ -107,9 +108,7 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
     return transaction(() async {
       await (delete(matomeContacts)..where((e) => e.contactId.equals(id))).go();
       await (delete(spaceContacts)..where((e) => e.contactId.equals(id))).go();
-      await (delete(
-        recordingContacts,
-      )..where((e) => e.contactId.equals(id))).go();
+      await (delete(itemContacts)..where((e) => e.contactId.equals(id))).go();
       return (delete(contacts)..where((c) => c.id.equals(id))).go();
     });
   }
@@ -245,10 +244,10 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   }
 
   // ---------------------------------------------------------------------------
-  // recording_contacts — the DIRECT file↔contact edge (#1472).
+  // item_contacts — the device-side DIRECT file↔contact edge.
   //
   // The source of truth for which contacts a file (recording) is about. Mirrors
-  // Core's `recording_contacts` and the matome/space edge DAOs above: add is
+  // The canonical `item_contacts` and the matome/space edge DAOs above: add is
   // idempotent (insertOrIgnore on UNIQUE(recording_id, contact_id)), removal is
   // EXPLICIT-ONLY (set-merge rule). Owner-scoping is the CALLER's contract — as
   // with every edge DAO here, callers pass ids of rows the session owner owns
@@ -258,15 +257,15 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
 
   /// Idempotently link [contactId] DIRECTLY to [recordingId]. UNIQUE
   /// (recording_id, contact_id) makes a re-add a no-op (set-merge rule).
-  Future<void> linkContactToRecording({
-    required String recordingId,
+  Future<void> linkContactToItem({
+    required String itemId,
     required String contactId,
     String? id,
   }) {
-    return into(recordingContacts).insert(
-      RecordingContactsCompanion.insert(
-        id: id ?? _mintEdgeId('rc', recordingId, contactId),
-        recordingId: recordingId,
+    return into(itemContacts).insert(
+      ItemContactsCompanion.insert(
+        id: id ?? _mintEdgeId('ic', itemId, contactId),
+        itemId: itemId,
         contactId: contactId,
       ),
       mode: InsertMode.insertOrIgnore,
@@ -275,45 +274,48 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
 
   /// Remove a single (recording, contact) direct edge. EXPLICIT-ONLY removal.
   /// Returns rows deleted.
-  Future<int> unlinkContactFromRecording({
-    required String recordingId,
+  Future<int> unlinkContactFromItem({
+    required String itemId,
     required String contactId,
   }) {
-    return (delete(recordingContacts)..where(
-          (e) =>
-              e.recordingId.equals(recordingId) & e.contactId.equals(contactId),
+    return (delete(itemContacts)..where(
+          (e) => e.itemId.equals(itemId) & e.contactId.equals(contactId),
         ))
         .go();
   }
 
-  /// The Contacts linked DIRECTLY to [recordingId] (via `recording_contacts`),
+  /// The Contacts linked DIRECTLY to [itemId] (via `item_contacts`),
   /// display-name ascending.
-  Future<List<ContactRow>> listContactsForFile(String recordingId) {
+  Future<List<ContactRow>> listContactsForFile(String itemId, String ownerId) {
     final query =
-        select(recordingContacts).join([
-            innerJoin(
-              contacts,
-              contacts.id.equalsExp(recordingContacts.contactId),
-            ),
+        select(itemContacts).join([
+            innerJoin(contacts, contacts.id.equalsExp(itemContacts.contactId)),
+            innerJoin(items, items.id.equalsExp(itemContacts.itemId)),
           ])
-          ..where(recordingContacts.recordingId.equals(recordingId))
+          ..where(
+            itemContacts.itemId.equals(itemId) &
+                items.ownerId.equals(ownerId) &
+                contacts.ownerId.equals(ownerId),
+          )
           ..orderBy([OrderingTerm.asc(contacts.displayName)]);
     return query.map((row) => row.readTable(contacts)).get();
   }
 
   /// The Files (recordings) linked DIRECTLY to [contactId] (via
-  /// `recording_contacts`), newest first.
-  Future<List<RecordingRow>> listFilesForContact(String contactId) {
-    final query =
-        select(recordingContacts).join([
-            innerJoin(
-              recordings,
-              recordings.id.equalsExp(recordingContacts.recordingId),
-            ),
-          ])
-          ..where(recordingContacts.contactId.equals(contactId))
-          ..orderBy([OrderingTerm.desc(recordings.createdAt)]);
-    return query.map((row) => row.readTable(recordings)).get();
+  /// `item_contacts`), newest first.
+  Future<List<ItemWithPayload>> listFilesForContact(
+    String contactId,
+    String ownerId,
+  ) async {
+    final edges = await (select(
+      itemContacts,
+    )..where((edge) => edge.contactId.equals(contactId))).get();
+    final ids = edges.map((edge) => edge.itemId).toSet();
+    if (ids.isEmpty) return const [];
+    final rows = await attachedDatabase.itemsDao.listAll(ownerId);
+    return rows
+        .where((row) => ids.contains(row.id) && row.file != null)
+        .toList(growable: false);
   }
 
   // ---------------------------------------------------------------------------
@@ -363,21 +365,22 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   /// of every Matome the contact is tagged in (via `matome_contacts`), newest
   /// first, de-duplicated. Returns an empty list when the contact has no matomes
   /// (or those matomes have no recordings).
-  Future<List<RecordingRow>> listFilesForContactViaMatomes(
+  Future<List<ItemWithPayload>> listFilesForContactViaMatomes(
     String contactId,
+    String ownerId,
   ) async {
     final matomeRows = await listMatomesForContact(contactId);
     final matomeIds = matomeRows.map((e) => e.matome.id).toList();
     if (matomeIds.isEmpty) return const [];
-    final rows =
-        await (select(recordings)
-              ..where((r) => r.matomeId.isIn(matomeIds))
-              ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
-            .get();
-    return rows;
+    final rows = await attachedDatabase.itemsDao.listAll(ownerId);
+    return rows
+        .where(
+          (row) => row.file != null && matomeIds.contains(row.item.matomeId),
+        )
+        .toList(growable: false);
   }
 
-  /// Files reachable from [contactId] — the DIRECT edge (`recording_contacts`,
+  /// Files reachable from [contactId] — the DIRECT edge (`item_contacts`,
   /// #1472) UNIONed with the MATOME-MEDIATED set (`listFilesForContactViaMatomes`,
   /// #1464), de-duplicated by recording id (direct wins on a tie), newest first.
   ///
@@ -386,11 +389,14 @@ class ContactsDao extends DatabaseAccessor<AppDatabase>
   /// reachable from via its matome still surfaces. De-duplication by id means a
   /// file linked BOTH directly and via its matome is counted exactly once (no
   /// double-count). Returns newest-first.
-  Future<List<RecordingRow>> listFilesForContactUnion(String contactId) async {
-    final direct = await listFilesForContact(contactId);
-    final viaMatomes = await listFilesForContactViaMatomes(contactId);
+  Future<List<ItemWithPayload>> listFilesForContactUnion(
+    String contactId,
+    String ownerId,
+  ) async {
+    final direct = await listFilesForContact(contactId, ownerId);
+    final viaMatomes = await listFilesForContactViaMatomes(contactId, ownerId);
 
-    final byId = <String, RecordingRow>{};
+    final byId = <String, ItemWithPayload>{};
     for (final row in direct) {
       byId[row.id] = row;
     }

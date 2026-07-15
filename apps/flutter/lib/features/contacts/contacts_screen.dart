@@ -281,7 +281,9 @@ class _ContactsPaneDetail extends ConsumerWidget {
     WidgetRef ref,
     String fileId,
   ) async {
-    final row = await ref.read(recordingsDaoProvider).getRecordingById(fileId);
+    final ownerId = ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final row = await ref.read(itemsDaoProvider).getById(fileId, ownerId);
     if (!context.mounted) return;
     final mediaType = row?.mediaType ?? 'audio';
     final path = switch (mediaType) {

@@ -81,7 +81,7 @@ enum _FileDetailPageKind { audio, image, document, video }
 class TextItemPage extends StatelessWidget {
   const TextItemPage({super.key, required this.id});
 
-  final int id;
+  final String id;
 
   @override
   Widget build(BuildContext context) => TextItemHost(itemId: id);

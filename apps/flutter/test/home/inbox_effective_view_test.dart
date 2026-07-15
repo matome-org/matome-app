@@ -9,11 +9,12 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/home/inbox_effective_view.dart';
 import 'package:matome_flutter/features/home/loose_inbox_controller.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
+
+import '../support/item_fixtures.dart';
 
 /// W3 (local-first-spaces #102): the Inbox is the VIEW over effective-space-NULL
 /// — LOOSE items (no matome, no space) AND DRAFT matomes (no space). With the
@@ -30,7 +31,7 @@ const _flagOn = bool.fromEnvironment(
 );
 
 /// Seed a recording row. Loose ⟺ both [matomeId] and [workspaceId] NULL.
-Future<void> _seedRecording(
+Future<void> _seedItem(
   AppDatabase db, {
   required String id,
   String title = 'Memo',
@@ -39,18 +40,15 @@ Future<void> _seedRecording(
   String mediaType = 'audio',
   int createdAt = 1000,
 }) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion.insert(
-      id: id,
-      title: title,
-      timestamp: '9:00 AM',
-      duration: '0:30',
-      audioFilePath: '/tmp/$id.m4a',
-      createdAt: createdAt,
-      mediaType: Value(mediaType),
-      matomeId: Value(matomeId),
-      workspaceId: Value(workspaceId),
-    ),
+  return insertTestFileItem(
+    db,
+    id: id,
+    title: title,
+    localPath: '/tmp/$id.m4a',
+    createdAt: createdAt,
+    mediaType: mediaType,
+    matomeId: matomeId,
+    workspaceId: workspaceId,
   );
 }
 
@@ -74,9 +72,9 @@ Future<void> _seedMatome(
 }
 
 Future<void> _seedSpace(AppDatabase db, String id, String name) {
-  return db.into(db.workspaces).insert(
-        WorkspacesCompanion.insert(id: id, name: name, createdAt: 0),
-      );
+  return db
+      .into(db.workspaces)
+      .insert(WorkspacesCompanion.insert(id: id, name: name, createdAt: 0));
 }
 
 /// A repo whose Core fetch returns nothing — the loose controller listens to the
@@ -89,27 +87,26 @@ class _EmptyRepo extends RecordingsRepository {
   Future<List<Recording>> fetchRecordings() async => const [];
 }
 
-ProviderContainer _container(AppDatabase db) => ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      recordingsRepositoryProvider.overrideWithValue(
-        _EmptyRepo(
-          apiClient: ApiClient(
-            tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-          ),
+ProviderContainer _container(AppDatabase db) => ProviderContainer(
+  overrides: [
+    appDatabaseProvider.overrideWithValue(db),
+    recordingsRepositoryProvider.overrideWithValue(
+      _EmptyRepo(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
         ),
       ),
-      currentOwnerIdProvider.overrideWithValue('1'),
-    ]);
+    ),
+    currentOwnerIdProvider.overrideWithValue('1'),
+  ],
+);
 
 void main() {
   // ── Pure resolver-routed predicate (flag-independent) ─────────────────────
   group('inbox_effective_view — resolver-routed predicate', () {
     test('a loose item (matome NULL, space NULL) is in the Inbox', () {
-      expect(
-        isInboxLooseItem(matomeSpaceId: null, workspaceId: null),
-        isTrue,
-      );
+      expect(isInboxLooseItem(matomeSpaceId: null, workspaceId: null), isTrue);
     });
 
     test('a directly-filed item (own space set) is NOT in the Inbox', () {
@@ -119,8 +116,7 @@ void main() {
       );
     });
 
-    test('an item in a FILED matome (matome space wins) is NOT in the Inbox',
-        () {
+    test('an item in a FILED matome (matome space wins) is NOT in the Inbox', () {
       // matome WINS — even with a null own space the matome-space makes it filed.
       expect(
         isInboxLooseItem(matomeSpaceId: 'ws_1', workspaceId: null),
@@ -138,13 +134,13 @@ void main() {
         addTearDown(db.close);
         await _seedSpace(db, 'ws_1', 'Work');
         // (a) a LOOSE item — should surface.
-        await _seedRecording(db, id: 'loose_1', title: 'Loose note');
+        await _seedItem(db, id: 'loose_1', title: 'Loose note');
         // (b) an item INSIDE a draft matome — belongs to the matome card, NOT
         //     the loose list (it has a matomeId).
         await _seedMatome(db, id: 'mat_draft');
-        await _seedRecording(db, id: 'in_matome', matomeId: 'mat_draft');
+        await _seedItem(db, id: 'in_matome', matomeId: 'mat_draft');
         // (c) a directly FILED item — effective space NON-null → excluded.
-        await _seedRecording(db, id: 'filed', workspaceId: 'ws_1');
+        await _seedItem(db, id: 'filed', workspaceId: 'ws_1');
 
         final container = _container(db);
         addTearDown(container.dispose);
@@ -153,11 +149,13 @@ void main() {
         await container
             .read(looseInboxControllerProvider.notifier)
             .reloadFromLocal();
-        final loose =
-            container.read(looseInboxControllerProvider).requireValue;
+        final loose = container.read(looseInboxControllerProvider).requireValue;
 
-        expect(loose.map((i) => i.id), ['loose_1'],
-            reason: 'only the loose item surfaces in the loose Inbox lane');
+        expect(
+          loose.map((i) => i.id),
+          ['loose_1'],
+          reason: 'only the loose item surfaces in the loose Inbox lane',
+        );
       },
       skip: _flagOn ? false : 'ON-only lane',
     );
@@ -173,7 +171,7 @@ void main() {
 
         // listInboxMatomeItems already narrows to spaceId NULL; the resolver
         // filter confirms membership without a second inline predicate.
-        final inbox = await db.matomesDao.listInboxMatomeItems();
+        final inbox = await db.matomesDao.listInboxMatomeItems('1');
         final drafts = inboxDraftMatomes(inbox);
 
         expect(drafts.map((m) => m.id), ['mat_draft']);
@@ -187,7 +185,7 @@ void main() {
       () async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
         addTearDown(db.close);
-        await _seedRecording(db, id: 'loose_1');
+        await _seedItem(db, id: 'loose_1');
         await _seedMatome(db, id: 'mat_draft');
 
         final container = _container(db);
@@ -196,10 +194,10 @@ void main() {
             .read(looseInboxControllerProvider.notifier)
             .reloadFromLocal();
 
-        final loose =
-            container.read(looseInboxControllerProvider).requireValue;
-        final drafts =
-            inboxDraftMatomes(await db.matomesDao.listInboxMatomeItems());
+        final loose = container.read(looseInboxControllerProvider).requireValue;
+        final drafts = inboxDraftMatomes(
+          await db.matomesDao.listInboxMatomeItems('1'),
+        );
 
         expect(loose, isNotEmpty, reason: 'loose card kind present');
         expect(drafts, isNotEmpty, reason: 'draft matome card kind present');
@@ -216,7 +214,7 @@ void main() {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
         addTearDown(db.close);
         // A loose row exists in the DB, but the OFF lane must never surface it.
-        await _seedRecording(db, id: 'loose_1');
+        await _seedItem(db, id: 'loose_1');
 
         final container = _container(db);
         addTearDown(container.dispose);
@@ -224,11 +222,13 @@ void main() {
         await container
             .read(looseInboxControllerProvider.notifier)
             .reloadFromLocal();
-        final loose =
-            container.read(looseInboxControllerProvider).requireValue;
+        final loose = container.read(looseInboxControllerProvider).requireValue;
 
-        expect(loose, isEmpty,
-            reason: 'flag OFF: the loose lane is inert (matome-only Inbox)');
+        expect(
+          loose,
+          isEmpty,
+          reason: 'flag OFF: the loose lane is inert (matome-only Inbox)',
+        );
       },
       skip: _flagOn ? 'OFF-only lane' : false,
     );

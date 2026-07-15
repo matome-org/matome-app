@@ -10,6 +10,8 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 /// The matome detail is ALWAYS the single-column "letter" presentation (owner
 /// decision 2026-06-24): the wide two-pane (letter + persistent side panel)
 /// split is retired. These tests pin that the SAME single-column layout — the
@@ -32,20 +34,14 @@ Future<void> _seedMatome(
   );
 
   for (var i = 0; i < recordingCount; i += 1) {
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: Value('rec_$i'),
-        matomeId: Value(id),
-        title: Value('Item $i'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value('0:30'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value(''),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + i),
-        mediaType: const Value('audio'),
-        processingStatus: const Value('done'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_$i',
+      matomeId: id,
+      position: i,
+      title: 'Item $i',
+      localPath: '',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + i,
     );
   }
 }
@@ -72,7 +68,10 @@ void main() {
 
   ProviderContainer container() {
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
     return c;
@@ -133,21 +132,24 @@ void main() {
     expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);
   });
 
-  testWidgets('the SAME single-column letter renders at every width — no layout '
-      'swap with width', (tester) async {
-    await _seedMatome(db, id: 'm_flip', aggregatedSummary: 'x');
+  testWidgets(
+    'the SAME single-column letter renders at every width — no layout '
+    'swap with width',
+    (tester) async {
+      await _seedMatome(db, id: 'm_flip', aggregatedSummary: 'x');
 
-    // Wide → single-column letter with "Show more", no side panel.
-    await sizeTo(tester, const Size(1200, 900));
-    await tester.pumpWidget(_app(container(), id: 'm_flip'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);
-    expect(find.byKey(const ValueKey('matome-show-more')), findsOneWidget);
+      // Wide → single-column letter with "Show more", no side panel.
+      await sizeTo(tester, const Size(1200, 900));
+      await tester.pumpWidget(_app(container(), id: 'm_flip'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);
+      expect(find.byKey(const ValueKey('matome-show-more')), findsOneWidget);
 
-    // Narrow → identical single-column presentation, same route.
-    tester.view.physicalSize = const Size(420, 900);
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);
-    expect(find.byKey(const ValueKey('matome-show-more')), findsOneWidget);
-  });
+      // Narrow → identical single-column presentation, same route.
+      tester.view.physicalSize = const Size(420, 900);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('matome-detail-panel')), findsNothing);
+      expect(find.byKey(const ValueKey('matome-show-more')), findsOneWidget);
+    },
+  );
 }

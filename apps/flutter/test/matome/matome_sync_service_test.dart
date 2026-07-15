@@ -8,7 +8,6 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/contacts/contact.dart';
 import 'package:matome_flutter/features/contacts/contacts_repository.dart';
 import 'package:matome_flutter/features/matome/matome.dart';
@@ -16,6 +15,8 @@ import 'package:matome_flutter/features/matome/matome_sync_service.dart';
 import 'package:matome_flutter/features/matome/matomes_repository.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
+
+import '../support/item_fixtures.dart';
 
 // ---------------------------------------------------------------------------
 // Fake repositories — no live backend. Each records the calls the sync service
@@ -324,17 +325,16 @@ void main() {
     await _seedMatome(db, id: 'mat_local_c', spaceId: space, title: 'Parent');
 
     // A reconciled child recording (coreId 7) under the not-yet-pushed matome.
-    await db.recordingsDao.upsertRecordingWithMatome(
-      RecordingsCompanion.insert(
-        id: 'rec_local_child',
-        title: 'Child',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: '/tmp/a.m4a',
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        coreId: const Value(7),
-        matomeId: const Value('mat_local_c'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_local_child',
+      ownerId: 'owner-1',
+      title: 'Child',
+      durationSeconds: 30,
+      localPath: '/tmp/a.m4a',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      coreId: 7,
+      matomeId: 'mat_local_c',
     );
 
     final matomesRepo = FakeMatomesRepository();
@@ -362,16 +362,15 @@ void main() {
       await _seedMatome(db, id: 'mat_local_d', spaceId: space);
 
       // A local-only child (coreId NULL) — not reconciled with Core yet.
-      await db.recordingsDao.upsertRecordingWithMatome(
-        RecordingsCompanion.insert(
-          id: 'rec_local_unsynced',
-          title: 'Unsynced child',
-          timestamp: '9:00 AM',
-          duration: '0:30',
-          audioFilePath: '/tmp/a.m4a',
-          createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-          matomeId: const Value('mat_local_d'),
-        ),
+      await insertTestFileItem(
+        db,
+        id: 'rec_local_unsynced',
+        ownerId: 'owner-1',
+        title: 'Unsynced child',
+        durationSeconds: 30,
+        localPath: '/tmp/a.m4a',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+        matomeId: 'mat_local_d',
       );
 
       final recordingsRepo = FakeRecordingsRepository();

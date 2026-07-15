@@ -1,4 +1,4 @@
-import '../../core/db/app_database.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/db/recording_card.dart';
 
 /// One Inbox row: the display [RecordingItem] plus the raw `createdAt` epoch
@@ -9,12 +9,12 @@ class InboxItem {
 
   final RecordingItem card;
 
-  /// `recordings.createdAt` (epoch ms), retained from the DB row for grouping.
+  /// `items.created_at` (epoch ms), retained from the DB row for grouping.
   final int createdAt;
 
-  factory InboxItem.fromRow(RecordingRow row, {String? workspaceName}) {
+  factory InboxItem.fromItem(ItemWithPayload row, {String? workspaceName}) {
     return InboxItem(
-      card: RecordingItem.fromRow(row, workspaceName: workspaceName),
+      card: RecordingItem.fromItem(row, workspaceName: workspaceName),
       createdAt: row.createdAt,
     );
   }

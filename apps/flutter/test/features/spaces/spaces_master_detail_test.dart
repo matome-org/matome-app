@@ -45,6 +45,7 @@ ProviderContainer _container(
 }) {
   final c = ProviderContainer(overrides: [
     appDatabaseProvider.overrideWithValue(db),
+    currentOwnerIdProvider.overrideWithValue('1'),
     if (mode != null)
       readingPaneModeProvider(ReadingPaneSurface.spaces)
           .overrideWith((ref) => _StubReadingPane(mode)),

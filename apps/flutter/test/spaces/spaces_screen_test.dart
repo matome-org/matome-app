@@ -12,31 +12,26 @@ import 'package:matome_flutter/features/spaces/space_detail_screen.dart';
 import 'package:matome_flutter/features/spaces/spaces_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 /// Widget tests for the Spaces tab (S5, #784): list renders with counts, the
 /// FAB-create modal adds a space, long-press + confirm deletes a space (and the
 /// recordings return to the Inbox), and the detail screen lists the workspace's
 /// recordings and routes on tap.
 
-Future<void> _seedRecording(
+Future<void> _seedItem(
   AppDatabase db, {
   required String id,
   String title = 'Recording',
   String? workspaceId,
 }) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: Value(id),
-      title: Value(title),
-      timestamp: const Value(''),
-      duration: const Value(''),
-      badge: const Value('Inbox'),
-      isProcessing: const Value(0),
-      audioFilePath: const Value(''),
-      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-      mediaType: const Value('audio'),
-      processingStatus: const Value('done'),
-      workspaceId: Value(workspaceId),
-    ),
+  return insertTestFileItem(
+    db,
+    id: id,
+    title: title,
+    localPath: '',
+    createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+    workspaceId: workspaceId,
   );
 }
 
@@ -88,7 +83,10 @@ Widget _app(AppDatabase db) {
   );
 
   return ProviderScope(
-    overrides: [appDatabaseProvider.overrideWithValue(db)],
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue('1'),
+    ],
     child: TranslationProvider(
       child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
@@ -104,8 +102,8 @@ void main() {
   testWidgets('renders the space list with names and counts', (tester) async {
     final work = await db.workspacesDao.createWorkspace('Work');
     await db.workspacesDao.createWorkspace('Ideas');
-    await _seedRecording(db, id: 'a', workspaceId: work.id);
-    await _seedRecording(db, id: 'b', workspaceId: work.id);
+    await _seedItem(db, id: 'a', workspaceId: work.id);
+    await _seedItem(db, id: 'b', workspaceId: work.id);
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
@@ -153,7 +151,7 @@ void main() {
   testWidgets('long-press + confirm deletes the space and returns recordings '
       'to the Inbox', (tester) async {
     final work = await db.workspacesDao.createWorkspace('Work');
-    await _seedRecording(db, id: 'a', workspaceId: work.id);
+    await _seedItem(db, id: 'a', workspaceId: work.id);
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();
@@ -171,7 +169,7 @@ void main() {
     expect(find.text('Work'), findsNothing);
 
     // Recording returned to the Inbox.
-    final inbox = await db.recordingsDao.getInboxRecordings();
+    final inbox = await db.itemsDao.listInbox('1');
     expect(inbox.single.id, 'a');
     expect(inbox.single.workspaceId, isNull);
   });
@@ -195,12 +193,7 @@ void main() {
     tester,
   ) async {
     final work = await db.workspacesDao.createWorkspace('Work');
-    await _seedMatome(
-      db,
-      id: 'a',
-      title: 'In work space',
-      spaceId: work.id,
-    );
+    await _seedMatome(db, id: 'a', title: 'In work space', spaceId: work.id);
     await _seedMatome(db, id: 'inbox-one', title: 'Inbox only');
 
     await tester.pumpWidget(_app(db));
@@ -217,12 +210,7 @@ void main() {
     tester,
   ) async {
     final work = await db.workspacesDao.createWorkspace('Work');
-    await _seedMatome(
-      db,
-      id: 'mat-9',
-      title: 'Routed',
-      spaceId: work.id,
-    );
+    await _seedMatome(db, id: 'mat-9', title: 'Routed', spaceId: work.id);
 
     await tester.pumpWidget(_app(db));
     await tester.pumpAndSettle();

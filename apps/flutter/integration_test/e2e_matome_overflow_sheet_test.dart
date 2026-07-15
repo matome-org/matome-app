@@ -15,6 +15,7 @@ import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 
 import 'support/e2e_harness.dart';
+import '../test/support/item_fixtures.dart';
 
 /// Ground-truth probes against the REAL production [routerProvider]: does a
 /// go_router rebuild (auth tick / matome reload) dismiss an imperatively-opened
@@ -33,31 +34,31 @@ Future<void> _seed(AppDatabase db) async {
       createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
     ),
   );
-  await db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: const Value('img1'),
-      title: const Value('A photo'),
-      timestamp: const Value('2026-06-08T12:00:00Z'),
-      duration: const Value('0:10'),
-      audioFilePath: const Value('/tmp/does-not-exist.bin'),
-      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-      mediaType: const Value('image'),
-      matomeId: const Value('m1'),
-      isProcessing: const Value(0),
-      processingStatus: const Value('done'),
-    ),
+  await insertTestFileItem(
+    db,
+    id: 'img1',
+    title: 'A photo',
+    durationSeconds: 10,
+    localPath: '/tmp/does-not-exist.bin',
+    createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+    mediaType: 'image',
+    matomeId: 'm1',
   );
 }
 
 Future<void> _bootToHubItems(WidgetTester tester, AppDatabase db) async {
   final store = InMemoryTokenStore();
   await store.saveTokens(accessToken: 'a', refreshToken: 'r');
-  await tester.pumpWidget(buildE2EApp(overrides: [
-    appDatabaseProvider.overrideWithValue(db),
-    tokenStoreProvider.overrideWithValue(store),
-    settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
-    authRepositoryProvider.overrideWithValue(FakeE2EAuthRepository(store)),
-  ]));
+  await tester.pumpWidget(
+    buildE2EApp(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        tokenStoreProvider.overrideWithValue(store),
+        settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
+        authRepositoryProvider.overrideWithValue(FakeE2EAuthRepository(store)),
+      ],
+    ),
+  );
   await tester.pumpAndSettle();
   final ctx = tester.element(find.byType(Navigator).first);
   GoRouter.of(ctx).push('/matome/m1');
@@ -75,53 +76,72 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-      'PROBE: overflow sheet survives a matome reload (go_router rebuild)',
-      (tester) async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    await _seed(db);
-    await _bootToHubItems(tester, db);
+    'PROBE: overflow sheet survives a matome reload (go_router rebuild)',
+    (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seed(db);
+      await _bootToHubItems(tester, db);
 
-    await tester.tap(find.byKey(const ValueKey('matome-item-overflow-img1')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('matome-item-delete-img1')), findsOneWidget,
-        reason: 'sheet opened');
+      await tester.tap(find.byKey(const ValueKey('matome-item-overflow-img1')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('matome-item-delete-img1')),
+        findsOneWidget,
+        reason: 'sheet opened',
+      );
 
-    // Force a go_router rebuild while the modal sheet is open: an auth tick.
-    final ctx = tester.element(find.byType(Navigator).first);
-    final container = ProviderScope.containerOf(ctx);
-    await container
-        .read(authControllerProvider.notifier)
-        .login(email: 'dev@matome.test', password: 'x');
-    // Also reload the matome controller (a routine live event).
-    await container.read(matomeDetailControllerProvider('m1').notifier).load();
-    await tester.pumpAndSettle();
+      // Force a go_router rebuild while the modal sheet is open: an auth tick.
+      final ctx = tester.element(find.byType(Navigator).first);
+      final container = ProviderScope.containerOf(ctx);
+      await container
+          .read(authControllerProvider.notifier)
+          .login(email: 'dev@matome.test', password: 'x');
+      // Also reload the matome controller (a routine live event).
+      await container
+          .read(matomeDetailControllerProvider('m1').notifier)
+          .load();
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('matome-item-delete-img1')), findsOneWidget,
-        reason: 'the overflow sheet must SURVIVE a go_router rebuild');
-  });
+      expect(
+        find.byKey(const ValueKey('matome-item-delete-img1')),
+        findsOneWidget,
+        reason: 'the overflow sheet must SURVIVE a go_router rebuild',
+      );
+    },
+  );
 
   testWidgets(
-      'PROBE: image detail survives a matome reload (go_router rebuild)',
-      (tester) async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    await _seed(db);
-    await _bootToHubItems(tester, db);
+    'PROBE: image detail survives a matome reload (go_router rebuild)',
+    (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seed(db);
+      await _bootToHubItems(tester, db);
 
-    await tester.tap(find.byKey(const ValueKey('matome-image-img1')));
-    await tester.pumpAndSettle();
-    expect(find.byType(FileDetailScreen), findsOneWidget, reason: 'image opened');
+      await tester.tap(find.byKey(const ValueKey('matome-image-img1')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byType(FileDetailScreen),
+        findsOneWidget,
+        reason: 'image opened',
+      );
 
-    final ctx = tester.element(find.byType(Navigator).first);
-    final container = ProviderScope.containerOf(ctx);
-    await container.read(matomeDetailControllerProvider('m1').notifier).load();
-    await container
-        .read(authControllerProvider.notifier)
-        .login(email: 'dev@matome.test', password: 'x');
-    await tester.pumpAndSettle();
+      final ctx = tester.element(find.byType(Navigator).first);
+      final container = ProviderScope.containerOf(ctx);
+      await container
+          .read(matomeDetailControllerProvider('m1').notifier)
+          .load();
+      await container
+          .read(authControllerProvider.notifier)
+          .login(email: 'dev@matome.test', password: 'x');
+      await tester.pumpAndSettle();
 
-    expect(find.byType(FileDetailScreen), findsOneWidget,
-        reason: 'the image detail must SURVIVE a go_router rebuild');
-  });
+      expect(
+        find.byType(FileDetailScreen),
+        findsOneWidget,
+        reason: 'the image detail must SURVIVE a go_router rebuild',
+      );
+    },
+  );
 }

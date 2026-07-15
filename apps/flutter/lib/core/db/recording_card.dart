@@ -1,4 +1,4 @@
-import 'app_database.dart';
+import 'daos/items_dao.dart';
 import '../../features/items/matome_item_type.dart';
 import '../../features/recordings/recording_ids.dart';
 import '../../features/recordings/processing_error.dart' as processing_error;
@@ -7,7 +7,7 @@ import '../../features/recordings/processing_error.dart' as processing_error;
 /// (apps/mobile/processes/homeData + recordToCard in recordingService.ts).
 ///
 /// This is the shape the home/calendar screens consume. It is derived from a
-/// persisted [RecordingRow] via [RecordingItem.fromRow]; the DB row keeps the
+/// persisted [ItemWithPayload] via [RecordingItem.fromItem]; the DB row keeps the
 /// raw SQLite columns, the card exposes the display-ready, typed view.
 class RecordingItem {
   const RecordingItem({
@@ -51,8 +51,8 @@ class RecordingItem {
   /// sync-state badge (on-device vs cloud) — plan #45, W2.
   final int? coreId;
 
-  /// Populated only when the row was loaded via a workspace LEFT JOIN
-  /// (see [RecordingsDao.recordingsByDayWithWorkspace]); NULL == Inbox.
+  /// Populated only when the Item was loaded with its workspace relation;
+  /// NULL means Inbox.
   final String? workspaceName;
 
   /// On-device path to the item's media (audio file or imported photo). Drives
@@ -71,36 +71,39 @@ class RecordingItem {
   /// Maps a persisted DB row to the UI card, mirroring `recordToCard`:
   ///   * `isProcessing` int → bool,
   ///   * `processingStatus` falls back to processing/done from the flag.
-  factory RecordingItem.fromRow(RecordingRow row, {String? workspaceName}) {
+  factory RecordingItem.fromItem(ItemWithPayload row, {String? workspaceName}) {
+    final duration = row.durationSeconds == null || row.durationSeconds! <= 0
+        ? ''
+        : '${row.durationSeconds! ~/ 60}m ${row.durationSeconds! % 60}s';
     return RecordingItem(
       id: row.id,
       title: row.title,
       summary: row.summary,
-      timestamp: row.timestamp,
-      duration: row.duration,
-      badge: row.badge,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(
+        row.createdAt,
+      ).toIso8601String(),
+      duration: duration,
+      badge: row.workspaceId == null ? 'Inbox' : 'Space',
       notes: row.notes,
-      isProcessing: row.isProcessing == 1,
-      itemType: MatomeItemType.file,
+      isProcessing: row.isProcessing,
+      itemType: row.type,
       mediaType: row.mediaType,
-      processingStatus: row.processingStatus.isNotEmpty
-          ? row.processingStatus
-          : (row.isProcessing == 1 ? 'processing' : 'done'),
+      processingStatus: row.processingStatus,
       processingErrorCode: row.processingErrorCode,
       workspaceName: workspaceName,
       coreId: row.coreId,
-      filePath: row.audioFilePath,
+      filePath: row.localPath,
     );
   }
 
   factory RecordingItem.textItem({
-    required int id,
+    required String id,
     required String body,
     required String insertedAt,
   }) {
     final title = body.trim().split('\n').first.trim();
     return RecordingItem(
-      id: id.toString(),
+      id: id,
       title: title.isEmpty ? 'Text note' : title,
       summary: body,
       timestamp: insertedAt,

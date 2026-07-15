@@ -12,6 +12,8 @@ import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 /// REPRODUCTION (TDD red) for the two file-view runtime bugs reported on the
 /// live matome detail screen (#97 shipped work):
 ///
@@ -42,19 +44,14 @@ Future<void> _seedItem(
   required String mediaType,
   required String title,
 }) async {
-  await db.recordingsDao.insertRecording(
-    RecordingsCompanion(
-      id: Value(id),
-      title: Value(title),
-      timestamp: const Value('2026-06-08T12:00:00Z'),
-      duration: const Value('0:10'),
-      audioFilePath: const Value('/tmp/does-not-exist.bin'),
-      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-      mediaType: Value(mediaType),
-      matomeId: Value(matomeId),
-      isProcessing: const Value(0),
-      processingStatus: const Value('done'),
-    ),
+  await insertTestFileItem(
+    db,
+    id: id,
+    title: title,
+    mediaType: mediaType,
+    matomeId: matomeId,
+    localPath: '/tmp/does-not-exist.bin',
+    createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
   );
 }
 
@@ -66,7 +63,10 @@ void main() {
 
   ProviderContainer container() {
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
     return c;

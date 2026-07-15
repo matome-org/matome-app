@@ -57,7 +57,7 @@ class Recording {
 
   /// The OWNING USER's Core id, as the TEXT/string id it is on the wire.
   ///
-  /// SECURITY (#1469, A01 — Broken Access Control): Core's `recordings.owner_id`
+  /// SECURITY (#1469, A01 — Broken Access Control): Core's `items.owner_id`
   /// is NOT NULL and server-enforced (`MatomeApi.Content.list_recordings` filters
   /// `owner_id == ^owner_id`), and the Drift mirror column is TEXT (tables.dart).
   /// It is parsed as a STRING — NEVER coerced through `asInt` (which would turn an

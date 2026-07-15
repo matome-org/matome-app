@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
-import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
@@ -108,7 +108,7 @@ class UploadQueue {
   final Set<String> _inFlight = <String>{};
 
   RecordingsRepository get _repo => _ref.read(recordingsRepositoryProvider);
-  RecordingsDao get _dao => _ref.read(recordingsDaoProvider);
+  ItemsDao get _dao => _ref.read(itemsDaoProvider);
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
   MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
   InboxController get _inbox => _ref.read(inboxControllerProvider.notifier);
@@ -139,9 +139,11 @@ class UploadQueue {
   /// Drain every pending, blocked, or interrupted local upload row once.
   Future<void> drain() async {
     AppLog.event(LogCat.upload, 'drain: start');
-    final List<RecordingRow> pending;
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final List<ItemWithPayload> pending;
     try {
-      pending = await _dao.getPendingUploadRecordings();
+      pending = await _dao.listPendingUploads(ownerId);
     } catch (e, st) {
       AppLog.error(LogCat.upload, 'drain: could not read pending rows', e, st);
       developer.log(
@@ -166,7 +168,9 @@ class UploadQueue {
     AppLog.event(LogCat.upload, 'drainRow: $localId');
     _inFlight.add(localId);
     try {
-      final row = await _dao.getRecordingById(localId);
+      final ownerId = _ref.read(currentOwnerIdProvider);
+      if (ownerId == null) return;
+      final row = await _dao.getById(localId, ownerId);
       if (row == null) return;
       // A locally-minted `processing` row is resumable: the app may have died
       // after reconciling its Core id but before upload/enqueue completed.
@@ -197,7 +201,7 @@ class UploadQueue {
   /// an Inbox Matome parent with no Space, requires a parent for every child,
   /// and holds explicit local/unknown Spaces. Cloud decisions continue through
   /// [EffectiveSpace] and [SyncPolicy.can].
-  Future<String?> _syncBlockReason(RecordingRow row) async {
+  Future<String?> _syncBlockReason(ItemWithPayload row) async {
     // matome WINS: if the row is in a matome, the matome's space_id is the
     // authoritative effective space and the row's own workspaceId is shadowed.
     final matomeId = row.matomeId;
@@ -234,7 +238,7 @@ class UploadQueue {
     return null;
   }
 
-  Future<void> _drainRow(RecordingRow row) async {
+  Future<void> _drainRow(ItemWithPayload row) async {
     final localId = row.id;
 
     // Resume point: a row may already carry a Core id from a prior attempt.
@@ -268,7 +272,12 @@ class UploadQueue {
     // Replay the permanent client id on every non-terminal attempt. #2033 makes
     // this idempotent and returns a fresh upload descriptor, so a restart after
     // item reconcile, PUT, or dispatch can safely resume without duplicate work.
-    final contentLength = await _byteSizeOf(row.audioFilePath);
+    final localPath = row.localPath;
+    if (localPath == null || localPath.isEmpty) {
+      await _markBlocked(localId, kProcessingStatusBlockedCore);
+      return;
+    }
+    final contentLength = await _byteSizeOf(localPath);
     final RecordingCreateResult created;
     try {
       created = await _repo.createItemRecording(
@@ -298,7 +307,13 @@ class UploadQueue {
     await _inbox.reconcileCoreId(localId, coreId);
 
     try {
-      await _repo.uploadFile(created.upload, File(row.audioFilePath));
+      try {
+        await _repo.uploadFile(created.upload, File(localPath));
+      } catch (_) {
+        await _inbox.markFileUploadFailed(localId);
+        rethrow;
+      }
+      await _inbox.markFileUploaded(localId);
       await _repo.enqueueProcessing(coreId);
       final result = await _awaitTerminal(
         recording: recording,
@@ -378,12 +393,12 @@ class UploadQueue {
   }
 
   Future<void> _markBlocked(String localId, String status) async {
-    await _dao.updateRecording(
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    await _dao.updateItem(
       localId,
-      RecordingsCompanion(
-        isProcessing: const Value(0),
-        processingStatus: Value(status),
-      ),
+      ownerId,
+      ItemsCompanion(syncState: Value(status), isDirty: const Value(true)),
     );
     await _inbox.reloadFromLocal();
   }
@@ -399,16 +414,7 @@ class UploadQueue {
   /// Best-effort re-derive the duration (seconds) for a Core create from the
   /// row's `m:ss`-style duration TEXT. Unknown ⇒ 0 (the file-picker path also
   /// uploads with an unknown duration), so this never blocks a drain.
-  int _durationSecondsFor(RecordingRow row) {
-    final text = row.duration.trim();
-    if (text.isEmpty) return 0;
-    var total = 0;
-    final mins = RegExp(r'(\d+)\s*m').firstMatch(text);
-    final secs = RegExp(r'(\d+)\s*s').firstMatch(text);
-    if (mins != null) total += (int.tryParse(mins.group(1)!) ?? 0) * 60;
-    if (secs != null) total += int.tryParse(secs.group(1)!) ?? 0;
-    return total;
-  }
+  int _durationSecondsFor(ItemWithPayload row) => row.durationSeconds ?? 0;
 
   /// Best-effort on-disk size in bytes of [path] (#1471), or null if the file is
   /// absent/unreadable. Declared as `content_length` on create so Core persists

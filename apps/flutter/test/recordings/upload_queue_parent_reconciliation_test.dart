@@ -10,7 +10,6 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/matome/matome.dart';
 import 'package:matome_flutter/features/matome/matomes_repository.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
@@ -18,6 +17,8 @@ import 'package:matome_flutter/features/recordings/recording_result_waiter.dart'
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
+
+import '../support/item_fixtures.dart';
 
 void main() {
   test('drain reconciles an unreconciled parent before its child', () async {
@@ -49,17 +50,16 @@ void main() {
         );
     final media = File('${temp.path}/child.m4a');
     await media.writeAsBytes(const [1, 2, 3]);
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: 'rec_local_child',
-        title: 'Child',
-        timestamp: 'now',
-        duration: '1s',
-        audioFilePath: media.path,
-        createdAt: 1,
-        matomeId: const Value('mat_local_parent'),
-        processingStatus: const Value('pending_upload'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_local_child',
+      ownerId: 'owner-1',
+      title: 'Child',
+      durationSeconds: 1,
+      localPath: media.path,
+      createdAt: 1,
+      matomeId: 'mat_local_parent',
+      processingStatus: 'pending_upload',
     );
 
     final calls = <String>[];
@@ -92,7 +92,7 @@ void main() {
       (await db.matomesDao.getById('mat_local_parent'))!.coreId,
       matomes.coreId,
     );
-    final child = await db.recordingsDao.getRecordingById('rec_local_child');
+    final child = await db.itemsDao.getById('rec_local_child', 'owner-1');
     expect(child!.coreId, recordings.coreId);
     expect(child.processingStatus, 'done');
   });

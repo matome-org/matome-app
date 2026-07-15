@@ -17,7 +17,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../files/files_providers.dart' show currentOwnerIdProvider;
+import '../auth/current_owner.dart' show currentOwnerIdProvider;
 import 'sync_policy.dart';
 
 /// Resolve the acting [Caller] (the future-PDP input) BEST-EFFORT from the

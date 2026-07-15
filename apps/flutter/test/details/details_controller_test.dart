@@ -2,14 +2,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
-import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-
 import 'package:matome_flutter/core/crypto/key_material.dart' show Dek;
 import 'package:matome_flutter/core/crypto/media_cipher.dart'
     show encryptFileToFile;
@@ -18,794 +14,390 @@ import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/details/details_controller.dart';
-import 'package:matome_flutter/features/home/inbox_upload.dart';
+import 'package:matome_flutter/features/home/inbox_upload.dart'
+    show RecordingResultAwaiter, liveRecordingResultAwaiter;
+import 'package:matome_flutter/features/recordings/processing_error.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
-import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
-import 'package:matome_flutter/features/recordings/processing_error.dart';
 
-/// An injected [RecordingResultAwaiter] that resolves immediately with a fixed
-/// terminal [result], standing in for the socket-vs-poll race outcome.
-RecordingResultAwaiter _awaiterReturning(RecordingResult result) {
-  return ({required recording, required poll, required ref}) async => result;
-}
+import '../support/item_fixtures.dart';
 
-/// A test provider yielding a [DetailsController] for id '5' with an injected
-/// [awaiter] (so the socket-vs-poll race is deterministic).
-Provider<DetailsController> _controllerProvider(
-  RecordingResultAwaiter awaiter,
-) {
-  return Provider<DetailsController>(
-    (ref) => DetailsController(ref, '5', awaitResult: awaiter),
-  );
-}
+RecordingResultAwaiter _awaiterReturning(RecordingResult result) =>
+    ({required recording, required poll, required ref}) async => result;
 
-/// Wires an in-memory Drift DB + a mock-adapter dio (no live backend). The
-/// `POST /api/items/5/process` endpoint returns 202 so
-/// [DetailsController.retry] can run; `GET /api/items/5` 404s (the poll
-/// fallback never wins — the injected awaiter resolves the race instead).
-ProviderContainer _container(AppDatabase db) {
-  final dio = Dio(
-    BaseOptions(
-      baseUrl: 'http://localhost:7001',
-      validateStatus: (s) => s != null && s < 500,
-    ),
-  );
-  final adapter = DioAdapter(dio: dio);
-  adapter
-    ..onPost(
-      '/api/items/5/process',
-      (s) => s.reply(202, {
-        'item': {
-          'id': 5,
-          'owner_id': 1,
-          'item_type': 'file',
-          'metadata': {'title': 'Rec', 'status': 'processing'},
-        },
-        'processing': {'queued': true},
-      }),
-    )
-    ..onGet('/api/items/5', (s) => s.reply(404, {'error': 'not found'}));
-  final repo = RecordingsRepository(
-    apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
-  );
-  return ProviderContainer(
-    overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-    ],
-  );
-}
-
-Future<void> _seedDone(AppDatabase db) {
-  return db.recordingsDao.insertRecording(
-    RecordingsCompanion.insert(
-      id: '5',
-      title: 'Rec',
-      timestamp: '9:00 AM',
-      duration: '0:30',
-      audioFilePath: '/tmp/a.m4a',
-      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-      summary: const Value('good summary'),
-      notes: const Value('good notes'),
-      processingStatus: const Value('failed'),
-      processingErrorCode: const Value(kProcessingErrorUploadFailed),
-    ),
-  );
-}
-
-/// Fake path_provider so tests that DON'T inject a `playbackScratchDirSource`
-/// (the plaintext-media paths, e.g. the W2 #871 delete test) still resolve
-/// `DetailsController`'s default scratch-dir source
-/// (`defaultPlaybackScratchDir` → `getTemporaryDirectory()`) against a real
-/// temp dir instead of hanging on the absent plugin channel — mirrors
-/// `matome_add_photo_e2e_test.dart`'s `_FakePathProvider`.
-class _FakeTempPathProvider extends PathProviderPlatform
-    with MockPlatformInterfaceMixin {
-  _FakeTempPathProvider(this.tempPath);
-  final String tempPath;
-  @override
-  Future<String?> getTemporaryPath() async => tempPath;
-}
-
-void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  late AppDatabase db;
-  late Directory fakeTempRoot;
-
-  setUp(() {
-    db = AppDatabase.forTesting(NativeDatabase.memory());
-    fakeTempRoot = Directory.systemTemp.createTempSync('details_fake_temp_');
-    PathProviderPlatform.instance = _FakeTempPathProvider(fakeTempRoot.path);
-  });
-  tearDown(() async {
-    await db.close();
-    if (fakeTempRoot.existsSync()) fakeTempRoot.deleteSync(recursive: true);
-  });
-
-  test(
-    'B3 regression: retry won by a sparse socket `done` (null summary/notes) '
-    'does NOT wipe previously-good values',
-    () async {
-      await _seedDone(db);
-      final container = _container(db);
-      addTearDown(container.dispose);
-
-      // Sparse terminal: a `done` recording carrying null summary/transcript —
-      // exactly what a partial socket broadcast (or a race loser) yields.
-      const sparse = Recording(
-        id: 5,
-        ownerId: '1',
-        title: '',
-        status: RecordingStatus.done,
-      );
-      final controller = container.read(
-        _controllerProvider(
-          _awaiterReturning(const RecordingResult.done(sparse)),
-        ),
-      );
-
-      await controller.retry();
-
-      final row = await db.recordingsDao.getRecordingById('5');
-      expect(row!.summary, 'good summary'); // preserved, not null-wiped
-      expect(row.notes, 'good notes'); // preserved, not null-wiped
-      expect(row.processingErrorCode, isNull);
-      expect(row.processingStatus, 'done');
-      expect(row.isProcessing, 0);
-    },
-  );
-
-  test(
-    'B3: a real non-null terminal DOES apply (overwrites old values)',
-    () async {
-      await _seedDone(db);
-      final container = _container(db);
-      addTearDown(container.dispose);
-
-      const full = Recording(
-        id: 5,
-        ownerId: '1',
-        title: 'Rec',
-        status: RecordingStatus.done,
-        summary: 'fresh summary',
-        transcript: 'fresh transcript',
-      );
-      final controller = container.read(
-        _controllerProvider(
-          _awaiterReturning(const RecordingResult.done(full)),
-        ),
-      );
-
-      await controller.retry();
-
-      final row = await db.recordingsDao.getRecordingById('5');
-      expect(row!.summary, 'fresh summary'); // real update applied
-      // 1435 write-authority: the machine transcript lands in the `transcript`
-      // column, NOT the user `notes` column. The seeded user note survives.
-      expect(row.transcript, 'fresh transcript');
-      expect(
-        row.notes,
-        'good notes',
-      ); // user note untouched by the terminal apply
-      expect(row.processingStatus, 'done');
-      expect(row.processingErrorCode, isNull);
-    },
-  );
-
-  test(
-    'retry timeout preserves notes and stores only the bounded timeout code',
-    () async {
-      await _seedDone(db);
-      final container = _container(db);
-      addTearDown(container.dispose);
-      final controller = container.read(
-        _controllerProvider(
-          _awaiterReturning(const RecordingResult.failed('timeout')),
-        ),
-      );
-
-      await controller.retry();
-
-      final row = await db.recordingsDao.getRecordingById('5');
-      expect(row!.notes, 'good notes');
-      expect(row.processingStatus, 'failed');
-      expect(row.processingErrorCode, kProcessingErrorTimeout);
-    },
-  );
-
-  test('1435: save(text) writes the buffer to Drift `notes`, leaves Drift '
-      '`transcript` UNCHANGED, and the Core PATCH carries `notes` but NOT '
-      '`transcript`', () async {
-    // Seed a row carrying BOTH a user note and a machine transcript so we can
-    // prove the write path touches notes only.
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: '5',
-        title: 'Rec',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: '/tmp/a.m4a',
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        summary: const Value('good summary'),
-        notes: const Value('old note'),
-        transcript: const Value('machine transcript'),
-      ),
-    );
-
-    // Capture the outgoing PATCH body via an interceptor (the mock-adapter
-    // handler callback does not expose the request body directly).
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: 'http://localhost:7001',
-        validateStatus: (s) => s != null && s < 500,
-      ),
-    );
-    Map<String, dynamic>? patchBody;
+ProviderContainer _container(
+  AppDatabase db, {
+  RecordingResultAwaiter? awaitResult,
+  Future<Dek> Function()? mediaDekSource,
+  Future<Directory> Function()? playbackScratchDirSource,
+  void Function(Map<String, dynamic>)? onPatch,
+}) {
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost:7001'));
+  if (onPatch != null) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
           if (options.method == 'PATCH' && options.path == '/api/items/5') {
-            patchBody = options.data as Map<String, dynamic>;
+            onPatch(options.data as Map<String, dynamic>);
           }
           handler.next(options);
         },
       ),
     );
-    final adapter = DioAdapter(dio: dio);
-    adapter.onPatch(
+  }
+  DioAdapter(dio: dio)
+    ..onPatch(
       '/api/items/5',
-      (s) => s.reply(200, {
+      (server) => server.reply(200, {
+        'item': {
+          'id': 5,
+          'owner_id': 1,
+          'metadata': <String, dynamic>{},
+          'file': <String, dynamic>{},
+        },
+      }),
+      data: Matchers.any,
+    )
+    ..onDelete('/api/items/5', (server) => server.reply(204, null))
+    ..onGet(
+      '/api/items/5/download-url',
+      (server) => server.reply(404, {'error': 'not found'}),
+    )
+    ..onPost(
+      '/api/items/5/process',
+      (server) => server.reply(202, {
         'item': {
           'id': 5,
           'owner_id': 1,
           'item_type': 'file',
-          'metadata': {'title': 'Rec', 'status': 'done'},
+          'metadata': {'title': 'File', 'status': 'processing'},
+          'file': <String, dynamic>{},
         },
+        'processing': {'queued': true},
       }),
-      data: Matchers.any,
     );
-    final repo = RecordingsRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        recordingsRepositoryProvider.overrideWithValue(repo),
-      ],
-    );
-    addTearDown(container.dispose);
+  return ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue('1'),
+      recordingsRepositoryProvider.overrideWithValue(
+        RecordingsRepository(
+          apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
+        ),
+      ),
+      detailsControllerProvider.overrideWith(
+        (ref, id) => DetailsController(
+          ref,
+          id,
+          awaitResult: awaitResult ?? liveRecordingResultAwaiter,
+          mediaDekSource: mediaDekSource,
+          playbackScratchDirSource:
+              playbackScratchDirSource ?? () async => Directory.systemTemp,
+        ),
+      ),
+    ],
+  );
+}
 
-    final controller = container.read(
-      _controllerProvider(_awaiterReturning(const RecordingResult.done(null))),
-    );
-    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
+DetailsController _controller(ProviderContainer container, String id) {
+  final subscription = container.listen(
+    detailsControllerProvider(id),
+    (_, _) {},
+  );
+  addTearDown(subscription.close);
+  return container.read(detailsControllerProvider(id).notifier);
+}
 
-    await controller.save('new note');
+void main() {
+  late AppDatabase db;
+  late ProviderContainer container;
 
-    final row = await db.recordingsDao.getRecordingById('5');
-    expect(row!.notes, 'new note'); // buffer written to notes
-    expect(row.transcript, 'machine transcript'); // transcript UNCHANGED
-
-    // The Core PATCH carries the note under `notes` and NEVER `transcript`.
-    expect(patchBody, isNotNull, reason: 'a Core PATCH was issued');
-    expect(patchBody!['notes'], 'new note');
-    expect(
-      patchBody!.containsKey('transcript'),
-      isFalse,
-      reason: 'save() must not PATCH Core transcript (data-loss path)',
-    );
+  setUp(() {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    container = _container(db);
   });
-
-  test('W3: a local-only row (rec_local_, coreId null) reads coreId from the '
-      'column and degrades cleanly — save persists locally, retry records its '
-      'missing-parent block, '
-      'no Core call is attempted', () async {
-    // A captured-but-not-yet-uploaded row: UUID PK, coreId NULL.
-    const localId = 'rec_local_details-degrade';
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: localId,
-        title: 'Local capture',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: '/tmp/local.m4a',
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        processingStatus: const Value('pending_upload'),
-      ),
-    );
-
-    // No /api/recordings/* endpoints are mocked: any Core call would throw an
-    // unmocked-route error and fail the test. The awaiter must NOT be reached.
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: 'http://localhost:7001',
-        validateStatus: (s) => s != null && s < 500,
-      ),
-    );
-    DioAdapter(dio: dio);
-    final repo = RecordingsRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        recordingsRepositoryProvider.overrideWithValue(repo),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    var awaiterCalled = false;
-    final controllerProvider = Provider<DetailsController>(
-      (ref) => DetailsController(
-        ref,
-        localId,
-        awaitResult: ({required recording, required poll, required ref}) async {
-          awaiterCalled = true;
-          return const RecordingResult.done(null);
-        },
-      ),
-    );
-    final controller = container.read(controllerProvider);
-    // Let load() settle.
-    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
-    expect(
-      controller.state.coreId,
-      isNull,
-    ); // derived from the column, not parse
-
-    // save() writes notes to Drift even with no Core counterpart.
-    await controller.save('offline edit');
-    expect(
-      (await db.recordingsDao.getRecordingById(localId))!.notes,
-      'offline edit',
-    );
-
-    // retry() is a clean no-op for a row Core has never seen.
-    await controller.retry();
-    expect(awaiterCalled, isFalse); // never raced the socket/poll
-    final after = await db.recordingsDao.getRecordingById(localId);
-    expect(after!.processingStatus, kProcessingStatusBlockedParent);
+  tearDown(() async {
+    container.dispose();
+    await db.close();
   });
 
   test(
-    'W2 #871: explicit user delete removes BOTH the on-disk local audio file '
-    'AND the Drift row (free disk on user-initiated deletion)',
+    'loads canonical file Item and resolves its durable local path',
     () async {
-      // Seed a local-only row pointing at a REAL on-disk temp file.
-      final tmp = await Directory.systemTemp.createTemp('details_delete_test_');
-      addTearDown(() async {
-        if (await tmp.exists()) await tmp.delete(recursive: true);
-      });
-      final audio = File('${tmp.path}/local.m4a');
-      await audio.writeAsBytes(List<int>.filled(8, 0));
-      expect(await audio.exists(), isTrue);
-
-      const localId = 'rec_local_details-delete';
-      await db.recordingsDao.insertRecording(
-        RecordingsCompanion.insert(
-          id: localId,
-          title: 'Local capture',
-          timestamp: '9:00 AM',
-          duration: '0:30',
-          audioFilePath: audio.path,
-          createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-          processingStatus: const Value('done'),
-        ),
+      final dir = await Directory.systemTemp.createTemp('details_item_');
+      addTearDown(() => dir.delete(recursive: true));
+      final media = File('${dir.path}/capture.m4a')..writeAsBytesSync([1, 2]);
+      await insertTestFileItem(
+        db,
+        id: '5',
+        coreId: 5,
+        localPath: media.path,
+        notes: 'Personal note',
+        transcript: 'Machine transcript',
       );
 
-      // No Core endpoints mocked: a local-only row (coreId null) makes no Core
-      // call on delete, so an unmocked route would fail the test if it did.
-      final dio = Dio(
-        BaseOptions(
-          baseUrl: 'http://localhost:7001',
-          validateStatus: (s) => s != null && s < 500,
-        ),
-      );
-      DioAdapter(dio: dio);
-      final repo = RecordingsRepository(
-        apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
-      );
-      final container = ProviderContainer(
-        overrides: [
-          appDatabaseProvider.overrideWithValue(db),
-          recordingsRepositoryProvider.overrideWithValue(repo),
-        ],
-      );
-      addTearDown(container.dispose);
+      final controller = _controller(container, '5');
+      await controller.load();
 
-      final controllerProvider = Provider<DetailsController>(
-        (ref) => DetailsController(
-          ref,
-          localId,
-          awaitResult:
-              ({required recording, required poll, required ref}) async =>
-                  const RecordingResult.done(null),
-        ),
-      );
-      final controller = container.read(controllerProvider);
-      for (var i = 0; i < 20 && controller.state.isLoading; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 5));
-      }
-
-      await controller.delete();
-
-      // The on-disk audio is freed AND the row is gone.
-      expect(
-        await audio.exists(),
-        isFalse,
-        reason: 'user-delete frees the local audio file (W2 #871)',
-      );
-      expect(
-        await db.recordingsDao.getRecordingById(localId),
-        isNull,
-        reason: 'user-delete removes the Drift row',
-      );
+      expect(controller.state.notFound, isFalse);
+      expect(controller.state.initialText, 'Personal note');
+      expect(controller.state.row?.transcript, 'Machine transcript');
+      expect(controller.state.audioSource.kind, AudioSourceKind.localFile);
     },
   );
 
-  test('#1866 encrypted-media read seam: a row with a non-null wrappedFek '
-      'resolves its audio source through the decrypt path, never handing '
-      'the raw ciphertext path to the player', () async {
-    final tmp = await Directory.systemTemp.createTemp('details_media_read_');
-    addTearDown(() async {
-      if (await tmp.exists()) await tmp.delete(recursive: true);
-    });
+  test('save changes notes without replacing machine outputs', () async {
+    await insertTestFileItem(
+      db,
+      id: '5',
+      coreId: 5,
+      notes: 'Old note',
+      transcript: 'Machine transcript',
+    );
+    Map<String, dynamic>? patchBody;
+    container.dispose();
+    container = _container(db, onPatch: (body) => patchBody = body);
+    final controller = _controller(container, '5');
+    await controller.load();
 
-    // A real encrypted media file, exactly what `inbox_upload.dart`'s
-    // `encryptedDurableImportCopy` would have produced under
-    // `kMediaEncryptionEnabled`.
-    final dek = Dek.generate();
-    final plaintext = Uint8List.fromList(List.generate(4096, (i) => i & 0xff));
-    final ciphertextFile = File('${tmp.path}/import_x.enc');
-    final result = await encryptFileToFile(
-      source: File('${tmp.path}/plain.bin')..writeAsBytesSync(plaintext),
-      destination: ciphertextFile,
-      dek: dek,
-    );
+    await controller.save('Edited note');
 
-    const localId = 'rec_local_details-media-read';
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: localId,
-        title: 'Encrypted capture',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: ciphertextFile.path,
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        processingStatus: const Value('done'),
-        wrappedFek: Value(result.wrappedFek.toBase64()),
-      ),
-    );
-
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: 'http://localhost:7001',
-        validateStatus: (s) => s != null && s < 500,
-      ),
-    );
-    DioAdapter(dio: dio);
-    final repo = RecordingsRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        recordingsRepositoryProvider.overrideWithValue(repo),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    final scratchDir = Directory('${tmp.path}/scratch');
-    var dekSourceCalls = 0;
-    final controllerProvider = Provider<DetailsController>(
-      (ref) => DetailsController(
-        ref,
-        localId,
-        awaitResult:
-            ({required recording, required poll, required ref}) async =>
-                const RecordingResult.done(null),
-        // Injected — proves the wiring without touching
-        // `flutter_secure_storage`'s platform channel.
-        mediaDekSource: () async {
-          dekSourceCalls++;
-          return Dek(Uint8List.fromList(dek.bytes));
-        },
-        playbackScratchDirSource: () async => scratchDir,
-      ),
-    );
-    final controller = container.read(controllerProvider);
-    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
-
-    expect(
-      dekSourceCalls,
-      1,
-      reason: 'a wrappedFek row must go through the decrypt-source seam',
-    );
-    expect(controller.state.audioSource.kind, AudioSourceKind.localFile);
-    final resolvedPath = controller.state.audioSource.value!;
-    expect(
-      resolvedPath,
-      isNot(ciphertextFile.path),
-      reason: 'the player must never be pointed at the raw ciphertext',
-    );
-    expect(resolvedPath, startsWith(scratchDir.path));
-    expect(
-      await File(resolvedPath).readAsBytes(),
-      plaintext,
-      reason: 'the resolved file is the real decrypted plaintext',
-    );
+    final row = await db.itemsDao.getById('5', '1');
+    expect(row?.notes, 'Edited note');
+    expect(row?.transcript, 'Machine transcript');
+    expect(patchBody?['notes'], 'Edited note');
+    expect(patchBody?.containsKey('transcript'), isFalse);
   });
 
-  test('#1866 regression: a decrypt failure on a wrappedFek row does NOT '
-      'crash load() and strand the controller at isLoading forever — it '
-      'degrades to a fallback source, like every other resolution failure '
-      'in this function', () async {
-    final tmp = await Directory.systemTemp.createTemp('details_media_read_');
-    addTearDown(() async {
-      if (await tmp.exists()) await tmp.delete(recursive: true);
-    });
-
-    // A row whose wrappedFek does not actually match the DEK the injected
-    // dekSource hands back — decryption will fail (AEAD auth error) exactly
-    // like a tampered/foreign ciphertext or a wrong/rotated DEK would.
-    final dek = Dek.generate();
-    final wrongDek = Dek.generate();
-    final ciphertextFile = File('${tmp.path}/import_bad.enc');
-    final result = await encryptFileToFile(
-      source: File('${tmp.path}/plain.bin')
-        ..writeAsBytesSync(Uint8List.fromList([1, 2, 3, 4])),
-      destination: ciphertextFile,
-      dek: dek,
+  test('sparse retry success preserves existing machine outputs', () async {
+    await insertTestFileItem(
+      db,
+      id: '5',
+      coreId: 5,
+      summary: 'Good summary',
+      transcript: 'Good transcript',
+      processingStatus: 'failed',
     );
-
-    const localId = 'rec_local_details-media-decrypt-fail';
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: localId,
-        title: 'Encrypted capture',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: ciphertextFile.path,
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        processingStatus: const Value('done'),
-        wrappedFek: Value(result.wrappedFek.toBase64()),
+    container.dispose();
+    container = _container(
+      db,
+      awaitResult: _awaiterReturning(
+        const RecordingResult.done(
+          Recording(
+            id: 5,
+            ownerId: '1',
+            title: 'File',
+            status: RecordingStatus.done,
+          ),
+        ),
       ),
     );
+    final controller = _controller(container, '5');
+    await controller.load();
 
-    // No Core endpoints mocked: a local-only row (coreId null) attempts no
-    // remote fallback, so this also proves the catch doesn't accidentally
-    // trigger an unexpected Core call.
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: 'http://localhost:7001',
-        validateStatus: (s) => s != null && s < 500,
-      ),
-    );
-    DioAdapter(dio: dio);
-    final repo = RecordingsRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        recordingsRepositoryProvider.overrideWithValue(repo),
-      ],
-    );
-    addTearDown(container.dispose);
+    await controller.retry();
 
-    final controllerProvider = Provider<DetailsController>(
-      (ref) => DetailsController(
-        ref,
-        localId,
-        awaitResult:
-            ({required recording, required poll, required ref}) async =>
-                const RecordingResult.done(null),
-        mediaDekSource: () async => Dek(Uint8List.fromList(wrongDek.bytes)),
-        playbackScratchDirSource: () async => Directory('${tmp.path}/scratch'),
-      ),
-    );
-    final controller = container.read(controllerProvider);
-    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
-
-    expect(
-      controller.state.isLoading,
-      isFalse,
-      reason: 'load() must settle, not hang, when decrypt throws',
-    );
-    expect(controller.state.notFound, isFalse);
-    expect(
-      controller.state.audioSource.kind,
-      AudioSourceKind.none,
-      reason: 'no usable source — degrades cleanly instead of crashing',
-    );
-    // okt-audit PASS-2 FINDING-1 (secondary): the failed decrypt must not
-    // leave a partial/stray plaintext scratch file behind.
-    final stray = File(
-      '${tmp.path}/scratch/rec_local_details-media-decrypt-fail.playback',
-    );
-    expect(
-      await stray.exists(),
-      isFalse,
-      reason:
-          'a failed decrypt must not leave any scratch file, even an '
-          'empty one',
-    );
+    final row = await db.itemsDao.getById('5', '1');
+    expect(row?.summary, 'Good summary');
+    expect(row?.transcript, 'Good transcript');
+    expect(row?.processingStatus, 'done');
+    expect(row?.processingErrorCode, isNull);
   });
 
-  test('okt-audit PASS-2 FINDING-1: DetailsController.dispose() unlinks the '
-      'decrypted playback scratch file it resolved — no permanent plaintext '
-      'copy survives past the controller/player\'s lifetime', () async {
-    final tmp = await Directory.systemTemp.createTemp('details_dispose_evict_');
-    addTearDown(() async {
-      if (await tmp.exists()) await tmp.delete(recursive: true);
-    });
-
-    final dek = Dek.generate();
-    final plaintext = Uint8List.fromList(List.generate(4096, (i) => i & 0xff));
-    final ciphertextFile = File('${tmp.path}/import_dispose.enc');
-    final result = await encryptFileToFile(
-      source: File('${tmp.path}/plain.bin')..writeAsBytesSync(plaintext),
-      destination: ciphertextFile,
-      dek: dek,
+  test('retry applies non-empty terminal machine outputs', () async {
+    await insertTestFileItem(
+      db,
+      id: '5',
+      coreId: 5,
+      notes: 'User note',
+      summary: 'Old summary',
+      transcript: 'Old transcript',
+      processingStatus: 'failed',
     );
-
-    const localId = 'rec_local_details-dispose-evict';
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: localId,
-        title: 'Encrypted capture',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: ciphertextFile.path,
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        processingStatus: const Value('done'),
-        wrappedFek: Value(result.wrappedFek.toBase64()),
+    container.dispose();
+    container = _container(
+      db,
+      awaitResult: _awaiterReturning(
+        const RecordingResult.done(
+          Recording(
+            id: 5,
+            ownerId: '1',
+            title: 'File',
+            status: RecordingStatus.done,
+            summary: 'Fresh summary',
+            transcript: 'Fresh transcript',
+          ),
+        ),
       ),
     );
+    final controller = _controller(container, '5');
+    await controller.load();
 
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: 'http://localhost:7001',
-        validateStatus: (s) => s != null && s < 500,
-      ),
-    );
-    DioAdapter(dio: dio);
-    final repo = RecordingsRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        recordingsRepositoryProvider.overrideWithValue(repo),
-      ],
-    );
-    addTearDown(container.dispose);
+    await controller.retry();
 
-    final scratchDir = Directory('${tmp.path}/scratch');
-    final controllerProvider = Provider<DetailsController>(
-      (ref) => DetailsController(
-        ref,
-        localId,
-        awaitResult:
-            ({required recording, required poll, required ref}) async =>
-                const RecordingResult.done(null),
-        mediaDekSource: () async => Dek(Uint8List.fromList(dek.bytes)),
-        playbackScratchDirSource: () async => scratchDir,
-      ),
-    );
-    final controller = container.read(controllerProvider);
-    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
-
-    final resolvedPath = controller.state.audioSource.value!;
-    final scratchFile = File(resolvedPath);
-    expect(
-      await scratchFile.exists(),
-      isTrue,
-      reason:
-          'sanity: the decrypted scratch file exists while the '
-          'controller/player is alive',
-    );
-
-    controller.dispose();
-
-    expect(
-      await scratchFile.exists(),
-      isFalse,
-      reason:
-          'dispose() must unlink the decrypted scratch file — no '
-          'permanent plaintext copy (okt-audit PASS-2 FINDING-1)',
-    );
+    final row = await db.itemsDao.getById('5', '1');
+    expect(row?.summary, 'Fresh summary');
+    expect(row?.transcript, 'Fresh transcript');
+    expect(row?.notes, 'User note');
+    expect(row?.processingStatus, 'done');
   });
 
-  test('okt-audit PASS-2 FINDING-1: delete() also unlinks the decrypted '
-      'playback scratch file for the recording being deleted', () async {
-    final tmp = await Directory.systemTemp.createTemp('details_delete_evict_');
-    addTearDown(() async {
-      if (await tmp.exists()) await tmp.delete(recursive: true);
-    });
+  test('retry timeout preserves notes and stores the bounded code', () async {
+    await insertTestFileItem(
+      db,
+      id: '5',
+      coreId: 5,
+      notes: 'User note',
+      processingStatus: 'failed',
+    );
+    container.dispose();
+    container = _container(
+      db,
+      awaitResult: _awaiterReturning(const RecordingResult.failed('timeout')),
+    );
+    final controller = _controller(container, '5');
+    await controller.load();
 
-    final dek = Dek.generate();
-    final plaintext = Uint8List.fromList(List.generate(512, (i) => i & 0xff));
-    final ciphertextFile = File('${tmp.path}/import_delete.enc');
-    final result = await encryptFileToFile(
-      source: File('${tmp.path}/plain.bin')..writeAsBytesSync(plaintext),
-      destination: ciphertextFile,
-      dek: dek,
-    );
+    await controller.retry();
 
-    const localId = 'rec_local_details-delete-evict';
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion.insert(
-        id: localId,
-        title: 'Encrypted capture',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: ciphertextFile.path,
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        processingStatus: const Value('done'),
-        wrappedFek: Value(result.wrappedFek.toBase64()),
-      ),
-    );
+    final row = await db.itemsDao.getById('5', '1');
+    expect(row?.notes, 'User note');
+    expect(row?.processingStatus, 'failed');
+    expect(row?.processingErrorCode, kProcessingErrorTimeout);
+  });
 
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: 'http://localhost:7001',
-        validateStatus: (s) => s != null && s < 500,
-      ),
-    );
-    DioAdapter(dio: dio);
-    final repo = RecordingsRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        recordingsRepositoryProvider.overrideWithValue(repo),
-      ],
-    );
-    addTearDown(container.dispose);
-
-    final scratchDir = Directory('${tmp.path}/scratch');
-    final controllerProvider = Provider<DetailsController>(
-      (ref) => DetailsController(
-        ref,
-        localId,
-        awaitResult:
-            ({required recording, required poll, required ref}) async =>
-                const RecordingResult.done(null),
-        mediaDekSource: () async => Dek(Uint8List.fromList(dek.bytes)),
-        playbackScratchDirSource: () async => scratchDir,
-      ),
-    );
-    final controller = container.read(controllerProvider);
-    for (var i = 0; i < 20 && controller.state.isLoading; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
-
-    final scratchFile = File(controller.state.audioSource.value!);
-    expect(await scratchFile.exists(), isTrue);
+  test('delete removes the payload row and durable media', () async {
+    final dir = await Directory.systemTemp.createTemp('details_delete_');
+    addTearDown(() => dir.delete(recursive: true));
+    final media = File('${dir.path}/capture.m4a')..writeAsBytesSync([1]);
+    await insertTestFileItem(db, id: '5', coreId: 5, localPath: media.path);
+    final controller = _controller(container, '5');
+    await controller.load();
 
     await controller.delete();
 
-    expect(
-      await scratchFile.exists(),
-      isFalse,
-      reason:
-          'deleting the recording must not leave its decrypted '
-          'scratch copy behind',
+    expect(media.existsSync(), isFalse);
+    expect(await db.itemsDao.getById('5', '1'), isNull);
+  });
+
+  test('a different owner cannot load the Item by id', () async {
+    await insertTestFileItem(db, id: '5', ownerId: '2');
+    final controller = _controller(container, '5');
+    await controller.load();
+    expect(controller.state.notFound, isTrue);
+  });
+
+  test('encrypted Item resolves plaintext and evicts it on dispose', () async {
+    final dir = await Directory.systemTemp.createTemp('details_encrypted_');
+    addTearDown(() => dir.delete(recursive: true));
+    final dek = Dek.generate();
+    final plaintext = Uint8List.fromList(List.generate(512, (i) => i & 0xff));
+    final encrypted = File('${dir.path}/capture.enc');
+    final encryptedResult = await encryptFileToFile(
+      source: File('${dir.path}/capture.raw')..writeAsBytesSync(plaintext),
+      destination: encrypted,
+      dek: dek,
     );
+    await insertTestFileItem(
+      db,
+      id: 'encrypted',
+      localPath: encrypted.path,
+      wrappedFek: encryptedResult.wrappedFek.toBase64(),
+    );
+
+    final scratch = Directory('${dir.path}/scratch');
+    container.dispose();
+    container = _container(
+      db,
+      mediaDekSource: () async => Dek(Uint8List.fromList(dek.bytes)),
+      playbackScratchDirSource: () async => scratch,
+    );
+    final subscription = container.listen(
+      detailsControllerProvider('encrypted'),
+      (_, _) {},
+    );
+    final controller = container.read(
+      detailsControllerProvider('encrypted').notifier,
+    );
+    await controller.load();
+
+    final resolved = File(controller.state.audioSource.value!);
+    expect(resolved.path, isNot(encrypted.path));
+    expect(resolved.readAsBytesSync(), plaintext);
+
+    subscription.close();
+    await Future<void>.delayed(Duration.zero);
+    expect(resolved.existsSync(), isFalse);
+  });
+
+  test('encrypted Item decrypt failure settles with no scratch file', () async {
+    final dir = await Directory.systemTemp.createTemp('details_bad_key_');
+    addTearDown(() => dir.delete(recursive: true));
+    final dek = Dek.generate();
+    final encrypted = File('${dir.path}/capture.enc');
+    final encryptedResult = await encryptFileToFile(
+      source: File('${dir.path}/capture.raw')..writeAsBytesSync([1, 2, 3]),
+      destination: encrypted,
+      dek: dek,
+    );
+    await insertTestFileItem(
+      db,
+      id: 'bad-key',
+      localPath: encrypted.path,
+      wrappedFek: encryptedResult.wrappedFek.toBase64(),
+    );
+
+    final scratch = Directory('${dir.path}/scratch');
+    final wrongDek = Dek.generate();
+    container.dispose();
+    container = _container(
+      db,
+      mediaDekSource: () async => Dek(Uint8List.fromList(wrongDek.bytes)),
+      playbackScratchDirSource: () async => scratch,
+    );
+    final controller = _controller(container, 'bad-key');
+    await controller.load();
+
+    expect(controller.state.isLoading, isFalse);
+    expect(controller.state.notFound, isFalse);
+    expect(controller.state.audioSource.kind, AudioSourceKind.none);
+    expect(File('${scratch.path}/bad-key.playback').existsSync(), isFalse);
+  });
+
+  test('delete evicts encrypted playback scratch and payload', () async {
+    final dir = await Directory.systemTemp.createTemp('details_delete_enc_');
+    addTearDown(() => dir.delete(recursive: true));
+    final dek = Dek.generate();
+    final encrypted = File('${dir.path}/capture.enc');
+    final encryptedResult = await encryptFileToFile(
+      source: File('${dir.path}/capture.raw')..writeAsBytesSync([1, 2, 3]),
+      destination: encrypted,
+      dek: dek,
+    );
+    await insertTestFileItem(
+      db,
+      id: 'delete-encrypted',
+      localPath: encrypted.path,
+      wrappedFek: encryptedResult.wrappedFek.toBase64(),
+    );
+
+    final scratch = Directory('${dir.path}/scratch');
+    container.dispose();
+    container = _container(
+      db,
+      mediaDekSource: () async => Dek(Uint8List.fromList(dek.bytes)),
+      playbackScratchDirSource: () async => scratch,
+    );
+    final controller = _controller(container, 'delete-encrypted');
+    await controller.load();
+    final resolved = File(controller.state.audioSource.value!);
+    expect(resolved.existsSync(), isTrue);
+
+    await controller.delete();
+
+    expect(resolved.existsSync(), isFalse);
+    expect(encrypted.existsSync(), isFalse);
+    expect(await db.itemsDao.getById('delete-encrypted', '1'), isNull);
   });
 }

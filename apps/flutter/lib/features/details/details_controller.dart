@@ -4,7 +4,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
-import '../../core/db/daos/recordings_dao.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
 import '../../core/crypto/key_material.dart' show Dek;
 import '../../core/crypto/media_playback_resolver.dart'
@@ -55,7 +55,7 @@ class DetailsState {
   });
 
   final String id;
-  final RecordingRow? row;
+  final ItemWithPayload? row;
   final AudioSource audioSource;
   final bool isLoading;
   final bool notFound;
@@ -82,7 +82,7 @@ class DetailsState {
   /// Whether the audio player has something to play.
   bool get hasAudio => audioSource.kind != AudioSourceKind.none;
 
-  String get badge => row?.badge ?? 'Inbox';
+  String get badge => row?.workspaceId == null ? 'Inbox' : 'Space';
 
   /// Core numeric id for this recording, or null when the row is local-only and
   /// has not yet been reconciled with Core (plan #43, W3).
@@ -98,7 +98,7 @@ class DetailsState {
   int? get coreId => row?.coreId ?? int.tryParse(id);
 
   DetailsState copyWith({
-    RecordingRow? row,
+    ItemWithPayload? row,
     AudioSource? audioSource,
     bool? isLoading,
     bool? notFound,
@@ -176,15 +176,23 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// mounted, so controller disposal is this app's "player stopped" boundary.
   String? _resolvedScratchPath;
 
-  RecordingsDao get _dao => _ref.read(recordingsDaoProvider);
+  ItemsDao get _dao => _ref.read(itemsDaoProvider);
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
   RecordingsRepository get _repo => _ref.read(recordingsRepositoryProvider);
+  String? get _ownerId => _ref.read(currentOwnerIdProvider);
 
   /// Loads the recording. Drift `getRecordingById` is the primary source; on a
   /// miss we fetch from Core, reconcile into Drift (S1 conventions) and re-read.
   Future<void> load() async {
     state = state.copyWith(isLoading: true, notFound: false);
-    var row = await _dao.getRecordingById(state.id);
+    final id = state.id;
+    final ownerId = _ownerId;
+    if (ownerId == null) {
+      state = state.copyWith(isLoading: false, notFound: true);
+      return;
+    }
+    var row = await _dao.getById(id, ownerId);
+    if (!mounted) return;
 
     if (row == null) {
       final coreId = state.coreId;
@@ -194,20 +202,27 @@ class DetailsController extends StateNotifier<DetailsState> {
           if (remote != null) {
             // m007 (.docs/internal/architecture.md §11 (D3)): a Core-fetched recording must also be an Item of
             // a Matome — mint one in the same transaction if absent.
-            await _dao.upsertRecordingWithMatome(recordingToCompanion(remote));
-            row = await _dao.getRecordingById(state.id);
+            final companions = recordingToItemCompanions(remote);
+            await _dao.upsertFileItem(
+              item: companions.item,
+              file: companions.file,
+              ensureMatome: true,
+            );
+            row = await _dao.getById(id, ownerId);
           }
         } catch (e, st) {
+          if (!mounted) return;
           // Offline / auth error — fall through to not-found below.
           AppLog.error(
             LogCat.sync,
-            'details load Core fetch failed id=${state.id}',
+            'details load Core fetch failed id=$id',
             e,
             st,
           );
         }
       }
     }
+    if (!mounted) return;
 
     if (row == null) {
       state = state.copyWith(isLoading: false, notFound: true);
@@ -215,6 +230,7 @@ class DetailsController extends StateNotifier<DetailsState> {
     }
 
     final source = await _resolveAudioSource(row);
+    if (!mounted) return;
     final pending = isUploadQueuePendingStatus(row.processingStatus);
     state = state.copyWith(
       row: row,
@@ -222,7 +238,7 @@ class DetailsController extends StateNotifier<DetailsState> {
       isLoading: false,
       // A pending-upload row is held locally, not transcribing — keep the
       // spinner off so the UI reads as safe rather than "in progress".
-      isProcessing: !pending && row.isProcessing == 1,
+      isProcessing: !pending && row.isProcessing,
       processingFailed: row.processingStatus == 'failed',
       pendingUpload: pending,
     );
@@ -247,9 +263,9 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// fallback source instead of throwing, and `load()` has no catch around
   /// this call, so an uncaught exception here would strand the controller at
   /// `isLoading: true` forever with no recovery signal.
-  Future<AudioSource> _resolveAudioSource(RecordingRow row) async {
-    final path = row.audioFilePath;
-    if (path.isNotEmpty && _isLocalPath(path) && File(path).existsSync()) {
+  Future<AudioSource> _resolveAudioSource(ItemWithPayload row) async {
+    final path = row.localPath;
+    if (path != null && _isLocalPath(path) && File(path).existsSync()) {
       final wrappedFek = row.wrappedFek;
       if (wrappedFek == null) {
         return AudioSource(AudioSourceKind.localFile, path);
@@ -338,15 +354,17 @@ class DetailsController extends StateNotifier<DetailsState> {
     AppLog.event(LogCat.action, 'save recording=${state.id}');
     // Drift is the source of truth for display — write it first so the UI
     // reflects the save even if Core is unreachable.
-    await _dao.updateRecording(
+    final ownerId = _requireOwner();
+    await _dao.updateItem(
       state.id,
-      RecordingsCompanion(notes: Value(text)),
+      ownerId,
+      ItemsCompanion(notes: Value(text), isDirty: const Value(true)),
     );
     final coreId = state.coreId;
     if (coreId != null) {
       await _repo.updateRecording(coreId, notes: text);
     }
-    final row = await _dao.getRecordingById(state.id);
+    final row = await _dao.getById(state.id, ownerId);
     if (row != null) state = state.copyWith(row: row);
   }
 
@@ -368,11 +386,11 @@ class DetailsController extends StateNotifier<DetailsState> {
       return;
     }
 
-    await _dao.updateRecording(
+    await _dao.updateItem(
       state.id,
-      const RecordingsCompanion(
-        isProcessing: Value(1),
-        processingStatus: Value('processing'),
+      _requireOwner(),
+      const ItemsCompanion(
+        processingState: Value('processing'),
         processingErrorCode: Value(null),
       ),
     );
@@ -442,19 +460,30 @@ class DetailsController extends StateNotifier<DetailsState> {
     //
     // WRITE-AUTHORITY (#1435): the machine transcript lands in the `transcript`
     // column; the user `notes` column is never touched on a terminal apply.
-    await _dao.updateRecording(
+    final ownerId = _requireOwner();
+    final current = await _dao.getById(state.id, ownerId);
+    if (current == null) return;
+    await _dao.updateItem(
       state.id,
-      RecordingsCompanion(
-        isProcessing: const Value(0),
-        processingStatus: Value(failed ? 'failed' : 'done'),
-        summary: failed ? const Value.absent() : mergeText(summary),
-        transcript: failed ? const Value.absent() : mergeText(transcript),
+      ownerId,
+      ItemsCompanion(
+        processingState: Value(failed ? 'failed' : 'succeeded'),
+        processingOutputs: failed
+            ? const Value.absent()
+            : Value(
+                mergeProcessingOutputs(
+                  current.item.processingOutputs,
+                  summary: summary,
+                  transcript: transcript,
+                ),
+              ),
         processingErrorCode: Value(
           failed ? normalizeProcessingErrorCode(errorCode) : null,
         ),
+        syncState: const Value('synced'),
       ),
     );
-    final row = await _dao.getRecordingById(state.id);
+    final row = await _dao.getById(state.id, ownerId);
     // Guard against a state emit after the autoDispose provider tore down (e.g.
     // the user navigated away mid-retry).
     if (!mounted) return;
@@ -482,7 +511,7 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// object key is skipped — there is no local file to remove.
   Future<void> delete() async {
     AppLog.event(LogCat.action, 'delete recording=${state.id}');
-    final path = state.row?.audioFilePath ?? '';
+    final path = state.row?.localPath ?? '';
     if (path.isNotEmpty && (path.startsWith('/') || path.startsWith('file:'))) {
       // Reuse the queue's best-effort path delete (never throws).
       await deleteAudioFile(path);
@@ -494,7 +523,7 @@ class DetailsController extends StateNotifier<DetailsState> {
       recordingId: state.id,
       scratchDirSource: _playbackScratchDirSource,
     );
-    await _dao.deleteRecording(state.id);
+    await _dao.deleteWithPayload(state.id, _requireOwner());
     final coreId = state.coreId;
     if (coreId != null) {
       try {
@@ -516,12 +545,25 @@ class DetailsController extends StateNotifier<DetailsState> {
       LogCat.action,
       'moveToSpace recording=${state.id} space=$workspaceId',
     );
-    await _dao.updateRecording(
+    final ownerId = _requireOwner();
+    await _dao.updateItem(
       state.id,
-      RecordingsCompanion(workspaceId: Value(workspaceId)),
+      ownerId,
+      ItemsCompanion(
+        workspaceId: Value(workspaceId),
+        isDirty: const Value(true),
+      ),
     );
-    final row = await _dao.getRecordingById(state.id);
+    final row = await _dao.getById(state.id, ownerId);
     if (row != null) state = state.copyWith(row: row);
+  }
+
+  String _requireOwner() {
+    final ownerId = _ownerId;
+    if (ownerId == null || ownerId.isEmpty) {
+      throw StateError('An authenticated owner is required');
+    }
+    return ownerId;
   }
 }
 

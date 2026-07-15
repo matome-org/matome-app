@@ -10,6 +10,8 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 /// #1444 + #1475 — the destructive affordance is STANDARDIZED across both Item
 /// kinds: audio AND image tiles expose Delete through the SAME affordance, never
 /// a bare trash icon on one and a menu on the other.
@@ -47,48 +49,37 @@ void main() {
       ),
     );
     // One audio Item.
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: const Value('rec_audio'),
-        matomeId: const Value('m_ov'),
-        title: const Value('Audio note'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value('0:30'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value(''),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-        mediaType: const Value('audio'),
-        processingStatus: const Value('done'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_audio',
+      matomeId: 'm_ov',
+      title: 'Audio note',
+      durationSeconds: 30,
+      localPath: '',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      mediaType: 'audio',
     );
     // One image Item (empty path → removeItem skips file I/O, stays fake-async).
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: const Value('rec_image'),
-        matomeId: const Value('m_ov'),
-        title: const Value('whiteboard'),
-        timestamp: const Value('9:05 AM'),
-        duration: const Value(''),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value(''),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + 1),
-        mediaType: const Value('image'),
-        processingStatus: const Value('done'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_image',
+      matomeId: 'm_ov',
+      title: 'whiteboard',
+      localPath: '',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 1,
+      mediaType: 'image',
     );
   }
 
   Widget app(ProviderContainer c) => UncontrolledProviderScope(
-        container: c,
-        child: TranslationProvider(
-          child: MaterialApp(
-            theme: buildLightTheme(),
-            home: const MatomeDetailScreen(id: 'm_ov'),
-          ),
-        ),
-      );
+    container: c,
+    child: TranslationProvider(
+      child: MaterialApp(
+        theme: buildLightTheme(),
+        home: const MatomeDetailScreen(id: 'm_ov'),
+      ),
+    ),
+  );
 
   testWidgets(
     'no inline "…" on the row; long-press surfaces the SAME actions sheet on '
@@ -96,7 +87,10 @@ void main() {
     (tester) async {
       await seed();
       final c = ProviderContainer(
-        overrides: [appDatabaseProvider.overrideWithValue(db)],
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
       );
       addTearDown(c.dispose);
 
@@ -123,7 +117,9 @@ void main() {
       );
 
       // Long-press the audio row → the standardized actions sheet appears.
-      await tester.longPress(find.byKey(const ValueKey('matome-item-rec_audio')));
+      await tester.longPress(
+        find.byKey(const ValueKey('matome-item-rec_audio')),
+      );
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('matome-item-overflow-rec_audio')),
@@ -137,7 +133,9 @@ void main() {
       // Dismiss and repeat for the image row → same affordance.
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
-      await tester.longPress(find.byKey(const ValueKey('matome-item-rec_image')));
+      await tester.longPress(
+        find.byKey(const ValueKey('matome-item-rec_image')),
+      );
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('matome-item-overflow-rec_image')),
@@ -150,11 +148,15 @@ void main() {
     },
   );
 
-  testWidgets('image tile: long-press → Delete → confirm removes the Item',
-      (tester) async {
+  testWidgets('image tile: long-press → Delete → confirm removes the Item', (
+    tester,
+  ) async {
     await seed();
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
 
@@ -165,24 +167,30 @@ void main() {
     await tester.longPress(find.byKey(const ValueKey('matome-item-rec_image')));
     await tester.pumpAndSettle();
     // The destructive entry lives inside the long-press actions sheet.
-    await tester.tap(find.byKey(const ValueKey('matome-item-delete-rec_image')));
+    await tester.tap(
+      find.byKey(const ValueKey('matome-item-delete-rec_image')),
+    );
     await tester.pumpAndSettle();
     // It raises the confirm dialog; confirm to delete.
     expect(find.text(t.matome.removeItemTitle), findsOneWidget);
     await tester.tap(find.text(t.matome.remove));
     await tester.pumpAndSettle();
 
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_ov');
+    final matome = await db.matomesDao.getMatomeWithItems('m_ov', '1');
     final ids = matome!.recordings.map((r) => r.id).toList();
     expect(ids, isNot(contains('rec_image')));
     expect(ids, contains('rec_audio'));
   });
 
-  testWidgets('audio tile: long-press → Delete → confirm removes the Item',
-      (tester) async {
+  testWidgets('audio tile: long-press → Delete → confirm removes the Item', (
+    tester,
+  ) async {
     await seed();
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
 
@@ -192,13 +200,15 @@ void main() {
 
     await tester.longPress(find.byKey(const ValueKey('matome-item-rec_audio')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('matome-item-delete-rec_audio')));
+    await tester.tap(
+      find.byKey(const ValueKey('matome-item-delete-rec_audio')),
+    );
     await tester.pumpAndSettle();
     expect(find.text(t.matome.removeItemTitle), findsOneWidget);
     await tester.tap(find.text(t.matome.remove));
     await tester.pumpAndSettle();
 
-    final matome = await db.matomesDao.getMatomeWithRecordings('m_ov');
+    final matome = await db.matomesDao.getMatomeWithItems('m_ov', '1');
     final ids = matome!.recordings.map((r) => r.id).toList();
     expect(ids, isNot(contains('rec_audio')));
     expect(ids, contains('rec_image'));

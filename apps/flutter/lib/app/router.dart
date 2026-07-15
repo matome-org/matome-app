@@ -50,9 +50,11 @@ class _AuthListenable extends ChangeNotifier {
 /// the legacy single-recording view rather than dead-ending.
 Future<String?> _redirectRecordingToMatome(Ref ref, String? recordingId) async {
   if (recordingId == null) return null;
+  final ownerId = ref.read(currentOwnerIdProvider);
+  if (ownerId == null) return null;
   final matomeId = await ref
       .read(matomesDaoProvider)
-      .matomeIdForRecording(recordingId);
+      .matomeIdForItem(recordingId, ownerId);
   if (matomeId == null) return null;
   return '/matome/$matomeId';
 }
@@ -214,7 +216,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/items/text/:id',
         parentNavigatorKey: _rootKey,
         builder: (context, state) =>
-            TextItemPage(id: int.parse(state.pathParameters['id']!)),
+            TextItemPage(id: state.pathParameters['id']!),
       ),
       // Desktop meeting recorder (loopback + mic, MVP Linux). Same fullscreen
       // modal as /recording, bound to the meeting (ffmpeg loopback) recorder.

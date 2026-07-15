@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/db/app_database.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
@@ -18,19 +18,21 @@ const double _kContactDetailMaxWidth = 920;
 
 /// Loads the full [ContactDetailData] for [contactId] from the local store: the
 /// contact row + its `matome_contacts` roles + `space_contacts` memberships +
-/// its files. Files come from the DIRECT file↔contact edge (`recording_contacts`,
+/// its files. Files come from the DIRECT file↔contact edge (`item_contacts`,
 /// #1472) UNIONed with the matome-mediated set (de-duplicated by id — DR-003);
 /// the direct edge is the source of truth. Returns null when the contact does
 /// not exist.
 final contactDetailProvider = FutureProvider.family<ContactDetailData?, String>(
   (ref, contactId) async {
     final dao = ref.watch(contactsDaoProvider);
+    final ownerId = ref.watch(currentOwnerIdProvider);
+    if (ownerId == null) return null;
     final row = await dao.getById(contactId);
-    if (row == null) return null;
+    if (row == null || row.ownerId != ownerId) return null;
 
     final matomeEntries = await dao.listMatomesForContact(contactId);
     final spaces = await dao.listSpacesForContact(contactId);
-    final files = await dao.listFilesForContactUnion(contactId);
+    final files = await dao.listFilesForContactUnion(contactId, ownerId);
 
     // The contact's index in the owner directory drives the avatar tint so it
     // matches the list tile's colour; fall back to a hash when not found.
@@ -72,7 +74,7 @@ final contactDetailProvider = FutureProvider.family<ContactDetailData?, String>(
   },
 );
 
-ContactFileKind _fileKind(RecordingRow row) {
+ContactFileKind _fileKind(ItemWithPayload row) {
   switch (row.mediaType) {
     case 'image':
       return ContactFileKind.image;
@@ -96,12 +98,12 @@ class ContactDetailScreen extends ConsumerWidget {
 
   Future<void> _openMatomeFile(BuildContext context, String fileId) async {
     // A file is a recording linked to the contact (directly via
-    // `recording_contacts`, or via its matome). Route by its media type so a
+    // `item_contacts`, or via its matome). Route by its media type so a
     // document/image never hits the audio-only detail host.
     final container = ProviderScope.containerOf(context, listen: false);
-    final row = await container
-        .read(recordingsDaoProvider)
-        .getRecordingById(fileId);
+    final ownerId = container.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final row = await container.read(itemsDaoProvider).getById(fileId, ownerId);
     if (!context.mounted) return;
     final mediaType = row?.mediaType ?? 'audio';
     final path = switch (mediaType) {

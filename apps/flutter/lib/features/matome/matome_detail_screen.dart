@@ -1720,11 +1720,7 @@ class _RecordingTile extends ConsumerWidget {
       AppLog.event(LogCat.action, 'removeItem: confirmed ${item.id}');
       await container
           .read(matomeDetailControllerProvider(matomeId).notifier)
-          .removeItem(
-            item.id,
-            filePath: item.filePath,
-            itemType: item.itemType,
-          );
+          .removeItem(item.id, filePath: item.filePath);
       AppLog.event(LogCat.action, 'removeItem: done ${item.id}');
     } catch (e, st) {
       AppLog.error(LogCat.action, 'removeItem failed ${item.id}', e, st);

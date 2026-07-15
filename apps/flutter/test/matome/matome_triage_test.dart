@@ -37,6 +37,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
         if (stubDurableCopy)
           // path_provider has no platform channel under flutter test, so the
           // photo import injects a no-op durable copy that returns the file
@@ -61,8 +62,9 @@ void main() {
       'the inbox list', () async {
     await seedInboxMatome('m1');
     final c = container();
-    final personal =
-        await c.read(spacesDaoProvider).ensureDefaultPersonalSpace();
+    final personal = await c
+        .read(spacesDaoProvider)
+        .ensureDefaultPersonalSpace();
     final space = await c.read(workspacesDaoProvider).createWorkspace('Work');
 
     // Sanity: starts in the inbox.
@@ -144,7 +146,7 @@ void main() {
 
     await controller.addPhoto(file: tmp, name: 'whiteboard.png');
 
-    final matome = await db.matomesDao.getMatomeWithRecordings('m4');
+    final matome = await db.matomesDao.getMatomeWithItems('m4', '1');
     expect(matome!.recordings, hasLength(1));
     final item = matome.recordings.single;
     expect(item.mediaType, 'image');
@@ -160,7 +162,7 @@ void main() {
     );
 
     // The photo Item is an Item of THIS matome.
-    final row = await db.recordingsDao.getRecordingById(item.id);
+    final row = await db.itemsDao.getById(item.id, '1');
     expect(row!.matomeId, 'm4');
 
     // Triage state untouched — still an Inbox Matome.
@@ -190,14 +192,16 @@ void main() {
     });
     await controller.addPhoto(file: tmp, name: 'whiteboard.png');
 
-    final item =
-        (await db.matomesDao.getMatomeWithRecordings('m5'))!.recordings.single;
+    final item = (await db.matomesDao.getMatomeWithItems(
+      'm5',
+      '1',
+    ))!.recordings.single;
     expect(tmp.existsSync(), isTrue);
 
     await controller.removeItem(item.id, filePath: tmp.path);
 
     // Row gone, on-device file deleted, summary marked stale, hub refreshed.
-    expect(await db.recordingsDao.getRecordingById(item.id), isNull);
+    expect(await db.itemsDao.getById(item.id, '1'), isNull);
     expect(tmp.existsSync(), isFalse);
     expect((await db.matomesDao.getById('m5'))!.summaryStale, isTrue);
     expect(controller.state.matome?.recordings, isEmpty);

@@ -8,7 +8,6 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/contacts/contact_detail_screen.dart';
-import 'package:matome_flutter/features/contacts/contacts_controller.dart';
 import 'package:matome_flutter/features/contacts/contacts_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
@@ -36,7 +35,10 @@ Widget _app(AppDatabase db) {
   );
 
   return ProviderScope(
-    overrides: [appDatabaseProvider.overrideWithValue(db)],
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue('1'),
+    ],
     child: TranslationProvider(
       child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
@@ -85,8 +87,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Alan Turing'), findsOneWidget);
-    final rows =
-        await db.contactsDao.listContactsForOwner(kPlaceholderContactOwnerId);
+    final rows = await db.contactsDao.listContactsForOwner('1');
     expect(rows.single.displayName, 'Alan Turing');
   });
 
@@ -103,10 +104,7 @@ void main() {
 
     // The detail screen hosts the contact name + the ⋯ actions affordance
     // (Edit lives inside that menu now — no separate Edit button).
-    expect(
-      find.byKey(const ValueKey('contact-detail-name')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('contact-detail-name')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('contact-detail-actions')),
       findsOneWidget,
@@ -177,7 +175,7 @@ ContactsCompanion _contactCompanion({
 }) {
   return ContactsCompanion.insert(
     id: id,
-    ownerId: kPlaceholderContactOwnerId,
+    ownerId: '1',
     displayName: name,
     createdAt: DateTime(2026, 6, 19).millisecondsSinceEpoch,
   );

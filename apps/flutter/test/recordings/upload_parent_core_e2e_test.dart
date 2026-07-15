@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,11 +10,12 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
+
+import '../support/item_fixtures.dart';
 
 void main() {
   test(
@@ -40,17 +40,15 @@ void main() {
           );
       final media = File('${temp.path}/capture.m4a');
       await media.writeAsBytes(const [1, 3, 3, 7]);
-      await db.recordingsDao.insertRecording(
-        RecordingsCompanion.insert(
-          id: 'rec_local_e2e',
-          title: 'Capture',
-          timestamp: 'now',
-          duration: '2s',
-          audioFilePath: media.path,
-          createdAt: 1,
-          matomeId: const Value('mat_local_inbox'),
-          processingStatus: const Value('pending_upload'),
-        ),
+      await insertTestFileItem(
+        db,
+        id: 'rec_local_e2e',
+        title: 'Capture',
+        durationSeconds: 2,
+        localPath: media.path,
+        createdAt: 1,
+        matomeId: 'mat_local_inbox',
+        processingStatus: 'pending_upload',
       );
 
       final tokens = InMemoryTokenStore();
@@ -73,7 +71,7 @@ void main() {
       await container.read(uploadQueueProvider).drain();
 
       final parent = await db.matomesDao.getById('mat_local_inbox');
-      final child = await db.recordingsDao.getRecordingById('rec_local_e2e');
+      final child = await db.itemsDao.getById('rec_local_e2e', '1');
       expect(parent!.coreId, 11);
       expect(child!.coreId, 42);
       expect(child.processingStatus, 'done');

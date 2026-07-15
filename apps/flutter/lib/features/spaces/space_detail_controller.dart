@@ -39,7 +39,10 @@ class SpaceDetailController
     final matomesDao = _ref.read(matomesDaoProvider);
 
     final workspace = await workspacesDao.getWorkspaceById(spaceId);
-    final items = await matomesDao.listMatomeItemsInSpace(spaceId);
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    final items = ownerId == null
+        ? const <MatomeItem>[]
+        : await matomesDao.listMatomeItemsInSpace(spaceId, ownerId);
     return SpaceDetailState(
       name: workspace?.name,
       items: items,

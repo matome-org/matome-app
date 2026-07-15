@@ -143,7 +143,9 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     }
     // A file is a recording; route by its media type so a document/image never
     // hits the audio-only detail host (mirrors the contacts host, #1464).
-    final row = await ref.read(recordingsDaoProvider).getRecordingById(fileId);
+    final ownerId = ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final row = await ref.read(itemsDaoProvider).getById(fileId, ownerId);
     if (!mounted) return;
     final mediaType = row?.mediaType ?? 'audio';
     final path = switch (mediaType) {
@@ -176,9 +178,11 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         // Permanent hard-delete — the widget already gated it behind a confirm
         // and shows the in-widget Undo affordance. After deleting we re-read the
         // owner-scoped provider so the rows drop out (mirrors the matome table).
-        final dao = ref.read(recordingsDaoProvider);
+        final ownerId = ref.read(currentOwnerIdProvider);
+        if (ownerId == null) return;
+        final dao = ref.read(itemsDaoProvider);
         for (final id in ids) {
-          await dao.deleteRecording(id);
+          await dao.deleteWithPayload(id, ownerId);
         }
         ref.invalidate(filesForCurrentOwnerProvider);
         if (!mounted) return;
@@ -202,7 +206,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final ownerId = ref.read(currentOwnerIdProvider);
     if (ownerId == null) return;
-    final dao = ref.read(recordingsDaoProvider);
+    final dao = ref.read(itemsDaoProvider);
 
     final targets = await ref.read(matomeTargetsForCurrentOwnerProvider.future);
     if (!mounted) return;
@@ -220,12 +224,8 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
     if (picked == null || !mounted) return;
 
     // Stash the prior filing BEFORE the write so Undo can restore it.
-    final prior = await dao.matomeIdsForOwnedRecordings(ids, ownerId);
-    final moved = await dao.moveRecordingsToMatome(
-      ids,
-      picked.matomeId,
-      ownerId,
-    );
+    final prior = await dao.matomeIdsForOwnedItems(ids, ownerId);
+    final moved = await dao.moveItemsToMatome(ids, picked.matomeId, ownerId);
     ref.invalidate(filesForCurrentOwnerProvider);
     ref.invalidate(matomeTargetsForCurrentOwnerProvider);
     if (!mounted) return;
@@ -237,7 +237,7 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         action: SnackBarAction(
           label: t.files.undo,
           onPressed: () async {
-            await dao.restoreRecordingMatomes(prior, ownerId);
+            await dao.restoreItemMatomes(prior, ownerId);
             ref.invalidate(filesForCurrentOwnerProvider);
             ref.invalidate(matomeTargetsForCurrentOwnerProvider);
           },
@@ -481,7 +481,7 @@ class _FilesPaneDetail extends ConsumerWidget {
           data: FileViewData(
             title: state.title.isEmpty ? t.recording.title : state.title,
             mediaKind: mediaKind,
-            place: row.badge,
+            place: state.badge,
             syncCoreId: state.coreId,
             processingStatus: row.processingStatus,
             // The machine-owned Contents (audio → transcript, doc → stub

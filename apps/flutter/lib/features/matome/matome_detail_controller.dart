@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value, Variable;
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../app/auth_state.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart';
+import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
-import '../../core/db/daos/recordings_dao.dart';
 import '../../core/db/daos/spaces_dao.dart';
 import '../../core/db/file_row.dart';
 import '../../core/db/matome_card.dart';
@@ -97,22 +96,26 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
 
   MatomesDao get _dao => _ref.read(matomesDaoProvider);
   SpacesDao get _spacesDao => _ref.read(spacesDaoProvider);
-  RecordingsDao get _recordingsDao => _ref.read(recordingsDaoProvider);
+  ItemsDao get _itemsDao => _ref.read(itemsDaoProvider);
   ContactsDao get _contactsDao => _ref.read(contactsDaoProvider);
-  AppDatabase get _db => _ref.read(appDatabaseProvider);
   MatomesRepository get _matomesRepo => _ref.read(matomesRepositoryProvider);
 
-  /// The current owner id used to scope the directory picker — `user_<coreId>`
-  /// for a signed-in user, otherwise the single-user placeholder. Mirrors
+  /// The current owner id used to scope the directory picker. Mirrors
   /// [ContactsController.ownerId] so the picker lists the same directory.
-  String get _ownerId {
-    final user = _ref.read(authStateProvider).user;
-    return user == null ? kPlaceholderContactOwnerId : 'user_${user.id}';
+  String get _ownerId =>
+      _ref.read(currentOwnerIdProvider) ?? kPlaceholderContactOwnerId;
+
+  String get _itemOwnerId {
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null || ownerId.isEmpty) {
+      throw StateError('An authenticated owner is required');
+    }
+    return ownerId;
   }
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true, notFound: false);
-    final matome = await _dao.getMatomeWithRecordings(state.id);
+    final matome = await _dao.getMatomeWithItems(state.id, _itemOwnerId);
     if (!mounted) return;
     if (matome == null) {
       state = state.copyWith(isLoading: false, notFound: true);
@@ -160,9 +163,9 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
 
   /// The owner's files that are NOT already Items of this Matome — the Files
   /// candidates for the unified "Add anything" picker. Owner-scoped via
-  /// [RecordingsDao.filesForOwner]; excludes the current Items by id.
+  /// [ItemsDao.filesForOwner]; excludes the current Items by id.
   Future<List<FileRow>> candidateFiles() async {
-    final all = await _recordingsDao.filesForOwner(_ownerId);
+    final all = await _itemsDao.filesForOwner(_itemOwnerId);
     final here = (state.matome?.recordings ?? const [])
         .map((r) => r.id)
         .toSet();
@@ -179,10 +182,10 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
       LogCat.action,
       'linkFiles ${recordingIds.length} -> ${state.id}',
     );
-    final moved = await _recordingsDao.moveRecordingsToMatome(
+    final moved = await _itemsDao.moveItemsToMatome(
       recordingIds,
       state.id,
-      _ownerId,
+      _itemOwnerId,
     );
     await load();
     return moved;
@@ -290,7 +293,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// has a summary yet). Reloads so the hub reflects the fresh summary.
   Future<void> regenerateSummary() async {
     AppLog.event(LogCat.action, 'regenerateSummary ${state.id}');
-    await _dao.regenerateSummary(state.id);
+    await _dao.regenerateSummary(state.id, _itemOwnerId);
     await load();
   }
 
@@ -305,8 +308,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// Import an arbitrary [file] as an Item of this Matome — the generic
   /// document/photo import (#1449). Reuses the local-first upload insert path:
   /// the bytes are copied to durable app storage, then a `rec_local_<uuid>` row
-  /// is upserted with this Matome's id via
-  /// [RecordingsDao.upsertRecordingWithMatome]. The Matome's triage state
+  /// is inserted with this Matome's id via [ItemsDao.createFileItem]. The
+  /// Matome's triage state
   /// (spaceId) is untouched.
   ///
   /// The `mediaType` is DERIVED from the file extension via [mediaTypeForPath]
@@ -347,26 +350,32 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     // Mint the local id up front so we can hand THIS row to the upload queue
     // after the insert (the drain below targets it directly).
     final recordingId = mintLocalRecordingId();
+    final fileId = 'file_$recordingId';
     final now = DateTime.now();
-    await _recordingsDao.upsertRecordingWithMatome(
-      RecordingsCompanion(
-        id: Value(recordingId),
+    final timestamp = now.millisecondsSinceEpoch;
+    await _itemsDao.createFileItem(
+      item: ItemsCompanion.insert(
+        id: recordingId,
+        ownerId: _itemOwnerId,
+        clientId: recordingId,
         matomeId: Value(matomeId),
-        coreId: const Value(null),
+        itemType: MatomeItemType.file.wireName,
         title: Value(stored.title),
-        timestamp: Value(_clock(now)),
-        duration: const Value(''),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: Value(stored.file.path),
-        createdAt: Value(now.millisecondsSinceEpoch),
-        // Derived from the extension — `image` for a photo, `document` for a
-        // pdf/docx/md/txt, etc. NEVER hardcoded (was `Value('image')`).
-        mediaType: Value(picked.mediaType),
-        // Persist the ORIGINAL extension so the type survives the durable
-        // rename (icon / open-extract routing).
-        originalExtension: Value(_extensionFromName(name)),
-        processingStatus: const Value(kProcessingStatusPendingUpload),
+        fileBlobId: Value(fileId),
+        syncState: const Value(kProcessingStatusPendingUpload),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      ),
+      file: FileBlobsCompanion.insert(
+        id: fileId,
+        filename: Value(name),
+        byteSize: Value(kIsWeb ? 0 : stored.file.lengthSync()),
+        mediaType: picked.mediaType,
+        localPath: Value(stored.file.path),
+        wrappedFek: Value(stored.wrappedFekBase64),
+        fileNoncePrefix: Value(stored.fileNoncePrefixBase64),
+        createdAt: timestamp,
+        updatedAt: timestamp,
       ),
     );
     if (!mounted) return;
@@ -404,7 +413,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// pipeline. This writes only the Core-shaped `text_contents` + `items` local
   /// mirror and deliberately performs no durable copy, presign, upload queue, or
   /// AI dispatch work; rich-text editing is intentionally out of scope.
-  Future<int> addTextNote(String body) async {
+  Future<String> addTextNote(String body) async {
     final text = body.trim();
     if (text.isEmpty) {
       throw ArgumentError.value(body, 'body', 'Text note cannot be empty');
@@ -413,48 +422,29 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     final matomeId = state.id;
     final matome = await _dao.getById(matomeId);
     final coreMatomeId = matome?.coreId;
-    if (coreMatomeId == null) {
-      throw StateError('Text notes require a reconciled Matome core id');
-    }
-
-    final db = _db;
-    final now = DateTime.now().toUtc().toIso8601String();
-    final localPayloadId = -DateTime.now().microsecondsSinceEpoch;
-
-    await db.transaction(() async {
-      final maxRow = await db
-          .customSelect(
-            'SELECT COALESCE(MAX(position), 0) AS max_position '
-            'FROM items WHERE matome_id = ?',
-            variables: [Variable<int>(coreMatomeId)],
-          )
-          .getSingle();
-      final position = maxRow.read<int>('max_position') + 1;
-
-      await db
-          .into(db.textContents)
-          .insert(
-            TextContentsCompanion.insert(
-              id: Value(localPayloadId),
-              body: text,
-              insertedAt: Value(now),
-              updatedAt: Value(now),
-            ),
-          );
-      await db
-          .into(db.items)
-          .insert(
-            ItemsCompanion.insert(
-              id: Value(localPayloadId),
-              matomeId: coreMatomeId,
-              position: position,
-              itemType: MatomeItemType.text.wireName,
-              textContentId: Value(localPayloadId),
-              insertedAt: Value(now),
-              updatedAt: Value(now),
-            ),
-          );
-    });
+    final itemId = 'text_local_${const Uuid().v4()}';
+    final payloadId = 'text_content_${const Uuid().v4()}';
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _itemsDao.createTextItem(
+      item: ItemsCompanion.insert(
+        id: itemId,
+        ownerId: _itemOwnerId,
+        clientId: itemId,
+        matomeId: Value(matomeId),
+        itemType: MatomeItemType.text.wireName,
+        title: Value(text.split('\n').first),
+        textContentId: Value(payloadId),
+        syncState: const Value('local_saved'),
+        createdAt: now,
+        updatedAt: now,
+      ),
+      text: TextContentsCompanion.insert(
+        id: payloadId,
+        body: text,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
 
     await _dao.markSummaryStale(matomeId, true);
 
@@ -465,24 +455,26 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     // logged and swallowed here (NEVER reverts the local write). An
     // un-reconciled Matome never reaches this method (the action is UI-gated on
     // `coreId != null` and the guard above throws), so it stays local-only.
-    try {
-      await _matomesRepo.createTextItem(
-        matomeId: coreMatomeId,
-        clientId: 'text_local_$localPayloadId',
-        body: text,
-      );
-    } catch (e, st) {
-      AppLog.error(
-        LogCat.sync,
-        'addTextNote: Core POST failed (note kept local, reconciles later) '
-        '$matomeId',
-        e,
-        st,
-      );
+    if (coreMatomeId != null) {
+      try {
+        await _matomesRepo.createTextItem(
+          matomeId: coreMatomeId,
+          clientId: itemId,
+          body: text,
+        );
+      } catch (e, st) {
+        AppLog.error(
+          LogCat.sync,
+          'addTextNote: Core POST failed (note kept local, reconciles later) '
+          '$matomeId',
+          e,
+          st,
+        );
+      }
     }
 
     if (mounted) await load();
-    return localPayloadId;
+    return itemId;
   }
 
   /// Rename this Matome — the local-first edit (task #1408 / W5). Writes the
@@ -541,19 +533,10 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// Remove an Item (recording) from this Matome: delete the row, its on-device
   /// file (best-effort), mark the aggregated summary stale (the item set
   /// changed), and reload so the hub drops it.
-  Future<void> removeItem(
-    String recordingId, {
-    String? filePath,
-    MatomeItemType itemType = MatomeItemType.file,
-  }) async {
+  Future<void> removeItem(String recordingId, {String? filePath}) async {
     final matomeId = state.id;
     AppLog.event(LogCat.action, 'removeItem $recordingId from $matomeId');
-    if (itemType == MatomeItemType.text) {
-      final itemId = int.tryParse(recordingId);
-      if (itemId != null) await _db.itemsDao.deleteWithPayload(itemId);
-    } else {
-      await _recordingsDao.deleteRecording(recordingId);
-    }
+    await _itemsDao.deleteWithPayload(recordingId, _itemOwnerId);
     if (filePath != null && filePath.isNotEmpty) {
       try {
         final f = File(filePath);
@@ -602,19 +585,6 @@ String _titleFromName(String name) {
 /// The lower-case extension of [name] (no leading dot), or NULL when the file
 /// has no extension. Mirrors [mediaTypeForPath]'s extension extraction so the
 /// persisted `originalExtension` agrees with the derived `mediaType`.
-String? _extensionFromName(String name) {
-  final dot = name.lastIndexOf('.');
-  if (dot <= 0 || dot == name.length - 1) return null;
-  return name.substring(dot + 1).toLowerCase();
-}
-
-String _clock(DateTime when) {
-  final hour = when.hour % 12 == 0 ? 12 : when.hour % 12;
-  final minute = when.minute.toString().padLeft(2, '0');
-  final period = when.hour < 12 ? 'AM' : 'PM';
-  return '$hour:$minute $period';
-}
-
 /// Family provider keyed by the Matome id (the Drift TEXT id from the route).
 final matomeDetailControllerProvider = StateNotifierProvider.autoDispose
     .family<MatomeDetailController, MatomeDetailState, String>(

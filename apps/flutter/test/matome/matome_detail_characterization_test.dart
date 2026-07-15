@@ -10,6 +10,8 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
+import '../support/item_fixtures.dart';
+
 /// CHARACTERIZATION test (W7, #1413). Pins the detail-screen contract the
 /// sibling suites and the app rely on, written BEFORE the letter rewrite so the
 /// rewrite is a deliberate migration, not an accidental drift (Feathers,
@@ -50,20 +52,14 @@ Future<void> _seedMatome(
   );
 
   for (var i = 0; i < recordingCount; i += 1) {
-    await db.recordingsDao.insertRecording(
-      RecordingsCompanion(
-        id: Value('rec_$i'),
-        matomeId: Value(id),
-        title: Value('Item $i'),
-        timestamp: const Value('9:00 AM'),
-        duration: const Value('0:30'),
-        badge: const Value('Inbox'),
-        isProcessing: const Value(0),
-        audioFilePath: const Value(''),
-        createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch + i),
-        mediaType: const Value('audio'),
-        processingStatus: const Value('done'),
-      ),
+    await insertTestFileItem(
+      db,
+      id: 'rec_$i',
+      matomeId: id,
+      title: 'Item $i',
+      localPath: '',
+      position: i,
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + i,
     );
   }
 }
@@ -103,7 +99,10 @@ void main() {
 
   ProviderContainer container() {
     final c = ProviderContainer(
-      overrides: [appDatabaseProvider.overrideWithValue(db)],
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
     );
     addTearDown(c.dispose);
     return c;
@@ -130,7 +129,10 @@ void main() {
     // The sync chip is ALWAYS visible (W1: matome-on-device key, rollup-driven).
     expect(find.byKey(const ValueKey('matome-on-device')), findsOneWidget);
     // Actions overflow lives in the header.
-    expect(find.byKey(const ValueKey('matome-actions-trigger')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('matome-actions-trigger')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('PRESERVED: sync chip is always visible for a FILED Matome', (
