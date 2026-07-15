@@ -36,6 +36,12 @@ policy or changing stable identity/detail policy.
   returns `{:ok, :disabled}` without inserting when collection is disabled and
   returns a bounded error tuple instead of raising when best-effort reporting
   fails.
+- `POST /api/events` is the authenticated Flutter ingress for optional product
+  keys only. The request must assert current user opt-in, and Core derives
+  actor, owner, and session device from the bearer session. Client-supplied
+  identity fields are ignored; security, operational, unknown, locked, nested,
+  and oversized payloads are rejected. A disabled product key returns
+  `202 disabled` and inserts nothing.
 - `MatomeApi.Admin.audit!/2` maps every current `admin.*` action to a stable
   security catalog key and uses the fail-closed path. Mutations that gained
   bounded before/after state use v2 keys; immutable v1 entries remain readable.
@@ -51,6 +57,21 @@ Admin before/after snapshots are JSON-encoded scalar strings rather than nested
 event objects. Their builders explicitly select control fields (for example
 Space quota, expiry, lifecycle, and sync type), keeping content and names out of
 the event payload.
+
+Flutter also keeps a code-defined product allowlist and a secure
+`matome.product_events_opt_in` setting. Opt-out is the default and suppresses
+the request before transport, so catalog enablement cannot grant consent.
+Cloud Matome add, remove, and archive actions use payload-free stable keys.
+Local-only Space actions never use those keys; only
+`product.local_space_aggregate.v1` may egress after opt-in, with coarse bucket
+fields and no Space id or content.
+
+Core records representative upload and processing observations under
+`operational.upload_completed.v1` and
+`operational.processing_completed.v1`. These writes are best effort and obey
+current catalog enablement. Payloads contain only bounded mode, size, input,
+output-type, and result metadata; item content and storage credentials are not
+eligible.
 
 ## Immutability and pruning
 
@@ -71,3 +92,15 @@ duplicates or gaps.
 Admin reads of cross-user metadata are themselves security events under
 `security.admin.sensitive_read.v1`; actor email, subject, and proxy-derived
 client IP are recorded before the caller receives the result.
+
+`/admin/events` exposes this cursor through a 50-row Events timeline with
+indexed class, key, actor id/email, owner, subject type/id, device, run,
+severity, and UTC range filters. `/admin/events/security` is a locked saved view
+that always applies `event_class=security`, regardless of submitted params.
+
+`/admin/event-catalog` lists stable collection policy by class. Rows marked
+`locked` are read-only. Optional rows expose enablement and retention controls;
+every submit re-checks the current email allowlist and five-minute OTP freshness
+and commits `security.event_catalog.changed.v2` atomically with the policy
+change. The admin views use the existing browser/admin LiveView session and
+design-system components; they add no Work or system-configuration controls.

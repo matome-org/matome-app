@@ -153,6 +153,13 @@
     ],
     "max_payload_bytes": 4096,
     "reject_unknown_payload_keys": true,
+    "product_ingest": {
+      "path": "POST /api/events",
+      "auth": "owner_bearer_token",
+      "eligible_class": "optional_product_only",
+      "identity_rule": "Core derives actor, owner, and session device; client identity fields are ignored.",
+      "consent_rule": "The client sends no request without user opt-in; opted_in=false records nothing. Catalog enablement cannot grant consent."
+    },
     "prohibited_payload_keys": [
       "access_token",
       "refresh_token",
@@ -450,6 +457,39 @@
         "enabled": false,
         "retention_days": 30,
         "payload_allowlist": ["period", "item_count_bucket", "byte_size_bucket", "platform"]
+      },
+      {
+        "catalog_key": "product.matome_added.v1",
+        "event_name": "product.matome_added",
+        "event_class": "product",
+        "event_version": 1,
+        "required": false,
+        "locked": false,
+        "enabled": false,
+        "retention_days": 30,
+        "payload_allowlist": []
+      },
+      {
+        "catalog_key": "product.matome_removed.v1",
+        "event_name": "product.matome_removed",
+        "event_class": "product",
+        "event_version": 1,
+        "required": false,
+        "locked": false,
+        "enabled": false,
+        "retention_days": 30,
+        "payload_allowlist": []
+      },
+      {
+        "catalog_key": "product.matome_archived.v1",
+        "event_name": "product.matome_archived",
+        "event_class": "product",
+        "event_version": 1,
+        "required": false,
+        "locked": false,
+        "enabled": false,
+        "retention_days": 30,
+        "payload_allowlist": []
       }
     ],
     "admin_action_map": {

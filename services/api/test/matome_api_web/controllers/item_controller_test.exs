@@ -1,9 +1,12 @@
 defmodule MatomeApiWeb.ItemControllerTest do
   use MatomeApiWeb.ConnCase, async: false
 
+  import Ecto.Query
+
   alias MatomeApi.Auth
   alias MatomeApi.Content
   alias MatomeApi.Content.Workspace
+  alias MatomeApi.Events.Event
   alias MatomeApi.Repo
 
   @password "correct horse battery staple"
@@ -376,6 +379,17 @@ defmodule MatomeApiWeb.ItemControllerTest do
 
     assert Repo.aggregate(Oban.Job, :count, :id) == 1
 
+    assert %Event{owner_id: owner_id, subject_type: "item", subject_id: subject_id} =
+             Repo.one!(
+               from e in Event,
+                 where: e.event_key == "operational.upload_completed.v1",
+                 order_by: [desc: e.id],
+                 limit: 1
+             )
+
+    assert owner_id == queued["owner_id"]
+    assert subject_id == to_string(item["id"])
+
     blob_id = item["file"]["id"]
 
     conn =
@@ -390,6 +404,18 @@ defmodule MatomeApiWeb.ItemControllerTest do
       })
 
     assert response(conn, 204) == ""
+
+    assert %Event{owner_id: owner_id, run_id: run_id, subject_id: subject_id} =
+             Repo.one!(
+               from e in Event,
+                 where: e.event_key == "operational.processing_completed.v1",
+                 order_by: [desc: e.id],
+                 limit: 1
+             )
+
+    assert owner_id == queued["owner_id"]
+    assert run_id == queued["processing_run_id"]
+    assert subject_id == to_string(item["id"])
 
     reloaded =
       get(owner_conn, ~p"/api/items/#{item["id"]}") |> json_response(200) |> Map.fetch!("item")

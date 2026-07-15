@@ -229,6 +229,22 @@ defmodule MatomeApi.AdminPrivilegedActionsTest do
   end
 
   describe "configuration mutation seam" do
+    test "locked catalog rows cannot be mutated" do
+      key = "security.admin.login.v1"
+      before = Repo.get!(EventCatalog, key)
+
+      assert {:error, :locked} =
+               Admin.update_event_catalog(key, %{retention_days: 730}, mutation_opts())
+
+      assert Repo.get!(EventCatalog, key).retention_days == before.retention_days
+
+      refute Repo.exists?(
+               from e in Event,
+                 where:
+                   e.event_key == "security.event_catalog.changed.v2" and e.subject_id == ^key
+             )
+    end
+
     test "catalog policy change requires recent OTP and records the full control event" do
       key = "operational.upload_completed.v1"
       before = Repo.get!(EventCatalog, key)

@@ -26,6 +26,12 @@ defmodule MatomeApi.EventsTest do
     security.admin.sensitive_read.v1
   )
 
+  @product_action_keys ~w(
+    product.matome_added.v1
+    product.matome_removed.v1
+    product.matome_archived.v1
+  )
+
   describe "catalog" do
     test "seeds stable entries for every current admin action" do
       assert Enum.all?(@admin_keys, &Repo.get(EventCatalog, &1))
@@ -42,6 +48,15 @@ defmodule MatomeApi.EventsTest do
 
       assert %EventCatalog{retention_days: 30, enabled: false} =
                Repo.get!(EventCatalog, "product.capture_completed.v1")
+    end
+
+    test "seeds stable optional product keys for representative client actions" do
+      assert Enum.all?(@product_action_keys, fn key ->
+               match?(
+                 %EventCatalog{event_class: "product", enabled: false, locked: false},
+                 Repo.get(EventCatalog, key)
+               )
+             end)
     end
 
     test "database catalog detail policy matches the code allowlist" do
@@ -275,6 +290,52 @@ defmodule MatomeApi.EventsTest do
       page = Events.list_events(subject_type: "session", subject_id: "wanted")
 
       assert [%Event{correlation_id: "matching"}] = page.entries
+    end
+
+    test "applies every indexed timeline dimension before paginating" do
+      run_id = Ecto.UUID.generate()
+
+      Events.write_security!("security.admin.session_revoked.v1", %{
+        actor_id: 10,
+        actor_email: "actor@example.com",
+        owner_id: 20,
+        subject_type: "session",
+        subject_id: "subject-30",
+        device_id: 40,
+        run_id: run_id,
+        severity: "warning",
+        occurred_at: ~U[2026-07-15 10:00:00Z],
+        correlation_id: "all-dimensions"
+      })
+
+      Events.write_security!("security.admin.session_revoked.v1", %{
+        actor_id: 11,
+        owner_id: 21,
+        subject_type: "session",
+        subject_id: "other",
+        device_id: 41,
+        severity: "info",
+        occurred_at: ~U[2026-07-15 10:00:00Z],
+        correlation_id: "distractor"
+      })
+
+      page =
+        Events.list_events(
+          event_class: "security",
+          event_key: "security.admin.session_revoked.v1",
+          actor_id: 10,
+          actor_email: "actor@example.com",
+          owner_id: 20,
+          subject_type: "session",
+          subject_id: "subject-30",
+          device_id: 40,
+          run_id: run_id,
+          severity: "warning",
+          since: ~U[2026-07-15 09:00:00Z],
+          until: ~U[2026-07-15 11:00:00Z]
+        )
+
+      assert [%Event{correlation_id: "all-dimensions"}] = page.entries
     end
   end
 end

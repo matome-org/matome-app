@@ -17,6 +17,7 @@ defmodule MatomeApi.Content do
   }
 
   alias MatomeApi.AIEngine.DispatchJob
+  alias MatomeApi.Events
   alias MatomeApi.Repo
   alias MatomeApi.Storage.{ObjectStore, Presigner}
 
@@ -485,7 +486,24 @@ defmodule MatomeApi.Content do
            get_item(owner, id),
          true <- file_blob.media_type in @ai_media_types,
          true <- file_blob.upload_state == "uploaded" || {:error, :upload_not_complete} do
-      queue_item_processing(item, file_blob)
+      result = queue_item_processing(item, file_blob)
+
+      if match?({:ok, _item}, result) and item.processing_state == :not_requested do
+        Events.write_optional("operational.upload_completed.v1", %{
+          actor_id: owner.id,
+          owner_id: owner.id,
+          subject_type: "item",
+          subject_id: to_string(item.id),
+          details: %{
+            mode: "single",
+            byte_size: file_blob.byte_size,
+            part_count: 1,
+            result: "ok"
+          }
+        })
+      end
+
+      result
     else
       %Item{item_type: :text} -> {:error, :text_item_not_processable}
       false -> {:error, :unsupported_media_type}
@@ -495,18 +513,37 @@ defmodule MatomeApi.Content do
   end
 
   def update_file_item_result(item_id, file_blob_id, attrs) do
-    with %Item{item_type: :file, file_blob: %FileBlob{id: ^file_blob_id}} = item <-
+    with %Item{item_type: :file, file_blob: %FileBlob{id: ^file_blob_id} = file_blob} = item <-
            Item
            |> where([item], item.id == ^item_id and item.file_blob_id == ^file_blob_id)
            |> Repo.one()
            |> Repo.preload(:file_blob) do
-      item
-      |> Item.processing_changeset(%{
-        processing_state: :succeeded,
-        processing_outputs: processing_outputs(attrs),
-        processing_error: nil
-      })
-      |> Repo.update()
+      outputs = processing_outputs(attrs)
+
+      result =
+        item
+        |> Item.processing_changeset(%{
+          processing_state: :succeeded,
+          processing_outputs: outputs,
+          processing_error: nil
+        })
+        |> Repo.update()
+
+      if match?({:ok, _item}, result) and item.processing_state != :succeeded do
+        Events.write_optional("operational.processing_completed.v1", %{
+          owner_id: item.owner_id,
+          subject_type: "item",
+          subject_id: to_string(item.id),
+          run_id: item.processing_run_id,
+          details: %{
+            input_kind: file_blob.media_type,
+            output_types: outputs |> Map.keys() |> Enum.sort(),
+            result: "ok"
+          }
+        })
+      end
+
+      result
     else
       nil -> nil
     end

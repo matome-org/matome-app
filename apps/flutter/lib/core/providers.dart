@@ -12,6 +12,7 @@ import 'http/api_client.dart';
 import 'http/api_exception.dart';
 import 'http/token_store.dart';
 import 'settings/settings_store.dart';
+import 'telemetry/product_event_reporter.dart';
 
 export '../features/auth/current_owner.dart' show currentOwnerIdProvider;
 
@@ -65,10 +66,20 @@ final recordingsRepositoryProvider = Provider<RecordingsRepository>((ref) {
   return RecordingsRepository(apiClient: ref.watch(apiClientProvider));
 });
 
+final productEventReporterProvider = Provider<ProductEventReporter>((ref) {
+  return ProductEventReporter(
+    apiClient: ref.watch(apiClientProvider),
+    settingsStore: ref.watch(settingsStoreProvider),
+  );
+});
+
 /// HTTP repository for space-scoped Matome sync (task #1377). Overridden in
 /// tests with a fake/mock-adapter-backed repo (mirrors recordings).
 final matomesRepositoryProvider = Provider<MatomesRepository>((ref) {
-  return MatomesRepository(apiClient: ref.watch(apiClientProvider));
+  return MatomesRepository(
+    apiClient: ref.watch(apiClientProvider),
+    productEvents: ref.watch(productEventReporterProvider),
+  );
 });
 
 /// HTTP repository for Contact sync (task #1377). Overridable in tests.

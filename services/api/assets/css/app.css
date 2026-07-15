@@ -418,7 +418,9 @@
 
 .admin-users__title,
 .admin-audit__title,
-.admin-sessions__title {
+.admin-sessions__title,
+.admin-events__title,
+.admin-catalog__title {
   margin: 0 0 var(--matome-space-md);
   font-family: var(--matome-font-display);
   font-size: var(--matome-type-title-size);
@@ -427,15 +429,47 @@
 }
 
 .admin-users .matome-banner,
-.admin-audit__lede {
+.admin-audit__lede,
+.admin-events__lede,
+.admin-catalog__lede {
   margin: 0 0 var(--matome-space-lg);
   color: var(--matome-text-secondary);
 }
 
-.admin-audit__filters {
+.admin-audit__filters,
+.admin-events__filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--matome-space-md);
   align-items: end;
   margin-bottom: var(--matome-space-lg);
+}
+
+.admin-events__views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--matome-space-md);
+  margin-bottom: var(--matome-space-lg);
+}
+
+.admin-events__views a {
+  color: var(--matome-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.admin-events__pagination,
+.admin-catalog__filters {
+  margin-top: var(--matome-space-lg);
+}
+
+.admin-catalog__filters {
+  max-width: 16rem;
+  margin-bottom: var(--matome-space-lg);
+}
+
+.admin-catalog__control {
+  display: grid;
+  gap: var(--matome-space-sm);
+  min-width: 11rem;
 }

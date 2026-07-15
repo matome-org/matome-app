@@ -428,6 +428,13 @@ defmodule MatomeApi.Admin do
     result
   end
 
+  @doc "Reads one bounded event-timeline page and records the sensitive admin read."
+  def list_events(event_opts, audit_opts) when is_list(event_opts) and is_list(audit_opts) do
+    page = Events.list_events(event_opts)
+    audit_sensitive_read!("events", audit_opts)
+    page
+  end
+
   defp blank_to_nil(nil), do: nil
 
   defp blank_to_nil(value) when is_binary(value) do
@@ -771,6 +778,7 @@ defmodule MatomeApi.Admin do
       |> Multi.run(:catalog, fn repo, _changes ->
         case repo.get(EventCatalog, key, lock: "FOR UPDATE") do
           nil -> {:error, :not_found}
+          %EventCatalog{locked: true} -> {:error, :locked}
           catalog -> {:ok, catalog}
         end
       end)

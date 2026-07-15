@@ -104,6 +104,15 @@ item content, notes, transcripts, or summaries. Events about local Spaces never
 egress with a Space id or content. Only the disabled-by-default aggregate
 product fixture is eligible after opt-in.
 
+The authenticated Flutter product ingress is `POST /api/events`. It accepts
+only unlocked product catalog keys and a bounded `payload`; Core derives actor,
+owner, and device from the bearer session. The client defaults product-event
+consent off and sends no request until the user opts in. Local Space actions do
+not egress individually: only the cataloged coarse local aggregate may leave
+the device, without ids or content. Cloud Matome add/remove/archive use
+payload-free product keys, while Core emits upload/processing operational
+observations from server-known state.
+
 ## Desired and applied configuration
 
 `system_config` is one versioned, non-secret global JSON document. Admin writes

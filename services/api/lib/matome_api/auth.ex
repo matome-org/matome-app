@@ -253,6 +253,17 @@ defmodule MatomeApi.Auth do
     end
   end
 
+  @doc "Resolves the database device bound to an authenticated access-token session."
+  def session_device_id(%User{id: user_id}, session_id) when is_binary(session_id) do
+    from(token in RefreshToken,
+      where: token.user_id == ^user_id and token.jti == ^session_id,
+      select: token.device_id
+    )
+    |> Repo.one()
+  end
+
+  def session_device_id(%User{}, _session_id), do: nil
+
   defp check_session_allowlist(claims) do
     case TokenAllowlist.mode() do
       :off ->

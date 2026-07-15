@@ -1,7 +1,10 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:dio/dio.dart';
 
 import '../../core/http/api_client.dart';
 import '../../core/http/api_exception.dart';
+import '../../core/telemetry/product_event_reporter.dart';
 import 'matome.dart';
 
 /// Drives the authenticated user's Matomes against the Core API (task #1377).
@@ -14,10 +17,14 @@ import 'matome.dart';
 class MatomesRepository {
   // Plain generative constructor (no redirect) so tests can subclass it to stub
   // HTTP, mirroring [RecordingsRepository].
-  // ignore: prefer_initializing_formals
-  MatomesRepository({required ApiClient apiClient}) : _apiClient = apiClient;
+  MatomesRepository({
+    required ApiClient apiClient,
+    ProductEventReporter? productEvents,
+  }) : _apiClient = apiClient,
+       _productEvents = productEvents;
 
   final ApiClient _apiClient;
+  final ProductEventReporter? _productEvents;
 
   /// `GET /api/matomes` (Bearer). The user's triaged Matomes.
   Future<List<Matome>> fetchMatomes() async {
@@ -69,7 +76,12 @@ class MatomesRepository {
           code: errorCodeFromBody(response.data),
         );
       }
-      return _matomeFromBody(response.data, status);
+      final matome = _matomeFromBody(response.data, status);
+      await _productEvents?.record(
+        ProductEventKey.matomeAdded,
+        localSpace: false,
+      );
+      return matome;
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
     }
@@ -182,7 +194,12 @@ class MatomesRepository {
           code: errorCodeFromBody(response.data),
         );
       }
-      return _matomeFromBody(response.data, status);
+      final matome = _matomeFromBody(response.data, status);
+      await _productEvents?.record(
+        ProductEventKey.matomeArchived,
+        localSpace: false,
+      );
+      return matome;
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
     }
@@ -223,6 +240,10 @@ class MatomesRepository {
           code: errorCodeFromBody(response.data),
         );
       }
+      await _productEvents?.record(
+        ProductEventKey.matomeRemoved,
+        localSpace: false,
+      );
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
     }

@@ -8,7 +8,7 @@ replaces password + authenticator TOTP. Staff identity does **not** require a
 
 - Admin capability (sessions revoke, future mutations).
 - Security-class rows in the canonical `events` trail.
-- Metadata visible in Users / Audit / Sessions LiveViews.
+- Metadata visible in Users / Audit / Sessions / Events / Event Catalog LiveViews.
 
 ## Layers (defense in depth)
 
@@ -64,8 +64,15 @@ at the context seam. Snapshots contain only control-plane policy fields, never
 workspace names, user content, tokens, local paths, or signed URLs.
 
 Sensitive cross-user reads of Dashboard, Users, Sessions, Spaces, individual
-Space metadata, and Audit data append `security.admin.sensitive_read.v1`. A
+Space metadata, Audit data, and paginated Events data append
+`security.admin.sensitive_read.v1`. A
 failed required read event prevents the result from being returned.
+
+The Event Catalog renders locked rows as read-only. Optional enablement and
+retention changes re-check both the current allowlist and OTP freshness in the
+context, then commit policy and `security.event_catalog.changed.v2` in one
+transaction. The Events security saved view fixes the class filter to
+`security`; submitted filter params cannot widen it.
 
 Phoenix filters credential, OTP, content, local-path, and presigned-credential
 parameter names before request logging. `MatomeApi.LogRedaction` is the fallback

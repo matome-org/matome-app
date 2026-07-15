@@ -44,7 +44,10 @@ defmodule MatomeApi.Events do
     "operational.processing_completed.v1" =>
       ~w(input_kind output_types duration_ms attempt result error_code),
     "product.capture_completed.v1" => ~w(input_kind duration_bucket size_bucket platform result),
-    "product.local_space_aggregate.v1" => ~w(period item_count_bucket byte_size_bucket platform)
+    "product.local_space_aggregate.v1" => ~w(period item_count_bucket byte_size_bucket platform),
+    "product.matome_added.v1" => [],
+    "product.matome_removed.v1" => [],
+    "product.matome_archived.v1" => []
   }
 
   @admin_action_keys %{
@@ -152,6 +155,30 @@ defmodule MatomeApi.Events do
       {:error, :write_failed}
   end
 
+  @doc "Accepts an opted-in product event with identity derived by Core."
+  def write_product(key, payload, attrs)
+      when is_binary(key) and is_map(payload) and is_map(attrs) do
+    case Repo.get(EventCatalog, key) do
+      %EventCatalog{event_class: "product", locked: false} ->
+        attrs
+        |> Map.put(:details, payload)
+        |> then(&write_optional(key, &1))
+
+      _catalog ->
+        {:error, :event_not_allowed}
+    end
+  end
+
+  def write_product(_key, _payload, _attrs), do: {:error, :invalid_event}
+
+  @doc "Lists catalog policy in stable key order, optionally filtered by class."
+  def list_catalog(event_class \\ nil) do
+    EventCatalog
+    |> maybe_filter_catalog_class(event_class)
+    |> order_by([catalog], asc: catalog.key)
+    |> Repo.all()
+  end
+
   @doc "Deletes only rows whose snapshotted retention deadline has passed."
   def prune_expired!(cutoff \\ DateTime.utc_now()) do
     %{rows: [[count]]} = Repo.query!("SELECT prune_expired_events($1)", [cutoff])
@@ -232,4 +259,12 @@ defmodule MatomeApi.Events do
   end
 
   defp decode_cursor!(_cursor), do: raise(ArgumentError, "invalid event cursor")
+
+  defp maybe_filter_catalog_class(query, nil), do: query
+
+  defp maybe_filter_catalog_class(query, event_class)
+       when event_class in ~w(security operational product),
+       do: where(query, [catalog], catalog.event_class == ^event_class)
+
+  defp maybe_filter_catalog_class(query, _event_class), do: query
 end
