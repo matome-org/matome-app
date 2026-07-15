@@ -94,6 +94,9 @@ config :matome_api, :admin_network,
 
 config :matome_api, :admin_session, ttl_seconds: 30 * 60, reauth_ttl_seconds: 5 * 60
 
+config :matome_api, :admin_otp,
+  pepper: System.get_env("ADMIN_OTP_PEPPER") || "dev-only-admin-otp-pepper-change-me"
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"
 

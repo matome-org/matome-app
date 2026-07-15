@@ -21,7 +21,7 @@ defmodule MatomeApiWeb.AdminLive.Users do
     {:ok,
      socket
      |> assign(page_title: "Users")
-     |> assign(users: Admin.list_users())}
+     |> assign(users: Admin.list_users(admin_read_opts(socket)))}
   end
 
   @impl true
@@ -66,4 +66,8 @@ defmodule MatomeApiWeb.AdminLive.Users do
 
   defp format_time(nil), do: "—"
   defp format_time(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
+
+  defp admin_read_opts(socket) do
+    [actor: socket.assigns.current_admin, remote_ip: socket.assigns.client_ip]
+  end
 end

@@ -106,8 +106,17 @@ if config_env() == :prod do
 
   config :matome_api, :admin_session,
     ttl_seconds: String.to_integer(System.get_env("ADMIN_SESSION_TTL_SECONDS") || "1800"),
-    reauth_ttl_seconds:
-      String.to_integer(System.get_env("ADMIN_REAUTH_TTL_SECONDS") || "300")
+    reauth_ttl_seconds: String.to_integer(System.get_env("ADMIN_REAUTH_TTL_SECONDS") || "300")
+
+  admin_otp_pepper =
+    System.get_env("ADMIN_OTP_PEPPER") ||
+      raise "environment variable ADMIN_OTP_PEPPER is missing."
+
+  if byte_size(admin_otp_pepper) < 32 do
+    raise "ADMIN_OTP_PEPPER must contain at least 32 bytes."
+  end
+
+  config :matome_api, :admin_otp, pepper: admin_otp_pepper
 
   # Optional leftover vault (TOTP path retired). Present only if set.
   if vault = System.get_env("ADMIN_SECRET_VAULT_KEY") do

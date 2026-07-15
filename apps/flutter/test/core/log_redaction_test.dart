@@ -10,7 +10,8 @@ void main() {
   group('redactSensitiveQueryParams', () {
     test('redacts the token from a phoenix_socket connect log line', () {
       const jwt = 'eyJhbGciOiJIUzI1NiJ9.payload.signature-AbC_123';
-      final line = 'Attempting to connect to '
+      final line =
+          'Attempting to connect to '
           'wss://api.example.com/socket/websocket?vsn=2.0.0&token=$jwt';
 
       final out = redactSensitiveQueryParams(line);
@@ -38,6 +39,46 @@ void main() {
     test('redacts token at end of string (no trailing &)', () {
       final out = redactSensitiveQueryParams('url?token=tail.jwt.value');
       expect(out, 'url?token=[REDACTED]');
+    });
+
+    test('redacts OTP, bearer, refresh/reset tokens, and auth secrets', () {
+      const secrets = [
+        '123456',
+        'bearer-secret',
+        'refresh-secret',
+        'reset-secret',
+        'client-secret',
+      ];
+      final out = redactSensitiveLogData(
+        'code=123456 Authorization: Bearer bearer-secret '
+        'refresh_token=refresh-secret reset_token=reset-secret '
+        'client_secret=client-secret',
+      );
+
+      for (final secret in secrets) {
+        expect(out, isNot(contains(secret)));
+      }
+    });
+
+    test('redacts content fields, local paths, and presigned credentials', () {
+      final out = redactSensitiveLogData(
+        'body="private words" notes=private-note '
+        'path=/home/alice/Matome/audio.wav '
+        'url=https://storage.test/object?X-Amz-Credential=credential&'
+        'X-Amz-Signature=signature&X-Amz-Security-Token=session',
+      );
+
+      for (final secret in [
+        'private words',
+        'private-note',
+        'alice',
+        'audio.wav',
+        'credential',
+        'signature',
+        'session',
+      ]) {
+        expect(out, isNot(contains(secret)));
+      }
     });
   });
 }

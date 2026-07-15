@@ -312,6 +312,83 @@
         "payload_allowlist": ["revision", "changed_keys", "result"]
       },
       {
+        "catalog_key": "security.event_catalog.changed.v2",
+        "event_name": "security.event_catalog.changed",
+        "event_class": "security",
+        "event_version": 2,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["changed_fields", "before", "after", "result"]
+      },
+      {
+        "catalog_key": "security.admin.session_revoked.v2",
+        "event_name": "security.admin.session_revoked",
+        "event_class": "security",
+        "event_version": 2,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["before", "after"]
+      },
+      {
+        "catalog_key": "security.admin.space_updated.v2",
+        "event_name": "security.admin.space_updated",
+        "event_class": "security",
+        "event_version": 2,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["changed_keys", "before", "after"]
+      },
+      {
+        "catalog_key": "security.admin.space_member_added.v2",
+        "event_name": "security.admin.space_member_added",
+        "event_class": "security",
+        "event_version": 2,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["workspace_id", "user_id", "role", "before", "after"]
+      },
+      {
+        "catalog_key": "security.admin.space_member_revoked.v2",
+        "event_name": "security.admin.space_member_revoked",
+        "event_class": "security",
+        "event_version": 2,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["workspace_id", "user_id", "before", "after"]
+      },
+      {
+        "catalog_key": "security.admin.space_lifecycle.v2",
+        "event_name": "security.admin.space_lifecycle",
+        "event_class": "security",
+        "event_version": 2,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["before", "after"]
+      },
+      {
+        "catalog_key": "security.admin.sensitive_read.v1",
+        "event_name": "security.admin.sensitive_read",
+        "event_class": "security",
+        "event_version": 1,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["resource", "result"]
+      },
+      {
         "catalog_key": "operational.work_transition.v1",
         "event_name": "operational.work_transition",
         "event_class": "operational",
@@ -381,11 +458,12 @@
       "admin.login_failed": "security.admin.login_failed.v1",
       "admin.logout": "security.admin.logout.v1",
       "admin.reauth": "security.admin.reauth.v1",
-      "admin.session_revoked": "security.admin.session_revoked.v1",
-      "admin.space_updated": "security.admin.space_updated.v1",
-      "admin.space_member_added": "security.admin.space_member_added.v1",
-      "admin.space_member_revoked": "security.admin.space_member_revoked.v1",
-      "admin.space_lifecycle": "security.admin.space_lifecycle.v1"
+      "admin.session_revoked": "security.admin.session_revoked.v2",
+      "admin.space_updated": "security.admin.space_updated.v2",
+      "admin.space_member_added": "security.admin.space_member_added.v2",
+      "admin.space_member_revoked": "security.admin.space_member_revoked.v2",
+      "admin.space_lifecycle": "security.admin.space_lifecycle.v2",
+      "admin.sensitive_read": "security.admin.sensitive_read.v1"
     }
   },
   "system_config": {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math';
 
@@ -271,11 +270,6 @@ class UploadQueue {
         'durable work failed kind=${work.kind} stage=${work.stage}',
         error,
         stack,
-      );
-      developer.log(
-        'durable work attempt failed',
-        name: 'work.queue',
-        error: error,
       );
       await _handleFailure(work, error, ownerId);
     }

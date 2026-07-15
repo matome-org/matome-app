@@ -125,7 +125,11 @@ defmodule MatomeApiWeb.AdminLive.Index do
   end
 
   defp assign_stats(socket) do
-    assign(socket, stats: Admin.dashboard_stats())
+    assign(socket, stats: Admin.dashboard_stats(admin_read_opts(socket)))
+  end
+
+  defp admin_read_opts(socket) do
+    [actor: socket.assigns.current_admin, remote_ip: socket.assigns.client_ip]
   end
 
   defp storage_rows(%{by_workspace: workspaces, unfiled_bytes: unfiled}) do

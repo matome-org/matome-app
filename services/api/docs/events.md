@@ -18,8 +18,9 @@ detail schema creates a new key; existing keys are never repurposed.
 
 An event insert reads the current catalog entry and snapshots `event_class` and
 `retention_until`. Later catalog changes therefore affect only future writes.
-`Events.update_catalog!/3` limits changes to `enabled`, `description`, and
-`retention_days`, and commits `security.event_catalog.changed.v1` in the same
+`Admin.update_event_catalog/3` requires an allowlisted actor, recent OTP, and a
+derived client IP; it limits changes to `enabled`, `description`, and
+`retention_days`, and commits `security.event_catalog.changed.v2` in the same
 transaction. Database constraints and a trigger prevent weakening security
 policy or changing stable identity/detail policy.
 
@@ -28,12 +29,16 @@ policy or changing stable identity/detail policy.
 - `MatomeApi.Events.write_security!/2` accepts only enabled security keys and
   raises for unknown keys, disabled policy, invalid details, or storage errors.
   Security-sensitive callers must not continue when this write fails.
+- `MatomeApi.Events.put_security/4` adds the same mandatory insert to a caller's
+  `Ecto.Multi`. Admin mutation contexts use this path so the action and its
+  event commit or roll back as one transaction.
 - `MatomeApi.Events.write_optional/2` accepts operational and product keys. It
   returns `{:ok, :disabled}` without inserting when collection is disabled and
   returns a bounded error tuple instead of raising when best-effort reporting
   fails.
 - `MatomeApi.Admin.audit!/2` maps every current `admin.*` action to a stable
-  security catalog key and uses the fail-closed path.
+  security catalog key and uses the fail-closed path. Mutations that gained
+  bounded before/after state use v2 keys; immutable v1 entries remain readable.
 
 `details` is a JSON object capped at 4096 encoded bytes. Its top-level keys must
 match the code-defined and catalog-pinned allowlist. Values are scalars or
@@ -41,6 +46,11 @@ bounded flat scalar lists; nested objects, credentials, signed URLs, item
 content, notes, transcripts, and summaries are not accepted. Actor, owner,
 subject, device, run, correlation, severity, occurrence, and retention fields
 remain scalar columns with purpose-built indexes.
+
+Admin before/after snapshots are JSON-encoded scalar strings rather than nested
+event objects. Their builders explicitly select control fields (for example
+Space quota, expiry, lifecycle, and sync type), keeping content and names out of
+the event payload.
 
 ## Immutability and pruning
 
@@ -57,3 +67,7 @@ delete only rows whose snapshotted `retention_until` has passed.
 maximum page size of 100. Results sort by `(occurred_at DESC, id DESC)` and use
 an opaque cursor encoding both values, so equal timestamps paginate without
 duplicates or gaps.
+
+Admin reads of cross-user metadata are themselves security events under
+`security.admin.sensitive_read.v1`; actor email, subject, and proxy-derived
+client IP are recorded before the caller receives the result.

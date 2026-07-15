@@ -17,8 +17,15 @@ defmodule MatomeApi.AdminSessionsTest do
     auth
   end
 
-  defp make_admin!(user) do
-    user |> Ecto.Changeset.change(role: "admin") |> Repo.update!()
+  defp read_opts do
+    [actor: %{email: "admin@example.com"}, remote_ip: "192.0.2.1"]
+  end
+
+  defp mutation_opts do
+    [
+      otp_verified_at: System.os_time(:second),
+      remote_ip: "192.0.2.1"
+    ]
   end
 
   defp stored_token(refresh_token) do
@@ -45,7 +52,7 @@ defmodule MatomeApi.AdminSessionsTest do
       {:ok, _} = Auth.login(user.email, "correct horse battery", %{ip: "198.51.100.9"})
 
       assert [%{user: tree_user, last_seen_at: %DateTime{}, devices: devices}] =
-               Admin.session_tree()
+               Admin.session_tree(read_opts())
 
       assert tree_user.id == user.id
       assert length(devices) == 2
@@ -75,7 +82,7 @@ defmodule MatomeApi.AdminSessionsTest do
 
       :ok = Auth.logout(refresh_token)
 
-      assert Admin.session_tree() == []
+      assert Admin.session_tree(read_opts()) == []
     end
 
     test "orders users by most recent activity" do
@@ -88,7 +95,7 @@ defmodule MatomeApi.AdminSessionsTest do
       from(t in RefreshToken, where: t.user_id == ^older.id)
       |> Repo.update_all(set: [last_seen_at: past])
 
-      assert [%{user: first}, %{user: second}] = Admin.session_tree()
+      assert [%{user: first}, %{user: second}] = Admin.session_tree(read_opts())
       assert first.id == newer.id
       assert second.id == older.id
     end
@@ -97,13 +104,13 @@ defmodule MatomeApi.AdminSessionsTest do
   describe "revoke_session/3" do
     test "revokes the whole family, audits, and returns :ok" do
       %{user: user, refresh_token: refresh_token} = register!("revokee@example.com")
-      admin = register!("the-admin@example.com").user |> make_admin!()
+      admin = %{email: "admin@example.com"}
 
       # Rotate once so the family has two rows (one already revoked).
       {:ok, %{refresh_token: rotated}} = Auth.refresh(refresh_token)
       %RefreshToken{jti: jti, family_id: family_id} = stored_token(rotated)
 
-      assert :ok = Admin.revoke_session(admin, jti, remote_ip: "192.0.2.1")
+      assert :ok = Admin.revoke_session(admin, jti, mutation_opts())
 
       live_in_family =
         from(t in RefreshToken,
@@ -116,10 +123,11 @@ defmodule MatomeApi.AdminSessionsTest do
       audit =
         Repo.one!(
           from e in Event,
-            where: e.event_key == "security.admin.session_revoked.v1"
+            where: e.event_key == "security.admin.session_revoked.v2"
         )
 
-      assert audit.actor_id == admin.id
+      assert audit.actor_id == nil
+      assert audit.actor_email == admin.email
       assert audit.remote_ip == "192.0.2.1"
       assert audit.subject_type == "session"
       assert audit.subject_id == jti
@@ -127,14 +135,14 @@ defmodule MatomeApi.AdminSessionsTest do
     end
 
     test "returns {:error, :not_found} for an unknown jti and audits nothing" do
-      admin = register!("lost-admin@example.com").user |> make_admin!()
+      admin = %{email: "admin@example.com"}
 
       assert {:error, :not_found} =
-               Admin.revoke_session(admin, Ecto.UUID.generate(), remote_ip: nil)
+               Admin.revoke_session(admin, Ecto.UUID.generate(), mutation_opts())
 
       refute Repo.exists?(
                from e in Event,
-                 where: e.event_key == "security.admin.session_revoked.v1"
+                 where: e.event_key == "security.admin.session_revoked.v2"
              )
     end
   end

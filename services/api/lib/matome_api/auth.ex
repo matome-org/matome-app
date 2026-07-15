@@ -3,7 +3,16 @@ defmodule MatomeApi.Auth do
 
   require Logger
 
-  alias MatomeApi.Auth.{Device, DeviceMeta, Guardian, KeyBundle, RefreshToken, TokenAllowlist, User}
+  alias MatomeApi.Auth.{
+    Device,
+    DeviceMeta,
+    Guardian,
+    KeyBundle,
+    RefreshToken,
+    TokenAllowlist,
+    User
+  }
+
   alias MatomeApi.Repo
 
   @access_ttl {15, :minutes}
@@ -178,8 +187,7 @@ defmodule MatomeApi.Auth do
       )
       |> Repo.update_all(set: [revoked_at: now])
 
-    Enum.each(revoked_jtis, &TokenAllowlist.invalidate/1)
-    broadcast_session_disconnect(user_id)
+    notify_sessions_revoked(user_id, revoked_jtis)
     :ok
   end
 
@@ -198,8 +206,14 @@ defmodule MatomeApi.Auth do
       from(t in RefreshToken, where: ^scope, select: t.jti)
       |> Repo.update_all(set: [revoked_at: now])
 
+    notify_sessions_revoked(stored.user_id, revoked_jtis)
+    :ok
+  end
+
+  @doc false
+  def notify_sessions_revoked(user_id, revoked_jtis) when is_list(revoked_jtis) do
     Enum.each(revoked_jtis, &TokenAllowlist.invalidate/1)
-    broadcast_session_disconnect(stored.user_id)
+    broadcast_session_disconnect(user_id)
     :ok
   end
 
@@ -250,10 +264,7 @@ defmodule MatomeApi.Auth do
             :ok
 
           {:denied, reason} ->
-            Logger.warning(
-              "token_allowlist shadow: would deny access token " <>
-                "(reason=#{reason} sid=#{inspect(claims["sid"])} sub=#{inspect(claims["sub"])})"
-            )
+            Logger.warning("token_allowlist shadow: would deny access token (reason=#{reason})")
 
             :ok
         end

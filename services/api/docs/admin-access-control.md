@@ -17,15 +17,21 @@ replaces password + authenticator TOTP. Staff identity does **not** require a
 | 1 | Panel kill switch | `ADMIN_PANEL_ENABLED` via `AdminNetworkGuard` | **Fail closed**: unset/`false` in prod ⇒ every `/admin*` is 404 |
 | 2 | Soft IP tier | `ADMIN_IP_ALLOWLIST` (optional) | Empty ⇒ all IPs reach the panel. Non-empty ⇒ IPs outside still allowed but under **stricter** per-IP rate limits (corporate laptop / no VPN) |
 | 3 | Email allowlist | `ADMIN_EMAIL_ALLOWLIST` CSV | Non-members get **total silence** on `POST /admin/login` (200 re-render, no flash, no mail, no redirect) |
-| 4 | Email OTP | `Admin.request_login_otp/2` + `verify_login_otp/2` | 6-digit code, SHA-256 at rest, 30-min TTL, one-shot consume; wrong code audited as `admin.login_failed` |
+| 4 | Email OTP | `Admin.request_login_otp/2` + `verify_login_otp/3` | 6-digit CSPRNG code, HMAC-SHA-256 with `ADMIN_OTP_PEPPER` at rest, 30-min TTL, one-shot consume; wrong code audited as `admin.login_failed` |
 | 5 | Session | `MatomeApiWeb.AdminAuth` | Cookie session keyed by `admin_email`; absolute TTL (default 30 min); no sliding renewal |
-| 6 | Sensitive re-auth | OTP freshness (`admin_otp_verified_at`, default 5 min) | Stale revoke → `/admin/otp?return_to=…` |
-| 7 | Append-only audit | canonical `events` + raise-triggers | `actor_id` nullable; `actor_email` snapshotted from the allowlisted address |
+| 6 | Sensitive re-auth | OTP freshness (`admin_otp_verified_at`, default 5 min) | Every session, Space, operational, or configuration mutation fails closed when stale; LiveView redirects to `/admin/otp?return_to=…` |
+| 7 | Transactional audit | canonical `events` + `Ecto.Multi` + append-only triggers | Every privileged database mutation and mandatory event commit together; event failure rolls back the action |
 
 ### LiveView
 
-`AdminAuth.on_mount/4` re-checks panel enabled + email allowlist + TTL. Soft IP
-is not a hard deny on the websocket (rate limits apply on HTTP POSTs only).
+`AdminAuth.on_mount/4` re-checks panel enabled + email allowlist + TTL. It also
+resolves the client address from LiveView `peer_data` and `X-Forwarded-For`, but
+honors forwarding headers only when the direct peer belongs to
+`ADMIN_TRUSTED_PROXIES`. HTTP login, rate limiting, and LiveView events use the
+same policy. An invalid forwarded chain fails closed.
+
+The context layer repeats allowlist and OTP-freshness checks at mutation time;
+UI checks are not the authorization boundary. `users.role` is not consulted.
 
 ## Env contract
 
@@ -33,6 +39,7 @@ is not a hard deny on the websocket (rate limits apply on HTTP POSTs only).
 |---|---|
 | `ADMIN_PANEL_ENABLED` | `true`/`1` to expose `/admin`. Prod default off. Dev default on. |
 | `ADMIN_EMAIL_ALLOWLIST` | CSV emails (lowercased). Empty ⇒ nobody can complete OTP. |
+| `ADMIN_OTP_PEPPER` | Production-only secret used as the HMAC-SHA-256 key for OTP verification. Required, at least 32 bytes, and independent from cookie/JWT keys. Rotation invalidates outstanding codes. |
 | `ADMIN_IP_ALLOWLIST` | Soft CIDR tier for rate limits only. |
 | `ADMIN_TRUSTED_PROXIES` | CIDRs that may supply `X-Forwarded-For`. |
 | `ADMIN_SESSION_TTL_SECONDS` | Absolute session TTL (default `1800`). |
@@ -43,6 +50,26 @@ is not a hard deny on the websocket (rate limits apply on HTTP POSTs only).
 1. `GET /admin/login` — email only (W1 `text_field` + `submit_button`).
 2. `POST /admin/login` — if allowlisted, store OTP hash, email code, redirect `/admin/otp`; else silence.
 3. `POST /admin/otp` — verify one-shot code → session → `/admin`.
+
+OTP consumption and the successful login/reauth event share one transaction.
+If the mandatory event cannot be stored, the code remains unconsumed and no
+admin session is established.
+
+## Privileged events
+
+Session and Space controls use versioned security events whose scalar details
+include bounded `before` and `after` state. Targets live in indexed
+`subject_type`/`subject_id` columns; actors and proxy-derived IPs are mandatory
+at the context seam. Snapshots contain only control-plane policy fields, never
+workspace names, user content, tokens, local paths, or signed URLs.
+
+Sensitive cross-user reads of Dashboard, Users, Sessions, Spaces, individual
+Space metadata, and Audit data append `security.admin.sensitive_read.v1`. A
+failed required read event prevents the result from being returned.
+
+Phoenix filters credential, OTP, content, local-path, and presigned-credential
+parameter names before request logging. `MatomeApi.LogRedaction` is the fallback
+for already-materialized exception text and never reads a raw request body.
 
 Dev: read the code at `http://127.0.0.1:7001/dev/mailbox`.
 

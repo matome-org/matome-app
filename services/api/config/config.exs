@@ -55,7 +55,7 @@ config :matome_api, MatomeApi.Storage.Presigner,
 config :matome_api,
        :cors_origins,
        System.get_env("CORS_ORIGINS") ||
-          "http://localhost:7000,http://127.0.0.1:7000"
+         "http://localhost:7000,http://127.0.0.1:7000"
 
 # Configures the endpoint
 config :matome_api, MatomeApiWeb.Endpoint,
@@ -102,7 +102,12 @@ config :phoenix, :json_library, Jason
 # Redact PII / secrets from any logged request params (#1462). Phoenix's
 # default only filters "password"; contact email/phone are PII and must never
 # reach logs or telemetry payloads.
-config :phoenix, :filter_parameters, ["password", "email", "phone"]
+config :phoenix, :filter_parameters, ~w(
+    password email phone code otp otp_code token access_token refresh_token reset_token
+    authorization auth secret client_secret api_key body content notes transcript summary
+    local_path file_path path storage_url presigned_url x-amz-credential x-amz-signature
+    x-amz-security-token awsaccesskeyid
+  )
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

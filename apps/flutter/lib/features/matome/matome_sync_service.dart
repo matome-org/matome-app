@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -65,20 +63,9 @@ class MatomeSyncService {
       AppLog.event(LogCat.sync, 'sync: done');
     } on ApiException catch (error, stack) {
       if (error.isUnauthorized || error.statusCode != null) {
-        developer.log(
-          'Matome sync failed (not offline)',
-          name: 'matome.sync',
-          error: error,
-        );
         AppLog.error(LogCat.sync, 'sync: failed (not offline)', error, stack);
       }
     } catch (error, stack) {
-      developer.log(
-        'Matome sync write failed',
-        name: 'matome.sync',
-        error: error,
-        stackTrace: stack,
-      );
       AppLog.error(LogCat.sync, 'sync: write failed', error, stack);
     }
   }

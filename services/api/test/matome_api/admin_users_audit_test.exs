@@ -12,6 +12,13 @@ defmodule MatomeApi.AdminUsersAuditTest do
   alias MatomeApi.Events
   alias MatomeApi.Events.Event
 
+  defp read_opts(extra \\ []) do
+    Keyword.merge(
+      [actor: %{email: "admin@example.com"}, remote_ip: "192.0.2.20"],
+      extra
+    )
+  end
+
   defp register!(email, meta \\ %{}) do
     {:ok, auth} =
       Auth.register_user(%{"email" => email, "password" => "correct horse battery"}, meta)
@@ -48,7 +55,7 @@ defmodule MatomeApi.AdminUsersAuditTest do
 
       %{user: bare} = register!("bare-user@example.com")
 
-      rows = Admin.list_users()
+      rows = Admin.list_users(read_opts())
 
       mfa_row = Enum.find(rows, &(&1.user.id == with_mfa.id))
       bare_row = Enum.find(rows, &(&1.user.id == bare.id))
@@ -75,7 +82,7 @@ defmodule MatomeApi.AdminUsersAuditTest do
       |> Ecto.Changeset.change(last_seen_at: past)
       |> Repo.update!()
 
-      [first | _] = Admin.list_users()
+      [first | _] = Admin.list_users(read_opts())
       assert first.user.id == newer.user.id
     end
   end
@@ -100,39 +107,39 @@ defmodule MatomeApi.AdminUsersAuditTest do
       insert_audit!(admin_a, "admin.session_revoked", %{"user_id" => 42, "jti" => "abc"}, mid)
       insert_audit!(admin_b, "admin.logout", %{"target" => "self"}, late)
 
-      all = Admin.list_audit_events()
+      all = Admin.list_audit_events(read_opts())
 
       assert Enum.map(all, & &1.event_key) == [
                "security.admin.logout.v1",
-               "security.admin.session_revoked.v1",
+               "security.admin.session_revoked.v2",
                "security.admin.login.v1"
              ]
 
-      by_admin = Admin.list_audit_events(actor_id: admin_a.id)
+      by_admin = Admin.list_audit_events(read_opts(actor_id: admin_a.id))
 
       assert Enum.map(by_admin, & &1.event_key) == [
-               "security.admin.session_revoked.v1",
+               "security.admin.session_revoked.v2",
                "security.admin.login.v1"
              ]
 
-      by_email = Admin.list_audit_events(actor_email: admin_a.email)
+      by_email = Admin.list_audit_events(read_opts(actor_email: admin_a.email))
 
       assert Enum.map(by_email, & &1.event_key) == [
-               "security.admin.session_revoked.v1",
+               "security.admin.session_revoked.v2",
                "security.admin.login.v1"
              ]
 
-      by_action = Admin.list_audit_events(action: "admin.logout")
+      by_action = Admin.list_audit_events(read_opts(action: "admin.logout"))
       assert length(by_action) == 1
       assert hd(by_action).actor_id == admin_b.id
       assert hd(by_action).actor_email == admin_b.email
 
-      by_target = Admin.list_audit_events(target: "42")
+      by_target = Admin.list_audit_events(read_opts(target: "42"))
       assert length(by_target) == 1
-      assert hd(by_target).event_key == "security.admin.session_revoked.v1"
+      assert hd(by_target).event_key == "security.admin.session_revoked.v2"
 
-      by_time = Admin.list_audit_events(since: mid, until: late)
-      assert Enum.map(by_time, & &1.event_key) == ["security.admin.session_revoked.v1"]
+      by_time = Admin.list_audit_events(read_opts(since: mid, until: late))
+      assert Enum.map(by_time, & &1.event_key) == ["security.admin.session_revoked.v2"]
     end
 
     test "blank filters are no-ops" do
@@ -140,10 +147,12 @@ defmodule MatomeApi.AdminUsersAuditTest do
 
       assert length(
                Admin.list_audit_events(
-                 actor_id: nil,
-                 actor_email: "",
-                 action: "",
-                 target: "  "
+                 read_opts(
+                   actor_id: nil,
+                   actor_email: "",
+                   action: "",
+                   target: "  "
+                 )
                )
              ) == 1
     end
@@ -155,7 +164,11 @@ defmodule MatomeApi.AdminUsersAuditTest do
     attrs =
       case action do
         "admin.session_revoked" ->
-          %{subject_type: "user", subject_id: to_string(metadata["user_id"]), details: %{}}
+          %{
+            subject_type: "user",
+            subject_id: to_string(metadata["user_id"]),
+            details: %{"before" => "active", "after" => "revoked"}
+          }
 
         "admin.login" ->
           %{details: %{"via" => metadata["target"]}}

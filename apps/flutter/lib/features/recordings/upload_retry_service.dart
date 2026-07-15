@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -130,7 +128,6 @@ class UploadRetryService {
         e,
         st,
       );
-      developer.log('reachability probe threw', name: 'upload.retry', error: e);
       return false;
     }
   }

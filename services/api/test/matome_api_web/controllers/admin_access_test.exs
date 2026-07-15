@@ -59,7 +59,11 @@ defmodule MatomeApiWeb.AdminAccessTest do
     test "rejects /admin when panel disabled", %{conn: conn} do
       original = Application.get_env(:matome_api, :admin_panel)
       on_exit(fn -> Application.put_env(:matome_api, :admin_panel, original) end)
-      Application.put_env(:matome_api, :admin_panel, enabled: false, email_allowlist: [@allowlisted])
+
+      Application.put_env(:matome_api, :admin_panel,
+        enabled: false,
+        email_allowlist: [@allowlisted]
+      )
 
       assert conn |> get("/admin") |> response(404)
       assert conn |> get("/admin/login") |> response(404)
@@ -114,6 +118,31 @@ defmodule MatomeApiWeb.AdminAccessTest do
       assert conn |> get("/admin") |> html_response(200) =~ "Admin"
       assert "security.admin.login_otp_requested.v1" in audit_actions(@allowlisted)
       assert "security.admin.login.v1" in audit_actions(@allowlisted)
+    end
+
+    test "audit records the proxy-derived client IP", %{conn: conn} do
+      original = Application.get_env(:matome_api, :admin_network)
+      on_exit(fn -> Application.put_env(:matome_api, :admin_network, original) end)
+
+      Application.put_env(:matome_api, :admin_network,
+        allowlist: [],
+        trusted_proxies: ["172.16.0.0/16"]
+      )
+
+      conn =
+        conn
+        |> Map.put(:remote_ip, {172, 16, 0, 10})
+        |> put_req_header("x-forwarded-for", "198.51.100.77")
+
+      {_conn, _code} = request_and_code!(conn, @allowlisted)
+
+      event =
+        Repo.one!(
+          from e in Event,
+            where: e.event_key == "security.admin.login_otp_requested.v1"
+        )
+
+      assert event.remote_ip == "198.51.100.77"
     end
 
     test "OTP is one-shot — reuse fails", %{conn: conn} do

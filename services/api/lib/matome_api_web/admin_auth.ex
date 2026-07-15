@@ -24,6 +24,7 @@ defmodule MatomeApiWeb.AdminAuth do
   @email_key "admin_email"
   @auth_at_key "admin_authenticated_at"
   @otp_at_key "admin_otp_verified_at"
+  @client_ip_key "admin_client_ip"
 
   @session_ttl_seconds 30 * 60
   @reauth_ttl_seconds 5 * 60
@@ -119,31 +120,72 @@ defmodule MatomeApiWeb.AdminAuth do
   `:current_admin` or redirects to the login screen.
   """
   def require_admin(conn, _opts) do
-    case admin_from_session(get_session(conn)) do
-      {:ok, admin} ->
-        assign(conn, :current_admin, admin)
-
-      :error ->
+    with {:ok, admin} <- admin_from_session(get_session(conn)),
+         client_ip when is_binary(client_ip) <- client_ip(conn) do
+      conn
+      |> put_session(@client_ip_key, client_ip)
+      |> assign(:current_admin, admin)
+    else
+      _ ->
         conn
         |> redirect(to: "/admin/login")
         |> halt()
     end
   end
 
+  @doc "Proxy-aware client IP for an HTTP admin request, or nil on an invalid trusted chain."
+  def client_ip(%Plug.Conn{} = conn) do
+    case NetworkPolicy.client_ip(conn.remote_ip, get_req_header(conn, "x-forwarded-for")) do
+      {:ok, ip} -> ip |> :inet.ntoa() |> to_string()
+      :error -> nil
+    end
+  end
+
   @doc """
-  LiveView `on_mount` gate. Re-checks panel enabled + session; network is
-  soft (no hard deny on IP).
+  LiveView `on_mount` gate. Re-checks panel enabled, session, and proxy-aware
+  client attribution. The soft IP allowlist is not an access deny.
   """
   def on_mount(:require_admin, _params, session, socket) do
     with true <- NetworkPolicy.panel_enabled?(),
-         {:ok, admin} <- admin_from_session(session) do
-      {:cont, Phoenix.Component.assign(socket, :current_admin, admin)}
+         {:ok, admin} <- admin_from_session(session),
+         client_ip when is_binary(client_ip) <- live_client_ip(socket, session) do
+      {:cont,
+       Phoenix.Component.assign(socket,
+         current_admin: admin,
+         otp_verified_at: session[@otp_at_key],
+         client_ip: client_ip
+       )}
     else
       _ -> {:halt, Phoenix.LiveView.redirect(socket, to: "/admin/login")}
     end
   end
 
   defp normalize(email), do: email |> String.trim() |> String.downcase()
+
+  defp live_client_ip(socket, session) do
+    if Phoenix.LiveView.connected?(socket) do
+      peer_data = Phoenix.LiveView.get_connect_info(socket, :peer_data)
+      x_headers = Phoenix.LiveView.get_connect_info(socket, :x_headers) || []
+
+      xff =
+        for {key, value} <- x_headers,
+            String.downcase(to_string(key)) == "x-forwarded-for",
+            do: to_string(value)
+
+      case peer_data do
+        %{address: address} ->
+          case NetworkPolicy.client_ip(address, xff) do
+            {:ok, ip} -> ip |> :inet.ntoa() |> to_string()
+            :error -> nil
+          end
+
+        _ ->
+          nil
+      end
+    else
+      session[@client_ip_key]
+    end
+  end
 
   defp renew_session(conn) do
     conn

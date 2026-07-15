@@ -41,20 +41,27 @@ defmodule MatomeApi.Content.SpaceLifecycleJob do
       nil ->
         {:discard, :missing_workspace}
 
-      %Workspace{status: from} = workspace ->
-        allowed = Map.get(@allowed, from, [])
+      %Workspace{} = workspace ->
+        case transition_changeset(workspace, to_status) do
+          {:ok, changeset} ->
+            case Repo.update(changeset) do
+              {:ok, _} -> :ok
+              {:error, changeset} -> {:error, changeset}
+            end
 
-        if to_status in allowed do
-          workspace
-          |> Workspace.admin_changeset(%{status: to_status})
-          |> Repo.update()
-          |> case do
-            {:ok, _} -> :ok
-            {:error, changeset} -> {:error, changeset}
-          end
-        else
-          {:discard, {:invalid_transition, from, to_status}}
+          {:error, reason} ->
+            {:discard, reason}
         end
+    end
+  end
+
+  @doc false
+  def transition_changeset(%Workspace{status: from} = workspace, to_status)
+      when is_binary(to_status) do
+    if to_status in Map.get(@allowed, from, []) do
+      {:ok, Workspace.admin_changeset(workspace, %{status: to_status})}
+    else
+      {:error, {:invalid_transition, from, to_status}}
     end
   end
 

@@ -10,10 +10,13 @@ defmodule MatomeApi.Admin do
 
   import Ecto.Query
 
+  alias Ecto.Multi
   alias MatomeApi.Admin.{Dashboard, LoginOtp, NetworkPolicy, Notifier, TotpSecret}
   alias MatomeApi.Auth
   alias MatomeApi.Auth.{RefreshToken, User}
+  alias MatomeApi.Content.{SpaceKeyWrap, SpaceLifecycleJob, SpaceMember, Workspace}
   alias MatomeApi.Events
+  alias MatomeApi.Events.EventCatalog
   alias MatomeApi.RateLimiter
   alias MatomeApi.Repo
 
@@ -28,8 +31,14 @@ defmodule MatomeApi.Admin do
   @doc "Activity window (seconds) for dashboard + Sessions “active recently”."
   def activity_window_seconds, do: Dashboard.activity_window_seconds()
 
-  @doc "Landing dashboard aggregations — see `MatomeApi.Admin.Dashboard.stats/1`."
-  def dashboard_stats(now \\ DateTime.utc_now()), do: Dashboard.stats(now)
+  @doc "Landing dashboard aggregations with a mandatory sensitive-read event."
+  def dashboard_stats(opts) when is_list(opts), do: dashboard_stats(DateTime.utc_now(), opts)
+
+  def dashboard_stats(%DateTime{} = now, opts) when is_list(opts) do
+    result = Dashboard.stats(now)
+    audit_sensitive_read!("dashboard", opts)
+    result
+  end
 
   @doc """
   Request a login OTP for an allowlisted email.
@@ -48,35 +57,47 @@ defmodule MatomeApi.Admin do
       now = DateTime.utc_now()
       expires_at = DateTime.add(now, @otp_ttl_seconds, :second)
 
-      Repo.transaction(fn ->
-        from(o in LoginOtp, where: o.email == ^email and is_nil(o.consumed_at))
-        |> Repo.update_all(set: [consumed_at: now])
-
-        %LoginOtp{}
-        |> LoginOtp.changeset(%{
+      otp_changeset =
+        LoginOtp.changeset(%LoginOtp{}, %{
           email: email,
           code_hash: hash_code(code),
           expires_at: expires_at,
           remote_ip: remote_ip && to_string(remote_ip)
         })
-        |> Repo.insert!()
-      end)
+
+      event_attrs =
+        audit_attrs("admin.login_otp_requested",
+          actor: %{email: email},
+          remote_ip: remote_ip && to_string(remote_ip)
+        )
+
+      Multi.new()
+      |> Multi.update_all(
+        :expire_previous,
+        from(o in LoginOtp, where: o.email == ^email and is_nil(o.consumed_at)),
+        set: [consumed_at: now]
+      )
+      |> Multi.insert(:otp, otp_changeset)
+      |> Events.put_security(
+        :event,
+        event_key!("admin.login_otp_requested"),
+        event_attrs
+      )
+      |> Repo.transaction()
       |> case do
-        {:ok, _} ->
+        {:ok, _changes} ->
           case Notifier.deliver_login_otp(email, code) do
             {:ok, _} ->
-              audit!("admin.login_otp_requested",
-                actor: %{email: email},
-                remote_ip: remote_ip && to_string(remote_ip)
-              )
-
               {:ok, :sent}
 
             {:error, reason} ->
               {:error, reason}
           end
 
-        {:error, reason} ->
+        {:error, :event, changeset, _changes} ->
+          {:error, {:audit_failed, changeset}}
+
+        {:error, _operation, reason, _changes} ->
           {:error, reason}
       end
     else
@@ -88,7 +109,7 @@ defmodule MatomeApi.Admin do
   Verify a one-shot login OTP. Returns `{:ok, email}`, `{:error, :invalid_code}`,
   or `{:error, :rate_limited}`.
   """
-  def verify_login_otp(email, code, _opts \\ []) do
+  def verify_login_otp(email, code, opts \\ []) do
     email = normalize_email(email)
     code = String.trim(code || "")
     now = DateTime.utc_now()
@@ -106,40 +127,73 @@ defmodule MatomeApi.Admin do
           {:error, :rate_limited}
 
         :ok ->
-          otp =
-            from(o in LoginOtp,
-              where:
-                o.email == ^email and is_nil(o.consumed_at) and o.expires_at > ^now,
-              order_by: [desc: o.inserted_at],
-              limit: 1
-            )
-            |> Repo.one()
-
-          cond do
-            is_nil(otp) ->
-              {:error, :invalid_code}
-
-            not secure_compare(otp.code_hash, hash_code(code)) ->
-              {:error, :invalid_code}
-
-            true ->
-              {1, _} =
-                from(o in LoginOtp, where: o.id == ^otp.id and is_nil(o.consumed_at))
-                |> Repo.update_all(set: [consumed_at: now])
-
-              {:ok, email}
-          end
+          verify_and_consume_otp(email, code, now, opts)
       end
     end
   end
 
   defp generate_otp_code do
-    0..5
-    |> Enum.map(fn _ -> Integer.to_string(:rand.uniform(10) - 1) end)
-    |> Enum.join()
+    1_000_000
+    |> secure_uniform()
+    |> Integer.to_string()
+    |> String.pad_leading(6, "0")
   end
 
-  defp hash_code(code), do: :crypto.hash(:sha256, code)
+  defp secure_uniform(limit) do
+    <<candidate::unsigned-32>> = :crypto.strong_rand_bytes(4)
+    upper_bound = 4_294_967_296 - rem(4_294_967_296, limit)
+
+    if candidate < upper_bound, do: rem(candidate, limit), else: secure_uniform(limit)
+  end
+
+  defp hash_code(code), do: :crypto.mac(:hmac, :sha256, otp_pepper(), code)
+
+  defp otp_pepper do
+    Application.fetch_env!(:matome_api, :admin_otp)
+    |> Keyword.fetch!(:pepper)
+  end
+
+  defp verify_and_consume_otp(email, code, now, opts) do
+    action = Keyword.get(opts, :audit_action, "admin.login")
+
+    event_attrs =
+      audit_attrs(action,
+        actor: %{email: email},
+        metadata: %{method: "email_otp", result: "verified"},
+        remote_ip: Keyword.get(opts, :remote_ip)
+      )
+
+    Multi.new()
+    |> Multi.run(:otp, fn repo, _changes ->
+      otp =
+        from(o in LoginOtp,
+          where: o.email == ^email and is_nil(o.consumed_at) and o.expires_at > ^now,
+          order_by: [desc: o.inserted_at],
+          limit: 1,
+          lock: "FOR UPDATE"
+        )
+        |> repo.one()
+
+      if otp && secure_compare(otp.code_hash, hash_code(code)) do
+        {:ok, otp}
+      else
+        {:error, :invalid_code}
+      end
+    end)
+    |> Multi.update_all(
+      :consume,
+      fn %{otp: otp} -> from(o in LoginOtp, where: o.id == ^otp.id and is_nil(o.consumed_at)) end,
+      set: [consumed_at: now]
+    )
+    |> Events.put_security(:event, event_key!(action), event_attrs)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{consume: {1, _}}} -> {:ok, email}
+      {:error, :otp, :invalid_code, _changes} -> {:error, :invalid_code}
+      {:error, :event, changeset, _changes} -> {:error, {:audit_failed, changeset}}
+      {:error, _operation, _reason, _changes} -> {:error, :invalid_code}
+    end
+  end
 
   defp secure_compare(a, b) when is_binary(a) and is_binary(b) and byte_size(a) == byte_size(b) do
     Plug.Crypto.secure_compare(a, b)
@@ -147,29 +201,37 @@ defmodule MatomeApi.Admin do
 
   defp secure_compare(_, _), do: false
 
-  defp normalize_email(email) when is_binary(email), do: email |> String.trim() |> String.downcase()
+  defp normalize_email(email) when is_binary(email),
+    do: email |> String.trim() |> String.downcase()
+
   defp normalize_email(_), do: ""
 
   @doc """
   The §9.2 sessions view data: every ACTIVE session grouped
   `user → device → tokens`.
   """
-  def session_tree(now \\ DateTime.utc_now()) do
-    from(t in RefreshToken,
-      where: is_nil(t.revoked_at) and t.expires_at > ^now,
-      order_by: [desc: t.last_seen_at],
-      preload: [:user, :device]
-    )
-    |> Repo.all()
-    |> Enum.group_by(& &1.user_id)
-    |> Enum.map(fn {_user_id, [first | _] = tokens} ->
-      %{
-        user: first.user,
-        last_seen_at: most_recent(tokens),
-        devices: group_by_device(tokens)
-      }
-    end)
-    |> Enum.sort_by(& &1.last_seen_at, {:desc, DateTime})
+  def session_tree(opts) when is_list(opts), do: session_tree(DateTime.utc_now(), opts)
+
+  def session_tree(%DateTime{} = now, opts) when is_list(opts) do
+    result =
+      from(t in RefreshToken,
+        where: is_nil(t.revoked_at) and t.expires_at > ^now,
+        order_by: [desc: t.last_seen_at],
+        preload: [:user, :device]
+      )
+      |> Repo.all()
+      |> Enum.group_by(& &1.user_id)
+      |> Enum.map(fn {_user_id, [first | _] = tokens} ->
+        %{
+          user: first.user,
+          last_seen_at: most_recent(tokens),
+          devices: group_by_device(tokens)
+        }
+      end)
+      |> Enum.sort_by(& &1.last_seen_at, {:desc, DateTime})
+
+    audit_sensitive_read!("sessions", opts)
+    result
   end
 
   defp group_by_device(tokens) do
@@ -191,25 +253,57 @@ defmodule MatomeApi.Admin do
   Administrative session revocation. `actor` is `%{email: ...}` (or a User).
   """
   def revoke_session(actor, jti, opts \\ []) when is_binary(jti) do
-    case Repo.get_by(RefreshToken, jti: jti) do
-      nil ->
-        {:error, :not_found}
+    with {:ok, context} <- authorize_mutation(Keyword.put(opts, :actor, actor)) do
+      Multi.new()
+      |> Multi.run(:token, fn repo, _changes ->
+        case repo.get_by(RefreshToken, [jti: jti], lock: "FOR UPDATE") do
+          nil -> {:error, :not_found}
+          token -> {:ok, token}
+        end
+      end)
+      |> Multi.update_all(
+        :revoke,
+        fn %{token: token} ->
+          scope =
+            if token.family_id do
+              dynamic([t], t.family_id == ^token.family_id and is_nil(t.revoked_at))
+            else
+              dynamic([t], t.id == ^token.id and is_nil(t.revoked_at))
+            end
 
-      %RefreshToken{} = token ->
-        :ok = Auth.revoke_session(token)
-
-        audit!("admin.session_revoked",
-          actor: actor,
+          from(t in RefreshToken, where: ^scope, select: t.jti)
+        end,
+        set: [revoked_at: DateTime.utc_now() |> DateTime.truncate(:second)]
+      )
+      |> Events.put_security(:event, event_key!("admin.session_revoked"), fn %{token: token} ->
+        audit_attrs("admin.session_revoked",
+          actor: context.actor,
+          remote_ip: context.remote_ip,
           metadata: %{
-            "jti" => jti,
-            "user_id" => token.user_id,
-            "family_id" => token.family_id,
-            "device_id" => token.device_id
-          },
-          remote_ip: Keyword.get(opts, :remote_ip)
+            jti: jti,
+            user_id: token.user_id,
+            family_id: token.family_id,
+            device_id: token.device_id,
+            before: "active",
+            after: "revoked"
+          }
         )
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{token: token, revoke: {_count, revoked_jtis}}} ->
+          :ok = Auth.notify_sessions_revoked(token.user_id, revoked_jtis)
+          :ok
 
-        :ok
+        {:error, :token, :not_found, _changes} ->
+          {:error, :not_found}
+
+        {:error, :event, changeset, _changes} ->
+          {:error, {:audit_failed, changeset}}
+
+        {:error, _operation, reason, _changes} ->
+          {:error, reason}
+      end
     end
   end
 
@@ -219,21 +313,25 @@ defmodule MatomeApi.Admin do
   `opts`: `:actor` (`%{email: ...}`, `%User{}`, or nil), `:metadata`, `:remote_ip`.
   """
   def audit!(action, opts \\ []) when is_binary(action) do
-    actor = Keyword.get(opts, :actor)
-    {actor_id, actor_email} = actor_fields(actor)
+    Events.write_security!(event_key!(action), audit_attrs(action, opts))
+  end
+
+  defp audit_attrs(action, opts) do
+    {actor_id, actor_email} = opts |> Keyword.get(:actor) |> actor_fields()
+
+    action
+    |> admin_event_attrs(Keyword.get(opts, :metadata, %{}))
+    |> Map.merge(%{
+      actor_id: actor_id,
+      actor_email: actor_email,
+      remote_ip: Keyword.get(opts, :remote_ip),
+      severity: if(action == "admin.login_failed", do: "warning", else: "info")
+    })
+  end
+
+  defp event_key!(action) do
     {:ok, event_key} = Events.admin_event_key(action)
-
-    attrs =
-      action
-      |> admin_event_attrs(Keyword.get(opts, :metadata, %{}))
-      |> Map.merge(%{
-        actor_id: actor_id,
-        actor_email: actor_email,
-        remote_ip: Keyword.get(opts, :remote_ip),
-        severity: if(action == "admin.login_failed", do: "warning", else: "info")
-      })
-
-    Events.write_security!(event_key, attrs)
+    event_key
   end
 
   defp actor_fields(%User{id: id, email: email}), do: {id, email}
@@ -244,7 +342,7 @@ defmodule MatomeApi.Admin do
   @doc """
   The §9.6 users directory: accounts with login methods, MFA status, last login.
   """
-  def list_users do
+  def list_users(opts) when is_list(opts) do
     mfa_ids =
       from(t in TotpSecret, where: not is_nil(t.confirmed_at), select: t.user_id)
       |> Repo.all()
@@ -255,19 +353,23 @@ defmodule MatomeApi.Admin do
       |> Repo.all()
       |> Enum.group_by(& &1.user_id)
 
-    from(u in User, order_by: [asc: u.email])
-    |> Repo.all()
-    |> Enum.map(fn user ->
-      tokens = Map.get(tokens_by_user, user.id, [])
+    result =
+      from(u in User, order_by: [asc: u.email])
+      |> Repo.all()
+      |> Enum.map(fn user ->
+        tokens = Map.get(tokens_by_user, user.id, [])
 
-      %{
-        user: user,
-        login_methods: distinct_login_methods(tokens),
-        mfa_enabled: MapSet.member?(mfa_ids, user.id),
-        last_login_at: most_recent_or_nil(tokens)
-      }
-    end)
-    |> Enum.sort_by(& &1.last_login_at, {:desc, DateTime})
+        %{
+          user: user,
+          login_methods: distinct_login_methods(tokens),
+          mfa_enabled: MapSet.member?(mfa_ids, user.id),
+          last_login_at: most_recent_or_nil(tokens)
+        }
+      end)
+      |> Enum.sort_by(& &1.last_login_at, {:desc, DateTime})
+
+    audit_sensitive_read!("users", opts)
+    result
   end
 
   defp distinct_login_methods(tokens) do
@@ -307,19 +409,23 @@ defmodule MatomeApi.Admin do
         _other -> action
       end
 
-    [
-      limit: 100,
-      event_class: "security",
-      actor_id: actor_id,
-      actor_email: actor_email && String.downcase(actor_email),
-      event_key: event_key,
-      since: since,
-      until: until
-    ]
-    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-    |> Events.list_events()
-    |> Map.fetch!(:entries)
-    |> maybe_filter_target(target)
+    result =
+      [
+        limit: 100,
+        event_class: "security",
+        actor_id: actor_id,
+        actor_email: actor_email && String.downcase(actor_email),
+        event_key: event_key,
+        since: since,
+        until: until
+      ]
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+      |> Events.list_events()
+      |> Map.fetch!(:entries)
+      |> maybe_filter_target(target)
+
+    audit_sensitive_read!("audit", opts)
+    result
   end
 
   defp blank_to_nil(nil), do: nil
@@ -359,7 +465,7 @@ defmodule MatomeApi.Admin do
 
     case action do
       "admin.session_revoked" ->
-        %{}
+        %{details: Map.take(metadata, ~w(before after))}
         |> put_present(:owner_id, metadata["user_id"])
         |> put_present(:device_id, metadata["device_id"])
         |> put_present(:correlation_id, metadata["family_id"])
@@ -375,23 +481,30 @@ defmodule MatomeApi.Admin do
 
         %{}
         |> put_subject("workspace", metadata["workspace_id"])
-        |> Map.put(:details, %{"changed_keys" => changed_keys})
+        |> Map.put(
+          :details,
+          metadata |> Map.take(~w(before after)) |> Map.put("changed_keys", changed_keys)
+        )
 
       "admin.space_member_added" ->
         %{
-          details: Map.take(metadata, ~w(workspace_id user_id role))
+          details: Map.take(metadata, ~w(workspace_id user_id role before after))
         }
-        |> put_subject("workspace", metadata["workspace_id"])
+        |> put_subject("space_member", metadata["member_id"])
 
       "admin.space_member_revoked" ->
         %{
-          details: Map.take(metadata, ~w(workspace_id user_id))
+          details: Map.take(metadata, ~w(workspace_id user_id before after))
         }
         |> put_subject("space_member", metadata["member_id"])
 
       "admin.space_lifecycle" ->
-        %{details: Map.take(metadata, ~w(to_status))}
+        %{details: Map.take(metadata, ~w(before after))}
         |> put_subject("workspace", metadata["workspace_id"])
+
+      "admin.sensitive_read" ->
+        %{details: Map.take(metadata, ~w(resource result))}
+        |> put_subject(metadata["subject_type"] || "admin_view", metadata["subject_id"])
 
       "admin.login" ->
         %{details: Map.take(metadata, ~w(method result via))}
@@ -428,9 +541,9 @@ defmodule MatomeApi.Admin do
   §9.4 Spaces directory for the admin LiveView — every workspace with owner
   email, two-axis fields, quota/lifecycle, and active member count.
   """
-  def list_spaces do
+  def list_spaces(opts) when is_list(opts) do
     member_counts =
-      from(m in MatomeApi.Content.SpaceMember,
+      from(m in SpaceMember,
         where: is_nil(m.revoked_at),
         group_by: m.workspace_id,
         select: {m.workspace_id, count(m.id)}
@@ -438,23 +551,33 @@ defmodule MatomeApi.Admin do
       |> Repo.all()
       |> Map.new()
 
-    from(w in MatomeApi.Content.Workspace,
-      join: u in assoc(w, :owner),
-      order_by: [asc: w.name],
-      preload: [owner: u]
-    )
-    |> Repo.all()
-    |> Enum.map(fn workspace ->
-      %{
-        workspace: workspace,
-        owner_email: workspace.owner.email,
-        member_count: Map.get(member_counts, workspace.id, 0)
-      }
-    end)
+    result =
+      from(w in Workspace,
+        join: u in assoc(w, :owner),
+        order_by: [asc: w.name],
+        preload: [owner: u]
+      )
+      |> Repo.all()
+      |> Enum.map(fn workspace ->
+        %{
+          workspace: workspace,
+          owner_email: workspace.owner.email,
+          member_count: Map.get(member_counts, workspace.id, 0)
+        }
+      end)
+
+    audit_sensitive_read!("spaces", opts)
+    result
   end
 
-  def get_space(id) do
-    case Repo.get(MatomeApi.Content.Workspace, id) do
+  def get_space(id, opts) when is_list(opts) do
+    workspace = get_space_raw(id)
+    audit_sensitive_read!("space", opts, "workspace", id)
+    workspace
+  end
+
+  defp get_space_raw(id) do
+    case Repo.get(Workspace, id) do
       nil ->
         nil
 
@@ -465,111 +588,307 @@ defmodule MatomeApi.Admin do
   end
 
   def update_space(id, attrs, opts \\ []) do
-    with %MatomeApi.Content.Workspace{} = workspace <- get_space(id) do
-      workspace
-      |> MatomeApi.Content.Workspace.admin_changeset(attrs)
-      |> Repo.update()
-      |> case do
-        {:ok, updated} ->
-          audit!("admin.space_updated",
-            actor: Keyword.get(opts, :actor),
-            remote_ip: Keyword.get(opts, :remote_ip),
-            metadata: %{
-              workspace_id: updated.id,
-              changes: Map.take(attrs, ~w(quota_bytes expires_at status space_type is_local)a)
-            }
-          )
+    with {:ok, context} <- authorize_mutation(opts) do
+      Multi.new()
+      |> Multi.run(:workspace, fn repo, _changes ->
+        case repo.get(Workspace, id, lock: "FOR UPDATE") do
+          nil -> {:error, :not_found}
+          workspace -> {:ok, workspace}
+        end
+      end)
+      |> Multi.update(:updated, fn %{workspace: workspace} ->
+        Workspace.admin_changeset(workspace, attrs)
+      end)
+      |> Events.put_security(:event, event_key!("admin.space_updated"), fn %{
+                                                                             workspace: before,
+                                                                             updated: after_state
+                                                                           } ->
+        before_snapshot = space_policy_snapshot(before)
+        after_snapshot = space_policy_snapshot(after_state)
 
+        changes =
+          before_snapshot
+          |> Map.keys()
+          |> Enum.filter(&(before_snapshot[&1] != after_snapshot[&1]))
+          |> Map.new(&{&1, after_snapshot[&1]})
+
+        audit_attrs("admin.space_updated",
+          actor: context.actor,
+          remote_ip: context.remote_ip,
+          metadata: %{
+            workspace_id: id,
+            changes: changes,
+            before: Jason.encode!(before_snapshot),
+            after: Jason.encode!(after_snapshot)
+          }
+        )
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{updated: updated}} ->
           {:ok, Repo.preload(updated, [:owner, space_members: :user], force: true)}
 
-        other ->
-          other
+        {:error, :event, changeset, _changes} ->
+          {:error, {:audit_failed, changeset}}
+
+        {:error, _operation, reason, _changes} ->
+          {:error, reason}
       end
     end
   end
 
   def add_space_member(workspace_id, user_id, role, opts \\ []) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    with {:ok, context} <- authorize_mutation(opts) do
+      member_changeset =
+        SpaceMember.changeset(%SpaceMember{}, %{
+          workspace_id: workspace_id,
+          user_id: user_id,
+          role: role,
+          granted_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        })
 
-    %MatomeApi.Content.SpaceMember{}
-    |> MatomeApi.Content.SpaceMember.changeset(%{
-      workspace_id: workspace_id,
-      user_id: user_id,
-      role: role,
-      granted_at: now
-    })
-    |> Repo.insert()
-    |> case do
-      {:ok, member} ->
-        audit!("admin.space_member_added",
-          actor: Keyword.get(opts, :actor),
-          remote_ip: Keyword.get(opts, :remote_ip),
-          metadata: %{workspace_id: workspace_id, user_id: user_id, role: role}
+      Multi.new()
+      |> Multi.insert(:member, member_changeset)
+      |> Events.put_security(:event, event_key!("admin.space_member_added"), fn %{member: member} ->
+        audit_attrs("admin.space_member_added",
+          actor: context.actor,
+          remote_ip: context.remote_ip,
+          metadata: %{
+            workspace_id: workspace_id,
+            user_id: user_id,
+            member_id: member.id,
+            role: role,
+            before: "absent",
+            after: role
+          }
         )
-
-        {:ok, Repo.preload(member, :user)}
-
-      other ->
-        other
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{member: member}} -> {:ok, Repo.preload(member, :user)}
+        {:error, :event, changeset, _changes} -> {:error, {:audit_failed, changeset}}
+        {:error, _operation, reason, _changes} -> {:error, reason}
+      end
     end
   end
 
   def revoke_space_member(member_id, opts \\ []) do
-    case Repo.get(MatomeApi.Content.SpaceMember, member_id) do
-      nil ->
-        nil
+    with {:ok, context} <- authorize_mutation(opts) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      member ->
-        now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-        Repo.transaction(fn ->
-          {:ok, updated} =
-            member
-            |> Ecto.Changeset.change(revoked_at: now)
-            |> Repo.update()
-
-          from(w in MatomeApi.Content.SpaceKeyWrap,
-            where: w.workspace_id == ^updated.workspace_id,
-            where: w.user_id == ^updated.user_id,
+      Multi.new()
+      |> Multi.run(:member, fn repo, _changes ->
+        case repo.get(SpaceMember, member_id, lock: "FOR UPDATE") do
+          nil -> {:error, :not_found}
+          %SpaceMember{revoked_at: %DateTime{}} -> {:error, :already_revoked}
+          member -> {:ok, member}
+        end
+      end)
+      |> Multi.update(:updated, fn %{member: member} ->
+        Ecto.Changeset.change(member, revoked_at: now)
+      end)
+      |> Multi.update_all(
+        :key_wraps,
+        fn %{member: member} ->
+          from(w in SpaceKeyWrap,
+            where: w.workspace_id == ^member.workspace_id,
+            where: w.user_id == ^member.user_id,
             where: is_nil(w.revoked_at)
           )
-          |> Repo.update_all(set: [revoked_at: now])
-
-          audit!("admin.space_member_revoked",
-            actor: Keyword.get(opts, :actor),
-            remote_ip: Keyword.get(opts, :remote_ip),
-            metadata: %{
-              workspace_id: updated.workspace_id,
-              user_id: updated.user_id,
-              member_id: updated.id
-            }
-          )
-
-          updated
-        end)
-        |> case do
-          {:ok, updated} -> {:ok, updated}
-          {:error, reason} -> {:error, reason}
-        end
+        end,
+        set: [revoked_at: now]
+      )
+      |> Events.put_security(:event, event_key!("admin.space_member_revoked"), fn %{
+                                                                                    member: member
+                                                                                  } ->
+        audit_attrs("admin.space_member_revoked",
+          actor: context.actor,
+          remote_ip: context.remote_ip,
+          metadata: %{
+            workspace_id: member.workspace_id,
+            user_id: member.user_id,
+            member_id: member.id,
+            before: member.role,
+            after: "revoked"
+          }
+        )
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{updated: updated}} -> {:ok, updated}
+        {:error, :event, changeset, _changes} -> {:error, {:audit_failed, changeset}}
+        {:error, _operation, reason, _changes} -> {:error, reason}
+      end
     end
   end
 
   def transition_space(workspace_id, to_status, opts \\ []) do
-    case MatomeApi.Content.SpaceLifecycleJob.transition(workspace_id, to_status) do
-      :ok ->
-        audit!("admin.space_lifecycle",
-          actor: Keyword.get(opts, :actor),
-          remote_ip: Keyword.get(opts, :remote_ip),
-          metadata: %{workspace_id: workspace_id, to_status: to_status}
+    with {:ok, context} <- authorize_mutation(opts) do
+      Multi.new()
+      |> Multi.run(:workspace, fn repo, _changes ->
+        case repo.get(Workspace, workspace_id, lock: "FOR UPDATE") do
+          nil -> {:error, :not_found}
+          workspace -> {:ok, workspace}
+        end
+      end)
+      |> Multi.run(:transition, fn _repo, %{workspace: workspace} ->
+        SpaceLifecycleJob.transition_changeset(workspace, to_status)
+      end)
+      |> Multi.update(:updated, fn %{transition: changeset} -> changeset end)
+      |> Events.put_security(:event, event_key!("admin.space_lifecycle"), fn %{
+                                                                               workspace: before,
+                                                                               updated:
+                                                                                 after_state
+                                                                             } ->
+        audit_attrs("admin.space_lifecycle",
+          actor: context.actor,
+          remote_ip: context.remote_ip,
+          metadata: %{
+            workspace_id: workspace_id,
+            before: before.status,
+            after: after_state.status
+          }
         )
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{updated: updated}} ->
+          {:ok, Repo.preload(updated, [:owner, space_members: :user], force: true)}
 
-        {:ok, get_space(workspace_id)}
+        {:error, :event, changeset, _changes} ->
+          {:error, {:audit_failed, changeset}}
 
-      {:discard, reason} ->
-        {:error, reason}
-
-      {:error, reason} ->
-        {:error, reason}
+        {:error, _operation, reason, _changes} ->
+          {:error, reason}
+      end
     end
+  end
+
+  @doc "Secure seam for future event-collection configuration controls."
+  def update_event_catalog(key, attrs, opts \\ []) when is_binary(key) and is_map(attrs) do
+    with {:ok, context} <- authorize_mutation(opts) do
+      Multi.new()
+      |> Multi.run(:catalog, fn repo, _changes ->
+        case repo.get(EventCatalog, key, lock: "FOR UPDATE") do
+          nil -> {:error, :not_found}
+          catalog -> {:ok, catalog}
+        end
+      end)
+      |> Multi.update(:updated, fn %{catalog: catalog} ->
+        changeset = EventCatalog.changeset(catalog, attrs)
+
+        if changeset.changes == %{} do
+          Ecto.Changeset.add_error(changeset, :base, "must change at least one field")
+        else
+          changeset
+        end
+      end)
+      |> Events.put_security(:event, "security.event_catalog.changed.v2", fn %{
+                                                                               catalog: before,
+                                                                               updated:
+                                                                                 after_state
+                                                                             } ->
+        {actor_id, actor_email} = actor_fields(context.actor)
+
+        changed_fields =
+          [:enabled, :description, :retention_days]
+          |> Enum.filter(&(Map.get(before, &1) != Map.get(after_state, &1)))
+          |> Enum.map(&to_string/1)
+
+        %{
+          actor_id: actor_id,
+          actor_email: actor_email,
+          remote_ip: context.remote_ip,
+          subject_type: "event_catalog",
+          subject_id: key,
+          details: %{
+            changed_fields: changed_fields,
+            before: Jason.encode!(catalog_policy_snapshot(before)),
+            after: Jason.encode!(catalog_policy_snapshot(after_state)),
+            result: "updated"
+          }
+        }
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{updated: updated}} -> {:ok, updated}
+        {:error, :event, changeset, _changes} -> {:error, {:audit_failed, changeset}}
+        {:error, _operation, reason, _changes} -> {:error, reason}
+      end
+    end
+  end
+
+  defp authorize_mutation(opts) do
+    with {:ok, actor} <- authorize_actor(Keyword.get(opts, :actor)),
+         {:otp, otp_at} when is_integer(otp_at) <-
+           {:otp, Keyword.get(opts, :otp_verified_at)},
+         true <- recent_otp?(otp_at),
+         remote_ip when is_binary(remote_ip) and remote_ip != "" <- Keyword.get(opts, :remote_ip) do
+      {:ok, %{actor: actor, remote_ip: remote_ip}}
+    else
+      {:error, reason} -> {:error, reason}
+      {:otp, _otp_at} -> {:error, :recent_otp_required}
+      false -> {:error, :recent_otp_required}
+      _ -> {:error, :invalid_client_ip}
+    end
+  end
+
+  defp authorize_actor(%User{email: email} = actor) do
+    if email_allowed?(email), do: {:ok, actor}, else: {:error, :forbidden}
+  end
+
+  defp authorize_actor(%{email: email}) when is_binary(email) do
+    email = normalize_email(email)
+    if email_allowed?(email), do: {:ok, %{email: email}}, else: {:error, :forbidden}
+  end
+
+  defp authorize_actor(_actor), do: {:error, :forbidden}
+
+  defp recent_otp?(verified_at) do
+    now = System.os_time(:second)
+
+    ttl =
+      Application.get_env(:matome_api, :admin_session, [])
+      |> Keyword.get(:reauth_ttl_seconds, 5 * 60)
+
+    verified_at <= now and now < verified_at + ttl
+  end
+
+  defp audit_sensitive_read!(resource, opts, subject_type \\ "admin_view", subject_id \\ nil) do
+    actor = Keyword.get(opts, :actor)
+    remote_ip = Keyword.get(opts, :remote_ip)
+
+    with {:ok, actor} <- authorize_actor(actor),
+         true <- is_binary(remote_ip) and remote_ip != "" do
+      audit!("admin.sensitive_read",
+        actor: actor,
+        remote_ip: remote_ip,
+        metadata: %{
+          resource: resource,
+          result: "success",
+          subject_type: subject_type,
+          subject_id: subject_id || resource
+        }
+      )
+    else
+      _ -> raise "sensitive admin read denied"
+    end
+  end
+
+  defp space_policy_snapshot(workspace) do
+    %{
+      "quota_bytes" => workspace.quota_bytes,
+      "expires_at" => workspace.expires_at && DateTime.to_iso8601(workspace.expires_at),
+      "status" => workspace.status,
+      "space_type" => workspace.space_type,
+      "is_local" => workspace.is_local
+    }
+  end
+
+  defp catalog_policy_snapshot(catalog) do
+    %{
+      "enabled" => catalog.enabled,
+      "retention_days" => catalog.retention_days
+    }
   end
 end

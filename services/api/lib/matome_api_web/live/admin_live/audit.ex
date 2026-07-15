@@ -126,6 +126,12 @@ defmodule MatomeApiWeb.AdminLive.Audit do
       ]
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
 
+    opts =
+      Keyword.merge(opts,
+        actor: socket.assigns.current_admin,
+        remote_ip: socket.assigns.client_ip
+      )
+
     assign(socket, events: Admin.list_audit_events(opts))
   end
 

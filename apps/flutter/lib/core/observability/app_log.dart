@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../storage/app_storage.dart'
     show isRunningFlutterTest, kMatomeFolderName;
+import '../logging/log_redaction.dart';
 
 /// Coarse log categories so the single app log can be grepped per concern
 /// (`grep ' sync:' app.log`, `grep '\[ERR\]'`, …).
@@ -109,7 +110,8 @@ class AppLog {
   /// same string (modulo the timestamp), so it is unit-testable.
   @visibleForTesting
   static String formatLine(String level, LogCat cat, String message) =>
-      '${DateTime.now().toIso8601String()} [$level] ${cat.name}: $message';
+      '${DateTime.now().toIso8601String()} [$level] ${cat.name}: '
+      '${redactSensitiveLogData(message)}';
 
   static Future<void> _writeRaw(String line) async {
     if (isRunningFlutterTest || kIsWeb) return;

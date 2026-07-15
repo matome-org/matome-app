@@ -90,7 +90,9 @@ Set once per environment (do not rotate casually — invalidates sessions):
 | `SMTP_*` | When `MAILER_ADAPTER=smtp` |
 | `ADMIN_PANEL_ENABLED` | `true` to expose `/admin` |
 | `ADMIN_EMAIL_ALLOWLIST` | CSV of staff emails (OTP gate) |
+| `ADMIN_OTP_PEPPER` | Independent random secret (minimum 32 bytes) for keyed admin OTP verification |
 | `ADMIN_IP_ALLOWLIST` | Optional soft IP tier for rate limits |
+| `ADMIN_TRUSTED_PROXIES` | CIDRs allowed to supply `X-Forwarded-For` for admin attribution |
 | `AI_ENGINE_ENDPOINT` / `AI_ENGINE_TOKEN` / `AI_ENGINE_CALLBACK_BASE_URL` | AI stub or real engine |
 | Plus all **data-plane** vars above | Postgres + S3-compatible |
 

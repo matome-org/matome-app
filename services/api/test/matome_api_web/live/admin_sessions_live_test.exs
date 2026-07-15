@@ -54,6 +54,8 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
   end
 
   defp socket(admin, extra \\ %{}) do
+    ensure_allowlist!(admin.email)
+
     assigns =
       Map.merge(
         %{
@@ -62,7 +64,7 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
           live_action: :index,
           current_admin: %{email: admin.email},
           otp_verified_at: System.os_time(:second),
-          peer_ip: "192.0.2.99",
+          client_ip: "192.0.2.99",
           sessions: [],
           now: DateTime.utc_now()
         },
@@ -120,7 +122,7 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
       audit =
         Repo.one!(
           from e in Event,
-            where: e.event_key == "security.admin.session_revoked.v1"
+            where: e.event_key == "security.admin.session_revoked.v2"
         )
 
       assert audit.actor_id == nil
@@ -151,7 +153,7 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
 
       refute Repo.exists?(
                from e in Event,
-                 where: e.event_key == "security.admin.session_revoked.v1"
+                 where: e.event_key == "security.admin.session_revoked.v2"
              )
     end
 
@@ -163,6 +165,21 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
 
       assert socket.assigns.flash["error"] =~ "not found"
     end
+
+    test "an actor removed from the allowlist after mount cannot revoke" do
+      admin = admin!("removed-admin@example.com")
+      %{refresh_token: refresh_token} = register!("still-safe@example.com")
+      %RefreshToken{jti: jti, id: token_id} = Repo.get_by!(RefreshToken, token: refresh_token)
+      socket = socket(admin)
+
+      current = Application.get_env(:matome_api, :admin_panel, [])
+      Application.put_env(:matome_api, :admin_panel, Keyword.put(current, :email_allowlist, []))
+
+      {:noreply, result} = Sessions.handle_event("revoke", %{"jti" => jti}, socket)
+
+      assert {:redirect, %{to: "/admin/login"}} = result.redirected
+      assert is_nil(Repo.get!(RefreshToken, token_id).revoked_at)
+    end
   end
 
   describe "handle_info allowlist invalidation" do
@@ -172,7 +189,17 @@ defmodule MatomeApiWeb.AdminSessionsLiveTest do
       %RefreshToken{jti: jti} = Repo.get_by!(RefreshToken, token: refresh_token)
 
       # Seed the socket with the pre-revocation tree.
-      socket = socket(admin, %{sessions: MatomeApi.Admin.session_tree()})
+      ensure_allowlist!(admin.email)
+
+      socket =
+        socket(admin, %{
+          sessions:
+            MatomeApi.Admin.session_tree(
+              actor: %{email: admin.email},
+              remote_ip: "192.0.2.99"
+            )
+        })
+
       assert Enum.any?(socket.assigns.sessions, &(&1.user.email == "leaver@example.com"))
 
       :ok = Auth.logout(refresh_token)

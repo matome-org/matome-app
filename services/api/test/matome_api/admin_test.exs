@@ -59,15 +59,27 @@ defmodule MatomeApi.AdminTest do
   end
 
   describe "request_login_otp/2" do
-    test "allowlisted email stores a hash and delivers mail" do
+    test "allowlisted email stores a peppered hash and delivers mail" do
       assert {:ok, :sent} = Admin.request_login_otp(@allowlisted, remote_ip: "127.0.0.1")
       code = receive_code!()
       assert String.length(code) == 6
 
       otp = Repo.get_by!(LoginOtp, email: @allowlisted)
-      assert otp.code_hash == :crypto.hash(:sha256, code)
+
+      pepper =
+        Application.fetch_env!(:matome_api, :admin_otp)
+        |> Keyword.fetch!(:pepper)
+
+      assert otp.code_hash == :crypto.mac(:hmac, :sha256, pepper, code)
       assert is_nil(otp.consumed_at)
       assert NetworkPolicy.email_allowed?(@allowlisted)
+    end
+
+    test "OTP generation uses the cryptographic RNG" do
+      source = File.read!(Path.expand("../../lib/matome_api/admin.ex", __DIR__))
+
+      assert source =~ ":crypto.strong_rand_bytes"
+      refute source =~ ":rand.uniform"
     end
 
     test "non-allowlisted email is silent — no row, no mail" do
@@ -94,6 +106,17 @@ defmodule MatomeApi.AdminTest do
 
     test "rejects when email is not allowlisted" do
       assert {:error, :invalid_code} = Admin.verify_login_otp("nope@example.com", "123456")
+    end
+
+    test "mandatory login event failure does not consume the code" do
+      assert {:ok, :sent} = Admin.request_login_otp(@allowlisted)
+      code = receive_code!()
+
+      assert {:error, {:audit_failed, _changeset}} =
+               Admin.verify_login_otp(@allowlisted, code, remote_ip: String.duplicate("1", 65))
+
+      assert {:ok, @allowlisted} =
+               Admin.verify_login_otp(@allowlisted, code, remote_ip: "127.0.0.1")
     end
   end
 

@@ -11,6 +11,7 @@ defmodule MatomeApiWeb.AdminLive.Spaces do
   import MatomeApiWeb.MatomeComposites
 
   alias MatomeApi.Admin
+  alias MatomeApiWeb.AdminAuth
 
   @impl true
   def mount(_params, _session, socket) do
@@ -29,7 +30,7 @@ defmodule MatomeApiWeb.AdminLive.Spaces do
 
   @impl true
   def handle_event("select", %{"id" => id}, socket) do
-    selected = Admin.get_space(String.to_integer(id))
+    selected = Admin.get_space(String.to_integer(id), admin_read_opts(socket))
 
     {:noreply,
      socket
@@ -41,12 +42,15 @@ defmodule MatomeApiWeb.AdminLive.Spaces do
   end
 
   def handle_event("save_quota", %{"quota" => quota_raw, "expires" => expires_raw}, socket) do
-    with %{} = selected <- socket.assigns.selected,
+    with true <- recent_otp?(socket),
+         %{} = selected <- socket.assigns.selected,
          {:ok, quota} <- parse_quota(quota_raw),
          {:ok, expires} <- parse_expires(expires_raw),
          {:ok, updated} <-
-           Admin.update_space(selected.id, %{quota_bytes: quota, expires_at: expires},
-             actor: %{email: socket.assigns[:admin_email]}
+           Admin.update_space(
+             selected.id,
+             %{quota_bytes: quota, expires_at: expires},
+             mutation_opts(socket)
            ) do
       {:noreply,
        socket
@@ -56,36 +60,46 @@ defmodule MatomeApiWeb.AdminLive.Spaces do
        |> assign(flash_note: "Quota / expiry saved.")
        |> assign_spaces()}
     else
-      nil -> {:noreply, assign(socket, flash_note: "Select a space first.")}
-      {:error, reason} -> {:noreply, assign(socket, flash_note: "Save failed: #{inspect(reason)}")}
+      false ->
+        reauthenticate(socket)
+
+      nil ->
+        {:noreply, assign(socket, flash_note: "Select a space first.")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, flash_note: "Save failed: #{inspect(reason)}")}
     end
   end
 
   def handle_event("lifecycle", %{"to" => to_status}, socket) do
-    with %{} = selected <- socket.assigns.selected,
+    with true <- recent_otp?(socket),
+         %{} = selected <- socket.assigns.selected,
          {:ok, updated} <-
-           Admin.transition_space(selected.id, to_status,
-             actor: %{email: socket.assigns[:admin_email]}
-           ) do
+           Admin.transition_space(selected.id, to_status, mutation_opts(socket)) do
       {:noreply,
        socket
        |> assign(selected: updated)
        |> assign(flash_note: "Status → #{to_status}")
        |> assign_spaces()}
     else
-      nil -> {:noreply, assign(socket, flash_note: "Select a space first.")}
-      {:error, reason} -> {:noreply, assign(socket, flash_note: "Transition failed: #{inspect(reason)}")}
+      false ->
+        reauthenticate(socket)
+
+      nil ->
+        {:noreply, assign(socket, flash_note: "Select a space first.")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, flash_note: "Transition failed: #{inspect(reason)}")}
     end
   end
 
   def handle_event("add_member", %{"email" => email, "role" => role}, socket) do
-    with %{} = selected <- socket.assigns.selected,
+    with true <- recent_otp?(socket),
+         %{} = selected <- socket.assigns.selected,
          %MatomeApi.Auth.User{id: user_id} <- find_user_by_email(email),
          {:ok, _member} <-
-           Admin.add_space_member(selected.id, user_id, role,
-             actor: %{email: socket.assigns[:admin_email]}
-           ) do
-      updated = Admin.get_space(selected.id)
+           Admin.add_space_member(selected.id, user_id, role, mutation_opts(socket)) do
+      updated = Admin.get_space(selected.id, admin_read_opts(socket))
 
       {:noreply,
        socket
@@ -94,6 +108,7 @@ defmodule MatomeApiWeb.AdminLive.Spaces do
        |> assign(flash_note: "Member added (permission only — no crypto key).")
        |> assign_spaces()}
     else
+      false -> reauthenticate(socket)
       nil -> {:noreply, assign(socket, flash_note: "Select a space first.")}
       :not_found -> {:noreply, assign(socket, flash_note: "User not found.")}
       {:error, reason} -> {:noreply, assign(socket, flash_note: "Add failed: #{inspect(reason)}")}
@@ -101,12 +116,14 @@ defmodule MatomeApiWeb.AdminLive.Spaces do
   end
 
   def handle_event("revoke_member", %{"id" => member_id}, socket) do
-    with %{} = selected <- socket.assigns.selected,
+    with true <- recent_otp?(socket),
+         %{} = selected <- socket.assigns.selected,
          {:ok, _} <-
-           Admin.revoke_space_member(String.to_integer(member_id),
-             actor: %{email: socket.assigns[:admin_email]}
+           Admin.revoke_space_member(
+             String.to_integer(member_id),
+             mutation_opts(socket)
            ) do
-      updated = Admin.get_space(selected.id)
+      updated = Admin.get_space(selected.id, admin_read_opts(socket))
 
       {:noreply,
        socket
@@ -114,8 +131,14 @@ defmodule MatomeApiWeb.AdminLive.Spaces do
        |> assign(flash_note: "Membership revoked.")
        |> assign_spaces()}
     else
-      nil -> {:noreply, assign(socket, flash_note: "Select a space first.")}
-      {:error, reason} -> {:noreply, assign(socket, flash_note: "Revoke failed: #{inspect(reason)}")}
+      false ->
+        reauthenticate(socket)
+
+      nil ->
+        {:noreply, assign(socket, flash_note: "Select a space first.")}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, flash_note: "Revoke failed: #{inspect(reason)}")}
     end
   end
 
@@ -224,7 +247,29 @@ defmodule MatomeApiWeb.AdminLive.Spaces do
     """
   end
 
-  defp assign_spaces(socket), do: assign(socket, spaces: Admin.list_spaces())
+  defp assign_spaces(socket),
+    do: assign(socket, spaces: Admin.list_spaces(admin_read_opts(socket)))
+
+  defp admin_read_opts(socket) do
+    [actor: socket.assigns.current_admin, remote_ip: socket.assigns.client_ip]
+  end
+
+  defp mutation_opts(socket) do
+    [
+      actor: socket.assigns.current_admin,
+      otp_verified_at: socket.assigns.otp_verified_at,
+      remote_ip: socket.assigns.client_ip
+    ]
+  end
+
+  defp recent_otp?(socket) do
+    AdminAuth.recent_otp?(%{"admin_otp_verified_at" => socket.assigns.otp_verified_at})
+  end
+
+  defp reauthenticate(socket) do
+    {:noreply,
+     redirect(socket, to: "/admin/otp?return_to=#{URI.encode_www_form("/admin/spaces")}")}
+  end
 
   defp active_members(members) when is_list(members),
     do: Enum.reject(members, & &1.revoked_at)

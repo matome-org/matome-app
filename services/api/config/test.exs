@@ -60,4 +60,6 @@ config :matome_api, :admin_network,
 
 config :matome_api, :admin_session, ttl_seconds: 30 * 60, reauth_ttl_seconds: 5 * 60
 
+config :matome_api, :admin_otp, pepper: "test-only-admin-otp-pepper-32-bytes"
+
 config :matome_api, MatomeApi.Storage.ObjectStore, adapter: MatomeApi.Storage.ObjectStore.Noop

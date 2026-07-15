@@ -17,7 +17,7 @@ defmodule MatomeApiWeb.AdminSessionController do
   def create(conn, params) do
     email = params["email"] || ""
 
-    case Admin.request_login_otp(email, remote_ip: remote_ip(conn)) do
+    case Admin.request_login_otp(email, remote_ip: AdminAuth.client_ip(conn)) do
       {:ok, :sent} ->
         conn
         |> AdminAuth.put_pending_email(email)
@@ -50,7 +50,7 @@ defmodule MatomeApiWeb.AdminSessionController do
         # Sensitive-action re-auth: send a fresh OTP for the session email.
         {:ok, admin} = AdminAuth.admin_from_session(get_session(conn))
 
-        case Admin.request_login_otp(admin.email, remote_ip: remote_ip(conn)) do
+        case Admin.request_login_otp(admin.email, remote_ip: AdminAuth.client_ip(conn)) do
           {:ok, :sent} ->
             conn
             |> AdminAuth.put_pending_email(admin.email)
@@ -82,7 +82,7 @@ defmodule MatomeApiWeb.AdminSessionController do
 
   def delete(conn, _params) do
     with {:ok, admin} <- AdminAuth.admin_from_session(get_session(conn)) do
-      Admin.audit!("admin.logout", actor: admin, remote_ip: remote_ip(conn))
+      Admin.audit!("admin.logout", actor: admin, remote_ip: AdminAuth.client_ip(conn))
     end
 
     conn
@@ -93,17 +93,18 @@ defmodule MatomeApiWeb.AdminSessionController do
   defp complete_otp(conn, email, code, return_to) do
     reauth? = match?({:ok, _}, AdminAuth.admin_from_session(get_session(conn)))
 
-    case Admin.verify_login_otp(email, code) do
+    action = if reauth?, do: "admin.reauth", else: "admin.login"
+
+    case Admin.verify_login_otp(email, code,
+           audit_action: action,
+           remote_ip: AdminAuth.client_ip(conn)
+         ) do
       {:ok, ^email} ->
         if reauth? do
-          Admin.audit!("admin.reauth", actor: %{email: email}, remote_ip: remote_ip(conn))
-
           conn
           |> AdminAuth.refresh_otp_verification()
           |> redirect(to: return_to)
         else
-          Admin.audit!("admin.login", actor: %{email: email}, remote_ip: remote_ip(conn))
-
           conn
           |> AdminAuth.complete_admin_login(email)
           |> redirect(to: if(return_to == "/admin", do: "/admin", else: return_to))
@@ -113,7 +114,7 @@ defmodule MatomeApiWeb.AdminSessionController do
         Admin.audit!("admin.login_failed",
           actor: %{email: email},
           metadata: %{"reason" => "rate_limited"},
-          remote_ip: remote_ip(conn)
+          remote_ip: AdminAuth.client_ip(conn)
         )
 
         conn
@@ -124,7 +125,7 @@ defmodule MatomeApiWeb.AdminSessionController do
         Admin.audit!("admin.login_failed",
           actor: %{email: email},
           metadata: %{"reason" => "invalid_code"},
-          remote_ip: remote_ip(conn)
+          remote_ip: AdminAuth.client_ip(conn)
         )
 
         conn
@@ -144,6 +145,4 @@ defmodule MatomeApiWeb.AdminSessionController do
 
   defp safe_return_to("/" <> _ = path), do: path
   defp safe_return_to(_), do: "/admin"
-
-  defp remote_ip(conn), do: to_string(:inet.ntoa(conn.remote_ip))
 end

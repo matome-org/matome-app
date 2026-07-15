@@ -75,11 +75,11 @@ decision to keep data indefinitely.**
 
 ## Access
 
-- No API or admin surface exposes these columns yet. W6 (sessions
-  LiveView) will show a user's own sessions/devices behind the full W3
-  admin gate (network allowlist → role → TOTP → audit); every admin read
-  of another user's session metadata must be audited via
-  the canonical security `events` trail like any other admin action.
+- The Sessions LiveView exposes this metadata behind the full W3 admin gate
+  (email allowlist → email OTP → short session). The allowlist is the sole role
+  model. Every cross-user read records `security.admin.sensitive_read.v1`, and
+  every revoke requires recent OTP and commits its mandatory before/after event
+  atomically with the token-family update.
 - Raw `ip`/`user_agent` never appear in application logs as part of this
   capture path (nothing is logged on login beyond what Phoenix already
   logs).

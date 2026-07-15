@@ -26,7 +26,7 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
   alias MatomeApiWeb.AdminAuth
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(_params, _session, socket) do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(MatomeApi.PubSub, TokenAllowlist.topic())
     end
@@ -34,8 +34,6 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
     {:ok,
      socket
      |> assign(page_title: "Sessions")
-     |> assign(otp_verified_at: session["admin_otp_verified_at"])
-     |> assign(peer_ip: peer_ip(socket))
      |> load_sessions()}
   end
 
@@ -48,17 +46,26 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
   def handle_event("revoke", %{"jti" => jti}, socket) do
     if recent_otp?(socket) do
       case Admin.revoke_session(socket.assigns.current_admin, jti,
-             remote_ip: socket.assigns.peer_ip
+             otp_verified_at: socket.assigns.otp_verified_at,
+             remote_ip: socket.assigns.client_ip
            ) do
         :ok ->
           {:noreply, socket |> put_flash(:info, "Session revoked.") |> load_sessions()}
 
         {:error, :not_found} ->
           {:noreply, socket |> put_flash(:error, "Session not found.") |> load_sessions()}
+
+        {:error, :forbidden} ->
+          {:noreply, redirect(socket, to: "/admin/login")}
+
+        {:error, :recent_otp_required} ->
+          reauthenticate(socket)
+
+        {:error, _reason} ->
+          {:noreply, put_flash(socket, :error, "Session revoke failed.")}
       end
     else
-      {:noreply,
-       redirect(socket, to: "/admin/otp?return_to=#{URI.encode_www_form("/admin/sessions")}")}
+      reauthenticate(socket)
     end
   end
 
@@ -121,20 +128,20 @@ defmodule MatomeApiWeb.AdminLive.Sessions do
 
   defp load_sessions(socket) do
     now = DateTime.utc_now()
-    assign(socket, sessions: Admin.session_tree(now), now: now)
+    assign(socket, sessions: Admin.session_tree(now, admin_read_opts(socket)), now: now)
   end
 
   defp recent_otp?(socket) do
     AdminAuth.recent_otp?(%{"admin_otp_verified_at" => socket.assigns.otp_verified_at})
   end
 
-  defp peer_ip(socket) do
-    if connected?(socket) do
-      case get_connect_info(socket, :peer_data) do
-        %{address: address} -> address |> :inet.ntoa() |> to_string()
-        _ -> nil
-      end
-    end
+  defp reauthenticate(socket) do
+    {:noreply,
+     redirect(socket, to: "/admin/otp?return_to=#{URI.encode_www_form("/admin/sessions")}")}
+  end
+
+  defp admin_read_opts(socket) do
+    [actor: socket.assigns.current_admin, remote_ip: socket.assigns.client_ip]
   end
 
   defp activity_label(nil, _now), do: "Never seen"

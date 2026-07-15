@@ -20,7 +20,7 @@ defmodule MatomeApiWeb.Plugs.AdminNetworkGuard do
     if NetworkPolicy.panel_enabled?() do
       conn
     else
-      Logger.warning("admin panel disabled — denied #{conn.request_path}")
+      Logger.warning("admin panel disabled — request denied")
 
       conn
       |> put_resp_content_type("text/plain")

@@ -24,7 +24,7 @@ defmodule MatomeApiWeb.Plugs.AdminAuthRateLimit do
     xff = get_req_header(conn, "x-forwarded-for")
     trusted = NetworkPolicy.soft_trusted_ip?(conn.remote_ip, xff)
     limit = if trusted, do: @normal_limit, else: @strict_limit
-    key = {scope, :ip, ip_string(conn), if(trusted, do: :trusted, else: :strict)}
+    key = {scope, :ip, ip_string(conn, xff), if(trusted, do: :trusted, else: :strict)}
 
     case RateLimiter.check(key, limit, @window_ms, @lockout_ms) do
       :ok ->
@@ -38,5 +38,10 @@ defmodule MatomeApiWeb.Plugs.AdminAuthRateLimit do
     end
   end
 
-  defp ip_string(conn), do: conn.remote_ip |> :inet.ntoa() |> to_string()
+  defp ip_string(conn, xff) do
+    case NetworkPolicy.client_ip(conn.remote_ip, xff) do
+      {:ok, ip} -> ip |> :inet.ntoa() |> to_string()
+      :error -> "invalid-proxy-chain"
+    end
+  end
 end

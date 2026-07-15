@@ -1,11 +1,50 @@
 import 'package:logging/logging.dart';
 
-/// Query-param names whose values must never appear in app logs.
-///
-/// `token` is the Guardian access token (JWT) that `phoenix_socket` puts in the
-/// WS connect URL (`?token=<jwt>`) per the Phoenix Socket contract; `ticket`
-/// covers the planned short-TTL socket-ticket follow-up.
-const List<String> _sensitiveQueryKeys = ['token', 'ticket'];
+const List<String> _sensitiveKeys = [
+  'password',
+  'code',
+  'otp',
+  'otp_code',
+  'token',
+  'ticket',
+  'access_token',
+  'refresh_token',
+  'reset_token',
+  'authorization',
+  'auth',
+  'secret',
+  'client_secret',
+  'api_key',
+  'body',
+  'content',
+  'notes',
+  'transcript',
+  'summary',
+  'local_path',
+  'file_path',
+  'path',
+  'storage_url',
+  'presigned_url',
+  'x-amz-credential',
+  'x-amz-signature',
+  'x-amz-security-token',
+  'awsaccesskeyid',
+];
+
+final RegExp _sensitiveFieldPattern = RegExp(
+  '(["\']?(?:${_sensitiveKeys.map(RegExp.escape).join('|')})["\']?'
+  r'''\s*(?:=|:)\s*)(?:"[^"]*"|'[^']*'|[^&,;\s}\]]+)''',
+  caseSensitive: false,
+);
+
+final RegExp _bearerPattern = RegExp(
+  r'\bBearer\s+[A-Za-z0-9._~+\/-]+=*',
+  caseSensitive: false,
+);
+
+final RegExp _localPathPattern = RegExp(
+  r'''(?:file://)?(?:/(?:home|Users|tmp)/[^\s"'&]+|[A-Za-z]:\\[^\s"'&]+)''',
+);
 
 /// Replaces the values of any sensitive query params in [message] with
 /// `[REDACTED]`, leaving the rest of the message intact.
@@ -15,11 +54,17 @@ const List<String> _sensitiveQueryKeys = ['token', 'ticket'];
 /// when it is embedded inside a larger log line such as
 /// `Attempting to connect to wss://host/socket/websocket?vsn=2.0.0&token=ey...`.
 String redactSensitiveQueryParams(String message) {
-  var out = message;
-  for (final key in _sensitiveQueryKeys) {
-    out = out.replaceAll(RegExp('$key=[^&\\s"\'\\]]+'), '$key=[REDACTED]');
-  }
-  return out;
+  return redactSensitiveLogData(message);
+}
+
+/// Redacts already-materialized log text without reading HTTP request bodies.
+String redactSensitiveLogData(String message) {
+  var out = message.replaceAll(_bearerPattern, 'Bearer [REDACTED]');
+  out = out.replaceAllMapped(
+    _sensitiveFieldPattern,
+    (match) => '${match.group(1)}[REDACTED]',
+  );
+  return out.replaceAll(_localPathPattern, '[REDACTED_PATH]');
 }
 
 bool _installed = false;
@@ -49,7 +94,7 @@ void installSocketLogRedaction({
   if (_installed) return;
   _installed = true;
   Logger.root.onRecord.listen((record) {
-    final safe = redactSensitiveQueryParams(record.message);
+    final safe = redactSensitiveLogData(record.message);
     onRecord?.call(safe, record);
   });
 }

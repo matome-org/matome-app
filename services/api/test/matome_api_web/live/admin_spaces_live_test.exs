@@ -4,10 +4,14 @@ defmodule MatomeApiWeb.AdminSpacesLiveTest do
   """
   use MatomeApiWeb.ConnCase
 
+  import Ecto.Query
+
   alias MatomeApi.Auth
   alias MatomeApi.Content
   alias MatomeApi.Content.Workspace
+  alias MatomeApi.Events.Event
   alias MatomeApi.Repo
+  alias MatomeApiWeb.AdminLive.Spaces
 
   defp register!(email, meta \\ %{}) do
     {:ok, auth} =
@@ -42,6 +46,31 @@ defmodule MatomeApiWeb.AdminSpacesLiveTest do
     })
   end
 
+  defp socket(admin, selected, extra \\ %{}) do
+    assigns =
+      Map.merge(
+        %{
+          __changed__: %{},
+          flash: %{},
+          live_action: :index,
+          current_admin: %{email: admin.email},
+          otp_verified_at: System.os_time(:second),
+          client_ip: "198.51.100.91",
+          selected: Repo.preload(selected, [:owner, space_members: :user]),
+          selected_id: selected.id,
+          spaces: [],
+          quota_input: "",
+          expires_input: "",
+          member_email: "",
+          member_role: "member",
+          flash_note: nil
+        },
+        extra
+      )
+
+    %Phoenix.LiveView.Socket{assigns: assigns}
+  end
+
   describe "dead render" do
     test "lists spaces with two-axis + quota and the §9.4 caveat", %{conn: conn} do
       admin = admin!("spaces-admin@example.com")
@@ -69,6 +98,53 @@ defmodule MatomeApiWeb.AdminSpacesLiveTest do
 
     test "redirects to login without an admin session", %{conn: conn} do
       assert conn |> get("/admin/spaces") |> redirected_to() == "/admin/login"
+    end
+  end
+
+  describe "privileged events" do
+    test "save attributes the allowlisted actor and client IP" do
+      admin = admin!("spaces-actor@example.com")
+      %{user: owner} = register!("spaces-target-owner@example.com")
+      {:ok, workspace} = Content.create_workspace(owner, %{name: "Attributed"})
+      ensure = admin_session(build_conn(), admin)
+      assert ensure
+
+      {:noreply, _socket} =
+        Spaces.handle_event(
+          "save_quota",
+          %{"quota" => "2048", "expires" => ""},
+          socket(admin, workspace)
+        )
+
+      event =
+        Repo.one!(
+          from e in Event,
+            where: like(e.event_key, "security.admin.space_updated.%")
+        )
+
+      assert event.actor_email == admin.email
+      assert event.remote_ip == "198.51.100.91"
+      assert event.subject_id == to_string(workspace.id)
+      assert event.details["before"]
+      assert event.details["after"]
+    end
+
+    test "stale OTP redirects without changing the space" do
+      admin = admin!("spaces-stale@example.com")
+      %{user: owner} = register!("spaces-stale-owner@example.com")
+      {:ok, workspace} = Content.create_workspace(owner, %{name: "Unchanged"})
+      _conn = admin_session(build_conn(), admin)
+
+      {:noreply, result} =
+        Spaces.handle_event(
+          "save_quota",
+          %{"quota" => "2048", "expires" => ""},
+          socket(admin, workspace, %{otp_verified_at: System.os_time(:second) - 3600})
+        )
+
+      assert {:redirect, %{to: to}} = result.redirected
+      assert to =~ "/admin/otp"
+      assert is_nil(Repo.get!(Workspace, workspace.id).quota_bytes)
     end
   end
 end

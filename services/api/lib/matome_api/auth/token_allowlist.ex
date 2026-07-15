@@ -113,7 +113,7 @@ defmodule MatomeApi.Auth.TokenAllowlist do
     exception ->
       Logger.error(
         "token_allowlist lookup failed (fail-closed, request will be denied): " <>
-          Exception.message(exception)
+          MatomeApi.LogRedaction.redact(Exception.message(exception))
       )
 
       :unavailable

@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -71,11 +69,6 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
       }
     } on ApiException catch (error, stack) {
       if (error.isUnauthorized || error.statusCode != null) {
-        developer.log(
-          'Inbox sync failed (not offline)',
-          name: 'inbox.sync',
-          error: error,
-        );
         AppLog.error(LogCat.sync, 'inbox refresh failed', error, stack);
       }
     } catch (error, stack) {

@@ -14,10 +14,16 @@ defmodule MatomeApi.EventsTest do
     security.admin.logout.v1
     security.admin.reauth.v1
     security.admin.session_revoked.v1
+    security.admin.session_revoked.v2
     security.admin.space_updated.v1
+    security.admin.space_updated.v2
     security.admin.space_member_added.v1
+    security.admin.space_member_added.v2
     security.admin.space_member_revoked.v1
+    security.admin.space_member_revoked.v2
     security.admin.space_lifecycle.v1
+    security.admin.space_lifecycle.v2
+    security.admin.sensitive_read.v1
   )
 
   describe "catalog" do
@@ -95,19 +101,21 @@ defmodule MatomeApi.EventsTest do
 
       assert {:ok, %Event{}} = before
 
-      catalog =
-        Events.update_catalog!(
-          "operational.upload_completed.v1",
-          %{retention_days: 120},
-          actor_email: "admin@example.com"
-        )
+      assert {:ok, catalog} =
+               MatomeApi.Admin.update_event_catalog(
+                 "operational.upload_completed.v1",
+                 %{retention_days: 120},
+                 actor: %{email: "admin@example.com"},
+                 otp_verified_at: System.os_time(:second),
+                 remote_ip: "192.0.2.30"
+               )
 
       assert catalog.retention_days == 120
 
-      assert %Event{event_key: "security.event_catalog.changed.v1"} =
+      assert %Event{event_key: "security.event_catalog.changed.v2"} =
                Repo.one!(
                  from e in Event,
-                   where: e.event_key == "security.event_catalog.changed.v1"
+                   where: e.event_key == "security.event_catalog.changed.v2"
                )
 
       assert {:ok, after_event} =
@@ -156,6 +164,20 @@ defmodule MatomeApi.EventsTest do
       end
 
       refute Repo.exists?(from e in Event, where: e.event_key == "security.admin.login.v1")
+    end
+
+    test "transactional security helper rejects non-security catalog keys" do
+      assert {:error, {:event, :security_policy}, :security_event_required, %{}} =
+               Ecto.Multi.new()
+               |> Events.put_security(:event, "operational.upload_completed.v1", %{
+                 details: %{mode: "single", result: "ok"}
+               })
+               |> Repo.transaction()
+
+      refute Repo.exists?(
+               from e in Event,
+                 where: e.event_key == "operational.upload_completed.v1"
+             )
     end
 
     test "disabled optional events insert nothing" do

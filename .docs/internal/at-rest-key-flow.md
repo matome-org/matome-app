@@ -448,9 +448,9 @@ Defense in depth — every layer must pass:
 | Kill switch | `ADMIN_PANEL_ENABLED` | unset/`false` in prod ⇒ every `/admin*` is 404 |
 | Soft IP tier | `ADMIN_IP_ALLOWLIST` (optional) | rate-limit tier only — **no hard 404** for unknown IPs |
 | Identity | **hard allowlist** — `ADMIN_EMAIL_ALLOWLIST` env CSV; no `users` row required | NOT self-service; non-members get total silence |
-| Auth strength | **email OTP mandatory** — one-shot code, 30-min TTL | password + authenticator TOTP retired for /admin |
-| Session | short admin session TTL, re-auth on sensitive actions | absolute TTL; OTP freshness for revoke |
-| Audit | every admin login + action written to security-class `events` | immutable log; `actor_email` snapshotted |
+| Auth strength | **email OTP mandatory** — CSPRNG one-shot code, HMAC-peppered verification, 30-min TTL | password + authenticator TOTP retired for /admin |
+| Session | short admin session TTL, re-auth on sensitive actions | absolute TTL; recent OTP required for every session, Space, operational, and configuration mutation |
+| Audit | every admin login, sensitive read, and action written to security-class `events` | mutations and mandatory before/after events share one `Ecto.Multi`; `actor_email` and proxy-aware IP snapshotted |
 
 ```mermaid
 sequenceDiagram

@@ -46,6 +46,8 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
   end
 
   defp socket(admin, extra \\ %{}) do
+    _conn = admin_session(build_conn(), admin)
+
     assigns =
       Map.merge(
         %{
@@ -53,6 +55,7 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
           flash: %{},
           live_action: :index,
           current_admin: %{email: admin.email},
+          client_ip: "192.0.2.88",
           filters: %{actor_email: nil, action: nil, target: nil, since: nil, until: nil},
           admins: [admin.email],
           events: []
@@ -122,7 +125,7 @@ defmodule MatomeApiWeb.AdminAuditLiveTest do
         )
 
       assert length(socket.assigns.events) == 1
-      assert hd(socket.assigns.events).event_key == "security.admin.session_revoked.v1"
+      assert hd(socket.assigns.events).event_key == "security.admin.session_revoked.v2"
       assert socket.assigns.filters.action == "admin.session_revoked"
       assert socket.assigns.filters.target == to_string(victim.id)
     end

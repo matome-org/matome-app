@@ -24,10 +24,17 @@ defmodule MatomeApi.Events do
     "security.admin.logout.v1" => [],
     "security.admin.reauth.v1" => ~w(method result),
     "security.admin.session_revoked.v1" => [],
+    "security.admin.session_revoked.v2" => ~w(before after),
     "security.admin.space_updated.v1" => ~w(changed_keys),
+    "security.admin.space_updated.v2" => ~w(changed_keys before after),
     "security.admin.space_member_added.v1" => ~w(workspace_id user_id role),
+    "security.admin.space_member_added.v2" => ~w(workspace_id user_id role before after),
     "security.admin.space_member_revoked.v1" => ~w(workspace_id user_id),
+    "security.admin.space_member_revoked.v2" => ~w(workspace_id user_id before after),
     "security.admin.space_lifecycle.v1" => ~w(to_status),
+    "security.admin.space_lifecycle.v2" => ~w(before after),
+    "security.admin.sensitive_read.v1" => ~w(resource result),
+    "security.event_catalog.changed.v2" => ~w(changed_fields before after result),
     "security.admin_auth_verified.v1" => ~w(method result),
     "security.admin_config_changed.v1" => ~w(revision changed_keys result),
     "operational.work_transition.v1" =>
@@ -46,11 +53,12 @@ defmodule MatomeApi.Events do
     "admin.login_failed" => "security.admin.login_failed.v1",
     "admin.logout" => "security.admin.logout.v1",
     "admin.reauth" => "security.admin.reauth.v1",
-    "admin.session_revoked" => "security.admin.session_revoked.v1",
-    "admin.space_updated" => "security.admin.space_updated.v1",
-    "admin.space_member_added" => "security.admin.space_member_added.v1",
-    "admin.space_member_revoked" => "security.admin.space_member_revoked.v1",
-    "admin.space_lifecycle" => "security.admin.space_lifecycle.v1"
+    "admin.session_revoked" => "security.admin.session_revoked.v2",
+    "admin.space_updated" => "security.admin.space_updated.v2",
+    "admin.space_member_added" => "security.admin.space_member_added.v2",
+    "admin.space_member_revoked" => "security.admin.space_member_revoked.v2",
+    "admin.space_lifecycle" => "security.admin.space_lifecycle.v2",
+    "admin.sensitive_read" => "security.admin.sensitive_read.v1"
   }
 
   def detail_keys(key), do: Map.fetch(@detail_keys, key)
@@ -75,6 +83,39 @@ defmodule MatomeApi.Events do
       nil ->
         raise ArgumentError, "unknown security event: #{key}"
     end
+  end
+
+  @doc "Adds a mandatory event insert to an existing transaction."
+  def put_security(multi, name, key, attrs_or_fun)
+
+  def put_security(%Ecto.Multi{} = multi, name, key, attrs)
+      when is_map(attrs) or is_list(attrs) do
+    multi
+    |> require_security_catalog(name, key)
+    |> Ecto.Multi.insert(name, security_changeset(key, attrs))
+  end
+
+  def put_security(%Ecto.Multi{} = multi, name, key, attrs_fun) when is_function(attrs_fun, 1) do
+    multi
+    |> require_security_catalog(name, key)
+    |> Ecto.Multi.insert(name, fn changes ->
+      key
+      |> security_changeset(attrs_fun.(changes))
+    end)
+  end
+
+  defp require_security_catalog(multi, name, key) do
+    Ecto.Multi.run(multi, {name, :security_policy}, fn repo, _changes ->
+      case repo.get(EventCatalog, key) do
+        %EventCatalog{event_class: "security", enabled: true} = catalog -> {:ok, catalog}
+        _catalog -> {:error, :security_event_required}
+      end
+    end)
+  end
+
+  defp security_changeset(key, attrs) do
+    %Event{event_key: key}
+    |> Event.changeset(normalize_attrs(attrs))
   end
 
   @doc "Best-effort write for operational and product events. Never raises."
@@ -109,34 +150,6 @@ defmodule MatomeApi.Events do
       )
 
       {:error, :write_failed}
-  end
-
-  @doc "Updates mutable catalog policy and records the change in the same transaction."
-  def update_catalog!(key, attrs, event_attrs \\ []) do
-    {:ok, catalog} =
-      Repo.transaction(fn ->
-        catalog = Repo.get!(EventCatalog, key, lock: "FOR UPDATE")
-        changeset = EventCatalog.changeset(catalog, normalize_attrs(attrs))
-        changed_fields = changeset.changes |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
-
-        if changed_fields == [] do
-          raise ArgumentError, "catalog update has no changes"
-        end
-
-        updated = Repo.update!(changeset)
-
-        event_attrs =
-          event_attrs
-          |> normalize_attrs()
-          |> Map.put(:subject_type, "event_catalog")
-          |> Map.put(:subject_id, key)
-          |> Map.put(:details, %{changed_fields: changed_fields})
-
-        write_security!("security.event_catalog.changed.v1", event_attrs)
-        updated
-      end)
-
-    catalog
   end
 
   @doc "Deletes only rows whose snapshotted retention deadline has passed."

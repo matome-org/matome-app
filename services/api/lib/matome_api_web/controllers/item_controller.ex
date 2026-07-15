@@ -142,7 +142,7 @@ defmodule MatomeApiWeb.ItemController do
         send_resp(conn, :no_content, "")
 
       {:error, reason} ->
-        Logger.error("item delete failed: #{inspect(reason)}")
+        Logger.error("item delete failed: #{MatomeApi.LogRedaction.redact(reason)}")
         conn |> put_status(:unprocessable_entity) |> json(%{error: "delete_failed"})
     end
   end

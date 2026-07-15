@@ -20,9 +20,12 @@ defmodule MatomeApi.Docs.ProdImageContractTest do
     body = File.read!(@dockerfile)
 
     assert body =~ ~r/MIX_ENV=prod/, "Dockploy Dockerfile must set MIX_ENV=prod"
+
     assert body =~ "mix release" or body =~ "RELEASE",
            "must build an OTP release"
+
     refute body =~ ~r/MIX_ENV=dev/, "prod Dockerfile must not set MIX_ENV=dev"
+
     refute body =~ "mix phx.server",
            "prod image must not boot via mix phx.server"
   end
@@ -32,6 +35,7 @@ defmodule MatomeApi.Docs.ProdImageContractTest do
            "expected Dockerfile.dev so compose stays on mix phx.server"
 
     compose = File.read!(@compose)
+
     assert compose =~ "Dockerfile.dev",
            "docker-compose.yml must build from Dockerfile.dev (not prod)"
   end
@@ -64,6 +68,7 @@ defmodule MatomeApi.Docs.ProdImageContractTest do
            MAILER_ADAPTER
            ADMIN_PANEL_ENABLED
            ADMIN_EMAIL_ALLOWLIST
+           ADMIN_OTP_PEPPER
            API_BASE_URL
            STORAGE_S3_ENDPOINT
            DATABASE_URL

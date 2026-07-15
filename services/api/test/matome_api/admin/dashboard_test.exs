@@ -12,6 +12,10 @@ defmodule MatomeApi.Admin.DashboardTest do
   alias MatomeApi.Auth.{Device, RefreshToken}
   alias MatomeApi.Content
 
+  defp read_opts do
+    [actor: %{email: "admin@example.com"}, remote_ip: "192.0.2.10"]
+  end
+
   defp register!(email) do
     {:ok, auth} =
       Auth.register_user(%{"email" => email, "password" => "correct horse battery"})
@@ -69,7 +73,7 @@ defmodule MatomeApi.Admin.DashboardTest do
         last_seen_at: DateTime.add(now, -600, :second)
       })
 
-      stats = Admin.dashboard_stats(now)
+      stats = Admin.dashboard_stats(now, read_opts())
 
       assert stats.users.total == 3
       assert stats.users.active == 1
@@ -89,7 +93,7 @@ defmodule MatomeApi.Admin.DashboardTest do
       insert_device!(user, %{platform: nil, last_seen_at: now})
       insert_device!(user, %{platform: "  ", last_seen_at: now})
 
-      %{platforms: platforms} = Admin.dashboard_stats(now)
+      %{platforms: platforms} = Admin.dashboard_stats(now, read_opts())
 
       assert platforms == [
                %{platform: "ios", count: 2},
@@ -117,7 +121,7 @@ defmodule MatomeApi.Admin.DashboardTest do
 
       insert_device!(user, %{platform: "web", last_seen_at: now})
 
-      stats = Admin.dashboard_stats(now)
+      stats = Admin.dashboard_stats(now, read_opts())
 
       assert Enum.find(stats.form_factors, &(&1.form_factor == "desktop")).count == 1
       assert Enum.find(stats.form_factors, &(&1.form_factor == "mobile")).count == 1
@@ -169,7 +173,7 @@ defmodule MatomeApi.Admin.DashboardTest do
                  byte_size: 125_000
                })
 
-      %{storage: storage} = Admin.dashboard_stats()
+      %{storage: storage} = Admin.dashboard_stats(read_opts())
 
       assert storage.total_bytes == 13_625_000
       assert storage.unfiled_bytes == 2_875_000
