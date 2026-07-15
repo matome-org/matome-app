@@ -29,9 +29,10 @@ Use an `items` table with:
 - Scalar `title` and user-authored `notes`.
 - `metadata jsonb` for display/render hints only.
 - Nullable payload foreign keys, currently `file_blob_id` and `text_content_id`.
-- The current `processing_state`, one `processing_run_id`, source/config
-  revisions, and bounded current outputs/error JSONB. Executor attempts remain
-  in Oban; no processing-attempt or derivation table exists.
+- The current `processing_state`, one `processing_run_id`, logical attempt,
+  source/config revisions, capability/requested-output/deadline snapshots, and
+  bounded current outputs/error JSONB. Physical executor attempts remain in
+  Oban; no processing-attempt or derivation table exists.
 
 The database owns the exclusive arc:
 
@@ -72,9 +73,11 @@ transcripts, summaries, user notes, or workspace placement.
 The database enforces supported item/media/upload/processing states, the 1:1
 payload arc, positive source/upload generations, SHA-256 shape, uploaded-state
 timestamp coherence, and owner-matching Matome/Space foreign keys. Current
-processing outputs are limited to 4 MiB, processing errors to 16 KiB, and the
-single multipart context to 256 KiB. Application transitions additionally
-reject file processing until `upload_state = uploaded`.
+processing outputs are limited to 4 MiB, processing errors to 16 KiB, the
+capability snapshot to 64 KiB, and the single multipart context to 256 KiB.
+Application transitions additionally reject file processing until
+`upload_state = uploaded`, enforce typed requested outputs, and conditionally
+apply terminal state only to the current run and source revision.
 
 Text bodies are non-empty and capped at 200,000 characters. No
 `processing_attempts`, `derivations`, or `upload_sessions` tables are created.

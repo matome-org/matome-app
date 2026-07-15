@@ -137,10 +137,30 @@ defmodule MatomeApiWeb.ItemController do
       {:ok, item} ->
         conn
         |> put_status(:accepted)
-        |> json(%{item: item_json(item), processing: %{queued: true}})
+        |> json(%{
+          contract_version: "1",
+          item: item_json(item),
+          processing: %{
+            queued: item.processing_state == :queued,
+            state: Atom.to_string(item.processing_state)
+          }
+        })
 
-      {:error, reason} ->
+      {:error, :capabilities_unavailable} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{error: "capabilities_unavailable"})
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        validation_error(conn, changeset)
+
+      {:error, reason} when is_atom(reason) ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: to_string(reason)})
+
+      {:error, _reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{error: "processing_request_failed"})
     end
   end
 
@@ -172,8 +192,13 @@ defmodule MatomeApiWeb.ItemController do
       metadata: item.metadata,
       processing_state: Atom.to_string(item.processing_state),
       processing_run_id: item.processing_run_id,
+      processing_attempt: item.processing_attempt,
       source_revision: item.source_revision,
       processing_config_revision: item.processing_config_revision,
+      processing_capabilities: item.processing_capabilities,
+      processing_requested_outputs: item.processing_requested_outputs,
+      processing_requested_at: item.processing_requested_at,
+      processing_deadline_at: item.processing_deadline_at,
       processing_outputs: item.processing_outputs,
       processing_error: item.processing_error,
       file: file_json(item.file_blob),

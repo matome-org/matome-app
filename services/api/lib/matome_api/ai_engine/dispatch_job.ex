@@ -1,34 +1,36 @@
 defmodule MatomeApi.AIEngine.DispatchJob do
-  # `unique` makes POST /items/:id/process idempotent: repeated calls for the
-  # same (item_id, file_blob_id) collapse onto the existing job instead of
-  # enqueuing unbounded AI work. Scoped by the two arg keys over all live +
-  # completed states so a re-request never double-dispatches.
+  # Transport retries retain one run id while a user retry creates another.
+  # Uniqueness therefore follows the logical run rather than mutable item input.
   use Oban.Worker,
     queue: :ai,
     max_attempts: 3,
     unique: [
-      keys: [:item_id, :file_blob_id],
+      keys: [:processing_run_id],
       period: :infinity,
       states: [:available, :scheduled, :executing, :retryable, :suspended, :completed]
     ]
 
   alias MatomeApi.AIEngine
+  alias MatomeApi.AIEngine.Contract
   alias MatomeApi.Content
 
   @impl Oban.Worker
   def perform(%Oban.Job{
         args: %{
           "item_id" => item_id,
-          "file_blob_id" => file_blob_id,
+          "processing_run_id" => processing_run_id,
+          "source_revision" => source_revision,
           "processing" => %{"job_timeout_seconds" => timeout_seconds}
         }
       }) do
-    with {:ok, payload} <- Content.ai_dispatch_payload(item_id, file_blob_id) do
-      AIEngine.dispatch(payload, timeout_seconds)
-      |> case do
-        {:ok, _body} -> :ok
-        {:error, reason} -> {:error, reason}
-      end
+    with {:ok, payload} <-
+           Content.ai_dispatch_payload(item_id, processing_run_id, source_revision),
+         {:ok, body} <- AIEngine.dispatch(payload, timeout_seconds),
+         :ok <- Contract.validate_dispatch_ack(body, payload) do
+      :ok
+    else
+      {:discard, reason} -> {:discard, reason}
+      {:error, reason} -> {:error, reason}
     end
   end
 

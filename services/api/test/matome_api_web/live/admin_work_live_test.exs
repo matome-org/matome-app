@@ -151,6 +151,7 @@ defmodule MatomeApiWeb.AdminWorkLiveTest do
         filename: "private-board.wav",
         byte_size: 4096,
         checksum_sha256: String.duplicate("a", 64),
+        content_type: "audio/wav",
         media_type: "audio"
       })
 

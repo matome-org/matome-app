@@ -18,7 +18,9 @@ config :matome_api, Oban,
 
 config :matome_api, MatomeApi.AIEngine,
   endpoint: System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:7002/v1/jobs",
-  token: System.get_env("AI_ENGINE_TOKEN") || "dev-ai-token",
+  dispatch_token: System.get_env("AI_ENGINE_DISPATCH_TOKEN") || "dev-ai-dispatch-token",
+  callback_signing_secret:
+    System.get_env("AI_ENGINE_CALLBACK_SIGNING_SECRET") || "dev-ai-callback-signing-secret",
   callback_base_url: System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:7001"
 
 config :matome_api, MatomeApi.Auth.Guardian,

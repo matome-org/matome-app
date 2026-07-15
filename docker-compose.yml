@@ -68,7 +68,9 @@ services:
     environment:
       AI_STUB_HOST: 0.0.0.0
       AI_STUB_PORT: ${AI_STUB_PORT}
-      AI_ENGINE_TOKEN: ${AI_ENGINE_TOKEN}
+      # Stub adapter migration is owned separately; it still reads its legacy
+      # variable for the outbound dispatch side of the v1 contract.
+      AI_ENGINE_TOKEN: ${AI_ENGINE_DISPATCH_TOKEN}
     expose:
       - "${AI_STUB_PORT}"
 
@@ -96,7 +98,8 @@ services:
       #   AI_ENGINE_ENDPOINT=http://host.docker.internal:7005/v1/jobs
       #   AI_ENGINE_CALLBACK_BASE_URL=http://localhost:7001   (adapter runs on host)
       AI_ENGINE_ENDPOINT: ${AI_ENGINE_ENDPOINT:-http://ai-stub:${AI_STUB_PORT}/v1/jobs}
-      AI_ENGINE_TOKEN: ${AI_ENGINE_TOKEN}
+      AI_ENGINE_DISPATCH_TOKEN: ${AI_ENGINE_DISPATCH_TOKEN}
+      AI_ENGINE_CALLBACK_SIGNING_SECRET: ${AI_ENGINE_CALLBACK_SIGNING_SECRET}
       AI_ENGINE_CALLBACK_BASE_URL: ${AI_ENGINE_CALLBACK_BASE_URL:-http://core:${CORE_PORT}}
       # Storage — endpoint is the browser-facing host; presigning is offline.
       STORAGE_S3_ENDPOINT: ${STORAGE_S3_ENDPOINT}

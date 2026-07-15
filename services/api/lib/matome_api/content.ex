@@ -17,7 +17,8 @@ defmodule MatomeApi.Content do
     Workspace
   }
 
-  alias MatomeApi.AIEngine.DispatchJob
+  alias MatomeApi.AIEngine
+  alias MatomeApi.AIEngine.{Contract, DispatchJob, WatchdogJob}
   alias MatomeApi.Events
   alias MatomeApi.Repo
   alias MatomeApi.Storage.{ObjectStore, Presigner, UploadPolicy}
@@ -506,117 +507,127 @@ defmodule MatomeApi.Content do
   def enqueue_item_processing(%User{} = owner, id) do
     config = SystemConfig.snapshot()
 
-    with %Item{item_type: :file, file_blob: %FileBlob{} = file_blob} = item <-
-           get_item(owner, id),
-         true <-
-           file_blob.media_type in @ai_media_types and
-             file_blob.media_type in config["desired"]["ai"]["enabled_input_kinds"],
-         true <- file_blob.upload_state == "uploaded" || {:error, :upload_not_complete} do
-      result = queue_item_processing(item, file_blob, config)
+    case get_item(owner, id) do
+      %Item{processing_state: state} = item when state in [:queued, :processing] ->
+        {:ok, item}
 
-      if match?({:ok, _item}, result) and item.processing_state == :not_requested do
-        Events.write_optional("operational.upload_completed.v1", %{
-          actor_id: owner.id,
-          owner_id: owner.id,
-          subject_type: "item",
-          subject_id: to_string(item.id),
-          details: %{
-            mode: "single",
-            byte_size: file_blob.byte_size,
-            part_count: 1,
-            result: "ok"
-          }
-        })
-      end
+      %Item{} = item ->
+        request_item_processing(item, config)
 
-      result
-    else
-      %Item{item_type: :text} -> {:error, :text_item_not_processable}
-      false -> {:error, :unsupported_media_type}
-      {:error, reason} -> {:error, reason}
-      nil -> nil
+      nil ->
+        nil
     end
   end
 
-  def update_file_item_result(item_id, file_blob_id, attrs) do
-    with %Item{item_type: :file, file_blob: %FileBlob{id: ^file_blob_id} = file_blob} = item <-
-           Item
-           |> where([item], item.id == ^item_id and item.file_blob_id == ^file_blob_id)
-           |> Repo.one()
-           |> Repo.preload(:file_blob) do
-      outputs = processing_outputs(attrs)
+  def ai_dispatch_payload(item_id, processing_run_id, source_revision) do
+    with %Item{} = item <- processing_item(item_id, processing_run_id, source_revision),
+         true <- item.processing_state in [:queued, :processing] || {:discard, :terminal_run},
+         {:ok, input} <- dispatch_input(item),
+         {:ok, item} <- mark_item_processing(item) do
+      job_id = processing_job_id(item.processing_run_id)
 
-      result =
-        item
-        |> Item.processing_changeset(%{
-          processing_state: :succeeded,
-          processing_outputs: outputs,
-          processing_error: nil
-        })
-        |> Repo.update()
-
-      if match?({:ok, _item}, result) and item.processing_state != :succeeded do
-        Events.write_optional("operational.processing_completed.v1", %{
-          owner_id: item.owner_id,
-          subject_type: "item",
-          subject_id: to_string(item.id),
-          run_id: item.processing_run_id,
-          details: %{
-            input_kind: file_blob.media_type,
-            output_types: outputs |> Map.keys() |> Enum.sort(),
-            result: "ok"
-          }
-        })
-      end
-
-      result
-    else
-      nil -> nil
-    end
-  end
-
-  def ai_dispatch_payload(item_id, file_blob_id) do
-    with %Item{item_type: :file, file_blob: %FileBlob{id: ^file_blob_id} = file_blob} = item <-
-           Item
-           |> where([item], item.id == ^item_id and item.file_blob_id == ^file_blob_id)
-           |> Repo.one()
-           |> Repo.preload(:file_blob),
-         true <- file_blob.upload_state == "uploaded",
-         {:ok, media} <- Presigner.presign_download(file_blob.storage_key),
-         {:ok, item} <-
-           item
-           |> Item.processing_changeset(%{processing_state: :processing})
-           |> Repo.update() do
-      job_id = item_job_id(item.id, file_blob.id)
+      callback_identity =
+        AIEngine.callback_identity(job_id, item.processing_run_id, item.source_revision)
 
       {:ok,
        %{
+         contract_version: "1",
          job_id: job_id,
-         recording_id: item.id,
+         run_id: item.processing_run_id,
          item_id: item.id,
-         file_blob_id: file_blob.id,
-         media_type: file_blob.media_type,
-         storage_key: file_blob.storage_key,
-         media: %{method: "GET", url: media.url},
+         input_revision: item.source_revision,
+         input: input,
+         requested_outputs: item.processing_requested_outputs,
          callback: %{
            method: "POST",
-           url: "#{MatomeApi.AIEngine.callback_base_url()}/internal/jobs/#{job_id}/result"
-         }
+           url: "#{AIEngine.callback_base_url()}/internal/v1/jobs/#{job_id}/result",
+           deadline_at: DateTime.to_iso8601(item.processing_deadline_at),
+           headers: %{authorization: "Bearer #{callback_identity}"}
+         },
+         metadata: processing_metadata(item)
        }}
     else
       nil -> {:discard, :missing_item}
-      false -> {:discard, :upload_not_complete}
+      {:discard, reason} -> {:discard, reason}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  def item_job_id(item_id, file_blob_id), do: "item:#{item_id}:file_blob:#{file_blob_id}"
+  def processing_job_id(processing_run_id),
+    do: "job_#{String.replace(processing_run_id, "-", "")}"
 
-  def persisted_ai_dispatch?(item_id, file_blob_id) do
-    Oban.Job
-    |> where([job], fragment("?->>'item_id' = ?", job.args, ^to_string(item_id)))
-    |> where([job], fragment("?->>'file_blob_id' = ?", job.args, ^to_string(file_blob_id)))
-    |> Repo.exists?()
+  def apply_processing_callback(route_job_id, attrs) do
+    with %Oban.Job{} = job <- persisted_dispatch_job(route_job_id, attrs),
+         requested_outputs when is_list(requested_outputs) <- job.args["requested_outputs"],
+         {:ok, callback} <- Contract.normalize_callback(attrs, requested_outputs),
+         true <- callback.job_id == route_job_id,
+         true <- callback.item_id == job.args["item_id"] do
+      apply_processing_terminal(callback, job.args["input_kind"])
+    else
+      nil -> {:error, :not_found}
+      false -> {:error, :invalid_callback}
+      {:error, reason} -> {:error, reason}
+      _invalid -> {:error, :invalid_callback}
+    end
+  end
+
+  def timeout_item_processing(
+        item_id,
+        processing_run_id,
+        source_revision,
+        now \\ DateTime.utc_now()
+      ) do
+    Repo.transaction(fn ->
+      item = Item |> where([item], item.id == ^item_id) |> lock("FOR UPDATE") |> Repo.one()
+
+      cond do
+        is_nil(item) ->
+          Repo.rollback(:not_found)
+
+        item.processing_run_id != processing_run_id or item.source_revision != source_revision ->
+          :stale
+
+        item.processing_state not in [:queued, :processing] ->
+          :stale
+
+        DateTime.compare(item.processing_deadline_at, now) == :gt ->
+          {:not_due, max(DateTime.diff(item.processing_deadline_at, now, :second), 1)}
+
+        true ->
+          error = %{
+            "code" => "timeout",
+            "message" => "Processing deadline exceeded.",
+            "retryable" => true
+          }
+
+          from_state = item.processing_state
+
+          with {:ok, item} <-
+                 item
+                 |> Item.processing_changeset(%{
+                   processing_state: :failed,
+                   processing_outputs: %{},
+                   processing_error: error
+                 })
+                 |> Repo.update(),
+               :ok <-
+                 write_processing_terminal_events(
+                   item,
+                   from_state,
+                   :failed,
+                   [],
+                   "timeout"
+                 ) do
+            :timed_out
+          else
+            {:error, reason} -> Repo.rollback(reason)
+          end
+      end
+    end)
+    |> case do
+      {:ok, result} -> {:ok, result}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def delete_item(%User{} = owner, id) do
@@ -1044,23 +1055,89 @@ defmodule MatomeApi.Content do
     end
   end
 
-  defp queue_item_processing(item, file_blob, config) do
+  defp request_item_processing(item, config) do
+    with {:ok, source} <- processing_source(item, config) do
+      case source do
+        :not_requested ->
+          {:ok, item}
+
+        source ->
+          case AIEngine.capabilities() do
+            {:ok, capabilities} ->
+              queue_item_processing(item, source, config, capabilities)
+
+            {:error, _reason} ->
+              {:error, :capabilities_unavailable}
+          end
+      end
+    end
+  end
+
+  defp processing_source(%Item{item_type: :text, text_content: %TextContent{} = text}, config) do
+    if "text" in config["desired"]["ai"]["enabled_input_kinds"] do
+      {:ok, %{kind: "text", text_content: text}}
+    else
+      {:ok, :not_requested}
+    end
+  end
+
+  defp processing_source(%Item{item_type: :file, file_blob: %FileBlob{} = file_blob}, config) do
+    cond do
+      file_blob.media_type not in @ai_media_types ->
+        {:ok, :not_requested}
+
+      file_blob.media_type not in config["desired"]["ai"]["enabled_input_kinds"] ->
+        {:ok, :not_requested}
+
+      file_blob.upload_state != "uploaded" ->
+        {:error, :upload_not_complete}
+
+      true ->
+        {:ok, %{kind: file_blob.media_type, file_blob: file_blob}}
+    end
+  end
+
+  defp queue_item_processing(item, source, config, capabilities) do
     config_revision = config["revision"]
     retry_policy = config["desired"]["retry"]
     processing_policy = config["desired"]["ai"]
+    input_capability = capabilities["inputs"][source.kind]
+    available? = capability_available?(source, input_capability, config)
+
+    capabilities_snapshot = %{
+      "contract_version" => capabilities["contract_version"],
+      "service" => capabilities["service"],
+      "input_kind" => source.kind,
+      "input" => input_capability || %{"enabled" => false, "outputs" => []}
+    }
 
     Repo.transaction(fn ->
-      with {:ok, item} <- mark_item_processing_queued(item, config_revision),
-           {:ok, _job} <-
-             %{
-               item_id: item.id,
-               file_blob_id: file_blob.id,
-               config_revision: config_revision,
-               retry: retry_policy,
-               processing: processing_policy
-             }
-             |> DispatchJob.new(queue: :ai, max_attempts: retry_policy["max_attempts"])
-             |> Oban.insert() do
+      item =
+        Item
+        |> where([candidate], candidate.id == ^item.id)
+        |> lock("FOR UPDATE")
+        |> Repo.one!()
+
+      with {:ok, item, created?, from_state} <-
+             mark_item_processing_requested(
+               item,
+               capabilities_snapshot,
+               available?,
+               config_revision,
+               processing_policy
+             ),
+           :ok <- write_processing_requested_event(item, source.kind, created?, from_state),
+           :ok <- write_upload_completed_event(item, source, created?, from_state),
+           {:ok, _jobs} <-
+             insert_processing_jobs(
+               item,
+               source,
+               config_revision,
+               retry_policy,
+               processing_policy,
+               config["desired"]["uploads"],
+               created? and available?
+             ) do
         Repo.preload(item, [:workspace, :matome, :file_blob, :text_content], force: true)
       else
         {:error, reason} -> Repo.rollback(reason)
@@ -1072,53 +1149,381 @@ defmodule MatomeApi.Content do
     end
   end
 
-  defp mark_item_processing_queued(
-         %Item{processing_state: :not_requested} = item,
-         config_revision
+  defp mark_item_processing_requested(
+         %Item{processing_state: state} = item,
+         _capabilities_snapshot,
+         _available?,
+         _config_revision,
+         _processing_policy
+       )
+       when state in [:queued, :processing],
+       do: {:ok, item, false, state}
+
+  defp mark_item_processing_requested(
+         %Item{} = item,
+         capabilities_snapshot,
+         available?,
+         config_revision,
+         processing_policy
        ) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    from_state = item.processing_state
+    state = if available?, do: :queued, else: :not_available
+
+    requested_outputs =
+      if available?, do: capabilities_snapshot["input"]["outputs"], else: []
+
     item
     |> Item.processing_changeset(%{
-      processing_state: :queued,
+      processing_state: state,
       processing_run_id: Ecto.UUID.generate(),
+      processing_attempt: item.processing_attempt + 1,
       processing_config_revision: config_revision,
+      processing_capabilities: capabilities_snapshot,
+      processing_requested_outputs: requested_outputs,
+      processing_requested_at: now,
+      processing_deadline_at:
+        DateTime.add(now, processing_policy["job_timeout_seconds"], :second),
       processing_outputs: %{},
       processing_error: nil
     })
     |> Repo.update()
+    |> case do
+      {:ok, item} -> {:ok, item, true, from_state}
+      {:error, changeset} -> {:error, changeset}
+    end
   end
 
-  defp mark_item_processing_queued(%Item{processing_state: :failed} = item, config_revision) do
-    item
-    |> Item.processing_changeset(%{
-      processing_state: :queued,
-      processing_config_revision: config_revision,
-      processing_outputs: %{},
-      processing_error: nil
-    })
-    |> Repo.update()
+  defp capability_available?(_source, nil, _config), do: false
+
+  defp capability_available?(
+         source,
+         %{"enabled" => true, "outputs" => [_ | _]} = capability,
+         config
+       ) do
+    case source do
+      %{kind: "text", text_content: text} ->
+        String.length(text.body) <= capability["max_characters"]
+
+      %{file_blob: file_blob} ->
+        file_blob.byte_size <=
+          min(capability["max_bytes"], config["desired"]["uploads"]["max_bytes"]) and
+          file_blob.content_type in capability["content_types"] and
+          is_binary(file_blob.checksum_sha256) and
+          Regex.match?(~r/^[0-9a-f]{64}$/, file_blob.checksum_sha256)
+    end
   end
 
-  defp mark_item_processing_queued(%Item{} = item, _config_revision), do: {:ok, item}
+  defp capability_available?(_source, _capability, _config), do: false
 
-  defp processing_outputs(attrs) do
-    %{}
-    |> maybe_put_output(
-      "transcript",
-      Map.get(attrs, "transcript") || Map.get(attrs, :transcript),
-      "text"
-    )
-    |> maybe_put_output(
-      "summary",
-      Map.get(attrs, "summary") || Map.get(attrs, :summary),
-      "markdown"
-    )
+  defp insert_processing_jobs(
+         _item,
+         _source,
+         _revision,
+         _retry,
+         _processing,
+         _uploads,
+         false
+       ),
+       do: {:ok, :not_available}
+
+  defp insert_processing_jobs(
+         item,
+         source,
+         config_revision,
+         retry_policy,
+         processing_policy,
+         upload_policy,
+         true
+       ) do
+    job_id = processing_job_id(item.processing_run_id)
+
+    args = %{
+      job_id: job_id,
+      item_id: item.id,
+      processing_run_id: item.processing_run_id,
+      source_revision: item.source_revision,
+      input_kind: source.kind,
+      requested_outputs: item.processing_requested_outputs,
+      config_revision: config_revision,
+      system_config: %{
+        revision: config_revision,
+        ai: processing_policy,
+        retry: retry_policy,
+        uploads: upload_policy
+      },
+      retry: retry_policy,
+      processing: processing_policy
+    }
+
+    with {:ok, dispatch} <-
+           args
+           |> DispatchJob.new(queue: :ai, max_attempts: retry_policy["max_attempts"])
+           |> Oban.insert(),
+         {:ok, watchdog} <-
+           %{
+             item_id: item.id,
+             processing_run_id: item.processing_run_id,
+             source_revision: item.source_revision
+           }
+           |> WatchdogJob.new(scheduled_at: item.processing_deadline_at)
+           |> Oban.insert() do
+      {:ok, %{dispatch: dispatch, watchdog: watchdog}}
+    end
   end
 
-  defp maybe_put_output(outputs, _type, nil, _value_key), do: outputs
+  defp write_processing_requested_event(_item, _input_kind, false, _from_state), do: :ok
 
-  defp maybe_put_output(outputs, type, value, value_key) do
-    Map.put(outputs, type, %{"type" => type, value_key => value})
+  defp write_processing_requested_event(item, input_kind, true, from_state) do
+    write_processing_transition_event(item, input_kind, from_state, item.processing_state)
   end
+
+  defp write_upload_completed_event(_item, _source, false, _from_state), do: :ok
+  defp write_upload_completed_event(_item, %{kind: "text"}, true, _from_state), do: :ok
+
+  defp write_upload_completed_event(_item, _source, true, from_state)
+       when from_state != :not_requested,
+       do: :ok
+
+  defp write_upload_completed_event(item, %{file_blob: file_blob}, true, :not_requested) do
+    case Events.write_optional("operational.upload_completed.v1", %{
+           actor_id: item.owner_id,
+           owner_id: item.owner_id,
+           subject_type: "item",
+           subject_id: to_string(item.id),
+           details: %{
+             mode: "single",
+             byte_size: file_blob.byte_size,
+             part_count: 1,
+             result: "ok"
+           }
+         }) do
+      {:ok, _event_or_disabled} -> :ok
+      {:error, reason} -> {:error, {:event_insert_failed, reason}}
+    end
+  end
+
+  defp processing_item(item_id, processing_run_id, source_revision) do
+    case Repo.one(
+           from(item in Item,
+             where:
+               item.id == ^item_id and item.processing_run_id == ^processing_run_id and
+                 item.source_revision == ^source_revision
+           )
+         ) do
+      nil -> nil
+      item -> Repo.preload(item, [:file_blob, :text_content])
+    end
+  end
+
+  defp dispatch_input(%Item{item_type: :text, text_content: %TextContent{} = text}),
+    do: {:ok, %{kind: "text", body: text.body}}
+
+  defp dispatch_input(%Item{item_type: :file, file_blob: %FileBlob{} = file_blob}) do
+    with true <- file_blob.upload_state == "uploaded" || {:discard, :upload_not_complete},
+         {:ok, media} <- Presigner.presign_download(file_blob.storage_key) do
+      {:ok,
+       %{
+         kind: file_blob.media_type,
+         media: %{
+           method: "GET",
+           url: media.url,
+           expires_at: DateTime.to_iso8601(media.expires_at),
+           content_type: file_blob.content_type,
+           byte_size: file_blob.byte_size,
+           checksum_sha256: file_blob.checksum_sha256
+         }
+       }}
+    end
+  end
+
+  defp mark_item_processing(item) do
+    Repo.transaction(fn ->
+      current =
+        Item
+        |> where(
+          [candidate],
+          candidate.id == ^item.id and
+            candidate.processing_run_id == ^item.processing_run_id and
+            candidate.source_revision == ^item.source_revision
+        )
+        |> lock("FOR UPDATE")
+        |> Repo.one()
+
+      case current do
+        %Item{processing_state: :queued} ->
+          with {:ok, processing} <-
+                 current
+                 |> Item.processing_changeset(%{processing_state: :processing})
+                 |> Repo.update(),
+               :ok <-
+                 write_processing_transition_event(
+                   processing,
+                   processing_input_kind(processing),
+                   :queued,
+                   :processing
+                 ) do
+            processing
+          else
+            {:error, reason} -> Repo.rollback(reason)
+          end
+
+        %Item{processing_state: :processing} ->
+          current
+
+        _terminal_or_missing ->
+          Repo.rollback(:terminal_run)
+      end
+    end)
+    |> case do
+      {:ok, processing} -> {:ok, Repo.preload(processing, [:file_blob, :text_content])}
+      {:error, :terminal_run} -> {:discard, :terminal_run}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp processing_metadata(item) do
+    case item.metadata["language"] do
+      locale when is_binary(locale) and byte_size(locale) <= 35 -> %{locale: locale}
+      _no_locale -> %{}
+    end
+  end
+
+  defp persisted_dispatch_job(route_job_id, attrs) do
+    run_id = attrs["run_id"]
+    source_revision = attrs["input_revision"]
+
+    if is_binary(run_id) and is_integer(source_revision) do
+      Oban.Job
+      |> where([job], job.worker == "MatomeApi.AIEngine.DispatchJob")
+      |> where([job], fragment("?->>'job_id' = ?", job.args, ^route_job_id))
+      |> where([job], fragment("?->>'processing_run_id' = ?", job.args, ^run_id))
+      |> where(
+        [job],
+        fragment("?->>'source_revision' = ?", job.args, ^to_string(source_revision))
+      )
+      |> Repo.one()
+    end
+  end
+
+  defp apply_processing_terminal(callback, input_kind) do
+    Repo.transaction(fn ->
+      item =
+        Item
+        |> where([item], item.id == ^callback.item_id)
+        |> lock("FOR UPDATE")
+        |> Repo.one()
+
+      cond do
+        is_nil(item) ->
+          Repo.rollback(:not_found)
+
+        item.processing_run_id != callback.run_id or
+            item.source_revision != callback.input_revision ->
+          :stale
+
+        item.processing_state == :queued ->
+          Repo.rollback(:not_processing)
+
+        item.processing_state == :processing and processing_input_kind(item) == input_kind ->
+          from_state = :processing
+
+          with {:ok, terminal} <-
+                 item
+                 |> Item.processing_changeset(%{
+                   processing_state: callback.state,
+                   processing_outputs: callback.outputs,
+                   processing_error: callback.error
+                 })
+                 |> Repo.update(),
+               :ok <-
+                 write_processing_terminal_events(
+                   terminal,
+                   from_state,
+                   callback.state,
+                   Map.keys(callback.outputs),
+                   terminal_result(callback.state)
+                 ) do
+            :applied
+          else
+            {:error, reason} -> Repo.rollback(reason)
+          end
+
+        item.processing_state == callback.state and
+          item.processing_outputs == callback.outputs and
+            item.processing_error == callback.error ->
+          :duplicate
+
+        true ->
+          :stale
+      end
+    end)
+    |> case do
+      {:ok, result} -> {:ok, result}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp write_processing_terminal_events(item, from_state, to_state, output_types, result) do
+    input_kind = processing_input_kind(item)
+
+    with :ok <- write_processing_transition_event(item, input_kind, from_state, to_state),
+         {:ok, _event_or_disabled} <-
+           Events.write_optional("operational.processing_completed.v1", %{
+             owner_id: item.owner_id,
+             subject_type: "item",
+             subject_id: to_string(item.id),
+             run_id: item.processing_run_id,
+             correlation_id: item.processing_run_id,
+             details: %{
+               input_kind: input_kind,
+               output_types: Enum.sort(output_types),
+               duration_ms: processing_duration_ms(item),
+               attempt: item.processing_attempt,
+               result: result,
+               error_code: item.processing_error && item.processing_error["code"]
+             }
+           }) do
+      :ok
+    else
+      {:error, reason} -> {:error, {:event_insert_failed, reason}}
+    end
+  end
+
+  defp write_processing_transition_event(item, input_kind, from_state, to_state) do
+    case Events.write_optional("operational.work_transition.v1", %{
+           owner_id: item.owner_id,
+           subject_type: "item",
+           subject_id: to_string(item.id),
+           run_id: item.processing_run_id,
+           correlation_id: item.processing_run_id,
+           details: %{
+             operation: "process",
+             input_kind: input_kind,
+             from_state: Atom.to_string(from_state),
+             to_state: Atom.to_string(to_state),
+             attempt: item.processing_attempt,
+             duration_ms: processing_duration_ms(item),
+             error_code: item.processing_error && item.processing_error["code"]
+           }
+         }) do
+      {:ok, _event} -> :ok
+      {:error, reason} -> {:error, {:event_insert_failed, reason}}
+    end
+  end
+
+  defp processing_input_kind(item), do: item.processing_capabilities["input_kind"]
+
+  defp processing_duration_ms(%Item{processing_requested_at: nil}), do: 0
+
+  defp processing_duration_ms(item) do
+    DateTime.diff(DateTime.utc_now(), item.processing_requested_at, :millisecond)
+    |> max(0)
+  end
+
+  defp terminal_result(:succeeded), do: "ok"
+  defp terminal_result(:partial), do: "partial"
+  defp terminal_result(:failed), do: "failed"
 
   defp item_client_id(attrs), do: item_attr(attrs, :client_id)
 

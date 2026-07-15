@@ -1,18 +1,5 @@
 {
   "contract_version": "1",
-  "purpose": "Executable characterization of current behavior. These fixtures must be rejected by v1 consumers until their owning W1+ implementation lands.",
-  "mismatches": [
-    {
-      "id": "retry",
-      "owner_wave": "W5",
-      "current": {
-        "first_job_identity": "item:42:file_blob:9",
-        "second_job_identity": "item:42:file_blob:9",
-        "jobs_after_second_process": 1,
-        "dedupe_period": "infinity",
-        "dedupe_states": ["available", "scheduled", "executing", "retryable", "suspended", "completed"]
-      },
-      "expected_violation": "processing.retry_reuses_completed_run"
-    }
-  ]
+  "purpose": "Executable characterization of current cross-runtime behavior not yet conforming to v1.",
+  "mismatches": []
 }

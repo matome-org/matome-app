@@ -101,9 +101,11 @@ defmodule MatomeApiWeb.AdminLive.Work do
           <dt>Run id</dt><dd>{@selected.processing_run_id || "—"}</dd>
           <dt>Upload state</dt><dd>{@selected.upload_state || "none"}</dd>
           <dt>Processing state</dt><dd>{@selected.processing_state}</dd>
+          <dt>Logical attempt</dt><dd>{@selected.processing_attempt}</dd>
           <dt>Media</dt><dd>{@selected.media_type || @selected.item_type}</dd>
           <dt>Source revision</dt><dd>{@selected.source_revision}</dd>
           <dt>Config revision</dt><dd>{@selected.processing_config_revision || "—"}</dd>
+          <dt>Deadline</dt><dd>{format_time(@selected.processing_deadline_at)}</dd>
           <dt>Device observation</dt><dd>{device_label(@selected.device_observation)}</dd>
         </dl>
         <h3>Events</h3>
@@ -164,8 +166,9 @@ defmodule MatomeApiWeb.AdminLive.Work do
   defp dispatch_label(%{dispatch: nil}), do: "Not accepted by Oban"
   defp dispatch_label(item), do: "Oban accepted · #{item.dispatch.state}"
 
-  defp terminal_label(%{processing_state: state}) when state in [:succeeded, :failed],
-    do: "AI terminal · #{state}"
+  defp terminal_label(%{processing_state: state})
+       when state in [:not_available, :succeeded, :partial, :failed],
+       do: "AI terminal · #{state}"
 
   defp terminal_label(item), do: "AI not terminal · #{item.processing_state}"
   defp device_label(nil), do: "No reconciled device observation"

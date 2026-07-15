@@ -4,13 +4,13 @@ defmodule MatomeApiWeb.ItemControllerTest do
   import Ecto.Query
 
   alias MatomeApi.Auth
+  alias MatomeApi.AIEngine
   alias MatomeApi.Content
   alias MatomeApi.Content.Workspace
   alias MatomeApi.Events.Event
   alias MatomeApi.Repo
 
   @password "correct horse battery staple"
-  @token "dev-ai-token"
 
   test "file create returns the W0 top-level upload envelope", %{conn: conn} do
     %{conn: owner_conn} = register_conn(conn)
@@ -274,6 +274,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
         position: 0,
         byte_size: 123,
         checksum_sha256: String.duplicate("a", 64),
+        content_type: "audio/wav",
         media_type: "audio"
       })
       |> json_response(201)
@@ -351,6 +352,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
         position: 0,
         byte_size: 123,
         checksum_sha256: String.duplicate("a", 64),
+        content_type: "audio/wav",
         media_type: "audio"
       })
       |> json_response(201)
@@ -377,9 +379,12 @@ defmodule MatomeApiWeb.ItemControllerTest do
 
     assert queued["processing_state"] == "queued"
     assert is_binary(queued["processing_run_id"])
+    assert queued["processing_attempt"] == 1
+    assert queued["processing_requested_outputs"] == ~w(transcript summary title)
+    assert queued["processing_deadline_at"]
     assert queued["file"]["upload_state"] == "uploaded"
 
-    assert Repo.aggregate(Oban.Job, :count, :id) == 1
+    assert Repo.aggregate(Oban.Job, :count, :id) == 2
 
     assert %Event{owner_id: owner_id, subject_type: "item", subject_id: subject_id} =
              Repo.one!(
@@ -392,18 +397,36 @@ defmodule MatomeApiWeb.ItemControllerTest do
     assert owner_id == queued["owner_id"]
     assert subject_id == to_string(item["id"])
 
-    blob_id = item["file"]["id"]
+    job_id = Content.processing_job_id(queued["processing_run_id"])
+
+    assert {:ok, _payload} =
+             Content.ai_dispatch_payload(
+               item["id"],
+               queued["processing_run_id"],
+               queued["source_revision"]
+             )
+
+    callback = %{
+      "contract_version" => "1",
+      "job_id" => job_id,
+      "run_id" => queued["processing_run_id"],
+      "item_id" => item["id"],
+      "input_revision" => queued["source_revision"],
+      "status" => "done",
+      "outputs" => [
+        %{"type" => "transcript", "text" => "hello world"},
+        %{"type" => "summary", "markdown" => "short summary"},
+        %{"type" => "title", "text" => "Processed title"}
+      ]
+    }
 
     conn =
       build_conn()
-      |> put_req_header("authorization", "Bearer #{@token}")
-      |> post("/internal/jobs/item:#{item["id"]}:file_blob:#{blob_id}/result", %{
-        "job_id" => "item:#{item["id"]}:file_blob:#{blob_id}",
-        "item_id" => item["id"],
-        "file_blob_id" => blob_id,
-        "transcript" => "hello world",
-        "summary" => "short summary"
-      })
+      |> put_req_header(
+        "authorization",
+        "Bearer #{AIEngine.callback_identity(job_id, queued["processing_run_id"], queued["source_revision"])}"
+      )
+      |> post("/internal/v1/jobs/#{job_id}/result", callback)
 
     assert response(conn, 204) == ""
 
@@ -426,6 +449,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
 
     assert reloaded["processing_outputs"] == %{
              "summary" => %{"markdown" => "short summary", "type" => "summary"},
+             "title" => %{"text" => "Processed title", "type" => "title"},
              "transcript" => %{"text" => "hello world", "type" => "transcript"}
            }
 
@@ -446,16 +470,23 @@ defmodule MatomeApiWeb.ItemControllerTest do
       |> json_response(201)
       |> Map.fetch!("item")
 
-    blob_id = item["file"]["id"]
+    run_id = Ecto.UUID.generate()
+    route_job_id = Content.processing_job_id(run_id)
 
     conn =
       build_conn()
-      |> put_req_header("authorization", "Bearer #{@token}")
-      |> post("/internal/jobs/item:#{item["id"]}:file_blob:#{blob_id}/result", %{
-        "job_id" => "item:#{item["id"]}:file_blob:#{blob_id + 1}",
+      |> put_req_header(
+        "authorization",
+        "Bearer #{AIEngine.callback_identity(route_job_id, run_id, 1)}"
+      )
+      |> post("/internal/v1/jobs/#{route_job_id}/result", %{
+        "contract_version" => "1",
+        "job_id" => Content.processing_job_id(Ecto.UUID.generate()),
+        "run_id" => run_id,
         "item_id" => item["id"],
-        "file_blob_id" => blob_id,
-        "transcript" => "forged"
+        "input_revision" => 1,
+        "status" => "done",
+        "outputs" => [%{"type" => "transcript", "text" => "forged"}]
       })
 
     assert json_response(conn, 404) == %{"error" => "not_found"}
@@ -463,7 +494,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
     reloaded =
       get(owner_conn, ~p"/api/items/#{item["id"]}") |> json_response(200) |> Map.fetch!("item")
 
-    assert reloaded["file"]["transcript"] == nil
+    assert reloaded["processing_outputs"] == %{}
   end
 
   test "deleting a matome deletes item payload rows and reaps file storage", %{conn: conn} do
@@ -541,6 +572,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
         position: 0,
         byte_size: 123,
         checksum_sha256: String.duplicate("a", 64),
+        content_type: "audio/wav",
         media_type: "audio"
       })
       |> json_response(201)
@@ -558,7 +590,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
     assert post(owner_conn, ~p"/api/items/#{item["id"]}/process", %{}) |> json_response(202)
     assert post(owner_conn, ~p"/api/items/#{item["id"]}/process", %{}) |> json_response(202)
 
-    assert Repo.aggregate(Oban.Job, :count, :id) == 1
+    assert Repo.aggregate(Oban.Job, :count, :id) == 2
   end
 
   test "delete failure returns a generic message and never leaks struct internals", %{conn: conn} do

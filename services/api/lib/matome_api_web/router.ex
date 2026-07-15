@@ -22,8 +22,8 @@ defmodule MatomeApiWeb.Router do
     plug MatomeApiWeb.Plugs.RequireAuth
   end
 
-  pipeline :internal_auth do
-    plug MatomeApiWeb.Plugs.RequireInternalToken
+  pipeline :callback_auth do
+    plug MatomeApiWeb.Plugs.RequireCallbackIdentity
   end
 
   # Task #1854 (plan #131 W3) — the pre-auth salt bootstrap (CF-1): a user
@@ -177,9 +177,9 @@ defmodule MatomeApiWeb.Router do
   end
 
   scope "/internal", MatomeApiWeb do
-    pipe_through [:api, :internal_auth]
+    pipe_through [:api, :callback_auth]
 
-    post "/jobs/:id/result", InternalJobController, :result
+    post "/v1/jobs/:id/result", InternalJobController, :result
   end
 
   # ── /admin email-OTP gate ──

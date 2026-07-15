@@ -19,6 +19,7 @@ defmodule MatomeApiWeb.OpenApiTest do
     assert Map.has_key?(body["paths"], "/api/matomes/{matome_id}/items")
     assert Map.has_key?(body["paths"], "/api/items/{id}")
     assert Map.has_key?(body["paths"], "/api/items/{id}/presign")
+    assert Map.has_key?(body["paths"], "/api/items/{id}/process")
     assert Map.has_key?(body["paths"], "/api/v1/items/{item_id}/uploads")
     assert Map.has_key?(body["paths"], "/api/v1/uploads/{upload_id}")
 
@@ -29,6 +30,13 @@ defmodule MatomeApiWeb.OpenApiTest do
 
     assert Map.has_key?(body["paths"], "/api/v1/uploads/{upload_id}/complete")
     assert Map.has_key?(body["paths"], "/api/v1/uploads/{upload_id}/abort")
+    assert Map.has_key?(body["paths"], "/internal/v1/jobs/{id}/result")
+
+    callback = body["paths"]["/internal/v1/jobs/{id}/result"]["post"]
+    callback_schema = get_in(callback, ["requestBody", "content", "application/json", "schema"])
+    assert callback_schema["additionalProperties"] == false
+    assert callback_schema["properties"]["contract_version"]["enum"] == ["1"]
+    assert callback_schema["properties"]["status"]["enum"] == ["done", "failed"]
 
     item_schema =
       body

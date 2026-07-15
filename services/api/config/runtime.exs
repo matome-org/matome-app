@@ -38,9 +38,33 @@ if ip = System.get_env("PHX_HTTP_IP") do
   config :matome_api, MatomeApiWeb.Endpoint, http: [ip: parsed_ip]
 end
 
+ai_dispatch_token =
+  System.get_env("AI_ENGINE_DISPATCH_TOKEN") ||
+    if(config_env() == :prod,
+      do: raise("AI_ENGINE_DISPATCH_TOKEN is required in production"),
+      else: "dev-ai-dispatch-token"
+    )
+
+ai_callback_signing_secret =
+  System.get_env("AI_ENGINE_CALLBACK_SIGNING_SECRET") ||
+    if(config_env() == :prod,
+      do: raise("AI_ENGINE_CALLBACK_SIGNING_SECRET is required in production"),
+      else: "dev-ai-callback-signing-secret"
+    )
+
+if ai_dispatch_token == ai_callback_signing_secret do
+  raise "AI dispatch and callback credentials must be different"
+end
+
+if config_env() == :prod and
+     (byte_size(ai_dispatch_token) < 32 or byte_size(ai_callback_signing_secret) < 32) do
+  raise "AI dispatch and callback credentials must each be at least 32 bytes"
+end
+
 config :matome_api, MatomeApi.AIEngine,
   endpoint: System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:7002/v1/jobs",
-  token: System.get_env("AI_ENGINE_TOKEN") || "dev-ai-token",
+  dispatch_token: ai_dispatch_token,
+  callback_signing_secret: ai_callback_signing_secret,
   callback_base_url: System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:7001"
 
 if config_env() == :prod do

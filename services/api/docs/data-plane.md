@@ -153,7 +153,7 @@ Set once per environment (do not rotate casually — invalidates sessions):
 | `ADMIN_OTP_PEPPER` | Independent random secret (minimum 32 bytes) for keyed admin OTP verification |
 | `ADMIN_IP_ALLOWLIST` | Optional soft IP tier for rate limits |
 | `ADMIN_TRUSTED_PROXIES` | CIDRs allowed to supply `X-Forwarded-For` for admin attribution |
-| `AI_ENGINE_ENDPOINT` / `AI_ENGINE_TOKEN` / `AI_ENGINE_CALLBACK_BASE_URL` | AI stub or real engine |
+| `AI_ENGINE_ENDPOINT` / `AI_ENGINE_DISPATCH_TOKEN` / `AI_ENGINE_CALLBACK_SIGNING_SECRET` / `AI_ENGINE_CALLBACK_BASE_URL` | AI endpoint, outbound dispatch credential, independent per-run callback signing secret, and Core callback origin |
 | Plus all **data-plane** vars above | Postgres + S3-compatible |
 
 Flutter Web build arg / runtime: `API_BASE_URL` must be the **browser-facing**

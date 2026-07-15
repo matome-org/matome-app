@@ -18,7 +18,7 @@ The canonical flow is:
 local_saved -> work_queued -> parent_item_reconciled
   -> uploading -> uploaded
   -> processing_queued -> processing
-  -> succeeded | failed
+  -> succeeded | partial | failed
 ```
 
 Text work skips upload. Upload-only file work finishes as `succeeded` with
@@ -36,8 +36,9 @@ Each work row is deduped by item, operation, and input revision. A worker may
 act only while it owns an unexpired lease. Expired current work is requeued;
 results from a stale run or input revision are acknowledged without mutation.
 Transient automatic retries use exponential full jitter. Manual retry creates
-a new run id and resets its executor attempt count; the failed run remains an
-immutable terminal observation rather than being reused.
+a new run id, increments the Item's logical processing attempt, and resets its
+executor attempt count; the failed run remains an immutable terminal
+observation rather than being reused.
 
 Parent reconciliation is work, not a precondition that can silently skip a
 child forever. Queue the parent first, reconcile it, then create/reconcile the
@@ -95,15 +96,16 @@ context.
 
 ## AI HTTP v1
 
-Core and the external processor authenticate both job dispatch and callback
-with `Authorization: Bearer <service token>`. The token comes from runtime
-secret configuration and never appears in a job, event, or `system_config`.
+Core dispatch uses a runtime bearer credential. Callback authentication is a
+per-run HMAC bearer identity derived from a different runtime signing secret.
+The dispatch credential is never accepted on the callback route; neither secret
+appears in Oban args, Events, Item state, or `system_config`.
 
 - `GET /v1/capabilities` advertises enabled input kinds, accepted content
   types, limits, and typed outputs.
 - `POST /v1/jobs` returns `202` with the same job and run ids.
 - The processor posts exactly one terminal `done` or `failed` callback to
-  `job.callback.url`.
+  `job.callback.url`, using the signed identity supplied in callback headers.
 - Core accepts a callback only when job id, run id, and input revision match the
   current run. Duplicate terminal callbacks are no-ops.
 
@@ -113,6 +115,17 @@ text item body. File notes and Matome notes are never automatic AI input.
 Capabilities and global policy both apply; the lower limit wins. Outputs are a
 typed list, not arbitrary result JSON. Error messages are sanitized and carry
 a stable code plus a `retryable` boolean.
+
+Under the Item row lock, a new logical request snapshots source/config
+revisions, the advertised input capability, requested outputs, deadline, and a
+new opaque run id before atomically inserting its dispatch, watchdog, and
+transition event. Active transport retries reuse that run. A valid `done`
+callback with all requested output kinds is `succeeded`; a strict subset is
+`partial`; duplicate or unrequested kinds are rejected. Disabled global policy
+stays `not_requested`, while an advertised unavailable or incompatible
+capability is a terminal `not_available` run. Callback and timeout updates are
+conditional on current run plus source revision, so exact duplicates are no-ops
+and stale or conflicting observations never overwrite current outputs.
 
 ## Events and catalog
 
@@ -189,20 +202,15 @@ compatibility.
 
 ## Executable evidence
 
-`fixtures/known-mismatches.json` captures one current failure without making
-the default suites red:
-
-1. Oban uniqueness includes completed jobs forever, so manual retry reuses the
-   completed identity instead of creating a run.
-Core and Flutter tests execute a detector against that fixture and assert the
-specific v1 violation. Core W2 now supplies live current-state conformance:
-processing is rejected until a file upload is verified, then persists
-`queued`/`processing`/`succeeded` independently of upload state, with machine
-outputs on `items`. The canonical item-create fixture supplies live W1
+`fixtures/known-mismatches.json` is empty after W5 replaced item/blob Oban
+uniqueness with run-keyed dispatch and live lifecycle/callback/watchdog tests.
+Core supplies live current-state conformance: processing is rejected until a
+file upload is verified, then persists truthful queued, processing, and terminal
+state independently of upload state, with typed machine outputs on `items` and
+history in Events. The canonical item-create fixture supplies live W1
 conformance for the top-level `upload.request` envelope and permanent
 `client_id`. Flutter's parent/Core boundary test supplies live W1 conformance
 for automatic parent-first reconciliation, immediate child drain, streamed
 upload, and restart-safe replay while preserving explicit durable block reasons.
 The AI-stub suite executes the shared capabilities, job, and typed-callback
-fixtures. W5 replaces the remaining retry characterization with live
-conformance.
+fixtures; adapter/stub transport conformance remains separately owned.

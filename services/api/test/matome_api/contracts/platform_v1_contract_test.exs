@@ -79,7 +79,14 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
     assert contract["ai"]["input_kinds"] == ~w(audio image document text)
     assert contract["ai"]["callback_statuses"] == ~w(done failed)
     assert contract["ai"]["auth"] == "bearer_service_token"
+    assert contract["ai"]["credential_separation"]["shared_credentials_forbidden"]
+
+    assert contract["ai"]["terminal_processing_states"] ==
+             ~w(succeeded partial failed not_available)
+
+    assert contract["ai"]["max_outputs_bytes"] == 4_194_304
     assert Map.keys(fixtures["ai"]["jobs"]) |> Enum.sort() == ~w(audio document image text)
+    assert fixtures["ai"]["callbacks"]["partial"]["outputs"] |> length() == 1
 
     assert contract["events"]["classes"] == ~w(security operational product)
     assert contract["events"]["reject_unknown_payload_keys"]
@@ -158,8 +165,7 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
     expected = Map.new(mismatches, &{&1["id"], &1["expected_violation"]})
 
     assert detected == expected
-
-    assert Map.keys(detected) == ["retry"]
+    assert detected == %{}
   end
 
   defp detect_violation(%{"id" => "retry", "current" => current}) do

@@ -69,6 +69,10 @@ defmodule MatomeApiWeb.AdminSettingsLiveTest do
     assert html =~ ~s(phx-submit="toggle_queue")
     refute html =~ "AI_ENGINE_TOKEN"
     refute html =~ "dev-ai-token"
+    refute html =~ "AI_ENGINE_DISPATCH_TOKEN"
+    refute html =~ "AI_ENGINE_CALLBACK_SIGNING_SECRET"
+    refute html =~ "dev-ai-dispatch-token"
+    refute html =~ "dev-ai-callback-signing-secret"
     refute html =~ "http://"
   end
 

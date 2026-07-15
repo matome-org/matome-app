@@ -63,3 +63,34 @@ config :matome_api, :admin_session, ttl_seconds: 30 * 60, reauth_ttl_seconds: 5 
 config :matome_api, :admin_otp, pepper: "test-only-admin-otp-pepper-32-bytes"
 
 config :matome_api, MatomeApi.Storage.ObjectStore, adapter: MatomeApi.Storage.ObjectStore.Noop
+
+config :matome_api, MatomeApi.AIEngine,
+  capabilities: %{
+    "contract_version" => "1",
+    "service" => "matome-ai-test",
+    "inputs" => %{
+      "audio" => %{
+        "enabled" => true,
+        "max_bytes" => 2_147_483_648,
+        "content_types" => ["audio/wav", "audio/mpeg", "application/octet-stream"],
+        "outputs" => ~w(transcript summary title)
+      },
+      "image" => %{
+        "enabled" => true,
+        "max_bytes" => 52_428_800,
+        "content_types" => ["image/jpeg", "image/png", "application/octet-stream"],
+        "outputs" => ~w(ocr_text description summary title)
+      },
+      "document" => %{
+        "enabled" => true,
+        "max_bytes" => 524_288_000,
+        "content_types" => ["application/pdf", "text/plain", "application/octet-stream"],
+        "outputs" => ~w(extracted_text summary title)
+      },
+      "text" => %{
+        "enabled" => true,
+        "max_characters" => 200_000,
+        "outputs" => ~w(summary title)
+      }
+    }
+  }

@@ -27,7 +27,7 @@
       "failed": []
     },
     "upload_states": ["not_required", "pending", "uploading", "uploaded", "failed", "aborted"],
-    "processing_states": ["not_requested", "queued", "processing", "succeeded", "failed"],
+    "processing_states": ["not_requested", "not_available", "queued", "processing", "succeeded", "partial", "failed"],
     "authorities": {
       "drift": [
         "local item and parent identity before reconciliation",
@@ -67,7 +67,8 @@
       "retryable_classes": ["transport", "timeout", "rate_limited", "server_unavailable"],
       "terminal_classes": ["validation", "unauthorized", "unsupported", "content_rejected"],
       "manual_retry_creates_new_run": true,
-      "manual_retry_resets_attempt": true
+      "manual_retry_resets_executor_attempt": true,
+      "logical_processing_attempt": "increments on each new processing run"
     },
     "stale_run": {
       "accept_when": "run_id_and_input_revision_match_current",
@@ -138,13 +139,25 @@
       "callback": "job.callback.url"
     },
     "auth": "bearer_service_token",
+    "credential_separation": {
+      "dispatch": "runtime bearer credential sent only by Core to the processor",
+      "callback": "per-run HMAC bearer identity derived from an independent runtime signing secret",
+      "shared_credentials_forbidden": true
+    },
     "token_source": "runtime_secret_only",
     "accepted_response": "202 with contract_version, job_id, run_id, and accepted=true",
     "input_kinds": ["audio", "image", "document", "text"],
     "callback_statuses": ["done", "failed"],
+    "terminal_processing_states": ["succeeded", "partial", "failed", "not_available"],
+    "partial_rule": "A valid done callback with a strict subset of requested outputs is partial; unrequested or duplicate output kinds are rejected.",
     "terminal_callback_count": 1,
     "idempotency_key": ["job_id", "run_id", "input_revision"],
     "limits_rule": "Core uses the lower of system_config policy and the advertised capability limit.",
+    "max_capabilities_bytes": 65536,
+    "max_callback_bytes": 4210000,
+    "max_outputs_bytes": 4194304,
+    "capability_snapshot_rule": "Each logical run snapshots the advertised input capability, source revision, desired config revision, and requested outputs on the current Item and immutable Oban args.",
+    "timeout_rule": "Core inserts one run-keyed watchdog atomically with dispatch; the callback deadline conditionally fails only the still-current queued or processing run.",
     "metadata_allowlist": ["locale"],
     "automatic_text_rule": "Only text item body is sent automatically; file notes and Matome notes are excluded.",
     "typed_outputs": {

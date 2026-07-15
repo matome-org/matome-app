@@ -6,7 +6,15 @@ defmodule MatomeApi.Content.Item do
   alias MatomeApi.Content.{FileBlob, Matome, TextContent, Workspace}
 
   @item_types [:file, :text]
-  @processing_states [:not_requested, :queued, :processing, :succeeded, :failed]
+  @processing_states [
+    :not_requested,
+    :not_available,
+    :queued,
+    :processing,
+    :succeeded,
+    :partial,
+    :failed
+  ]
   @metadata_reserved_keys ~w(
     body
     byte_size
@@ -20,9 +28,14 @@ defmodule MatomeApi.Content.Item do
     media_type
     mediaType
     notes
+    processing_attempt
+    processing_capabilities
     processing_config_revision
+    processing_deadline_at
     processing_error
     processing_outputs
+    processing_requested_at
+    processing_requested_outputs
     processing_run_id
     processing_state
     source_revision
@@ -50,8 +63,13 @@ defmodule MatomeApi.Content.Item do
     field :client_fingerprint, :string
     field :processing_state, Ecto.Enum, values: @processing_states, default: :not_requested
     field :processing_run_id, Ecto.UUID
+    field :processing_attempt, :integer, default: 0
     field :source_revision, :integer, default: 1
     field :processing_config_revision, :integer
+    field :processing_capabilities, :map
+    field :processing_requested_outputs, {:array, :string}, default: []
+    field :processing_requested_at, :utc_datetime
+    field :processing_deadline_at, :utc_datetime
     field :processing_outputs, :map, default: %{}
     field :processing_error, :map
 
@@ -79,8 +97,13 @@ defmodule MatomeApi.Content.Item do
       :metadata,
       :processing_state,
       :processing_run_id,
+      :processing_attempt,
       :source_revision,
       :processing_config_revision,
+      :processing_capabilities,
+      :processing_requested_outputs,
+      :processing_requested_at,
+      :processing_deadline_at,
       :processing_outputs,
       :processing_error,
       :file_blob_id,
@@ -92,6 +115,7 @@ defmodule MatomeApi.Content.Item do
     |> validate_length(:client_id, min: 1, max: 255)
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_number(:source_revision, greater_than: 0)
+    |> validate_number(:processing_attempt, greater_than_or_equal_to: 0)
     |> validate_number(:processing_config_revision, greater_than_or_equal_to: 0)
     |> validate_metadata_render_hints_only()
     |> foreign_key_constraint(:workspace_id, name: :items_owner_workspace_fkey)
@@ -108,6 +132,10 @@ defmodule MatomeApi.Content.Item do
     |> check_constraint(:client_id, name: :items_client_identity_check)
     |> check_constraint(:processing_state, name: :items_processing_state_check)
     |> check_constraint(:processing_run_id, name: :items_processing_run_check)
+    |> check_constraint(:processing_capabilities, name: :items_processing_capabilities_check)
+    |> check_constraint(:processing_requested_outputs,
+      name: :items_processing_requested_outputs_check
+    )
     |> check_constraint(:source_revision, name: :items_processing_revision_check)
     |> check_constraint(:metadata, name: :items_metadata_check)
     |> check_constraint(:processing_outputs, name: :items_processing_outputs_check)
@@ -119,14 +147,24 @@ defmodule MatomeApi.Content.Item do
     |> cast(attrs, [
       :processing_state,
       :processing_run_id,
+      :processing_attempt,
       :processing_config_revision,
+      :processing_capabilities,
+      :processing_requested_outputs,
+      :processing_requested_at,
+      :processing_deadline_at,
       :processing_outputs,
       :processing_error
     ])
     |> validate_required([:processing_state])
+    |> validate_number(:processing_attempt, greater_than_or_equal_to: 0)
     |> validate_number(:processing_config_revision, greater_than_or_equal_to: 0)
     |> check_constraint(:processing_state, name: :items_processing_state_check)
     |> check_constraint(:processing_run_id, name: :items_processing_run_check)
+    |> check_constraint(:processing_capabilities, name: :items_processing_capabilities_check)
+    |> check_constraint(:processing_requested_outputs,
+      name: :items_processing_requested_outputs_check
+    )
     |> check_constraint(:processing_outputs, name: :items_processing_outputs_check)
     |> check_constraint(:processing_error, name: :items_processing_error_check)
   end

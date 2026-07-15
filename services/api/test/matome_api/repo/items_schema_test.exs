@@ -17,7 +17,9 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
     assert columns("items") >=
              MapSet.new(~w(
                owner_id client_id workspace_id matome_id title notes item_type metadata
-               processing_state processing_run_id source_revision processing_config_revision
+               processing_state processing_run_id processing_attempt source_revision
+               processing_config_revision processing_capabilities processing_requested_outputs
+               processing_requested_at processing_deadline_at
                processing_outputs processing_error file_blob_id text_content_id
              ))
 
@@ -183,6 +185,22 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
       )
     end
 
+    assert_raise Postgrex.Error, ~r/items_processing_capabilities_check/, fn ->
+      insert_text_item_for_owner!(user.id,
+        processing_state: "queued",
+        processing_run_id: run_id,
+        processing_capabilities: %{"text" => String.duplicate("x", 65_536)}
+      )
+    end
+
+    assert_raise Postgrex.Error, ~r/items_processing_requested_outputs_check/, fn ->
+      insert_text_item_for_owner!(user.id,
+        processing_state: "queued",
+        processing_run_id: run_id,
+        processing_requested_outputs: ["arbitrary_json"]
+      )
+    end
+
     assert_raise Postgrex.Error, ~r/file_blobs_multipart_context_check/, fn ->
       insert_file_blob!("audio",
         multipart_context: %{"provider" => String.duplicate("x", 262_144)}
@@ -193,6 +211,18 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
       processing_state: "failed",
       processing_run_id: run_id,
       processing_error: %{"code" => "processor_unavailable", "retryable" => true}
+    )
+
+    insert_text_item_for_owner!(user.id,
+      processing_state: "partial",
+      processing_run_id: Ecto.UUID.generate(),
+      processing_outputs: %{"summary" => %{"type" => "summary", "markdown" => "partial"}}
+    )
+
+    insert_text_item_for_owner!(user.id,
+      processing_state: "not_available",
+      processing_run_id: Ecto.UUID.generate(),
+      processing_requested_outputs: []
     )
 
     insert_file_blob!("audio",
@@ -310,17 +340,56 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
     processing_outputs = Keyword.get(attrs, :processing_outputs, %{})
     processing_error = Keyword.get(attrs, :processing_error)
 
+    processing_attempt =
+      Keyword.get(attrs, :processing_attempt, if(processing_run_id, do: 1, else: 0))
+
+    processing_config_revision =
+      Keyword.get(attrs, :processing_config_revision, if(processing_run_id, do: 1, else: nil))
+
+    processing_capabilities =
+      Keyword.get(
+        attrs,
+        :processing_capabilities,
+        if(processing_run_id,
+          do: %{
+            "contract_version" => "1",
+            "service" => "schema-test",
+            "input_kind" => "text",
+            "input" => %{
+              "enabled" => true,
+              "max_characters" => 200_000,
+              "outputs" => ~w(summary title)
+            }
+          },
+          else: nil
+        )
+      )
+
+    processing_requested_outputs =
+      Keyword.get(
+        attrs,
+        :processing_requested_outputs,
+        if(processing_run_id, do: ~w(summary title), else: [])
+      )
+
+    processing_requested_at = if processing_run_id, do: DateTime.utc_now(), else: nil
+
+    processing_deadline_at =
+      if processing_run_id, do: DateTime.add(DateTime.utc_now(), 60), else: nil
+
     %{rows: [[id]]} =
       Repo.query!(
         """
         INSERT INTO items (
           owner_id, client_id, client_fingerprint, workspace_id, matome_id, position,
           item_type, title, metadata, processing_state, processing_run_id,
+          processing_attempt, processing_config_revision, processing_capabilities,
+          processing_requested_outputs, processing_requested_at, processing_deadline_at,
           processing_outputs, processing_error, text_content_id, inserted_at, updated_at
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, 'text', 'Schema item', '{}'::jsonb, $7, $8,
-          $9::jsonb, $10::jsonb, $11, now(), now()
+          $9, $10, $11::jsonb, $12, $13, $14, $15::jsonb, $16::jsonb, $17, now(), now()
         )
         RETURNING id
         """,
@@ -333,6 +402,12 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
           position,
           processing_state,
           processing_run_id,
+          processing_attempt,
+          processing_config_revision,
+          processing_capabilities,
+          processing_requested_outputs,
+          processing_requested_at,
+          processing_deadline_at,
           processing_outputs,
           processing_error,
           text_content_id

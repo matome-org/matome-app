@@ -69,14 +69,14 @@ Owns everything except AI.
 | DB | **Postgres** via **Ecto** — system of record (`DATABASE_URL`; local native or managed) |
 | Auth | **Guardian** (JWT access + refresh), **Argon2** hashing; users in Postgres. App-level authz (no third-party Auth/RLS). Session auth is layered under a separate **at-rest key envelope** (plan #131 / [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md)): `POST/GET /keybundle` (+ `/keybundle/recovery`) stores only opaque `wrapped_dek_*` blobs + salts/KDF params — the server never receives the password, the KEK, or the DEK. `auth_secret` (login) and the password-KEK (data-key unwrap) are independent Argon2id derivations of the same password under distinct salts, so a credential the server legitimately sees can never unwrap client data. See §11 D8 below for what of this is implemented+tested vs dark/deferred. |
 | Authorization | scoping by `owner_id` (Ecto query scopes) |
-| Job queue | **Oban** (Postgres-backed) — dispatch + retry of AI jobs |
+| Job queue | **Oban** (Postgres-backed) — run-keyed dispatch, retry, and timeout watchdog for AI jobs |
 | Realtime | **Phoenix Channels** + PubSub (`RecordingStatusChannel` on `user:*`) |
 | Object storage | **S3-compatible** (MinIO local / R2 or S3 in prod) — Core issues path-style presigned PUT/GET URLs ([data-plane.md](../../services/api/docs/data-plane.md)) |
 | API surface | REST, documented as **OpenAPI** (`open_api_spex`) |
 
 Responsibilities: register/login + tokens; CRUD on matomes / recordings / spaces / contacts; create the `pending` record; issue presigned upload URLs; enqueue ingestion jobs; receive AI results via internal callback; archive/restore.
 
-**Public REST surface (owner-scoped unless noted):** `/api/auth/{register,login,refresh,logout}` (public) + `/api/auth/me`; `/api/spaces` (+ `/search`, `/:id`); `/api/recordings` (+ `/search`, `/:id`, `/:id/process`, `/:id/download-url`, `/:id/contacts`); `/api/matomes` (+ `/search`, `/:id`, `/:id/archive`, `/:id/restore`, `/:id/contacts`); `/api/contacts` (+ `/search`, `/:id`). **Internal:** `POST /internal/jobs/:id/result` (AI callback, service-token).
+**Public processing surface (owner-scoped):** `POST /api/items/:id/process`. **Internal:** `POST /internal/v1/jobs/:id/result` (per-run signed AI callback).
 
 > Note: the physical `workspaces` table / `workspace_id` FK is the **Space** concept (logical rename); the code keeps the legacy name.
 
@@ -88,7 +88,7 @@ Responsibilities: register/login + tokens; CRUD on matomes / recordings / spaces
 
 Stateless processors (`transcribe`, `ocr`, `summarize`). Only Core reaches it (service token, private network). It downloads media via presigned GET and returns one terminal result via callback. It stores nothing durable.
 
-**Contract.** Core → AI: `POST /v1/jobs` `{job_id, recording_id, media_type, storage_key, media:{method:GET,url,expires_at}, callback:{url,method:POST}, metadata}` → `202 {accepted:true}`. AI → Core: `POST /internal/jobs/:job_id/result` with `status:done` (`title, transcript, summary, duration`) or `status:failed` (`error.{code,message}`), both `Bearer <AI_ENGINE_TOKEN>`. Callback is idempotent per `job_id`; `metadata` is advisory and must not be used for authorization. Local stub: `bun run ai:stub` (default `http://127.0.0.1:7002/v1/jobs`).
+**Contract.** Core → AI: versioned `POST /v1/jobs` with opaque job/run ids, source revision, tagged audio/image/document/text input, typed requested outputs, signed callback descriptor, and locale-only metadata. AI → Core: `POST /internal/v1/jobs/:job_id/result` with terminal `done` typed outputs or sanitized `failed` error. Dispatch and callback use separate credentials. Core conditionally applies only the current run/revision; exact duplicates, stale callbacks, and the callback-before-dispatch-ack race are safe. See [processing-lifecycle.md](../../services/api/docs/processing-lifecycle.md).
 
 ---
 
@@ -182,9 +182,9 @@ sequenceDiagram
   Note over C: a ~2s GET /api/recordings/:id poll also resolves it
 ```
 
-- **Statuses:** `pending → processing → done | failed` (client renders each + retry).
-- **mediaType:** `audio | meeting | image` (future `video | pdf`); set by the client at upload, routed by the AI Engine.
-- **Retry:** on processor error Core sets `failed`; client retry re-enqueues server-side, never processes locally.
+- **Processing states:** `not_requested | not_available | queued | processing | succeeded | partial | failed`.
+- **Input kinds:** `audio | image | document | text`; video is upload-only unless a future version advertises it.
+- **Retry:** transport retries retain the run; a terminal user retry creates a new run and logical attempt.
 
 ---
 
@@ -224,7 +224,9 @@ items
   id / owner_id / client_id
   matome_id (nullable) / workspace_id (nullable, shadowed by matome) / position
   item_type / title / notes / metadata (render hints only)
-  processing_state / processing_run_id / source_revision / processing_config_revision
+  processing_state / processing_run_id / processing_attempt
+  source_revision / processing_config_revision / capability + requested-output snapshot
+  processing_requested_at / processing_deadline_at
   processing_outputs jsonb / processing_error jsonb
   file_blob_id xor text_content_id
 file_blobs

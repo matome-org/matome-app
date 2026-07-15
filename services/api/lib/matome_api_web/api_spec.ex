@@ -203,6 +203,25 @@ defmodule MatomeApiWeb.ApiSpec do
           responses: resource_responses("Presign")
         }
       },
+      "/api/items/{id}/process" => %PathItem{
+        post: %Operation{
+          operationId: "ItemController.process",
+          tags: ["items", "processing"],
+          summary: "Create or replay the authenticated owner's current processing run",
+          description:
+            "Active transport retries return the same run; a terminal user retry creates a new run and logical attempt.",
+          parameters: [id_parameter()],
+          responses: %{
+            202 => Operation.response("Current processing state", "application/json", nil),
+            401 => Operation.response("Unauthorized", "application/json", nil),
+            404 => Operation.response("Not found", "application/json", nil),
+            422 =>
+              Operation.response("Upload, capability, or policy error", "application/json", nil),
+            503 =>
+              Operation.response("Processor capabilities unavailable", "application/json", nil)
+          }
+        }
+      },
       "/api/v1/items/{item_id}/uploads" => %PathItem{
         post: %Operation{
           operationId: "UploadController.request",
@@ -250,6 +269,23 @@ defmodule MatomeApiWeb.ApiSpec do
           parameters: [upload_id_parameter()],
           requestBody: upload_abort_request_body(),
           responses: upload_responses("Aborted upload")
+        }
+      },
+      "/internal/v1/jobs/{id}/result" => %PathItem{
+        post: %Operation{
+          operationId: "InternalJobController.result",
+          tags: ["processing-internal"],
+          summary: "Conditionally apply one signed terminal processor callback",
+          description:
+            "Requires the per-run HMAC bearer identity. Exact duplicates and stale/conflicting current-run observations are acknowledged without overwrite.",
+          parameters: [job_id_parameter()],
+          requestBody: processing_callback_request_body(),
+          responses: %{
+            204 => Operation.response("Applied, duplicate, or stale", "application/json", nil),
+            401 => Operation.response("Invalid callback identity", "application/json", nil),
+            404 => Operation.response("Unknown persisted dispatch", "application/json", nil),
+            422 => Operation.response("Invalid versioned callback", "application/json", nil)
+          }
         }
       }
     }
@@ -342,6 +378,42 @@ defmodule MatomeApiWeb.ApiSpec do
       type: :object,
       properties: %{
         byte_size: %OpenApiSpex.Schema{type: :integer, minimum: 1}
+      }
+    })
+  end
+
+  defp processing_callback_request_body do
+    Operation.request_body("AI processing callback v1", "application/json", %OpenApiSpex.Schema{
+      type: :object,
+      additionalProperties: false,
+      required: [:contract_version, :job_id, :run_id, :item_id, :input_revision, :status],
+      properties: %{
+        contract_version: %OpenApiSpex.Schema{type: :string, enum: ["1"]},
+        job_id: %OpenApiSpex.Schema{type: :string, minLength: 1, maxLength: 255},
+        run_id: %OpenApiSpex.Schema{type: :string, format: :uuid},
+        item_id: %OpenApiSpex.Schema{type: :integer, minimum: 1},
+        input_revision: %OpenApiSpex.Schema{type: :integer, minimum: 1},
+        status: %OpenApiSpex.Schema{type: :string, enum: ["done", "failed"]},
+        outputs: %OpenApiSpex.Schema{
+          type: :array,
+          minItems: 1,
+          maxItems: 10,
+          items: %OpenApiSpex.Schema{type: :object}
+        },
+        error: %OpenApiSpex.Schema{
+          type: :object,
+          additionalProperties: false,
+          required: [:code, :message, :retryable],
+          properties: %{
+            code: %OpenApiSpex.Schema{
+              type: :string,
+              pattern: "^[a-z][a-z0-9_]*$",
+              maxLength: 100
+            },
+            message: %OpenApiSpex.Schema{type: :string, maxLength: 1024},
+            retryable: %OpenApiSpex.Schema{type: :boolean}
+          }
+        }
       }
     })
   end
@@ -504,6 +576,16 @@ defmodule MatomeApiWeb.ApiSpec do
       :path,
       %OpenApiSpex.Schema{type: :integer},
       "Owner-scoped item id",
+      required: true
+    )
+  end
+
+  defp job_id_parameter do
+    Operation.parameter(
+      :id,
+      :path,
+      %OpenApiSpex.Schema{type: :string, minLength: 1, maxLength: 255},
+      "Opaque processing job id",
       required: true
     )
   end

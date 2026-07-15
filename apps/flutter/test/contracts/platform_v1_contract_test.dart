@@ -140,7 +140,7 @@ void main() {
     };
 
     expect(detected, expected);
-    expect(detected.keys.toSet(), <String>{'retry'});
+    expect(detected, isEmpty);
   });
 
   test('pins the reset-safe 1:1 payload model decision', () {
