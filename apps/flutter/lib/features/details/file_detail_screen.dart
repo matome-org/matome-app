@@ -446,7 +446,8 @@ class _ImageDetailHost extends StatelessWidget {
   /// as empty rather than a misleading "Processing…".
   ContentsState _docContentsState() {
     if (processingStatus == 'failed') return ContentsState.failed;
-    final pending = processingStatus == kProcessingStatusPendingUpload;
+    final status = processingStatus;
+    final pending = status != null && isUploadQueuePendingStatus(status);
     if (isProcessing && !pending) return ContentsState.processing;
     final text = contentsText;
     if (text != null && text.trim().isNotEmpty) return ContentsState.ready;

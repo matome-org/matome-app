@@ -16,11 +16,14 @@ import 'package:matome_flutter/features/files/files_providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
+import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
+
+import '../support/fake_parent_sync.dart';
 
 /// Local-first-spaces #102 W2 — imports land LOOSE behind the flag, the
 /// flag-off path is byte-for-byte unchanged, and the existing synced (upload)
@@ -57,60 +60,65 @@ Future<RecordingResult> _pollFallbackAwaiter({
 
 void main() {
   group('lane: ff.localFirstSpaces=true (ON / loose import)', () {
-    test(
-      'import lands LOOSE — matome NULL + workspace NULL → in the Inbox '
-      '(effective space NULL via the resolver), no Matome minted',
-      () async {
-        final db = AppDatabase.forTesting(NativeDatabase.memory());
-        addTearDown(db.close);
+    test('import lands LOOSE — matome NULL + workspace NULL → in the Inbox '
+        '(effective space NULL via the resolver), no Matome minted', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-        final tmp = File('${Directory.systemTemp.path}/loose_import_on.m4a');
-        await tmp.writeAsBytes(List<int>.filled(16, 0));
-        addTearDown(() => tmp.exists().then((e) => e ? tmp.delete() : null));
+      final tmp = File('${Directory.systemTemp.path}/loose_import_on.m4a');
+      await tmp.writeAsBytes(List<int>.filled(16, 0));
+      addTearDown(() => tmp.exists().then((e) => e ? tmp.delete() : null));
 
-        // Core unreachable → the row stays pending_upload + loose; the assertion
-        // sees the locally-persisted membership (no Core reconcile reshapes it).
-        final repo = _CoreDownRepository(
-          apiClient: ApiClient(
-            tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-          ),
-        );
+      // Core unreachable → the row stays pending_upload + loose; the assertion
+      // sees the locally-persisted membership (no Core reconcile reshapes it).
+      final repo = _CoreDownRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
 
-        final container = ProviderContainer(overrides: [
+      final container = ProviderContainer(
+        overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          testParentSyncOverride(),
           recordingsRepositoryProvider.overrideWithValue(repo),
-        ]);
-        addTearDown(container.dispose);
+        ],
+      );
+      addTearDown(container.dispose);
 
-        final localId = await container.read(inboxUploaderProvider).upload(
-              PickedUpload(file: tmp, title: 'Imported', mediaType: 'audio'),
-            );
+      final localId = await container
+          .read(inboxUploaderProvider)
+          .upload(
+            PickedUpload(file: tmp, title: 'Imported', mediaType: 'audio'),
+          );
 
-        final row = await db.recordingsDao.getRecordingById(localId);
-        expect(row, isNotNull);
-        // LOOSE: no matome, no space. Its effective space is therefore NULL ⇒
-        // Inbox (INBOX ⟺ effectiveSpace == NULL, spec R1.3).
-        expect(row!.matomeId, isNull,
-            reason: 'flag ON: import must NOT mint a matome (loose)');
-        expect(row.workspaceId, isNull,
-            reason: 'flag ON: import is loose, no space filed');
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(row, isNotNull);
+      // LOOSE: no matome, no space. Its effective space is therefore NULL ⇒
+      // Inbox (INBOX ⟺ effectiveSpace == NULL, spec R1.3).
+      expect(
+        row!.matomeId,
+        isNull,
+        reason: 'flag ON: import must NOT mint a matome (loose)',
+      );
+      expect(
+        row.workspaceId,
+        isNull,
+        reason: 'flag ON: import is loose, no space filed',
+      );
 
-        // No Matome row was created at all (the m007 forced-mint is repealed).
-        final matomes = await db.matomesDao.listMatomes();
-        expect(matomes, isEmpty,
-            reason: 'a loose import mints NO Matome');
+      // No Matome row was created at all (the m007 forced-mint is repealed).
+      final matomes = await db.matomesDao.listMatomes();
+      expect(matomes, isEmpty, reason: 'a loose import mints NO Matome');
 
-        // Surfaces in the Inbox view (workspaceId IS NULL).
-        final items = container.read(inboxControllerProvider).requireValue;
-        expect(items.single.id, localId);
-      },
-      skip: _flagOn ? false : 'ON-only lane',
-    );
+      // Surfaces in the Inbox view (workspaceId IS NULL).
+      final items = container.read(inboxControllerProvider).requireValue;
+      expect(items.single.id, localId);
+    }, skip: _flagOn ? false : 'ON-only lane');
 
     test(
-      'regression: an existing recording already in a CLOUD space still '
-      'uploads — the synced path is NOT broken by the loose-import change',
+      'W2 boundary: a CLOUD-filed loose item stays blocked until it has a parent',
       () async {
         final db = AppDatabase.forTesting(NativeDatabase.memory());
         addTearDown(db.close);
@@ -119,10 +127,12 @@ void main() {
         await tmp.writeAsBytes(List<int>.filled(16, 0));
         addTearDown(() => tmp.exists().then((e) => e ? tmp.delete() : null));
 
-        final dio = Dio(BaseOptions(
-          baseUrl: 'http://localhost:7001',
-          validateStatus: (s) => s != null && s < 500,
-        ));
+        final dio = Dio(
+          BaseOptions(
+            baseUrl: 'http://localhost:7001',
+            validateStatus: (s) => s != null && s < 500,
+          ),
+        );
         final adapter = DioAdapter(dio: dio);
         adapter.onPost(
           '/api/recordings',
@@ -171,32 +181,39 @@ void main() {
           apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
         );
 
-        final container = ProviderContainer(overrides: [
-          appDatabaseProvider.overrideWithValue(db),
-          recordingsRepositoryProvider.overrideWithValue(repo),
-          // The W4 gate's [Caller] reads this; override so the drain never
-          // builds the real auth chain (secure-storage platform channels).
-          currentOwnerIdProvider.overrideWithValue('owner-1'),
-          uploadQueueProvider.overrideWith(
-            (ref) => UploadQueue(
-              ref,
-              awaitResult: _pollFallbackAwaiter,
-              cleanupAudio: (_) async {},
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            testParentSyncOverride(),
+            recordingsRepositoryProvider.overrideWithValue(repo),
+            // The W4 gate's [Caller] reads this; override so the drain never
+            // builds the real auth chain (secure-storage platform channels).
+            currentOwnerIdProvider.overrideWithValue('owner-1'),
+            uploadQueueProvider.overrideWith(
+              (ref) => UploadQueue(
+                ref,
+                awaitResult: _pollFallbackAwaiter,
+                cleanupAudio: (_) async {},
+              ),
             ),
-          ),
-        ]);
+          ],
+        );
         addTearDown(container.dispose);
 
         // The CLOUD space the recording is filed into (`is_local = 0`) — a real
         // `workspaces` row so the W4 data-egress gate can resolve it to a CLOUD
         // SpaceRef and ALLOW the drain. (The gate fails-closed on an unknown
         // space id, so the synced-path regression needs the space to exist.)
-        await db.into(db.workspaces).insert(WorkspacesCompanion.insert(
-              id: '7',
-              name: 'Cloud space',
-              createdAt: DateTime.now().millisecondsSinceEpoch,
-              isLocal: const Value(0),
-            ));
+        await db
+            .into(db.workspaces)
+            .insert(
+              WorkspacesCompanion.insert(
+                id: '7',
+                name: 'Cloud space',
+                createdAt: DateTime.now().millisecondsSinceEpoch,
+                isLocal: const Value(0),
+              ),
+            );
 
         // A recording ALREADY filed into a cloud space (workspaceId set to a
         // numeric Core space id), pending_upload — the synced reality the W4
@@ -224,11 +241,11 @@ void main() {
 
         final row = await db.recordingsDao.getRecordingById(localId);
         expect(row, isNotNull);
-        // The synced path drove: create → reconcile coreId → upload → done.
-        expect(row!.coreId, 555,
-            reason: 'cloud-filed recording must still create on Core');
-        expect(row.processingStatus, 'done',
-            reason: 'synced path not broken by the loose-import change');
+        // W1 does not invent organization for a loose item: W2 owns the
+        // canonical parent/work_queue cutover. The durable reason prevents a
+        // silent return and makes the checkpoint resumable once parented.
+        expect(row!.coreId, isNull);
+        expect(row.processingStatus, kProcessingStatusBlockedParent);
         // It stayed filed in its cloud space the whole time.
         expect(row.workspaceId, '7');
       },
@@ -255,13 +272,18 @@ void main() {
           ),
         );
 
-        final container = ProviderContainer(overrides: [
-          appDatabaseProvider.overrideWithValue(db),
-          recordingsRepositoryProvider.overrideWithValue(repo),
-        ]);
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            testParentSyncOverride(),
+            recordingsRepositoryProvider.overrideWithValue(repo),
+          ],
+        );
         addTearDown(container.dispose);
 
-        final localId = await container.read(inboxUploaderProvider).upload(
+        final localId = await container
+            .read(inboxUploaderProvider)
+            .upload(
               PickedUpload(file: tmp, title: 'Imported', mediaType: 'audio'),
             );
 
@@ -269,14 +291,20 @@ void main() {
         expect(row, isNotNull);
         // OFF: the forced-mint invariant holds — a Matome was minted and the
         // recording points at it.
-        expect(row!.matomeId, isNotNull,
-            reason: 'flag OFF: import still mints a Matome (unchanged)');
+        expect(
+          row!.matomeId,
+          isNotNull,
+          reason: 'flag OFF: import still mints a Matome (unchanged)',
+        );
         // Inbox upload → Inbox Matome: the minted matome has no space.
         expect(row.workspaceId, isNull);
 
         final matomes = await db.matomesDao.listMatomes();
-        expect(matomes, hasLength(1),
-            reason: 'flag OFF mints exactly one Matome per import');
+        expect(
+          matomes,
+          hasLength(1),
+          reason: 'flag OFF mints exactly one Matome per import',
+        );
         expect(matomes.single.id, row.matomeId);
       },
       skip: _flagOn ? 'OFF-only lane' : false,
@@ -290,8 +318,10 @@ class _CoreDownRepository extends RecordingsRepository {
   _CoreDownRepository({required super.apiClient});
 
   @override
-  Future<RecordingCreateResult> createRecording({
+  Future<RecordingCreateResult> createItemRecording({
     required String title,
+    required int matomeId,
+    required String clientId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',

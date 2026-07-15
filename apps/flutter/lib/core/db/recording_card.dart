@@ -1,5 +1,6 @@
 import 'app_database.dart';
 import '../../features/items/matome_item_type.dart';
+import '../../features/recordings/recording_ids.dart';
 
 /// UI-facing recording item, ported from the RN home card data shape
 /// (apps/mobile/processes/homeData + recordToCard in recordingService.ts).
@@ -58,7 +59,7 @@ class RecordingItem {
   /// "Cloud"/"On device" state of its own child tiles.
   bool get isOnCloud =>
       coreId != null &&
-      processingStatus != 'pending_upload' &&
+      !isUploadQueuePendingStatus(processingStatus) &&
       processingStatus != 'failed';
 
   /// Maps a persisted DB row to the UI card, mirroring `recordToCard`:

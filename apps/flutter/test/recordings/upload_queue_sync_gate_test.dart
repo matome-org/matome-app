@@ -38,6 +38,8 @@ import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
+import '../support/fake_parent_sync.dart';
+
 void main() {
   Future<RecordingResult> pollAwaiter({
     required Recording recording,
@@ -65,18 +67,21 @@ void main() {
   });
 
   ProviderContainer containerFor(AppDatabase db, RecordingsRepository repo) {
-    return ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-      // The gate's [Caller] reads this; override it so the test never builds the
-      // real auth chain (secure-storage platform channels). The id is the
-      // future-PDP input — today's `spaceSync` decision gates only on the space
-      // being cloud, so this value does not change any assertion here.
-      currentOwnerIdProvider.overrideWithValue('owner-1'),
-      uploadQueueProvider.overrideWith(
-        (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
-      ),
-    ]);
+    return ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        testParentSyncOverride(),
+        recordingsRepositoryProvider.overrideWithValue(repo),
+        // The gate's [Caller] reads this; override it so the test never builds the
+        // real auth chain (secure-storage platform channels). The id is the
+        // future-PDP input — today's `spaceSync` decision gates only on the space
+        // being cloud, so this value does not change any assertion here.
+        currentOwnerIdProvider.overrideWithValue('owner-1'),
+        uploadQueueProvider.overrideWith(
+          (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
+        ),
+      ],
+    );
   }
 
   /// Insert a `pending_upload` row optionally filed directly into [workspaceId]
@@ -91,21 +96,23 @@ void main() {
     final localId = mintLocalRecordingId();
     final audio = File('${tmp.path}/$localId.m4a');
     await audio.writeAsBytes(List<int>.filled(16, 0));
-    await db.recordingsDao.upsertRecording(RecordingsCompanion(
-      id: Value(localId),
-      coreId: Value(coreId),
-      title: const Value('Memo'),
-      timestamp: const Value('1:00 PM'),
-      duration: const Value('34s'),
-      badge: const Value('Inbox'),
-      isProcessing: const Value(1),
-      audioFilePath: Value(audio.path),
-      workspaceId: Value(workspaceId),
-      matomeId: Value(matomeId),
-      createdAt: Value(DateTime.now().millisecondsSinceEpoch),
-      mediaType: const Value('audio'),
-      processingStatus: const Value(kProcessingStatusPendingUpload),
-    ));
+    await db.recordingsDao.upsertRecording(
+      RecordingsCompanion(
+        id: Value(localId),
+        coreId: Value(coreId),
+        title: const Value('Memo'),
+        timestamp: const Value('1:00 PM'),
+        duration: const Value('34s'),
+        badge: const Value('Inbox'),
+        isProcessing: const Value(1),
+        audioFilePath: Value(audio.path),
+        workspaceId: Value(workspaceId),
+        matomeId: Value(matomeId),
+        createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+        mediaType: const Value('audio'),
+        processingStatus: const Value(kProcessingStatusPendingUpload),
+      ),
+    );
     return localId;
   }
 
@@ -116,12 +123,16 @@ void main() {
     String? id,
   }) async {
     final spaceId = id ?? 'ws_${DateTime.now().microsecondsSinceEpoch}';
-    await db.into(db.workspaces).insert(WorkspacesCompanion.insert(
-          id: spaceId,
-          name: 'space-$spaceId',
-          createdAt: DateTime.now().millisecondsSinceEpoch,
-          isLocal: Value(isLocal ? 1 : 0),
-        ));
+    await db
+        .into(db.workspaces)
+        .insert(
+          WorkspacesCompanion.insert(
+            id: spaceId,
+            name: 'space-$spaceId',
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+            isLocal: Value(isLocal ? 1 : 0),
+          ),
+        );
     return spaceId;
   }
 
@@ -135,23 +146,27 @@ void main() {
     int? coreId,
   }) async {
     final matomeId = mintLocalMatomeId();
-    await db.into(db.matomes).insert(MatomesCompanion.insert(
-          id: matomeId,
-          title: 'M',
-          happenedAt: DateTime.now().millisecondsSinceEpoch,
-          createdAt: DateTime.now().millisecondsSinceEpoch,
-          spaceId: Value(spaceId),
-          coreId: Value(coreId),
-        ));
+    await db
+        .into(db.matomes)
+        .insert(
+          MatomesCompanion.insert(
+            id: matomeId,
+            title: 'M',
+            happenedAt: DateTime.now().millisecondsSinceEpoch,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+            spaceId: Value(spaceId),
+            coreId: Value(coreId),
+          ),
+        );
     return matomeId;
   }
 
   RecordingsRepository repo() => _CountingRepository(
-        apiClient: ApiClient(
-          tokenStore: InMemoryTokenStore(),
-          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-        ),
-      );
+    apiClient: ApiClient(
+      tokenStore: InMemoryTokenStore(),
+      dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+    ),
+  );
 
   /// The DRAINED set, read from the counting sink's effect on the DB: a row
   /// that egressed reconciled a coreId (and flipped off pending_upload). A held
@@ -177,115 +192,140 @@ void main() {
       }
     });
 
-    test('nothing-in-inbox-uploads: ZERO upload calls for NULL/local effective '
-        'space (inbox loose, draft matome, local-space-filed, local-matome)',
-        () async {
-      if (!FeatureFlags.localFirstSpaces) return;
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final r = repo() as _CountingRepository;
-      final container = containerFor(db, r);
-      addTearDown(container.dispose);
+    test(
+      'W0 parent rule: an Inbox Matome drains; missing-parent and LOCAL-space '
+      'items stay explicitly blocked',
+      () async {
+        if (!FeatureFlags.localFirstSpaces) return;
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final r = repo() as _CountingRepository;
+        final container = containerFor(db, r);
+        addTearDown(container.dispose);
 
-      final localSpace = await seedSpace(db, isLocal: true);
-      final localMatome = await seedMatome(db, spaceId: localSpace);
-      final draftMatome = await seedMatome(db, spaceId: null);
+        final localSpace = await seedSpace(db, isLocal: true);
+        final localMatome = await seedMatome(db, spaceId: localSpace);
+        final draftMatome = await seedMatome(db, spaceId: null);
 
-      // (a) loose item: no matome, no space → effective space NULL (Inbox).
-      await seedRow(db, tmp);
-      // (b) draft matome: matome with NULL space → effective space NULL.
-      await seedRow(db, tmp, matomeId: draftMatome);
-      // (c) filed directly into a LOCAL space → effective space local.
-      await seedRow(db, tmp, workspaceId: localSpace);
-      // (d) in a matome filed into a LOCAL space → effective space local.
-      await seedRow(db, tmp, matomeId: localMatome);
+        // (a) loose item: no matome, no space → effective space NULL (Inbox).
+        await seedRow(db, tmp);
+        // (b) draft matome: matome with NULL space → effective space NULL.
+        final draftChild = await seedRow(db, tmp, matomeId: draftMatome);
+        // (c) filed directly into a LOCAL space → effective space local.
+        await seedRow(db, tmp, workspaceId: localSpace);
+        // (d) in a matome filed into a LOCAL space → effective space local.
+        await seedRow(db, tmp, matomeId: localMatome);
 
-      await container.read(uploadQueueProvider).drain();
+        await container.read(uploadQueueProvider).drain();
 
-      expect(r.createCalls, 0,
-          reason: 'no inbox/local item may ever egress to Core');
-      expect(r.uploadedIds, isEmpty);
-      // Every row stays retriable (pending_upload), none reconciled a coreId.
-      final pending = await db.recordingsDao.getPendingUploadRecordings();
-      expect(pending.length, 4, reason: 'all four are HELD, never drained');
-      for (final row in pending) {
-        expect(row.coreId, isNull, reason: 'held rows never create on Core');
-      }
-    });
+        expect(
+          r.createCalls,
+          1,
+          reason:
+              'the Inbox Matome parent and its child reconcile in one drain',
+        );
+        expect(r.uploadedIds, hasLength(1));
+        expect(
+          (await db.recordingsDao.getRecordingById(
+            draftChild,
+          ))!.processingStatus,
+          'done',
+        );
+        // Missing-parent and LOCAL-space rows remain durably blocked.
+        final pending = await db.recordingsDao.getPendingUploadRecordings();
+        expect(pending.length, 3);
+        for (final row in pending) {
+          expect(row.coreId, isNull, reason: 'held rows never create on Core');
+        }
+      },
+    );
 
-    test('drain-only-cloud (BOTH directions): drained set == cloud-space set',
-        () async {
-      if (!FeatureFlags.localFirstSpaces) return;
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final r = repo() as _CountingRepository;
-      final container = containerFor(db, r);
-      addTearDown(container.dispose);
+    test(
+      'drainable set is cloud-space plus Inbox-parent work, never LOCAL-space',
+      () async {
+        if (!FeatureFlags.localFirstSpaces) return;
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final r = repo() as _CountingRepository;
+        final container = containerFor(db, r);
+        addTearDown(container.dispose);
 
-      final cloudSpace = await seedSpace(db, isLocal: false);
-      final localSpace = await seedSpace(db, isLocal: true);
-      // Every drainable row rides a matome that has reconciled a coreId (the
-      // two-phase create leg POSTs under the matome). The EFFECTIVE space — and
-      // thus the gate decision — is the matome's space (matome wins).
-      final cloudMatome = await seedMatome(db, spaceId: cloudSpace, coreId: 61);
-      final draftMatome = await seedMatome(db, spaceId: null, coreId: 62);
-      final localMatome = await seedMatome(db, spaceId: localSpace, coreId: 63);
+        final cloudSpace = await seedSpace(db, isLocal: false);
+        final localSpace = await seedSpace(db, isLocal: true);
+        // Every drainable row rides a matome that has reconciled a coreId (the
+        // two-phase create leg POSTs under the matome). The EFFECTIVE space — and
+        // thus the gate decision — is the matome's space (matome wins).
+        final cloudMatome = await seedMatome(
+          db,
+          spaceId: cloudSpace,
+          coreId: 61,
+        );
+        final draftMatome = await seedMatome(db, spaceId: null, coreId: 62);
+        final localMatome = await seedMatome(
+          db,
+          spaceId: localSpace,
+          coreId: 63,
+        );
 
-      // CLOUD set (MUST all drain): both ride a cloud-space matome.
-      final cloudFiled = await seedRow(db, tmp, matomeId: cloudMatome);
-      final cloudViaMatome = await seedRow(db, tmp, matomeId: cloudMatome);
-      final cloudIds = {cloudFiled, cloudViaMatome};
+        // CLOUD set (MUST all drain): both ride a cloud-space matome.
+        final cloudFiled = await seedRow(db, tmp, matomeId: cloudMatome);
+        final cloudViaMatome = await seedRow(db, tmp, matomeId: cloudMatome);
+        final cloudIds = {cloudFiled, cloudViaMatome};
 
-      // NON-CLOUD set (MUST NOT drain): held by the GATE, not by a missing
-      // matome — an inbox (NULL space) matome and a LOCAL-space matome.
-      final loose = await seedRow(db, tmp, matomeId: draftMatome);
-      final localFiled = await seedRow(db, tmp, matomeId: localMatome);
-      final nonCloudIds = {loose, localFiled};
+        // W0 also drains an Inbox parent (NULL space). LOCAL space stays held.
+        final inboxParent = await seedRow(db, tmp, matomeId: draftMatome);
+        final localFiled = await seedRow(db, tmp, matomeId: localMatome);
+        final drainableIds = {...cloudIds, inboxParent};
 
-      await container.read(uploadQueueProvider).drain();
+        await container.read(uploadQueueProvider).drain();
 
-      final drained = await drainedIds(db, {...cloudIds, ...nonCloudIds});
+        final drained = await drainedIds(db, {...drainableIds, localFiled});
 
-      // The counting sink corroborates: exactly the 2 cloud items egressed.
-      expect(r.createCalls, 2, reason: 'only the two cloud items create');
+        expect(r.createCalls, 3);
 
-      // Direction 1 — every cloud item drained.
-      for (final id in cloudIds) {
-        expect(drained.contains(id), isTrue,
-            reason: 'cloud-space item $id MUST drain');
-      }
-      // Direction 2 — no non-cloud item drained.
-      for (final id in nonCloudIds) {
-        expect(drained.contains(id), isFalse,
-            reason: 'non-cloud item $id MUST NOT drain');
-      }
-      // Set equality both directions: drained == cloud set exactly.
-      expect(drained, equals(cloudIds),
-          reason: 'the drained set is EXACTLY the cloud-space set');
-    });
+        for (final id in drainableIds) {
+          expect(
+            drained.contains(id),
+            isTrue,
+            reason: 'W0-drainable item $id MUST drain',
+          );
+        }
+        expect(drained.contains(localFiled), isFalse);
+        expect(
+          drained,
+          equals(drainableIds),
+          reason: 'the drained set is exactly W0-drainable work',
+        );
+      },
+    );
 
-    test('matome WINS: a row filed into a CLOUD space but wrapped in a matome '
-        'in a LOCAL space is HELD (shadowed workspaceId never egresses)',
-        () async {
-      if (!FeatureFlags.localFirstSpaces) return;
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final r = repo() as _CountingRepository;
-      final container = containerFor(db, r);
-      addTearDown(container.dispose);
+    test(
+      'matome WINS: a row filed into a CLOUD space but wrapped in a matome '
+      'in a LOCAL space is HELD (shadowed workspaceId never egresses)',
+      () async {
+        if (!FeatureFlags.localFirstSpaces) return;
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final r = repo() as _CountingRepository;
+        final container = containerFor(db, r);
+        addTearDown(container.dispose);
 
-      final cloudSpace = await seedSpace(db, isLocal: false);
-      final localSpace = await seedSpace(db, isLocal: true);
-      final localMatome = await seedMatome(db, spaceId: localSpace);
+        final cloudSpace = await seedSpace(db, isLocal: false);
+        final localSpace = await seedSpace(db, isLocal: true);
+        final localMatome = await seedMatome(db, spaceId: localSpace);
 
-      // workspaceId = cloud, but matome's space = local → matome WINS → HELD.
-      await seedRow(db, tmp, workspaceId: cloudSpace, matomeId: localMatome);
+        // workspaceId = cloud, but matome's space = local → matome WINS → HELD.
+        await seedRow(db, tmp, workspaceId: cloudSpace, matomeId: localMatome);
 
-      await container.read(uploadQueueProvider).drain();
+        await container.read(uploadQueueProvider).drain();
 
-      expect(r.createCalls, 0,
-          reason: 'matome (local) WINS over the shadowed cloud workspaceId');
-    });
+        expect(
+          r.createCalls,
+          0,
+          reason: 'matome (local) WINS over the shadowed cloud workspaceId',
+        );
+      },
+    );
 
     test('leak-close #74712: moveToSpace into a LOCAL space files locally but '
         'does NOT egress (no Core PATCH); into a CLOUD space it DOES', () async {
@@ -293,11 +333,13 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
       final r = repo() as _CountingRepository;
-      final container = ProviderContainer(overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        recordingsRepositoryProvider.overrideWithValue(r),
-        currentOwnerIdProvider.overrideWithValue('owner-1'),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          recordingsRepositoryProvider.overrideWithValue(r),
+          currentOwnerIdProvider.overrideWithValue('owner-1'),
+        ],
+      );
       addTearDown(container.dispose);
 
       // Numeric ids so the LEGACY `int.tryParse(workspaceId)` gate would pass
@@ -309,15 +351,17 @@ void main() {
       // A reconciled row (coreId set) so the legacy numeric-id gate would PATCH.
       Future<String> seedReconciled() async {
         final id = mintLocalRecordingId();
-        await db.recordingsDao.insertRecording(RecordingsCompanion.insert(
-          id: id,
-          coreId: const Value(900),
-          title: 't',
-          timestamp: '9',
-          duration: '1',
-          audioFilePath: '/tmp/a',
-          createdAt: DateTime.now().millisecondsSinceEpoch,
-        ));
+        await db.recordingsDao.insertRecording(
+          RecordingsCompanion.insert(
+            id: id,
+            coreId: const Value(900),
+            title: 't',
+            timestamp: '9',
+            duration: '1',
+            audioFilePath: '/tmp/a',
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
         return id;
       }
 
@@ -326,17 +370,26 @@ void main() {
       // Filing into a LOCAL space: the local move holds, but NO Core PATCH.
       final toLocal = await seedReconciled();
       await inbox.moveToSpace(toLocal, localSpace);
-      expect(r.updateCalls, 0,
-          reason: 'filing into a LOCAL space must NOT egress (#74712)');
+      expect(
+        r.updateCalls,
+        0,
+        reason: 'filing into a LOCAL space must NOT egress (#74712)',
+      );
       final localRow = await db.recordingsDao.getRecordingById(toLocal);
-      expect(localRow!.workspaceId, localSpace,
-          reason: 'the local file-move still holds (filing ≠ sync)');
+      expect(
+        localRow!.workspaceId,
+        localSpace,
+        reason: 'the local file-move still holds (filing ≠ sync)',
+      );
 
       // Filing into a CLOUD space: the Core PATCH (egress) fires.
       final toCloud = await seedReconciled();
       await inbox.moveToSpace(toCloud, cloudSpace);
-      expect(r.updateCalls, 1,
-          reason: 'filing into a CLOUD space DOES egress (synced path intact)');
+      expect(
+        r.updateCalls,
+        1,
+        reason: 'filing into a CLOUD space DOES egress (synced path intact)',
+      );
     });
 
     test('duplicate-coreId regression (d8cc85d): a duplicate coreId does not '
@@ -360,7 +413,11 @@ void main() {
       await container.read(uploadQueueProvider).drain();
 
       // Never re-created on Core (both already have a coreId → idempotent).
-      expect(r.createCalls, 0, reason: 'a row with a coreId is never recreated');
+      expect(
+        r.createCalls,
+        0,
+        reason: 'a row with a coreId is never recreated',
+      );
       // Both rows resolved without throwing; the gate tolerated the duplicate.
       final rowA = await db.recordingsDao.getRecordingById(a);
       final rowB = await db.recordingsDao.getRecordingById(b);
@@ -372,36 +429,48 @@ void main() {
   // ===================================================================== //
   // FLAG OFF — gate compiled out; drain-on-pending_upload (shipped).       //
   // ===================================================================== //
-  group('flag OFF — gate inert (shipped reality unchanged)', () {
-    test('every pending_upload row drains regardless of effective space '
-        '(byte-unchanged: no gate)', () async {
-      if (FeatureFlags.localFirstSpaces) return; // self-skip under ON build.
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final r = repo() as _CountingRepository;
-      final container = containerFor(db, r);
-      addTearDown(container.dispose);
+  group('flag OFF — W0 parent/local-space contract', () {
+    test(
+      'an Inbox parent drains but an explicit LOCAL-space parent stays blocked',
+      () async {
+        if (FeatureFlags.localFirstSpaces) return; // self-skip under ON build.
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final r = repo() as _CountingRepository;
+        final container = containerFor(db, r);
+        addTearDown(container.dispose);
 
-      final localSpace = await seedSpace(db, isLocal: true);
-      // Both rows ride a matome that has reconciled a coreId (drainable under
-      // the two-phase create leg). Their effective spaces differ — inbox (NULL)
-      // vs LOCAL — the two the gate WOULD hold under ON. Under OFF the gate is
-      // compiled out, so BOTH drain regardless.
-      final draftMatome = await seedMatome(db, spaceId: null, coreId: 55);
-      final localMatome = await seedMatome(db, spaceId: localSpace, coreId: 56);
+        final localSpace = await seedSpace(db, isLocal: true);
+        // Both rows ride a reconciled matome. W0 permits a parent with no space,
+        // while an explicitly LOCAL space must remain on-device under every flag.
+        final draftMatome = await seedMatome(db, spaceId: null, coreId: 55);
+        final localMatome = await seedMatome(
+          db,
+          spaceId: localSpace,
+          coreId: 56,
+        );
 
-      // An inbox row AND a local-space row — under OFF, BOTH drain (the gate
-      // does not exist; the legacy behaviour is drain-on-pending_upload).
-      final loose = await seedRow(db, tmp, matomeId: draftMatome);
-      final localFiled = await seedRow(db, tmp, matomeId: localMatome);
+        // An Inbox-parented row drains; a local-space row records why it cannot.
+        final loose = await seedRow(db, tmp, matomeId: draftMatome);
+        final localFiled = await seedRow(db, tmp, matomeId: localMatome);
 
-      await container.read(uploadQueueProvider).drain();
+        await container.read(uploadQueueProvider).drain();
 
-      final drained = await drainedIds(db, {loose, localFiled});
-      expect(drained, equals({loose, localFiled}),
-          reason: 'flag OFF: every pending_upload row drains (no gate)');
-      expect(r.createCalls, 2, reason: 'both create under OFF (no gate)');
-    });
+        final drained = await drainedIds(db, {loose, localFiled});
+        expect(drained, equals({loose}));
+        expect(
+          r.createCalls,
+          1,
+          reason: 'only the Inbox-parented item creates',
+        );
+        expect(
+          (await db.recordingsDao.getRecordingById(
+            localFiled,
+          ))!.processingStatus,
+          kProcessingStatusBlockedLocalSpace,
+        );
+      },
+    );
   });
 }
 

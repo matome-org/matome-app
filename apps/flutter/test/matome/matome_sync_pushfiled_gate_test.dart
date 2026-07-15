@@ -51,7 +51,7 @@ class _CountingMatomesRepository extends MatomesRepository {
   @override
   Future<Matome> createMatome({
     required String title,
-    required int workspaceId,
+    int? workspaceId,
     DateTime? happenedAt,
     String? description,
     String? aggregatedSummary,
@@ -91,7 +91,11 @@ class _FakeRecordingsRepository extends RecordingsRepository {
   }) async {
     patched.add(id);
     return Recording(
-        id: id, ownerId: '1', title: 'r', status: RecordingStatus.done);
+      id: id,
+      ownerId: '1',
+      title: 'r',
+      status: RecordingStatus.done,
+    );
   }
 }
 
@@ -100,39 +104,55 @@ ProviderContainer _container(
   _CountingMatomesRepository matomes,
   _FakeRecordingsRepository recordings,
 ) {
-  return ProviderContainer(overrides: [
-    appDatabaseProvider.overrideWithValue(db),
-    matomesRepositoryProvider.overrideWithValue(matomes),
-    contactsRepositoryProvider.overrideWithValue(_FakeContactsRepository()),
-    recordingsRepositoryProvider.overrideWithValue(recordings),
-    // The gate's [Caller] reads this; override so the test never builds the real
-    // auth chain. The id is the future-PDP input; `spaceSync` gates only on the
-    // space being cloud, so it changes no assertion here.
-    currentOwnerIdProvider.overrideWithValue('owner-1'),
-  ]);
+  return ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      matomesRepositoryProvider.overrideWithValue(matomes),
+      contactsRepositoryProvider.overrideWithValue(_FakeContactsRepository()),
+      recordingsRepositoryProvider.overrideWithValue(recordings),
+      // The gate's [Caller] reads this; override so the test never builds the real
+      // auth chain. The id is the future-PDP input; `spaceSync` gates only on the
+      // space being cloud, so it changes no assertion here.
+      currentOwnerIdProvider.overrideWithValue('owner-1'),
+    ],
+  );
 }
 
 /// Seed a space with an explicit `is_local` bit at a numeric id (so the LEGACY
 /// `int.tryParse` heuristic would PASS for both local and cloud — proving the
 /// egress decision is the NEW resolver gate, not the numeric-id check).
-Future<String> _seedSpace(AppDatabase db, {required bool isLocal, required int id}) async {
-  await db.into(db.workspaces).insert(WorkspacesCompanion.insert(
-        id: '$id',
-        name: 'space-$id',
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        isLocal: Value(isLocal ? 1 : 0),
-      ));
+Future<String> _seedSpace(
+  AppDatabase db, {
+  required bool isLocal,
+  required int id,
+}) async {
+  await db
+      .into(db.workspaces)
+      .insert(
+        WorkspacesCompanion.insert(
+          id: '$id',
+          name: 'space-$id',
+          createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+          isLocal: Value(isLocal ? 1 : 0),
+        ),
+      );
   return '$id';
 }
 
-Future<String> _seedMatome(AppDatabase db, {required String id, String? spaceId}) async {
-  await db.matomesDao.create(MatomesCompanion(
-    id: Value(id),
-    spaceId: Value(spaceId),
-    title: const Value('M'),
-    happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-    createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
-  ));
+Future<String> _seedMatome(
+  AppDatabase db, {
+  required String id,
+  String? spaceId,
+}) async {
+  await db.matomesDao.create(
+    MatomesCompanion(
+      id: Value(id),
+      spaceId: Value(spaceId),
+      title: const Value('M'),
+      happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+    ),
+  );
   return id;
 }
 
@@ -142,84 +162,106 @@ void main() {
   tearDown(() => db.close());
 
   group('flag ON — pushFiled routed through the gate', () {
-    test('a LOCAL-space matome is NOT pushed; a CLOUD-space matome IS', () async {
-      if (!FeatureFlags.localFirstSpaces) return; // self-skip under OFF build.
+    test(
+      'a LOCAL-space matome is NOT pushed; a CLOUD-space matome IS',
+      () async {
+        if (!FeatureFlags.localFirstSpaces) {
+          return; // self-skip under OFF build.
+        }
 
-      final localSpace = await _seedSpace(db, isLocal: true, id: 11);
-      final cloudSpace = await _seedSpace(db, isLocal: false, id: 22);
-      await _seedMatome(db, id: 'mat_local_space', spaceId: localSpace);
-      await _seedMatome(db, id: 'mat_cloud_space', spaceId: cloudSpace);
+        final localSpace = await _seedSpace(db, isLocal: true, id: 11);
+        final cloudSpace = await _seedSpace(db, isLocal: false, id: 22);
+        await _seedMatome(db, id: 'mat_local_space', spaceId: localSpace);
+        await _seedMatome(db, id: 'mat_cloud_space', spaceId: cloudSpace);
 
-      final matomes = _CountingMatomesRepository();
-      final container = _container(db, matomes, _FakeRecordingsRepository());
-      addTearDown(container.dispose);
+        final matomes = _CountingMatomesRepository();
+        final container = _container(db, matomes, _FakeRecordingsRepository());
+        addTearDown(container.dispose);
 
-      await container.read(matomeSyncServiceProvider).pushFiled();
+        await container.read(matomeSyncServiceProvider).pushFiled();
 
-      // Only the cloud-space matome egressed (created on Core).
-      expect(matomes.created, hasLength(1),
-          reason: 'exactly the cloud-space matome is pushed');
-      expect(matomes.created.single['workspace_id'], 22);
+        // Only the cloud-space matome egressed (created on Core).
+        expect(
+          matomes.created,
+          hasLength(1),
+          reason: 'exactly the cloud-space matome is pushed',
+        );
+        expect(matomes.created.single['workspace_id'], 22);
 
-      // The local-space matome stayed local-only (no coreId reconciled).
-      final localRow = await db.matomesDao.getById('mat_local_space');
-      expect(localRow!.coreId, isNull,
-          reason: 'a local-space matome is HELD — never egressed (#74801 P2)');
-      final cloudRow = await db.matomesDao.getById('mat_cloud_space');
-      expect(cloudRow!.coreId, isNotNull, reason: 'cloud-space matome reconciled');
-    });
+        // The local-space matome stayed local-only (no coreId reconciled).
+        final localRow = await db.matomesDao.getById('mat_local_space');
+        expect(
+          localRow!.coreId,
+          isNull,
+          reason: 'a local-space matome is HELD — never egressed (#74801 P2)',
+        );
+        final cloudRow = await db.matomesDao.getById('mat_cloud_space');
+        expect(
+          cloudRow!.coreId,
+          isNotNull,
+          reason: 'cloud-space matome reconciled',
+        );
+      },
+    );
 
-    test('a local-space matome holds its children too (no child PATCH)', () async {
-      if (!FeatureFlags.localFirstSpaces) return;
+    test(
+      'a local-space matome holds its children too (no child PATCH)',
+      () async {
+        if (!FeatureFlags.localFirstSpaces) return;
 
-      final localSpace = await _seedSpace(db, isLocal: true, id: 33);
-      await _seedMatome(db, id: 'mat_local_kids', spaceId: localSpace);
-      // A reconciled child (coreId 7) — under the legacy path it would PATCH.
-      await db.recordingsDao.upsertRecordingWithMatome(
-        RecordingsCompanion.insert(
-          id: 'rec_child',
-          title: 'Child',
-          timestamp: '9',
-          duration: '1',
-          audioFilePath: '/tmp/a.m4a',
-          createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-          coreId: const Value(7),
-          matomeId: const Value('mat_local_kids'),
-        ),
-      );
+        final localSpace = await _seedSpace(db, isLocal: true, id: 33);
+        await _seedMatome(db, id: 'mat_local_kids', spaceId: localSpace);
+        // A reconciled child (coreId 7) — under the legacy path it would PATCH.
+        await db.recordingsDao.upsertRecordingWithMatome(
+          RecordingsCompanion.insert(
+            id: 'rec_child',
+            title: 'Child',
+            timestamp: '9',
+            duration: '1',
+            audioFilePath: '/tmp/a.m4a',
+            createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+            coreId: const Value(7),
+            matomeId: const Value('mat_local_kids'),
+          ),
+        );
 
-      final matomes = _CountingMatomesRepository();
-      final recordings = _FakeRecordingsRepository();
-      final container = _container(db, matomes, recordings);
-      addTearDown(container.dispose);
+        final matomes = _CountingMatomesRepository();
+        final recordings = _FakeRecordingsRepository();
+        final container = _container(db, matomes, recordings);
+        addTearDown(container.dispose);
 
-      await container.read(matomeSyncServiceProvider).pushFiled();
+        await container.read(matomeSyncServiceProvider).pushFiled();
 
-      expect(matomes.created, isEmpty, reason: 'local-space matome held');
-      expect(recordings.patched, isEmpty,
-          reason: 'a held matome never pushes its children either');
-    });
+        expect(matomes.created, isEmpty, reason: 'local-space matome held');
+        expect(
+          recordings.patched,
+          isEmpty,
+          reason: 'a held matome never pushes its children either',
+        );
+      },
+    );
   });
 
-  group('flag OFF — legacy numeric-id filter (shipped reality unchanged)', () {
-    test('a numeric-id matome pushes regardless of is_local (no gate)', () async {
-      if (FeatureFlags.localFirstSpaces) return; // self-skip under ON build.
+  group('flag OFF — W0 local-space contract', () {
+    test(
+      'a numeric LOCAL space stays blocked while a CLOUD space pushes',
+      () async {
+        if (FeatureFlags.localFirstSpaces) return; // self-skip under ON build.
 
-      // Under OFF the gate is compiled out — both numeric-id spaces push, exactly
-      // the pre-#102 behaviour (filed + numeric id ⇒ pushed).
-      final localSpace = await _seedSpace(db, isLocal: true, id: 11);
-      final cloudSpace = await _seedSpace(db, isLocal: false, id: 22);
-      await _seedMatome(db, id: 'mat_a', spaceId: localSpace);
-      await _seedMatome(db, id: 'mat_b', spaceId: cloudSpace);
+        final localSpace = await _seedSpace(db, isLocal: true, id: 11);
+        final cloudSpace = await _seedSpace(db, isLocal: false, id: 22);
+        await _seedMatome(db, id: 'mat_a', spaceId: localSpace);
+        await _seedMatome(db, id: 'mat_b', spaceId: cloudSpace);
 
-      final matomes = _CountingMatomesRepository();
-      final container = _container(db, matomes, _FakeRecordingsRepository());
-      addTearDown(container.dispose);
+        final matomes = _CountingMatomesRepository();
+        final container = _container(db, matomes, _FakeRecordingsRepository());
+        addTearDown(container.dispose);
 
-      await container.read(matomeSyncServiceProvider).pushFiled();
+        await container.read(matomeSyncServiceProvider).pushFiled();
 
-      expect(matomes.created, hasLength(2),
-          reason: 'flag OFF: both numeric-id matomes push (byte-unchanged)');
-    });
+        expect(matomes.created, hasLength(1));
+        expect(matomes.created.single['workspace_id'], 22);
+      },
+    );
   });
 }

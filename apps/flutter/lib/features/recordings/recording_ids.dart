@@ -39,3 +39,24 @@ bool isLocalRecordingId(String id) => id.startsWith(kLocalRecordingIdPrefix);
 /// Defined here for Wave 1; Wave 2 sets it on local-first finish and Wave 4's
 /// retry queue clears it once the recording reconciles.
 const String kProcessingStatusPendingUpload = 'pending_upload';
+
+/// Durable reasons why legacy upload work cannot currently advance. W2 replaces
+/// these row statuses with typed `work_queue` records; until then they keep a
+/// blocked item discoverable across restarts instead of silently returning.
+const String kProcessingStatusBlockedSignedOut = 'blocked_signed_out';
+const String kProcessingStatusBlockedOffline = 'blocked_offline';
+const String kProcessingStatusBlockedLocalSpace = 'blocked_local_space';
+const String kProcessingStatusBlockedParent = 'blocked_parent';
+const String kProcessingStatusBlockedCore = 'blocked_core';
+
+const Set<String> kUploadQueuePendingStatuses = <String>{
+  kProcessingStatusPendingUpload,
+  kProcessingStatusBlockedSignedOut,
+  kProcessingStatusBlockedOffline,
+  kProcessingStatusBlockedLocalSpace,
+  kProcessingStatusBlockedParent,
+  kProcessingStatusBlockedCore,
+};
+
+bool isUploadQueuePendingStatus(String status) =>
+    kUploadQueuePendingStatuses.contains(status);

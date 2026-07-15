@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,6 +26,7 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import 'audio_recording_service_test.dart' show FakeRecorderBackend;
+import '../support/fake_parent_sync.dart';
 
 // ---------------------------------------------------------------------------
 // Mirrors apps/mobile RecordingScreen.handleFinish: F3 finalizes the session
@@ -61,10 +61,12 @@ void main() {
   // is POST /api/items/{id}/process; the poll-fallback source is GET
   // /api/items/{id}. The minted-matome coreId is 42; the created item id is 321.
   Dio stubbedDio() {
-    final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:7001',
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: 'http://localhost:7001',
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
     final adapter = DioAdapter(dio: dio);
     adapter.onPost(
       '/api/matomes/42/items',
@@ -119,10 +121,12 @@ void main() {
   // GET /api/items/321 that never reports terminal — so ONLY the injected socket
   // awaiter can flip processing→done (proves the realtime path is wired).
   Dio stubbedDioProcessing() {
-    final dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:7001',
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: 'http://localhost:7001',
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
     final adapter = DioAdapter(dio: dio);
     adapter.onPost(
       '/api/matomes/42/items',
@@ -148,36 +152,25 @@ void main() {
     adapter.onPost(
       '/api/items/321/process',
       (server) => server.reply(202, {
-        'item': {'id': 321, 'owner_id': 1, 'metadata': {'status': 'processing'}},
+        'item': {
+          'id': 321,
+          'owner_id': 1,
+          'metadata': {'status': 'processing'},
+        },
         'processing': {'queued': true},
       }),
     );
     adapter.onGet(
       '/api/items/321',
       (server) => server.reply(200, {
-        'item': {'id': 321, 'owner_id': 1, 'metadata': {'status': 'processing'}},
+        'item': {
+          'id': 321,
+          'owner_id': 1,
+          'metadata': {'status': 'processing'},
+        },
       }),
     );
     return dio;
-  }
-
-  /// Simulate the matome→Core sync (matome_sync) reconciling the just-minted
-  /// LOCAL matome's Core id, then re-drain the row. The finish flow (flag OFF)
-  /// mints a coreId-less local matome, so the inline drain HOLDS the row (an item
-  /// can only be created under a reconciled matome — POST
-  /// /api/matomes/{coreMatomeId}/items). This is the two-phase contract after the
-  /// recordings→items migration; matome sync supplies the coreId out-of-band.
-  Future<void> reconcileMatomeAndRedrain(
-    ProviderContainer container,
-    AppDatabase db,
-    String localId,
-  ) async {
-    final held = await db.recordingsDao.getRecordingById(localId);
-    await db.matomesDao.updateMatome(
-      held!.matomeId!,
-      const MatomesCompanion(coreId: Value(42)),
-    );
-    await container.read(uploadQueueProvider).drainRow(localId);
   }
 
   /// Overrides [uploadQueueProvider] with a queue carrying an injected
@@ -188,10 +181,9 @@ void main() {
   Override queueWith(
     RecordingResultAwaiter awaiter, {
     AudioCleanup cleanupAudio = _noopCleanup,
-  }) =>
-      uploadQueueProvider.overrideWith(
-        (ref) => UploadQueue(ref, awaitResult: awaiter, cleanupAudio: cleanupAudio),
-      );
+  }) => uploadQueueProvider.overrideWith(
+    (ref) => UploadQueue(ref, awaitResult: awaiter, cleanupAudio: cleanupAudio),
+  );
 
   test('finish: F3 file → Core create → Drift processing row → done → cleanup '
       '(poll fallback resolves when socket is absent)', () async {
@@ -223,12 +215,15 @@ void main() {
       return result;
     }
 
-    final container = ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      audioRecordingServiceProvider.overrideWithValue(service),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-      queueWith(pollFallbackAwaiter),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        testParentSyncOverride(),
+        audioRecordingServiceProvider.overrideWithValue(service),
+        recordingsRepositoryProvider.overrideWithValue(repo),
+        queueWith(pollFallbackAwaiter),
+      ],
+    );
     addTearDown(container.dispose);
 
     final controller = container.read(recordingControllerProvider.notifier);
@@ -236,15 +231,12 @@ void main() {
     await controller.pause();
     await controller.resume();
 
-    final localId = await container.read(recordingFinisherProvider).finish(
-          title: 'Standup notes',
-        );
+    final localId = await container
+        .read(recordingFinisherProvider)
+        .finish(title: 'Standup notes');
 
     // W2: local-first id (rec_local_<uuid>), NOT the Core id.
     expect(isLocalRecordingId(localId), isTrue);
-
-    // Two-phase: reconcile the minted matome's coreId, then re-drain to done.
-    await reconcileMatomeAndRedrain(container, db, localId);
 
     // Inbox row keeps its local PK; coreId reconciled to the item id 321, done.
     final row = await db.recordingsDao.getRecordingById(localId);
@@ -259,190 +251,223 @@ void main() {
     expect(items.any((i) => i.id == localId), isTrue);
   });
 
-  test('W2 #871 RETENTION: finish → confirmed done RETAINS the durable local '
-      'audio file (reverses #43 W4; uses the REAL deleteAudioFile cleanup)',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
+  test(
+    'W2 #871 RETENTION: finish → confirmed done RETAINS the durable local '
+    'audio file (reverses #43 W4; uses the REAL deleteAudioFile cleanup)',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    final service = svc(db);
-    final repo = _StubUploadRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: stubbedDio()),
-    );
-
-    // Same poll-fallback awaiter (GET → done) used by the first test.
-    Future<RecordingResult> pollFallbackAwaiter({
-      required Recording recording,
-      required Future<Recording?> Function() poll,
-      required Ref ref,
-    }) async {
-      final events = StreamController<RecordingStatusEvent>();
-      final waiter = RecordingResultWaiter(
-        recordingId: recording.id,
-        statusEvents: events.stream,
-        poll: poll,
-        pollInterval: const Duration(milliseconds: 20),
+      final service = svc(db);
+      final repo = _StubUploadRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: stubbedDio(),
+        ),
       );
-      final result = await waiter.wait();
-      await events.close();
-      return result;
-    }
 
-    final container = ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      audioRecordingServiceProvider.overrideWithValue(service),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-      // Wire the PRODUCTION cleanup deliberately: the queue must STILL not delete
-      // the local file on done. (Before W2 this would have deleted it.)
-      queueWith(pollFallbackAwaiter, cleanupAudio: deleteAudioFile),
-    ]);
-    addTearDown(container.dispose);
+      // Same poll-fallback awaiter (GET → done) used by the first test.
+      Future<RecordingResult> pollFallbackAwaiter({
+        required Recording recording,
+        required Future<Recording?> Function() poll,
+        required Ref ref,
+      }) async {
+        final events = StreamController<RecordingStatusEvent>();
+        final waiter = RecordingResultWaiter(
+          recordingId: recording.id,
+          statusEvents: events.stream,
+          poll: poll,
+          pollInterval: const Duration(milliseconds: 20),
+        );
+        final result = await waiter.wait();
+        await events.close();
+        return result;
+      }
 
-    final controller = container.read(recordingControllerProvider.notifier);
-    await controller.start();
-    await controller.pause();
-    await controller.resume();
-
-    final localId = await container
-        .read(recordingFinisherProvider)
-        .finish(title: 'Retained memo');
-
-    // Two-phase: reconcile the minted matome's coreId, then re-drain to done.
-    await reconcileMatomeAndRedrain(container, db, localId);
-
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row, isNotNull);
-    expect(row!.processingStatus, 'done',
-        reason: 'upload reconciled to done');
-
-    // The local-first source of truth must survive a confirmed done.
-    expect(row.audioFilePath, isNotEmpty);
-    expect(await File(row.audioFilePath).exists(), isTrue,
-        reason: 'done must NOT auto-delete the durable local audio (W2 #871)');
-  });
-
-  test('stale-draft fix: finish → done CLEARS the crash-recovery draft row but '
-      'KEEPS the durable segment file (no "recover already-saved" prompt)',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-
-    final service = svc(db);
-    final repo = _StubUploadRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: stubbedDio()),
-    );
-
-    Future<RecordingResult> pollFallbackAwaiter({
-      required Recording recording,
-      required Future<Recording?> Function() poll,
-      required Ref ref,
-    }) async {
-      final events = StreamController<RecordingStatusEvent>();
-      final waiter = RecordingResultWaiter(
-        recordingId: recording.id,
-        statusEvents: events.stream,
-        poll: poll,
-        pollInterval: const Duration(milliseconds: 20),
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          testParentSyncOverride(),
+          audioRecordingServiceProvider.overrideWithValue(service),
+          recordingsRepositoryProvider.overrideWithValue(repo),
+          // Wire the PRODUCTION cleanup deliberately: the queue must STILL not delete
+          // the local file on done. (Before W2 this would have deleted it.)
+          queueWith(pollFallbackAwaiter, cleanupAudio: deleteAudioFile),
+        ],
       );
-      final result = await waiter.wait();
-      await events.close();
-      return result;
-    }
+      addTearDown(container.dispose);
 
-    final container = ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      audioRecordingServiceProvider.overrideWithValue(service),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-      queueWith(pollFallbackAwaiter),
-    ]);
-    addTearDown(container.dispose);
+      final controller = container.read(recordingControllerProvider.notifier);
+      await controller.start();
+      await controller.pause();
+      await controller.resume();
 
-    final controller = container.read(recordingControllerProvider.notifier);
-    await controller.start();
-    // A pause persists a crash-recovery DRAFT row (autosave on pause).
-    await controller.pause();
-    await controller.resume();
-    expect(await db.recordingDraftsDao.loadDraft(), isNotNull,
-        reason: 'pause autosaves a draft');
+      final localId = await container
+          .read(recordingFinisherProvider)
+          .finish(title: 'Retained memo');
 
-    final localId = await container
-        .read(recordingFinisherProvider)
-        .finish(title: 'Saved memo');
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(row, isNotNull);
+      expect(
+        row!.processingStatus,
+        'done',
+        reason: 'upload reconciled to done',
+      );
 
-    // Two-phase: reconcile the minted matome's coreId, then re-drain to done.
-    await reconcileMatomeAndRedrain(container, db, localId);
+      // The local-first source of truth must survive a confirmed done.
+      expect(row.audioFilePath, isNotEmpty);
+      expect(
+        await File(row.audioFilePath).exists(),
+        isTrue,
+        reason: 'done must NOT auto-delete the durable local audio (W2 #871)',
+      );
+    },
+  );
 
-    // The recording is saved + uploaded done.
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row, isNotNull);
-    expect(row!.processingStatus, 'done');
+  test(
+    'stale-draft fix: finish → done CLEARS the crash-recovery draft row but '
+    'KEEPS the durable segment file (no "recover already-saved" prompt)',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    // FIX: the draft row is cleared on a confirmed finish — so a next launch
-    // does NOT prompt to "recover" this already-saved recording.
-    expect(await db.recordingDraftsDao.loadDraft(), isNull,
-        reason: 'finish must clear the draft row');
-    expect(await service.detectRecoverableDraft(), isNull,
-        reason: 'no recoverable draft remains to prompt on');
+      final service = svc(db);
+      final repo = _StubUploadRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: stubbedDio(),
+        ),
+      );
 
-    // RETENTION (W2): the durable segment file STAYS on disk (draft-clear is
-    // split from file-delete) — the audio remains playable.
-    expect(row.audioFilePath, isNotEmpty);
-    expect(await File(row.audioFilePath).exists(), isTrue,
-        reason: 'clearing the draft must NOT delete the durable audio (W2)');
-  });
+      Future<RecordingResult> pollFallbackAwaiter({
+        required Recording recording,
+        required Future<Recording?> Function() poll,
+        required Ref ref,
+      }) async {
+        final events = StreamController<RecordingStatusEvent>();
+        final waiter = RecordingResultWaiter(
+          recordingId: recording.id,
+          statusEvents: events.stream,
+          poll: poll,
+          pollInterval: const Duration(milliseconds: 20),
+        );
+        final result = await waiter.wait();
+        await events.close();
+        return result;
+      }
 
-  test('finish is local-first: a Core-down repo (createRecording throws) still '
-      'yields a visible local Drift row + on-disk audio (reproduces #828)',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          testParentSyncOverride(),
+          audioRecordingServiceProvider.overrideWithValue(service),
+          recordingsRepositoryProvider.overrideWithValue(repo),
+          queueWith(pollFallbackAwaiter),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final service = svc(db);
-    // Core unreachable — createRecording throws.
-    final repo = _CoreDownRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    );
+      final controller = container.read(recordingControllerProvider.notifier);
+      await controller.start();
+      // A pause persists a crash-recovery DRAFT row (autosave on pause).
+      await controller.pause();
+      await controller.resume();
+      expect(
+        await db.recordingDraftsDao.loadDraft(),
+        isNotNull,
+        reason: 'pause autosaves a draft',
+      );
 
-    final container = ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      audioRecordingServiceProvider.overrideWithValue(service),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-    ]);
-    addTearDown(container.dispose);
+      final localId = await container
+          .read(recordingFinisherProvider)
+          .finish(title: 'Saved memo');
 
-    final controller = container.read(recordingControllerProvider.notifier);
-    await controller.start();
-    await controller.pause();
-    await controller.resume();
+      // The recording is saved + uploaded done.
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(row, isNotNull);
+      expect(row!.processingStatus, 'done');
 
-    // finish() must NOT throw even though Core is down.
-    final localId =
-        await container.read(recordingFinisherProvider).finish(title: 'Memo');
+      // FIX: the draft row is cleared on a confirmed finish — so a next launch
+      // does NOT prompt to "recover" this already-saved recording.
+      expect(
+        await db.recordingDraftsDao.loadDraft(),
+        isNull,
+        reason: 'finish must clear the draft row',
+      );
+      expect(
+        await service.detectRecoverableDraft(),
+        isNull,
+        reason: 'no recoverable draft remains to prompt on',
+      );
 
-    expect(isLocalRecordingId(localId), isTrue);
+      // RETENTION (W2): the durable segment file STAYS on disk (draft-clear is
+      // split from file-delete) — the audio remains playable.
+      expect(row.audioFilePath, isNotEmpty);
+      expect(
+        await File(row.audioFilePath).exists(),
+        isTrue,
+        reason: 'clearing the draft must NOT delete the durable audio (W2)',
+      );
+    },
+  );
 
-    // The local row survives, pending_upload, coreId NULL.
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row, isNotNull);
-    expect(row!.coreId, isNull);
-    expect(row.processingStatus, 'pending_upload');
-    expect(row.isProcessing, 1);
+  test(
+    'finish is local-first: a Core-down repo (createRecording throws) still '
+    'yields a visible local Drift row + on-disk audio (reproduces #828)',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    // The captured audio is on disk and NOT orphaned (the #828 symptom).
-    expect(row.audioFilePath, isNotEmpty);
-    expect(await File(row.audioFilePath).exists(), isTrue);
+      final service = svc(db);
+      // Core unreachable — createRecording throws.
+      final repo = _CoreDownRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
 
-    // The card is visible in the Inbox.
-    final items = container.read(inboxControllerProvider).requireValue;
-    expect(items.any((i) => i.id == localId), isTrue);
-  });
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          testParentSyncOverride(),
+          audioRecordingServiceProvider.overrideWithValue(service),
+          recordingsRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final controller = container.read(recordingControllerProvider.notifier);
+      await controller.start();
+      await controller.pause();
+      await controller.resume();
+
+      // finish() must NOT throw even though Core is down.
+      final localId = await container
+          .read(recordingFinisherProvider)
+          .finish(title: 'Memo');
+
+      expect(isLocalRecordingId(localId), isTrue);
+
+      // The local row survives with a durable retryable Core block, coreId NULL.
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(row, isNotNull);
+      expect(row!.coreId, isNull);
+      expect(row.processingStatus, kProcessingStatusBlockedOffline);
+      expect(row.isProcessing, 0);
+
+      // The captured audio is on disk and NOT orphaned (the #828 symptom).
+      expect(row.audioFilePath, isNotEmpty);
+      expect(await File(row.audioFilePath).exists(), isTrue);
+
+      // The card is visible in the Inbox.
+      final items = container.read(inboxControllerProvider).requireValue;
+      expect(items.any((i) => i.id == localId), isTrue);
+    },
+  );
 
   test('finish: realtime socket event drives processing→done (poll stays '
-      'processing — proves the F4 realtime waiter is wired into finish)',
-      () async {
+      'processing — proves the F4 realtime waiter is wired into finish)', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
@@ -473,23 +498,28 @@ void main() {
       );
       final future = waiter.wait();
       // Socket delivers the terminal status first.
-      events.add(RecordingStatusEvent(
-        recordingId: recording.id,
-        status: RecordingStatus.done,
-        summary: 'From socket',
-        transcript: 'realtime',
-      ));
+      events.add(
+        RecordingStatusEvent(
+          recordingId: recording.id,
+          status: RecordingStatus.done,
+          summary: 'From socket',
+          transcript: 'realtime',
+        ),
+      );
       final result = await future;
       await events.close();
       return result;
     }
 
-    final container = ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      audioRecordingServiceProvider.overrideWithValue(service),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-      queueWith(fakeSocketAwaiter),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        testParentSyncOverride(),
+        audioRecordingServiceProvider.overrideWithValue(service),
+        recordingsRepositoryProvider.overrideWithValue(repo),
+        queueWith(fakeSocketAwaiter),
+      ],
+    );
     addTearDown(container.dispose);
 
     final controller = container.read(recordingControllerProvider.notifier);
@@ -497,22 +527,26 @@ void main() {
     await controller.pause();
     await controller.resume();
 
-    final localId =
-        await container.read(recordingFinisherProvider).finish(title: 'Live');
+    final localId = await container
+        .read(recordingFinisherProvider)
+        .finish(title: 'Live');
 
     expect(isLocalRecordingId(localId), isTrue);
 
-    // Two-phase: reconcile the minted matome's coreId, then re-drain — this is
-    // the drain that actually creates the item and runs the realtime waiter.
-    await reconcileMatomeAndRedrain(container, db, localId);
-
-    expect(awaiterCalled, isTrue, reason: 'finish must use the realtime waiter');
+    expect(
+      awaiterCalled,
+      isTrue,
+      reason: 'finish must use the realtime waiter',
+    );
 
     final row = await db.recordingsDao.getRecordingById(localId);
     expect(row, isNotNull);
     expect(row!.coreId, 321);
-    expect(row.processingStatus, 'done',
-        reason: 'socket event must drive processing→done');
+    expect(
+      row.processingStatus,
+      'done',
+      reason: 'socket event must drive processing→done',
+    );
     expect(row.isProcessing, 0);
     expect(row.summary, 'From socket');
     // WRITE-AUTHORITY (#1435): the machine transcript from the socket `done`
@@ -531,8 +565,10 @@ class _CoreDownRepository extends RecordingsRepository {
   _CoreDownRepository({required super.apiClient});
 
   @override
-  Future<RecordingCreateResult> createRecording({
+  Future<RecordingCreateResult> createItemRecording({
     required String title,
+    required int matomeId,
+    required String clientId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',

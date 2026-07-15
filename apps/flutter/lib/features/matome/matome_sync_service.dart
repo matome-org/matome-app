@@ -3,7 +3,6 @@ import 'dart:developer' as developer;
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart';
 import '../../core/db/daos/matomes_dao.dart';
@@ -30,9 +29,10 @@ import 'matomes_repository.dart';
 /// display layer keeps reading from Drift; this only reconciles.
 ///
 /// Enforced invariants:
-///   * SPACE-SCOPED — only a Matome with `space_id != null` is ever pushed.
-///     Inbox Matomes (`space_id == null`) stay local-only (see [pushFiled]).
-///   * CHILD-BEFORE-PARENT (council P0) — a recording's remote `matome_id` is
+///   * SPACE-SCOPED LIST SYNC — [pushFiled] only scans filed cloud Matomes.
+///     [reconcileParent] is the W0 queue exception: an Inbox Matome may be
+///     created without a workspace when durable child work depends on it.
+///   * PARENT-BEFORE-CHILD (council P0) — a recording's remote `matome_id` is
 ///     its Matome's `core_id`, so a Matome is pushed (and reconciles its
 ///     `core_id`) BEFORE any of its recordings send `matome_id`. A recording
 ///     whose Matome still has no `core_id` does NOT send one (see [_pushChildren]).
@@ -42,6 +42,8 @@ class MatomeSyncService {
   MatomeSyncService(this._ref);
 
   final Ref _ref;
+  final Map<String, Future<int?>> _parentReconciliations =
+      <String, Future<int?>>{};
 
   MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
   ContactsDao get _contactsDao => _ref.read(contactsDaoProvider);
@@ -195,7 +197,8 @@ class MatomeSyncService {
   // ---------------------------------------------------------------------------
 
   /// Push every FILED Matome (`space_id != null`) to Core, then its contacts and
-  /// child recordings (child-before-parent). Inbox Matomes are never pushed.
+  /// child recordings (parent-before-child). Inbox Matomes are not list-pushed;
+  /// [reconcileParent] handles the narrow W0 queue dependency exception.
   Future<void> pushFiled() async {
     final filed = await _matomesDao.listFiledMatomes();
     AppLog.event(LogCat.sync, 'pushFiled: ${filed.length} filed matomes');
@@ -206,21 +209,9 @@ class MatomeSyncService {
       final spaceId = matome.spaceId;
       if (spaceId == null) continue;
 
-      // DATA-EGRESS GATE (#1501, plan #102 W6 / spec R2.1 / W4-audit #74801 P2).
-      // This is the OTHER egress path the upload queue's `_maySync` already
-      // routes through the ONE operation-keyed gate. Behind the
-      // `localFirstSpaces` flag, a matome (and its children) egress ONLY when its
-      // EFFECTIVE space is a CLOUD space — decided by
-      // `SyncPolicy.can(caller, Operation.spaceSync, space)` over the ONE
-      // resolver, NOT by the old `int.tryParse(spaceId)` numeric-id heuristic
-      // (which gated on Core-backed-ness, NEVER on `is_local`). After this there
-      // is ONE operation-keyed decision point for ALL egress (queue + matome
-      // push); no second sync-eligibility predicate survives anywhere (R1.2).
-      //
-      // Flag OFF ⇒ byte-unchanged: the gate is compiled out, so the only filter
-      // is the legacy "Core-backed numeric id" check below — exactly the pre-#102
-      // behaviour (`space_id != null` ⇒ push when numeric).
-      if (FeatureFlags.localFirstSpaces && !await _maySyncSpace(spaceId)) {
+      // Local-space work is durably held under every flag. Cloud egress still
+      // routes through the operation-keyed SyncPolicy decision point.
+      if (!await _maySyncSpace(spaceId)) {
         AppLog.event(
           LogCat.sync,
           'pushFiled: HELD (effective space not cloud) ${matome.id}',
@@ -231,26 +222,13 @@ class MatomeSyncService {
       // The Space must be Core-backed (a numeric workspace id) to file the
       // Matome under it. A locally-created `ws_<...>` Space has no Core
       // counterpart, so its Matomes can't be pushed yet — left local-only.
-      // (Behind the flag, the gate above already HELD every local space; this
-      // remains as the Core-id projection AND the flag-OFF eligibility filter.)
-      final coreWorkspaceId = int.tryParse(spaceId);
-      if (coreWorkspaceId == null) continue;
+      if (int.tryParse(spaceId) == null) continue;
 
       var coreId = matome.coreId;
       if (coreId == null) {
-        // FIRST push: create remote, reconcile the local `core_id` (no PK remap).
-        final created = await _matomesRepo.createMatome(
-          title: matome.title,
-          workspaceId: coreWorkspaceId,
-          happenedAt: DateTime.fromMillisecondsSinceEpoch(matome.happenedAt),
-          description: matome.description,
-          aggregatedSummary: matome.aggregatedSummary,
-        );
-        coreId = created.id;
-        await _matomesDao.updateMatome(
-          matome.id,
-          MatomesCompanion(coreId: Value(coreId)),
-        );
+        // Share the parent-level single-flight with child queue triggers.
+        coreId = await reconcileParent(matome.id);
+        if (coreId == null) continue;
       }
 
       await _pushContacts(matome.id, coreId);
@@ -264,15 +242,63 @@ class MatomeSyncService {
     await pushArchives();
   }
 
+  /// Reconcile exactly one local parent needed by queued child work.
+  ///
+  /// Unlike [pushFiled], an Inbox Matome (`space_id == null`) is valid parent
+  /// work under the W0 queue contract and Core accepts it without a workspace.
+  /// A Matome in a local/unknown Space remains on-device and returns `null` so
+  /// the caller can persist an explicit blocked reason. Re-reading before the
+  /// create makes overlapping child drains share a parent that just reconciled.
+  Future<int?> reconcileParent(String matomeId) {
+    final inFlight = _parentReconciliations[matomeId];
+    if (inFlight != null) return inFlight;
+    final run = _reconcileParent(matomeId);
+    _parentReconciliations[matomeId] = run;
+    return run.whenComplete(() {
+      if (identical(_parentReconciliations[matomeId], run)) {
+        _parentReconciliations.remove(matomeId);
+      }
+    });
+  }
+
+  Future<int?> _reconcileParent(String matomeId) async {
+    final matome = await _matomesDao.getById(matomeId);
+    if (matome == null) return null;
+    final existingCoreId = matome.coreId;
+    if (existingCoreId != null) return existingCoreId;
+
+    int? coreWorkspaceId;
+    final spaceId = matome.spaceId;
+    if (spaceId != null) {
+      final space = await _workspacesDao.getWorkspaceById(spaceId);
+      if (space == null || space.isLocal == 1) return null;
+      coreWorkspaceId = int.tryParse(spaceId);
+      if (coreWorkspaceId == null) return null;
+    }
+
+    final created = await _matomesRepo.createMatome(
+      title: matome.title,
+      workspaceId: coreWorkspaceId,
+      happenedAt: DateTime.fromMillisecondsSinceEpoch(matome.happenedAt),
+      description: matome.description,
+      aggregatedSummary: matome.aggregatedSummary,
+    );
+    await _matomesDao.updateMatome(
+      matome.id,
+      MatomesCompanion(coreId: Value(created.id)),
+    );
+    return created.id;
+  }
+
   /// Whether a matome filed into space [spaceId] may egress to Core, routed
   /// through the ONE operation-keyed gate [SyncPolicy.can] over the ONE resolver
   /// (#1501, plan #102 W6 / spec R2.1). Identical decision shape to the upload
-  /// queue's `_maySync` so there is ONE egress predicate for the whole program.
+  /// queue's decision so there is ONE egress predicate for the whole program.
   ///
   /// Returns true ONLY when [spaceId] resolves to a known `workspaces` row that
   /// is a CLOUD space. A LOCAL space, or an unknown/local-only `ws_…` id with no
   /// row, returns false — the matome stays local-only (fail-closed; filing ≠
-  /// sync, spec R2). Only called behind the `localFirstSpaces` flag.
+  /// sync, spec R2).
   Future<bool> _maySyncSpace(String spaceId) async {
     final spaceRow = await _workspacesDao.getWorkspaceById(spaceId);
     if (spaceRow == null) {
@@ -347,7 +373,7 @@ class MatomeSyncService {
     }
   }
 
-  /// CHILD-BEFORE-PARENT: now that the Matome has [matomeCoreId], stamp it onto
+  /// PARENT-BEFORE-CHILD: now that the Matome has [matomeCoreId], stamp it onto
   /// each child recording that itself already has a `core_id` (is reconciled
   /// with Core). A recording with no `core_id` yet is skipped — it carries its
   /// `matome_id` once it reconciles, never before (so Core never sees a dangling

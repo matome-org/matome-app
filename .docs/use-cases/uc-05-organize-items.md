@@ -25,6 +25,7 @@ Items compose freely: they can be loose, inside a Matome, or filed directly into
 ## Alternate & exception flows
 - Filing into a local space organizes the content without any sync.
 - Leaving a Matome makes the shadowed `workspaceId` authoritative again, with no data loss.
+- **Temporary W0 queue exception:** while uploads still use legacy recording-row statuses, durable child work may reconcile its Inbox Matome parent to Core before filing. This dependency-only path does not make loose items or local-space content sync-eligible and is replaced by the canonical `work_queue` cutover.
 - The whole behaviour sits behind `FeatureFlags.localFirstSpaces`.
 - **Reading pane (master–detail).** On expanded widths, the collection surfaces used to triage — Inbox, Files, Spaces, and now **Contacts** — render through the shared `MasterDetailScaffold` behind `FeatureFlags.masterDetailLayout`: the directory stays as a full-width master beside a reading pane that previews the selected row in place (for Contacts, the real `ContactDetail`), so the user can scan and inspect without leaving the list. Tapping selects in-pane only when the pane is visible (`MasterDetailScaffold.showsPane`); on narrow widths, with the pane off, or with the flag OFF it degrades to navigating to the full-screen detail (`/contacts/:id`), exactly as shipped. The pane selection is reconciled after every list re-read so it never points at a row that has left the list (deleted / out of scope).
 

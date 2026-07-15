@@ -77,9 +77,9 @@ void main() {
   }
 
   ApiClient apiClient() => ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      );
+    tokenStore: InMemoryTokenStore(),
+    dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+  );
 
   ProviderContainer containerFor(
     AppDatabase db, {
@@ -88,29 +88,36 @@ void main() {
     required SpacesRepository spaces,
     String? ownerId = 'owner-1',
   }) {
-    return ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      recordingsRepositoryProvider.overrideWithValue(recordings),
-      matomesRepositoryProvider.overrideWithValue(matomes),
-      spacesRepositoryProvider.overrideWithValue(spaces),
-      currentOwnerIdProvider.overrideWithValue(ownerId),
-      uploadQueueProvider.overrideWith(
-        (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
-      ),
-    ]);
+    return ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        recordingsRepositoryProvider.overrideWithValue(recordings),
+        matomesRepositoryProvider.overrideWithValue(matomes),
+        spacesRepositoryProvider.overrideWithValue(spaces),
+        currentOwnerIdProvider.overrideWithValue(ownerId),
+        uploadQueueProvider.overrideWith(
+          (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
+        ),
+      ],
+    );
   }
 
   /// Insert a LOCAL space (`ws_<...>` id, is_local = 1). Returns its id.
   Future<String> seedLocalSpace(AppDatabase db, {String? ownerId}) async {
-    final id = 'ws_${DateTime.now().microsecondsSinceEpoch}_'
+    final id =
+        'ws_${DateTime.now().microsecondsSinceEpoch}_'
         '${db.hashCode ^ DateTime.now().microsecond}';
-    await db.into(db.workspaces).insert(WorkspacesCompanion.insert(
-          id: id,
-          name: 'Local Space $id',
-          createdAt: DateTime.now().millisecondsSinceEpoch,
-          isLocal: const Value(1),
-          ownerId: Value(ownerId),
-        ));
+    await db
+        .into(db.workspaces)
+        .insert(
+          WorkspacesCompanion.insert(
+            id: id,
+            name: 'Local Space $id',
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+            isLocal: const Value(1),
+            ownerId: Value(ownerId),
+          ),
+        );
     return id;
   }
 
@@ -126,33 +133,39 @@ void main() {
     final localId = mintLocalRecordingId();
     final audio = File('${tmp.path}/$localId.m4a');
     await audio.writeAsBytes(List<int>.filled(16, 0));
-    await db.recordingsDao.upsertRecording(RecordingsCompanion(
-      id: Value(localId),
-      coreId: Value(coreId),
-      title: const Value('Memo'),
-      timestamp: const Value('1:00 PM'),
-      duration: const Value('34s'),
-      isProcessing: const Value(1),
-      audioFilePath: Value(audio.path),
-      workspaceId: Value(workspaceId),
-      matomeId: Value(matomeId),
-      createdAt: Value(DateTime.now().millisecondsSinceEpoch),
-      mediaType: const Value('audio'),
-      processingStatus: const Value(kProcessingStatusPendingUpload),
-    ));
+    await db.recordingsDao.upsertRecording(
+      RecordingsCompanion(
+        id: Value(localId),
+        coreId: Value(coreId),
+        title: const Value('Memo'),
+        timestamp: const Value('1:00 PM'),
+        duration: const Value('34s'),
+        isProcessing: const Value(1),
+        audioFilePath: Value(audio.path),
+        workspaceId: Value(workspaceId),
+        matomeId: Value(matomeId),
+        createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+        mediaType: const Value('audio'),
+        processingStatus: const Value(kProcessingStatusPendingUpload),
+      ),
+    );
     return localId;
   }
 
   /// Insert a matome filed into [spaceId]. Returns its id.
   Future<String> seedMatome(AppDatabase db, {required String spaceId}) async {
     final id = mintLocalMatomeId();
-    await db.into(db.matomes).insert(MatomesCompanion.insert(
-          id: id,
-          title: 'M',
-          happenedAt: DateTime.now().millisecondsSinceEpoch,
-          createdAt: DateTime.now().millisecondsSinceEpoch,
-          spaceId: Value(spaceId),
-        ));
+    await db
+        .into(db.matomes)
+        .insert(
+          MatomesCompanion.insert(
+            id: id,
+            title: 'M',
+            happenedAt: DateTime.now().millisecondsSinceEpoch,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+            spaceId: Value(spaceId),
+          ),
+        );
     return id;
   }
 
@@ -160,16 +173,20 @@ void main() {
   // FLAG ON — promotion behaviour (future-wave reality).                   //
   // ===================================================================== //
   group('flag ON — local→cloud promotion', () {
-    test('EXACTLY-ONCE: promoting a space with N items creates each on Core '
-        'exactly once and lands `cloud`', () async {
+    test('W2 boundary: promotion reconciles Matome parents but reports loose '
+        'items without parents as resumably failed', () async {
       if (!FeatureFlags.localFirstSpaces) return;
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
       final recordings = _CountingRecordingsRepo(apiClient: apiClient());
       final matomesRepo = _CountingMatomesRepo(apiClient: apiClient());
       final spacesRepo = _CountingSpacesRepo(apiClient: apiClient());
-      final container = containerFor(db,
-          recordings: recordings, matomes: matomesRepo, spaces: spacesRepo);
+      final container = containerFor(
+        db,
+        recordings: recordings,
+        matomes: matomesRepo,
+        spaces: spacesRepo,
+      );
       addTearDown(container.dispose);
 
       final space = await seedLocalSpace(db, ownerId: null);
@@ -183,18 +200,20 @@ void main() {
       final svc = container.read(spacePromotionServiceProvider);
       final state = await svc.promote(space);
 
-      expect(state, isA<PromotionCloud>(),
-          reason: 'all items acked ⇒ terminal cloud');
-      // Each item created on Core EXACTLY once (the counting sink).
-      expect(recordings.createCalls, 3, reason: '3 recordings create once each');
+      expect(state, isA<PromotionFailed>());
+      expect((state as PromotionFailed).remaining, 3);
+      // W1 does not synthesize parents for loose items; W2 owns that schema and
+      // work_queue cutover. The two real Matome parents still reconcile once.
+      expect(recordings.createCalls, 0);
       expect(matomesRepo.createCalls, 2, reason: '2 matomes create once each');
       expect(spacesRepo.createCalls, 1, reason: 'ONE Core space created');
 
       // The space is now CLOUD: re-keyed to the numeric Core id, is_local = 0.
       final old = await db.workspacesDao.getWorkspaceById(space);
       expect(old, isNull, reason: 'the ws_<...> local row was re-keyed away');
-      final cloud = await db.workspacesDao
-          .getWorkspaceById(spacesRepo.lastId.toString());
+      final cloud = await db.workspacesDao.getWorkspaceById(
+        spacesRepo.lastId.toString(),
+      );
       expect(cloud, isNotNull);
       expect(cloud!.isLocal, 0, reason: 'promoted space is cloud');
     });
@@ -208,8 +227,12 @@ void main() {
       final recordings = _CountingRecordingsRepo(apiClient: apiClient());
       final matomesRepo = _CountingMatomesRepo(apiClient: apiClient());
       final spacesRepo = _CountingSpacesRepo(apiClient: apiClient());
-      final container = containerFor(db,
-          recordings: recordings, matomes: matomesRepo, spaces: spacesRepo);
+      final container = containerFor(
+        db,
+        recordings: recordings,
+        matomes: matomesRepo,
+        spaces: spacesRepo,
+      );
       addTearDown(container.dispose);
 
       final space = await seedLocalSpace(db);
@@ -217,8 +240,12 @@ void main() {
       // A pending-upload child of the matome (no coreId yet): it egresses via
       // the upload queue once the space is cloud (matome WINS resolves it to the
       // now-cloud space).
-      final child =
-          await seedRecording(db, tmp, matomeId: matome, workspaceId: space);
+      final child = await seedRecording(
+        db,
+        tmp,
+        matomeId: matome,
+        workspaceId: space,
+      );
 
       final svc = container.read(spacePromotionServiceProvider);
       final state = await svc.promote(space);
@@ -239,13 +266,17 @@ void main() {
       final recordings = _CountingRecordingsRepo(apiClient: apiClient());
       final matomesRepo = _CountingMatomesRepo(apiClient: apiClient());
       final spacesRepo = _CountingSpacesRepo(apiClient: apiClient());
-      final container = containerFor(db,
-          recordings: recordings, matomes: matomesRepo, spaces: spacesRepo);
+      final container = containerFor(
+        db,
+        recordings: recordings,
+        matomes: matomesRepo,
+        spaces: spacesRepo,
+      );
       addTearDown(container.dispose);
 
       final space = await seedLocalSpace(db);
-      await seedRecording(db, tmp, workspaceId: space);
-      await seedMatome(db, spaceId: space);
+      final matome = await seedMatome(db, spaceId: space);
+      await seedRecording(db, tmp, matomeId: matome, workspaceId: space);
 
       final svc = container.read(spacePromotionServiceProvider);
       final first = await svc.promote(space);
@@ -261,8 +292,11 @@ void main() {
       expect(second, isA<PromotionCloud>());
       expect(recordings.createCalls, 1, reason: 'no recording re-created');
       expect(matomesRepo.createCalls, 1, reason: 'no matome re-created');
-      expect(spacesRepo.createCalls, 1,
-          reason: 'no SECOND Core space (re-key made create idempotent)');
+      expect(
+        spacesRepo.createCalls,
+        1,
+        reason: 'no SECOND Core space (re-key made create idempotent)',
+      );
     });
 
     test('PARTIAL-FAILURE: one item fails ⇒ space lands `failed`/resumable '
@@ -276,21 +310,40 @@ void main() {
       final recordings = _FlakyRecordingsRepo(apiClient: apiClient());
       final matomesRepo = _CountingMatomesRepo(apiClient: apiClient());
       final spacesRepo = _CountingSpacesRepo(apiClient: apiClient());
-      final container = containerFor(db,
-          recordings: recordings, matomes: matomesRepo, spaces: spacesRepo);
+      final container = containerFor(
+        db,
+        recordings: recordings,
+        matomes: matomesRepo,
+        spaces: spacesRepo,
+      );
       addTearDown(container.dispose);
 
       final space = await seedLocalSpace(db);
-      final good = await seedRecording(db, tmp, workspaceId: space);
-      final flaky = await seedRecording(db, tmp, workspaceId: space);
+      final goodMatome = await seedMatome(db, spaceId: space);
+      final flakyMatome = await seedMatome(db, spaceId: space);
+      final good = await seedRecording(
+        db,
+        tmp,
+        matomeId: goodMatome,
+        workspaceId: space,
+      );
+      final flaky = await seedRecording(
+        db,
+        tmp,
+        matomeId: flakyMatome,
+        workspaceId: space,
+      );
       recordings.failCreateForTitleOnce = true; // first create throws once.
 
       final svc = container.read(spacePromotionServiceProvider);
       final state = await svc.promote(space);
 
       // One item failed to reach Core ⇒ NOT cloud, resumable.
-      expect(state, isA<PromotionFailed>(),
-          reason: 'a half-cloud space MUST NOT look done');
+      expect(
+        state,
+        isA<PromotionFailed>(),
+        reason: 'a half-cloud space MUST NOT look done',
+      );
       expect((state as PromotionFailed).remaining, 1);
 
       // The space WAS re-keyed (its succeeded item kept its Core row — no
@@ -306,44 +359,57 @@ void main() {
       // remainder completes. No duplicate create for the already-acked item.
       recordings.failCreateForTitleOnce = false;
       final resumed = await svc.promote(cloudId);
-      expect(resumed, isA<PromotionCloud>(), reason: 'resume finishes the rest');
-      expect(recordings.createCalls, createsAfterFirstPass + 1,
-          reason: 'resume creates ONLY the previously-failed item (no re-send '
-              'of the succeeded one)');
+      expect(
+        resumed,
+        isA<PromotionCloud>(),
+        reason: 'resume finishes the rest',
+      );
+      expect(
+        recordings.createCalls,
+        createsAfterFirstPass + 1,
+        reason:
+            'resume creates ONLY the previously-failed item (no re-send '
+            'of the succeeded one)',
+      );
     });
 
-    test('OWNER-SCOPE AUTHZ: a non-owner caller cannot promote — Core create is '
-        'never attempted (spec R3.6)', () async {
-      if (!FeatureFlags.localFirstSpaces) return;
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final recordings = _CountingRecordingsRepo(apiClient: apiClient());
-      final matomesRepo = _CountingMatomesRepo(apiClient: apiClient());
-      final spacesRepo = _CountingSpacesRepo(apiClient: apiClient());
-      // Space is OWNED by 'owner-1' but the acting caller is 'intruder'.
-      final container = containerFor(db,
+    test(
+      'OWNER-SCOPE AUTHZ: a non-owner caller cannot promote — Core create is '
+      'never attempted (spec R3.6)',
+      () async {
+        if (!FeatureFlags.localFirstSpaces) return;
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final recordings = _CountingRecordingsRepo(apiClient: apiClient());
+        final matomesRepo = _CountingMatomesRepo(apiClient: apiClient());
+        final spacesRepo = _CountingSpacesRepo(apiClient: apiClient());
+        // Space is OWNED by 'owner-1' but the acting caller is 'intruder'.
+        final container = containerFor(
+          db,
           recordings: recordings,
           matomes: matomesRepo,
           spaces: spacesRepo,
-          ownerId: 'intruder');
-      addTearDown(container.dispose);
+          ownerId: 'intruder',
+        );
+        addTearDown(container.dispose);
 
-      final space = await seedLocalSpace(db, ownerId: 'owner-1');
-      await seedRecording(db, tmp, workspaceId: space);
+        final space = await seedLocalSpace(db, ownerId: 'owner-1');
+        await seedRecording(db, tmp, workspaceId: space);
 
-      final svc = container.read(spacePromotionServiceProvider);
-      await expectLater(
-        svc.promote(space),
-        throwsA(isA<PromotionNotAuthorized>()),
-      );
+        final svc = container.read(spacePromotionServiceProvider);
+        await expectLater(
+          svc.promote(space),
+          throwsA(isA<PromotionNotAuthorized>()),
+        );
 
-      // No Core write of any kind — the gate refused before egress.
-      expect(spacesRepo.createCalls, 0, reason: 'no Core space create');
-      expect(recordings.createCalls, 0, reason: 'no item egress');
-      // The space stays LOCAL (no state change on denial).
-      final row = await db.workspacesDao.getWorkspaceById(space);
-      expect(row!.isLocal, 1, reason: 'denied promotion leaves space local');
-    });
+        // No Core write of any kind — the gate refused before egress.
+        expect(spacesRepo.createCalls, 0, reason: 'no Core space create');
+        expect(recordings.createCalls, 0, reason: 'no item egress');
+        // The space stays LOCAL (no state change on denial).
+        final row = await db.workspacesDao.getWorkspaceById(space);
+        expect(row!.isLocal, 1, reason: 'denied promotion leaves space local');
+      },
+    );
 
     test('CONSENT counts (matome WINS): itemized count is the items whose '
         'effective space is this space with no Core row — children counted '
@@ -351,10 +417,12 @@ void main() {
       if (!FeatureFlags.localFirstSpaces) return;
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
-      final container = containerFor(db,
-          recordings: _CountingRecordingsRepo(apiClient: apiClient()),
-          matomes: _CountingMatomesRepo(apiClient: apiClient()),
-          spaces: _CountingSpacesRepo(apiClient: apiClient()));
+      final container = containerFor(
+        db,
+        recordings: _CountingRecordingsRepo(apiClient: apiClient()),
+        matomes: _CountingMatomesRepo(apiClient: apiClient()),
+        spaces: _CountingSpacesRepo(apiClient: apiClient()),
+      );
       addTearDown(container.dispose);
 
       final space = await seedLocalSpace(db);
@@ -371,9 +439,13 @@ void main() {
       final consent = await svc.consentFor(space);
 
       expect(consent.matomeCount, 1, reason: 'one un-synced matome');
-      expect(consent.recordingCount, 3,
-          reason: '2 matome children + 1 loose; the already-synced one excluded; '
-              'the matome child filed into the space is NOT double-counted');
+      expect(
+        consent.recordingCount,
+        3,
+        reason:
+            '2 matome children + 1 loose; the already-synced one excluded; '
+            'the matome child filed into the space is NOT double-counted',
+      );
       expect(consent.totalCount, 4);
     });
   });
@@ -384,8 +456,11 @@ void main() {
   group('flag OFF — promotion behind the flag', () {
     test('the localFirstSpaces flag is OFF in this build', () async {
       if (FeatureFlags.localFirstSpaces) return; // self-skip under ON build.
-      expect(FeatureFlags.localFirstSpaces, isFalse,
-          reason: 'promotion (data-egress) ships dark behind the single flag');
+      expect(
+        FeatureFlags.localFirstSpaces,
+        isFalse,
+        reason: 'promotion (data-egress) ships dark behind the single flag',
+      );
     });
   });
 }
@@ -420,13 +495,17 @@ class _CountingMatomesRepo extends MatomesRepository {
   int createCalls = 0;
   int _next = 8000;
 
-  Matome _matome(int id, {required String title, int? workspaceId}) =>
-      Matome(id: id, ownerId: 'owner-1', title: title, workspaceId: workspaceId);
+  Matome _matome(int id, {required String title, int? workspaceId}) => Matome(
+    id: id,
+    ownerId: 'owner-1',
+    title: title,
+    workspaceId: workspaceId,
+  );
 
   @override
   Future<Matome> createMatome({
     required String title,
-    required int workspaceId,
+    int? workspaceId,
     DateTime? happenedAt,
     String? description,
     String? aggregatedSummary,
@@ -443,8 +522,7 @@ class _CountingMatomesRepo extends MatomesRepository {
     DateTime? happenedAt,
     String? description,
     String? aggregatedSummary,
-  }) async =>
-      _matome(id, title: title ?? 'M');
+  }) async => _matome(id, title: title ?? 'M');
 
   @override
   Future<Matome> archiveMatome(int id) async => _matome(id, title: 'M');
@@ -457,7 +535,7 @@ class _CountingMatomesRepo extends MatomesRepository {
   }) async {}
 }
 
-/// Counts `POST /api/recordings` creates and PUT uploads; resolves `done`.
+/// Counts idempotent item creates and PUT uploads; resolves `done`.
 class _CountingRecordingsRepo extends RecordingsRepository {
   _CountingRecordingsRepo({required super.apiClient});
 
@@ -476,8 +554,10 @@ class _CountingRecordingsRepo extends RecordingsRepository {
   }
 
   @override
-  Future<RecordingCreateResult> createRecording({
+  Future<RecordingCreateResult> createItemRecording({
     required String title,
+    required int matomeId,
+    required String clientId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',
@@ -521,8 +601,7 @@ class _CountingRecordingsRepo extends RecordingsRepository {
     int? workspaceId,
     int? matomeId,
     bool clearWorkspace = false,
-  }) async =>
-      _recording(id, status: 'done');
+  }) async => _recording(id, status: 'done');
 }
 
 /// Like [_CountingRecordingsRepo] but throws on the FIRST create while
@@ -537,8 +616,10 @@ class _FlakyRecordingsRepo extends _CountingRecordingsRepo {
   bool _failedOnce = false;
 
   @override
-  Future<RecordingCreateResult> createRecording({
+  Future<RecordingCreateResult> createItemRecording({
     required String title,
+    required int matomeId,
+    required String clientId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',
@@ -547,11 +628,16 @@ class _FlakyRecordingsRepo extends _CountingRecordingsRepo {
   }) async {
     if (failCreateForTitleOnce && !_failedOnce) {
       _failedOnce = true;
-      throw const ApiException('transient', statusCode: 503,
-          code: 'upload_failed');
+      throw const ApiException(
+        'transient',
+        statusCode: 503,
+        code: 'upload_failed',
+      );
     }
-    return super.createRecording(
+    return super.createItemRecording(
       title: title,
+      matomeId: matomeId,
+      clientId: clientId,
       durationSeconds: durationSeconds,
       badge: badge,
       mediaType: mediaType,

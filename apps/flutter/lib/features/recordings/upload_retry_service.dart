@@ -4,24 +4,24 @@ import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/config/app_config.dart';
+import '../../core/config/endpoint_controller.dart';
 import '../../core/observability/app_log.dart';
 import 'upload_queue.dart';
 
-/// A reachability check for Core — returns `true` when `AppConfig.apiBaseUrl`
+/// A reachability check for Core — returns `true` when the supplied runtime URL
 /// answers. Injectable so tests drive connectivity transitions with a fake
 /// instead of a live socket. The default ([probeApiReachability]) issues a
 /// cheap GET to the API root and treats *any* HTTP reply (even 4xx) as
 /// reachable — only a transport error (no statusCode) means "offline".
-typedef ReachabilityProbe = Future<bool> Function();
+typedef ReachabilityProbe = Future<bool> Function(String baseUrl);
 
-/// Default [ReachabilityProbe]: a short-timeout GET to `AppConfig.apiBaseUrl`.
+/// Default [ReachabilityProbe]: a short-timeout GET to the runtime endpoint.
 /// Any HTTP response (incl. 404/401) ⇒ reachable; a connection/timeout error ⇒
 /// unreachable. Uses a bare [Dio] (no auth) so it works pre-login too.
-Future<bool> probeApiReachability() async {
+Future<bool> probeApiReachability(String baseUrl) async {
   final dio = Dio(
     BaseOptions(
-      baseUrl: AppConfig.apiBaseUrl,
+      baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 4),
       receiveTimeout: const Duration(seconds: 4),
       validateStatus: (_) => true,
@@ -43,12 +43,14 @@ Future<bool> probeApiReachability() async {
   }
 }
 
-/// Drives the [UploadQueue] on its three triggers (plan #43, W4):
+/// Drives the [UploadQueue] on production recovery triggers:
 ///  (a) app start — drain once immediately,
 ///  (b) connectivity regained — a lightweight periodic reachability probe to
-///      `AppConfig.apiBaseUrl` re-drains on an unreachable→reachable edge,
-///  (c) after a finish() — handled in-line by `InboxUploader.upload`'s drain;
-///      this service covers the background/offline-recovery cases.
+///      the current [endpointConfigProvider] value re-drains on an
+///      unreachable→reachable edge,
+///  (c) auth success, foreground/resume, and endpoint changes — wired by the
+///      app root through [drainNow],
+///  (d) after a finish() — handled in-line by `InboxUploader.upload`'s drain.
 ///
 /// No `connectivity_plus` dependency exists in the project, so this uses a
 /// simple injectable HTTP reachability probe rather than pulling in a native
@@ -113,7 +115,7 @@ class UploadRetryService {
 
   Future<bool> _safeProbe() async {
     try {
-      return await probe();
+      return await probe(_ref.read(endpointConfigProvider));
     } catch (e, st) {
       AppLog.error(
         LogCat.upload,

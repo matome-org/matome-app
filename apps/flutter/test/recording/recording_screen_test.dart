@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +29,7 @@ import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:record/record.dart' show Amplitude, AudioEncoder, RecordState;
 
 import 'audio_recording_service_test.dart' show FakeRecorderBackend;
+import '../support/fake_parent_sync.dart';
 
 /// A [FakeRecorderBackend] for widget tests that emits NO stream events. The
 /// production fake's `Stream.periodic` amplitude + broadcast state controller
@@ -186,27 +186,6 @@ void main() {
     );
   }
 
-  // Simulate the matome→Core sync (matome_sync) reconciling the just-minted LOCAL
-  // matome's Core id (900), then re-drain the held row. The finish flow (flag OFF)
-  // mints a coreId-less local matome, so the inline drain HOLDS the row (an item
-  // can only be created under a reconciled matome — POST
-  // /api/matomes/{coreMatomeId}/items). This is the two-phase contract after the
-  // recordings→items migration; matome sync supplies the coreId out-of-band.
-  // Reconciles the single held (minted) matome's coreId to 900 and returns the
-  // held row's local id so the caller can re-drain it (the caller decides whether
-  // to await that drain — a gated terminal awaiter keeps it pending on purpose).
-  Future<String> reconcileMintedMatome(
-    ProviderContainer container,
-    AppDatabase db,
-  ) async {
-    final held = (await db.recordingsDao.getPendingUploadRecordings()).single;
-    await db.matomesDao.updateMatome(
-      held.matomeId!,
-      const MatomesCompanion(coreId: Value(900)),
-    );
-    return held.id;
-  }
-
   // Pumps the widget, letting the post-frame bootstrap (mic-support probe +
   // Drift draft detection — both real async) complete on the real event loop
   // before pumping to render the resolved entry phase.
@@ -270,6 +249,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
         // Avoid a live Phoenix socket connect in the widget test; the poll
@@ -318,14 +298,6 @@ void main() {
     }
     expect(find.text('inbox'), findsOneWidget);
 
-    // Two-phase: the finish minted a coreId-less local matome, so the in-modal
-    // drain HELD the row. Simulate matome sync reconciling the matome's coreId,
-    // then re-drain to done (the poll-fallback GET resolves the terminal state).
-    await tester.runAsync(() async {
-      final id = await reconcileMintedMatome(container, db);
-      await container.read(uploadQueueProvider).drainRow(id);
-    });
-
     // The new recording landed in the Inbox (Drift), done. W2: local-first PK,
     // so look it up by the reconciled coreId (item id 42), not by a Core-id PK.
     final row = await db.recordingsDao.recordingByCoreId(42);
@@ -345,6 +317,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
         uploadQueueProvider.overrideWith(
@@ -413,6 +386,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
       ],
@@ -456,6 +430,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
       ],
@@ -480,6 +455,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          testParentSyncOverride(coreId: 900),
           audioRecordingServiceProvider.overrideWithValue(svc(db)),
           recordingsRepositoryProvider.overrideWithValue(stubRepo()),
         ],
@@ -538,6 +514,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          testParentSyncOverride(coreId: 900),
           audioRecordingServiceProvider.overrideWithValue(svc(db)),
           recordingsRepositoryProvider.overrideWithValue(stubRepo()),
           uploadQueueProvider.overrideWith(
@@ -562,13 +539,12 @@ void main() {
         find.byKey(const Key('processing-background-button')),
         findsOneWidget,
       );
-      // Two-phase: the finish minted a coreId-less local matome, so the in-modal
-      // drain HELD the row — it's already in the Inbox as pending_upload with no
-      // coreId yet (an item is created only under a reconciled matome).
-      final held = (await db.recordingsDao.getPendingUploadRecordings()).single;
-      expect(isLocalRecordingId(held.id), isTrue);
-      expect(held.coreId, isNull);
-      expect(held.processingStatus, 'pending_upload');
+      // Parent and item ids reconcile before the terminal processing wait, which
+      // remains gated so the user can background the modal.
+      final pending = await db.recordingsDao.recordingByCoreId(42);
+      expect(pending, isNotNull);
+      expect(isLocalRecordingId(pending!.id), isTrue);
+      expect(pending.processingStatus, 'processing');
 
       // Background to the Inbox: the modal is dismissed even though the upload
       // hasn't resolved.
@@ -578,25 +554,11 @@ void main() {
       );
       expect(find.text('inbox'), findsOneWidget);
 
-      // matome sync reconciles the matome's coreId out-of-band; re-drain so the
-      // create leg runs (item id 42), reconciling coreId and flipping
-      // pending_upload → processing while the terminal await is still gated.
-      late Future<void> draining;
-      await tester.runAsync(() async {
-        final id = await reconcileMintedMatome(container, db);
-        draining = container.read(uploadQueueProvider).drainRow(id);
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
-      final pending = await db.recordingsDao.recordingByCoreId(42);
-      expect(pending, isNotNull);
-      expect(isLocalRecordingId(pending!.id), isTrue);
-      expect(pending.processingStatus, 'processing');
-
       // The pipeline keeps running off the (still-alive) provider; release it and
       // the row flips to done.
       await tester.runAsync(() async {
         release.complete();
-        await draining;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       final row = await db.recordingsDao.recordingByCoreId(42);
       expect(row!.processingStatus, 'done');
@@ -611,6 +573,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(
           svc(db, supported: false),
         ),

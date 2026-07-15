@@ -2,7 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../../features/matome/matome_ids.dart';
 import '../../../features/recordings/recording_ids.dart'
-    show kProcessingStatusPendingUpload;
+    show kLocalRecordingIdPrefix, kUploadQueuePendingStatuses;
 import '../app_database.dart';
 import '../file_row.dart';
 import '../recording_card.dart';
@@ -272,16 +272,18 @@ class RecordingsDao extends DatabaseAccessor<AppDatabase>
         .getSingleOrNull();
   }
 
-  /// Rows still awaiting a confirmed Core upload — `processingStatus` is the
-  /// local-only `pending_upload` state (plan #43, W4). These are exactly the
-  /// rows the auto-retry queue drains: a local-first finish/upload persisted
-  /// them but the Core create→upload→reconcile handoff has not yet completed
-  /// (Core was unreachable, or the attempt is still in flight on a fresh boot).
-  /// Newest first so a backlog drains most-recent-first.
+  /// Local rows still awaiting a confirmed Core upload. This includes explicit
+  /// blocked states and a locally-minted row left in `processing` after its Core
+  /// id was reconciled but before upload/dispatch reached a terminal result.
+  /// W2 replaces this compatibility query with the canonical `work_queue`.
   Future<List<RecordingRow>> getPendingUploadRecordings() {
     return (select(recordings)
           ..where(
-            (r) => r.processingStatus.equals(kProcessingStatusPendingUpload),
+            (r) =>
+                r.processingStatus.isIn(kUploadQueuePendingStatuses) |
+                (r.processingStatus.equals('processing') &
+                    r.coreId.isNotNull() &
+                    r.id.like('$kLocalRecordingIdPrefix%')),
           )
           ..orderBy([(r) => OrderingTerm.desc(r.createdAt)]))
         .get();

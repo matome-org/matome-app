@@ -108,11 +108,7 @@ void main() {
     };
 
     expect(detected, expected);
-    expect(detected.keys.toSet(), <String>{
-      'pending_status',
-      'retry',
-      'parent_sync',
-    });
+    expect(detected.keys.toSet(), <String>{'pending_status', 'retry'});
   });
 
   test('pins the reset-safe 1:1 payload model decision', () {
@@ -152,13 +148,6 @@ String? _detectViolation(Map<String, dynamic> mismatch) {
           current['first_job_identity'] == current['second_job_identity'] &&
           (current['dedupe_states'] as List<dynamic>).contains('completed')) {
         return 'processing.retry_reuses_completed_run';
-      }
-    case 'parent_sync':
-      final parent = current['parent'] as Map<String, dynamic>;
-      if (parent['core_id'] == null &&
-          current['parent_sync_result'] == 'skipped_unfiled_parent' &&
-          current['child_work_result'] == 'blocked_missing_parent_core_id') {
-        return 'sync.parent_child_deadlock';
       }
   }
   return null;

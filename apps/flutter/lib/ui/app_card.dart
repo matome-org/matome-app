@@ -4,13 +4,12 @@ import '../core/db/matome_card.dart';
 import '../core/db/recording_card.dart';
 import '../core/theme/app_theme.dart';
 import '../features/matome/matome_actions_menu.dart';
+import '../features/recordings/recording_ids.dart';
 import '../i18n/strings.g.dart';
 import 'app_button.dart';
 import 'avatar.dart';
 import 'loading_indicator.dart';
 import 'status_badge.dart';
-
-const _pendingUploadStatus = 'pending_upload';
 
 enum AppCardRecordingState { pendingUpload, processing, done, failed }
 
@@ -111,7 +110,7 @@ class AppCard extends StatelessWidget {
 
     final status = recording.processingStatus;
     if (status == 'failed') return AppCardRecordingState.failed;
-    if (status == _pendingUploadStatus) {
+    if (isUploadQueuePendingStatus(status)) {
       return AppCardRecordingState.pendingUpload;
     }
     if (status == 'processing' ||

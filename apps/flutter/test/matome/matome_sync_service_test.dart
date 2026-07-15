@@ -26,10 +26,13 @@ ApiClient _client() =>
     ApiClient(tokenStore: InMemoryTokenStore(), dio: Dio()..close());
 
 class FakeMatomesRepository extends MatomesRepository {
-  FakeMatomesRepository({this.remoteMatomes = const []})
-      : super(apiClient: _client());
+  FakeMatomesRepository({
+    this.remoteMatomes = const [],
+    this.createDelay = Duration.zero,
+  }) : super(apiClient: _client());
 
   List<Matome> remoteMatomes;
+  final Duration createDelay;
 
   int _nextId = 1000;
   final List<Map<String, Object?>> created = [];
@@ -78,11 +81,14 @@ class FakeMatomesRepository extends MatomesRepository {
   @override
   Future<Matome> createMatome({
     required String title,
-    required int workspaceId,
+    int? workspaceId,
     DateTime? happenedAt,
     String? description,
     String? aggregatedSummary,
   }) async {
+    if (createDelay > Duration.zero) {
+      await Future<void>.delayed(createDelay);
+    }
     final id = _nextId++;
     created.add({'title': title, 'workspace_id': workspaceId, 'id': id});
     return Matome(
@@ -115,7 +121,7 @@ class FakeMatomesRepository extends MatomesRepository {
 
 class FakeContactsRepository extends ContactsRepository {
   FakeContactsRepository({this.remoteContacts = const []})
-      : super(apiClient: _client());
+    : super(apiClient: _client());
 
   List<Contact> remoteContacts;
 
@@ -175,26 +181,34 @@ ProviderContainer _container(
   FakeContactsRepository? contacts,
   FakeRecordingsRepository? recordings,
 }) {
-  final container = ProviderContainer(overrides: [
-    appDatabaseProvider.overrideWithValue(db),
-    matomesRepositoryProvider.overrideWithValue(matomes ?? FakeMatomesRepository()),
-    contactsRepositoryProvider
-        .overrideWithValue(contacts ?? FakeContactsRepository()),
-    recordingsRepositoryProvider
-        .overrideWithValue(recordings ?? FakeRecordingsRepository()),
-    // pushFiled's egress gate (#1501) reads the caller via currentOwnerIdProvider.
-    // Override it so the test never builds the real auth chain (secure-storage
-    // platform channels). The id is the future-PDP input; spaceSync gates only on
-    // the space being cloud, so it changes no assertion here.
-    currentOwnerIdProvider.overrideWithValue('owner-1'),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      matomesRepositoryProvider.overrideWithValue(
+        matomes ?? FakeMatomesRepository(),
+      ),
+      contactsRepositoryProvider.overrideWithValue(
+        contacts ?? FakeContactsRepository(),
+      ),
+      recordingsRepositoryProvider.overrideWithValue(
+        recordings ?? FakeRecordingsRepository(),
+      ),
+      // pushFiled's egress gate (#1501) reads the caller via currentOwnerIdProvider.
+      // Override it so the test never builds the real auth chain (secure-storage
+      // platform channels). The id is the future-PDP input; spaceSync gates only on
+      // the space being cloud, so it changes no assertion here.
+      currentOwnerIdProvider.overrideWithValue('owner-1'),
+    ],
+  );
   return container;
 }
 
 /// Seed a Core-backed Space (a numeric workspace id is the "Core-backed"
 /// convention, mirroring the recordings sync). Returns the id as TEXT.
 Future<String> _seedCoreSpace(AppDatabase db, int coreId) async {
-  await db.into(db.workspaces).insert(
+  await db
+      .into(db.workspaces)
+      .insert(
         WorkspacesCompanion.insert(
           id: '$coreId',
           name: 'Space $coreId',
@@ -255,6 +269,25 @@ void main() {
     expect(row.id, 'mat_local_a'); // PK unchanged
   });
 
+  test('overlapping child triggers reconcile one parent only once', () async {
+    final space = await _seedCoreSpace(db, 42);
+    await _seedMatome(db, id: 'mat_local_race', spaceId: space);
+    final matomesRepo = FakeMatomesRepository(
+      createDelay: const Duration(milliseconds: 20),
+    );
+    final container = _container(db, matomes: matomesRepo);
+    addTearDown(container.dispose);
+    final sync = container.read(matomeSyncServiceProvider);
+
+    final ids = await Future.wait([
+      sync.reconcileParent('mat_local_race'),
+      sync.reconcileParent('mat_local_race'),
+    ]);
+
+    expect(ids, [1000, 1000]);
+    expect(matomesRepo.created, hasLength(1));
+  });
+
   test('an INBOX matome (spaceId null) is NEVER pushed', () async {
     await _seedMatome(db, id: 'mat_local_inbox', spaceId: null);
 
@@ -285,7 +318,7 @@ void main() {
     expect(matomesRepo.created, isEmpty); // already has a coreId → no re-create
   });
 
-  test('child-before-parent: a recording sends its matome_id only AFTER its '
+  test('parent-before-child: a recording sends its matome_id only AFTER its '
       'matome has a coreId', () async {
     final space = await _seedCoreSpace(db, 42);
     await _seedMatome(db, id: 'mat_local_c', spaceId: space, title: 'Parent');
@@ -306,8 +339,11 @@ void main() {
 
     final matomesRepo = FakeMatomesRepository();
     final recordingsRepo = FakeRecordingsRepository();
-    final container =
-        _container(db, matomes: matomesRepo, recordings: recordingsRepo);
+    final container = _container(
+      db,
+      matomes: matomesRepo,
+      recordings: recordingsRepo,
+    );
     addTearDown(container.dispose);
 
     await container.read(matomeSyncServiceProvider).pushFiled();
@@ -319,32 +355,34 @@ void main() {
     expect(recordingsRepo.patched.single['matome_id'], matomeCoreId);
   });
 
-  test('child-before-parent: a child with NO coreId does NOT send matome_id',
-      () async {
-    final space = await _seedCoreSpace(db, 42);
-    await _seedMatome(db, id: 'mat_local_d', spaceId: space);
+  test(
+    'parent-before-child: a child with NO coreId does NOT send matome_id',
+    () async {
+      final space = await _seedCoreSpace(db, 42);
+      await _seedMatome(db, id: 'mat_local_d', spaceId: space);
 
-    // A local-only child (coreId NULL) — not reconciled with Core yet.
-    await db.recordingsDao.upsertRecordingWithMatome(
-      RecordingsCompanion.insert(
-        id: 'rec_local_unsynced',
-        title: 'Unsynced child',
-        timestamp: '9:00 AM',
-        duration: '0:30',
-        audioFilePath: '/tmp/a.m4a',
-        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
-        matomeId: const Value('mat_local_d'),
-      ),
-    );
+      // A local-only child (coreId NULL) — not reconciled with Core yet.
+      await db.recordingsDao.upsertRecordingWithMatome(
+        RecordingsCompanion.insert(
+          id: 'rec_local_unsynced',
+          title: 'Unsynced child',
+          timestamp: '9:00 AM',
+          duration: '0:30',
+          audioFilePath: '/tmp/a.m4a',
+          createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+          matomeId: const Value('mat_local_d'),
+        ),
+      );
 
-    final recordingsRepo = FakeRecordingsRepository();
-    final container = _container(db, recordings: recordingsRepo);
-    addTearDown(container.dispose);
+      final recordingsRepo = FakeRecordingsRepository();
+      final container = _container(db, recordings: recordingsRepo);
+      addTearDown(container.dispose);
 
-    await container.read(matomeSyncServiceProvider).pushFiled();
+      await container.read(matomeSyncServiceProvider).pushFiled();
 
-    expect(recordingsRepo.patched, isEmpty); // no matome_id sent for it
-  });
+      expect(recordingsRepo.patched, isEmpty); // no matome_id sent for it
+    },
+  );
 
   test('contacts pushed: an untagged local contact is created on Core, its '
       'coreId reconciled, then attached', () async {
@@ -367,8 +405,11 @@ void main() {
 
     final matomesRepo = FakeMatomesRepository();
     final contactsRepo = FakeContactsRepository();
-    final container =
-        _container(db, matomes: matomesRepo, contacts: contactsRepo);
+    final container = _container(
+      db,
+      matomes: matomesRepo,
+      contacts: contactsRepo,
+    );
     addTearDown(container.dispose);
 
     await container.read(matomeSyncServiceProvider).pushFiled();
@@ -398,7 +439,9 @@ void main() {
     final container = _container(db, matomes: matomesRepo);
     addTearDown(container.dispose);
 
-    await container.read(matomeSyncServiceProvider).editMatome(
+    await container
+        .read(matomeSyncServiceProvider)
+        .editMatome(
           'mat_local_edit',
           title: '  New name  ',
           happenedAt: happenedAt,
@@ -418,22 +461,30 @@ void main() {
     expect(matomesRepo.updated.single['happened_at'], happenedAt);
   });
 
-  test('editMatome: an un-reconciled (coreId null) matome writes Drift but does '
-      'NOT call Core', () async {
-    await _seedMatome(db, id: 'mat_local_only', spaceId: null, title: 'Local');
+  test(
+    'editMatome: an un-reconciled (coreId null) matome writes Drift but does '
+    'NOT call Core',
+    () async {
+      await _seedMatome(
+        db,
+        id: 'mat_local_only',
+        spaceId: null,
+        title: 'Local',
+      );
 
-    final matomesRepo = FakeMatomesRepository();
-    final container = _container(db, matomes: matomesRepo);
-    addTearDown(container.dispose);
+      final matomesRepo = FakeMatomesRepository();
+      final container = _container(db, matomes: matomesRepo);
+      addTearDown(container.dispose);
 
-    await container
-        .read(matomeSyncServiceProvider)
-        .editMatome('mat_local_only', title: 'Renamed local');
+      await container
+          .read(matomeSyncServiceProvider)
+          .editMatome('mat_local_only', title: 'Renamed local');
 
-    final row = await db.matomesDao.getById('mat_local_only');
-    expect(row!.title, 'Renamed local'); // local write still happened
-    expect(matomesRepo.updated, isEmpty); // no coreId → nothing pushed
-  });
+      final row = await db.matomesDao.getById('mat_local_only');
+      expect(row!.title, 'Renamed local'); // local write still happened
+      expect(matomesRepo.updated, isEmpty); // no coreId → nothing pushed
+    },
+  );
 
   test('archiveMatome: local-first archive lands in Drift, then POSTs Core when '
       'the matome is reconciled', () async {
@@ -444,7 +495,9 @@ void main() {
     final container = _container(db, matomes: matomesRepo);
     addTearDown(container.dispose);
 
-    await container.read(matomeSyncServiceProvider).archiveMatome('mat_local_arch');
+    await container
+        .read(matomeSyncServiceProvider)
+        .archiveMatome('mat_local_arch');
 
     // Drift archived FIRST (local-first) — the matome leaves the lists locally.
     final row = await db.matomesDao.getById('mat_local_arch');
@@ -455,22 +508,25 @@ void main() {
     expect(matomesRepo.archived, [88]);
   });
 
-  test('archiveMatome: an un-reconciled (coreId null) matome archives Drift but '
-      'does NOT call Core', () async {
-    await _seedMatome(db, id: 'mat_local_inbox_arch', spaceId: null);
+  test(
+    'archiveMatome: an un-reconciled (coreId null) matome archives Drift but '
+    'does NOT call Core',
+    () async {
+      await _seedMatome(db, id: 'mat_local_inbox_arch', spaceId: null);
 
-    final matomesRepo = FakeMatomesRepository();
-    final container = _container(db, matomes: matomesRepo);
-    addTearDown(container.dispose);
+      final matomesRepo = FakeMatomesRepository();
+      final container = _container(db, matomes: matomesRepo);
+      addTearDown(container.dispose);
 
-    await container
-        .read(matomeSyncServiceProvider)
-        .archiveMatome('mat_local_inbox_arch');
+      await container
+          .read(matomeSyncServiceProvider)
+          .archiveMatome('mat_local_inbox_arch');
 
-    final row = await db.matomesDao.getById('mat_local_inbox_arch');
-    expect(row!.archivedAt, isNotNull); // local archive still happened
-    expect(matomesRepo.archived, isEmpty); // no coreId → nothing pushed
-  });
+      final row = await db.matomesDao.getById('mat_local_inbox_arch');
+      expect(row!.archivedAt, isNotNull); // local archive still happened
+      expect(matomesRepo.archived, isEmpty); // no coreId → nothing pushed
+    },
+  );
 
   test('restoreMatome: local-first restore clears Drift, then POSTs Core when '
       'reconciled', () async {
@@ -482,7 +538,9 @@ void main() {
     final container = _container(db, matomes: matomesRepo);
     addTearDown(container.dispose);
 
-    await container.read(matomeSyncServiceProvider).restoreMatome('mat_local_rest');
+    await container
+        .read(matomeSyncServiceProvider)
+        .restoreMatome('mat_local_rest');
 
     final row = await db.matomesDao.getById('mat_local_rest');
     expect(row!.archivedAt, isNull); // restored locally
@@ -498,8 +556,10 @@ void main() {
     // locally — but the Core POST never landed, so Core still has it active.
     await _seedMatome(db, id: 'mat_local_pull', spaceId: space, coreId: 13);
     await db.matomesDao.archive('mat_local_pull');
-    expect((await db.matomesDao.getById('mat_local_pull'))!.archivedAt,
-        isNotNull);
+    expect(
+      (await db.matomesDao.getById('mat_local_pull'))!.archivedAt,
+      isNotNull,
+    );
 
     // Core's default list returns the row as ACTIVE (archived_at = null),
     // because Core never received the archive.
@@ -557,8 +617,10 @@ void main() {
     final space = await _seedCoreSpace(db, 42);
     // Reconciled (coreId 15), filed, ACTIVE locally (e.g. just restored).
     await _seedMatome(db, id: 'mat_local_active', spaceId: space, coreId: 15);
-    expect((await db.matomesDao.getById('mat_local_active'))!.archivedAt,
-        isNull);
+    expect(
+      (await db.matomesDao.getById('mat_local_active'))!.archivedAt,
+      isNull,
+    );
 
     // Core returns it active. The guard only fires when the LOCAL row is
     // archived — an active local row adopts Core's active state verbatim.
@@ -571,27 +633,31 @@ void main() {
 
     await container.read(matomeSyncServiceProvider).pullMatomes();
 
-    expect((await db.matomesDao.getById('mat_local_active'))!.archivedAt,
-        isNull);
+    expect(
+      (await db.matomesDao.getById('mat_local_active'))!.archivedAt,
+      isNull,
+    );
   });
 
-  test('contacts upsert by coreId on pull — no duplicate row on re-sync',
-      () async {
-    final remote = [
-      Contact(id: 5, ownerId: '1', displayName: 'Ada', metadata: '{"e":"a"}'),
-    ];
-    final contactsRepo = FakeContactsRepository(remoteContacts: remote);
-    final container = _container(db, contacts: contactsRepo);
-    addTearDown(container.dispose);
+  test(
+    'contacts upsert by coreId on pull — no duplicate row on re-sync',
+    () async {
+      final remote = [
+        Contact(id: 5, ownerId: '1', displayName: 'Ada', metadata: '{"e":"a"}'),
+      ];
+      final contactsRepo = FakeContactsRepository(remoteContacts: remote);
+      final container = _container(db, contacts: contactsRepo);
+      addTearDown(container.dispose);
 
-    await container.read(matomeSyncServiceProvider).pullContacts();
-    await container.read(matomeSyncServiceProvider).pullContacts();
+      await container.read(matomeSyncServiceProvider).pullContacts();
+      await container.read(matomeSyncServiceProvider).pullContacts();
 
-    final all = await db.contactsDao.listContacts();
-    expect(all, hasLength(1)); // upsert by coreId — no dup
-    expect(all.single.coreId, 5);
-    expect(all.single.displayName, 'Ada');
-  });
+      final all = await db.contactsDao.listContacts();
+      expect(all, hasLength(1)); // upsert by coreId — no dup
+      expect(all.single.coreId, 5);
+      expect(all.single.displayName, 'Ada');
+    },
+  );
 
   test('merge-guards on a sparse pull preserve local aggregated_summary and '
       'spaceId', () async {
@@ -608,9 +674,7 @@ void main() {
 
     // Core list returns id 9 with NO aggregated_summary and NO workspace_id
     // (a sparse payload). The merge-guards must NOT wipe the local values.
-    final remote = [
-      Matome(id: 9, ownerId: '1', title: 'Has summary'),
-    ];
+    final remote = [Matome(id: 9, ownerId: '1', title: 'Has summary')];
     final matomesRepo = FakeMatomesRepository(remoteMatomes: remote);
     final container = _container(db, matomes: matomesRepo);
     addTearDown(container.dispose);
@@ -619,7 +683,10 @@ void main() {
 
     final row = await db.matomesDao.getById('mat_local_f');
     expect(row!.aggregatedSummary, 'good local rollup'); // preserved
-    expect(row.spaceId, space); // local filed Space preserved (not wiped to null)
+    expect(
+      row.spaceId,
+      space,
+    ); // local filed Space preserved (not wiped to null)
     // No duplicate row under PK '9'.
     expect(await db.matomesDao.getById('9'), isNull);
   });
@@ -660,34 +727,41 @@ void main() {
     expect(edges.single.contact.id, 'contact_local_keep');
   });
 
-  test('pull adds a remote contact edge idempotently (no duplicate on re-sync)',
-      () async {
-    final space = await _seedCoreSpace(db, 42);
-    await _seedMatome(db, id: 'mat_local_h', spaceId: space, coreId: 12);
+  test(
+    'pull adds a remote contact edge idempotently (no duplicate on re-sync)',
+    () async {
+      final space = await _seedCoreSpace(db, 42);
+      await _seedMatome(db, id: 'mat_local_h', spaceId: space, coreId: 12);
 
-    // Contacts are pulled first (id 5 → local row), then the matome whose edge
-    // references contact_id 5. The edge add is idempotent.
-    final contactsRepo = FakeContactsRepository(remoteContacts: [
-      Contact(id: 5, ownerId: '1', displayName: 'Ada'),
-    ]);
-    final matomesRepo = FakeMatomesRepository(remoteMatomes: [
-      Matome(
-        id: 12,
-        ownerId: '1',
-        title: 'Meeting',
-        workspaceId: 42,
-        contacts: const [MatomeContactEdge(contactId: 5, role: 'speaker')],
-      ),
-    ]);
-    final container =
-        _container(db, matomes: matomesRepo, contacts: contactsRepo);
-    addTearDown(container.dispose);
+      // Contacts are pulled first (id 5 → local row), then the matome whose edge
+      // references contact_id 5. The edge add is idempotent.
+      final contactsRepo = FakeContactsRepository(
+        remoteContacts: [Contact(id: 5, ownerId: '1', displayName: 'Ada')],
+      );
+      final matomesRepo = FakeMatomesRepository(
+        remoteMatomes: [
+          Matome(
+            id: 12,
+            ownerId: '1',
+            title: 'Meeting',
+            workspaceId: 42,
+            contacts: const [MatomeContactEdge(contactId: 5, role: 'speaker')],
+          ),
+        ],
+      );
+      final container = _container(
+        db,
+        matomes: matomesRepo,
+        contacts: contactsRepo,
+      );
+      addTearDown(container.dispose);
 
-    await container.read(matomeSyncServiceProvider).sync();
-    await container.read(matomeSyncServiceProvider).sync();
+      await container.read(matomeSyncServiceProvider).sync();
+      await container.read(matomeSyncServiceProvider).sync();
 
-    final edges = await db.contactsDao.listContactsForMatome('mat_local_h');
-    expect(edges, hasLength(1)); // idempotent add — no dup edge
-    expect(edges.single.role, 'speaker');
-  });
+      final edges = await db.contactsDao.listContactsForMatome('mat_local_h');
+      expect(edges, hasLength(1)); // idempotent add — no dup edge
+      expect(edges.single.role, 'speaker');
+    },
+  );
 }

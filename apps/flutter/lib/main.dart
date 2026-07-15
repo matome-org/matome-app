@@ -1,14 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
+import 'app/auth_state.dart';
 import 'core/audio/audio_desktop_init.dart';
+import 'core/config/endpoint_controller.dart';
 import 'core/i18n/locale_controller.dart';
 import 'core/observability/app_log.dart';
 import 'core/logging/log_redaction.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
+import 'features/recordings/upload_retry_service.dart';
 import 'i18n/strings.g.dart';
 
 void main() {
@@ -31,11 +36,50 @@ void main() {
 
 /// App root: boots Riverpod + slang, then renders the go_router shell with the
 /// Eva light/dark themes driven by the persisted theme controller.
-class MatomeApp extends ConsumerWidget {
+class MatomeApp extends ConsumerStatefulWidget {
   const MatomeApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MatomeApp> createState() => _MatomeAppState();
+}
+
+class _MatomeAppState extends ConsumerState<MatomeApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(ref.read(uploadRetryServiceProvider).start());
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ref.read(uploadRetryServiceProvider).drainNow());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<AuthState>(authStateProvider, (previous, next) {
+      if (next.isAuthenticated && !(previous?.isAuthenticated ?? false)) {
+        unawaited(ref.read(uploadRetryServiceProvider).drainNow());
+      }
+    });
+    ref.listen<String>(endpointConfigProvider, (previous, next) {
+      if (previous != null && previous != next) {
+        unawaited(ref.read(uploadRetryServiceProvider).drainNow());
+      }
+    });
+
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeControllerProvider);
     // Watch the locale so the whole app rebuilds on language switch.

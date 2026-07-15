@@ -124,7 +124,7 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
 
     assert detected == expected
 
-    assert Map.keys(detected) |> Enum.sort() == ~w(parent_sync pending_status retry)
+    assert Map.keys(detected) |> Enum.sort() == ~w(pending_status retry)
   end
 
   defp detect_violation(%{"id" => "pending_status", "current" => current}) do
@@ -141,14 +141,6 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
          current["first_job_identity"] == current["second_job_identity"] and
          "completed" in current["dedupe_states"] do
       "processing.retry_reuses_completed_run"
-    end
-  end
-
-  defp detect_violation(%{"id" => "parent_sync", "current" => current}) do
-    if is_nil(current["parent"]["core_id"]) and
-         current["parent_sync_result"] == "skipped_unfiled_parent" and
-         current["child_work_result"] == "blocked_missing_parent_core_id" do
-      "sync.parent_child_deadlock"
     end
   end
 

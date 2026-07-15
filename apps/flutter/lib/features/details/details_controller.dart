@@ -135,8 +135,9 @@ class DetailsController extends StateNotifier<DetailsState> {
   }) : _awaitTerminal = awaitResult,
        _mediaDekSource =
            mediaDekSource ??
-           (() =>
-               NativeDekProvisioner(FlutterSecureKeyStore.deviceKek()).obtainDek()),
+           (() => NativeDekProvisioner(
+             FlutterSecureKeyStore.deviceKek(),
+           ).obtainDek()),
        _playbackScratchDirSource =
            playbackScratchDirSource ?? defaultPlaybackScratchDir,
        super(DetailsState(id: id)) {
@@ -213,7 +214,7 @@ class DetailsController extends StateNotifier<DetailsState> {
     }
 
     final source = await _resolveAudioSource(row);
-    final pending = row.processingStatus == kProcessingStatusPendingUpload;
+    final pending = isUploadQueuePendingStatus(row.processingStatus);
     state = state.copyWith(
       row: row,
       audioSource: source,

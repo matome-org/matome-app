@@ -57,29 +57,33 @@ void main() {
     // parented to a matome that has already reconciled a Core id. Seed one — the
     // queue holds the row until reconcile, then creates the item under it.
     final matomeId = 'mat_local_$localId';
-    await db.into(db.matomes).insert(
-      MatomesCompanion.insert(
-        id: matomeId,
-        title: 'Memo',
-        happenedAt: now.millisecondsSinceEpoch,
-        createdAt: now.millisecondsSinceEpoch,
-        coreId: const Value(42),
+    await db
+        .into(db.matomes)
+        .insert(
+          MatomesCompanion.insert(
+            id: matomeId,
+            title: 'Memo',
+            happenedAt: now.millisecondsSinceEpoch,
+            createdAt: now.millisecondsSinceEpoch,
+            coreId: const Value(42),
+          ),
+        );
+    await db.recordingsDao.upsertRecording(
+      RecordingsCompanion(
+        id: Value(localId),
+        coreId: Value(coreId),
+        matomeId: Value(matomeId),
+        title: const Value('Memo'),
+        timestamp: const Value('1:00 PM'),
+        duration: const Value('34s'),
+        badge: const Value('Inbox'),
+        isProcessing: const Value(1),
+        audioFilePath: Value(audio.path),
+        createdAt: Value(now.millisecondsSinceEpoch),
+        mediaType: const Value('audio'),
+        processingStatus: const Value(kProcessingStatusPendingUpload),
       ),
     );
-    await db.recordingsDao.upsertRecording(RecordingsCompanion(
-      id: Value(localId),
-      coreId: Value(coreId),
-      matomeId: Value(matomeId),
-      title: const Value('Memo'),
-      timestamp: const Value('1:00 PM'),
-      duration: const Value('34s'),
-      badge: const Value('Inbox'),
-      isProcessing: const Value(1),
-      audioFilePath: Value(audio.path),
-      createdAt: Value(now.millisecondsSinceEpoch),
-      mediaType: const Value('audio'),
-      processingStatus: const Value(kProcessingStatusPendingUpload),
-    ));
     return (localId, audio);
   }
 
@@ -96,21 +100,22 @@ void main() {
     RecordingsRepository repo, {
     AudioCleanup? cleanupAudio,
   }) {
-    return ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-      uploadQueueProvider.overrideWith(
-        (ref) => UploadQueue(
-          ref,
-          awaitResult: pollAwaiter,
-          cleanupAudio: cleanupAudio ?? deleteAudioFile,
+    return ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        recordingsRepositoryProvider.overrideWithValue(repo),
+        uploadQueueProvider.overrideWith(
+          (ref) => UploadQueue(
+            ref,
+            awaitResult: pollAwaiter,
+            cleanupAudio: cleanupAudio ?? deleteAudioFile,
+          ),
         ),
-      ),
-    ]);
+      ],
+    );
   }
 
-  test(
-      'Core-down → row stays pending + audio kept → Core-up → drains → '
+  test('Core-down → row stays pending + audio kept → Core-up → drains → '
       'reconciled done → audio RETAINED (W2 #871 retention)', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
@@ -127,13 +132,16 @@ void main() {
     final (localId, audio) = await seedPendingRow(db, tmp);
     final queue = container.read(uploadQueueProvider);
 
-    // CORE DOWN: drain leaves the row pending_upload, coreId null, audio kept.
+    // CORE DOWN: drain persists an explicit durable block, coreId null, audio kept.
     repo.coreUp = false;
     await queue.drain();
 
     var row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.processingStatus, kProcessingStatusPendingUpload,
-        reason: 'Core-down keeps the row retriable');
+    expect(
+      row!.processingStatus,
+      kProcessingStatusBlockedOffline,
+      reason: 'Core-down keeps the row retriable with an explicit reason',
+    );
     expect(row.coreId, isNull, reason: 'no Core id minted while down');
     expect(await audio.exists(), isTrue, reason: 'audio kept while down');
     expect(repo.createCalls, 0, reason: 'create never succeeded while down');
@@ -143,63 +151,86 @@ void main() {
     await queue.drain();
 
     row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.coreId, repo.coreIdMinted, reason: 'coreId reconciled on drain');
+    expect(
+      row!.coreId,
+      repo.coreIdMinted,
+      reason: 'coreId reconciled on drain',
+    );
     expect(row.processingStatus, 'done');
     expect(row.isProcessing, 0);
     expect(row.summary, 'A memo');
-    expect(repo.lastClientId, localId,
-        reason: 'local row id is the Core client_id');
+    expect(
+      repo.lastClientId,
+      localId,
+      reason: 'local row id is the Core client_id',
+    );
     // W2 / #871 RETENTION (reverses #43 W4): reaching `done` must NOT delete the
     // local audio. `done` proves Core accepted the upload, not that the user can
     // play a cloud copy, so the local-first file is the source of truth and
     // persists until the user explicitly deletes the recording.
-    expect(await audio.exists(), isTrue,
-        reason: 'audio RETAINED after confirmed done (local-first; user-only delete)');
+    expect(
+      await audio.exists(),
+      isTrue,
+      reason:
+          'audio RETAINED after confirmed done (local-first; user-only delete)',
+    );
   });
 
-  test('failure path: terminal failure keeps the row + audio + reason',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
+  test(
+    'failure path: terminal failure keeps the row + audio + reason',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    final repo = _ToggleRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    )
-      ..coreUp = true
-      ..failProcessing = true; // GET returns status `failed`.
+      final repo =
+          _ToggleRepository(
+              apiClient: ApiClient(
+                tokenStore: InMemoryTokenStore(),
+                dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+              ),
+            )
+            ..coreUp = true
+            ..failProcessing = true; // GET returns status `failed`.
 
-    final container = containerFor(db, repo);
-    addTearDown(container.dispose);
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
 
-    final (localId, audio) = await seedPendingRow(db, tmp);
-    await container.read(uploadQueueProvider).drain();
+      final (localId, audio) = await seedPendingRow(db, tmp);
+      await container.read(uploadQueueProvider).drain();
 
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.processingStatus, 'failed', reason: 'terminal failure persists');
-    expect(row.coreId, repo.coreIdMinted, reason: 'create did happen');
-    expect(await audio.exists(), isTrue,
-        reason: 'audio KEPT on failure for inspection / retry');
-  });
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(
+        row!.processingStatus,
+        'failed',
+        reason: 'terminal failure persists',
+      );
+      expect(row.coreId, repo.coreIdMinted, reason: 'create did happen');
+      expect(
+        await audio.exists(),
+        isTrue,
+        reason: 'audio KEPT on failure for inspection / retry',
+      );
+    },
+  );
 
-  test('failure path (transport throw mid-process): keeps row + audio, notes '
-      'SANITIZED to generic (unknown-code ApiException is NOT leaked verbatim)',
-      () async {
+  test('transport failure mid-process stays durably blocked without leaking '
+      'the ApiException message into notes', () async {
     LocaleSettings.setLocaleSync(AppLocale.en);
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
-    final repo = _ToggleRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    )
-      ..coreUp = true
-      // No `code` ⇒ NOT whitelisted ⇒ must collapse to the generic string.
-      ..throwOnEnqueue = const ApiException('transcription backend exploded');
+    final repo =
+        _ToggleRepository(
+            apiClient: ApiClient(
+              tokenStore: InMemoryTokenStore(),
+              dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+            ),
+          )
+          ..coreUp = true
+          // No `code` ⇒ NOT whitelisted ⇒ must collapse to the generic string.
+          ..throwOnEnqueue = const ApiException(
+            'transcription backend exploded',
+          );
 
     final container = containerFor(db, repo);
     addTearDown(container.dispose);
@@ -208,128 +239,235 @@ void main() {
     await container.read(uploadQueueProvider).drain();
 
     final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.processingStatus, 'failed');
-    expect(row.notes, t.cardStatus.failed,
-        reason: 'unknown-code error → generic localized reason in notes');
-    expect(row.notes, isNot(contains('transcription backend exploded')),
-        reason: 'raw transport message must never reach the Core-synced notes');
+    expect(row!.processingStatus, kProcessingStatusBlockedOffline);
+    expect(
+      row.notes,
+      isNull,
+      reason: 'a retryable transport block is status, not user notes',
+    );
+    expect(
+      row.notes,
+      isNot(contains('transcription backend exploded')),
+      reason: 'raw transport message must never reach the Core-synced notes',
+    );
     expect(await audio.exists(), isTrue, reason: 'audio kept on failure');
   });
 
-  test('failure path: a KNOWN error code is whitelisted through to notes',
-      () async {
-    LocaleSettings.setLocaleSync(AppLocale.en);
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
+  test(
+    'server/upload failure remains durably blocked for a fresh-presign retry',
+    () async {
+      LocaleSettings.setLocaleSync(AppLocale.en);
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    final repo = _ToggleRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    )
-      ..coreUp = true
-      ..throwOnEnqueue = const ApiException(
-        'Failed to enqueue processing.',
-        statusCode: 500,
-        code: 'upload_failed', // a whitelisted, app-authored code
+      final repo =
+          _ToggleRepository(
+              apiClient: ApiClient(
+                tokenStore: InMemoryTokenStore(),
+                dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+              ),
+            )
+            ..coreUp = true
+            ..throwOnEnqueue = const ApiException(
+              'Failed to enqueue processing.',
+              statusCode: 500,
+              code: 'upload_failed', // a whitelisted, app-authored code
+            );
+
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
+
+      final (localId, _) = await seedPendingRow(db, tmp);
+      await container.read(uploadQueueProvider).drain();
+
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(row!.processingStatus, kProcessingStatusBlockedCore);
+      expect(
+        row.notes,
+        isNull,
+        reason: 'retry orchestration never overwrites user-authored notes',
+      );
+    },
+  );
+
+  test(
+    'failure path: a non-ApiException is sanitized (never toString)',
+    () async {
+      LocaleSettings.setLocaleSync(AppLocale.en);
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+
+      final repo =
+          _ToggleRepository(
+              apiClient: ApiClient(
+                tokenStore: InMemoryTokenStore(),
+                dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+              ),
+            )
+            ..coreUp = true
+            // A raw StateError carries a sensitive .toString() that must NOT leak.
+            ..throwRawOnEnqueue = StateError(
+              'secret host 10.0.0.5:7001 internal trace',
+            );
+
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
+
+      final (localId, _) = await seedPendingRow(db, tmp);
+      await container.read(uploadQueueProvider).drain();
+
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(row!.processingStatus, 'failed');
+      expect(
+        row.notes,
+        t.cardStatus.failed,
+        reason: 'non-ApiException → generic reason, not error.toString()',
+      );
+      expect(
+        row.notes,
+        isNot(contains('10.0.0.5')),
+        reason: 'raw toString() detail must never reach notes',
+      );
+    },
+  );
+
+  test(
+    'restart after item reconcile replays idempotent create for a fresh presign',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+
+      final repo = _ToggleRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      )..coreUp = true;
+
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
+
+      // Row already reconciled a coreId (a prior attempt created on Core but the
+      // upload/await didn't finish) — but is STILL pending_upload.
+      final (localId, _) = await seedPendingRow(
+        db,
+        tmp,
+        coreId: repo.coreIdMinted,
+      );
+      await container.read(uploadQueueProvider).drainRow(localId);
+
+      expect(
+        repo.createCalls,
+        1,
+        reason: '#2033 replay returns the same item plus a fresh presign',
+      );
+      expect(repo.lastClientId, localId);
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(
+        row!.coreId,
+        repo.coreIdMinted,
+        reason: 'keeps the existing coreId',
+      );
+      expect(row.processingStatus, 'done');
+    },
+  );
+
+  test(
+    'single-flight: concurrent drains of the same row create only once',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+
+      final repo =
+          _ToggleRepository(
+              apiClient: ApiClient(
+                tokenStore: InMemoryTokenStore(),
+                dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+              ),
+            )
+            ..coreUp = true
+            ..createDelay = const Duration(milliseconds: 30);
+
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
+
+      final (localId, _) = await seedPendingRow(db, tmp);
+      final queue = container.read(uploadQueueProvider);
+
+      // Fire two drains for the same row at once — the second must no-op.
+      await Future.wait([queue.drainRow(localId), queue.drainRow(localId)]);
+
+      expect(repo.createCalls, 1, reason: 'single-flight guards the same row');
+    },
+  );
+
+  test(
+    'signed-out work persists an explicit block and resumes after auth',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repo = _ToggleRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      )..unauthorized = true;
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
+      final (localId, audio) = await seedPendingRow(db, tmp);
+
+      await container.read(uploadQueueProvider).drain();
+
+      var row = await db.recordingsDao.getRecordingById(localId);
+      expect(row!.processingStatus, kProcessingStatusBlockedSignedOut);
+      expect(row.coreId, isNull);
+      expect(await audio.exists(), isTrue);
+
+      repo.unauthorized = false;
+      await container.read(uploadQueueProvider).drain();
+
+      row = await db.recordingsDao.getRecordingById(localId);
+      expect(row!.processingStatus, 'done');
+      expect(row.coreId, repo.coreIdMinted);
+    },
+  );
+
+  test(
+    'app restart resumes a local processing row from idempotent create',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repo = _ToggleRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
+      final (localId, _) = await seedPendingRow(
+        db,
+        tmp,
+        coreId: repo.coreIdMinted,
+      );
+      await db.recordingsDao.updateRecording(
+        localId,
+        const RecordingsCompanion(
+          processingStatus: Value('processing'),
+          isProcessing: Value(1),
+        ),
       );
 
-    final container = containerFor(db, repo);
-    addTearDown(container.dispose);
+      // A fresh container models a process restart after Core id reconciliation.
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
+      await container.read(uploadQueueProvider).drain();
 
-    final (localId, _) = await seedPendingRow(db, tmp);
-    await container.read(uploadQueueProvider).drain();
-
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.processingStatus, 'failed');
-    expect(row.notes, 'Failed to enqueue processing.',
-        reason: 'curated message for a known code is allowed through');
-  });
-
-  test('failure path: a non-ApiException is sanitized (never toString)',
-      () async {
-    LocaleSettings.setLocaleSync(AppLocale.en);
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-
-    final repo = _ToggleRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    )
-      ..coreUp = true
-      // A raw StateError carries a sensitive .toString() that must NOT leak.
-      ..throwRawOnEnqueue =
-          StateError('secret host 10.0.0.5:7001 internal trace');
-
-    final container = containerFor(db, repo);
-    addTearDown(container.dispose);
-
-    final (localId, _) = await seedPendingRow(db, tmp);
-    await container.read(uploadQueueProvider).drain();
-
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.processingStatus, 'failed');
-    expect(row.notes, t.cardStatus.failed,
-        reason: 'non-ApiException → generic reason, not error.toString()');
-    expect(row.notes, isNot(contains('10.0.0.5')),
-        reason: 'raw toString() detail must never reach notes');
-  });
-
-  test('idempotency: no double-create when the row already has a coreId',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-
-    final repo = _ToggleRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    )..coreUp = true;
-
-    final container = containerFor(db, repo);
-    addTearDown(container.dispose);
-
-    // Row already reconciled a coreId (a prior attempt created on Core but the
-    // upload/await didn't finish) — but is STILL pending_upload.
-    final (localId, _) = await seedPendingRow(db, tmp, coreId: 4242);
-    await container.read(uploadQueueProvider).drainRow(localId);
-
-    expect(repo.createCalls, 0,
-        reason: 'a row with a coreId must NEVER be re-created on Core');
-    // It resumes by fetching the existing Core recording and resolving it.
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.coreId, 4242, reason: 'keeps the existing coreId');
-  });
-
-  test('single-flight: concurrent drains of the same row create only once',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-
-    final repo = _ToggleRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    )
-      ..coreUp = true
-      ..createDelay = const Duration(milliseconds: 30);
-
-    final container = containerFor(db, repo);
-    addTearDown(container.dispose);
-
-    final (localId, _) = await seedPendingRow(db, tmp);
-    final queue = container.read(uploadQueueProvider);
-
-    // Fire two drains for the same row at once — the second must no-op.
-    await Future.wait([queue.drainRow(localId), queue.drainRow(localId)]);
-
-    expect(repo.createCalls, 1, reason: 'single-flight guards the same row');
-  });
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(repo.createCalls, 1);
+      expect(repo.lastClientId, localId);
+      expect(row!.coreId, repo.coreIdMinted);
+      expect(row.processingStatus, 'done');
+    },
+  );
 }
 
 /// A repository whose Core reachability + processing outcome are toggleable, so
@@ -339,6 +477,7 @@ class _ToggleRepository extends RecordingsRepository {
   _ToggleRepository({required super.apiClient});
 
   bool coreUp = true;
+  bool unauthorized = false;
   bool failProcessing = false;
   ApiException? throwOnEnqueue;
   Object? throwRawOnEnqueue;
@@ -371,6 +510,13 @@ class _ToggleRepository extends RecordingsRepository {
     int? contentLength,
   }) async {
     if (createDelay > Duration.zero) await Future<void>.delayed(createDelay);
+    if (unauthorized) {
+      throw const ApiException(
+        'Session expired.',
+        statusCode: 401,
+        code: 'unauthorized',
+      );
+    }
     if (!coreUp) throw const ApiException('Core unreachable');
     createCalls++;
     lastClientId = clientId;

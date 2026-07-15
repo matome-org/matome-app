@@ -342,6 +342,7 @@ Plan #102 leaves **seams, not features**, so the deferred work plugs in without 
 - **Item / recording** — a child of a Matome (audio / meeting / image), or a loose/directly-filed file.
 - **Loose item** — no matome and no space → Inbox, never syncs.
 - **Draft matome** — a matome with no space → Inbox, unsynced until filed.
+- **W0 Inbox-parent exception** — during the legacy upload-queue migration, a draft Matome may be reconciled solely as the required Core parent of durable child upload work. Loose items and local-space content remain on-device; the canonical `work_queue` cutover removes this compatibility path.
 - **Inbox** — the VIEW of everything whose effective space is NULL. (Banned synonym: **"unfiled"**.)
 - **Local / Cloud space** — `is_local` true/false; sync ⟺ effective space is a cloud space.
 - **Capture** — recording audio or picking a file on the client.

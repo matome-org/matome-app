@@ -1,0 +1,186 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:matome_flutter/core/db/app_database.dart';
+import 'package:matome_flutter/core/http/api_client.dart';
+import 'package:matome_flutter/core/http/token_store.dart';
+import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/features/files/files_providers.dart';
+import 'package:matome_flutter/features/matome/matome.dart';
+import 'package:matome_flutter/features/matome/matomes_repository.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
+import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
+import 'package:matome_flutter/features/recordings/recordings_repository.dart';
+import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
+import 'package:matome_flutter/features/recordings/upload_queue.dart';
+
+void main() {
+  test('drain reconciles an unreconciled parent before its child', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final temp = await Directory.systemTemp.createTemp('parent_reconcile_');
+    addTearDown(() => temp.delete(recursive: true));
+
+    await db
+        .into(db.workspaces)
+        .insert(
+          WorkspacesCompanion.insert(
+            id: '42',
+            name: 'Cloud',
+            createdAt: 1,
+            isLocal: const Value(0),
+          ),
+        );
+    await db
+        .into(db.matomes)
+        .insert(
+          MatomesCompanion.insert(
+            id: 'mat_local_parent',
+            title: 'Parent',
+            happenedAt: 1,
+            createdAt: 1,
+            spaceId: const Value('42'),
+          ),
+        );
+    final media = File('${temp.path}/child.m4a');
+    await media.writeAsBytes(const [1, 2, 3]);
+    await db.recordingsDao.insertRecording(
+      RecordingsCompanion.insert(
+        id: 'rec_local_child',
+        title: 'Child',
+        timestamp: 'now',
+        duration: '1s',
+        audioFilePath: media.path,
+        createdAt: 1,
+        matomeId: const Value('mat_local_parent'),
+        processingStatus: const Value('pending_upload'),
+      ),
+    );
+
+    final calls = <String>[];
+    final tokenStore = InMemoryTokenStore();
+    await tokenStore.saveTokens(accessToken: 'test-token');
+    final client = ApiClient(
+      tokenStore: tokenStore,
+      dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+    );
+    final matomes = _ParentRepository(apiClient: client, calls: calls);
+    final recordings = _ChildRepository(apiClient: client, calls: calls);
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        tokenStoreProvider.overrideWithValue(tokenStore),
+        currentOwnerIdProvider.overrideWithValue('owner-1'),
+        matomesRepositoryProvider.overrideWithValue(matomes),
+        recordingsRepositoryProvider.overrideWithValue(recordings),
+        uploadQueueProvider.overrideWith(
+          (ref) => UploadQueue(ref, awaitResult: _doneAwaiter),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(uploadQueueProvider).drain();
+
+    expect(calls, ['parent', 'child', 'upload', 'enqueue']);
+    expect(
+      (await db.matomesDao.getById('mat_local_parent'))!.coreId,
+      matomes.coreId,
+    );
+    final child = await db.recordingsDao.getRecordingById('rec_local_child');
+    expect(child!.coreId, recordings.coreId);
+    expect(child.processingStatus, 'done');
+  });
+}
+
+Future<RecordingResult> _doneAwaiter({
+  required Recording recording,
+  required Future<Recording?> Function() poll,
+  required Ref ref,
+}) async => RecordingResult.done(
+  Recording(
+    id: recording.id,
+    ownerId: 'owner-1',
+    title: recording.title,
+    status: RecordingStatus.done,
+  ),
+);
+
+class _ParentRepository extends MatomesRepository {
+  _ParentRepository({required super.apiClient, required this.calls});
+
+  final List<String> calls;
+  final int coreId = 101;
+
+  @override
+  Future<Matome> createMatome({
+    required String title,
+    int? workspaceId,
+    DateTime? happenedAt,
+    String? description,
+    String? aggregatedSummary,
+  }) async {
+    calls.add('parent');
+    return Matome(
+      id: coreId,
+      ownerId: 'owner-1',
+      title: title,
+      workspaceId: workspaceId,
+      happenedAt: happenedAt,
+    );
+  }
+}
+
+class _ChildRepository extends RecordingsRepository {
+  _ChildRepository({required super.apiClient, required this.calls});
+
+  final List<String> calls;
+  final int coreId = 202;
+
+  Recording _recording(RecordingStatus status) =>
+      Recording(id: coreId, ownerId: 'owner-1', title: 'Child', status: status);
+
+  @override
+  Future<List<Recording>> fetchRecordings() async => const [];
+
+  @override
+  Future<RecordingCreateResult> createItemRecording({
+    required String title,
+    required int matomeId,
+    required String clientId,
+    int? durationSeconds,
+    String? badge,
+    String mediaType = 'audio',
+    int? workspaceId,
+    int? contentLength,
+  }) async {
+    calls.add('child');
+    expect(matomeId, 101);
+    expect(clientId, 'rec_local_child');
+    return RecordingCreateResult(
+      recording: _recording(RecordingStatus.pending),
+      upload: const UploadDescriptor(
+        method: 'PUT',
+        url: 'http://127.0.0.1:9/upload',
+        storageKey: 'child',
+        expiresIn: 900,
+      ),
+    );
+  }
+
+  @override
+  Future<void> uploadFile(UploadDescriptor upload, File file) async {
+    calls.add('upload');
+  }
+
+  @override
+  Future<Recording> enqueueProcessing(int id) async {
+    calls.add('enqueue');
+    return _recording(RecordingStatus.processing);
+  }
+}

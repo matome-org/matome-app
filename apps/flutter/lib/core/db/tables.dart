@@ -183,10 +183,10 @@ class Recordings extends Table {
 /// Matome with a single item.
 ///
 /// Local-first lifecycle (.docs/internal/architecture.md §11 (D4)): a Matome is minted `mat_local_<uuid>` and
-/// stays Core-less (`coreId` NULL) while in the Inbox (`spaceId == null` —
-/// untriaged, local-only, NOT synced). `coreId` is assigned on first sync,
-/// which only happens once the Matome is filed into a (synced) Space. This
-/// mirrors the proven `recording_ids.dart` / m005 reconciliation pattern.
+/// starts Core-less (`coreId` NULL). Ordinary list sync is filed-space scoped;
+/// W0 queue orchestration may also reconcile an Inbox Matome when durable child
+/// work depends on its Core id. This mirrors the proven `recording_ids.dart` /
+/// m005 reconciliation pattern until W2 replaces the legacy queue/schema.
 ///
 /// `space_id` reuses the existing `workspaces` table (the Space rename is
 /// logical — .docs/internal/architecture.md §11 (D3)). NULL ⟺ Inbox.

@@ -25,6 +25,7 @@ import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import 'audio_recording_service_test.dart' show FakeRecorderBackend;
+import '../support/fake_parent_sync.dart';
 
 /// Local-first-spaces #102 W2 — AUDIO RECORDINGS land LOOSE behind the flag.
 ///
@@ -97,8 +98,10 @@ void main() {
 
   /// Drives a real recorder session start→pause→resume→finish so the finish
   /// path under test is the production [RecordingFinisher.finish].
-  Future<String> finishASession(ProviderContainer container,
-      {String title = 'Memo'}) async {
+  Future<String> finishASession(
+    ProviderContainer container, {
+    String title = 'Memo',
+  }) async {
     final controller = container.read(recordingControllerProvider.notifier);
     await controller.start();
     await controller.pause();
@@ -124,11 +127,14 @@ void main() {
           ),
         );
 
-        final container = ProviderContainer(overrides: [
-          appDatabaseProvider.overrideWithValue(db),
-          audioRecordingServiceProvider.overrideWithValue(service),
-          recordingsRepositoryProvider.overrideWithValue(repo),
-        ]);
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            testParentSyncOverride(),
+            audioRecordingServiceProvider.overrideWithValue(service),
+            recordingsRepositoryProvider.overrideWithValue(repo),
+          ],
+        );
         addTearDown(container.dispose);
 
         final localId = await finishASession(container, title: 'Standup');
@@ -137,15 +143,20 @@ void main() {
         expect(row, isNotNull);
         // LOOSE: no matome, no space. Its effective space is therefore NULL ⇒
         // Inbox (INBOX ⟺ effectiveSpace == NULL, spec R1.3).
-        expect(row!.matomeId, isNull,
-            reason: 'flag ON: a finished recording must NOT mint a matome');
-        expect(row.workspaceId, isNull,
-            reason: 'flag ON: a finished recording is loose, no space filed');
+        expect(
+          row!.matomeId,
+          isNull,
+          reason: 'flag ON: a finished recording must NOT mint a matome',
+        );
+        expect(
+          row.workspaceId,
+          isNull,
+          reason: 'flag ON: a finished recording is loose, no space filed',
+        );
 
         // No Matome row was created at all (the m007 forced-mint is repealed).
         final matomes = await db.matomesDao.listMatomes();
-        expect(matomes, isEmpty,
-            reason: 'a loose recording mints NO Matome');
+        expect(matomes, isEmpty, reason: 'a loose recording mints NO Matome');
 
         // Surfaces in the Inbox view (workspaceId IS NULL).
         final items = container.read(inboxControllerProvider).requireValue;
@@ -169,11 +180,14 @@ void main() {
           ),
         );
 
-        final container = ProviderContainer(overrides: [
-          appDatabaseProvider.overrideWithValue(db),
-          audioRecordingServiceProvider.overrideWithValue(service),
-          recordingsRepositoryProvider.overrideWithValue(repo),
-        ]);
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            testParentSyncOverride(),
+            audioRecordingServiceProvider.overrideWithValue(service),
+            recordingsRepositoryProvider.overrideWithValue(repo),
+          ],
+        );
         addTearDown(container.dispose);
 
         final localId = await finishASession(container);
@@ -181,12 +195,18 @@ void main() {
         // The PK is the LOCAL uuid id, never the Core id — so making it loose
         // cannot clash with the #43 PK==Core-id path (there is no Core id at
         // the PK). The Core id, when it arrives, lives in `coreId`.
-        expect(isLocalRecordingId(localId), isTrue,
-            reason: 'finish returns a local id; PK is never the Core id (#43)');
+        expect(
+          isLocalRecordingId(localId),
+          isTrue,
+          reason: 'finish returns a local id; PK is never the Core id (#43)',
+        );
         final row = await db.recordingsDao.getRecordingById(localId);
         expect(row!.id, localId);
-        expect(row.coreId, isNull,
-            reason: 'loose insert leaves coreId NULL for the queue to reconcile');
+        expect(
+          row.coreId,
+          isNull,
+          reason: 'loose insert leaves coreId NULL for the queue to reconcile',
+        );
 
         // A by-coreId lookup must not crash and must find nothing yet (the
         // tolerate-duplicates query, d8cc85d, sees no row for an unminted id).
@@ -213,18 +233,21 @@ void main() {
           ),
         );
 
-        final container = ProviderContainer(overrides: [
-          appDatabaseProvider.overrideWithValue(db),
-          audioRecordingServiceProvider.overrideWithValue(service),
-          recordingsRepositoryProvider.overrideWithValue(repo),
-          uploadQueueProvider.overrideWith(
-            (ref) => UploadQueue(
-              ref,
-              awaitResult: _pollFallbackAwaiter,
-              cleanupAudio: (_) async {},
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            testParentSyncOverride(),
+            audioRecordingServiceProvider.overrideWithValue(service),
+            recordingsRepositoryProvider.overrideWithValue(repo),
+            uploadQueueProvider.overrideWith(
+              (ref) => UploadQueue(
+                ref,
+                awaitResult: _pollFallbackAwaiter,
+                cleanupAudio: (_) async {},
+              ),
             ),
-          ),
-        ]);
+          ],
+        );
         addTearDown(container.dispose);
 
         final localId = await finishASession(container, title: 'Synced');
@@ -232,87 +255,105 @@ void main() {
         final row = await db.recordingsDao.getRecordingById(localId);
         expect(row, isNotNull);
         // Loose membership: capture is decoupled from organization.
-        expect(row!.matomeId, isNull,
-            reason: 'a finished recording lands loose (no matome minted)');
+        expect(
+          row!.matomeId,
+          isNull,
+          reason: 'a finished recording lands loose (no matome minted)',
+        );
         expect(row.workspaceId, isNull);
         // W4 DATA-EGRESS GATE (#1498 / spec R2): the effective space is NULL
         // (Inbox), so the inline `drainRow` in InboxUploader.upload is HELD —
         // the loose item NEVER egresses to Core even though Core is reachable.
         expect(row.id, localId, reason: 'local-PK row is intact');
-        expect(row.coreId, isNull,
-            reason:
-                'HELD by the gate: a loose (Inbox) item never reconciles a '
-                'coreId — nothing-in-inbox-uploads (#1498)');
-        expect(row.processingStatus, kProcessingStatusPendingUpload,
-            reason: 'held rows stay retriable; they drain only once filed into '
-                'a cloud space');
+        expect(
+          row.coreId,
+          isNull,
+          reason:
+              'HELD by the gate: a loose (Inbox) item never reconciles a '
+              'coreId — nothing-in-inbox-uploads (#1498)',
+        );
+        expect(
+          row.processingStatus,
+          kProcessingStatusBlockedParent,
+          reason: 'a loose row records that parent work does not exist yet',
+        );
         // No row was created on Core, so no by-coreId row exists (no dup, and
         // no leak): the loose item produced ZERO Core state.
         final byCore = await db.recordingsDao.recordingByCoreId(777);
-        expect(byCore, isNull,
-            reason: 'a held loose item creates NO Core row (zero egress)');
+        expect(
+          byCore,
+          isNull,
+          reason: 'a held loose item creates NO Core row (zero egress)',
+        );
       },
       skip: _flagOn ? false : 'ON-only lane',
     );
   });
 
   group('lane: ff.localFirstSpaces=false (OFF / shipped reality)', () {
-    test(
-      'a finished recording is UNCHANGED — a fresh Matome is minted '
-      '(m007 forced-Matome invariant, architecture.md §11 D3), the recording '
-      'is an Item of it',
-      () async {
-        final db = AppDatabase.forTesting(NativeDatabase.memory());
-        addTearDown(db.close);
+    test('a finished recording is UNCHANGED — a fresh Matome is minted '
+        '(m007 forced-Matome invariant, architecture.md §11 D3), the recording '
+        'is an Item of it', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-        final service = svc(db);
-        final repo = _CoreDownRepository(
-          apiClient: ApiClient(
-            tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-          ),
-        );
+      final service = svc(db);
+      final repo = _CoreDownRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
 
-        final container = ProviderContainer(overrides: [
+      final container = ProviderContainer(
+        overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          testParentSyncOverride(),
           audioRecordingServiceProvider.overrideWithValue(service),
           recordingsRepositoryProvider.overrideWithValue(repo),
-        ]);
-        addTearDown(container.dispose);
+        ],
+      );
+      addTearDown(container.dispose);
 
-        final localId = await finishASession(container, title: 'Standup');
+      final localId = await finishASession(container, title: 'Standup');
 
-        final row = await db.recordingsDao.getRecordingById(localId);
-        expect(row, isNotNull);
-        // OFF: the forced-mint invariant holds — a Matome was minted and the
-        // recording points at it.
-        expect(row!.matomeId, isNotNull,
-            reason: 'flag OFF: a finished recording still mints a Matome');
-        // Inbox capture → Inbox Matome: the minted matome has no space.
-        expect(row.workspaceId, isNull);
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(row, isNotNull);
+      // OFF: the forced-mint invariant holds — a Matome was minted and the
+      // recording points at it.
+      expect(
+        row!.matomeId,
+        isNotNull,
+        reason: 'flag OFF: a finished recording still mints a Matome',
+      );
+      // Inbox capture → Inbox Matome: the minted matome has no space.
+      expect(row.workspaceId, isNull);
 
-        final matomes = await db.matomesDao.listMatomes();
-        expect(matomes, hasLength(1),
-            reason: 'flag OFF mints exactly one Matome per recording');
-        expect(matomes.single.id, row.matomeId);
+      final matomes = await db.matomesDao.listMatomes();
+      expect(
+        matomes,
+        hasLength(1),
+        reason: 'flag OFF mints exactly one Matome per recording',
+      );
+      expect(matomes.single.id, row.matomeId);
 
-        // No id regression on OFF either: PK is the local id, coreId NULL
-        // (Core down) for the queue to reconcile.
-        expect(isLocalRecordingId(localId), isTrue);
-        expect(row.coreId, isNull);
-      },
-      skip: _flagOn ? 'OFF-only lane' : false,
-    );
+      // No id regression on OFF either: PK is the local id, coreId NULL
+      // (Core down) for the queue to reconcile.
+      expect(isLocalRecordingId(localId), isTrue);
+      expect(row.coreId, isNull);
+    }, skip: _flagOn ? 'OFF-only lane' : false);
   });
 }
 
 /// Stubbed Core that drives create → process → done so the queue reconciles a
 /// coreId (777) onto the local-PK row.
 Dio _stubbedDio() {
-  final dio = Dio(BaseOptions(
-    baseUrl: 'http://localhost:7001',
-    validateStatus: (s) => s != null && s < 500,
-  ));
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: 'http://localhost:7001',
+      validateStatus: (s) => s != null && s < 500,
+    ),
+  );
   final adapter = DioAdapter(dio: dio);
   adapter.onPost(
     '/api/recordings',
@@ -360,8 +401,10 @@ class _CoreDownRepository extends RecordingsRepository {
   _CoreDownRepository({required super.apiClient});
 
   @override
-  Future<RecordingCreateResult> createRecording({
+  Future<RecordingCreateResult> createItemRecording({
     required String title,
+    required int matomeId,
+    required String clientId,
     int? durationSeconds,
     String? badge,
     String mediaType = 'audio',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_theme.dart';
+import '../features/recordings/recording_ids.dart';
 import '../i18n/strings.g.dart';
 
 enum SyncState { onDevice, cloud }
@@ -56,7 +57,8 @@ class StatusBadge extends StatelessWidget {
 
   SyncState get syncState {
     final status = processingStatus;
-    if (status == 'pending_upload' || status == 'failed') {
+    if ((status != null && isUploadQueuePendingStatus(status)) ||
+        status == 'failed') {
       return SyncState.onDevice;
     }
     return coreId != null ? SyncState.cloud : SyncState.onDevice;

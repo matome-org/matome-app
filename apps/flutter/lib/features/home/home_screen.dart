@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,7 +26,6 @@ import 'loose_inbox_controller.dart';
 import 'loose_inbox_section.dart';
 import 'matome_inbox_controller.dart';
 import 'matome_inbox_grouping.dart';
-import '../recordings/upload_retry_service.dart';
 
 /// Width past which we treat the viewport as "wide" (desktop / web) and
 /// constrain the content column instead of letting it stretch edge-to-edge.
@@ -103,17 +100,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    // App-start trigger (plan #43, W4): kick the auto-retry queue so any
-    // `pending_upload` rows left by a prior session (Core was unreachable) drain
-    // now, and start the connectivity-regained watcher. Best-effort; idempotent.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) ref.read(uploadRetryServiceProvider).start();
-    });
-  }
 
   @override
   void dispose() {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/feature_flags.dart';
@@ -15,11 +16,11 @@ import '../../core/providers.dart';
 import '../../i18n/strings.g.dart';
 import '../home/inbox_controller.dart';
 import '../home/inbox_upload.dart';
+import '../matome/matome_sync_service.dart';
 import '../spaces/current_caller.dart';
 import '../spaces/effective_space.dart';
 import '../spaces/space_ref_mapping.dart';
 import '../spaces/sync_policy.dart';
-import 'recording.dart';
 import 'recording_ids.dart';
 import 'recordings_repository.dart';
 import 'upload_descriptor.dart';
@@ -58,19 +59,17 @@ Future<void> deleteAudioFile(String audioFilePath) async {
   }
 }
 
-/// Async, failure-tolerant uploader that drains `pending_upload` recording rows
-/// (plan #43, W4). This lifts the W2 inline `_bestEffortCore` best-effort
-/// handoff into a reusable, row-driven, single-flight service so it can run on
-/// three triggers — app start, after a finish(), and on connectivity regained —
-/// rather than only once inline at upload time.
+/// Async, failure-tolerant uploader that drains legacy upload-work recording
+/// rows. It runs on app/auth/lifecycle/config/network triggers and after local
+/// capture while W2's canonical `work_queue` replacement is still pending.
 ///
-/// For each `pending_upload` row it runs the same W2/W3 pipeline:
-///   createRecording → reconcileCoreId → uploadFile → enqueueProcessing →
-///   await terminal → applyUploadResult.
+/// For each row it reconciles the parent first, replays #2033's owner-scoped
+/// idempotent item create for a fresh presign, then uploads, dispatches, awaits,
+/// and applies the terminal result.
 ///
 /// Failure policy (closing #828 end-to-end):
-///  * Core create/transport failure ⇒ row stays `pending_upload`, audio kept,
-///    queue retries on the next trigger. NEVER throws out of [drain].
+///  * Parent/Core/auth/transport hold ⇒ row stores an explicit `blocked_*`
+///    status, audio stays durable, and the next trigger retries it.
 ///  * Terminal *processing* failure ⇒ row marked `failed` + reason persisted,
 ///    audio KEPT (a failed transcription is still re-inspectable; W5 surfaces
 ///    the reason). Not auto-retried (it is a real processing failure, not a
@@ -83,8 +82,8 @@ Future<void> deleteAudioFile(String audioFilePath) async {
 ///    [_drainRow].
 ///
 /// Idempotency / single-flight:
-///  * A row that already has a `coreId` is never re-created on Core — the queue
-///    resumes from upload/await for it.
+///  * A row that already has a `coreId` replays the same permanent `client_id`;
+///    Core returns the same item and a fresh upload descriptor.
 ///  * Concurrent drains of the same row are guarded by [_inFlight]; a second
 ///    trigger that arrives mid-drain is a no-op for that row.
 class UploadQueue {
@@ -113,6 +112,7 @@ class UploadQueue {
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
   MatomesDao get _matomesDao => _ref.read(matomesDaoProvider);
   InboxController get _inbox => _ref.read(inboxControllerProvider.notifier);
+  MatomeSyncService get _matomeSync => _ref.read(matomeSyncServiceProvider);
 
   /// Per-local-id hooks registered by callers that own recorder-session
   /// resources (the finish flow registers `service.discardSegmentPaths`).
@@ -136,8 +136,7 @@ class UploadQueue {
     _confirmHooks[localId] = hook;
   }
 
-  /// Drain every `pending_upload` row. Safe to call repeatedly; never throws.
-  /// Returns when all currently-pending rows have been attempted once.
+  /// Drain every pending, blocked, or interrupted local upload row once.
   Future<void> drain() async {
     AppLog.event(LogCat.upload, 'drain: start');
     final List<RecordingRow> pending;
@@ -161,7 +160,7 @@ class UploadQueue {
   }
 
   /// Drain a single row by its local id. Idempotent + single-flight: a row that
-  /// is mid-drain, no longer `pending_upload`, or missing is a no-op.
+  /// is mid-drain, terminal, or missing is a no-op.
   Future<void> drainRow(String localId) async {
     if (_inFlight.contains(localId)) return;
     AppLog.event(LogCat.upload, 'drainRow: $localId');
@@ -169,21 +168,23 @@ class UploadQueue {
     try {
       final row = await _dao.getRecordingById(localId);
       if (row == null) return;
-      // Only `pending_upload` rows are drainable. A row that already reconciled
-      // to processing/done/failed is intentionally skipped (idempotency).
-      if (row.processingStatus != kProcessingStatusPendingUpload) return;
-      // DATA-EGRESS GATE (#1498, plan #102 W4 / spec R2.1). Behind the
-      // `localFirstSpaces` flag, an item drains ONLY when its EFFECTIVE space is
-      // a CLOUD space — routed through the ONE operation-keyed decision point
-      // [SyncPolicy.can]. Inbox items (effective space NULL) and items in a
-      // LOCAL space are HELD here, never egressed. This is the SINGLE drain
-      // decision point: `drain()`, `drainRow()` and the manual retry all pass
-      // through it. Flag OFF ⇒ byte-unchanged (no gate, drain on pending_upload).
-      if (FeatureFlags.localFirstSpaces && !await _maySync(row)) {
-        AppLog.event(
-          LogCat.upload,
-          'drainRow: HELD (effective space not cloud) $localId',
-        );
+      // A locally-minted `processing` row is resumable: the app may have died
+      // after reconciling its Core id but before upload/enqueue completed.
+      final resumableProcessing =
+          row.processingStatus == 'processing' &&
+          row.coreId != null &&
+          isLocalRecordingId(row.id);
+      if (!isUploadQueuePendingStatus(row.processingStatus) &&
+          !resumableProcessing) {
+        return;
+      }
+      // W0 parent rule: an Inbox Matome may be created without a workspace, but
+      // a missing parent or explicitly local Space is durably blocked. Cloud
+      // policy still routes through SyncPolicy when the feature is enabled.
+      final blocked = await _syncBlockReason(row);
+      if (blocked != null) {
+        AppLog.event(LogCat.upload, 'drainRow: HELD ($blocked) $localId');
+        await _markBlocked(localId, blocked);
         return;
       }
       await _drainRow(row);
@@ -192,139 +193,116 @@ class UploadQueue {
     }
   }
 
-  /// The data-egress decision for a single row, routed through the ONE
-  /// operation-keyed gate [SyncPolicy.can] over the ONE resolver
-  /// [EffectiveSpace]. Resolves the row's EFFECTIVE space
-  /// (`matome.space_id ?? recording.workspace_id`, matome WINS) to a [SpaceRef]
-  /// VALUE OBJECT, then asks the gate whether `Operation.spaceSync` is allowed.
-  ///
-  /// Returns true ONLY for an effective space that exists AND is cloud. Inbox
-  /// (NULL effective space), a LOCAL effective space, or an unknown/missing
-  /// space all resolve to false (fail-closed — never egressed). The
-  /// sync-eligibility predicate is NOT recomputed here: it is computed once,
-  /// inside the resolver/gate.
-  Future<bool> _maySync(RecordingRow row) async {
+  /// Returns a durable block status, or null when the row may advance. W0 permits
+  /// an Inbox Matome parent with no Space, requires a parent for every child,
+  /// and holds explicit local/unknown Spaces. Cloud decisions continue through
+  /// [EffectiveSpace] and [SyncPolicy.can].
+  Future<String?> _syncBlockReason(RecordingRow row) async {
     // matome WINS: if the row is in a matome, the matome's space_id is the
     // authoritative effective space and the row's own workspaceId is shadowed.
-    String? matomeSpaceId;
     final matomeId = row.matomeId;
-    if (matomeId != null) {
-      final matome = await _matomesDao.getById(matomeId);
-      matomeSpaceId = matome?.spaceId;
-    }
+    if (matomeId == null) return kProcessingStatusBlockedParent;
+    final matome = await _matomesDao.getById(matomeId);
+    if (matome == null) return kProcessingStatusBlockedParent;
+    final matomeSpaceId = matome.spaceId;
+
+    // W0 parent work may create an Inbox Matome on Core without a workspace.
+    // A Matome explicitly filed into a local/unknown Space must never egress.
+    if (matomeSpaceId == null) return null;
     final membership = ItemMembership(
       matomeSpaceId: matomeSpaceId,
       workspaceId: row.workspaceId,
     );
     final spaceId = EffectiveSpace.effectiveSpaceId(membership);
-    if (spaceId == null) return false; // Inbox — never egressed.
+    if (spaceId == null) return null;
 
     final spaceRow = await _workspacesDao.getWorkspaceById(spaceId);
     // Fail-closed: an effective space id with no known `workspaces` row is
     // treated as not-syncable (never silently uploaded).
-    if (spaceRow == null) return false;
+    if (spaceRow == null || spaceRow.isLocal == 1) {
+      return kProcessingStatusBlockedLocalSpace;
+    }
 
-    return SyncPolicy.can(
-      currentCaller(_ref),
-      Operation.spaceSync,
-      spaceRefFromRow(spaceRow),
-    );
+    if (FeatureFlags.localFirstSpaces &&
+        !SyncPolicy.can(
+          currentCaller(_ref),
+          Operation.spaceSync,
+          spaceRefFromRow(spaceRow),
+        )) {
+      return kProcessingStatusBlockedLocalSpace;
+    }
+    return null;
   }
 
   Future<void> _drainRow(RecordingRow row) async {
     final localId = row.id;
 
-    // Resume point: a row may already carry a coreId from a prior attempt that
-    // created on Core but failed mid upload/await. NEVER double-create in that
-    // case — pick up from upload/enqueue with the known coreId.
-    int? coreId = row.coreId;
-    Recording recording;
-    UploadDescriptor? upload;
+    // Resume point: a row may already carry a Core id from a prior attempt.
+    // Replaying its permanent client id is idempotent and refreshes the presign.
+    final localMatomeId = row.matomeId;
+    if (localMatomeId == null) {
+      await _markBlocked(localId, kProcessingStatusBlockedParent);
+      return;
+    }
 
-    if (coreId == null) {
-      final localMatomeId = row.matomeId;
-      if (localMatomeId == null) return;
-      final matome = await _matomesDao.getById(localMatomeId);
-      final coreMatomeId = matome?.coreId;
-      if (coreMatomeId == null) return;
-
-      // #1471: declare the on-disk media size so Core persists `byte_size` and
-      // the Files view renders a real size. Best-effort: a missing/unreadable
-      // file leaves it null (the upload itself would fail later anyway), so the
-      // size is simply omitted rather than blocking the create.
-      final contentLength = await _byteSizeOf(row.audioFilePath);
-      final RecordingCreateResult created;
+    int? coreMatomeId = (await _matomesDao.getById(localMatomeId))?.coreId;
+    if (coreMatomeId == null) {
       try {
-        created = await _repo.createItemRecording(
-          title: row.title,
-          matomeId: coreMatomeId,
-          clientId: localId,
-          durationSeconds: _durationSecondsFor(row),
-          mediaType: row.mediaType,
-          contentLength: contentLength,
-        );
+        coreMatomeId = await _matomeSync.reconcileParent(localMatomeId);
       } catch (e, st) {
         AppLog.error(
           LogCat.upload,
-          '_drainRow: createRecording failed (retry later) $localId',
+          '_drainRow: parent reconcile failed $localId',
           e,
           st,
         );
-        // Core unreachable / rejected — retryable transport state. Leave the
-        // row pending_upload + audio on disk; the next trigger retries.
+        await _markBlocked(localId, _blockedStatusFor(e));
         return;
       }
-      recording = created.recording;
-      upload = created.upload;
-      coreId = recording.id;
-      // Reconcile the Core id into the row (keeps the local PK), flipping
-      // pending_upload → processing so a concurrent trigger won't re-create.
-      await _inbox.reconcileCoreId(localId, coreId);
-    } else {
-      // Resume: row already reconciled a coreId but is still pending_upload —
-      // re-fetch the Core recording so we can re-run upload/enqueue/await.
-      // (This branch is defensive; reconcileCoreId already flips status to
-      // processing, so a coreId + pending_upload pairing is rare.)
-      final fetched = await _safeFetch(coreId);
-      if (fetched == null) {
-        return; // Core unreachable — retry later, audio kept.
-      }
-      recording = fetched;
-      // The row was created on Core but may never have been enqueued for
-      // processing (a prior attempt died between create and enqueue). Without
-      // this, the await below has nothing to wait FOR and dead-waits the full
-      // ~10-min timeout before marking the row failed. POST /process is
-      // server-side idempotent, so re-enqueueing an already-queued recording is
-      // safe. Best-effort: if the recording already progressed (or Core blips),
-      // the await still resolves the real terminal state — never block it.
-      try {
-        await _repo.enqueueProcessing(coreId);
-      } catch (e, st) {
-        AppLog.error(
-          LogCat.upload,
-          '_drainRow: resume re-enqueue best-effort failed $localId',
-          e,
-          st,
-        );
-        developer.log(
-          'upload-queue resume re-enqueue best-effort failed',
-          name: 'upload.queue',
-          error: e,
-        );
+      if (coreMatomeId == null) {
+        await _markBlocked(localId, kProcessingStatusBlockedParent);
+        return;
       }
     }
 
+    // Replay the permanent client id on every non-terminal attempt. #2033 makes
+    // this idempotent and returns a fresh upload descriptor, so a restart after
+    // item reconcile, PUT, or dispatch can safely resume without duplicate work.
+    final contentLength = await _byteSizeOf(row.audioFilePath);
+    final RecordingCreateResult created;
     try {
-      // Re-upload only when we hold a fresh presign from this attempt's create.
-      // (A resumed row without a presign cannot re-PUT; it falls through to
-      // await the terminal result of whatever Core already has.)
-      if (upload != null) {
-        await _repo.uploadFile(upload, File(row.audioFilePath));
-        await _repo.enqueueProcessing(coreId);
-      }
+      created = await _repo.createItemRecording(
+        title: row.title,
+        matomeId: coreMatomeId,
+        clientId: localId,
+        durationSeconds: _durationSecondsFor(row),
+        mediaType: row.mediaType,
+        contentLength: contentLength,
+      );
+    } catch (e, st) {
+      AppLog.error(
+        LogCat.upload,
+        '_drainRow: createRecording failed (retry later) $localId',
+        e,
+        st,
+      );
+      await _markBlocked(localId, _blockedStatusFor(e));
+      return;
+    }
+    final recording = created.recording;
+    final coreId = recording.id;
+    if (row.coreId != null && row.coreId != coreId) {
+      await _markBlocked(localId, kProcessingStatusBlockedCore);
+      return;
+    }
+    await _inbox.reconcileCoreId(localId, coreId);
+
+    try {
+      await _repo.uploadFile(created.upload, File(row.audioFilePath));
+      await _repo.enqueueProcessing(coreId);
       final result = await _awaitTerminal(
         recording: recording,
-        poll: () => _repo.fetchRecording(coreId!),
+        poll: () => _repo.fetchRecording(coreId),
         ref: _ref,
       );
       final done = result.recording;
@@ -364,6 +342,14 @@ class UploadQueue {
       // should let the user reclaim disk for already-synced recordings. Do NOT
       // auto-evict here — that reintroduces exactly the data-loss this reverses.
       _confirmHooks.remove(localId);
+    } on ApiException catch (e, st) {
+      AppLog.error(
+        LogCat.upload,
+        '_drainRow: retryable Core failure $localId',
+        e,
+        st,
+      );
+      await _markBlocked(localId, _blockedStatusFor(e));
     } catch (e, st) {
       // Terminal processing failure (the row already carries a coreId, so this
       // is a genuine post-create failure, not "Core unreachable"). Persist a
@@ -393,6 +379,25 @@ class UploadQueue {
     }
   }
 
+  Future<void> _markBlocked(String localId, String status) async {
+    await _dao.updateRecording(
+      localId,
+      RecordingsCompanion(
+        isProcessing: const Value(0),
+        processingStatus: Value(status),
+      ),
+    );
+    await _inbox.reloadFromLocal();
+  }
+
+  static String _blockedStatusFor(Object error) {
+    if (error is ApiException) {
+      if (error.isUnauthorized) return kProcessingStatusBlockedSignedOut;
+      if (error.statusCode == null) return kProcessingStatusBlockedOffline;
+    }
+    return kProcessingStatusBlockedCore;
+  }
+
   /// Map a drain failure to a SAFE, user-visible reason for the `notes` column.
   ///
   /// Only a curated [ApiException.message] for a KNOWN [ApiException.code] is
@@ -420,20 +425,6 @@ class UploadQueue {
     'upload_failed',
     'malformed_response',
   };
-
-  Future<Recording?> _safeFetch(int coreId) async {
-    try {
-      return await _repo.fetchRecording(coreId);
-    } catch (e, st) {
-      AppLog.error(
-        LogCat.upload,
-        '_safeFetch: fetchRecording failed for coreId=$coreId',
-        e,
-        st,
-      );
-      return null;
-    }
-  }
 
   /// Best-effort re-derive the duration (seconds) for a Core create from the
   /// row's `m:ss`-style duration TEXT. Unknown ⇒ 0 (the file-picker path also

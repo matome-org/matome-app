@@ -21,8 +21,9 @@ class MatomeContactEdge {
 /// A user's Matome, per the `/api/matomes` contract (.docs/internal/architecture.md §11 (D3) / .docs/internal/architecture.md §11 (D4), task #1377).
 ///
 /// Hand-written, tolerant parsing: only `id`, `owner_id` and `title` are
-/// required. `workspace_id` is the Space (a Matome is only ever returned filed
-/// into one — Inbox Matomes never sync). `contacts` is the role-bearing edge set.
+/// required. `workspace_id` is optional: ordinary list sync is filed-space
+/// scoped, while W0 parent reconciliation may create an Inbox Matome without a
+/// workspace so queued child work can progress. `contacts` is the edge set.
 class Matome {
   const Matome({
     required this.id,
@@ -43,7 +44,7 @@ class Matome {
   final String ownerId;
   final String title;
 
-  /// FK → the Space (`workspaces`). A synced Matome is always filed into one.
+  /// FK → the Space (`workspaces`), or null for a reconciled Inbox parent.
   final int? workspaceId;
   final DateTime? happenedAt;
   final String? description;

@@ -63,49 +63,60 @@ void main() {
     final localId = mintLocalRecordingId();
     final audio = File('${tmp.path}/$localId.m4a');
     await audio.writeAsBytes(List<int>.filled(16, 0));
-    await db.recordingsDao.upsertRecording(RecordingsCompanion(
-      id: Value(localId),
-      coreId: Value(coreId),
-      // A coreId-less retry re-runs the CREATE leg, which now targets the
-      // recording's parent matome (POST /api/matomes/{coreMatomeId}/items), so
-      // the row must be parented to a Core-reconciled matome to egress.
-      matomeId: Value(matomeId),
-      title: const Value('Memo'),
-      timestamp: const Value('1:00 PM'),
-      duration: const Value('34s'),
-      badge: const Value('Inbox'),
-      isProcessing: const Value(0),
-      audioFilePath: Value(audio.path),
-      createdAt: Value(DateTime.now().millisecondsSinceEpoch),
-      mediaType: const Value('audio'),
-      processingStatus: const Value('failed'),
-      notes: Value(notes),
-    ));
+    await db.recordingsDao.upsertRecording(
+      RecordingsCompanion(
+        id: Value(localId),
+        coreId: Value(coreId),
+        // A coreId-less retry re-runs the CREATE leg, which now targets the
+        // recording's parent matome (POST /api/matomes/{coreMatomeId}/items), so
+        // the row must be parented to a Core-reconciled matome to egress.
+        matomeId: Value(matomeId),
+        title: const Value('Memo'),
+        timestamp: const Value('1:00 PM'),
+        duration: const Value('34s'),
+        badge: const Value('Inbox'),
+        isProcessing: const Value(0),
+        audioFilePath: Value(audio.path),
+        createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+        mediaType: const Value('audio'),
+        processingStatus: const Value('failed'),
+        notes: Value(notes),
+      ),
+    );
     return (localId, audio);
   }
 
   /// Seeds a Core-reconciled local matome (coreId set) the retry can create an
   /// item under, returning its local id.
-  Future<String> seedReconciledMatome(AppDatabase db, {required int coreId}) async {
+  Future<String> seedReconciledMatome(
+    AppDatabase db, {
+    required int coreId,
+  }) async {
     final matomeId = 'mat_local_$coreId';
-    await db.into(db.matomes).insert(MatomesCompanion.insert(
-          id: matomeId,
-          title: 'M',
-          happenedAt: DateTime.now().millisecondsSinceEpoch,
-          createdAt: DateTime.now().millisecondsSinceEpoch,
-          coreId: Value(coreId),
-        ));
+    await db
+        .into(db.matomes)
+        .insert(
+          MatomesCompanion.insert(
+            id: matomeId,
+            title: 'M',
+            happenedAt: DateTime.now().millisecondsSinceEpoch,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+            coreId: Value(coreId),
+          ),
+        );
     return matomeId;
   }
 
   ProviderContainer containerFor(AppDatabase db, RecordingsRepository repo) {
-    return ProviderContainer(overrides: [
-      appDatabaseProvider.overrideWithValue(db),
-      recordingsRepositoryProvider.overrideWithValue(repo),
-      uploadQueueProvider.overrideWith(
-        (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
-      ),
-    ]);
+    return ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        recordingsRepositoryProvider.overrideWithValue(repo),
+        uploadQueueProvider.overrideWith(
+          (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
+        ),
+      ],
+    );
   }
 
   test('manual retry of a failed row re-enqueues via the queue → done', () async {
@@ -123,57 +134,83 @@ void main() {
     addTearDown(container.dispose);
 
     // A failed row that already reconciled a coreId (transcription failed).
-    final (localId, audio) =
-        await seedFailedRow(db, coreId: 999, notes: 'backend exploded');
+    // Its parent is also reconciled so #2033 can replay item create for a fresh
+    // upload descriptor without minting a duplicate item.
+    final matomeId = await seedReconciledMatome(db, coreId: 42);
+    final (localId, audio) = await seedFailedRow(
+      db,
+      coreId: 999,
+      notes: 'backend exploded',
+      matomeId: matomeId,
+    );
 
-    await container
-        .read(inboxControllerProvider.notifier)
-        .retryUpload(localId);
+    await container.read(inboxControllerProvider.notifier).retryUpload(localId);
 
     final row = await db.recordingsDao.getRecordingById(localId);
     // Re-enqueued through the queue and resolved to done (NOT a new pipeline).
     expect(row!.processingStatus, 'done', reason: 'retry drove it to done');
-    expect(row.notes, isNot('backend exploded'),
-        reason: 'the persisted failure reason was cleared on retry');
+    expect(
+      row.notes,
+      isNot('backend exploded'),
+      reason: 'the persisted failure reason was cleared on retry',
+    );
     expect(row.coreId, 999, reason: 'no double-create — kept the coreId');
-    expect(repo.createCalls, 0, reason: 'reused the existing Core recording');
+    expect(
+      repo.createCalls,
+      1,
+      reason: 'idempotent replay refreshed the presign',
+    );
     // W2 / #871 RETENTION (reverses #43 W4): a retry that reaches `done` must
     // NOT delete the local audio — `done` proves Core accepted the upload, not
     // that the user can play a cloud copy. The local-first file persists until
     // the user explicitly deletes the recording.
-    expect(await audio.exists(), isTrue,
-        reason: 'audio RETAINED after confirmed done (local-first; user-only delete)');
+    expect(
+      await audio.exists(),
+      isTrue,
+      reason:
+          'audio RETAINED after confirmed done (local-first; user-only delete)',
+    );
   });
 
-  test('manual retry of a coreId-less failure re-creates then reconciles',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
+  test(
+    'manual retry of a coreId-less failure re-creates then reconciles',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    final repo = _ToggleRepository(
-      apiClient: ApiClient(
-        tokenStore: InMemoryTokenStore(),
-        dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-      ),
-    )..coreUp = true;
+      final repo = _ToggleRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      )..coreUp = true;
 
-    final container = containerFor(db, repo);
-    addTearDown(container.dispose);
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
 
-    // A failure with NO coreId (the create/upload itself failed), parented to a
-    // Core-reconciled matome so the retry's create leg can egress.
-    final matomeId = await seedReconciledMatome(db, coreId: 42);
-    final (localId, _) = await seedFailedRow(db, matomeId: matomeId);
+      // A failure with NO coreId (the create/upload itself failed), parented to a
+      // Core-reconciled matome so the retry's create leg can egress.
+      final matomeId = await seedReconciledMatome(db, coreId: 42);
+      final (localId, _) = await seedFailedRow(db, matomeId: matomeId);
 
-    await container
-        .read(inboxControllerProvider.notifier)
-        .retryUpload(localId);
+      await container
+          .read(inboxControllerProvider.notifier)
+          .retryUpload(localId);
 
-    final row = await db.recordingsDao.getRecordingById(localId);
-    expect(row!.coreId, repo.coreIdMinted, reason: 'create happened on retry');
-    expect(row.processingStatus, 'done');
-    expect(repo.createCalls, 1, reason: 'one create for the never-uploaded row');
-  });
+      final row = await db.recordingsDao.getRecordingById(localId);
+      expect(
+        row!.coreId,
+        repo.coreIdMinted,
+        reason: 'create happened on retry',
+      );
+      expect(row.processingStatus, 'done');
+      expect(
+        repo.createCalls,
+        1,
+        reason: 'one create for the never-uploaded row',
+      );
+    },
+  );
 }
 
 class _ToggleRepository extends RecordingsRepository {

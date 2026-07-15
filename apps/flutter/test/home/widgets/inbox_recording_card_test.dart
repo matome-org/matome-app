@@ -74,6 +74,29 @@ void main() {
     expect(find.byKey(const ValueKey('card-retry')), findsNothing);
   });
 
+  testWidgets('durable queue block reasons still render as waiting on-device', (
+    tester,
+  ) async {
+    for (final status in const [
+      kProcessingStatusBlockedSignedOut,
+      kProcessingStatusBlockedOffline,
+      kProcessingStatusBlockedLocalSpace,
+      kProcessingStatusBlockedParent,
+      kProcessingStatusBlockedCore,
+    ]) {
+      await pump(
+        tester,
+        card(id: mintLocalRecordingId(), processingStatus: status),
+      );
+      expect(
+        find.byKey(const ValueKey('card-pending-upload')),
+        findsOneWidget,
+        reason: status,
+      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    }
+  });
+
   testWidgets('processing renders a transcribing spinner', (tester) async {
     await pump(
       tester,

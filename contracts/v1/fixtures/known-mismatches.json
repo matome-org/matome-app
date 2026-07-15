@@ -25,22 +25,6 @@
         "dedupe_states": ["available", "scheduled", "executing", "retryable", "suspended", "completed"]
       },
       "expected_violation": "processing.retry_reuses_completed_run"
-    },
-    {
-      "id": "parent_sync",
-      "owner_wave": "W1",
-      "current": {
-        "parent": {"local_id": "matome_local_1", "core_id": null, "space_id": null},
-        "child": {
-          "local_id": "item_local_1",
-          "core_id": null,
-          "parent_local_id": "matome_local_1",
-          "status": "pending_upload"
-        },
-        "parent_sync_result": "skipped_unfiled_parent",
-        "child_work_result": "blocked_missing_parent_core_id"
-      },
-      "expected_violation": "sync.parent_child_deadlock"
     }
   ]
 }

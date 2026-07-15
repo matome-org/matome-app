@@ -1,22 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/matome_card.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/features/recordings/recording_ids.dart';
 
 /// The Matome sync pill ([MatomeItem.syncRollup]) must agree with the per-tile
 /// "Cloud"/"On device" badges of its children — the field bug where a Matome
 /// read "On device" while a child read "Cloud". The rollup is derived from the
 /// SAME [RecordingItem.isOnCloud] rule the tiles use.
 RecordingItem _rec({int? coreId, String status = 'done'}) => RecordingItem(
-      id: 'r',
-      title: 't',
-      timestamp: '',
-      duration: '',
-      badge: 'Inbox',
-      isProcessing: false,
-      mediaType: 'audio',
-      processingStatus: status,
-      coreId: coreId,
-    );
+  id: 'r',
+  title: 't',
+  timestamp: '',
+  duration: '',
+  badge: 'Inbox',
+  isProcessing: false,
+  mediaType: 'audio',
+  processingStatus: status,
+  coreId: coreId,
+);
 
 MatomeItem _matome({int? coreId, List<RecordingItem> recordings = const []}) =>
     MatomeItem(
@@ -44,6 +45,10 @@ void main() {
     test('coreId set but still uploading/failed → NOT on cloud', () {
       expect(_rec(coreId: 5, status: 'pending_upload').isOnCloud, isFalse);
       expect(_rec(coreId: 5, status: 'failed').isOnCloud, isFalse);
+      expect(
+        _rec(coreId: 5, status: kProcessingStatusBlockedOffline).isOnCloud,
+        isFalse,
+      );
     });
   });
 
@@ -70,7 +75,10 @@ void main() {
 
     test('child reconciled but pending counts as not-yet-cloud', () {
       final m = _matome(
-        recordings: [_rec(coreId: 1), _rec(coreId: 2, status: 'pending_upload')],
+        recordings: [
+          _rec(coreId: 1),
+          _rec(coreId: 2, status: 'pending_upload'),
+        ],
       );
       expect(m.syncRollup, MatomeSyncRollup.partial);
     });

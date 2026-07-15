@@ -7,9 +7,10 @@ import 'matome.dart';
 /// Drives the authenticated user's Matomes against the Core API (task #1377).
 ///
 /// Mirrors [RecordingsRepository]: a thin Bearer-authed HTTP surface with no
-/// local state. Space-scoped sync (.docs/internal/architecture.md §11 (D4)) decides WHEN to call these — only
-/// a Matome filed into a Space is ever pushed here. Plain generative constructor
-/// so tests can subclass/fake it the same way the recordings repo allows.
+/// local state. Space-scoped list sync decides when to call these; W0 queue
+/// reconciliation may also create an Inbox Matome needed by durable child work.
+/// Plain generative constructor so tests can subclass/fake it like the
+/// recordings repository.
 class MatomesRepository {
   // Plain generative constructor (no redirect) so tests can subclass it to stub
   // HTTP, mirroring [RecordingsRepository].
@@ -43,7 +44,7 @@ class MatomesRepository {
   /// (carrying the freshly-minted Core id reconciled into `matomes.core_id`).
   Future<Matome> createMatome({
     required String title,
-    required int workspaceId,
+    int? workspaceId,
     DateTime? happenedAt,
     String? description,
     String? aggregatedSummary,
@@ -53,7 +54,7 @@ class MatomesRepository {
         '/api/matomes',
         data: <String, dynamic>{
           'title': title,
-          'workspace_id': workspaceId,
+          'workspace_id': ?workspaceId,
           'happened_at': ?happenedAt?.toUtc().toIso8601String(),
           'description': ?description,
           'aggregated_summary': ?aggregatedSummary,
