@@ -28,8 +28,9 @@
         "queue": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["lease_seconds", "max_concurrency", "snapshot_interval_seconds"],
+          "required": ["paused", "lease_seconds", "max_concurrency", "snapshot_interval_seconds"],
           "properties": {
+            "paused": {"type": "boolean"},
             "lease_seconds": {"type": "integer", "minimum": 15, "maximum": 3600},
             "max_concurrency": {"type": "integer", "minimum": 1, "maximum": 16},
             "snapshot_interval_seconds": {"type": "integer", "minimum": 60, "maximum": 86400}
@@ -50,9 +51,9 @@
           "additionalProperties": false,
           "required": ["single_max_bytes", "multipart_part_bytes", "max_bytes"],
           "properties": {
-            "single_max_bytes": {"type": "integer", "minimum": 1},
-            "multipart_part_bytes": {"type": "integer", "minimum": 5242880},
-            "max_bytes": {"type": "integer", "minimum": 1}
+            "single_max_bytes": {"type": "integer", "minimum": 1, "maximum": 2147483648},
+            "multipart_part_bytes": {"type": "integer", "minimum": 5242880, "maximum": 536870912},
+            "max_bytes": {"type": "integer", "minimum": 5242880, "maximum": 2147483648}
           }
         },
         "ai": {

@@ -6,17 +6,16 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/audio/audio_playback.dart';
-import '../../core/config/endpoint_controller.dart';
 import '../../core/crypto/key_material.dart' show Dek;
 import '../../core/crypto/media_cipher.dart'
     show encodeNoncePrefix, encryptFileToFile, kMediaEncryptionEnabled;
 import '../../core/db/db_encryption.dart'
     show FlutterSecureKeyStore, NativeDekProvisioner;
 import '../../core/observability/app_log.dart';
+import '../../core/providers.dart';
 import '../../core/storage/app_storage.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/work_queue_dao.dart';
-import '../auth/current_owner.dart';
 import '../items/matome_item_type.dart';
 import '../recordings/recording.dart';
 import '../recordings/recording_ids.dart';
@@ -402,9 +401,7 @@ class InboxUploader {
         itemId: localId,
         sourceRevision: 1,
         now: timestamp,
-        configRevision: workConfigRevisionForEndpoint(
-          _ref.read(endpointConfigProvider),
-        ),
+        configRevision: _ref.read(systemPolicyProvider).revision,
       ),
     );
   }
@@ -426,6 +423,7 @@ Future<RecordingResult> liveRecordingResultAwaiter({
     recordingId: recording.id,
     statusEvents: const Stream<RecordingStatusEvent>.empty(),
     poll: poll,
+    pollInterval: ref.read(systemPolicyProvider).pollInterval,
   );
   try {
     return await waiter.wait();

@@ -1,6 +1,8 @@
 defmodule MatomeApi.Storage.UploadPolicy do
   @moduledoc "Upload mode selection and S3-compatible media/provider bounds."
 
+  alias MatomeApi.SystemConfig
+
   @provider_max_bytes 5 * 1024 * 1024 * 1024 * 1024
   @provider_max_parts 10_000
 
@@ -32,13 +34,23 @@ defmodule MatomeApi.Storage.UploadPolicy do
 
   def validate_size(media_type, bytes) do
     media_max = config(:media_max_bytes) |> Map.get(to_string(media_type))
+    upload_policy = system_upload_policy()
 
     cond do
-      is_nil(media_max) -> {:error, :unsupported_media_type}
-      bytes > max_bytes() -> {:error, :upload_too_large}
-      bytes > media_max -> {:error, :media_too_large}
-      part_count(bytes) > @provider_max_parts -> {:error, :provider_limit_exceeded}
-      true -> :ok
+      is_nil(media_max) ->
+        {:error, :unsupported_media_type}
+
+      bytes > upload_policy["max_bytes"] ->
+        {:error, :upload_too_large}
+
+      bytes > media_max ->
+        {:error, :media_too_large}
+
+      part_count(bytes, upload_policy["multipart_part_bytes"]) > @provider_max_parts ->
+        {:error, :provider_limit_exceeded}
+
+      true ->
+        :ok
     end
   end
 
@@ -47,15 +59,16 @@ defmodule MatomeApi.Storage.UploadPolicy do
   end
 
   def part_count(bytes) when is_integer(bytes) and bytes > 0 do
-    div(bytes + multipart_part_bytes() - 1, multipart_part_bytes())
+    part_count(bytes, multipart_part_bytes())
   end
 
   def part_byte_size(bytes, part_number)
       when is_integer(bytes) and bytes > 0 and is_integer(part_number) and part_number > 0 do
-    count = part_count(bytes)
+    part_bytes = multipart_part_bytes()
+    count = part_count(bytes, part_bytes)
 
     if part_number <= count do
-      min(multipart_part_bytes(), bytes - (part_number - 1) * multipart_part_bytes())
+      min(part_bytes, bytes - (part_number - 1) * part_bytes)
     else
       {:error, :invalid_part_number}
     end
@@ -63,8 +76,16 @@ defmodule MatomeApi.Storage.UploadPolicy do
 
   def part_byte_size(_bytes, _part_number), do: {:error, :invalid_part_number}
 
+  defp part_count(bytes, part_bytes), do: div(bytes + part_bytes - 1, part_bytes)
+
+  defp system_upload_policy, do: SystemConfig.desired()["uploads"]
+
   defp config(key) do
-    Application.get_env(:matome_api, __MODULE__, [])
-    |> Keyword.get(key, Keyword.fetch!(@defaults, key))
+    if key in [:single_max_bytes, :multipart_part_bytes, :max_bytes] do
+      system_upload_policy()[to_string(key)]
+    else
+      Application.get_env(:matome_api, __MODULE__, [])
+      |> Keyword.get(key, Keyword.fetch!(@defaults, key))
+    end
   end
 end

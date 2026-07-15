@@ -21,8 +21,9 @@ defmodule MatomeApi.Content do
   alias MatomeApi.Events
   alias MatomeApi.Repo
   alias MatomeApi.Storage.{ObjectStore, Presigner, UploadPolicy}
+  alias MatomeApi.SystemConfig
 
-  @ai_media_types ~w(audio image)
+  @ai_media_types ~w(audio image document)
 
   def list_workspaces(%User{id: owner_id}, params \\ %{}) do
     member_ids =
@@ -503,11 +504,15 @@ defmodule MatomeApi.Content do
   end
 
   def enqueue_item_processing(%User{} = owner, id) do
+    config = SystemConfig.snapshot()
+
     with %Item{item_type: :file, file_blob: %FileBlob{} = file_blob} = item <-
            get_item(owner, id),
-         true <- file_blob.media_type in @ai_media_types,
+         true <-
+           file_blob.media_type in @ai_media_types and
+             file_blob.media_type in config["desired"]["ai"]["enabled_input_kinds"],
          true <- file_blob.upload_state == "uploaded" || {:error, :upload_not_complete} do
-      result = queue_item_processing(item, file_blob)
+      result = queue_item_processing(item, file_blob, config)
 
       if match?({:ok, _item}, result) and item.processing_state == :not_requested do
         Events.write_optional("operational.upload_completed.v1", %{
@@ -1039,12 +1044,22 @@ defmodule MatomeApi.Content do
     end
   end
 
-  defp queue_item_processing(item, file_blob) do
+  defp queue_item_processing(item, file_blob, config) do
+    config_revision = config["revision"]
+    retry_policy = config["desired"]["retry"]
+    processing_policy = config["desired"]["ai"]
+
     Repo.transaction(fn ->
-      with {:ok, item} <- mark_item_processing_queued(item),
+      with {:ok, item} <- mark_item_processing_queued(item, config_revision),
            {:ok, _job} <-
-             %{item_id: item.id, file_blob_id: file_blob.id}
-             |> DispatchJob.new(queue: :ai)
+             %{
+               item_id: item.id,
+               file_blob_id: file_blob.id,
+               config_revision: config_revision,
+               retry: retry_policy,
+               processing: processing_policy
+             }
+             |> DispatchJob.new(queue: :ai, max_attempts: retry_policy["max_attempts"])
              |> Oban.insert() do
         Repo.preload(item, [:workspace, :matome, :file_blob, :text_content], force: true)
       else
@@ -1057,28 +1072,33 @@ defmodule MatomeApi.Content do
     end
   end
 
-  defp mark_item_processing_queued(%Item{processing_state: :not_requested} = item) do
+  defp mark_item_processing_queued(
+         %Item{processing_state: :not_requested} = item,
+         config_revision
+       ) do
     item
     |> Item.processing_changeset(%{
       processing_state: :queued,
       processing_run_id: Ecto.UUID.generate(),
+      processing_config_revision: config_revision,
       processing_outputs: %{},
       processing_error: nil
     })
     |> Repo.update()
   end
 
-  defp mark_item_processing_queued(%Item{processing_state: :failed} = item) do
+  defp mark_item_processing_queued(%Item{processing_state: :failed} = item, config_revision) do
     item
     |> Item.processing_changeset(%{
       processing_state: :queued,
+      processing_config_revision: config_revision,
       processing_outputs: %{},
       processing_error: nil
     })
     |> Repo.update()
   end
 
-  defp mark_item_processing_queued(%Item{} = item), do: {:ok, item}
+  defp mark_item_processing_queued(%Item{} = item, _config_revision), do: {:ok, item}
 
   defp processing_outputs(attrs) do
     %{}

@@ -137,6 +137,8 @@ defmodule MatomeApiWeb.Router do
     scope "/" do
       pipe_through :auth
 
+      get "/system-config", SystemConfigController, :show
+      post "/system-config/application", SystemConfigController, :application
       post "/events", ProductEventController, :create
       get "/spaces/search", WorkspaceController, :search
       get "/spaces/:space_id/key-wraps/me", SpaceKeyWrapController, :show_own
@@ -224,6 +226,7 @@ defmodule MatomeApiWeb.Router do
       live "/events", AdminLive.Events, :index
       live "/events/security", AdminLive.Events, :security
       live "/event-catalog", AdminLive.EventCatalog, :index
+      live "/settings", AdminLive.Settings, :index
     end
   end
 

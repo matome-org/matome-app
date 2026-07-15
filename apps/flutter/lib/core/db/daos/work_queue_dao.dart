@@ -41,16 +41,6 @@ const String kWorkErrorContentRejected = 'content_rejected';
 const String kWorkErrorInvalidLocalData = 'invalid_local_data';
 const String kWorkErrorUnexpected = 'unexpected';
 
-/// Stable local revision for runtime endpoint changes until the versioned
-/// system-config client lands. It deliberately contains no endpoint text.
-int workConfigRevisionForEndpoint(String endpoint) {
-  var hash = 0x811c9dc5;
-  for (final byte in endpoint.codeUnits) {
-    hash = ((hash ^ byte) * 0x01000193) & 0x7fffffff;
-  }
-  return hash;
-}
-
 WorkQueueCompanion genericWork({
   required String id,
   required String kind,

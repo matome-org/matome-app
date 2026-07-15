@@ -7,7 +7,6 @@ import 'package:crypto/crypto.dart' show sha256;
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/config/endpoint_controller.dart';
 import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/items_dao.dart';
@@ -69,10 +68,7 @@ class UploadQueue {
        _jitter = jitter ?? Random().nextDouble,
        _shouldProcess = shouldProcess ?? _defaultProcessingEligibility,
        _configRevision =
-           configRevision ??
-           (() => workConfigRevisionForEndpoint(
-             _ref.read(endpointConfigProvider),
-           )),
+           configRevision ?? (() => _ref.read(systemPolicyProvider).revision),
        _leaseOwner =
            'device-${DateTime.now().microsecondsSinceEpoch}-'
            '${Random().nextInt(1 << 32)}';
@@ -929,4 +925,17 @@ class _WorkFailure {
   final String? blockedReason;
 }
 
-final uploadQueueProvider = Provider<UploadQueue>((ref) => UploadQueue(ref));
+final uploadQueueProvider = Provider<UploadQueue>((ref) {
+  final policy = ref.watch(systemPolicyProvider);
+  return UploadQueue(
+    ref,
+    configRevision: () => policy.revision,
+    baseRetryDelay: policy.baseRetryDelay,
+    maxRetryDelay: policy.maxRetryDelay,
+    leaseDuration: policy.leaseDuration,
+    maxAttempts: policy.maxAttempts,
+    shouldProcess: (item) =>
+        policy.enabledInputKinds.contains(item.file?.mediaType) &&
+        _defaultProcessingEligibility(item),
+  );
+});

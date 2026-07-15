@@ -8,7 +8,7 @@ replaces password + authenticator TOTP. Staff identity does **not** require a
 
 - Admin capability (sessions revoke, future mutations).
 - Security-class rows in the canonical `events` trail.
-- Metadata visible in Users / Audit / Sessions / Events / Event Catalog LiveViews.
+- Metadata visible in Users / Audit / Sessions / Events / Event Catalog / System Settings LiveViews.
 
 ## Layers (defense in depth)
 
@@ -73,6 +73,15 @@ retention changes re-check both the current allowlist and OTP freshness in the
 context, then commit policy and `security.event_catalog.changed.v2` in one
 transaction. The Events security saved view fixes the class filter to
 `security`; submitted filter params cannot widen it.
+
+System Settings at `/admin/settings` exposes only the closed, non-secret v1
+policy. Pause/resume, desired local AI Oban concurrency, client lease/retry
+bounds, upload thresholds, processing kinds/timeouts, and reporting intervals
+all re-check the allowlist and recent OTP at the context seam. Updates use the
+displayed revision as compare-and-swap input and commit with
+`security.admin_config_changed.v2`, whose bounded `before`/`after` values are
+policy only. Tokens, credentials, signing material, storage URLs, and service
+endpoints are not fields and remain runtime environment configuration.
 
 Phoenix filters credential, OTP, content, local-path, and presigned-credential
 parameter names before request logging. `MatomeApi.LogRedaction` is the fallback

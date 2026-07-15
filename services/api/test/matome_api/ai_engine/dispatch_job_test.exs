@@ -1,9 +1,13 @@
 defmodule MatomeApi.AIEngine.DispatchJobTest do
   use MatomeApi.DataCase, async: false
 
+  import Ecto.Query
+
+  alias MatomeApi.Admin
   alias MatomeApi.Auth
   alias MatomeApi.AIEngine.DispatchJob
   alias MatomeApi.Content
+  alias MatomeApi.SystemConfig
 
   @password "correct horse battery staple"
 
@@ -46,11 +50,41 @@ defmodule MatomeApi.AIEngine.DispatchJobTest do
     )
     |> MatomeApi.Repo.update!()
 
-    assert {:ok, _queued_item} = Content.enqueue_item_processing(user, item.id)
+    revision = SystemConfig.current_revision()
+    assert {:ok, queued_item} = Content.enqueue_item_processing(user, item.id)
+    assert queued_item.processing_config_revision == revision
+
+    job = Repo.one!(from job in Oban.Job, where: job.worker == "MatomeApi.AIEngine.DispatchJob")
+    assert job.args["config_revision"] == revision
+
+    assert job.args["retry"] == %{
+             "max_attempts" => 5,
+             "base_delay_seconds" => 2,
+             "max_delay_seconds" => 300
+           }
+
+    assert job.args["processing"] == %{
+             "enabled_input_kinds" => ["audio", "image", "document", "text"],
+             "job_timeout_seconds" => 1800
+           }
+
+    assert job.max_attempts == 5
+
+    desired = put_in(SystemConfig.desired(), ["retry", "max_attempts"], 6)
+
+    assert {:ok, _config} =
+             Admin.update_system_config(desired, revision,
+               actor: %{email: "admin@example.com"},
+               otp_verified_at: System.os_time(:second),
+               remote_ip: "198.51.100.24"
+             )
+
+    assert Content.get_item(user, item.id).processing_config_revision == revision
+    assert Repo.get!(Oban.Job, job.id).args == job.args
 
     assert :ok =
              DispatchJob.perform(%Oban.Job{
-               args: %{"item_id" => item.id, "file_blob_id" => item.file_blob_id}
+               args: job.args
              })
 
     assert_receive {:dispatch, "http://ai.test/jobs", "test-token", payload}
@@ -62,7 +96,8 @@ defmodule MatomeApi.AIEngine.DispatchJobTest do
   end
 
   defmodule Adapter do
-    def dispatch(endpoint, token, payload, parent) do
+    def dispatch(endpoint, token, payload, timeout_seconds, parent) do
+      assert timeout_seconds == 1800
       send(parent, {:dispatch, endpoint, token, payload})
       {:ok, "accepted"}
     end

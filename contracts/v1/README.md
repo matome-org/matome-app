@@ -146,11 +146,24 @@ observations from server-known state.
 Core marks that revision applied only when the policy write and mandatory audit
 event commit together.
 
+The queue policy carries desired AI-queue pause and concurrency state. A
+supervised reconciler applies it to the local Oban producer after every Core
+node boot and again on the bounded reporting interval. API and Admin responses
+keep desired, persisted applied revision, and effective producer state
+separate; an unavailable producer is shown as a mismatch requiring restart.
+
 Devices fetch desired policy when online and report a separate sanitized
 application snapshot. An offline device keeps its last `applied_revision`; the
 admin may display it as stale but must not present desired policy as applied or
 send an individual device command. Rejected keys are explicit. Credentials and
 signing material remain runtime secrets.
+
+Flutter fetches on app start, authentication, endpoint change, and foreground
+resume. It accepts and caches only a closed v1 document with a non-decreasing
+revision, keeps the last accepted document offline, reports only the applied
+revision plus rejected key paths, and snapshots the accepted revision into new
+device work. The report endpoint is the W4 seam only; per-device snapshot
+storage and Work UI belong to the following task.
 
 ## Data model decisions
 

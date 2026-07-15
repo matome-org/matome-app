@@ -319,6 +319,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
             itemId: itemId,
             sourceRevision: item.item.sourceRevision,
             now: now,
+            configRevision: _ref.read(systemPolicyProvider).revision,
           ),
         );
       }

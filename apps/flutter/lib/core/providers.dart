@@ -7,6 +7,7 @@ import '../features/matome/matomes_repository.dart';
 import '../features/recordings/recordings_repository.dart';
 import '../features/spaces/spaces_repository.dart';
 import 'config/endpoint_controller.dart';
+import 'config/system_policy.dart';
 import 'db/app_database.dart';
 import 'http/api_client.dart';
 import 'http/api_exception.dart';
@@ -35,6 +36,14 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     baseUrl: ref.watch(endpointConfigProvider),
   );
 });
+
+final systemPolicyProvider =
+    StateNotifierProvider<SystemPolicyController, SystemPolicy>((ref) {
+      return SystemPolicyController.reading(
+        () => ref.read(apiClientProvider),
+        ref.watch(settingsStoreProvider),
+      );
+    });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final apiClient = ref.watch(apiClientProvider);

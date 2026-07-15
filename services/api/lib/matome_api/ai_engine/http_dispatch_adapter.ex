@@ -1,7 +1,7 @@
 defmodule MatomeApi.AIEngine.HTTPDispatchAdapter do
   @moduledoc false
 
-  def dispatch(endpoint, token, payload) do
+  def dispatch(endpoint, token, payload, timeout_seconds) do
     body = Jason.encode!(payload)
     headers = [{~c"content-type", ~c"application/json"}]
 
@@ -11,7 +11,10 @@ defmodule MatomeApi.AIEngine.HTTPDispatchAdapter do
     case :httpc.request(
            :post,
            {String.to_charlist(endpoint), headers, ~c"application/json", body},
-           [],
+           [
+             timeout: :timer.seconds(timeout_seconds),
+             connect_timeout: min(:timer.seconds(timeout_seconds), :timer.seconds(10))
+           ],
            []
          ) do
       {:ok, {{_, status, _}, _headers, response_body}} when status in 200..299 ->

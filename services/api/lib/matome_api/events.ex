@@ -37,6 +37,7 @@ defmodule MatomeApi.Events do
     "security.event_catalog.changed.v2" => ~w(changed_fields before after result),
     "security.admin_auth_verified.v1" => ~w(method result),
     "security.admin_config_changed.v1" => ~w(revision changed_keys result),
+    "security.admin_config_changed.v2" => ~w(revision changed_keys before after result),
     "operational.work_transition.v1" =>
       ~w(operation input_kind from_state to_state attempt duration_ms error_code),
     "operational.upload_completed.v1" =>
@@ -61,7 +62,8 @@ defmodule MatomeApi.Events do
     "admin.space_member_added" => "security.admin.space_member_added.v2",
     "admin.space_member_revoked" => "security.admin.space_member_revoked.v2",
     "admin.space_lifecycle" => "security.admin.space_lifecycle.v2",
-    "admin.sensitive_read" => "security.admin.sensitive_read.v1"
+    "admin.sensitive_read" => "security.admin.sensitive_read.v1",
+    "admin.config_changed" => "security.admin_config_changed.v2"
   }
 
   def detail_keys(key), do: Map.fetch(@detail_keys, key)

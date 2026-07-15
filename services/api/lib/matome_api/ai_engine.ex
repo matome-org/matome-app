@@ -23,10 +23,10 @@ defmodule MatomeApi.AIEngine do
     config() |> Keyword.get(:dispatch_adapter, MatomeApi.AIEngine.HTTPDispatchAdapter)
   end
 
-  def dispatch(payload) do
+  def dispatch(payload, timeout_seconds) do
     case dispatch_adapter() do
-      {module, arg} -> module.dispatch(endpoint(), token(), payload, arg)
-      module -> module.dispatch(endpoint(), token(), payload)
+      {module, arg} -> module.dispatch(endpoint(), token(), payload, timeout_seconds, arg)
+      module -> module.dispatch(endpoint(), token(), payload, timeout_seconds)
     end
   end
 

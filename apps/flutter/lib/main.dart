@@ -11,6 +11,7 @@ import 'core/config/endpoint_controller.dart';
 import 'core/i18n/locale_controller.dart';
 import 'core/observability/app_log.dart';
 import 'core/logging/log_redaction.dart';
+import 'core/providers.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/recordings/upload_retry_service.dart';
@@ -50,14 +51,17 @@ class _MatomeAppState extends ConsumerState<MatomeApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(ref.read(uploadRetryServiceProvider).start());
+      if (!mounted) return;
+      final policy = ref.read(systemPolicyProvider.notifier);
+      final uploads = ref.read(uploadRetryServiceProvider);
+      unawaited(policy.initialize().then((_) => uploads.start()));
     });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(ref.read(uploadRetryServiceProvider).drainNow());
+      _refreshPolicyAndDrain();
     }
   }
 
@@ -71,12 +75,12 @@ class _MatomeAppState extends ConsumerState<MatomeApp>
   Widget build(BuildContext context) {
     ref.listen<AuthState>(authStateProvider, (previous, next) {
       if (next.isAuthenticated && !(previous?.isAuthenticated ?? false)) {
-        unawaited(ref.read(uploadRetryServiceProvider).drainNow());
+        _refreshPolicyAndDrain();
       }
     });
     ref.listen<String>(endpointConfigProvider, (previous, next) {
       if (previous != null && previous != next) {
-        unawaited(ref.read(uploadRetryServiceProvider).drainNow());
+        _refreshPolicyAndDrain();
       }
     });
 
@@ -100,5 +104,12 @@ class _MatomeAppState extends ConsumerState<MatomeApp>
       ],
       routerConfig: router,
     );
+  }
+
+  void _refreshPolicyAndDrain() {
+    final policy = ref.read(systemPolicyProvider.notifier);
+    final uploads = ref.read(uploadRetryServiceProvider);
+    unawaited(policy.refresh());
+    unawaited(uploads.drainNow());
   }
 }

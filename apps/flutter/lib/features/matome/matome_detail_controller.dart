@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../core/config/endpoint_controller.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/contacts_dao.dart';
 import '../../core/db/daos/items_dao.dart';
@@ -383,9 +382,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
         itemId: recordingId,
         sourceRevision: 1,
         now: timestamp,
-        configRevision: workConfigRevisionForEndpoint(
-          _ref.read(endpointConfigProvider),
-        ),
+        configRevision: _ref.read(systemPolicyProvider).revision,
       ),
     );
     if (!mounted) return;

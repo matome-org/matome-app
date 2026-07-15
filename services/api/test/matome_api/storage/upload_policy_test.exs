@@ -1,5 +1,5 @@
 defmodule MatomeApi.Storage.UploadPolicyTest do
-  use ExUnit.Case, async: true
+  use MatomeApi.DataCase, async: true
 
   alias MatomeApi.Storage.UploadPolicy
 

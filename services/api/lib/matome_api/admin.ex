@@ -19,6 +19,8 @@ defmodule MatomeApi.Admin do
   alias MatomeApi.Events.EventCatalog
   alias MatomeApi.RateLimiter
   alias MatomeApi.Repo
+  alias MatomeApi.SystemConfig
+  alias MatomeApi.SystemConfig.Reconciler
 
   @otp_ttl_seconds 30 * 60
   @otp_attempt_limit 5
@@ -822,6 +824,21 @@ defmodule MatomeApi.Admin do
         {:ok, %{updated: updated}} -> {:ok, updated}
         {:error, :event, changeset, _changes} -> {:error, {:audit_failed, changeset}}
         {:error, _operation, reason, _changes} -> {:error, reason}
+      end
+    end
+  end
+
+  @doc "Update the global non-secret policy through allowlist, recent OTP, CAS, and audit gates."
+  def update_system_config(desired, base_revision, opts \\ [])
+      when is_map(desired) and is_integer(base_revision) do
+    with {:ok, context} <- authorize_mutation(opts) do
+      case SystemConfig.update_desired(desired, base_revision, context) do
+        {:ok, _config} = result ->
+          Reconciler.reconcile_async()
+          result
+
+        error ->
+          error
       end
     end
   end

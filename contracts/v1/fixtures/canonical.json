@@ -304,7 +304,7 @@
       "schema_version": 1,
       "revision": 7,
       "desired": {
-        "queue": {"lease_seconds": 120, "max_concurrency": 2, "snapshot_interval_seconds": 900},
+        "queue": {"paused": false, "lease_seconds": 120, "max_concurrency": 2, "snapshot_interval_seconds": 900},
         "retry": {"max_attempts": 5, "base_delay_seconds": 2, "max_delay_seconds": 300},
         "uploads": {"single_max_bytes": 26214400, "multipart_part_bytes": 16777216, "max_bytes": 2147483648},
         "ai": {"enabled_input_kinds": ["audio", "image", "document", "text"], "job_timeout_seconds": 1800},

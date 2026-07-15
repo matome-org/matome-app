@@ -348,6 +348,17 @@
         "payload_allowlist": ["revision", "changed_keys", "result"]
       },
       {
+        "catalog_key": "security.admin_config_changed.v2",
+        "event_name": "security.admin_config_changed",
+        "event_class": "security",
+        "event_version": 2,
+        "required": true,
+        "locked": true,
+        "enabled": true,
+        "retention_days": 365,
+        "payload_allowlist": ["revision", "changed_keys", "before", "after", "result"]
+      },
+      {
         "catalog_key": "security.event_catalog.changed.v2",
         "event_name": "security.event_catalog.changed",
         "event_class": "security",
@@ -532,19 +543,27 @@
       "admin.space_member_added": "security.admin.space_member_added.v2",
       "admin.space_member_revoked": "security.admin.space_member_revoked.v2",
       "admin.space_lifecycle": "security.admin.space_lifecycle.v2",
-      "admin.sensitive_read": "security.admin.sensitive_read.v1"
+      "admin.sensitive_read": "security.admin.sensitive_read.v1",
+      "admin.config_changed": "security.admin_config_changed.v2"
     }
   },
   "system_config": {
     "schema": "system-config.schema.json",
     "singleton_key": "global",
     "non_secret": true,
+    "paths": {
+      "fetch": "GET /api/system-config",
+      "application_report": "POST /api/system-config/application",
+      "admin": "/admin/settings"
+    },
+    "queue_semantics": "paused and max_concurrency are desired local AI Oban producer state; every Core node reapplies them after its producer starts and on the reporting interval.",
     "desired_semantics": "Admin writes policy intent at a new monotonic revision; this does not assert that an offline device applied it.",
     "applied_semantics": {
       "core": "Core reports applied only after the config transaction and mandatory audit event commit together.",
       "device": "Each device reports its own last applied revision and rejected keys in a sanitized snapshot.",
       "offline": "Keep the last applied revision and report it as stale; never copy desired into applied."
     },
+    "effective_semantics": "Core reports the local Oban producer's actual paused/concurrency state separately; an unavailable producer is a mismatch with restart_required=true.",
     "stale_write_rule": "Reject a desired update whose base_revision does not equal current revision.",
     "secret_rule": "Tokens, credentials, and signing material remain in runtime environment or a secret store."
   },

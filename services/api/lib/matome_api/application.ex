@@ -11,6 +11,7 @@ defmodule MatomeApi.Application do
       MatomeApiWeb.Telemetry,
       MatomeApi.Repo,
       {Oban, Application.fetch_env!(:matome_api, Oban)},
+      MatomeApi.SystemConfig.Reconciler,
       {DNSCluster, query: Application.get_env(:matome_api, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: MatomeApi.PubSub},
       # Owns the token-allowlist ETS cache and applies PubSub invalidations
