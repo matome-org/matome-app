@@ -28,7 +28,7 @@ defmodule MatomeApi.Repo.Migrations.ReplaceRecordingsWithItems do
              check: "media_type IN ('audio', 'image', 'document', 'video')"
            )
 
-    create constraint(:file_blobs, :file_blobs_byte_size_check, check: "byte_size >= 0")
+    create constraint(:file_blobs, :file_blobs_byte_size_check, check: "byte_size > 0")
 
     create constraint(:file_blobs, :file_blobs_filename_check,
              check: "filename IS NULL OR char_length(btrim(filename)) BETWEEN 1 AND 1024"
@@ -51,7 +51,10 @@ defmodule MatomeApi.Repo.Migrations.ReplaceRecordingsWithItems do
            )
 
     create constraint(:file_blobs, :file_blobs_uploaded_at_check,
-             check: "(upload_state = 'uploaded') = (uploaded_at IS NOT NULL)"
+             check: """
+             (upload_state = 'uploaded') = (uploaded_at IS NOT NULL)
+             AND (upload_state != 'uploaded' OR checksum_sha256 IS NOT NULL)
+             """
            )
 
     create constraint(:file_blobs, :file_blobs_multipart_context_check,

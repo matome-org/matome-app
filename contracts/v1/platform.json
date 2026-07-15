@@ -84,9 +84,11 @@
   "upload": {
     "contract_version": "1",
     "modes": ["single", "multipart"],
-    "operations": ["request", "complete", "abort"],
+    "operations": ["request", "inspect", "presign_part", "complete", "abort"],
     "paths": {
       "request": "POST /api/v1/items/{item_id}/uploads",
+      "inspect": "GET /api/v1/uploads/{upload_id}",
+      "presign_part": "POST /api/v1/uploads/{upload_id}/parts/{part_number}/presign",
       "complete": "POST /api/v1/uploads/{upload_id}/complete",
       "abort": "POST /api/v1/uploads/{upload_id}/abort"
     },
@@ -97,9 +99,23 @@
     "multipart": {
       "part_numbers": "contiguous_1_based",
       "part_retry": "same_upload_id_generation_and_part_number",
-      "resume": "request returns already accepted parts for the active generation"
+      "resume": "request and inspect return provider-accepted parts plus only the missing part numbers for the active generation",
+      "active_context": "one bounded JSONB context on file_blobs; no upload_sessions table",
+      "expiry": "presign expiry retains the provider upload for resume; context expiry aborts provider state before clearing Core context"
     },
-    "limits_source": "system_config.desired.uploads"
+    "limits_source": "MatomeApi.Storage.UploadPolicy runtime configuration",
+    "limits": {
+      "single_max_bytes": 26214400,
+      "multipart_part_bytes": 16777216,
+      "max_bytes": 2147483648,
+      "provider_max_bytes": 5497558138880,
+      "media_max_bytes": {
+        "audio": 2147483648,
+        "image": 52428800,
+        "document": 524288000,
+        "video": 2147483648
+      }
+    }
   },
   "ai": {
     "contract_version": "1",

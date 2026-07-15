@@ -104,10 +104,7 @@
           "state": "pending",
           "part_size": 16777216,
           "accepted_parts": [],
-          "parts": [
-            {"part_number": 1, "method": "PUT", "url": "https://storage.invalid/media/object?partNumber=1"},
-            {"part_number": 2, "method": "PUT", "url": "https://storage.invalid/media/object?partNumber=2"}
-          ],
+          "missing_parts": [1, 2],
           "expires_at": "2026-07-15T12:15:00Z"
         }
       },

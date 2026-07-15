@@ -145,6 +145,13 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
       insert_file_blob!("audio", uploaded_at: DateTime.utc_now())
     end
 
+    assert_raise Postgrex.Error, ~r/file_blobs_uploaded_at_check/, fn ->
+      insert_file_blob!("audio",
+        upload_state: "uploaded",
+        uploaded_at: DateTime.utc_now()
+      )
+    end
+
     insert_file_blob!("audio",
       checksum_sha256: String.duplicate("a", 64),
       upload_state: "uploaded",

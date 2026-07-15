@@ -273,6 +273,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
         item_type: "file",
         position: 0,
         byte_size: 123,
+        checksum_sha256: String.duplicate("a", 64),
         media_type: "audio"
       })
       |> json_response(201)
@@ -349,6 +350,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
         item_type: "file",
         position: 0,
         byte_size: 123,
+        checksum_sha256: String.duplicate("a", 64),
         media_type: "audio"
       })
       |> json_response(201)
@@ -538,6 +540,7 @@ defmodule MatomeApiWeb.ItemControllerTest do
         item_type: "file",
         position: 0,
         byte_size: 123,
+        checksum_sha256: String.duplicate("a", 64),
         media_type: "audio"
       })
       |> json_response(201)

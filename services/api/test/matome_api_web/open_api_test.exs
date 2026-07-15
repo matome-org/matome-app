@@ -19,6 +19,16 @@ defmodule MatomeApiWeb.OpenApiTest do
     assert Map.has_key?(body["paths"], "/api/matomes/{matome_id}/items")
     assert Map.has_key?(body["paths"], "/api/items/{id}")
     assert Map.has_key?(body["paths"], "/api/items/{id}/presign")
+    assert Map.has_key?(body["paths"], "/api/v1/items/{item_id}/uploads")
+    assert Map.has_key?(body["paths"], "/api/v1/uploads/{upload_id}")
+
+    assert Map.has_key?(
+             body["paths"],
+             "/api/v1/uploads/{upload_id}/parts/{part_number}/presign"
+           )
+
+    assert Map.has_key?(body["paths"], "/api/v1/uploads/{upload_id}/complete")
+    assert Map.has_key?(body["paths"], "/api/v1/uploads/{upload_id}/abort")
 
     item_schema =
       body
@@ -46,6 +56,9 @@ defmodule MatomeApiWeb.OpenApiTest do
 
     assert create_schema["properties"]["upload"]["properties"]["request"]["required"] ==
              ["method", "url", "headers"]
+
+    assert create_schema["properties"]["upload"]["properties"]["mode"]["enum"] ==
+             ["single", "multipart"]
 
     refute Map.has_key?(body["paths"], "/api/recordings")
     refute Map.has_key?(body["paths"], "/api/recordings/search")

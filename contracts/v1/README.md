@@ -56,6 +56,9 @@ an idempotency key. Core selects single or multipart for `mode=auto` using the
 desired upload policy and declared byte size.
 
 - `request` creates or resumes one active upload generation.
+- `inspect` reloads provider-accepted parts after a Core or client restart.
+- `presign_part` binds one part number, exact byte size, and SHA-256 to a fresh
+  short-lived PUT while retaining the provider upload when that URL expires.
 - `complete` verifies object byte size and SHA-256 before marking `uploaded`.
 - `abort` is idempotent and applies only to the named active generation.
 - Multipart parts are contiguous and 1-based. Retrying a part keeps the same
@@ -64,7 +67,17 @@ desired upload policy and declared byte size.
 
 `upload_id` is a logical envelope handle, not a requirement for an
 `upload_sessions` domain table. The active bounded multipart context belongs on
-the `file_blobs` row. S3 ETags are transport evidence, not content integrity.
+the `file_blobs` row. S3 ETags and per-part provider checksums are matched before
+completion; HEAD size and checksum facts are matched before `uploaded`. S3
+ETags are transport evidence, not content integrity.
+
+The 25 MiB value selects single PUT versus multipart; it is not a global audio
+ceiling. Core also enforces the configured media limit, Space quota, 2 GiB
+application upload limit, S3's 5 TiB object bound, 10,000-part bound, and minimum
+non-final part size. A multipart context lives for 24 hours by default. Expired
+presigns resume the same generation and return only missing parts; expired
+contexts are provider-aborted by a persisted cleanup job before Core clears the
+context.
 
 ## AI HTTP v1
 

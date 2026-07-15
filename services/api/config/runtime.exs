@@ -169,6 +169,7 @@ if config_env() == :prod do
 
   config :matome_api, MatomeApi.Storage.Presigner,
     endpoint: storage_s3_endpoint,
+    server_endpoint: System.get_env("STORAGE_S3_INTERNAL_ENDPOINT") || storage_s3_endpoint,
     access_key_id: storage_s3_access_key_id,
     secret_access_key: storage_s3_secret_access_key,
     region: System.get_env("STORAGE_S3_REGION") || "local",

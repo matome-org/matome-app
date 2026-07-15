@@ -55,7 +55,10 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
     schema = read_json!(@system_config_schema_path)
 
     assert contract["upload"]["modes"] == ~w(single multipart)
-    assert contract["upload"]["operations"] == ~w(request complete abort)
+    assert contract["upload"]["operations"] == ~w(request inspect presign_part complete abort)
+    assert contract["upload"]["limits"]["single_max_bytes"] == 25 * 1024 * 1024
+    assert contract["upload"]["limits"]["media_max_bytes"]["audio"] > 25 * 1024 * 1024
+    assert contract["upload"]["multipart"]["active_context"] =~ "no upload_sessions"
 
     for mode <- ~w(single multipart) do
       fixture = fixtures["uploads"][mode]

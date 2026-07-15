@@ -162,6 +162,12 @@ defmodule MatomeApiWeb.Router do
       post "/items/:id/process", ItemController, :process
       delete "/items/:id", ItemController, :delete
 
+      post "/v1/items/:item_id/uploads", UploadController, :request
+      get "/v1/uploads/:upload_id", UploadController, :inspect
+      post "/v1/uploads/:upload_id/parts/:part_number/presign", UploadController, :presign_part
+      post "/v1/uploads/:upload_id/complete", UploadController, :complete
+      post "/v1/uploads/:upload_id/abort", UploadController, :abort
+
       get "/contacts/search", ContactController, :search
       resources "/contacts", ContactController, except: [:new, :edit]
     end

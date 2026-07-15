@@ -41,12 +41,27 @@ config :matome_api, MatomeApi.Auth.TokenAllowlist,
 
 config :matome_api, MatomeApi.Storage.Presigner,
   endpoint: System.get_env("STORAGE_S3_ENDPOINT") || "http://127.0.0.1:7021",
+  server_endpoint:
+    System.get_env("STORAGE_S3_INTERNAL_ENDPOINT") || System.get_env("STORAGE_S3_ENDPOINT") ||
+      "http://127.0.0.1:7021",
   access_key_id: System.get_env("STORAGE_S3_ACCESS_KEY_ID") || "test-access-key",
   secret_access_key: System.get_env("STORAGE_S3_SECRET_ACCESS_KEY") || "test-secret-key",
   region: System.get_env("STORAGE_S3_REGION") || "local",
   bucket: System.get_env("STORAGE_MEDIA_BUCKET") || "media",
   upload_expires_in: String.to_integer(System.get_env("STORAGE_UPLOAD_URL_TTL") || "900"),
   download_expires_in: String.to_integer(System.get_env("STORAGE_DOWNLOAD_URL_TTL") || "300")
+
+config :matome_api, MatomeApi.Storage.UploadPolicy,
+  single_max_bytes: 25 * 1024 * 1024,
+  multipart_part_bytes: 16 * 1024 * 1024,
+  max_bytes: 2 * 1024 * 1024 * 1024,
+  multipart_ttl_seconds: 24 * 60 * 60,
+  media_max_bytes: %{
+    "audio" => 2 * 1024 * 1024 * 1024,
+    "image" => 50 * 1024 * 1024,
+    "document" => 500 * 1024 * 1024,
+    "video" => 2 * 1024 * 1024 * 1024
+  }
 
 # CORS allowed origins for browser clients (Flutter Web).
 # Overridden at runtime via CORS_ORIGINS (comma-separated) in runtime.exs.

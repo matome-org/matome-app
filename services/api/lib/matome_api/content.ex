@@ -13,13 +13,14 @@ defmodule MatomeApi.Content do
     SpaceKeyWrap,
     SpaceMember,
     TextContent,
+    UploadLifecycle,
     Workspace
   }
 
   alias MatomeApi.AIEngine.DispatchJob
   alias MatomeApi.Events
   alias MatomeApi.Repo
-  alias MatomeApi.Storage.{ObjectStore, Presigner}
+  alias MatomeApi.Storage.{ObjectStore, Presigner, UploadPolicy}
 
   @ai_media_types ~w(audio image)
 
@@ -442,16 +443,36 @@ defmodule MatomeApi.Content do
   def presign_item_upload(%User{} = owner, id, attrs \\ %{}) do
     with %Item{} = item <- get_item(owner, id),
          %Item{item_type: :file, file_blob: %FileBlob{} = file_blob} <- item do
-      Presigner.presign_upload(file_blob.storage_key,
-        content_length:
-          Map.get(attrs, "byte_size") || Map.get(attrs, :byte_size) || file_blob.byte_size
-      )
+      byte_size = Map.get(attrs, "byte_size") || Map.get(attrs, :byte_size) || file_blob.byte_size
+
+      with :ok <- UploadPolicy.validate_size(file_blob.media_type, byte_size),
+           true <- byte_size == file_blob.byte_size || {:error, :declared_size_mismatch},
+           true <-
+             UploadPolicy.mode_for(file_blob.media_type, byte_size) == :single ||
+               {:error, :multipart_required} do
+        Presigner.presign_upload(file_blob.storage_key, content_length: byte_size)
+      end
     else
       %Item{item_type: :text} -> {:error, :text_item_not_presignable}
       nil -> nil
       {:error, reason} -> {:error, reason}
     end
   end
+
+  def request_item_upload(%User{} = owner, id, attrs \\ %{}),
+    do: UploadLifecycle.request(owner, id, attrs)
+
+  def inspect_item_upload(%User{} = owner, upload_id),
+    do: UploadLifecycle.inspect(owner, upload_id)
+
+  def presign_item_upload_part(%User{} = owner, upload_id, part_number, attrs),
+    do: UploadLifecycle.presign_part(owner, upload_id, part_number, attrs)
+
+  def complete_item_upload(%User{} = owner, upload_id, attrs),
+    do: UploadLifecycle.complete(owner, upload_id, attrs)
+
+  def abort_item_upload(%User{} = owner, upload_id, attrs \\ %{}),
+    do: UploadLifecycle.abort(owner, upload_id, attrs)
 
   def presign_item_download(%User{} = owner, id) do
     with %Item{} = item <- get_item(owner, id),

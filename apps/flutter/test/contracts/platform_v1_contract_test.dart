@@ -49,6 +49,8 @@ void main() {
     expect(item['presign'], isNull);
     expect(contract['upload']['operations'], <String>[
       'request',
+      'inspect',
+      'presign_part',
       'complete',
       'abort',
     ]);

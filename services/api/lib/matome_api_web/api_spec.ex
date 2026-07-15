@@ -202,6 +202,55 @@ defmodule MatomeApiWeb.ApiSpec do
           requestBody: presign_request_body(),
           responses: resource_responses("Presign")
         }
+      },
+      "/api/v1/items/{item_id}/uploads" => %PathItem{
+        post: %Operation{
+          operationId: "UploadController.request",
+          tags: ["uploads"],
+          summary: "Create or resume the authenticated owner's active upload generation",
+          parameters: [item_id_parameter()],
+          requestBody: upload_request_body(),
+          responses: upload_responses("Upload descriptor")
+        }
+      },
+      "/api/v1/uploads/{upload_id}" => %PathItem{
+        get: %Operation{
+          operationId: "UploadController.inspect",
+          tags: ["uploads"],
+          summary: "Inspect accepted and missing parts for an owner-scoped upload",
+          parameters: [upload_id_parameter()],
+          responses: upload_responses("Upload state")
+        }
+      },
+      "/api/v1/uploads/{upload_id}/parts/{part_number}/presign" => %PathItem{
+        post: %Operation{
+          operationId: "UploadController.presign_part",
+          tags: ["uploads"],
+          summary: "Presign one checksum-bound multipart part PUT",
+          parameters: [upload_id_parameter(), part_number_parameter()],
+          requestBody: checksum_request_body("Multipart part"),
+          responses: upload_responses("Multipart part request")
+        }
+      },
+      "/api/v1/uploads/{upload_id}/complete" => %PathItem{
+        post: %Operation{
+          operationId: "UploadController.complete",
+          tags: ["uploads"],
+          summary: "Verify provider size/checksum/ETags and complete an upload",
+          parameters: [upload_id_parameter()],
+          requestBody: upload_complete_request_body(),
+          responses: upload_responses("Verified upload")
+        }
+      },
+      "/api/v1/uploads/{upload_id}/abort" => %PathItem{
+        post: %Operation{
+          operationId: "UploadController.abort",
+          tags: ["uploads"],
+          summary: "Idempotently abort and clean the active upload generation",
+          parameters: [upload_id_parameter()],
+          requestBody: upload_abort_request_body(),
+          responses: upload_responses("Aborted upload")
+        }
       }
     }
   end
@@ -297,6 +346,66 @@ defmodule MatomeApiWeb.ApiSpec do
     })
   end
 
+  defp upload_request_body do
+    Operation.request_body("Upload request", "application/json", %OpenApiSpex.Schema{
+      type: :object,
+      properties: %{
+        contract_version: %OpenApiSpex.Schema{type: :string, enum: ["1"]},
+        mode: %OpenApiSpex.Schema{type: :string, enum: ["auto", "single", "multipart"]},
+        checksum_sha256: checksum_schema()
+      }
+    })
+  end
+
+  defp checksum_request_body(description) do
+    Operation.request_body(description, "application/json", %OpenApiSpex.Schema{
+      type: :object,
+      required: [:checksum_sha256],
+      properties: %{checksum_sha256: checksum_schema()}
+    })
+  end
+
+  defp upload_complete_request_body do
+    Operation.request_body("Upload completion", "application/json", %OpenApiSpex.Schema{
+      type: :object,
+      required: [:upload_generation, :checksum_sha256],
+      properties: %{
+        contract_version: %OpenApiSpex.Schema{type: :string, enum: ["1"]},
+        upload_generation: %OpenApiSpex.Schema{type: :integer, minimum: 1},
+        checksum_sha256: checksum_schema(),
+        etag: %OpenApiSpex.Schema{type: :string},
+        parts: %OpenApiSpex.Schema{
+          type: :array,
+          items: %OpenApiSpex.Schema{
+            type: :object,
+            required: [:part_number, :etag, :checksum_sha256],
+            properties: %{
+              part_number: %OpenApiSpex.Schema{type: :integer, minimum: 1, maximum: 10_000},
+              etag: %OpenApiSpex.Schema{type: :string},
+              checksum_sha256: checksum_schema()
+            }
+          }
+        }
+      }
+    })
+  end
+
+  defp upload_abort_request_body do
+    Operation.request_body("Upload abort", "application/json", %OpenApiSpex.Schema{
+      type: :object,
+      required: [:upload_generation],
+      properties: %{
+        contract_version: %OpenApiSpex.Schema{type: :string, enum: ["1"]},
+        upload_generation: %OpenApiSpex.Schema{type: :integer, minimum: 1},
+        reason: %OpenApiSpex.Schema{type: :string, maxLength: 255}
+      }
+    })
+  end
+
+  defp checksum_schema do
+    %OpenApiSpex.Schema{type: :string, pattern: "^[0-9a-f]{64}$"}
+  end
+
   defp item_create_responses do
     %{
       201 =>
@@ -327,15 +436,20 @@ defmodule MatomeApiWeb.ApiSpec do
             :upload_generation,
             :mode,
             :state,
-            :expires_at,
-            :request
+            :expires_at
           ],
           properties: %{
             upload_id: %OpenApiSpex.Schema{type: :string},
             upload_generation: %OpenApiSpex.Schema{type: :integer, minimum: 1},
-            mode: %OpenApiSpex.Schema{type: :string, enum: ["single"]},
-            state: %OpenApiSpex.Schema{type: :string, enum: ["pending"]},
+            mode: %OpenApiSpex.Schema{type: :string, enum: ["single", "multipart"]},
+            state: %OpenApiSpex.Schema{type: :string, enum: ["pending", "uploading"]},
             expires_at: %OpenApiSpex.Schema{type: :string, format: :"date-time"},
+            part_size: %OpenApiSpex.Schema{type: :integer, minimum: 5_242_880},
+            accepted_parts: %OpenApiSpex.Schema{type: :array},
+            missing_parts: %OpenApiSpex.Schema{
+              type: :array,
+              items: %OpenApiSpex.Schema{type: :integer, minimum: 1}
+            },
             request: %OpenApiSpex.Schema{
               type: :object,
               required: [:method, :url, :headers],
@@ -360,6 +474,18 @@ defmodule MatomeApiWeb.ApiSpec do
     }
   end
 
+  defp upload_responses(description) do
+    %{
+      200 => Operation.response(description, "application/json", nil),
+      401 => Operation.response("Unauthorized", "application/json", nil),
+      404 => Operation.response("Not found", "application/json", nil),
+      409 => Operation.response("Stale upload generation", "application/json", nil),
+      410 => Operation.response("Upload expired", "application/json", nil),
+      422 =>
+        Operation.response("Upload validation or verification error", "application/json", nil)
+    }
+  end
+
   defp id_parameter do
     Operation.parameter(:id, :path, %OpenApiSpex.Schema{type: :integer}, "Resource id",
       required: true
@@ -368,6 +494,36 @@ defmodule MatomeApiWeb.ApiSpec do
 
   defp matome_id_parameter do
     Operation.parameter(:matome_id, :path, %OpenApiSpex.Schema{type: :integer}, "Matome id",
+      required: true
+    )
+  end
+
+  defp item_id_parameter do
+    Operation.parameter(
+      :item_id,
+      :path,
+      %OpenApiSpex.Schema{type: :integer},
+      "Owner-scoped item id",
+      required: true
+    )
+  end
+
+  defp upload_id_parameter do
+    Operation.parameter(
+      :upload_id,
+      :path,
+      %OpenApiSpex.Schema{type: :string},
+      "Logical active upload handle",
+      required: true
+    )
+  end
+
+  defp part_number_parameter do
+    Operation.parameter(
+      :part_number,
+      :path,
+      %OpenApiSpex.Schema{type: :integer, minimum: 1, maximum: 10_000},
+      "One-based multipart part number",
       required: true
     )
   end

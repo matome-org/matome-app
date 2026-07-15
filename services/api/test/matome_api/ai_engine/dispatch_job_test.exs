@@ -33,7 +33,11 @@ defmodule MatomeApi.AIEngine.DispatchJobTest do
     {:ok, matome} = Content.create_matome(user, %{title: "Dispatch"})
 
     {:ok, item} =
-      Content.create_file_item(user, matome.id, %{byte_size: 123, media_type: "audio"})
+      Content.create_file_item(user, matome.id, %{
+        byte_size: 123,
+        checksum_sha256: String.duplicate("a", 64),
+        media_type: "audio"
+      })
 
     item.file_blob
     |> Ecto.Changeset.change(

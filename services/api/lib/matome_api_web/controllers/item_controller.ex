@@ -4,6 +4,7 @@ defmodule MatomeApiWeb.ItemController do
   require Logger
 
   alias MatomeApi.Content
+  alias MatomeApi.Storage.UploadPolicy
 
   def index(conn, %{"matome_id" => matome_id}) do
     case Content.list_items(conn.assigns.current_user, matome_id) do
@@ -45,14 +46,24 @@ defmodule MatomeApiWeb.ItemController do
         not_found(conn)
 
       {:ok, item} ->
-        case Content.presign_item_upload(conn.assigns.current_user, item.id) do
-          {:ok, presign} ->
+        upload_result =
+          if UploadPolicy.mode_for(item.file_blob.media_type, item.file_blob.byte_size) ==
+               :multipart do
+            Content.request_item_upload(conn.assigns.current_user, item.id, %{"mode" => "auto"})
+          else
+            with {:ok, presign} <- Content.presign_item_upload(conn.assigns.current_user, item.id) do
+              {:ok, upload_json(item, presign)}
+            end
+          end
+
+        case upload_result do
+          {:ok, upload} ->
             conn
             |> put_status(:created)
             |> json(%{
               contract_version: "1",
               item: item_json(item),
-              upload: upload_json(item, presign)
+              upload: upload
             })
 
           {:error, reason} ->

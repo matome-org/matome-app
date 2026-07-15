@@ -30,12 +30,43 @@ data plane. `mise run up` is a thin wrapper over `docker compose` that seeds
 | `DATABASE_SSL` | no | Default `true` in prod, `false` in dev/test. Set `true` for managed Postgres. |
 | `POOL_SIZE` | no | Default `10` in prod. Keep conservative behind a pooler. |
 | `STORAGE_S3_ENDPOINT` | yes (prod) | **Browser-reachable public base URL** baked into every presigned PUT/GET. Never an internal Docker hostname (`http://minio:9000`). Local example: `http://127.0.0.1:7021`. |
+| `STORAGE_S3_INTERNAL_ENDPOINT` | no | Core-reachable S3 base URL for multipart control, HEAD, verification GET, and cleanup. Defaults to `STORAGE_S3_ENDPOINT`; Compose uses `http://minio:9000`. Never returned to clients. |
 | `STORAGE_S3_ACCESS_KEY_ID` | yes (prod) | Access key for the object store. |
 | `STORAGE_S3_SECRET_ACCESS_KEY` | yes (prod) | Secret key. |
 | `STORAGE_S3_REGION` | no | Default `local`. Use the provider region (e.g. `auto` for R2, `us-east-1` for S3). |
 | `STORAGE_MEDIA_BUCKET` | no | Default `media`. |
 | `STORAGE_UPLOAD_URL_TTL` | no | Seconds; default `900`. |
 | `STORAGE_DOWNLOAD_URL_TTL` | no | Seconds; default `300`. |
+
+## Verified upload lifecycle
+
+File items retain one stable `owners/{owner_id}/items/{uuid}` key and move
+through `pending`, `uploading`, then provider-verified `uploaded` (or terminal
+`failed`/`aborted`). Small files keep the existing single presigned PUT. The
+25 MiB boundary selects multipart rather than rejecting larger audio; Core still
+enforces media-specific limits, Space quota, the 2 GiB application limit, and
+S3-compatible provider bounds.
+
+Authenticated v1 routes are owner-scoped and return `404` across owners:
+
+| Operation | Route |
+| --- | --- |
+| Create/resume | `POST /api/v1/items/{item_id}/uploads` |
+| Inspect accepted/missing parts | `GET /api/v1/uploads/{upload_id}` |
+| Presign one missing part | `POST /api/v1/uploads/{upload_id}/parts/{part_number}/presign` |
+| Verify and complete | `POST /api/v1/uploads/{upload_id}/complete` |
+| Abort and clean | `POST /api/v1/uploads/{upload_id}/abort` |
+
+Multipart progress is provider state plus one bounded `file_blobs.multipart_context`
+JSONB value; there is no upload-session table or node-local session. Core restart
+therefore resumes the same generation by listing provider parts. Expired part
+URLs are refreshed without replacing accepted parts. The persisted Oban cleanup
+job aborts a context after 24 hours by default, and explicit abort is idempotent.
+
+Completion compares contiguous part numbers, exact part sizes, provider ETags,
+and provider-verified part SHA-256 values before assembling. It then HEADs the
+object and compares exact total size plus SHA-256 metadata/checksum before setting
+`uploaded_at`; processing continues to reject every non-verified state.
 
 ### Presign addressing (path-style)
 
@@ -55,7 +86,8 @@ change the contract.
 
 Browser uploads (Flutter Web) need the object store to allow the web origin
 for `PUT`/`GET` on the media bucket. Configure CORS on MinIO/R2/S3 to match
-`CORS_ORIGINS` (or the deployed web origin).
+`CORS_ORIGINS` (or the deployed web origin), allow the checksum request header,
+and expose `ETag` plus provider checksum headers for multipart completion.
 
 ## Dockploy / production checklist
 
