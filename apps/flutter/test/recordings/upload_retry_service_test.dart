@@ -15,6 +15,7 @@ void main() {
     () async {
       final queue = _RecordingQueue();
       final probedEndpoints = <String>[];
+      var reports = 0;
       final container = ProviderContainer(
         overrides: [
           settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
@@ -23,6 +24,7 @@ void main() {
             (ref) => UploadRetryService(
               ref,
               interval: const Duration(milliseconds: 5),
+              reportQueue: () async => reports++,
               probe: (baseUrl) async {
                 probedEndpoints.add(baseUrl);
                 return baseUrl == 'http://127.0.0.1:7999';
@@ -35,6 +37,8 @@ void main() {
 
       await container.read(uploadRetryServiceProvider).start();
       expect(queue.drains, 1, reason: 'app start drains once');
+      await queue.firstDrainFinished.future.timeout(const Duration(seconds: 1));
+      expect(reports, 1, reason: 'app start reports after the drain');
 
       await container
           .read(endpointConfigProvider.notifier)
@@ -61,6 +65,7 @@ void main() {
             ref,
             interval: const Duration(milliseconds: 5),
             probe: (_) async => true,
+            reportQueue: () async {},
           ),
         ),
       ],
@@ -79,10 +84,14 @@ class _RecordingQueue extends UploadQueue {
 
   int drains = 0;
   final networkRecovery = Completer<void>();
+  final firstDrainFinished = Completer<void>();
 
   @override
   Future<void> drain() async {
     drains++;
+    if (drains == 1 && !firstDrainFinished.isCompleted) {
+      firstDrainFinished.complete();
+    }
     if (drains == 2 && !networkRecovery.isCompleted) {
       networkRecovery.complete();
     }

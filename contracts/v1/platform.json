@@ -547,6 +547,19 @@
       "admin.config_changed": "security.admin_config_changed.v2"
     }
   },
+  "device_queue_snapshot": {
+    "schema": "device-queue-snapshot.schema.json",
+    "path": "POST /api/device/queue-snapshot",
+    "auth": "owner_bearer_session_device",
+    "storage": "one current bounded JSONB value on the owner-scoped devices row; no history table",
+    "monotonic_field": "sequence",
+    "max_json_bytes": 65536,
+    "max_reconciled_items": 100,
+    "allowed_facts": ["counts", "stages", "oldest_age_seconds", "progress", "stable_error_codes", "reconciled_core_item_ids"],
+    "prohibited_facts": ["paths", "filenames", "names", "local_only_ids", "content", "raw_errors", "keys", "credentials"],
+    "local_space_rule": "Local-only Spaces are omitted by default and may contribute aggregate work count/oldest age only after product-metrics opt-in.",
+    "admin_semantics": "Observation only: label stale snapshots and unacknowledged desired config; never imply control of an offline device or expose individual device commands."
+  },
   "system_config": {
     "schema": "system-config.schema.json",
     "singleton_key": "global",
@@ -560,7 +573,7 @@
     "desired_semantics": "Admin writes policy intent at a new monotonic revision; this does not assert that an offline device applied it.",
     "applied_semantics": {
       "core": "Core reports applied only after the config transaction and mandatory audit event commit together.",
-      "device": "Each device reports its own last applied revision and rejected keys in a sanitized snapshot.",
+      "device": "Each device reports its own last applied revision with its latest sanitized queue snapshot.",
       "offline": "Keep the last applied revision and report it as stale; never copy desired into applied."
     },
     "effective_semantics": "Core reports the local Oban producer's actual paused/concurrency state separately; an unavailable producer is a mismatch with restart_required=true.",

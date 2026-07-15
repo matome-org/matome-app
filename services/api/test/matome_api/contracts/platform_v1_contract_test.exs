@@ -6,6 +6,10 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
   @fixtures_path Path.join(@repo_root, "contracts/v1/fixtures/canonical.json")
   @mismatches_path Path.join(@repo_root, "contracts/v1/fixtures/known-mismatches.json")
   @system_config_schema_path Path.join(@repo_root, "contracts/v1/system-config.schema.json")
+  @device_snapshot_schema_path Path.join(
+                                 @repo_root,
+                                 "contracts/v1/device-queue-snapshot.schema.json"
+                               )
 
   test "freezes the local-first work lifecycle and ownership boundaries" do
     contract = read_json!(@contract_path)
@@ -53,6 +57,7 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
     contract = read_json!(@contract_path)
     fixtures = read_json!(@fixtures_path)
     schema = read_json!(@system_config_schema_path)
+    device_schema = read_json!(@device_snapshot_schema_path)
 
     assert contract["upload"]["modes"] == ~w(single multipart)
     assert contract["upload"]["operations"] == ~w(request inspect presign_part complete abort)
@@ -122,6 +127,16 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
     assert fixtures["system_config"]["document"]["revision"] == 7
     assert fixtures["system_config"]["device_application"]["desired_revision"] == 7
     assert fixtures["system_config"]["device_application"]["applied_revision"] == 6
+
+    device = fixtures["device_queue_snapshot"]
+    assert device_schema["additionalProperties"] == false
+    assert device_schema["properties"]["snapshot"]["additionalProperties"] == false
+
+    assert device["snapshot"]["items"] |> hd() |> Map.keys() |> Enum.sort() ==
+             ~w(age_seconds core_item_id error_code media_type progress stage state)
+
+    refute Jason.encode!(device) =~ "local_id"
+    refute Jason.encode!(device) =~ "path"
   end
 
   test "records the reset-safe data model decisions" do

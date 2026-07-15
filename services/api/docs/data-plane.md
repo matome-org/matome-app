@@ -87,6 +87,15 @@ ends at `uploaded/not_requested`; capable media releases the device lease once
 Core accepts processing, without polling or awaiting AI. The canonical local
 file is retained in both cases.
 
+After app-start and reachable retry drains, Flutter may report one throttled
+queue observation to `POST /api/device/queue-snapshot`. The closed v1 request
+contains aggregate state/stage/error counts, oldest age, progress, and at most
+100 reconciled Core Item ids. It never contains local ids, paths, filenames,
+names, content, raw errors, credentials, or key material. Local-only Spaces are
+omitted by default; after product-metrics opt-in they contribute aggregate work
+count and oldest age only. Core replaces the single Device JSONB value only for
+a higher report sequence; there is no queue-report history table.
+
 ### Presign addressing (path-style)
 
 `MatomeApi.Storage.Presigner` signs **path-style** URLs:

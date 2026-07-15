@@ -110,6 +110,21 @@ void main() {
       'desired',
       'applied',
     ]);
+
+    final queueContract =
+        contract['device_queue_snapshot'] as Map<String, dynamic>;
+    final queueFixture =
+        fixtures['device_queue_snapshot'] as Map<String, dynamic>;
+    final queueSchema = _readJson(
+      '../../contracts/v1/device-queue-snapshot.schema.json',
+    );
+    expect(queueContract['max_json_bytes'], 65536);
+    expect(queueContract['max_reconciled_items'], 100);
+    expect(queueSchema['additionalProperties'], isFalse);
+    expect(
+      (queueFixture['snapshot'] as Map<String, dynamic>)['items'],
+      everyElement(isNot(contains('local_id'))),
+    );
   });
 
   test('executes all known current mismatch proofs', () {

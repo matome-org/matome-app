@@ -32,9 +32,11 @@ unavailable local producer additionally reports `restart_required=true`.
 Flutter validates and caches only accepted monotonic revisions. It fetches on
 start, authentication, endpoint change, and foreground resume, retains the last
 accepted policy offline, and sends a bounded application report to
-`POST /api/system-config/application`. That endpoint intentionally stores no
-per-device snapshot in this task; it is the seam for the subsequent device
-snapshot/Work UI task.
+`POST /api/system-config/application`. Queue observability separately uses
+`POST /api/device/queue-snapshot`, which stores the applied revision with one
+monotonic, bounded observation on the owner-scoped Device row. Admin labels a
+snapshot when it is stale or has not acknowledged the desired revision; neither
+status creates a device command or implies control of an offline client.
 
 ## Runtime-only values
 

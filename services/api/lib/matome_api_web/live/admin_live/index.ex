@@ -46,6 +46,7 @@ defmodule MatomeApiWeb.AdminLive.Index do
           <a href="/admin/spaces">Spaces</a>
           <a href="/admin/audit">Audit log</a>
           <a href="/admin/events">Events</a>
+          <a href="/admin/work">Work</a>
           <a href="/admin/event-catalog">Event catalog</a>
           <a href="/admin/settings">Settings</a>
         </nav>

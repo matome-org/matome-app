@@ -14,6 +14,7 @@ import 'http/api_exception.dart';
 import 'http/token_store.dart';
 import 'settings/settings_store.dart';
 import 'telemetry/product_event_reporter.dart';
+import 'telemetry/device_queue_reporter.dart';
 
 export '../features/auth/current_owner.dart' show currentOwnerIdProvider;
 
@@ -79,6 +80,16 @@ final productEventReporterProvider = Provider<ProductEventReporter>((ref) {
   return ProductEventReporter(
     apiClient: ref.watch(apiClientProvider),
     settingsStore: ref.watch(settingsStoreProvider),
+  );
+});
+
+final deviceQueueReporterProvider = Provider<DeviceQueueReporter>((ref) {
+  return DeviceQueueReporter(
+    database: ref.watch(appDatabaseProvider),
+    apiClient: ref.watch(apiClientProvider),
+    settingsStore: ref.watch(settingsStoreProvider),
+    appliedConfigRevision: () => ref.read(systemPolicyProvider).revision,
+    reportingInterval: () => ref.read(systemPolicyProvider).reportingInterval,
   );
 });
 

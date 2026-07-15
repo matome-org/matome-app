@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/endpoint_controller.dart';
 import '../../core/observability/app_log.dart';
+import '../../core/providers.dart' show deviceQueueReporterProvider;
 import 'upload_queue.dart';
 
 /// A reachability check for Core — returns `true` when the supplied runtime URL
@@ -59,7 +60,12 @@ class UploadRetryService {
     this._ref, {
     this.probe = probeApiReachability,
     this.interval = const Duration(seconds: 30),
-  });
+    Future<void> Function()? reportQueue,
+  }) : _reportQueue =
+           reportQueue ??
+           (() async {
+             await _ref.read(deviceQueueReporterProvider).report();
+           });
 
   final Ref _ref;
 
@@ -68,6 +74,7 @@ class UploadRetryService {
 
   /// How often reachability is re-probed for the connectivity-regained trigger.
   final Duration interval;
+  final Future<void> Function() _reportQueue;
 
   Timer? _timer;
   bool _lastReachable = false;
@@ -84,7 +91,7 @@ class UploadRetryService {
 
     // (a) App-start drain — clears any backlog left by a previous session that
     //     died with Core unreachable. Best-effort: the queue never throws.
-    unawaited(_queue.drain());
+    unawaited(_drainAndReport());
 
     // Seed the reachability edge detector so we don't double-drain on the first
     // tick if Core was already up at start.
@@ -107,7 +114,7 @@ class UploadRetryService {
             ? '_tick: connectivity regained, draining'
             : '_tick: reachable, draining due work',
       );
-      unawaited(_queue.drain());
+      unawaited(_drainAndReport());
     }
   }
 
@@ -115,7 +122,16 @@ class UploadRetryService {
   /// e.g. a successful foreground sync). Best-effort.
   Future<void> drainNow() {
     AppLog.event(LogCat.upload, 'drainNow: manual drain');
-    return _queue.drain();
+    return _drainAndReport();
+  }
+
+  Future<void> _drainAndReport() async {
+    await _queue.drain();
+    try {
+      await _reportQueue();
+    } on Object {
+      // Queue reporting is observational and must never break execution.
+    }
   }
 
   Future<bool> _safeProbe() async {

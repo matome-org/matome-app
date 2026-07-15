@@ -2,8 +2,9 @@
 
 This directory is the normative W0 contract for device work, Core state,
 uploads, AI jobs, events, and non-secret system policy. `platform.json` is the
-machine-readable catalog; `system-config.schema.json` is the executable JSON
-Schema; `fixtures/canonical.json` contains valid shared envelopes.
+machine-readable catalog; `system-config.schema.json` and
+`device-queue-snapshot.schema.json` are executable JSON Schemas;
+`fixtures/canonical.json` contains valid shared envelopes.
 
 Breaking wire changes create `contracts/v2`. Additive fields may be introduced
 in v1 only when existing consumers ignore unknown response fields; requests and
@@ -152,8 +153,8 @@ node boot and again on the bounded reporting interval. API and Admin responses
 keep desired, persisted applied revision, and effective producer state
 separate; an unavailable producer is shown as a mismatch requiring restart.
 
-Devices fetch desired policy when online and report a separate sanitized
-application snapshot. An offline device keeps its last `applied_revision`; the
+Devices fetch desired policy when online and report a separate sanitized queue
+snapshot. An offline device keeps its last `applied_config_revision`; the
 admin may display it as stale but must not present desired policy as applied or
 send an individual device command. Rejected keys are explicit. Credentials and
 signing material remain runtime secrets.
@@ -161,9 +162,18 @@ signing material remain runtime secrets.
 Flutter fetches on app start, authentication, endpoint change, and foreground
 resume. It accepts and caches only a closed v1 document with a non-decreasing
 revision, keeps the last accepted document offline, reports only the applied
-revision plus rejected key paths, and snapshots the accepted revision into new
-device work. The report endpoint is the W4 seam only; per-device snapshot
-storage and Work UI belong to the following task.
+revision plus rejected key paths to the application seam, and snapshots the
+accepted revision into new device work. The queue reporter stores only one
+monotonic, 64 KiB-bounded observation on the owner-scoped Device: aggregate
+counts/stages/age/progress/stable error codes and at most 100 reconciled Core
+Item ids. Paths, filenames, names, local-only ids, content, raw errors, keys,
+and credentials are not fields. Local-only Spaces are omitted unless product
+metrics are opted in, and then contribute aggregate count/age only.
+
+`/admin/work` joins this observation with current Item upload/processing fields,
+Oban dispatch metadata, and immutable Events. It labels stale snapshots and
+unacknowledged desired configuration, distinguishes Oban acceptance from AI
+terminal state, and is observation-only: no individual device command exists.
 
 ## Data model decisions
 

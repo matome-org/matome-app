@@ -17,6 +17,9 @@ defmodule MatomeApi.Auth.Device do
   for this device (consumed by the key-bundle flow; written by a later
   wave). `revoked_at` is the W5 revocation seam — capture never sets it.
 
+  Queue observability stores only the latest bounded, sanitized aggregate and
+  reconciled Core item observations. It is not a history or command channel.
+
   Retention of the PII here (user agent, and the per-token IPs referencing
   this row) is bounded — see `services/api/docs/session-metadata-retention.md`.
   """
@@ -36,6 +39,10 @@ defmodule MatomeApi.Auth.Device do
     field :last_seen_at, :utc_datetime
     field :device_key_enrolled, :boolean, default: false
     field :revoked_at, :utc_datetime
+    field :queue_snapshot, :map
+    field :queue_reported_at, :utc_datetime
+    field :queue_report_sequence, :integer, default: 0
+    field :applied_config_revision, :integer
 
     belongs_to :user, MatomeApi.Auth.User
 
@@ -56,7 +63,11 @@ defmodule MatomeApi.Auth.Device do
       :first_seen_at,
       :last_seen_at,
       :device_key_enrolled,
-      :revoked_at
+      :revoked_at,
+      :queue_snapshot,
+      :queue_reported_at,
+      :queue_report_sequence,
+      :applied_config_revision
     ])
     |> validate_required([:user_id, :first_seen_at, :last_seen_at])
     |> validate_length(:platform, max: 100)
@@ -64,6 +75,9 @@ defmodule MatomeApi.Auth.Device do
     |> validate_length(:device_class, max: 100)
     |> validate_length(:model, max: 255)
     |> validate_length(:display_name, max: 255)
+    |> validate_number(:queue_report_sequence, greater_than_or_equal_to: 0)
+    |> validate_number(:applied_config_revision, greater_than_or_equal_to: 0)
     |> unique_constraint([:user_id, :client_id])
+    |> check_constraint(:queue_snapshot, name: :devices_queue_snapshot_current_check)
   end
 end

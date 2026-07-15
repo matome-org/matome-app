@@ -103,4 +103,9 @@ that always applies `event_class=security`, regardless of submitted params.
 every submit re-checks the current email allowlist and five-minute OTP freshness
 and commits `security.event_catalog.changed.v2` atomically with the policy
 change. The admin views use the existing browser/admin LiveView session and
-design-system components; they add no Work or system-configuration controls.
+design-system components. `/admin/work` adds a metadata-only observation that
+joins current Item upload/processing fields, Oban dispatch metadata, immutable
+Events, and each Device's last sanitized snapshot. It labels stale/config-
+unacknowledged snapshots and separates “Oban accepted” from AI terminal state.
+It exposes no device commands and never presents an offline device as
+server-controlled.

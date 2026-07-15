@@ -11,7 +11,7 @@ defmodule MatomeApi.Admin do
   import Ecto.Query
 
   alias Ecto.Multi
-  alias MatomeApi.Admin.{Dashboard, LoginOtp, NetworkPolicy, Notifier, TotpSecret}
+  alias MatomeApi.Admin.{Dashboard, LoginOtp, NetworkPolicy, Notifier, TotpSecret, Work}
   alias MatomeApi.Auth
   alias MatomeApi.Auth.{RefreshToken, User}
   alias MatomeApi.Content.{SpaceKeyWrap, SpaceLifecycleJob, SpaceMember, Workspace}
@@ -435,6 +435,20 @@ defmodule MatomeApi.Admin do
     page = Events.list_events(event_opts)
     audit_sensitive_read!("events", audit_opts)
     page
+  end
+
+  @doc "Reads the bounded metadata-only Work projection and audits the cross-user read."
+  def list_work(filters, opts) when is_map(filters) and is_list(opts) do
+    work = Work.list(filters)
+    audit_sensitive_read!("work", opts)
+    work
+  end
+
+  @doc "Reads one metadata-only Item/run Work timeline and audits the read."
+  def get_work_item(id, opts) when is_integer(id) and is_list(opts) do
+    item = Work.get_item(id)
+    audit_sensitive_read!("work_item", opts, "item", id)
+    item
   end
 
   defp blank_to_nil(nil), do: nil

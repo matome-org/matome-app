@@ -321,5 +321,21 @@
       "status": "stale",
       "rejected_keys": []
     }
+  },
+  "device_queue_snapshot": {
+    "contract_version": "1",
+    "sequence": 8,
+    "applied_config_revision": 7,
+    "snapshot": {
+      "counts": {"retry": 1},
+      "stages": {"upload": 1},
+      "errors": {"transport": 1},
+      "oldest_age_seconds": 120,
+      "progress": {"average": 0.5, "minimum": 0.5},
+      "items": [
+        {"core_item_id": 42, "state": "retry", "stage": "upload", "media_type": "audio", "age_seconds": 120, "progress": 0.5, "error_code": "transport"}
+      ],
+      "local_spaces": {"work_count": 2, "oldest_age_seconds": 300}
+    }
   }
 }
