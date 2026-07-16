@@ -2840,9 +2840,12 @@ const _journeyAudioRow = ItemWithPayload(
     notes: 'Follow up with design on empty states before Friday.',
     metadata: '{}',
     processingState: 'succeeded',
+    processingRunId: '00000000-0000-4000-8000-000000000501',
+    processingAttempt: 1,
     sourceRevision: 1,
     processingOutputs:
-        '{"summary":"Decision log, launch risks, and owners captured from the review.","transcript":"We confirmed the launch checklist, kept analytics instrumentation as the highest risk, and assigned owners for support docs, billing copy, and the Friday go/no-go review."}',
+        '{"summary":{"type":"summary","markdown":"Decision log, launch risks, and owners captured from the review."},"transcript":{"type":"transcript","text":"We confirmed the launch checklist, kept analytics instrumentation as the highest risk, and assigned owners for support docs, billing copy, and the Friday go/no-go review."}}',
+    processingRequestedOutputs: '["transcript","summary"]',
     fileBlobId: 'widgetbook-audio-review-blob',
     isDirty: false,
     syncState: 'synced',

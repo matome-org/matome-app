@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../recordings/recording_ids.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_button.dart';
 import '../../ui/app_text_field.dart';
@@ -17,21 +18,27 @@ enum FileMediaKind { audio, image, doc, video }
 /// The honest, producer-INDEPENDENT state of a file's read-only Contents body
 /// (audio → transcript, image → description, …).
 ///
-/// The host derives this from the recording's OWN fields (processing flags,
-/// failure status, whether the machine text is present) — never from a backend
-/// producer that may not exist yet. That is what lets an image with no
-/// description converge on [empty] ("No description yet") rather than a fake
-/// "Describing…": the image producer is deferred (#1445), so its terminal state
-/// is honestly empty.
+/// The host projects Core's explicit processing state and the modality's typed
+/// output. It never infers success from output presence or invents an in-flight
+/// state for a producer that did not run.
 enum ContentsState {
   /// Machine text is present — render it.
   ready,
+
+  /// Core accepted the run but dispatch has not started.
+  queued,
 
   /// The text is actively being generated (transcribing / describing).
   processing,
 
   /// Generation failed — show the per-type message and a Retry affordance.
   failed,
+
+  /// Core completed only a strict subset of the requested output kinds.
+  partial,
+
+  /// Core could not dispatch this modality under current capabilities/policy.
+  notAvailable,
 
   /// Generation is done (or never ran) and there is simply no content.
   empty,
@@ -328,7 +335,36 @@ class _MetaRow extends StatelessWidget {
       children: [
         if (place != null && place.isNotEmpty) _PlaceChip(place: place),
         StatusBadge.sync(coreId: coreId, processingStatus: processingStatus),
+        ?_processingBadge(context),
       ],
+    );
+  }
+
+  Widget? _processingBadge(BuildContext context) {
+    final status = processingStatus;
+    if (status == null || isUploadQueuePendingStatus(status)) return null;
+    final labels = t.fileView.processingState;
+    final label = switch (status) {
+      'queued' => labels.queued,
+      'processing' => labels.processing,
+      'succeeded' => labels.succeeded,
+      'partial' => labels.partial,
+      'failed' => labels.failed,
+      'not_available' => labels.notAvailable,
+      _ => null,
+    };
+    if (label == null) return null;
+    final color = switch (status) {
+      'failed' => context.colors.failed,
+      'queued' || 'processing' || 'partial' => context.colors.accent,
+      _ => context.colors.textSecondary,
+    };
+    return StatusBadge.label(
+      key: ValueKey('processing-badge-$status'),
+      label: label,
+      color: color,
+      textColor: color,
+      semanticLabel: label,
     );
   }
 }
@@ -531,9 +567,26 @@ class _ContentsSection extends StatelessWidget {
 
     return switch (effective) {
       ContentsState.ready => _ReadyBody(text: text!),
-      ContentsState.processing => _ProcessingBody(label: status.processing),
+      ContentsState.queued => _ProcessingBody(
+        label: t.fileView.processingState.queued,
+        priorText: hasText ? text : null,
+      ),
+      ContentsState.processing => _ProcessingBody(
+        label: status.processing,
+        priorText: hasText ? text : null,
+      ),
       ContentsState.failed => _FailedBody(
         label: errorMessage ?? status.failed,
+        onRetry: onRetry,
+        priorText: hasText ? text : null,
+      ),
+      ContentsState.partial => _PartialBody(
+        label: t.fileView.processingState.partial,
+        text: hasText ? text : null,
+        onRetry: onRetry,
+      ),
+      ContentsState.notAvailable => _FailedBody(
+        label: t.fileView.processingState.notAvailable,
         onRetry: onRetry,
       ),
       ContentsState.empty => _EmptyBody(label: status.empty),
@@ -576,40 +629,58 @@ class _EmptyBody extends StatelessWidget {
 }
 
 class _ProcessingBody extends StatelessWidget {
-  const _ProcessingBody({required this.label});
+  const _ProcessingBody({required this.label, this.priorText});
 
   final String label;
+  final String? priorText;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
     final typography = context.typography;
-    return Row(
+    return Column(
       key: const ValueKey('file-view-contents-processing'),
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        LoadingIndicator(
-          size: typography.body.fontSize,
-          strokeWidth: spacing.xxs,
-          color: colors.accent,
+        Row(
+          children: [
+            LoadingIndicator(
+              size: typography.body.fontSize,
+              strokeWidth: spacing.xxs,
+              color: colors.accent,
+            ),
+            SizedBox(width: spacing.sm),
+            Flexible(
+              child: Text(
+                label,
+                style: typography.body.copyWith(color: colors.textSecondary),
+              ),
+            ),
+          ],
         ),
-        SizedBox(width: spacing.sm),
-        Flexible(
-          child: Text(
-            label,
-            style: typography.body.copyWith(color: colors.textSecondary),
+        if (priorText != null) ...[
+          SizedBox(height: spacing.sm),
+          Text(
+            priorText!,
+            style: typography.body.copyWith(color: colors.textPrimary),
           ),
-        ),
+        ],
       ],
     );
   }
 }
 
 class _FailedBody extends StatelessWidget {
-  const _FailedBody({required this.label, required this.onRetry});
+  const _FailedBody({
+    required this.label,
+    required this.onRetry,
+    this.priorText,
+  });
 
   final String label;
   final VoidCallback? onRetry;
+  final String? priorText;
 
   @override
   Widget build(BuildContext context) {
@@ -638,6 +709,52 @@ class _FailedBody extends StatelessWidget {
             ),
           ],
         ),
+        if (priorText != null) ...[
+          SizedBox(height: spacing.sm),
+          Text(
+            priorText!,
+            style: typography.body.copyWith(color: colors.textPrimary),
+          ),
+        ],
+        if (onRetry != null) ...[
+          SizedBox(height: spacing.sm),
+          AppTextButton.icon(
+            key: const ValueKey('file-view-contents-retry'),
+            onPressed: onRetry,
+            icon: Icon(Icons.refresh, size: typography.body.fontSize),
+            label: Text(t.common.retry),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PartialBody extends StatelessWidget {
+  const _PartialBody({
+    required this.label,
+    required this.text,
+    required this.onRetry,
+  });
+
+  final String label;
+  final String? text;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    return Column(
+      key: const ValueKey('file-view-contents-partial'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: typography.label.copyWith(color: colors.accent)),
+        if (text != null) ...[
+          SizedBox(height: spacing.sm),
+          Text(text!, style: typography.body.copyWith(color: colors.textPrimary)),
+        ],
         if (onRetry != null) ...[
           SizedBox(height: spacing.sm),
           AppTextButton.icon(

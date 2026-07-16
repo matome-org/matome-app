@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../core/http/api_client.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/telemetry/product_event_reporter.dart';
+import '../recordings/recording.dart';
 import 'matome.dart';
 
 /// Drives the authenticated user's Matomes against the Core API (task #1377).
@@ -89,12 +90,12 @@ class MatomesRepository {
 
   /// `POST /api/matomes/:matomeId/items {item_type: "text", body}` (Bearer).
   /// Creates a plain-text Item on Core so a reconciled Matome's typed notes are
-  /// durable + visible cross-device (task #1830 / W1). Returns the freshly
-  /// minted Core item id. 201 is success; 200 is tolerated (idempotent server).
+  /// durable + visible cross-device (task #1830 / W1). Returns the explicit
+  /// Core Item snapshot so processing can be requested without inference.
   ///
   /// The unit is a single text Item — no presign/upload leg (that is the file
   /// item's concern, [RecordingsRepository.createItemRecording]).
-  Future<int> createTextItem({
+  Future<Recording> createTextItem({
     required int matomeId,
     required String clientId,
     required String body,
@@ -125,17 +126,7 @@ class MatomesRepository {
           code: 'malformed_response',
         );
       }
-      final id = raw['id'];
-      if (id is int) return id;
-      if (id is String) {
-        final parsed = int.tryParse(id);
-        if (parsed != null) return parsed;
-      }
-      throw ApiException(
-        'Malformed create-text-item response.',
-        statusCode: status,
-        code: 'malformed_response',
-      );
+      return Recording.fromItemJson(raw);
     } on DioException catch (error) {
       throw ApiException.fromDio(error);
     }

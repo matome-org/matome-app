@@ -30,16 +30,7 @@ String formatClock(DateTime when) {
   return '$hour:${local.minute.toString().padLeft(2, '0')} $period';
 }
 
-String statusToProcessingState(RecordingStatus status) => switch (status) {
-  RecordingStatus.pending => 'queued',
-  RecordingStatus.processing => 'processing',
-  RecordingStatus.failed => 'failed',
-  RecordingStatus.done || RecordingStatus.unknown => 'succeeded',
-};
-
-/// Canonical Item + FileBlob companions for one legacy W0 wire recording.
-/// The HTTP model remains until its endpoint cutover, but no local persistence
-/// path writes or reads a recording-shaped table.
+/// Canonical Item + FileBlob companions for one Core Item response.
 ({ItemsCompanion item, FileBlobsCompanion file}) recordingToItemCompanions(
   Recording recording, {
   ItemWithPayload? existing,
@@ -56,14 +47,17 @@ String statusToProcessingState(RecordingStatus status) => switch (status) {
   final fileId = existing?.file?.id ?? 'file_$localId';
   final coreWorkspaceId = coreWorkspaceIdToLocal(recording.workspaceId);
   final workspaceId = coreWorkspaceId ?? existing?.workspaceId;
-  final outputs = _mergeOutputs(
-    existing?.item.processingOutputs,
-    summary: recording.summary,
-    transcript: recording.transcript,
-  );
+  final processing = itemProcessingUpdate(recording, existing: existing);
 
   final storageKey = recording.storageKey;
-  final uploaded = storageKey != null && storageKey.isNotEmpty;
+  final existingUploadState = existing?.file?.uploadState;
+  final uploadState = recording.uploadState ?? existingUploadState ?? 'pending';
+  final uploadedAt = uploadState == 'uploaded'
+      ? recording.uploadedAt?.millisecondsSinceEpoch ??
+            (existingUploadState == 'uploaded'
+                ? existing?.file?.uploadedAt
+                : null)
+      : null;
   final existingLocalPath = existing?.localPath;
   final localPath =
       existingLocalPath != null &&
@@ -85,13 +79,15 @@ String statusToProcessingState(RecordingStatus status) => switch (status) {
       title: Value(recording.title),
       notes: Value(existing?.notes ?? recording.notes),
       metadata: Value(existing?.item.metadata ?? '{}'),
-      processingState: Value(statusToProcessingState(recording.status)),
-      processingRunId: Value(existing?.item.processingRunId),
+      processingState: processing.processingState,
+      processingRunId: processing.processingRunId,
+      processingAttempt: processing.processingAttempt,
       sourceRevision: Value(existing?.item.sourceRevision ?? 1),
       processingConfigRevision: Value(existing?.item.processingConfigRevision),
-      processingOutputs: Value(outputs),
-      processingError: Value(existing?.item.processingError),
-      processingErrorCode: Value(existing?.item.processingErrorCode),
+      processingOutputs: processing.processingOutputs,
+      processingRequestedOutputs: processing.processingRequestedOutputs,
+      processingError: processing.processingError,
+      processingErrorCode: processing.processingErrorCode,
       fileBlobId: Value(fileId),
       isDirty: const Value(false),
       syncState: const Value('synced'),
@@ -108,18 +104,9 @@ String statusToProcessingState(RecordingStatus status) => switch (status) {
       checksumSha256: Value(existing?.file?.checksumSha256),
       mediaType: recording.mediaType ?? existing?.mediaType ?? 'audio',
       duration: Value(recording.duration ?? existing?.durationSeconds),
-      uploadState: Value(
-        uploaded ? 'uploaded' : existing?.file?.uploadState ?? 'pending',
-      ),
+      uploadState: Value(uploadState),
       uploadGeneration: Value(existing?.file?.uploadGeneration ?? 1),
-      uploadedAt: Value(
-        uploaded
-            ? existing?.file?.uploadedAt ??
-                  (recording.updatedAt ?? recording.insertedAt)
-                      ?.millisecondsSinceEpoch ??
-                  now
-            : null,
-      ),
+      uploadedAt: Value(uploadedAt),
       multipartContext: Value(existing?.file?.multipartContext),
       localPath: Value(localPath),
       wrappedFek: Value(existing?.wrappedFek),
@@ -129,6 +116,73 @@ String statusToProcessingState(RecordingStatus status) => switch (status) {
       updatedAt: now,
     ),
   );
+}
+
+/// Builds a current-run guarded processing-only patch for file or text Items.
+/// Older attempts and same-attempt/different-run responses are ignored.
+ItemsCompanion itemProcessingUpdate(
+  Recording recording, {
+  required ItemWithPayload? existing,
+}) {
+  final incoming = recording.processing;
+  final existingAttempt = existing?.item.processingAttempt ?? -1;
+  final existingRunId = existing?.item.processingRunId;
+  final applies =
+      existing == null ||
+      incoming.attempt > existingAttempt ||
+      (incoming.attempt == existingAttempt && incoming.runId == existingRunId);
+  final state = applies
+      ? incoming.state.wireName
+      : existing.item.processingState;
+  final runId = applies ? incoming.runId : existing.item.processingRunId;
+  final attempt = applies ? incoming.attempt : existing.item.processingAttempt;
+  final requestedOutputs = applies
+      ? jsonEncode(
+          incoming.requestedOutputs
+              .map((kind) => kind.wireName)
+              .toList(growable: false),
+        )
+      : existing.item.processingRequestedOutputs;
+  final outputs = switch ((applies, existing, incoming.state)) {
+    (false, final current?, _) => current.item.processingOutputs,
+    (_, null, _) => jsonEncode(incoming.outputs.toJson()),
+    (true, _, ProcessingState.succeeded) => jsonEncode(
+      incoming.outputs.toJson(),
+    ),
+    (true, final current?, ProcessingState.partial) => _mergeTypedOutputs(
+      current.item.processingOutputs,
+      incoming.outputs,
+    ),
+    (_, final current?, _) => current.item.processingOutputs,
+  };
+  final incomingError = incoming.error;
+  final error = applies
+      ? (incomingError == null ? null : jsonEncode(incomingError.toJson()))
+      : existing.item.processingError;
+  final errorCode = applies
+      ? incomingError?.code
+      : existing.item.processingErrorCode;
+  return ItemsCompanion(
+    processingState: Value(state),
+    processingRunId: Value(runId),
+    processingAttempt: Value(attempt),
+    processingOutputs: Value(outputs),
+    processingRequestedOutputs: Value(requestedOutputs),
+    processingError: Value(error),
+    processingErrorCode: Value(errorCode),
+  );
+}
+
+String _mergeTypedOutputs(String existing, ProcessingOutputs incoming) {
+  final outputs = <String, dynamic>{};
+  try {
+    final decoded = jsonDecode(existing);
+    if (decoded is Map<String, dynamic>) outputs.addAll(decoded);
+  } on FormatException {
+    // Invalid cached machine output is replaced by valid typed output.
+  }
+  outputs.addAll(incoming.toJson());
+  return jsonEncode(outputs);
 }
 
 String _mergeOutputs(String? existing, {String? summary, String? transcript}) {
@@ -141,9 +195,17 @@ String _mergeOutputs(String? existing, {String? summary, String? transcript}) {
       // Invalid cached machine output is replaced by the valid incoming fields.
     }
   }
-  if (summary != null && summary.isNotEmpty) outputs['summary'] = summary;
+  if (summary != null && summary.isNotEmpty) {
+    outputs['summary'] = <String, dynamic>{
+      'type': 'summary',
+      'markdown': summary,
+    };
+  }
   if (transcript != null && transcript.isNotEmpty) {
-    outputs['transcript'] = transcript;
+    outputs['transcript'] = <String, dynamic>{
+      'type': 'transcript',
+      'text': transcript,
+    };
   }
   return jsonEncode(outputs);
 }

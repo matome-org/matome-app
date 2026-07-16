@@ -18,10 +18,7 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
 import 'package:matome_flutter/features/recording/recording_finish.dart';
-import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -126,7 +123,7 @@ void main() {
 
   // Modern items contract (recordings→items migration): the create leg POSTs to
   // /api/matomes/{coreMatomeId}/items and returns an ITEM + W0 upload; processing
-  // is POST /api/items/{id}/process; the poll-fallback source is GET
+  // is POST /api/items/{id}/process; the current-run poll source is GET
   // /api/items/{id}. The minted-matome coreId is 900; the created item id is 42.
   RecordingsRepository stubRepo({
     Future<void>? uploadGate,
@@ -147,8 +144,13 @@ void main() {
           'owner_id': 1,
           'matome_id': 900,
           'item_type': 'file',
-          'metadata': {'title': 'New Recording', 'status': 'pending'},
-          'file': {'media_type': 'audio'},
+          'title': 'New Recording',
+          'processing_state': 'not_requested',
+          'processing_run_id': null,
+          'processing_attempt': 0,
+          'processing_requested_outputs': const <String>[],
+          'processing_outputs': const <String, dynamic>{},
+          'file': {'media_type': 'audio', 'upload_state': 'pending'},
         },
         'upload': {
           'request': {
@@ -168,7 +170,13 @@ void main() {
           'owner_id': 1,
           'matome_id': 900,
           'item_type': 'file',
-          'metadata': {'title': 'New Recording', 'status': 'processing'},
+          'title': 'New Recording',
+          'processing_state': 'queued',
+          'processing_run_id': 'run-42',
+          'processing_attempt': 1,
+          'processing_requested_outputs': ['transcript', 'summary'],
+          'processing_outputs': const <String, dynamic>{},
+          'file': {'media_type': 'audio', 'upload_state': 'uploaded'},
         },
         'processing': {'queued': true},
       }),
@@ -181,7 +189,12 @@ void main() {
           'owner_id': 1,
           'matome_id': 900,
           'item_type': 'file',
-          'metadata': {'title': 'New Recording', 'status': 'done'},
+          'title': 'New Recording',
+          'processing_state': 'succeeded',
+          'processing_run_id': 'run-42',
+          'processing_attempt': 1,
+          'processing_requested_outputs': ['transcript', 'summary'],
+          'processing_outputs': const <String, dynamic>{},
         },
       }),
     );
@@ -259,16 +272,7 @@ void main() {
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
-        // Avoid a live Phoenix socket connect in the widget test; the poll
-        // fallback resolves done (the realtime wiring itself is covered by the
-        // finish unit test).
-        uploadQueueProvider.overrideWith(
-          (ref) => UploadQueue(
-            ref,
-            awaitResult: pollFallbackAwaiter,
-            cleanupAudio: (_) async {},
-          ),
-        ),
+        uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
     );
     addTearDown(container.dispose);
@@ -319,7 +323,7 @@ void main() {
     final row = await db.itemsDao.getByCoreId(42, '1');
     expect(row, isNotNull);
     expect(isLocalRecordingId(row!.id), isTrue);
-    expect(row.processingStatus, 'processing');
+    expect(row.processingStatus, 'queued');
   });
 
   testWidgets('meeting binding (no pause): primary button finishes while recording, '
@@ -337,13 +341,7 @@ void main() {
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
         recordingsRepositoryProvider.overrideWithValue(stubRepo()),
-        uploadQueueProvider.overrideWith(
-          (ref) => UploadQueue(
-            ref,
-            awaitResult: pollFallbackAwaiter,
-            cleanupAudio: (_) async {},
-          ),
-        ),
+        uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
     );
     addTearDown(container.dispose);
@@ -574,7 +572,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       final row = await db.itemsDao.getByCoreId(42, '1');
-      expect(row!.processingStatus, 'processing');
+      expect(row!.processingStatus, 'queued');
     },
   );
 
@@ -620,24 +618,4 @@ class _StubUploadRepository extends RecordingsRepository
     final gate = uploadGate;
     if (gate != null) await gate;
   }
-}
-
-/// Socket-absent awaiter: an empty event stream so only the poll fallback
-/// (GET → done) resolves. Drives the production [RecordingResultWaiter] race
-/// without a live Phoenix socket in the widget test.
-Future<RecordingResult> pollFallbackAwaiter({
-  required Recording recording,
-  required Future<Recording?> Function() poll,
-  required Ref ref,
-}) async {
-  final events = StreamController<RecordingStatusEvent>();
-  final waiter = RecordingResultWaiter(
-    recordingId: recording.id,
-    statusEvents: events.stream,
-    poll: poll,
-    pollInterval: const Duration(milliseconds: 20),
-  );
-  final result = await waiter.wait();
-  await events.close();
-  return result;
 }

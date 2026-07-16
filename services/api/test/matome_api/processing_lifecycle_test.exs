@@ -156,6 +156,44 @@ defmodule MatomeApi.ProcessingLifecycleTest do
     assert Repo.aggregate(Oban.Job, :count, :id) == 0
   end
 
+  test "a missing input capability degrades to not_available without dispatch" do
+    config = Application.fetch_env!(:matome_api, MatomeApi.AIEngine)
+    capabilities = update_in(capabilities(), ["inputs"], &Map.delete(&1, "document"))
+
+    Application.put_env(
+      :matome_api,
+      MatomeApi.AIEngine,
+      Keyword.put(config, :capabilities, capabilities)
+    )
+
+    {user, item} = uploaded_file_fixture("document", "application/pdf")
+
+    assert {:ok, unavailable} = Content.enqueue_item_processing(user, item.id)
+    assert unavailable.processing_state == :not_available
+    assert unavailable.processing_requested_outputs == []
+    assert unavailable.processing_capabilities["input"] == %{"enabled" => false, "outputs" => []}
+    assert Repo.aggregate(Oban.Job, :count, :id) == 0
+  end
+
+  test "a policy-disabled input remains not_requested without capability lookup or work" do
+    desired = put_in(SystemConfig.desired(), ["ai", "enabled_input_kinds"], ["audio"])
+    revision = SystemConfig.current_revision()
+
+    assert {:ok, _config} =
+             MatomeApi.Admin.update_system_config(desired, revision,
+               actor: %{email: "admin@example.com"},
+               otp_verified_at: System.os_time(:second),
+               remote_ip: "198.51.100.24"
+             )
+
+    {user, item} = uploaded_file_fixture("image", "image/jpeg")
+
+    assert {:ok, not_requested} = Content.enqueue_item_processing(user, item.id)
+    assert not_requested.processing_state == :not_requested
+    assert not_requested.processing_run_id == nil
+    assert Repo.aggregate(Oban.Job, :count, :id) == 0
+  end
+
   test "typed callbacks are conditional, duplicate-safe, partial-aware, and stale-safe" do
     {user, item} = uploaded_file_fixture("audio", "audio/wav")
     assert {:ok, first} = Content.enqueue_item_processing(user, item.id)

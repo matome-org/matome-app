@@ -58,9 +58,7 @@ ProviderContainer _container(
   );
 }
 
-/// Builds a Core `item` payload (item_type=file) as `GET /api/items` now
-/// returns it: file-owned fields (`summary`/`transcript`) under `file`,
-/// user-owned fields (`title`/`status`/`notes`/`workspace_id`) under `metadata`.
+/// Builds the explicit Core Item processing projection returned by `/api/items`.
 Map<String, dynamic> _remote({
   required int id,
   String title = 'Remote',
@@ -71,17 +69,28 @@ Map<String, dynamic> _remote({
   String? transcript,
   String? notes,
 }) {
+  final processingState = switch (status) {
+    'pending' => 'queued',
+    'done' => 'succeeded',
+    _ => status,
+  };
   return {
     'id': id,
     'owner_id': 1,
     'item_type': 'file',
-    'metadata': {
-      'title': title,
-      'status': status,
-      'notes': notes,
-      'workspace_id': workspaceId,
+    'title': title,
+    'notes': notes,
+    'workspace_id': workspaceId,
+    'processing_state': processingState,
+    'processing_run_id': 'run-$id',
+    'processing_attempt': 1,
+    'processing_requested_outputs': const ['summary', 'transcript'],
+    'processing_outputs': {
+      if (summary != null) 'summary': {'type': 'summary', 'markdown': summary},
+      if (transcript != null)
+        'transcript': {'type': 'transcript', 'text': transcript},
     },
-    'file': {'summary': summary, 'transcript': transcript},
+    'file': {'media_type': 'audio', 'upload_state': 'uploaded'},
     'inserted_at': insertedAt ?? '2026-06-08T12:00:00Z',
   };
 }
@@ -473,7 +482,7 @@ void main() {
     expect(items.single.id, '77');
     expect(items.single.card.isProcessing, isTrue);
 
-    // applyUploadResult flips it to done with a summary.
+    // applyUploadResult flips it to succeeded with a summary.
     await controller.applyUploadResult(
       '77',
       failed: false,
@@ -482,7 +491,7 @@ void main() {
     );
     final done = await _awaitItems(container);
     expect(done.single.card.isProcessing, isFalse);
-    expect(done.single.card.processingStatus, 'done');
+    expect(done.single.card.processingStatus, 'succeeded');
     expect(done.single.card.summary, 'transcribed');
   });
 
@@ -504,14 +513,14 @@ void main() {
     final controller = container.read(inboxControllerProvider.notifier);
     await controller.reloadFromLocal();
 
-    // The socket-vs-poll race is won by a SPARSE `done` event carrying null
-    // summary/transcript — pre-fix this null-overwrote the good data.
+    // A sparse successful result carries no summary/transcript. It must not
+    // overwrite previously-good machine output.
     await controller.applyUploadResult('88', failed: false);
 
     final row = await db.itemsDao.getById('88', '1');
     expect(row!.summary, 'good summary'); // preserved, not wiped to null
     expect(row.notes, 'good notes'); // preserved, not wiped to null
-    expect(row.processingStatus, 'done');
+    expect(row.processingStatus, 'succeeded');
     expect(row.isProcessing, isFalse);
   });
 
@@ -568,7 +577,7 @@ void main() {
 
     // The Core list later returns the same recording under Core int id 321 —
     // i.e. the row has reconciled to coreId 321 and Core now reports it `done`
-    // with a transcript. This is the socket/poll terminal landing via sync.
+    // with a transcript. This is the terminal response landing via sync.
     final container = _container(
       db,
       recordings: [

@@ -308,11 +308,8 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
 
   Future<void> _finish() async {
     setState(() => _phase = _ModalPhase.processing);
-    // Kick the F4 finish/upload pipeline off the widget's lifecycle. The
-    // InboxUploader inserts the Drift row as `processing` immediately and is
-    // owned by the provider container (it outlives this widget), so the
-    // terminal await (socket/poll race, up to the 10-min window) keeps running
-    // even if the user backgrounds the modal to the Inbox.
+    // Kick the durable upload pipeline off the widget's lifecycle. The local
+    // row appears immediately, and the queue runs until Core accepts processing.
     final finishing = ref.read(_finisherProvider).finish();
     try {
       await finishing;
@@ -328,9 +325,8 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   }
 
   /// Processing → "Continue in Inbox": dismiss the modal while the upload keeps
-  /// running in the background. The Inbox row already shows `processing` and
-  /// flips to done/failed when the pipeline resolves — so the UI is never
-  /// pinned on the spinner for up to 10 minutes.
+  /// running in the background. Core processing continues independently after
+  /// the device queue records the accepted run.
   void _backgroundToInbox() {
     if (context.canPop()) context.pop();
     context.go('/inbox');

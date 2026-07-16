@@ -546,6 +546,7 @@ class Translations$fileView$en {
 
 	late final Translations$fileView$fileChip$en fileChip = Translations$fileView$fileChip$en.internal(_root);
 	late final Translations$fileView$contentsTag$en contentsTag = Translations$fileView$contentsTag$en.internal(_root);
+	late final Translations$fileView$processingState$en processingState = Translations$fileView$processingState$en.internal(_root);
 	late final Translations$fileView$contentsStatus$en contentsStatus = Translations$fileView$contentsStatus$en.internal(_root);
 }
 
@@ -1257,6 +1258,33 @@ class Translations$fileView$contentsTag$en {
 	String get document => 'Document';
 }
 
+// Path: fileView.processingState
+class Translations$fileView$processingState$en {
+	Translations$fileView$processingState$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Queued'
+	String get queued => 'Queued';
+
+	/// en: 'Processing'
+	String get processing => 'Processing';
+
+	/// en: 'Succeeded'
+	String get succeeded => 'Succeeded';
+
+	/// en: 'Partial'
+	String get partial => 'Partial';
+
+	/// en: 'Failed'
+	String get failed => 'Failed';
+
+	/// en: 'Not available'
+	String get notAvailable => 'Not available';
+}
+
 // Path: fileView.contentsStatus
 class Translations$fileView$contentsStatus$en {
 	Translations$fileView$contentsStatus$en.internal(this._root);
@@ -1790,6 +1818,12 @@ extension on Translations {
 			'fileView.contentsTag.transcript' => 'Transcript',
 			'fileView.contentsTag.description' => 'Description',
 			'fileView.contentsTag.document' => 'Document',
+			'fileView.processingState.queued' => 'Queued',
+			'fileView.processingState.processing' => 'Processing',
+			'fileView.processingState.succeeded' => 'Succeeded',
+			'fileView.processingState.partial' => 'Partial',
+			'fileView.processingState.failed' => 'Failed',
+			'fileView.processingState.notAvailable' => 'Not available',
 			'fileView.contentsStatus.audio.processing' => 'Transcribing…',
 			'fileView.contentsStatus.audio.failed' => 'Transcription failed',
 			'fileView.contentsStatus.audio.empty' => 'No transcript yet',

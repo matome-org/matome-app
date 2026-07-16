@@ -19,17 +19,15 @@ import 'recording_controller.dart';
 ///  2. [InboxUploader.upload] inserts the local Drift row FIRST
 ///     (`rec_local_<uuid>`, `pending_upload`, audio path on disk) so the Inbox
 ///     card shows immediately regardless of Core, THEN best-effort uploads to
-///     Core and reconciles `coreId` / done back into the same row.
+///     Core and reconciles `coreId` / the accepted processing run into the row.
 ///
 /// The crash-recovery segments are deliberately NOT discarded here: that was the
 /// root of #828 (orphan-WAV — a Core failure wiped the only on-disk copy with no
 /// local row). The audio must outlive a Core failure so it can be retried.
 ///
-/// W2 (#46 / #871): the upload queue no longer deletes the local audio when a
-/// row reaches confirmed `done` — the durable `audioFilePath` is the canonical
-/// local-first copy and is RETAINED until the user explicitly deletes it. So the
-/// old W4 confirm hook (`service.discardSegmentPaths(snapshot)`) that dropped the
-/// finalized audio + draft on `done` is retired and NOT registered here.
+/// W2 (#46 / #871): the upload queue never deletes the local audio after Core
+/// accepts processing. The durable `audioFilePath` remains the canonical
+/// local-first copy until the user explicitly deletes it.
 ///
 /// finish() instead clears ONLY the crash-recovery DRAFT row (via
 /// [AudioRecordingService.clearDraft]) once the session is finalized and persisted
@@ -96,7 +94,7 @@ class RecordingFinisher {
 
     // 2. Local-first persist + queued upload. The local row + on-disk audio
     //    survive even if Core never answers; the queue retries a failed upload
-    //    and RETAINS the local audio on a confirmed `done` (#46 W2 / #871 — the
+    //    and RETAINS the local audio after Core acceptance (#46 W2 / #871 — the
     //    durable `audioFilePath` is the canonical copy until the user deletes it).
     //
     //    LOOSE CAPTURE (#102 W2, .docs/internal/architecture.md §5):

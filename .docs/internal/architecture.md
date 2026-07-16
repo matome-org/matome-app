@@ -20,10 +20,10 @@
 1. **Thin client.** The app only *captures* (record / pick a file), *uploads raw bytes*, and *reads results*. It never runs transcription, OCR, or summarization.
 2. **The backend owns all processing.** Transcription, OCR, and summarization are server-side. Adding a media type or model is a backend change — the client doesn't ship.
 3. **Server is the source of record.** Records live in Core's Postgres. The client's Drift (SQLite) store is an offline mirror, reconciled against Core — not the authority.
-4. **One ingestion contract for every media type.** Audio, meetings, images, and future formats flow through one `upload → pending → process → done` path. The client is media-agnostic.
+4. **One ingestion contract for every media type.** Audio, meetings, images, documents, and text use one verified upload/process contract with explicit run state and typed outputs. The client is media-agnostic.
 5. **Local-first organization, decoupled from sync.** Items are organized on-device; whether they sync is a separate question answered by a single resolver (§5).
 6. **Owned backends, one client language.** Core API is Elixir; the AI Engine is Python; the client is Dart/Flutter.
-7. **Contract-first.** Core publishes a REST (OpenAPI) surface consumed by the Flutter `dio` layer; ingestion status is pushed over Phoenix Channels, raced against a poll fallback.
+7. **Contract-first.** Core publishes a REST (OpenAPI) surface consumed by the Flutter `dio` layer. The client observes one explicit current processing run through bounded owner-scoped polling; Core remains authoritative.
 
 ---
 
@@ -38,7 +38,6 @@ flowchart LR
     PH[Phoenix\nauth · CRUD · gateway]
     PG[(PostgreSQL\nsource of record)]
     OB[Oban\njob queue]
-    CH[Channels\nrealtime status]
   end
   ST[(Object Storage\nS3-compatible)]
   subgraph AI["Backend B — AI Engine (Python/FastAPI)"]
@@ -48,11 +47,10 @@ flowchart LR
   F -- "presigned upload" --> ST
   PH --- PG
   PH --- OB
-  PH --- CH
   OB -- "enqueue job" --> P
   P -- "download raw" --> ST
   P -- "callback: result" --> PH
-  CH -- "status push (poll fallback)" --> F
+  PH -- "current-run Item polling" --> F
 ```
 
 **Hard rule:** the client talks only to Core + Storage. Only Core talks to the AI Engine. The AI Engine is never client-facing.
@@ -70,7 +68,7 @@ Owns everything except AI.
 | Auth | **Guardian** (JWT access + refresh), **Argon2** hashing; users in Postgres. App-level authz (no third-party Auth/RLS). Session auth is layered under a separate **at-rest key envelope** (plan #131 / [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md)): `POST/GET /keybundle` (+ `/keybundle/recovery`) stores only opaque `wrapped_dek_*` blobs + salts/KDF params — the server never receives the password, the KEK, or the DEK. `auth_secret` (login) and the password-KEK (data-key unwrap) are independent Argon2id derivations of the same password under distinct salts, so a credential the server legitimately sees can never unwrap client data. See §11 D8 below for what of this is implemented+tested vs dark/deferred. |
 | Authorization | scoping by `owner_id` (Ecto query scopes) |
 | Job queue | **Oban** (Postgres-backed) — run-keyed dispatch, retry, and timeout watchdog for AI jobs |
-| Realtime | **Phoenix Channels** + PubSub (`RecordingStatusChannel` on `user:*`) |
+| Processing observation | Owner-scoped Item REST polling by current run id; one request in flight with bounded backoff |
 | Object storage | **S3-compatible** (MinIO local / R2 or S3 in prod) — Core issues path-style presigned PUT/GET URLs ([data-plane.md](../../services/api/docs/data-plane.md)) |
 | API surface | REST, documented as **OpenAPI** (`open_api_spex`) |
 
@@ -162,12 +160,14 @@ sequenceDiagram
   participant ST as Object Storage
   participant OB as Oban
   participant AI as AI Engine
-  C->>API: POST /api/recordings (mediaType)
-  API-->>C: id + presigned PUT url (status pending)
-  C->>ST: PUT raw bytes (presigned, streamed)
-  C->>API: POST /api/recordings/:id/process
-  API->>OB: enqueue ingestion job
-  API-->>C: 202 (status processing)
+  C->>API: POST /api/matomes/:id/items
+  API-->>C: Item + upload envelope
+  C->>ST: PUT bytes (presigned, streamed)
+  C->>API: POST /api/v1/uploads/:id/complete
+  API-->>C: provider-verified upload
+  C->>API: POST /api/items/:id/process
+  API->>OB: enqueue run-keyed dispatch + watchdog
+  API-->>C: 202 (queued + run id + attempt)
   OB->>AI: dispatch job
   AI->>ST: GET raw bytes (presigned)
   alt audio or meeting
@@ -176,10 +176,13 @@ sequenceDiagram
     AI->>AI: ocr
   end
   AI->>AI: summarize
-  AI->>API: POST /internal/jobs/:id/result
-  API->>API: update record, status done
-  API-->>C: Channels push (status done)
-  Note over C: a ~2s GET /api/recordings/:id poll also resolves it
+  AI->>API: POST /internal/v1/jobs/:job_id/result
+  API->>API: conditionally persist terminal state + typed outputs
+  loop bounded current-run observation
+    C->>API: GET /api/items/:id
+    API-->>C: explicit state + same run id
+  end
+  Note over C,API: client timeout ends observation only; Core watchdog is authoritative
 ```
 
 - **Processing states:** `not_requested | not_available | queued | processing | succeeded | partial | failed`.
@@ -256,10 +259,9 @@ contacts (+ matome_contacts, space_contacts, matome_shares, space_members)
   metadata, dirty flags, and current upload reconciliation state. Capture
   recovery remains in the separate `recording_drafts` table because draft
   lifetime is independent from Item lifetime.
-- This reset does not implement the contract's durable `work_queue` executor.
-  The existing upload trigger continues to use bounded Item/FileBlob current
-  state until that separately scoped work lands; no attempt/history domain table
-  is introduced here.
+- Device-owned upload work is persisted in the durable `work_queue` executor.
+  It completes after Core accepts processing; AI execution and terminal state
+  remain server-owned and are observed separately through the Item projection.
 
 ---
 
@@ -267,7 +269,7 @@ contacts (+ matome_contacts, space_contacts, matome_shares, space_members)
 
 - **Birth** — minted implicitly when the first item enters (1 item → 1 Matome); local id `mat_local_<uuid>`. No blank-Matome flow.
 - **Add items** — photo/file upserted against the existing Matome; summary marked stale.
-- **Upload + processing** — per-item ingestion (§6); status `pending_upload → processing → done | failed`.
+- **Upload + processing** — per-item ingestion (§6); device upload work ends at Core acceptance, then Item processing projects `queued | processing → succeeded | partial | failed`, with `not_available` when dispatch is unavailable.
 - **Summary** — aggregated summary is a local deterministic composition of item summaries, regenerated on demand; staleness flips on add/remove/change.
 - **Edit** — rename + date/time, local-first then `PATCH` when reconciled.
 - **Triage** — file into a Space (§5); only cloud-space items push to Core.

@@ -17,7 +17,7 @@ part 'app_database.g.dart';
 /// Destructive canonical-Items reset. There are no deployed databases, so v22
 /// intentionally rebuilds the local store instead of carrying legacy data,
 /// aliases, or dual reads forward.
-const int kSchemaVersion = 23;
+const int kSchemaVersion = 24;
 
 @DriftDatabase(
   tables: [

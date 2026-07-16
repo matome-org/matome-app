@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,9 +10,6 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/recordings/recording.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import '../support/item_fixtures.dart';
@@ -62,9 +58,7 @@ void main() {
           apiClientProvider.overrideWithValue(
             ApiClient(tokenStore: tokens, baseUrl: core.baseUrl),
           ),
-          uploadQueueProvider.overrideWith(
-            (ref) => UploadQueue(ref, awaitResult: _pollAwaiter),
-          ),
+          uploadQueueProvider.overrideWith(UploadQueue.new),
         ],
       );
       addTearDown(container.dispose);
@@ -75,7 +69,7 @@ void main() {
       final child = await db.itemsDao.getById('rec_local_e2e', '1');
       expect(parent!.coreId, 11);
       expect(child!.coreId, 42);
-      expect(child.processingStatus, 'processing');
+      expect(child.processingStatus, 'queued');
       expect(child.summary, isNull);
       expect(core.uploadedBytes, const [1, 3, 3, 7]);
       expect(core.calls, [
@@ -103,25 +97,6 @@ void main() {
       }
     },
   );
-}
-
-Future<RecordingResult> _pollAwaiter({
-  required Recording recording,
-  required Future<Recording?> Function() poll,
-  required Ref ref,
-}) async {
-  final waiter = RecordingResultWaiter(
-    recordingId: recording.id,
-    statusEvents: const Stream<RecordingStatusEvent>.empty(),
-    poll: poll,
-    pollInterval: const Duration(milliseconds: 5),
-    timeout: const Duration(seconds: 1),
-  );
-  try {
-    return await waiter.wait();
-  } finally {
-    waiter.cancel();
-  }
 }
 
 class _ContractCore {
@@ -278,15 +253,36 @@ class _ContractCore {
     await request.response.close();
   }
 
-  Map<String, dynamic> _item({required String status, String? summary}) => {
-    'id': 42,
-    'client_id': 'rec_local_e2e',
-    'owner_id': 1,
-    'matome_id': 11,
-    'item_type': 'file',
-    'metadata': {'title': 'Capture', 'status': status},
-    'file': {'media_type': 'audio', 'byte_size': 4, 'summary': ?summary},
-  };
+  Map<String, dynamic> _item({required String status, String? summary}) {
+    final state = switch (status) {
+      'pending' => 'not_requested',
+      'done' => 'succeeded',
+      _ => 'queued',
+    };
+    return {
+      'id': 42,
+      'client_id': 'rec_local_e2e',
+      'owner_id': 1,
+      'matome_id': 11,
+      'item_type': 'file',
+      'title': 'Capture',
+      'processing_state': state,
+      'processing_run_id': state == 'not_requested' ? null : 'run-42',
+      'processing_attempt': state == 'not_requested' ? 0 : 1,
+      'processing_requested_outputs': state == 'not_requested'
+          ? const <String>[]
+          : const ['transcript', 'summary'],
+      'processing_outputs': {
+        if (summary != null)
+          'summary': {'type': 'summary', 'markdown': summary},
+      },
+      'file': {
+        'media_type': 'audio',
+        'byte_size': 4,
+        'upload_state': state == 'not_requested' ? 'pending' : 'uploaded',
+      },
+    };
+  }
 
   Future<Map<String, dynamic>> _jsonBody(HttpRequest request) async {
     final bytes = await request.fold<List<int>>(

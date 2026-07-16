@@ -325,6 +325,77 @@ void main() {
     });
   });
 
+  group('explicit Core processing states', () {
+    testWidgets('queued keeps prior successful output visible', (tester) async {
+      await _pump(
+        tester,
+        _data(
+          processingStatus: 'queued',
+          contentsText: 'Prior transcript',
+          contentsState: ContentsState.queued,
+        ),
+      );
+
+      expect(find.text('Queued'), findsWidgets);
+      expect(find.text('Prior transcript'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('file-view-contents-processing')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('succeeded exposes a truthful state badge', (tester) async {
+      await _pump(
+        tester,
+        _data(
+          processingStatus: 'succeeded',
+          contentsState: ContentsState.ready,
+        ),
+      );
+
+      expect(find.text('Succeeded'), findsOneWidget);
+      expect(find.text('Machine transcript line.'), findsOneWidget);
+    });
+
+    testWidgets('partial shows available output and retry', (tester) async {
+      var retried = false;
+      await _pump(
+        tester,
+        _data(
+          processingStatus: 'partial',
+          contentsText: 'Only the summary completed',
+          contentsState: ContentsState.partial,
+          onContentsRetry: () => retried = true,
+        ),
+      );
+
+      expect(find.text('Partial'), findsWidgets);
+      expect(find.text('Only the summary completed'), findsOneWidget);
+      final retry = find.byKey(const ValueKey('file-view-contents-retry'));
+      expect(retry, findsOneWidget);
+      await tester.tap(retry);
+      expect(retried, isTrue);
+    });
+
+    testWidgets('not_available is terminal and retryable', (tester) async {
+      await _pump(
+        tester,
+        _data(
+          processingStatus: 'not_available',
+          contentsText: null,
+          contentsState: ContentsState.notAvailable,
+          onContentsRetry: () {},
+        ),
+      );
+
+      expect(find.text('Not available'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('file-view-contents-retry')),
+        findsOneWidget,
+      );
+    });
+  });
+
   testWidgets('state defaults from text: text present → ready', (tester) async {
     await _pump(
       tester,

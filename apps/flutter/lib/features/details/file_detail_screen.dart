@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/daos/items_dao.dart';
 import '../../core/db/recording_card.dart';
+import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
@@ -13,8 +14,10 @@ import '../../ui/app_dialog.dart';
 import '../../ui/file_type_chip.dart';
 import '../../ui/loading_indicator.dart';
 import '../items/matome_item_type.dart';
+import '../home/inbox_sync.dart';
 import '../recordings/processing_error.dart';
-import '../recordings/recording_ids.dart';
+import '../recordings/recording.dart';
+import '../recordings/recording_result_waiter.dart';
 import 'audio_player_bar.dart';
 import 'details_controller.dart';
 import 'file_actions_menu.dart';
@@ -35,6 +38,20 @@ FileMediaKind mediaKindForType(String mediaType) {
   if (mediaType.startsWith('document')) return FileMediaKind.doc;
   if (mediaType.startsWith('video')) return FileMediaKind.video;
   return FileMediaKind.audio;
+}
+
+String? _contentsFor(ItemWithPayload row, FileMediaKind kind) {
+  final values = switch (kind) {
+    FileMediaKind.audio => [row.transcript],
+    FileMediaKind.image => [row.description, row.ocrText],
+    FileMediaKind.doc => [row.extractedText, row.summary],
+    FileMediaKind.video => const <String?>[],
+  };
+  final present = values
+      .whereType<String>()
+      .where((value) => value.trim().isNotEmpty)
+      .toList(growable: false);
+  return present.isEmpty ? null : present.join('\n\n');
 }
 
 /// Best-effort human size for the on-disk document, read synchronously from the
@@ -234,7 +251,74 @@ class _RowOnlyDetailById extends ConsumerStatefulWidget {
 }
 
 class _RowOnlyDetailByIdState extends ConsumerState<_RowOnlyDetailById> {
+  bool _retrying = false;
+
   void _onDelete() => _fileDeleteFlow(context, ref, widget.id);
+
+  Future<void> _onRetry(ItemWithPayload row) async {
+    final coreId = row.coreId;
+    if (coreId == null || _retrying) return;
+    final container = ProviderScope.containerOf(context, listen: false);
+    final ownerId = container.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final repository = container.read(recordingsRepositoryProvider);
+    final dao = container.read(itemsDaoProvider);
+    final pollInterval = container.read(systemPolicyProvider).pollInterval;
+
+    setState(() => _retrying = true);
+    try {
+      final accepted = await repository.enqueueProcessing(coreId);
+      await _applyProcessing(dao, ownerId, accepted);
+      container.invalidate(_imageRowProvider(widget.id));
+      final runId = accepted.processing.runId;
+      if (runId != null && accepted.processing.state.isInFlight) {
+        final waiter = RecordingResultWaiter(
+          recordingId: coreId,
+          runId: runId,
+          poll: () => repository.fetchRecording(coreId),
+          initialPollInterval: pollInterval,
+        );
+        final RecordingResult result;
+        try {
+          result = await waiter.wait();
+        } finally {
+          waiter.cancel();
+        }
+        final terminal = result.recording;
+        if (terminal != null) {
+          await _applyProcessing(dao, ownerId, terminal, expectedRunId: runId);
+        }
+      }
+    } catch (error, stack) {
+      AppLog.error(
+        LogCat.action,
+        'retry processing failed item=${widget.id}',
+        error,
+        stack,
+      );
+    } finally {
+      container.invalidate(_imageRowProvider(widget.id));
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
+
+  Future<void> _applyProcessing(
+    ItemsDao dao,
+    String ownerId,
+    Recording remote, {
+    String? expectedRunId,
+  }) async {
+    if (expectedRunId != null && remote.processing.runId != expectedRunId) {
+      return;
+    }
+    final current = await dao.getById(widget.id, ownerId);
+    if (current == null) return;
+    await dao.updateItem(
+      widget.id,
+      ownerId,
+      itemProcessingUpdate(remote, existing: current),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -257,6 +341,7 @@ class _RowOnlyDetailByIdState extends ConsumerState<_RowOnlyDetailById> {
                   row: row,
                   place: null,
                   mediaKind: widget.mediaKind,
+                  onRetry: _retrying ? null : () => _onRetry(row),
                   // Same "…" popup as audio (Delete), so every file detail has
                   // a consistent overflow.
                   trailing: FileActionsMenu(onDelete: _onDelete),
@@ -295,18 +380,27 @@ class _FileDetailById extends ConsumerWidget {
     //   * audio  → the audio host (the default).
     switch (mediaKindForType(row.mediaType)) {
       case FileMediaKind.image:
-        return _ImageDetailHost.fromRow(row: row, place: state.badge);
+        return _ImageDetailHost.fromRow(
+          row: row,
+          place: state.badge,
+          onRetry: () =>
+              ref.read(detailsControllerProvider(id).notifier).retry(),
+        );
       case FileMediaKind.doc:
         return _ImageDetailHost.fromRow(
           row: row,
           place: state.badge,
           mediaKind: FileMediaKind.doc,
+          onRetry: () =>
+              ref.read(detailsControllerProvider(id).notifier).retry(),
         );
       case FileMediaKind.video:
         return _ImageDetailHost.fromRow(
           row: row,
           place: state.badge,
           mediaKind: FileMediaKind.video,
+          onRetry: () =>
+              ref.read(detailsControllerProvider(id).notifier).retry(),
         );
       case FileMediaKind.audio:
         return _AudioDetailHost(id: id);
@@ -335,7 +429,8 @@ class _ImageDetailHost extends StatelessWidget {
       // The item-driven path carries no machine text/processing flag, so the
       // doc Contents falls back to its honest derivation (empty).
       contentsText = null,
-      isProcessing = false,
+      processingState = ProcessingState.notRequested,
+      onRetry = null,
       trailing = null;
 
   /// Built from a loaded [ItemWithPayload] — the id-driven `/items/audio/:id`
@@ -348,6 +443,7 @@ class _ImageDetailHost extends StatelessWidget {
     required this.place,
     this.trailing,
     this.mediaKind = FileMediaKind.image,
+    this.onRetry,
   }) : title = row.title,
        coreId = row.coreId,
        processingStatus = row.processingStatus,
@@ -356,12 +452,8 @@ class _ImageDetailHost extends StatelessWidget {
        // generic media-path column shared across kinds).
        path = row.localPath,
        notes = row.notes,
-       // The machine-produced text (Core-owned `transcript` column — the SAME
-       // column audio uses) carries the document's stub summary once the
-       // pipeline resolves (#1454). The doc Contents renders it as the "ready"
-       // body; image keeps it null (its description producer is deferred).
-       contentsText = row.transcript,
-       isProcessing = row.isProcessing,
+       contentsText = _contentsFor(row, mediaKind),
+       processingState = row.processingState,
        // The persisted source extension (#1449) drives the doc chip's type
        // icon; null on non-document rows (and on the item-driven path).
        originalExtension = row.originalExtension;
@@ -379,9 +471,7 @@ class _ImageDetailHost extends StatelessWidget {
   /// null on the image path (its description producer is deferred, #1445).
   final String? contentsText;
 
-  /// Whether the row is mid-pipeline (`isProcessing == 1`). Drives the doc
-  /// Contents "Processing…" state; ignored on the image path.
-  final bool isProcessing;
+  final ProcessingState processingState;
 
   /// The persisted lower-case source extension (`original_extension`, #1449)
   /// used by the doc media header to pick its type icon. Null on image/audio.
@@ -394,6 +484,7 @@ class _ImageDetailHost extends StatelessWidget {
   /// The "…" overflow menu rendered in the AppBar (Move + Delete). Null on the
   /// item-driven [fromItem] path.
   final Widget? trailing;
+  final VoidCallback? onRetry;
 
   FileViewData _viewData(BuildContext context) {
     return FileViewData(
@@ -421,25 +512,12 @@ class _ImageDetailHost extends StatelessWidget {
         FileMediaKind.video => _VideoMediaHeader(title: title, path: path),
         FileMediaKind.audio => null,
       },
-      // Contents body, per kind:
-      //   * image → "Description". The image description producer is deferred
-      //     (#1445), so there is no honest "processing": the Contents state
-      //     machine (#1440) converges on the EMPTY terminal state ("No
-      //     description yet") rather than a fake "Describing…".
-      //   * doc   → "Document". The document IS processed end-to-end (#1454): the
-      //     AI-stub summary lands in the machine `transcript` column, so the doc
-      //     Contents renders the LIVE state machine driven by the row's own
-      //     fields — processing while in flight, failed on a failed pipeline,
-      //     ready once the summary arrives, empty otherwise. This wires the
-      //     `contentsStatus.doc.*` strings (en + ja) to real states rather than
-      //     leaving them as the placeholder empty body.
-      contentsText: mediaKind == FileMediaKind.doc ? contentsText : null,
-      contentsState: mediaKind == FileMediaKind.doc
-          ? _docContentsState()
-          : ContentsState.empty,
+      contentsText: contentsText,
+      contentsState: _contentsState(),
       errorMessage: processingErrorCode == null
           ? null
           : processingErrorMessage(processingErrorCode),
+      onContentsRetry: onRetry,
       notesText: notes,
     );
   }
@@ -453,11 +531,18 @@ class _ImageDetailHost extends StatelessWidget {
   ///   * otherwise → empty ("No contents yet").
   /// A `pending_upload` row is held locally (not in the pipeline), so it reads
   /// as empty rather than a misleading "Processing…".
-  ContentsState _docContentsState() {
-    if (processingStatus == 'failed') return ContentsState.failed;
-    final status = processingStatus;
-    final pending = status != null && isUploadQueuePendingStatus(status);
-    if (isProcessing && !pending) return ContentsState.processing;
+  ContentsState _contentsState() {
+    final explicit = switch (processingState) {
+      ProcessingState.queued => ContentsState.queued,
+      ProcessingState.processing => ContentsState.processing,
+      ProcessingState.partial => ContentsState.partial,
+      ProcessingState.failed => ContentsState.failed,
+      ProcessingState.notAvailable => ContentsState.notAvailable,
+      ProcessingState.succeeded ||
+      ProcessingState.notRequested ||
+      ProcessingState.unknown => null,
+    };
+    if (explicit != null) return explicit;
     final text = contentsText;
     if (text != null && text.trim().isNotEmpty) return ContentsState.ready;
     return ContentsState.empty;
@@ -694,8 +779,19 @@ class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
   /// transcript text → ready; otherwise → empty ("No transcript yet"). This is
   /// producer-independent — it reads only the loaded row's own status.
   ContentsState _contentsState(DetailsState state) {
-    if (state.processingFailed) return ContentsState.failed;
-    if (state.isProcessing) return ContentsState.processing;
+    final processing = state.row?.processingState;
+    final explicit = switch (processing) {
+      ProcessingState.queued => ContentsState.queued,
+      ProcessingState.processing => ContentsState.processing,
+      ProcessingState.partial => ContentsState.partial,
+      ProcessingState.failed => ContentsState.failed,
+      ProcessingState.notAvailable => ContentsState.notAvailable,
+      ProcessingState.succeeded ||
+      ProcessingState.notRequested ||
+      ProcessingState.unknown ||
+      null => null,
+    };
+    if (explicit != null) return explicit;
     final transcript = state.row?.transcript;
     if (transcript != null && transcript.trim().isNotEmpty) {
       return ContentsState.ready;

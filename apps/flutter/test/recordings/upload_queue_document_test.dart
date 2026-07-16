@@ -18,8 +18,6 @@ import 'package:matome_flutter/features/home/inbox_upload.dart'
     show mediaTypeForPath;
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -30,9 +28,8 @@ import '../support/verified_upload_repository_fake.dart';
 /// CHARACTERIZATION TEST (task #1451).
 ///
 /// Proves an end-to-end claim that was previously UNPROVEN: that the #43
-/// [UploadQueue] — which is named and documented around audio
-/// (`audioFilePath` / `AudioCleanup`) — can actually drain a NON-AUDIO
-/// `mediaType = 'document'` row from `pending_upload` → terminal `done`,
+/// [UploadQueue] can actually drain a NON-AUDIO `mediaType = 'document'` row
+/// from `pending_upload` through Core processing acceptance,
 /// preserving the document bytes through the presigned PUT, for the
 /// representative imported types txt / md / pdf / docx (#1449, schema v12).
 ///
@@ -43,26 +40,6 @@ import '../support/verified_upload_repository_fake.dart';
 /// streams to storage. Only Core's own API calls (create / enqueue / fetch)
 /// are faked, because those are not what is under test here.
 void main() {
-  // A poll-driven awaiter that resolves from GET (no live socket). The fake
-  // repo's fetchRecording supplies the terminal `done` result. Mirrors the
-  // audio upload_queue_test.dart awaiter so we drive the SAME real drain.
-  Future<RecordingResult> pollAwaiter({
-    required Recording recording,
-    required Future<Recording?> Function() poll,
-    required Ref ref,
-  }) async {
-    final events = StreamController<RecordingStatusEvent>();
-    final waiter = RecordingResultWaiter(
-      recordingId: recording.id,
-      statusEvents: events.stream,
-      poll: poll,
-      pollInterval: const Duration(milliseconds: 10),
-    );
-    final result = await waiter.wait();
-    await events.close();
-    return result;
-  }
-
   /// A real loopback server that ACCEPTS one presigned PUT and CAPTURES the
   /// streamed body bytes + the `content-type` header the queue sent. This is
   /// the storage stand-in; it lets the REAL repo `_uploadStream` run unchanged.
@@ -111,9 +88,7 @@ void main() {
         appDatabaseProvider.overrideWithValue(db),
         currentOwnerIdProvider.overrideWithValue('1'),
         recordingsRepositoryProvider.overrideWithValue(repo),
-        uploadQueueProvider.overrideWith(
-          (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
-        ),
+        uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
     );
   }
@@ -295,7 +270,7 @@ void main() {
         final row = await db.itemsDao.getById(localId, '1');
         expect(
           row!.processingStatus,
-          'processing',
+          'queued',
           reason: 'document row stopped after Core accepted processing',
         );
         expect(row.isProcessing, isTrue);
@@ -357,13 +332,24 @@ class _DocCapturingRepository extends RecordingsRepository
     state: UploadState.uploading,
   );
 
-  Recording _recording({required String status, String? summary}) {
-    return Recording.fromJson(<String, dynamic>{
+  Recording _recording({required ProcessingState state, String? summary}) {
+    return Recording.fromItemJson(<String, dynamic>{
       'id': coreIdMinted,
       'owner_id': 1,
+      'item_type': 'file',
       'title': 'Report',
-      'status': status,
-      'summary': ?summary,
+      'processing_state': state.wireName,
+      'processing_run_id': state == ProcessingState.notRequested
+          ? null
+          : '00000000-0000-4000-8000-000000000998',
+      'processing_attempt': state == ProcessingState.notRequested ? 0 : 1,
+      'processing_requested_outputs': const ['extracted_text', 'summary'],
+      'processing_outputs': <String, dynamic>{
+        if (summary != null)
+          'summary': {'type': 'summary', 'markdown': summary},
+      },
+      'processing_error': null,
+      'file': const <String, dynamic>{'media_type': 'document'},
     });
   }
 
@@ -383,7 +369,7 @@ class _DocCapturingRepository extends RecordingsRepository
     createdMediaType = mediaType;
     createdContentLength = contentLength;
     return RecordingCreateResult(
-      recording: _recording(status: 'pending'),
+      recording: _recording(state: ProcessingState.notRequested),
       // Presign points at the real loopback server so super.uploadFile streams
       // the document bytes through the genuine transport.
       upload: UploadDescriptor(
@@ -400,10 +386,10 @@ class _DocCapturingRepository extends RecordingsRepository
   @override
   Future<Recording> enqueueProcessing(int id) async {
     enqueueCalls++;
-    return _recording(status: 'processing');
+    return _recording(state: ProcessingState.queued);
   }
 
   @override
   Future<Recording?> fetchRecording(int id) async =>
-      _recording(status: 'done', summary: 'A document');
+      _recording(state: ProcessingState.succeeded, summary: 'A document');
 }

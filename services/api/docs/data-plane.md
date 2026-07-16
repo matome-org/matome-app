@@ -5,9 +5,9 @@ object store** (AWS4 presigned URLs). Providers are interchangeable: swap
 `DATABASE_URL` and `STORAGE_S3_*` only — no code fork for Neon vs RDS, or
 MinIO vs R2 vs S3.
 
-Auth is Guardian (not a hosted auth product). Realtime status uses Phoenix
-Channels. The Flutter client never holds storage credentials; it only receives
-presigned URLs.
+Auth is Guardian (not a hosted auth product). Processing status is exposed on
+owner-scoped Item REST responses. The Flutter client never holds storage
+credentials; it only receives presigned URLs.
 
 ## Daily DX vs compose
 
@@ -87,6 +87,22 @@ ends at `uploaded/not_requested`; capable media releases the device lease once
 Core accepts processing, without polling or awaiting AI. The canonical local
 file is retained in both cases.
 
+### AI processor execution
+
+Core discovers `GET /v1/capabilities` before creating a logical processing run.
+An input disabled by system policy stays `not_requested`; a policy-enabled input
+missing from, disabled by, or outside the processor's advertised bounds becomes
+`not_available` without an Oban dispatch. The in-repo stub advertises audio,
+image, document, and text fixture simulation. The optional audio adapter
+advertises audio transcription only.
+
+Both Node processors persist the accepted v1 envelope before returning `202`,
+deduplicate by `job_id` + `run_id` + `input_revision`, verify fetched byte count
+and SHA-256, and persist one terminal callback body before delivery. Callback
+transport retries reuse those exact bytes across failures and restarts. The
+callback uses Core's per-run authorization header, not the dispatch token.
+Processor logs are restricted to job/run identities and stable error codes.
+
 After app-start and reachable retry drains, Flutter may report one throttled
 queue observation to `POST /api/device/queue-snapshot`. The closed v1 request
 contains aggregate state/stage/error counts, oldest age, progress, and at most
@@ -153,7 +169,7 @@ Set once per environment (do not rotate casually — invalidates sessions):
 | `ADMIN_OTP_PEPPER` | Independent random secret (minimum 32 bytes) for keyed admin OTP verification |
 | `ADMIN_IP_ALLOWLIST` | Optional soft IP tier for rate limits |
 | `ADMIN_TRUSTED_PROXIES` | CIDRs allowed to supply `X-Forwarded-For` for admin attribution |
-| `AI_ENGINE_ENDPOINT` / `AI_ENGINE_DISPATCH_TOKEN` / `AI_ENGINE_CALLBACK_SIGNING_SECRET` / `AI_ENGINE_CALLBACK_BASE_URL` | AI endpoint, outbound dispatch credential, independent per-run callback signing secret, and Core callback origin |
+| `AI_ENGINE_ENDPOINT` / `AI_ENGINE_DISPATCH_TOKEN` / `AI_ENGINE_CALLBACK_SIGNING_SECRET` / `AI_ENGINE_CALLBACK_BASE_URL` | AI endpoint, outbound dispatch credential, independent per-run callback signing secret, and Core callback origin. Production URLs must use HTTPS and both credentials must be distinct non-default values of at least 32 bytes. |
 | Plus all **data-plane** vars above | Postgres + S3-compatible |
 
 Flutter Web build arg / runtime: `API_BASE_URL` must be the **browser-facing**
@@ -168,7 +184,9 @@ entrypoint (or an equivalent release eval) is configured.
 ### Fail-closed boot
 
 In `:prod`, missing `DATABASE_URL`, `SECRET_KEY_BASE`, `GUARDIAN_SECRET_KEY`,
-`STORAGE_S3_ENDPOINT`, or storage keys raises at boot (`config/runtime.exs`).
+`STORAGE_S3_ENDPOINT`, storage keys, AI credentials, or secure AI URLs raises at
+boot (`config/runtime.exs`). Node processors additionally require an explicit
+durable data directory and reject non-HTTPS processor, media, and callback URLs.
 
 ### Deploy smoke checklist
 

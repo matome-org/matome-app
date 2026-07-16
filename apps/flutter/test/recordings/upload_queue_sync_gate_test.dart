@@ -13,7 +13,6 @@
 // on pending_upload, the shipped reality) and `=true` (gate ON). It self-skips
 // the wrong-flag groups so each invocation proves exactly its reality.
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -31,8 +30,6 @@ import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/matome/matome_ids.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -42,23 +39,6 @@ import '../support/item_fixtures.dart';
 import '../support/verified_upload_repository_fake.dart';
 
 void main() {
-  Future<RecordingResult> pollAwaiter({
-    required Recording recording,
-    required Future<Recording?> Function() poll,
-    required Ref ref,
-  }) async {
-    final events = StreamController<RecordingStatusEvent>();
-    final waiter = RecordingResultWaiter(
-      recordingId: recording.id,
-      statusEvents: events.stream,
-      poll: poll,
-      pollInterval: const Duration(milliseconds: 10),
-    );
-    final result = await waiter.wait();
-    await events.close();
-    return result;
-  }
-
   late Directory tmp;
   setUp(() async {
     tmp = await Directory.systemTemp.createTemp('upload_gate_test_');
@@ -78,9 +58,7 @@ void main() {
         // future-PDP input — today's `spaceSync` decision gates only on the space
         // being cloud, so this value does not change any assertion here.
         currentOwnerIdProvider.overrideWithValue('owner-1'),
-        uploadQueueProvider.overrideWith(
-          (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
-        ),
+        uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
     );
   }
@@ -225,7 +203,7 @@ void main() {
         expect(r.uploadedIds, hasLength(1));
         expect(
           (await db.itemsDao.getById(draftChild, 'owner-1'))!.processingStatus,
-          'processing',
+          'queued',
         );
         // Missing-parent and LOCAL-space rows remain durably blocked.
         final pending = await db.itemsDao.listPendingUploads('owner-1');
@@ -482,13 +460,28 @@ class _CountingRepository extends RecordingsRepository
   /// Core ids that were PUT-uploaded (the egress sink).
   final Set<int> uploadedIds = <int>{};
 
-  Recording _recording(int id, {required String status, String? summary}) {
-    return Recording.fromJson(<String, dynamic>{
+  Recording _recording(
+    int id, {
+    required ProcessingState state,
+    String? summary,
+  }) {
+    return Recording.fromItemJson(<String, dynamic>{
       'id': id,
       'owner_id': 1,
+      'item_type': 'file',
       'title': 'Memo',
-      'status': status,
-      'summary': ?summary,
+      'processing_state': state.wireName,
+      'processing_run_id': state == ProcessingState.notRequested
+          ? null
+          : '00000000-0000-4000-8000-${id.toString().padLeft(12, '0')}',
+      'processing_attempt': state == ProcessingState.notRequested ? 0 : 1,
+      'processing_requested_outputs': const ['transcript', 'summary'],
+      'processing_outputs': <String, dynamic>{
+        if (summary != null)
+          'summary': {'type': 'summary', 'markdown': summary},
+      },
+      'processing_error': null,
+      'file': const <String, dynamic>{'media_type': 'audio'},
     });
   }
 
@@ -507,7 +500,7 @@ class _CountingRepository extends RecordingsRepository
     createCalls++;
     final id = _nextCoreId++;
     return RecordingCreateResult(
-      recording: _recording(id, status: 'pending'),
+      recording: _recording(id, state: ProcessingState.notRequested),
       upload: UploadDescriptor(
         method: 'PUT',
         url: 'http://127.0.0.1:9/upload',
@@ -524,11 +517,11 @@ class _CountingRepository extends RecordingsRepository
 
   @override
   Future<Recording> enqueueProcessing(int id) async =>
-      _recording(id, status: 'processing');
+      _recording(id, state: ProcessingState.queued);
 
   @override
   Future<Recording?> fetchRecording(int id) async =>
-      _recording(id, status: 'done', summary: 'ok');
+      _recording(id, state: ProcessingState.succeeded, summary: 'ok');
 
   @override
   Future<Recording> updateRecording(
@@ -543,6 +536,6 @@ class _CountingRepository extends RecordingsRepository
     bool clearWorkspace = false,
   }) async {
     updateCalls++;
-    return _recording(id, status: 'done');
+    return _recording(id, state: ProcessingState.succeeded);
   }
 }

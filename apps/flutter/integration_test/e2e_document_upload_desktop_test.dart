@@ -20,8 +20,6 @@ import 'package:matome_flutter/features/home/inbox_upload.dart'
     show PickedUpload;
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -176,11 +174,7 @@ void main() {
             FakeE2EAuthRepository(store),
           ),
           recordingsRepositoryProvider.overrideWithValue(repo),
-          // Drive the queue with a poll-only awaiter (no live socket); the fake
-          // repo's fetchRecording supplies the terminal `done`.
-          uploadQueueProvider.overrideWith(
-            (ref) => UploadQueue(ref, awaitResult: _pollAwaiter),
-          ),
+          uploadQueueProvider.overrideWith(UploadQueue.new),
           // The matome import controller copies through the test durableCopy.
           matomeDetailControllerProvider.overrideWith(
             (ref, id) =>
@@ -359,25 +353,8 @@ void main() {
   });
 }
 
-/// Poll-driven awaiter (no live socket): resolves from the repo's GET, mirroring
-/// the upload_queue_document_test.dart awaiter so the REAL drain runs.
-Future<RecordingResult> _pollAwaiter({
-  required Recording recording,
-  required Future<Recording?> Function() poll,
-  required Ref ref,
-}) async {
-  final events = StreamController<RecordingStatusEvent>();
-  final waiter = RecordingResultWaiter(
-    recordingId: recording.id,
-    statusEvents: events.stream,
-    poll: poll,
-    pollInterval: const Duration(milliseconds: 10),
-  );
-  final result = await waiter.wait();
-  await events.close();
-  return result;
-}
-
+/// Legacy injection seam retained by this integration harness. Device work
+/// releases at Core acceptance and does not invoke it.
 /// A repository whose Core API legs (create / enqueue / fetch) are faked but
 /// whose `uploadFile` runs the REAL implementation (via `super`) so the genuine
 /// `_uploadStream` PUTs the document bytes to the loopback presign URL. The

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -12,11 +11,8 @@ import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
-import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/processing_error.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
@@ -27,25 +23,6 @@ import '../support/item_fixtures.dart';
 import '../support/verified_upload_repository_fake.dart';
 
 void main() {
-  // A poll-driven awaiter that resolves from GET (no live socket). The fake
-  // repo's fetchRecording supplies the terminal result.
-  Future<RecordingResult> pollAwaiter({
-    required Recording recording,
-    required Future<Recording?> Function() poll,
-    required Ref ref,
-  }) async {
-    final events = StreamController<RecordingStatusEvent>();
-    final waiter = RecordingResultWaiter(
-      recordingId: recording.id,
-      statusEvents: events.stream,
-      poll: poll,
-      pollInterval: const Duration(milliseconds: 10),
-    );
-    final result = await waiter.wait();
-    await events.close();
-    return result;
-  }
-
   /// Inserts a `pending_upload` local row (the W2 local-first shape) with a
   /// real on-disk audio file the queue must keep until upload is confirmed.
   Future<(String, File)> seedPendingRow(
@@ -98,24 +75,13 @@ void main() {
     if (await tmp.exists()) await tmp.delete(recursive: true);
   });
 
-  ProviderContainer containerFor(
-    AppDatabase db,
-    RecordingsRepository repo, {
-    AudioCleanup? cleanupAudio,
-    RecordingResultAwaiter? awaitResult,
-  }) {
+  ProviderContainer containerFor(AppDatabase db, RecordingsRepository repo) {
     return ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
         currentOwnerIdProvider.overrideWithValue('1'),
         recordingsRepositoryProvider.overrideWithValue(repo),
-        uploadQueueProvider.overrideWith(
-          (ref) => UploadQueue(
-            ref,
-            awaitResult: awaitResult ?? pollAwaiter,
-            cleanupAudio: cleanupAudio ?? deleteAudioFile,
-          ),
-        ),
+        uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
     );
   }
@@ -168,7 +134,7 @@ void main() {
         repo.coreIdMinted,
         reason: 'coreId reconciled on drain',
       );
-      expect(row.processingStatus, 'processing');
+      expect(row.processingStatus, 'queued');
       expect(row.isProcessing, isTrue);
       expect(row.summary, isNull);
       expect(row.file?.uploadState, 'uploaded');
@@ -219,7 +185,7 @@ void main() {
     await container.read(uploadQueueProvider).drain();
 
     final row = await db.itemsDao.getById(localId, '1');
-    expect(row!.processingStatus, 'processing');
+    expect(row!.processingStatus, 'queued');
     expect(row.coreId, repo.coreIdMinted, reason: 'create did happen');
     expect(row.file?.uploadState, 'uploaded');
     expect(row.file?.uploadedAt, isNotNull);
@@ -235,37 +201,6 @@ void main() {
       reason: 'audio KEPT on failure for inspection / retry',
     );
   });
-
-  test(
-    'legacy terminal awaiter is ignored and notes remain device-owned',
-    () async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      final repo = _ToggleRepository(
-        apiClient: ApiClient(
-          tokenStore: InMemoryTokenStore(),
-          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-        ),
-      );
-      final container = containerFor(
-        db,
-        repo,
-        awaitResult:
-            ({required recording, required poll, required ref}) async =>
-                const RecordingResult.failed('timeout'),
-      );
-      addTearDown(container.dispose);
-
-      const userNotes = '  Timeout note\nkept byte-for-byte.  ';
-      final (localId, _) = await seedPendingRow(db, tmp, notes: userNotes);
-      await container.read(uploadQueueProvider).drain();
-
-      final row = await db.itemsDao.getById(localId, '1');
-      expect(row!.processingStatus, 'processing');
-      expect(row.processingErrorCode, isNull);
-      expect(row.notes, userNotes);
-    },
-  );
 
   test('transport failure mid-process stays durably blocked without leaking '
       'the ApiException message into notes', () async {
@@ -419,7 +354,7 @@ void main() {
     expect(repo.createCalls, 0, reason: 'verified upload is not repeated');
     final row = await db.itemsDao.getById(localId, '1');
     expect(row!.coreId, repo.coreIdMinted, reason: 'keeps the existing coreId');
-    expect(row.processingStatus, 'processing');
+    expect(row.processingStatus, 'queued');
   });
 
   test(
@@ -477,7 +412,7 @@ void main() {
       await container.read(uploadQueueProvider).drain();
 
       row = await db.itemsDao.getById(localId, '1');
-      expect(row!.processingStatus, 'processing');
+      expect(row!.processingStatus, 'queued');
       expect(row.coreId, repo.coreIdMinted);
     },
   );
@@ -517,7 +452,7 @@ void main() {
       final row = await db.itemsDao.getById(localId, '1');
       expect(repo.createCalls, 0);
       expect(row!.coreId, repo.coreIdMinted);
-      expect(row.processingStatus, 'processing');
+      expect(row.processingStatus, 'queued');
       expect(row.processingErrorCode, isNull);
       expect(row.notes, '  Restart note.\nExact bytes.  ');
     },
@@ -542,14 +477,31 @@ class _ToggleRepository extends RecordingsRepository
   String? lastClientId;
   final int coreIdMinted = 999;
 
-  Recording _recording({required String status, String? summary, String? tx}) {
-    return Recording.fromJson(<String, dynamic>{
+  Recording _recording({
+    required ProcessingState state,
+    String? summary,
+    String? tx,
+  }) {
+    return Recording.fromItemJson(<String, dynamic>{
       'id': coreIdMinted,
       'owner_id': 1,
+      'item_type': 'file',
       'title': 'Memo',
-      'status': status,
-      'summary': ?summary,
-      'transcript': ?tx,
+      'processing_state': state.wireName,
+      'processing_run_id': state == ProcessingState.notRequested
+          ? null
+          : '00000000-0000-4000-8000-000000000999',
+      'processing_attempt': state == ProcessingState.notRequested ? 0 : 1,
+      'processing_requested_outputs': const ['transcript', 'summary'],
+      'processing_outputs': <String, dynamic>{
+        if (summary != null)
+          'summary': {'type': 'summary', 'markdown': summary},
+        if (tx != null) 'transcript': {'type': 'transcript', 'text': tx},
+      },
+      'processing_error': state == ProcessingState.failed
+          ? const {'code': 'processor_unavailable', 'retryable': true}
+          : null,
+      'file': const <String, dynamic>{'media_type': 'audio'},
     });
   }
 
@@ -577,7 +529,7 @@ class _ToggleRepository extends RecordingsRepository
     createCalls++;
     lastClientId = clientId;
     return RecordingCreateResult(
-      recording: _recording(status: 'pending'),
+      recording: _recording(state: ProcessingState.notRequested),
       upload: const UploadDescriptor(
         method: 'PUT',
         url: 'http://127.0.0.1:9/upload',
@@ -598,13 +550,17 @@ class _ToggleRepository extends RecordingsRepository
     if (raw != null) throw raw;
     final err = throwOnEnqueue;
     if (err != null) throw err;
-    return _recording(status: 'processing');
+    return _recording(state: ProcessingState.queued);
   }
 
   @override
   Future<Recording?> fetchRecording(int id) async {
     if (!coreUp) throw const ApiException('Core unreachable');
-    if (failProcessing) return _recording(status: 'failed');
-    return _recording(status: 'done', summary: 'A memo', tx: 'hello world');
+    if (failProcessing) return _recording(state: ProcessingState.failed);
+    return _recording(
+      state: ProcessingState.succeeded,
+      summary: 'A memo',
+      tx: 'hello world',
+    );
   }
 }

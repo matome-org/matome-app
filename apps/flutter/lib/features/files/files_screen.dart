@@ -33,6 +33,7 @@ import '../details/file_detail_screen.dart' show mediaKindForType;
 import '../details/file_view.dart';
 import '../home/inbox_controller.dart';
 import '../recordings/processing_error.dart';
+import '../recordings/recording.dart';
 import 'files_providers.dart';
 import 'widgets/files_grid.dart';
 import 'widgets/files_table.dart';
@@ -487,16 +488,33 @@ class _FilesPaneDetail extends ConsumerWidget {
             // The machine-owned Contents (audio → transcript, doc → stub
             // summary; image keeps it null). Read-only, from the row's OWN
             // fields.
-            contentsText: mediaKind == FileMediaKind.image
-                ? null
-                : row.transcript,
-            contentsState: row.processingStatus == 'failed'
-                ? ContentsState.failed
-                : null,
+            contentsText: switch (mediaKind) {
+              FileMediaKind.audio => row.transcript,
+              FileMediaKind.image => [row.description, row.ocrText]
+                  .whereType<String>()
+                  .where((value) => value.trim().isNotEmpty)
+                  .join('\n\n'),
+              FileMediaKind.doc => [row.extractedText, row.summary]
+                  .whereType<String>()
+                  .where((value) => value.trim().isNotEmpty)
+                  .join('\n\n'),
+              FileMediaKind.video => null,
+            },
+            contentsState: switch (row.processingState) {
+              ProcessingState.queued => ContentsState.queued,
+              ProcessingState.processing => ContentsState.processing,
+              ProcessingState.partial => ContentsState.partial,
+              ProcessingState.failed => ContentsState.failed,
+              ProcessingState.notAvailable => ContentsState.notAvailable,
+              _ => null,
+            },
             errorMessage: row.processingErrorCode == null
                 ? null
                 : processingErrorMessage(row.processingErrorCode),
             notesText: row.notes,
+            onContentsRetry: () => ref
+                .read(detailsControllerProvider(id).notifier)
+                .retry(),
           ),
           // The pane is a read surface — the editable Notes lifecycle stays on
           // the routed detail screen.

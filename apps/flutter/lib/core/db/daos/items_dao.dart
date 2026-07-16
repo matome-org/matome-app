@@ -6,6 +6,7 @@ import '../../../features/items/matome_item_type.dart';
 import '../../../features/matome/matome_ids.dart';
 import '../../../features/recordings/recording_ids.dart'
     show kLocalRecordingIdPrefix, kUploadQueuePendingStatuses;
+import '../../../features/recordings/recording.dart';
 import '../app_database.dart';
 import '../file_row.dart';
 import '../tables.dart';
@@ -53,32 +54,40 @@ class ItemWithPayload {
   bool get isProcessing =>
       item.processingState == 'queued' || item.processingState == 'processing';
 
+  ProcessingState get processingState =>
+      ProcessingState.fromWire(item.processingState);
+
   String get processingStatus {
     if (kUploadQueuePendingStatuses.contains(item.syncState) ||
         item.syncState.startsWith('blocked_')) {
       return item.syncState;
     }
     return switch (item.processingState) {
-      'queued' || 'processing' => 'processing',
+      'not_requested' => 'not_requested',
+      'not_available' => 'not_available',
+      'queued' => 'queued',
+      'processing' => 'processing',
+      'succeeded' => 'succeeded',
+      'partial' => 'partial',
       'failed' => 'failed',
-      _ => 'done',
+      _ => 'not_requested',
     };
   }
 
-  String? get summary => _processingOutput('summary');
-  String? get transcript => _processingOutput('transcript');
-  String? get processingErrorCode => item.processingErrorCode;
-
-  String? _processingOutput(String key) {
+  ProcessingOutputs get processingOutputs {
     try {
-      final decoded = jsonDecode(item.processingOutputs);
-      if (decoded is! Map<String, dynamic>) return null;
-      final value = decoded[key];
-      return value is String && value.isNotEmpty ? value : null;
+      return ProcessingOutputs.fromJson(jsonDecode(item.processingOutputs));
     } on FormatException {
-      return null;
+      return const ProcessingOutputs.empty();
     }
   }
+
+  String? get summary => processingOutputs.summary?.markdown;
+  String? get transcript => processingOutputs.transcript?.text;
+  String? get description => processingOutputs.description?.text;
+  String? get ocrText => processingOutputs.ocrText?.text;
+  String? get extractedText => processingOutputs.extractedText?.text;
+  String? get processingErrorCode => item.processingErrorCode;
 }
 
 class ItemWithWorkspace {

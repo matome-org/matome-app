@@ -49,15 +49,15 @@
 
 ### Ingestion & processing — `FR-ING`
 
-- **FR-ING-1** Every media type (`audio | meeting | image`, future `video | pdf`) flows through **one** ingestion path: `pending → processing → done | failed`.
-- **FR-ING-2** The client creates a `pending` record on Core (`POST /api/recordings`) and receives a presigned upload URL.
+- **FR-ING-1** Every supported input (`audio | image | document | text`) uses one explicit processing lifecycle: `not_requested → queued → processing → succeeded | partial | failed`, with `not_available` when current capabilities or policy cannot dispatch it.
+- **FR-ING-2** The client creates a file Item under its reconciled Matome (`POST /api/matomes/:id/items`) and receives a verified-upload envelope.
 - **FR-ING-3** The client uploads raw bytes directly to object storage via the presigned URL (streamed); the client never sends bytes through Core.
-- **FR-ING-4** The client requests processing (`POST /api/recordings/:id/process`); Core enqueues an AI job (Oban).
+- **FR-ING-4** The client requests processing (`POST /api/items/:id/process`); Core creates or replays one logical run and enqueues run-keyed Oban work.
 - **FR-ING-5** The AI Engine downloads media via a presigned GET, runs transcribe/OCR + summarize, and POSTs a single terminal result to Core's internal callback.
-- **FR-ING-6** On `done`, Core persists `title`, `transcript`, `summary`, `duration` and broadcasts status over Phoenix Channels.
-- **FR-ING-7** The client resolves terminal status by **racing** a Phoenix Channel push against a ~2 s `GET /api/recordings/:id` poll (10-minute timeout).
+- **FR-ING-6** Core persists terminal state and bounded typed `processing_outputs`; user-authored notes remain independent.
+- **FR-ING-7** The client polls `GET /api/items/:id` for the accepted run id with one request in flight and bounded backoff. Its 30-second observation timeout does not fail the Core run; Core's watchdog is authoritative.
 - **FR-ING-8** On `failed`, the client surfaces the failure and the User can retry; retry re-enqueues server-side (Oban) — the client never processes media locally.
-- **FR-ING-9** Callback handling is idempotent per `job_id` / recording status.
+- **FR-ING-9** Callback handling is idempotent and current-run guarded by job id, run id, Item id, and source revision.
 
 ### Matome (the central aggregate) — `FR-MAT`
 
@@ -114,7 +114,7 @@
 - **FR-ITM-1** A User can open an audio item: play/pause/seek a local file or a presigned Core URL, with duration/bitrate/size.
 - **FR-ITM-2** A User can read an item's machine-generated transcript (read-only).
 - **FR-ITM-3** A User can edit an item's notes (user-owned, with a leave guard).
-- **FR-ITM-4** A User can retry a failed transcription (socket + poll for the terminal result).
+- **FR-ITM-4** A User can retry failed processing as a new Core run; the client observes only that current run through bounded polling.
 - **FR-ITM-5** A User can view an image item inline and fullscreen.
 - **FR-ITM-6** A User can view a document item's metadata (name, size, type).
 - **FR-ITM-7** A User can delete an item (removes on-disk file + Drift row + Core row) and move an item to a Space.

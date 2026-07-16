@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -14,10 +13,7 @@ import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_upload.dart';
-import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -61,8 +57,13 @@ void main() {
             'owner_id': 1,
             'matome_id': 42,
             'item_type': 'file',
-            'metadata': {'title': 'Voice memo', 'status': 'pending'},
-            'file': {'media_type': 'audio'},
+            'title': 'Voice memo',
+            'processing_state': 'not_requested',
+            'processing_run_id': null,
+            'processing_attempt': 0,
+            'processing_requested_outputs': const <String>[],
+            'processing_outputs': const <String, dynamic>{},
+            'file': {'media_type': 'audio', 'upload_state': 'pending'},
           },
           'upload': {
             'request': {
@@ -83,7 +84,13 @@ void main() {
             'owner_id': 1,
             'matome_id': 42,
             'item_type': 'file',
-            'metadata': {'title': 'Voice memo', 'status': 'processing'},
+            'title': 'Voice memo',
+            'processing_state': 'queued',
+            'processing_run_id': 'run-321',
+            'processing_attempt': 1,
+            'processing_requested_outputs': ['transcript', 'summary'],
+            'processing_outputs': const <String, dynamic>{},
+            'file': {'media_type': 'audio', 'upload_state': 'uploaded'},
           },
           'processing': {'queued': true},
         }),
@@ -97,8 +104,16 @@ void main() {
             'owner_id': 1,
             'matome_id': 42,
             'item_type': 'file',
-            'metadata': {'title': 'Voice memo', 'status': 'done'},
-            'file': {'summary': 'A short memo', 'transcript': 'hello world'},
+            'title': 'Voice memo',
+            'processing_state': 'succeeded',
+            'processing_run_id': 'run-321',
+            'processing_attempt': 1,
+            'processing_requested_outputs': ['transcript', 'summary'],
+            'processing_outputs': {
+              'summary': {'type': 'summary', 'markdown': 'A short memo'},
+              'transcript': {'type': 'transcript', 'text': 'hello world'},
+            },
+            'file': {'media_type': 'audio', 'upload_state': 'uploaded'},
           },
         }),
       );
@@ -109,41 +124,13 @@ void main() {
         apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: dio),
       );
 
-      // Socket absent → poll fallback resolves (GET → done). Drives the real
-      // RecordingResultWaiter race without a live Phoenix socket.
-      Future<RecordingResult> pollFallbackAwaiter({
-        required Recording recording,
-        required Future<Recording?> Function() poll,
-        required Ref ref,
-      }) async {
-        final events = StreamController<RecordingStatusEvent>();
-        final waiter = RecordingResultWaiter(
-          recordingId: recording.id,
-          statusEvents: events.stream,
-          poll: poll,
-          pollInterval: const Duration(milliseconds: 20),
-        );
-        final result = await waiter.wait();
-        await events.close();
-        return result;
-      }
-
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
           currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           recordingsRepositoryProvider.overrideWithValue(repo),
-          // W4: the terminal-result awaiter moved from InboxUploader onto the queue.
-          // No-op cleanup so the stub temp file isn't deleted out from under the
-          // test's own teardown.
-          uploadQueueProvider.overrideWith(
-            (ref) => UploadQueue(
-              ref,
-              awaitResult: pollFallbackAwaiter,
-              cleanupAudio: (_) async {},
-            ),
-          ),
+          uploadQueueProvider.overrideWith(UploadQueue.new),
         ],
       );
       addTearDown(container.dispose);
@@ -162,7 +149,7 @@ void main() {
       final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
       expect(row!.coreId, 321);
-      expect(row.processingStatus, 'processing');
+      expect(row.processingStatus, 'queued');
       expect(row.isProcessing, isTrue);
       expect(row.summary, isNull);
 

@@ -6,6 +6,7 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/items/text_item_host.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 import '../support/item_fixtures.dart';
@@ -66,5 +67,42 @@ void main() {
     )..where((tbl) => tbl.id.equals('text_content_100'))).getSingle();
     expect(row.body, 'Updated plain text');
     expect(find.text('Updated plain text'), findsOneWidget);
+  });
+
+  testWidgets('renders typed text summary and truthful failed retry state', (
+    tester,
+  ) async {
+    await insertTestTextItem(
+      db,
+      id: 'summary',
+      body: 'Original note remains user-owned',
+      coreId: 42,
+      summary: 'Machine-generated summary',
+      processingState: ProcessingState.failed,
+      processingRunId: 'run-text',
+      processingAttempt: 1,
+      processingErrorCode: 'processor_unavailable',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
+        child: TranslationProvider(
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const TextItemHost(itemId: 'summary'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Original note remains user-owned'), findsOneWidget);
+    expect(find.text('Machine-generated summary'), findsOneWidget);
+    expect(find.text('Failed'), findsOneWidget);
+    expect(find.byKey(const ValueKey('text-item-processing-retry')), findsOneWidget);
   });
 }

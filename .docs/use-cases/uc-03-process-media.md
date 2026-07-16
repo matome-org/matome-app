@@ -5,16 +5,16 @@
 > [Requirements](../internal/requirements.md).
 
 ## Summary
-Every media type flows through **one** ingestion path. The client drains a
-locally-captured `pending_upload` item: it creates a `pending` record on Core
-and receives a presigned upload URL, streams the raw bytes straight to object
-storage (never through Core), then requests processing. Core enqueues an Oban
-job; the AI Engine downloads the media via a presigned GET, transcribes or OCRs
-it, summarizes, and POSTs a single terminal result to Core's internal callback.
-Core persists the result, flips status to `done`, and broadcasts over Phoenix
-Channels. The client resolves the terminal status by **racing** the Channel push
-against a ~2 s poll (10-minute timeout). On failure the User can retry, which
-re-enqueues server-side — the client never processes media locally.
+Every supported input flows through **one** processing contract. For file input,
+the client drains a locally captured `pending_upload` Item: it creates the Item
+under a reconciled Matome, completes a provider-verified upload, then requests
+processing. Text Items skip the upload leg. Core snapshots capabilities and
+creates one logical run with a UUID, attempt, source revision, requested output
+kinds, and deadline before enqueuing run-keyed Oban work. The AI service returns
+one bounded terminal callback. Core persists explicit state and typed outputs.
+The client may observe the accepted run through bounded owner-scoped polling;
+its timeout only stops observation and never fails Core's run. On failure the
+User can retry, creating a newer run while prior successful output stays visible.
 
 ## Actors
 - **Primary:** User (triggers ingestion; retries on failure).
@@ -27,31 +27,34 @@ re-enqueues server-side — the client never processes media locally.
 
 ## Main flow
 1. The UploadQueue drains a `pending_upload` item.
-2. The client POSTs `/api/recordings` (with `mediaType`); Core returns a
-   `coreId` and a presigned PUT URL. The client reconciles the `coreId` against
-   its stable local PK and moves status to `processing`.
-3. The client PUTs the raw bytes to object storage via the presigned URL
-   (streamed).
-4. The client POSTs `/api/recordings/:id/process`; Core enqueues an Oban
-   ingestion job.
+2. The client POSTs `/api/matomes/:id/items`; Core returns the file Item and an
+   upload envelope. The client reconciles the numeric Core id against its stable
+   local PK.
+3. The client streams the bytes to object storage and asks Core to verify the
+   upload generation, size, checksum, and provider ETag.
+4. The client POSTs `/api/items/:id/process`; Core returns `queued` with the
+   current run id, attempt, and requested output kinds, then owns execution.
 5. The AI Engine downloads the media via a presigned GET, transcribes or OCRs
    it, and summarizes.
 6. The AI Engine POSTs the single terminal result to
-   `/internal/jobs/:id/result`.
-7. Core persists `title`, `transcript`, `summary`, `duration`, sets status
-   `done`, and broadcasts on Phoenix Channels.
-8. The client resolves the terminal status by racing the Channel push against a
-   ~2 s `GET /api/recordings/:id` poll (10-minute timeout).
+   `/internal/v1/jobs/:job_id/result` with the matching run and source revision.
+7. Core conditionally persists `succeeded`, `partial`, or `failed` plus bounded
+   typed outputs/error details only if that run is still current.
+8. The client polls `GET /api/items/:id` for that run with one request in flight
+   and bounded backoff. A 30-second client timeout is observational; Core's
+   watchdog owns authoritative timeout failure.
 
 ## Alternate & exception flows
-- **Processor error** — Core sets status `failed` with an `error_reason`; the
-  client surfaces the failure.
-- **Retry** — the User retries; retry re-enqueues server-side (Oban). The client
-  never processes media locally.
-- **Idempotent callback** — callback handling is idempotent per `job_id` /
-  recording status, so a duplicate result is a no-op.
-- **Media types** — `audio | meeting | image` today (future `video | pdf`); set
-  by the client at upload and routed by the AI Engine.
+- **Processor error** — Core sets `failed` with a bounded stable error code and
+  retryability; upload/cloud state and user notes do not change.
+- **Unavailable capability** — Core sets `not_available` without dispatch when
+  policy or the discovered processor capability cannot serve the input.
+- **Partial result** — Core sets `partial` when only a strict subset of requested
+  output kinds succeeds.
+- **Retry** — the User retries; Core creates a new run/attempt while the client
+  retains prior successful output until newer output succeeds.
+- **Idempotent callback** — exact duplicates are no-ops; stale run/revision
+  callbacks are acknowledged without mutation.
 
 ## Sequence
 ```mermaid
@@ -61,12 +64,14 @@ sequenceDiagram
   participant ST as Object Storage
   participant OB as Oban
   participant AI as AI Engine
-  C->>API: POST /api/recordings with mediaType
-  API-->>C: coreId and presigned PUT url, status pending
-  C->>ST: PUT raw bytes, presigned and streamed
-  C->>API: POST /api/recordings/:id/process
-  API->>OB: enqueue ingestion job
-  API-->>C: 202, status processing
+  C->>API: POST /api/matomes/:id/items
+  API-->>C: Item + upload envelope
+  C->>ST: PUT bytes, presigned and streamed
+  C->>API: POST /api/v1/uploads/:id/complete
+  API-->>C: provider-verified uploaded state
+  C->>API: POST /api/items/:id/process
+  API->>OB: enqueue run-keyed dispatch + watchdog
+  API-->>C: 202, queued + run id + attempt
   OB->>AI: dispatch job
   AI->>ST: GET raw bytes, presigned
   alt audio or meeting
@@ -75,24 +80,27 @@ sequenceDiagram
     AI->>AI: ocr
   end
   AI->>AI: summarize
-  AI->>API: POST /internal/jobs/:id/result
-  API->>API: persist title, transcript, summary, duration, status done
-  API-->>C: Channels push, status done
-  Note over C,API: a ~2s GET /api/recordings/:id poll also resolves it, 10 min timeout
+  AI->>API: POST /internal/v1/jobs/:job_id/result
+  API->>API: conditionally persist terminal state + typed outputs
+  loop bounded current-run observation
+    C->>API: GET /api/items/:id
+    API-->>C: explicit state + same run id
+  end
+  Note over C,API: Client timeout ends observation only; Core watchdog remains authoritative
 ```
 
 ## Requirements satisfied
 | Requirement | What it covers |
 |---|---|
-| **FR-ING-1** | Every media type flows through one ingestion path: `pending → processing → done \| failed`. |
-| **FR-ING-2** | Client creates a `pending` record on Core (`POST /api/recordings`) and gets a presigned upload URL. |
+| **FR-ING-1** | Every supported input uses the explicit Item processing lifecycle and typed outputs. |
+| **FR-ING-2** | Client creates a file Item under a reconciled Matome and receives a verified-upload envelope. |
 | **FR-ING-3** | Client uploads raw bytes directly to object storage (streamed); never through Core. |
-| **FR-ING-4** | Client requests processing (`POST /api/recordings/:id/process`); Core enqueues an Oban job. |
+| **FR-ING-4** | Client requests processing (`POST /api/items/:id/process`); Core creates/replays run-keyed Oban work. |
 | **FR-ING-5** | AI Engine downloads via presigned GET, runs transcribe/OCR + summarize, POSTs one terminal result. |
-| **FR-ING-6** | On `done`, Core persists `title`, `transcript`, `summary`, `duration` and broadcasts over Channels. |
-| **FR-ING-7** | Client resolves terminal status by racing a Channel push against a ~2 s poll (10-minute timeout). |
+| **FR-ING-6** | Core persists explicit terminal state and bounded typed outputs independently of user notes. |
+| **FR-ING-7** | Client observes only the accepted current run through bounded poll-only REST; timeout is non-authoritative. |
 | **FR-ING-8** | On `failed`, the User can retry; retry re-enqueues server-side — never processed locally. |
-| **FR-ING-9** | Callback handling is idempotent per `job_id` / recording status. |
+| **FR-ING-9** | Callback handling is idempotent and guarded by job/run/Item/revision identity. |
 | **NFR-ARCH-1** | Thin client: it only captures, uploads bytes, and reads results — never runs processing. |
 | **NFR-ARCH-2** | Backend owns processing; adding a media type/model is a backend change. |
 | **NFR-ARCH-4** | One ingestion contract for every media type. |
@@ -101,8 +109,8 @@ sequenceDiagram
 | **NFR-SEC-3** | The AI Engine is internal-only behind a shared service token, never client-facing. |
 
 ## Code anchors
-- `apps/flutter/lib/features/recordings/upload_queue.dart` — `UploadQueue.drainRow`: drains a pending item through the ingestion steps.
-- `apps/flutter/lib/features/recordings/recordings_repository.dart` — `RecordingsRepository.createRecording` / `uploadFile` / `enqueueProcessing`.
-- `apps/flutter/lib/features/recordings/recording_result_waiter.dart` — `RecordingResultWaiter`: races channel vs poll (`kProcessingTimeout` 10 min, `kPollInterval` 2 s).
-- `apps/flutter/lib/features/recordings/recording_status_socket.dart` — `RecordingStatusSocket`: the Phoenix Channel push side of the race.
-- `services/api/lib/matome_api_web/router.ex` — `POST /internal/jobs/:id/result` (`InternalJobController.result`, service-token); Core ↔ AI contract `POST /v1/jobs` + callback.
+- `apps/flutter/lib/features/recordings/upload_queue.dart` — durable verified upload through Core processing acceptance.
+- `apps/flutter/lib/features/recordings/recordings_repository.dart` — Item creation, verified upload, process request, and owner-scoped Item reads.
+- `apps/flutter/lib/features/recordings/recording_result_waiter.dart` — current-run guarded, single-flight polling with bounded backoff and observational timeout.
+- `services/api/lib/matome_api/content.ex` — run creation, dispatch/watchdog insertion, current-run callback application, and typed outputs.
+- `services/api/docs/processing-lifecycle.md` — authoritative processing lifecycle and callback identity contract.

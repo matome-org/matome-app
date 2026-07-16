@@ -57,8 +57,7 @@ class StatusBadge extends StatelessWidget {
 
   SyncState get syncState {
     final status = processingStatus;
-    if ((status != null && isUploadQueuePendingStatus(status)) ||
-        status == 'failed') {
+    if (status != null && isUploadQueuePendingStatus(status)) {
       return SyncState.onDevice;
     }
     return coreId != null ? SyncState.cloud : SyncState.onDevice;

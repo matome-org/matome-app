@@ -57,7 +57,7 @@ void main() {
       );
 
       expect(result.recording.id, 42);
-      expect(result.recording.status, RecordingStatus.pending);
+      expect(result.recording.processing.state, ProcessingState.notRequested);
       expect(result.upload.method, 'PUT');
       expect(result.upload.isPost, isFalse);
       expect(result.upload.url, contains('signature=redacted'));
@@ -75,7 +75,12 @@ void main() {
             'owner_id': 1,
             'matome_id': 42,
             'item_type': 'file',
-            'metadata': {'title': 'F4 test', 'status': 'pending'},
+            'title': 'F4 test',
+            'processing_state': 'queued',
+            'processing_run_id': 'run-6',
+            'processing_attempt': 1,
+            'processing_requested_outputs': ['transcript', 'summary'],
+            'processing_outputs': const <String, dynamic>{},
           },
           'processing': {'queued': true},
         }),
@@ -288,8 +293,14 @@ void main() {
             'owner_id': 1,
             'matome_id': 42,
             'item_type': 'file',
-            'metadata': {'title': 'F4 test', 'status': 'done'},
-            'file': {'summary': 'done'},
+            'title': 'F4 test',
+            'processing_state': 'succeeded',
+            'processing_run_id': 'run-6',
+            'processing_attempt': 1,
+            'processing_requested_outputs': ['summary'],
+            'processing_outputs': {
+              'summary': {'type': 'summary', 'markdown': 'done'},
+            },
           },
         }),
       );

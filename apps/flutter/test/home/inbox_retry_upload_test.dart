@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -15,8 +14,6 @@ import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/processing_error.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
@@ -31,23 +28,6 @@ import '../support/verified_upload_repository_fake.dart';
 /// [InboxController.retryUpload] flips it back to `pending_upload` and drains
 /// without touching the user-owned `notes` field.
 void main() {
-  Future<RecordingResult> pollAwaiter({
-    required Recording recording,
-    required Future<Recording?> Function() poll,
-    required Ref ref,
-  }) async {
-    final events = StreamController<RecordingStatusEvent>();
-    final waiter = RecordingResultWaiter(
-      recordingId: recording.id,
-      statusEvents: events.stream,
-      poll: poll,
-      pollInterval: const Duration(milliseconds: 10),
-    );
-    final result = await waiter.wait();
-    await events.close();
-    return result;
-  }
-
   late Directory tmp;
   setUp(() async {
     tmp = await Directory.systemTemp.createTemp('inbox_retry_test_');
@@ -111,9 +91,7 @@ void main() {
         appDatabaseProvider.overrideWithValue(db),
         currentOwnerIdProvider.overrideWithValue('1'),
         recordingsRepositoryProvider.overrideWithValue(repo),
-        uploadQueueProvider.overrideWith(
-          (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
-        ),
+        uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
     );
   }
@@ -150,7 +128,7 @@ void main() {
     // Re-enqueued through the queue and resolved to done (NOT a new pipeline).
     expect(
       row!.processingStatus,
-      'processing',
+      'queued',
       reason: 'retry stopped when Core accepted processing',
     );
     expect(
@@ -217,7 +195,7 @@ void main() {
         repo.coreIdMinted,
         reason: 'create happened on retry',
       );
-      expect(row.processingStatus, 'processing');
+      expect(row.processingStatus, 'queued');
       expect(
         repo.createCalls,
         1,
@@ -235,14 +213,29 @@ class _ToggleRepository extends RecordingsRepository
   int createCalls = 0;
   final int coreIdMinted = 999;
 
-  Recording _recording({required String status, String? summary, String? tx}) {
-    return Recording.fromJson(<String, dynamic>{
+  Recording _recording({
+    required ProcessingState state,
+    String? summary,
+    String? tx,
+  }) {
+    return Recording.fromItemJson(<String, dynamic>{
       'id': coreIdMinted,
       'owner_id': 1,
+      'item_type': 'file',
       'title': 'Memo',
-      'status': status,
-      'summary': ?summary,
-      'transcript': ?tx,
+      'processing_state': state.wireName,
+      'processing_run_id': state == ProcessingState.notRequested
+          ? null
+          : '00000000-0000-4000-8000-000000000997',
+      'processing_attempt': state == ProcessingState.notRequested ? 0 : 1,
+      'processing_requested_outputs': const ['transcript', 'summary'],
+      'processing_outputs': <String, dynamic>{
+        if (summary != null)
+          'summary': {'type': 'summary', 'markdown': summary},
+        if (tx != null) 'transcript': {'type': 'transcript', 'text': tx},
+      },
+      'processing_error': null,
+      'file': const <String, dynamic>{'media_type': 'audio'},
     });
   }
 
@@ -261,7 +254,7 @@ class _ToggleRepository extends RecordingsRepository
     if (!coreUp) throw const ApiException('Core unreachable');
     createCalls++;
     return RecordingCreateResult(
-      recording: _recording(status: 'pending'),
+      recording: _recording(state: ProcessingState.notRequested),
       upload: const UploadDescriptor(
         method: 'PUT',
         url: 'http://127.0.0.1:9/upload',
@@ -278,11 +271,15 @@ class _ToggleRepository extends RecordingsRepository
 
   @override
   Future<Recording> enqueueProcessing(int id) async =>
-      _recording(status: 'processing');
+      _recording(state: ProcessingState.queued);
 
   @override
   Future<Recording?> fetchRecording(int id) async {
     if (!coreUp) throw const ApiException('Core unreachable');
-    return _recording(status: 'done', summary: 'A memo', tx: 'hello world');
+    return _recording(
+      state: ProcessingState.succeeded,
+      summary: 'A memo',
+      tx: 'hello world',
+    );
   }
 }

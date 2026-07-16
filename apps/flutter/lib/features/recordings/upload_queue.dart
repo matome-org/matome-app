@@ -17,7 +17,6 @@ import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../home/inbox_controller.dart';
-import '../home/inbox_upload.dart' show RecordingResultAwaiter;
 import '../matome/matome_sync_service.dart';
 import '../spaces/current_caller.dart';
 import '../spaces/effective_space.dart';
@@ -27,7 +26,6 @@ import 'recording_ids.dart';
 import 'recordings_repository.dart';
 import 'upload_descriptor.dart';
 
-typedef AudioCleanup = Future<void> Function(String audioFilePath);
 typedef ProcessingEligibility = bool Function(ItemWithPayload item);
 
 Future<void> deleteAudioFile(String audioFilePath) async {
@@ -60,10 +58,6 @@ class UploadQueue {
     this.leaseDuration = const Duration(minutes: 6),
     this.maxAttempts = 5,
     ProcessingEligibility? shouldProcess,
-    // Retained as source-compatible injection seams for current callers. Device
-    // work intentionally never invokes either one after the W2 cutover.
-    RecordingResultAwaiter? awaitResult,
-    this.cleanupAudio = deleteAudioFile,
   }) : _clock = clock ?? DateTime.now,
        _jitter = jitter ?? Random().nextDouble,
        _shouldProcess = shouldProcess ?? _defaultProcessingEligibility,
@@ -83,7 +77,6 @@ class UploadQueue {
   final Duration maxRetryDelay;
   final Duration leaseDuration;
   final int maxAttempts;
-  final AudioCleanup cleanupAudio;
 
   Future<void>? _activeDrain;
   bool _drainRequested = false;
@@ -424,13 +417,19 @@ class UploadQueue {
           throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
         }
         if (!await _renew(work)) return;
-        await _repo.enqueueProcessing(coreId);
+        final accepted = await _repo.enqueueProcessing(coreId);
         final completed = await _work.completeProcessingAccepted(
           work.id,
           itemId: item.id,
           ownerId: ownerId,
           leaseOwner: _leaseOwner,
           now: _now,
+          processingState: accepted.processing.state.wireName,
+          processingRunId: accepted.processing.runId,
+          processingAttempt: accepted.processing.attempt,
+          processingRequestedOutputs: accepted.processing.requestedOutputs.map(
+            (kind) => kind.wireName,
+          ),
         );
         if (completed) await _inbox.reloadFromLocal();
       }

@@ -5168,6 +5168,18 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _processingAttemptMeta = const VerificationMeta(
+    'processingAttempt',
+  );
+  @override
+  late final GeneratedColumn<int> processingAttempt = GeneratedColumn<int>(
+    'processing_attempt',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _sourceRevisionMeta = const VerificationMeta(
     'sourceRevision',
   );
@@ -5203,6 +5215,18 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
         type: DriftSqlType.string,
         requiredDuringInsert: false,
         defaultValue: const Constant('{}'),
+      );
+  static const VerificationMeta _processingRequestedOutputsMeta =
+      const VerificationMeta('processingRequestedOutputs');
+  @override
+  late final GeneratedColumn<String> processingRequestedOutputs =
+      GeneratedColumn<String>(
+        'processing_requested_outputs',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('[]'),
       );
   static const VerificationMeta _processingErrorMeta = const VerificationMeta(
     'processingError',
@@ -5313,9 +5337,11 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     metadata,
     processingState,
     processingRunId,
+    processingAttempt,
     sourceRevision,
     processingConfigRevision,
     processingOutputs,
+    processingRequestedOutputs,
     processingError,
     processingErrorCode,
     fileBlobId,
@@ -5438,6 +5464,15 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
         ),
       );
     }
+    if (data.containsKey('processing_attempt')) {
+      context.handle(
+        _processingAttemptMeta,
+        processingAttempt.isAcceptableOrUnknown(
+          data['processing_attempt']!,
+          _processingAttemptMeta,
+        ),
+      );
+    }
     if (data.containsKey('source_revision')) {
       context.handle(
         _sourceRevisionMeta,
@@ -5462,6 +5497,15 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
         processingOutputs.isAcceptableOrUnknown(
           data['processing_outputs']!,
           _processingOutputsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('processing_requested_outputs')) {
+      context.handle(
+        _processingRequestedOutputsMeta,
+        processingRequestedOutputs.isAcceptableOrUnknown(
+          data['processing_requested_outputs']!,
+          _processingRequestedOutputsMeta,
         ),
       );
     }
@@ -5599,6 +5643,10 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
         DriftSqlType.string,
         data['${effectivePrefix}processing_run_id'],
       ),
+      processingAttempt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}processing_attempt'],
+      )!,
       sourceRevision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}source_revision'],
@@ -5610,6 +5658,10 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
       processingOutputs: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}processing_outputs'],
+      )!,
+      processingRequestedOutputs: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}processing_requested_outputs'],
       )!,
       processingError: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -5667,9 +5719,11 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
   final String metadata;
   final String processingState;
   final String? processingRunId;
+  final int processingAttempt;
   final int sourceRevision;
   final int? processingConfigRevision;
   final String processingOutputs;
+  final String processingRequestedOutputs;
   final String? processingError;
   final String? processingErrorCode;
   final String? fileBlobId;
@@ -5693,9 +5747,11 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     required this.metadata,
     required this.processingState,
     this.processingRunId,
+    required this.processingAttempt,
     required this.sourceRevision,
     this.processingConfigRevision,
     required this.processingOutputs,
+    required this.processingRequestedOutputs,
     this.processingError,
     this.processingErrorCode,
     this.fileBlobId,
@@ -5736,6 +5792,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     if (!nullToAbsent || processingRunId != null) {
       map['processing_run_id'] = Variable<String>(processingRunId);
     }
+    map['processing_attempt'] = Variable<int>(processingAttempt);
     map['source_revision'] = Variable<int>(sourceRevision);
     if (!nullToAbsent || processingConfigRevision != null) {
       map['processing_config_revision'] = Variable<int>(
@@ -5743,6 +5800,9 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       );
     }
     map['processing_outputs'] = Variable<String>(processingOutputs);
+    map['processing_requested_outputs'] = Variable<String>(
+      processingRequestedOutputs,
+    );
     if (!nullToAbsent || processingError != null) {
       map['processing_error'] = Variable<String>(processingError);
     }
@@ -5792,11 +5852,13 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       processingRunId: processingRunId == null && nullToAbsent
           ? const Value.absent()
           : Value(processingRunId),
+      processingAttempt: Value(processingAttempt),
       sourceRevision: Value(sourceRevision),
       processingConfigRevision: processingConfigRevision == null && nullToAbsent
           ? const Value.absent()
           : Value(processingConfigRevision),
       processingOutputs: Value(processingOutputs),
+      processingRequestedOutputs: Value(processingRequestedOutputs),
       processingError: processingError == null && nullToAbsent
           ? const Value.absent()
           : Value(processingError),
@@ -5838,11 +5900,15 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       metadata: serializer.fromJson<String>(json['metadata']),
       processingState: serializer.fromJson<String>(json['processingState']),
       processingRunId: serializer.fromJson<String?>(json['processingRunId']),
+      processingAttempt: serializer.fromJson<int>(json['processingAttempt']),
       sourceRevision: serializer.fromJson<int>(json['sourceRevision']),
       processingConfigRevision: serializer.fromJson<int?>(
         json['processingConfigRevision'],
       ),
       processingOutputs: serializer.fromJson<String>(json['processingOutputs']),
+      processingRequestedOutputs: serializer.fromJson<String>(
+        json['processingRequestedOutputs'],
+      ),
       processingError: serializer.fromJson<String?>(json['processingError']),
       processingErrorCode: serializer.fromJson<String?>(
         json['processingErrorCode'],
@@ -5873,11 +5939,15 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       'metadata': serializer.toJson<String>(metadata),
       'processingState': serializer.toJson<String>(processingState),
       'processingRunId': serializer.toJson<String?>(processingRunId),
+      'processingAttempt': serializer.toJson<int>(processingAttempt),
       'sourceRevision': serializer.toJson<int>(sourceRevision),
       'processingConfigRevision': serializer.toJson<int?>(
         processingConfigRevision,
       ),
       'processingOutputs': serializer.toJson<String>(processingOutputs),
+      'processingRequestedOutputs': serializer.toJson<String>(
+        processingRequestedOutputs,
+      ),
       'processingError': serializer.toJson<String?>(processingError),
       'processingErrorCode': serializer.toJson<String?>(processingErrorCode),
       'fileBlobId': serializer.toJson<String?>(fileBlobId),
@@ -5904,9 +5974,11 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     String? metadata,
     String? processingState,
     Value<String?> processingRunId = const Value.absent(),
+    int? processingAttempt,
     int? sourceRevision,
     Value<int?> processingConfigRevision = const Value.absent(),
     String? processingOutputs,
+    String? processingRequestedOutputs,
     Value<String?> processingError = const Value.absent(),
     Value<String?> processingErrorCode = const Value.absent(),
     Value<String?> fileBlobId = const Value.absent(),
@@ -5934,11 +6006,14 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     processingRunId: processingRunId.present
         ? processingRunId.value
         : this.processingRunId,
+    processingAttempt: processingAttempt ?? this.processingAttempt,
     sourceRevision: sourceRevision ?? this.sourceRevision,
     processingConfigRevision: processingConfigRevision.present
         ? processingConfigRevision.value
         : this.processingConfigRevision,
     processingOutputs: processingOutputs ?? this.processingOutputs,
+    processingRequestedOutputs:
+        processingRequestedOutputs ?? this.processingRequestedOutputs,
     processingError: processingError.present
         ? processingError.value
         : this.processingError,
@@ -5978,6 +6053,9 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       processingRunId: data.processingRunId.present
           ? data.processingRunId.value
           : this.processingRunId,
+      processingAttempt: data.processingAttempt.present
+          ? data.processingAttempt.value
+          : this.processingAttempt,
       sourceRevision: data.sourceRevision.present
           ? data.sourceRevision.value
           : this.sourceRevision,
@@ -5987,6 +6065,9 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       processingOutputs: data.processingOutputs.present
           ? data.processingOutputs.value
           : this.processingOutputs,
+      processingRequestedOutputs: data.processingRequestedOutputs.present
+          ? data.processingRequestedOutputs.value
+          : this.processingRequestedOutputs,
       processingError: data.processingError.present
           ? data.processingError.value
           : this.processingError,
@@ -6023,9 +6104,11 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           ..write('metadata: $metadata, ')
           ..write('processingState: $processingState, ')
           ..write('processingRunId: $processingRunId, ')
+          ..write('processingAttempt: $processingAttempt, ')
           ..write('sourceRevision: $sourceRevision, ')
           ..write('processingConfigRevision: $processingConfigRevision, ')
           ..write('processingOutputs: $processingOutputs, ')
+          ..write('processingRequestedOutputs: $processingRequestedOutputs, ')
           ..write('processingError: $processingError, ')
           ..write('processingErrorCode: $processingErrorCode, ')
           ..write('fileBlobId: $fileBlobId, ')
@@ -6054,9 +6137,11 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     metadata,
     processingState,
     processingRunId,
+    processingAttempt,
     sourceRevision,
     processingConfigRevision,
     processingOutputs,
+    processingRequestedOutputs,
     processingError,
     processingErrorCode,
     fileBlobId,
@@ -6084,9 +6169,11 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           other.metadata == this.metadata &&
           other.processingState == this.processingState &&
           other.processingRunId == this.processingRunId &&
+          other.processingAttempt == this.processingAttempt &&
           other.sourceRevision == this.sourceRevision &&
           other.processingConfigRevision == this.processingConfigRevision &&
           other.processingOutputs == this.processingOutputs &&
+          other.processingRequestedOutputs == this.processingRequestedOutputs &&
           other.processingError == this.processingError &&
           other.processingErrorCode == this.processingErrorCode &&
           other.fileBlobId == this.fileBlobId &&
@@ -6112,9 +6199,11 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
   final Value<String> metadata;
   final Value<String> processingState;
   final Value<String?> processingRunId;
+  final Value<int> processingAttempt;
   final Value<int> sourceRevision;
   final Value<int?> processingConfigRevision;
   final Value<String> processingOutputs;
+  final Value<String> processingRequestedOutputs;
   final Value<String?> processingError;
   final Value<String?> processingErrorCode;
   final Value<String?> fileBlobId;
@@ -6139,9 +6228,11 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     this.metadata = const Value.absent(),
     this.processingState = const Value.absent(),
     this.processingRunId = const Value.absent(),
+    this.processingAttempt = const Value.absent(),
     this.sourceRevision = const Value.absent(),
     this.processingConfigRevision = const Value.absent(),
     this.processingOutputs = const Value.absent(),
+    this.processingRequestedOutputs = const Value.absent(),
     this.processingError = const Value.absent(),
     this.processingErrorCode = const Value.absent(),
     this.fileBlobId = const Value.absent(),
@@ -6167,9 +6258,11 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     this.metadata = const Value.absent(),
     this.processingState = const Value.absent(),
     this.processingRunId = const Value.absent(),
+    this.processingAttempt = const Value.absent(),
     this.sourceRevision = const Value.absent(),
     this.processingConfigRevision = const Value.absent(),
     this.processingOutputs = const Value.absent(),
+    this.processingRequestedOutputs = const Value.absent(),
     this.processingError = const Value.absent(),
     this.processingErrorCode = const Value.absent(),
     this.fileBlobId = const Value.absent(),
@@ -6200,9 +6293,11 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     Expression<String>? metadata,
     Expression<String>? processingState,
     Expression<String>? processingRunId,
+    Expression<int>? processingAttempt,
     Expression<int>? sourceRevision,
     Expression<int>? processingConfigRevision,
     Expression<String>? processingOutputs,
+    Expression<String>? processingRequestedOutputs,
     Expression<String>? processingError,
     Expression<String>? processingErrorCode,
     Expression<String>? fileBlobId,
@@ -6228,10 +6323,13 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
       if (metadata != null) 'metadata': metadata,
       if (processingState != null) 'processing_state': processingState,
       if (processingRunId != null) 'processing_run_id': processingRunId,
+      if (processingAttempt != null) 'processing_attempt': processingAttempt,
       if (sourceRevision != null) 'source_revision': sourceRevision,
       if (processingConfigRevision != null)
         'processing_config_revision': processingConfigRevision,
       if (processingOutputs != null) 'processing_outputs': processingOutputs,
+      if (processingRequestedOutputs != null)
+        'processing_requested_outputs': processingRequestedOutputs,
       if (processingError != null) 'processing_error': processingError,
       if (processingErrorCode != null)
         'processing_error_code': processingErrorCode,
@@ -6260,9 +6358,11 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     Value<String>? metadata,
     Value<String>? processingState,
     Value<String?>? processingRunId,
+    Value<int>? processingAttempt,
     Value<int>? sourceRevision,
     Value<int?>? processingConfigRevision,
     Value<String>? processingOutputs,
+    Value<String>? processingRequestedOutputs,
     Value<String?>? processingError,
     Value<String?>? processingErrorCode,
     Value<String?>? fileBlobId,
@@ -6288,10 +6388,13 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
       metadata: metadata ?? this.metadata,
       processingState: processingState ?? this.processingState,
       processingRunId: processingRunId ?? this.processingRunId,
+      processingAttempt: processingAttempt ?? this.processingAttempt,
       sourceRevision: sourceRevision ?? this.sourceRevision,
       processingConfigRevision:
           processingConfigRevision ?? this.processingConfigRevision,
       processingOutputs: processingOutputs ?? this.processingOutputs,
+      processingRequestedOutputs:
+          processingRequestedOutputs ?? this.processingRequestedOutputs,
       processingError: processingError ?? this.processingError,
       processingErrorCode: processingErrorCode ?? this.processingErrorCode,
       fileBlobId: fileBlobId ?? this.fileBlobId,
@@ -6349,6 +6452,9 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     if (processingRunId.present) {
       map['processing_run_id'] = Variable<String>(processingRunId.value);
     }
+    if (processingAttempt.present) {
+      map['processing_attempt'] = Variable<int>(processingAttempt.value);
+    }
     if (sourceRevision.present) {
       map['source_revision'] = Variable<int>(sourceRevision.value);
     }
@@ -6359,6 +6465,11 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     }
     if (processingOutputs.present) {
       map['processing_outputs'] = Variable<String>(processingOutputs.value);
+    }
+    if (processingRequestedOutputs.present) {
+      map['processing_requested_outputs'] = Variable<String>(
+        processingRequestedOutputs.value,
+      );
     }
     if (processingError.present) {
       map['processing_error'] = Variable<String>(processingError.value);
@@ -6409,9 +6520,11 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
           ..write('metadata: $metadata, ')
           ..write('processingState: $processingState, ')
           ..write('processingRunId: $processingRunId, ')
+          ..write('processingAttempt: $processingAttempt, ')
           ..write('sourceRevision: $sourceRevision, ')
           ..write('processingConfigRevision: $processingConfigRevision, ')
           ..write('processingOutputs: $processingOutputs, ')
+          ..write('processingRequestedOutputs: $processingRequestedOutputs, ')
           ..write('processingError: $processingError, ')
           ..write('processingErrorCode: $processingErrorCode, ')
           ..write('fileBlobId: $fileBlobId, ')
@@ -10332,9 +10445,11 @@ typedef $$ItemsTableCreateCompanionBuilder =
       Value<String> metadata,
       Value<String> processingState,
       Value<String?> processingRunId,
+      Value<int> processingAttempt,
       Value<int> sourceRevision,
       Value<int?> processingConfigRevision,
       Value<String> processingOutputs,
+      Value<String> processingRequestedOutputs,
       Value<String?> processingError,
       Value<String?> processingErrorCode,
       Value<String?> fileBlobId,
@@ -10361,9 +10476,11 @@ typedef $$ItemsTableUpdateCompanionBuilder =
       Value<String> metadata,
       Value<String> processingState,
       Value<String?> processingRunId,
+      Value<int> processingAttempt,
       Value<int> sourceRevision,
       Value<int?> processingConfigRevision,
       Value<String> processingOutputs,
+      Value<String> processingRequestedOutputs,
       Value<String?> processingError,
       Value<String?> processingErrorCode,
       Value<String?> fileBlobId,
@@ -10453,6 +10570,11 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get processingAttempt => $composableBuilder(
+    column: $table.processingAttempt,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get sourceRevision => $composableBuilder(
     column: $table.sourceRevision,
     builder: (column) => ColumnFilters(column),
@@ -10465,6 +10587,11 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
 
   ColumnFilters<String> get processingOutputs => $composableBuilder(
     column: $table.processingOutputs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get processingRequestedOutputs => $composableBuilder(
+    column: $table.processingRequestedOutputs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10588,6 +10715,11 @@ class $$ItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get processingAttempt => $composableBuilder(
+    column: $table.processingAttempt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sourceRevision => $composableBuilder(
     column: $table.sourceRevision,
     builder: (column) => ColumnOrderings(column),
@@ -10600,6 +10732,11 @@ class $$ItemsTableOrderingComposer
 
   ColumnOrderings<String> get processingOutputs => $composableBuilder(
     column: $table.processingOutputs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get processingRequestedOutputs => $composableBuilder(
+    column: $table.processingRequestedOutputs,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10703,6 +10840,11 @@ class $$ItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get processingAttempt => $composableBuilder(
+    column: $table.processingAttempt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get sourceRevision => $composableBuilder(
     column: $table.sourceRevision,
     builder: (column) => column,
@@ -10715,6 +10857,11 @@ class $$ItemsTableAnnotationComposer
 
   GeneratedColumn<String> get processingOutputs => $composableBuilder(
     column: $table.processingOutputs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get processingRequestedOutputs => $composableBuilder(
+    column: $table.processingRequestedOutputs,
     builder: (column) => column,
   );
 
@@ -10793,9 +10940,11 @@ class $$ItemsTableTableManager
                 Value<String> metadata = const Value.absent(),
                 Value<String> processingState = const Value.absent(),
                 Value<String?> processingRunId = const Value.absent(),
+                Value<int> processingAttempt = const Value.absent(),
                 Value<int> sourceRevision = const Value.absent(),
                 Value<int?> processingConfigRevision = const Value.absent(),
                 Value<String> processingOutputs = const Value.absent(),
+                Value<String> processingRequestedOutputs = const Value.absent(),
                 Value<String?> processingError = const Value.absent(),
                 Value<String?> processingErrorCode = const Value.absent(),
                 Value<String?> fileBlobId = const Value.absent(),
@@ -10820,9 +10969,11 @@ class $$ItemsTableTableManager
                 metadata: metadata,
                 processingState: processingState,
                 processingRunId: processingRunId,
+                processingAttempt: processingAttempt,
                 sourceRevision: sourceRevision,
                 processingConfigRevision: processingConfigRevision,
                 processingOutputs: processingOutputs,
+                processingRequestedOutputs: processingRequestedOutputs,
                 processingError: processingError,
                 processingErrorCode: processingErrorCode,
                 fileBlobId: fileBlobId,
@@ -10849,9 +11000,11 @@ class $$ItemsTableTableManager
                 Value<String> metadata = const Value.absent(),
                 Value<String> processingState = const Value.absent(),
                 Value<String?> processingRunId = const Value.absent(),
+                Value<int> processingAttempt = const Value.absent(),
                 Value<int> sourceRevision = const Value.absent(),
                 Value<int?> processingConfigRevision = const Value.absent(),
                 Value<String> processingOutputs = const Value.absent(),
+                Value<String> processingRequestedOutputs = const Value.absent(),
                 Value<String?> processingError = const Value.absent(),
                 Value<String?> processingErrorCode = const Value.absent(),
                 Value<String?> fileBlobId = const Value.absent(),
@@ -10876,9 +11029,11 @@ class $$ItemsTableTableManager
                 metadata: metadata,
                 processingState: processingState,
                 processingRunId: processingRunId,
+                processingAttempt: processingAttempt,
                 sourceRevision: sourceRevision,
                 processingConfigRevision: processingConfigRevision,
                 processingOutputs: processingOutputs,
+                processingRequestedOutputs: processingRequestedOutputs,
                 processingError: processingError,
                 processingErrorCode: processingErrorCode,
                 fileBlobId: fileBlobId,

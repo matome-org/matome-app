@@ -1,155 +1,142 @@
-// Private fields are paired with public named constructor params, so the
-// `prefer_initializing_formals` suggestion does not apply here.
+// Private fields are paired with public named constructor parameters.
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
 
 import '../../core/observability/app_log.dart';
 import 'recording.dart';
-import 'recording_status_event.dart';
 
-/// Default timings, mirroring apps/mobile `waitForCoreRecordingResult`.
-const Duration kProcessingTimeout = Duration(minutes: 10);
-const Duration kPollInterval = Duration(seconds: 2);
+const Duration kProcessingObservationTimeout = Duration(seconds: 30);
+const Duration kInitialPollInterval = Duration(seconds: 1);
+const Duration kMaxPollInterval = Duration(seconds: 8);
 
-/// Result of awaiting a recording's processing.
+enum RecordingWaitOutcome { terminal, observationTimedOut }
+
 class RecordingResult {
-  const RecordingResult.done(this.recording)
-    : failed = false,
-      errorReason = null;
-  const RecordingResult.failed(this.errorReason)
-    : failed = true,
-      recording = null;
+  const RecordingResult.terminal(this.recording)
+    : outcome = RecordingWaitOutcome.terminal,
+      _standaloneErrorCode = null;
+  const RecordingResult.observationTimedOut()
+    : outcome = RecordingWaitOutcome.observationTimedOut,
+      recording = null,
+      _standaloneErrorCode = null;
 
-  final bool failed;
+  /// Compatibility constructors for injected test awaiters.
+  const RecordingResult.done(this.recording)
+    : outcome = RecordingWaitOutcome.terminal,
+      _standaloneErrorCode = null;
+  const RecordingResult.failed(String? errorCode)
+    : outcome = RecordingWaitOutcome.terminal,
+      recording = null,
+      _standaloneErrorCode = errorCode;
+
+  final RecordingWaitOutcome outcome;
   final Recording? recording;
-  final String? errorReason;
+  final String? _standaloneErrorCode;
+
+  bool get failed =>
+      recording?.processing.state == ProcessingState.failed ||
+      _standaloneErrorCode != null;
+  String? get errorCode =>
+      recording?.processing.error?.code ?? _standaloneErrorCode;
+  String? get errorReason => errorCode;
 }
 
-/// Races the realtime channel against a periodic poll until the recording is
-/// `done` / `failed`, or the [timeout] elapses.
+/// Polls one explicit Core processing run with one request in flight at a time.
 ///
-/// Both inputs are injected so this is unit-testable with no live backend:
-///  * [statusEvents] — the `recording:status` stream (the primary path).
-///  * [poll] — `GET /api/recordings/{id}` callback (the fallback path), which
-///    keeps the pipeline correct even when the socket is down or never emits.
-///
-/// First terminal signal from *either* source wins; the loser is ignored.
+/// The timeout bounds only this client observation. Core's watchdog remains the
+/// authority for changing an active run to failed.
 class RecordingResultWaiter {
   RecordingResultWaiter({
     required int recordingId,
-    required Stream<RecordingStatusEvent> statusEvents,
+    required String runId,
     required Future<Recording?> Function() poll,
-    Duration timeout = kProcessingTimeout,
-    Duration pollInterval = kPollInterval,
+    Duration initialPollInterval = kInitialPollInterval,
+    Duration maxPollInterval = kMaxPollInterval,
+    Duration observationTimeout = kProcessingObservationTimeout,
   }) : _recordingId = recordingId,
-       _statusEvents = statusEvents,
+       _runId = runId,
        _poll = poll,
-       _timeout = timeout,
-       _pollInterval = pollInterval;
+       _initialPollInterval = initialPollInterval,
+       _maxPollInterval = maxPollInterval,
+       _observationTimeout = observationTimeout,
+       _nextInterval = initialPollInterval;
 
   final int _recordingId;
-  final Stream<RecordingStatusEvent> _statusEvents;
+  final String _runId;
   final Future<Recording?> Function() _poll;
-  final Duration _timeout;
-  final Duration _pollInterval;
+  final Duration _initialPollInterval;
+  final Duration _maxPollInterval;
+  final Duration _observationTimeout;
 
   final _completer = Completer<RecordingResult>();
-  StreamSubscription<RecordingStatusEvent>? _eventSub;
   Timer? _pollTimer;
   Timer? _timeoutTimer;
+  late Duration _nextInterval;
+  bool _polling = false;
   bool _settled = false;
+  bool _started = false;
 
-  /// Begins waiting. Resolves on the first terminal status from the socket or
-  /// the poll loop, or rejects-as-failed (`errorReason: 'timeout'`) at
-  /// [timeout].
   Future<RecordingResult> wait() {
-    AppLog.event(LogCat.upload, 'wait: awaiting terminal for $_recordingId');
-    _eventSub = _statusEvents.listen(
-      _onEvent,
-      onError: (_) {
-        /* poll covers */
-      },
+    if (_started) return _completer.future;
+    _started = true;
+    AppLog.event(
+      LogCat.upload,
+      'wait: observing item=$_recordingId run=$_runId',
     );
-
-    _pollTimer = Timer.periodic(_pollInterval, (_) => _pollOnce());
-
-    _timeoutTimer = Timer(_timeout, () {
-      _settle(const RecordingResult.failed('timeout'));
-    });
-
+    _timeoutTimer = Timer(
+      _observationTimeout,
+      () => _settle(const RecordingResult.observationTimedOut()),
+    );
+    unawaited(_pollOnce());
     return _completer.future;
   }
 
-  void _onEvent(RecordingStatusEvent event) {
-    if (event.recordingId != _recordingId) return;
-    if (event.status == RecordingStatus.done) {
-      _settle(RecordingResult.done(_recordingFromEvent(event)));
-    } else if (event.status == RecordingStatus.failed) {
-      _settle(
-        RecordingResult.failed(
-          event.errorReason ?? 'recording_processing_failed',
-        ),
-      );
-    }
-  }
-
   Future<void> _pollOnce() async {
-    if (_settled) return;
+    if (_settled || _polling) return;
+    _polling = true;
     try {
       final latest = await _poll();
-      if (latest == null) return;
-      if (latest.status == RecordingStatus.done) {
-        _settle(RecordingResult.done(latest));
-      } else if (latest.status == RecordingStatus.failed) {
-        _settle(
-          RecordingResult.failed(
-            latest.errorReason ?? 'recording_processing_failed',
-          ),
-        );
+      if (_settled) return;
+      if (latest != null &&
+          latest.id == _recordingId &&
+          latest.processing.runId == _runId &&
+          latest.processing.state.isTerminal) {
+        _settle(RecordingResult.terminal(latest));
+        return;
       }
-    } catch (e, st) {
+    } catch (error, stack) {
       AppLog.error(
         LogCat.upload,
-        '_pollOnce: poll failed for $_recordingId (channel still primary)',
-        e,
-        st,
+        '_pollOnce: transient poll failure item=$_recordingId run=$_runId',
+        error,
+        stack,
       );
-      // The channel remains the primary path; ignore transient poll errors.
+    } finally {
+      _polling = false;
     }
-  }
-
-  Recording _recordingFromEvent(RecordingStatusEvent event) {
-    return Recording(
-      id: event.recordingId,
-      // A status event carries no owner; this synthetic Recording is only used
-      // to fold terminal status onto the real row, never persisted, so owner is
-      // left null (#1469 — never default to a poison "0").
-      ownerId: null,
-      title: '',
-      status: event.status,
-      summary: event.summary,
-      transcript: event.transcript,
-      errorReason: event.errorReason,
-      duration: event.duration,
-      badge: event.badge,
-      updatedAt: event.updatedAt,
+    if (_settled) return;
+    final delay = _nextInterval;
+    final doubled = delay.inMicroseconds * 2;
+    _nextInterval = Duration(
+      microseconds: doubled.clamp(
+        _initialPollInterval.inMicroseconds,
+        _maxPollInterval.inMicroseconds,
+      ),
     );
+    _pollTimer = Timer(delay, () => unawaited(_pollOnce()));
   }
 
   void _settle(RecordingResult result) {
     if (_settled) return;
     _settled = true;
-    _eventSub?.cancel();
     _pollTimer?.cancel();
     _timeoutTimer?.cancel();
     if (!_completer.isCompleted) _completer.complete(result);
   }
 
-  /// Aborts the wait without resolving the caller's future (used on dispose).
   void cancel() {
     _settled = true;
-    _eventSub?.cancel();
     _pollTimer?.cancel();
     _timeoutTimer?.cancel();
   }

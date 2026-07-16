@@ -21,7 +21,6 @@
 // BOTH ff.localFirstSpaces=false and =true; flag-state groups self-skip the
 // wrong build so each invocation proves exactly its reality.
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -41,8 +40,6 @@ import 'package:matome_flutter/features/matome/matome_ids.dart';
 import 'package:matome_flutter/features/matome/matomes_repository.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -60,23 +57,6 @@ void main() {
   tearDown(() async {
     if (await tmp.exists()) await tmp.delete(recursive: true);
   });
-
-  Future<RecordingResult> pollAwaiter({
-    required Recording recording,
-    required Future<Recording?> Function() poll,
-    required Ref ref,
-  }) async {
-    final events = StreamController<RecordingStatusEvent>();
-    final waiter = RecordingResultWaiter(
-      recordingId: recording.id,
-      statusEvents: events.stream,
-      poll: poll,
-      pollInterval: const Duration(milliseconds: 5),
-    );
-    final result = await waiter.wait();
-    await events.close();
-    return result;
-  }
 
   ApiClient apiClient() => ApiClient(
     tokenStore: InMemoryTokenStore(),
@@ -97,9 +77,7 @@ void main() {
         matomesRepositoryProvider.overrideWithValue(matomes),
         spacesRepositoryProvider.overrideWithValue(spaces),
         currentOwnerIdProvider.overrideWithValue(ownerId),
-        uploadQueueProvider.overrideWith(
-          (ref) => UploadQueue(ref, awaitResult: pollAwaiter),
-        ),
+        uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
     );
   }

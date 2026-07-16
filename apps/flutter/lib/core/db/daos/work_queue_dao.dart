@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
@@ -270,6 +272,10 @@ class WorkQueueDao extends DatabaseAccessor<AppDatabase>
     required String ownerId,
     required String leaseOwner,
     required int now,
+    required String processingState,
+    required String? processingRunId,
+    required int processingAttempt,
+    required Iterable<String> processingRequestedOutputs,
   }) {
     return transaction(() async {
       final changed =
@@ -293,11 +299,17 @@ class WorkQueueDao extends DatabaseAccessor<AppDatabase>
                 (item) => item.id.equals(itemId) & item.ownerId.equals(ownerId),
               ))
               .write(
-                const ItemsCompanion(
-                  processingState: Value('queued'),
-                  syncState: Value('processing_queued'),
-                  processingErrorCode: Value(null),
-                  isDirty: Value(false),
+                ItemsCompanion(
+                  processingState: Value(processingState),
+                  processingRunId: Value(processingRunId),
+                  processingAttempt: Value(processingAttempt),
+                  processingRequestedOutputs: Value(
+                    jsonEncode(processingRequestedOutputs.toList()),
+                  ),
+                  processingError: const Value(null),
+                  processingErrorCode: const Value(null),
+                  syncState: const Value('synced'),
+                  isDirty: const Value(false),
                 ),
               );
       if (itemChanged != 1) {

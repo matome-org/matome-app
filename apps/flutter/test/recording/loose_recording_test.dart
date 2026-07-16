@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -16,10 +15,7 @@ import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
 import 'package:matome_flutter/features/recording/recording_finish.dart';
-import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -57,25 +53,6 @@ const _flagOn = bool.fromEnvironment(
   'ff.localFirstSpaces',
   defaultValue: false,
 );
-
-/// A no-op terminal-result awaiter that drives the real queue pipeline via the
-/// poll fallback (no live Phoenix socket).
-Future<RecordingResult> _pollFallbackAwaiter({
-  required Recording recording,
-  required Future<Recording?> Function() poll,
-  required Ref ref,
-}) async {
-  final events = StreamController<RecordingStatusEvent>();
-  final waiter = RecordingResultWaiter(
-    recordingId: recording.id,
-    statusEvents: events.stream,
-    poll: poll,
-    pollInterval: const Duration(milliseconds: 20),
-  );
-  final result = await waiter.wait();
-  await events.close();
-  return result;
-}
 
 void main() {
   late Directory tmp;
@@ -243,13 +220,7 @@ void main() {
             testParentSyncOverride(),
             audioRecordingServiceProvider.overrideWithValue(service),
             recordingsRepositoryProvider.overrideWithValue(repo),
-            uploadQueueProvider.overrideWith(
-              (ref) => UploadQueue(
-                ref,
-                awaitResult: _pollFallbackAwaiter,
-                cleanupAudio: (_) async {},
-              ),
-            ),
+            uploadQueueProvider.overrideWith(UploadQueue.new),
           ],
         );
         addTearDown(container.dispose);

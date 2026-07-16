@@ -7,38 +7,14 @@ To start your Phoenix server:
 
 Now you can visit [`localhost:7001`](http://localhost:7001) from your browser.
 
-## Recording Status Channel
+## Processing Observation
 
-Authenticated clients connect to `/socket/websocket` with their access token in
-the socket params:
-
-```js
-const socket = new Socket("/socket", { params: { token: accessToken } });
-socket.connect();
-
-const channel = socket.channel(`user:${userId}`);
-channel.join();
-
-channel.on("recording:status", (message) => {
-  // message shape below
-});
-```
-
-Only the authenticated user may join `user:<userId>`. Recording status updates
-emit only to the recording owner's topic with this payload:
-
-```json
-{
-  "recording_id": 123,
-  "status": "processing",
-  "summary": null,
-  "transcript": null,
-  "error_reason": null,
-  "duration": null,
-  "badge": null,
-  "updated_at": "2026-06-04T12:00:00Z"
-}
-```
+Authenticated clients request processing with `POST /api/items/:id/process`.
+Core returns the explicit current run id, attempt, requested output kinds, and
+state. Flutter observes only that run through bounded owner-scoped
+`GET /api/items/:id` polling with one request in flight. A client observation
+timeout stops polling but does not fail the Core run; Core's watchdog owns the
+authoritative timeout transition.
 
 Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
 

@@ -6,6 +6,7 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
   @fixtures_path Path.join(@repo_root, "contracts/v1/fixtures/canonical.json")
   @mismatches_path Path.join(@repo_root, "contracts/v1/fixtures/known-mismatches.json")
   @system_config_schema_path Path.join(@repo_root, "contracts/v1/system-config.schema.json")
+  @runtime_config_path Path.join(@repo_root, "services/api/config/runtime.exs")
   @device_snapshot_schema_path Path.join(
                                  @repo_root,
                                  "contracts/v1/device-queue-snapshot.schema.json"
@@ -156,6 +157,24 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
 
     assert decisions["migration_policy"] == "clean_schema_reset"
     assert decisions["reason"] == "no_users_and_no_deployment"
+  end
+
+  test "production runtime rejects insecure AI service origins before boot" do
+    expression = "Config.Reader.read!(#{inspect(@runtime_config_path)}, env: :prod)"
+
+    {output, status} =
+      System.cmd("elixir", ["-e", expression],
+        env: [
+          {"AI_ENGINE_DISPATCH_TOKEN", String.duplicate("d", 32)},
+          {"AI_ENGINE_CALLBACK_SIGNING_SECRET", String.duplicate("c", 32)},
+          {"AI_ENGINE_ENDPOINT", "http://processor.invalid/v1/jobs"},
+          {"AI_ENGINE_CALLBACK_BASE_URL", "https://core.invalid"}
+        ],
+        stderr_to_stdout: true
+      )
+
+    assert status != 0
+    assert output =~ "AI_ENGINE_ENDPOINT must be an absolute HTTPS URL in production"
   end
 
   test "the remaining cross-runtime mismatches are executable failing proofs" do

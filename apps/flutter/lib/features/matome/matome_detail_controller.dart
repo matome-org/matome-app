@@ -19,10 +19,12 @@ import '../../core/providers.dart';
 import '../contacts/contacts_controller.dart' show kPlaceholderContactOwnerId;
 import '../home/inbox_upload.dart'
     show DurableImportCopy, PickedUpload, durableImportCopy, mediaTypeForPath;
+import '../home/inbox_sync.dart';
 import '../home/matome_inbox_controller.dart'
     show matomeInboxControllerProvider;
 import '../items/matome_item_type.dart';
 import '../recordings/recording_ids.dart';
+import '../recordings/recordings_repository.dart';
 import '../recordings/upload_queue.dart' show uploadQueueProvider;
 import 'matome_sync_service.dart';
 import 'matomes_repository.dart';
@@ -100,6 +102,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   ItemsDao get _itemsDao => _ref.read(itemsDaoProvider);
   ContactsDao get _contactsDao => _ref.read(contactsDaoProvider);
   MatomesRepository get _matomesRepo => _ref.read(matomesRepositoryProvider);
+  RecordingsRepository get _recordingsRepo =>
+      _ref.read(recordingsRepositoryProvider);
 
   /// The current owner id used to scope the directory picker. Mirrors
   /// [ContactsController.ownerId] so the picker lists the same directory.
@@ -464,11 +468,39 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     // `coreId != null` and the guard above throws), so it stays local-only.
     if (coreMatomeId != null) {
       try {
-        await _matomesRepo.createTextItem(
+        final remote = await _matomesRepo.createTextItem(
           matomeId: coreMatomeId,
           clientId: itemId,
           body: text,
         );
+        await _itemsDao.updateItem(
+          itemId,
+          _itemOwnerId,
+          ItemsCompanion(
+            coreId: Value(remote.id),
+            syncState: const Value('synced'),
+            isDirty: const Value(false),
+          ),
+        );
+        try {
+          final accepted = await _recordingsRepo.enqueueProcessing(remote.id);
+          final current = await _itemsDao.getById(itemId, _itemOwnerId);
+          if (current != null) {
+            await _itemsDao.updateItem(
+              itemId,
+              _itemOwnerId,
+              itemProcessingUpdate(accepted, existing: current),
+            );
+          }
+        } catch (e, st) {
+          AppLog.error(
+            LogCat.sync,
+            'addTextNote: Core processing request failed (text remains synced) '
+            '$itemId',
+            e,
+            st,
+          );
+        }
       } catch (e, st) {
         AppLog.error(
           LogCat.sync,

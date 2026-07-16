@@ -65,8 +65,7 @@ class RecordingItem {
   /// "Cloud"/"On device" state of its own child tiles.
   bool get isOnCloud =>
       coreId != null &&
-      !isUploadQueuePendingStatus(processingStatus) &&
-      processingStatus != 'failed';
+      !isUploadQueuePendingStatus(processingStatus);
 
   /// Maps a persisted DB row to the UI card, mirroring `recordToCard`:
   ///   * `isProcessing` int → bool,

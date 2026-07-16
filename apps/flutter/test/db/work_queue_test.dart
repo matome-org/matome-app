@@ -210,7 +210,7 @@ void main() {
         expect(work?.state, kWorkStateSucceeded);
         expect(work?.stage, kWorkStageProcessingAccepted);
         expect(work?.progress, 1);
-        expect(item?.processingStatus, 'processing');
+        expect(item?.processingStatus, 'queued');
         expect(item?.file?.uploadState, 'uploaded');
         expect(repo.fetchCalls, 0, reason: 'device work never polls AI');
         expect(repo.enqueueEffects, 1);
@@ -780,11 +780,20 @@ class _WorkRepository extends RecordingsRepository {
   int get uploadEffects => uploadedClientIds.length;
   int get enqueueEffects => processedIds.length;
 
-  Recording _recording(String status) => Recording.fromJson({
+  Recording _recording(ProcessingState state) => Recording.fromItemJson({
     'id': 900,
     'owner_id': 'owner-1',
+    'item_type': 'file',
     'title': 'Memo',
-    'status': status,
+    'processing_state': state.wireName,
+    'processing_run_id': state == ProcessingState.notRequested
+        ? null
+        : '00000000-0000-4000-8000-000000000900',
+    'processing_attempt': state == ProcessingState.notRequested ? 0 : 1,
+    'processing_requested_outputs': const ['transcript', 'summary'],
+    'processing_outputs': const <String, dynamic>{},
+    'processing_error': null,
+    'file': const <String, dynamic>{'media_type': 'audio'},
   });
 
   @override
@@ -805,7 +814,7 @@ class _WorkRepository extends RecordingsRepository {
     if (createError case final error?) throw error;
     createdClientIds.add(clientId);
     return RecordingCreateResult(
-      recording: _recording('pending'),
+        recording: _recording(ProcessingState.notRequested),
       upload: const UploadDescriptor(
         method: 'PUT',
         url: 'http://127.0.0.1:9/upload',
@@ -931,7 +940,7 @@ class _WorkRepository extends RecordingsRepository {
     operations.add('process');
     processedIds.add(id);
     if (loseFirstProcessResponse && enqueueCalls == 1) throw _unavailable;
-    return _recording('processing');
+    return _recording(ProcessingState.queued);
   }
 
   @override

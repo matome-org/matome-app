@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -13,14 +12,10 @@ import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
-import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
 import 'package:matome_flutter/features/recording/recording_finish.dart';
-import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
-import 'package:matome_flutter/features/recordings/recording_status_event.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -59,7 +54,7 @@ void main() {
 
   // Modern items contract (recordings→items migration): the create leg POSTs to
   // /api/matomes/{coreMatomeId}/items and returns an ITEM + W0 upload; processing
-  // is POST /api/items/{id}/process; the poll-fallback source is GET
+  // is POST /api/items/{id}/process; the current-run poll source is GET
   // /api/items/{id}. The minted-matome coreId is 42; the created item id is 321.
   Dio stubbedDio() {
     final dio = Dio(
@@ -77,8 +72,13 @@ void main() {
           'owner_id': 1,
           'matome_id': 42,
           'item_type': 'file',
-          'metadata': {'title': 'New Recording', 'status': 'pending'},
-          'file': {'media_type': 'audio'},
+          'title': 'New Recording',
+          'processing_state': 'not_requested',
+          'processing_run_id': null,
+          'processing_attempt': 0,
+          'processing_requested_outputs': const <String>[],
+          'processing_outputs': const <String, dynamic>{},
+          'file': {'media_type': 'audio', 'upload_state': 'pending'},
         },
         'upload': {
           'request': {
@@ -98,7 +98,13 @@ void main() {
           'owner_id': 1,
           'matome_id': 42,
           'item_type': 'file',
-          'metadata': {'title': 'New Recording', 'status': 'processing'},
+          'title': 'New Recording',
+          'processing_state': 'queued',
+          'processing_run_id': 'run-321',
+          'processing_attempt': 1,
+          'processing_requested_outputs': ['transcript', 'summary'],
+          'processing_outputs': const <String, dynamic>{},
+          'file': {'media_type': 'audio', 'upload_state': 'uploaded'},
         },
         'processing': {'queued': true},
       }),
@@ -111,16 +117,23 @@ void main() {
           'owner_id': 1,
           'matome_id': 42,
           'item_type': 'file',
-          'metadata': {'title': 'New Recording', 'status': 'done'},
-          'file': {'summary': 'A memo', 'transcript': 'hello'},
+          'title': 'New Recording',
+          'processing_state': 'succeeded',
+          'processing_run_id': 'run-321',
+          'processing_attempt': 1,
+          'processing_requested_outputs': ['transcript', 'summary'],
+          'processing_outputs': {
+            'summary': {'type': 'summary', 'markdown': 'A memo'},
+            'transcript': {'type': 'transcript', 'text': 'hello'},
+          },
+          'file': {'media_type': 'audio', 'upload_state': 'uploaded'},
         },
       }),
     );
     return dio;
   }
 
-  // GET /api/items/321 that never reports terminal — so ONLY the injected socket
-  // awaiter can flip processing→done (proves the realtime path is wired).
+  // GET /api/items/321 that never reports terminal.
   Dio stubbedDioProcessing() {
     final dio = Dio(
       BaseOptions(
@@ -137,8 +150,13 @@ void main() {
           'owner_id': 1,
           'matome_id': 42,
           'item_type': 'file',
-          'metadata': {'title': 'New Recording', 'status': 'pending'},
-          'file': {'media_type': 'audio'},
+          'title': 'New Recording',
+          'processing_state': 'not_requested',
+          'processing_run_id': null,
+          'processing_attempt': 0,
+          'processing_requested_outputs': const <String>[],
+          'processing_outputs': const <String, dynamic>{},
+          'file': {'media_type': 'audio', 'upload_state': 'pending'},
         },
         'upload': {
           'request': {
@@ -156,7 +174,12 @@ void main() {
         'item': {
           'id': 321,
           'owner_id': 1,
-          'metadata': {'status': 'processing'},
+          'title': 'New Recording',
+          'processing_state': 'queued',
+          'processing_run_id': 'run-321',
+          'processing_attempt': 1,
+          'processing_requested_outputs': ['transcript', 'summary'],
+          'processing_outputs': const <String, dynamic>{},
         },
         'processing': {'queued': true},
       }),
@@ -167,90 +190,71 @@ void main() {
         'item': {
           'id': 321,
           'owner_id': 1,
-          'metadata': {'status': 'processing'},
+          'title': 'New Recording',
+          'processing_state': 'processing',
+          'processing_run_id': 'run-321',
+          'processing_attempt': 1,
+          'processing_requested_outputs': ['transcript', 'summary'],
+          'processing_outputs': const <String, dynamic>{},
         },
       }),
     );
     return dio;
   }
 
-  /// Overrides [uploadQueueProvider] with a queue carrying an injected
-  /// [RecordingResultAwaiter] (and a no-op audio cleanup so tests don't touch
-  /// the real filesystem unless they assert on it), so the finish→queue flow
-  /// can be driven by a fake socket-vs-poll race. W4 moved the awaiter from the
-  /// uploader onto the queue.
-  Override queueWith(
-    RecordingResultAwaiter awaiter, {
-    AudioCleanup cleanupAudio = _noopCleanup,
-  }) => uploadQueueProvider.overrideWith(
-    (ref) => UploadQueue(ref, awaitResult: awaiter, cleanupAudio: cleanupAudio),
-  );
+  Override queueOverride() => uploadQueueProvider.overrideWith(UploadQueue.new);
 
-  test('finish persists locally and stops after Core accepts processing', () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
+  test(
+    'finish persists locally and stops after Core accepts processing',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-    final service = svc(db);
-    final repo = _StubUploadRepository(
-      apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: stubbedDio()),
-    );
-
-    // Socket "absent": an empty event stream that never emits, so ONLY the poll
-    // fallback (GET → done) can resolve — exercising the fallback branch of the
-    // realtime waiter without a live Phoenix socket.
-    Future<RecordingResult> pollFallbackAwaiter({
-      required Recording recording,
-      required Future<Recording?> Function() poll,
-      required Ref ref,
-    }) async {
-      final events = StreamController<RecordingStatusEvent>();
-      final waiter = RecordingResultWaiter(
-        recordingId: recording.id,
-        statusEvents: events.stream,
-        poll: poll,
-        pollInterval: const Duration(milliseconds: 20),
+      final service = svc(db);
+      final repo = _StubUploadRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: stubbedDio(),
+        ),
       );
-      final result = await waiter.wait();
-      await events.close();
-      return result;
-    }
 
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        currentOwnerIdProvider.overrideWithValue('1'),
-        testParentSyncOverride(),
-        audioRecordingServiceProvider.overrideWithValue(service),
-        recordingsRepositoryProvider.overrideWithValue(repo),
-        queueWith(pollFallbackAwaiter),
-      ],
-    );
-    addTearDown(container.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+          testParentSyncOverride(),
+          audioRecordingServiceProvider.overrideWithValue(service),
+          recordingsRepositoryProvider.overrideWithValue(repo),
+          queueOverride(),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final controller = container.read(recordingControllerProvider.notifier);
-    await controller.start();
-    await controller.pause();
-    await controller.resume();
+      final controller = container.read(recordingControllerProvider.notifier);
+      await controller.start();
+      await controller.pause();
+      await controller.resume();
 
-    final localId = await container
-        .read(recordingFinisherProvider)
-        .finish(title: 'Standup notes');
+      final localId = await container
+          .read(recordingFinisherProvider)
+          .finish(title: 'Standup notes');
 
-    // W2: local-first id (rec_local_<uuid>), NOT the Core id.
-    expect(isLocalRecordingId(localId), isTrue);
+      // W2: local-first id (rec_local_<uuid>), NOT the Core id.
+      expect(isLocalRecordingId(localId), isTrue);
 
-    // Inbox row keeps its local PK; Core owns processing after acceptance.
-    final row = await db.itemsDao.getById(localId, '1');
-    expect(row, isNotNull);
-    expect(row!.coreId, 321);
-    expect(row.processingStatus, 'processing');
-    expect(row.isProcessing, isTrue);
-    expect(row.summary, isNull);
+      // Inbox row keeps its local PK; Core owns processing after acceptance.
+      final row = await db.itemsDao.getById(localId, '1');
+      expect(row, isNotNull);
+      expect(row!.coreId, 321);
+      expect(row.processingStatus, 'queued');
+      expect(row.isProcessing, isTrue);
+      expect(row.summary, isNull);
 
-    // It appears in the Inbox list (workspaceId IS NULL).
-    final items = container.read(inboxControllerProvider).requireValue;
-    expect(items.any((i) => i.id == localId), isTrue);
-  });
+      // It appears in the Inbox list (workspaceId IS NULL).
+      final items = container.read(inboxControllerProvider).requireValue;
+      expect(items.any((i) => i.id == localId), isTrue);
+    },
+  );
 
   test(
     'W2 #871 RETENTION: Core handoff RETAINS the durable local '
@@ -267,24 +271,6 @@ void main() {
         ),
       );
 
-      // Same poll-fallback awaiter (GET → done) used by the first test.
-      Future<RecordingResult> pollFallbackAwaiter({
-        required Recording recording,
-        required Future<Recording?> Function() poll,
-        required Ref ref,
-      }) async {
-        final events = StreamController<RecordingStatusEvent>();
-        final waiter = RecordingResultWaiter(
-          recordingId: recording.id,
-          statusEvents: events.stream,
-          poll: poll,
-          pollInterval: const Duration(milliseconds: 20),
-        );
-        final result = await waiter.wait();
-        await events.close();
-        return result;
-      }
-
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
@@ -292,9 +278,7 @@ void main() {
           testParentSyncOverride(),
           audioRecordingServiceProvider.overrideWithValue(service),
           recordingsRepositoryProvider.overrideWithValue(repo),
-          // Wire the PRODUCTION cleanup deliberately: the queue must STILL not delete
-          // the local file on done. (Before W2 this would have deleted it.)
-          queueWith(pollFallbackAwaiter, cleanupAudio: deleteAudioFile),
+          queueOverride(),
         ],
       );
       addTearDown(container.dispose);
@@ -312,7 +296,7 @@ void main() {
       expect(row, isNotNull);
       expect(
         row!.processingStatus,
-        'processing',
+        'queued',
         reason: 'device work stopped after Core accepted processing',
       );
 
@@ -341,23 +325,6 @@ void main() {
         ),
       );
 
-      Future<RecordingResult> pollFallbackAwaiter({
-        required Recording recording,
-        required Future<Recording?> Function() poll,
-        required Ref ref,
-      }) async {
-        final events = StreamController<RecordingStatusEvent>();
-        final waiter = RecordingResultWaiter(
-          recordingId: recording.id,
-          statusEvents: events.stream,
-          poll: poll,
-          pollInterval: const Duration(milliseconds: 20),
-        );
-        final result = await waiter.wait();
-        await events.close();
-        return result;
-      }
-
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
@@ -365,7 +332,7 @@ void main() {
           testParentSyncOverride(),
           audioRecordingServiceProvider.overrideWithValue(service),
           recordingsRepositoryProvider.overrideWithValue(repo),
-          queueWith(pollFallbackAwaiter),
+          queueOverride(),
         ],
       );
       addTearDown(container.dispose);
@@ -388,7 +355,7 @@ void main() {
       // The recording is saved, uploaded, and handed to Core processing.
       final row = await db.itemsDao.getById(localId, '1');
       expect(row, isNotNull);
-      expect(row!.processingStatus, 'processing');
+      expect(row!.processingStatus, 'queued');
 
       // FIX: the draft row is cleared on a confirmed finish — so a next launch
       // does NOT prompt to "recover" this already-saved recording.
@@ -470,49 +437,19 @@ void main() {
     },
   );
 
-  test('finish does not wait on the legacy realtime/poll awaiter', () async {
+  test('finish does not poll for a terminal result after acceptance', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
     final service = svc(db);
-    // Poll endpoint NEVER reports done — only the socket event can resolve it.
+    // Poll endpoint never reports terminal; device work still releases at Core
+    // acceptance.
     final repo = _StubUploadRepository(
       apiClient: ApiClient(
         tokenStore: InMemoryTokenStore(),
         dio: stubbedDioProcessing(),
       ),
     );
-
-    var awaiterCalled = false;
-    // Fake awaiter: a socket event stream that emits `done`, raced against the
-    // (never-terminal) poll — exactly the production RecordingResultWaiter race.
-    Future<RecordingResult> fakeSocketAwaiter({
-      required Recording recording,
-      required Future<Recording?> Function() poll,
-      required Ref ref,
-    }) async {
-      awaiterCalled = true;
-      final events = StreamController<RecordingStatusEvent>();
-      final waiter = RecordingResultWaiter(
-        recordingId: recording.id,
-        statusEvents: events.stream,
-        poll: poll,
-        pollInterval: const Duration(milliseconds: 50),
-      );
-      final future = waiter.wait();
-      // Socket delivers the terminal status first.
-      events.add(
-        RecordingStatusEvent(
-          recordingId: recording.id,
-          status: RecordingStatus.done,
-          summary: 'From socket',
-          transcript: 'realtime',
-        ),
-      );
-      final result = await future;
-      await events.close();
-      return result;
-    }
 
     final container = ProviderContainer(
       overrides: [
@@ -521,7 +458,7 @@ void main() {
         testParentSyncOverride(),
         audioRecordingServiceProvider.overrideWithValue(service),
         recordingsRepositoryProvider.overrideWithValue(repo),
-        queueWith(fakeSocketAwaiter),
+        queueOverride(),
       ],
     );
     addTearDown(container.dispose);
@@ -537,18 +474,12 @@ void main() {
 
     expect(isLocalRecordingId(localId), isTrue);
 
-    expect(
-      awaiterCalled,
-      isFalse,
-      reason: 'device work ends before server-owned AI result polling',
-    );
-
     final row = await db.itemsDao.getById(localId, '1');
     expect(row, isNotNull);
     expect(row!.coreId, 321);
     expect(
       row.processingStatus,
-      'processing',
+      'queued',
       reason: 'Core owns the processing lifecycle after acceptance',
     );
     expect(row.isProcessing, isTrue);
@@ -557,9 +488,6 @@ void main() {
     expect(row.notes, isNull);
   });
 }
-
-/// No-op audio cleanup for queue tests that don't assert on file deletion.
-Future<void> _noopCleanup(String path) async {}
 
 /// Repo whose Core create throws — simulates Core being unreachable so the
 /// local-first finish path can be proven independent of Core.

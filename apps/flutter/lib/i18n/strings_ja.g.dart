@@ -274,6 +274,7 @@ class _Translations$fileView$ja extends Translations$fileView$en {
 	@override String get viewFullscreen => '全画面で表示';
 	@override late final _Translations$fileView$fileChip$ja fileChip = _Translations$fileView$fileChip$ja._(_root);
 	@override late final _Translations$fileView$contentsTag$ja contentsTag = _Translations$fileView$contentsTag$ja._(_root);
+	@override late final _Translations$fileView$processingState$ja processingState = _Translations$fileView$processingState$ja._(_root);
 	@override late final _Translations$fileView$contentsStatus$ja contentsStatus = _Translations$fileView$contentsStatus$ja._(_root);
 }
 
@@ -573,6 +574,21 @@ class _Translations$fileView$contentsTag$ja extends Translations$fileView$conten
 	@override String get transcript => 'トランスクリプト';
 	@override String get description => '説明';
 	@override String get document => 'ドキュメント';
+}
+
+// Path: fileView.processingState
+class _Translations$fileView$processingState$ja extends Translations$fileView$processingState$en {
+	_Translations$fileView$processingState$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get queued => '待機中';
+	@override String get processing => '処理中';
+	@override String get succeeded => '完了';
+	@override String get partial => '一部完了';
+	@override String get failed => '失敗';
+	@override String get notAvailable => '利用できません';
 }
 
 // Path: fileView.contentsStatus
@@ -902,6 +918,12 @@ extension on TranslationsJa {
 			'fileView.contentsTag.transcript' => 'トランスクリプト',
 			'fileView.contentsTag.description' => '説明',
 			'fileView.contentsTag.document' => 'ドキュメント',
+			'fileView.processingState.queued' => '待機中',
+			'fileView.processingState.processing' => '処理中',
+			'fileView.processingState.succeeded' => '完了',
+			'fileView.processingState.partial' => '一部完了',
+			'fileView.processingState.failed' => '失敗',
+			'fileView.processingState.notAvailable' => '利用できません',
 			'fileView.contentsStatus.audio.processing' => '文字起こし中…',
 			'fileView.contentsStatus.audio.failed' => '文字起こしに失敗しました',
 			'fileView.contentsStatus.audio.empty' => 'トランスクリプトはまだありません',

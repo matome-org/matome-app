@@ -5,6 +5,7 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/daos/items_dao.dart';
 import 'package:matome_flutter/features/items/matome_item_type.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
 
 Future<ItemWithPayload> insertTestFileItem(
   AppDatabase db, {
@@ -13,6 +14,9 @@ Future<ItemWithPayload> insertTestFileItem(
   String title = 'File',
   String? summary,
   String? transcript,
+  String? description,
+  String? ocrText,
+  String? extractedText,
   String? notes,
   String? workspaceId,
   String? matomeId,
@@ -25,6 +29,9 @@ Future<ItemWithPayload> insertTestFileItem(
   int createdAt = 1000,
   int? coreId,
   String processingStatus = 'done',
+  ProcessingState? processingState,
+  String? processingRunId,
+  int processingAttempt = 0,
   String? processingErrorCode,
   String? wrappedFek,
   String? fileNoncePrefix,
@@ -33,14 +40,31 @@ Future<ItemWithPayload> insertTestFileItem(
   final isQueueState =
       isUploadQueuePendingStatus(processingStatus) ||
       processingStatus.startsWith('blocked_');
-  final processingState = switch (processingStatus) {
+  final resolvedProcessingState = processingState?.wireName ?? switch (processingStatus) {
     'processing' => 'processing',
     'failed' => 'failed',
     _ => 'succeeded',
   };
   final outputs = <String, dynamic>{
-    'summary': ?summary,
-    'transcript': ?transcript,
+    if (summary != null)
+      'summary': <String, dynamic>{'type': 'summary', 'markdown': summary},
+    if (transcript != null)
+      'transcript': <String, dynamic>{
+        'type': 'transcript',
+        'text': transcript,
+      },
+    if (description != null)
+      'description': <String, dynamic>{
+        'type': 'description',
+        'text': description,
+      },
+    if (ocrText != null)
+      'ocr_text': <String, dynamic>{'type': 'ocr_text', 'text': ocrText},
+    if (extractedText != null)
+      'extracted_text': <String, dynamic>{
+        'type': 'extracted_text',
+        'text': extractedText,
+      },
   };
   await db.itemsDao.upsertFileItem(
     item: ItemsCompanion.insert(
@@ -54,7 +78,9 @@ Future<ItemWithPayload> insertTestFileItem(
       itemType: MatomeItemType.file.wireName,
       title: Value(title),
       notes: Value(notes),
-      processingState: Value(processingState),
+      processingState: Value(resolvedProcessingState),
+      processingRunId: Value(processingRunId),
+      processingAttempt: Value(processingAttempt),
       processingOutputs: Value(jsonEncode(outputs)),
       processingErrorCode: Value(processingErrorCode),
       fileBlobId: Value(payloadId),
@@ -92,8 +118,17 @@ Future<ItemWithPayload> insertTestTextItem(
   int? position,
   int createdAt = 1000,
   int? coreId,
+  String? summary,
+  ProcessingState processingState = ProcessingState.notRequested,
+  String? processingRunId,
+  int processingAttempt = 0,
+  String? processingErrorCode,
 }) async {
   final payloadId = 'text_content_$id';
+  final outputs = <String, dynamic>{
+    if (summary != null)
+      'summary': <String, dynamic>{'type': 'summary', 'markdown': summary},
+  };
   await db.itemsDao.createTextItem(
     item: ItemsCompanion.insert(
       id: id,
@@ -105,6 +140,11 @@ Future<ItemWithPayload> insertTestTextItem(
       position: Value(position),
       itemType: MatomeItemType.text.wireName,
       title: Value(body.trim().split('\n').first),
+      processingState: Value(processingState.wireName),
+      processingRunId: Value(processingRunId),
+      processingAttempt: Value(processingAttempt),
+      processingOutputs: Value(jsonEncode(outputs)),
+      processingErrorCode: Value(processingErrorCode),
       textContentId: Value(payloadId),
       isDirty: Value(coreId == null),
       syncState: Value(coreId == null ? 'local_saved' : 'synced'),

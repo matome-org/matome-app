@@ -50,7 +50,7 @@ class RecordingsRepository {
     }
   }
 
-  /// `GET /api/items/{id}` (Bearer). The realtime poll-fallback source.
+  /// `GET /api/items/{id}` (Bearer). The current-run polling source.
   ///
   /// Returns `null` on 404 so the poll loop can treat a missing recording as a
   /// transient miss rather than crashing.
@@ -122,13 +122,10 @@ class RecordingsRepository {
         data: <String, dynamic>{
           'client_id': clientId,
           'item_type': 'file',
+          'title': title,
           'media_type': mediaType,
-          'metadata': <String, dynamic>{
-            'title': title,
-            'status': 'pending',
-            'badge': ?badge,
-            'workspace_id': ?workspaceId,
-          },
+          'workspace_id': ?workspaceId,
+          'metadata': <String, dynamic>{'badge': ?badge},
           'duration': ?durationSeconds,
           // #1471: declare the upload size in bytes. Core SigV4-signs it into the
           // presigned PUT AND persists it as `byte_size` so the Files view shows

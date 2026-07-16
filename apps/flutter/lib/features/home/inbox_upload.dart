@@ -20,19 +20,11 @@ import '../items/matome_item_type.dart';
 import '../recordings/recording.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recording_result_waiter.dart';
-import '../recordings/recording_status_event.dart';
 import '../recordings/upload_queue.dart';
 import 'inbox_controller.dart';
 
-/// Awaits a recording's terminal result by polling `GET /api/recordings/{id}`
-/// until it is `done` / `failed` (or times out). Injectable so the
-/// finish/upload flow can be unit-tested without a live backend.
-///
-/// The realtime `recording:status` socket path was removed with task #1830 (W4)
-/// once the Core channel + `broadcast_recording_status` were deleted server-
-/// side: the join always failed and fell back to this poll anyway, so the
-/// socket (and its `phoenix_socket` dependency) was dead weight. The default
-/// ([liveRecordingResultAwaiter]) is now poll-only.
+/// Observes one explicit Core processing run until it reaches a terminal state.
+/// Injectable so retry behavior can be tested without a live backend.
 typedef RecordingResultAwaiter =
     Future<RecordingResult> Function({
       required Recording recording,
@@ -407,23 +399,23 @@ class InboxUploader {
   }
 }
 
-/// Default [RecordingResultAwaiter]: resolves [recording]'s terminal result by
-/// polling [poll] (`GET /api/recordings/{id}`) via a [RecordingResultWaiter].
-///
-/// Poll-only since task #1830 (W4): the realtime socket source is gone (the
-/// Core channel was deleted), so the waiter is fed an empty status stream and
-/// the poll loop is the sole terminal-result source. `ref` is retained for the
-/// injectable signature (shared by the upload queue + details controller).
+/// Bounded, poll-only observation of the current Core run. A client timeout
+/// ends observation but never authors a failed Core state.
 Future<RecordingResult> liveRecordingResultAwaiter({
   required Recording recording,
   required Future<Recording?> Function() poll,
   required Ref ref,
 }) async {
+  if (recording.processing.state.isTerminal) {
+    return RecordingResult.terminal(recording);
+  }
+  final runId = recording.processing.runId;
+  if (runId == null) return RecordingResult.terminal(recording);
   final waiter = RecordingResultWaiter(
     recordingId: recording.id,
-    statusEvents: const Stream<RecordingStatusEvent>.empty(),
+    runId: runId,
     poll: poll,
-    pollInterval: ref.read(systemPolicyProvider).pollInterval,
+    initialPollInterval: ref.read(systemPolicyProvider).pollInterval,
   );
   try {
     return await waiter.wait();

@@ -61,11 +61,30 @@ if config_env() == :prod and
   raise "AI dispatch and callback credentials must each be at least 32 bytes"
 end
 
+ai_engine_endpoint =
+  System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:7002/v1/jobs"
+
+ai_callback_base_url =
+  System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:7001"
+
+if config_env() == :prod do
+  for {name, value} <- [
+        {"AI_ENGINE_ENDPOINT", ai_engine_endpoint},
+        {"AI_ENGINE_CALLBACK_BASE_URL", ai_callback_base_url}
+      ] do
+    uri = URI.parse(value)
+
+    if uri.scheme != "https" or not is_binary(uri.host) do
+      raise "#{name} must be an absolute HTTPS URL in production"
+    end
+  end
+end
+
 config :matome_api, MatomeApi.AIEngine,
-  endpoint: System.get_env("AI_ENGINE_ENDPOINT") || "http://127.0.0.1:7002/v1/jobs",
+  endpoint: ai_engine_endpoint,
   dispatch_token: ai_dispatch_token,
   callback_signing_secret: ai_callback_signing_secret,
-  callback_base_url: System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:7001"
+  callback_base_url: ai_callback_base_url
 
 if config_env() == :prod do
   database_url =

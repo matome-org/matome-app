@@ -17,8 +17,9 @@ import '../../core/db/db_encryption.dart'
     show FlutterSecureKeyStore, NativeDekProvisioner;
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
+import '../recordings/recording.dart';
 import '../recordings/recording_ids.dart';
-import '../recordings/processing_error.dart';
+import '../recordings/recording_result_waiter.dart';
 import '../recordings/recordings_repository.dart';
 import '../recordings/upload_queue.dart';
 import '../home/inbox_controller.dart';
@@ -147,9 +148,8 @@ class DetailsController extends StateNotifier<DetailsState> {
 
   final Ref _ref;
 
-  /// Races the realtime socket against a poll fallback for the terminal result.
-  /// Shared with the upload flow ([liveRecordingResultAwaiter], B1) so there is
-  /// a single socket/poll await implementation; injected in tests.
+  /// Observes one explicit Core run through bounded polling; injected in tests.
+  /// The observation timeout never authors a failed Core state.
   final RecordingResultAwaiter _awaitTerminal;
 
   /// Encrypted-media read seam (task #1866): supplies the DEK
@@ -239,7 +239,7 @@ class DetailsController extends StateNotifier<DetailsState> {
       // A pending-upload row is held locally, not transcribing — keep the
       // spinner off so the UI reads as safe rather than "in progress".
       isProcessing: !pending && row.isProcessing,
-      processingFailed: row.processingStatus == 'failed',
+      processingFailed: row.processingState == ProcessingState.failed,
       pendingUpload: pending,
     );
   }
@@ -368,16 +368,15 @@ class DetailsController extends StateNotifier<DetailsState> {
     if (row != null) state = state.copyWith(row: row);
   }
 
-  /// Retries a failed recording.
+  /// Retries failed processing without coupling it to upload/cloud state.
   ///
   /// Two failure shapes exist (plan #43, W5):
   ///  * No `coreId` yet — the failure happened during the local-first UPLOAD
   ///    (create/transport), or the row is still `pending_upload`. Re-enqueue
   ///    through the SAME auto-retry queue ([UploadQueue.drainRow]) rather than
   ///    calling `/process` (there is no Core recording to process yet).
-  ///  * Has a `coreId` — the upload reconciled but TRANSCRIPTION failed. Retry
-  ///    via the F4 pipeline: `POST /process` then race the `recording:status`
-  ///    channel against the poll. Marks the row processing immediately.
+  ///  * Has a `coreId` — Core creates a new logical run. Polling accepts only
+  ///    that run, while prior successful machine output remains visible.
   Future<void> retry() async {
     AppLog.event(LogCat.action, 'retry recording=${state.id}');
     final coreId = state.coreId;
@@ -386,42 +385,22 @@ class DetailsController extends StateNotifier<DetailsState> {
       return;
     }
 
-    await _dao.updateItem(
-      state.id,
-      _requireOwner(),
-      const ItemsCompanion(
-        processingState: Value('processing'),
-        processingErrorCode: Value(null),
-      ),
-    );
-    state = state.copyWith(isProcessing: true, processingFailed: false);
-
     try {
       final pending = await _repo.enqueueProcessing(coreId);
-      // Single socket/poll await — shared with the upload flow (B1) so there is
-      // no duplicated pipeline. First terminal signal from either source wins.
+      await _applyRemoteProcessing(pending);
+      if (mounted) await load();
+      final runId = pending.processing.runId;
+      if (runId == null || pending.processing.state.isTerminal) return;
       final result = await _awaitTerminal(
         recording: pending,
         poll: () => _repo.fetchRecording(pending.id),
         ref: _ref,
       );
-      if (result.failed) {
-        await _applyTerminal(
-          failed: true,
-          errorCode: processingErrorCodeForTerminal(result.errorReason),
-        );
-      } else {
-        final done = result.recording;
-        // WRITE-AUTHORITY (#1435): the machine transcript routes to the
-        // `transcript` column, NOT `notes`. The previous alias
-        // (`notes: done?.transcript`) clobbered any user note on every
-        // terminal apply.
-        await _applyTerminal(
-          failed: false,
-          summary: done?.summary,
-          transcript: done?.transcript,
-        );
+      final terminal = result.recording;
+      if (result.outcome == RecordingWaitOutcome.terminal && terminal != null) {
+        await _applyRemoteProcessing(terminal, expectedRunId: runId);
       }
+      if (mounted) await load();
     } catch (e, st) {
       AppLog.error(
         LogCat.action,
@@ -429,7 +408,8 @@ class DetailsController extends StateNotifier<DetailsState> {
         e,
         st,
       );
-      await _applyTerminal(failed: true, errorCode: kProcessingErrorFailed);
+      // A request/transport error is not an authoritative Core run result.
+      if (mounted) await load();
     }
   }
 
@@ -448,49 +428,18 @@ class DetailsController extends StateNotifier<DetailsState> {
     await load();
   }
 
-  Future<void> _applyTerminal({
-    required bool failed,
-    String? summary,
-    String? transcript,
-    String? errorCode,
+  Future<void> _applyRemoteProcessing(
+    Recording remote, {
+    String? expectedRunId,
   }) async {
-    // Merge, not null-overwrite (B3): a sparse socket `done` event can carry a
-    // null summary/transcript even after good data exists, so [mergeText] leaves
-    // the column untouched rather than wiping a previously-good value.
-    //
-    // WRITE-AUTHORITY (#1435): the machine transcript lands in the `transcript`
-    // column; the user `notes` column is never touched on a terminal apply.
     final ownerId = _requireOwner();
     final current = await _dao.getById(state.id, ownerId);
     if (current == null) return;
+    if (expectedRunId != null && remote.processing.runId != expectedRunId) return;
     await _dao.updateItem(
       state.id,
       ownerId,
-      ItemsCompanion(
-        processingState: Value(failed ? 'failed' : 'succeeded'),
-        processingOutputs: failed
-            ? const Value.absent()
-            : Value(
-                mergeProcessingOutputs(
-                  current.item.processingOutputs,
-                  summary: summary,
-                  transcript: transcript,
-                ),
-              ),
-        processingErrorCode: Value(
-          failed ? normalizeProcessingErrorCode(errorCode) : null,
-        ),
-        syncState: const Value('synced'),
-      ),
-    );
-    final row = await _dao.getById(state.id, ownerId);
-    // Guard against a state emit after the autoDispose provider tore down (e.g.
-    // the user navigated away mid-retry).
-    if (!mounted) return;
-    state = state.copyWith(
-      row: row,
-      isProcessing: false,
-      processingFailed: failed,
+      itemProcessingUpdate(remote, existing: current),
     );
   }
 

@@ -42,9 +42,9 @@ void main() {
       expect(_rec().isOnCloud, isFalse);
     });
 
-    test('coreId set but still uploading/failed → NOT on cloud', () {
+    test('upload state, not AI failure, controls cloud state', () {
       expect(_rec(coreId: 5, status: 'pending_upload').isOnCloud, isFalse);
-      expect(_rec(coreId: 5, status: 'failed').isOnCloud, isFalse);
+      expect(_rec(coreId: 5, status: 'failed').isOnCloud, isTrue);
       expect(
         _rec(coreId: 5, status: kProcessingStatusBlockedOffline).isOnCloud,
         isFalse,

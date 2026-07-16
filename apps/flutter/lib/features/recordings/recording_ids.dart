@@ -33,8 +33,8 @@ String mintLocalRecordingId() => '$kLocalRecordingIdPrefix${_uuid.v4()}';
 bool isLocalRecordingId(String id) => id.startsWith(kLocalRecordingIdPrefix);
 
 /// Local-only processing status for a recording that has been persisted on
-/// device but not yet uploaded/created on Core. Distinct from the backend
-/// `processing`/`done`/`failed` states (see `RecordingStatus`).
+/// device but not yet uploaded/created on Core. Distinct from Core's explicit
+/// processing lifecycle states.
 ///
 /// Defined here for Wave 1; Wave 2 sets it on local-first finish and Wave 4's
 /// retry queue clears it once the recording reconciles.

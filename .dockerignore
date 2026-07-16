@@ -1,0 +1,15 @@
+**
+!services/
+!services/ai-common/
+!services/ai-common/src/
+!services/ai-common/src/**
+!services/ai-stub/
+!services/ai-stub/Dockerfile
+!services/ai-stub/package.json
+!services/ai-stub/src/
+!services/ai-stub/src/**
+!services/ai-adapter/
+!services/ai-adapter/Dockerfile
+!services/ai-adapter/package.json
+!services/ai-adapter/src/
+!services/ai-adapter/src/**

@@ -8,14 +8,21 @@ void main() {
         'id': 1,
         'owner_id': 1,
         'title': 'Standup notes',
-        'summary': 'Short AI summary',
-        'transcript': 'Full transcript',
-        'media_type': 'audio/m4a',
-        'storage_key': 'recordings/abc',
-        'status': 'done',
-        'error_reason': null,
-        'duration': 132,
-        'badge': 'work',
+        'processing_state': 'succeeded',
+        'processing_run_id': 'run-1',
+        'processing_attempt': 1,
+        'processing_requested_outputs': ['summary', 'transcript'],
+        'processing_outputs': {
+          'summary': {'type': 'summary', 'markdown': 'Short AI summary'},
+          'transcript': {'type': 'transcript', 'text': 'Full transcript'},
+        },
+        'file': {
+          'media_type': 'audio/m4a',
+          'storage_key': 'recordings/abc',
+          'duration': 132,
+          'upload_state': 'uploaded',
+        },
+        'metadata': {'badge': 'work'},
         'workspace_id': null,
         'inserted_at': '2026-06-08T12:00:00Z',
         'updated_at': '2026-06-08T12:00:00Z',
@@ -45,13 +52,12 @@ void main() {
         'id': 2,
         'owner_id': 1,
         'title': 'Untitled',
-        'summary': null,
-        'transcript': null,
-        'media_type': null,
-        'storage_key': null,
-        'status': 'pending',
-        'error_reason': null,
-        'duration': null,
+        'processing_state': 'queued',
+        'processing_run_id': 'run-2',
+        'processing_attempt': 1,
+        'processing_requested_outputs': const <String>[],
+        'processing_outputs': const <String, dynamic>{},
+        'file': {'media_type': null, 'storage_key': null, 'duration': null},
         'badge': null,
         'workspace_id': null,
         'inserted_at': null,
@@ -72,7 +78,7 @@ void main() {
         'id': 3,
         'owner_id': 1,
         'title': 't',
-        'status': 'archived',
+        'processing_state': 'archived',
       });
       expect(r.status, RecordingStatus.unknown);
     });
@@ -82,9 +88,11 @@ void main() {
         'id': '7',
         'owner_id': '1',
         'title': 't',
-        'status': 'failed',
-        'duration': '90',
-        'error_reason': 'transcode_failed',
+        'processing_state': 'failed',
+        'processing_run_id': 'run-7',
+        'processing_attempt': 1,
+        'processing_error': {'code': 'transcode_failed', 'retryable': true},
+        'file': {'duration': '90'},
       });
       expect(r.id, 7);
       expect(r.duration, 90);
@@ -117,11 +125,7 @@ void main() {
     });
 
     test('a MISSING owner_id parses to null (never coerced to 0)', () {
-      final r = Recording.fromJson({
-        'id': 1,
-        'title': 't',
-        'status': 'done',
-      });
+      final r = Recording.fromJson({'id': 1, 'title': 't', 'status': 'done'});
       expect(r.ownerId, isNull);
     });
 
@@ -150,8 +154,22 @@ void main() {
     test('parses the { recordings: [...] } envelope', () {
       final envelope = <String, dynamic>{
         'recordings': [
-          {'id': 1, 'owner_id': 1, 'title': 'A', 'status': 'done'},
-          {'id': 2, 'owner_id': 1, 'title': 'B', 'status': 'processing'},
+          {
+            'id': 1,
+            'owner_id': 1,
+            'title': 'A',
+            'processing_state': 'succeeded',
+            'processing_run_id': 'run-1',
+            'processing_attempt': 1,
+          },
+          {
+            'id': 2,
+            'owner_id': 1,
+            'title': 'B',
+            'processing_state': 'processing',
+            'processing_run_id': 'run-2',
+            'processing_attempt': 1,
+          },
         ],
       };
 

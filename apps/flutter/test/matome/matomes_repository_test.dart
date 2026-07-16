@@ -6,6 +6,7 @@ import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/features/contacts/contacts_repository.dart';
 import 'package:matome_flutter/features/matome/matomes_repository.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
 
 /// HTTP-contract tests for the space-scoped sync repos (task #1377), mirroring
 /// `recordings_repository_test.dart`: a mock-adapter dio, Bearer injection, and
@@ -84,9 +85,18 @@ void main() {
       (server) => server.reply(201, {
         'item': {
           'id': 555,
+          'owner_id': 1,
+          'client_id': 'text_local_1',
           'matome_id': 7,
           'item_type': 'text',
+          'title': 'A durable note',
           'position': 1,
+          'processing_state': 'not_requested',
+          'processing_run_id': null,
+          'processing_attempt': 0,
+          'processing_requested_outputs': <String>[],
+          'processing_outputs': <String, dynamic>{},
+          'processing_error': null,
           'text': {'id': 900, 'body': 'A durable note'},
         },
       }),
@@ -105,12 +115,13 @@ void main() {
       ),
     );
 
-    final id = await matomesRepo.createTextItem(
+    final item = await matomesRepo.createTextItem(
       matomeId: 7,
       clientId: 'text_local_1',
       body: 'A durable note',
     );
-    expect(id, 555);
+    expect(item.id, 555);
+    expect(item.processing.state, ProcessingState.notRequested);
     expect(sentBody?['client_id'], 'text_local_1');
     expect(sentBody?['item_type'], 'text');
     expect(sentBody?['body'], 'A durable note');

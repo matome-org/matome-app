@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -6,12 +9,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/core/http/api_client.dart';
+import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
 import 'package:matome_flutter/features/items/matome_item_type.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
+import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 import 'package:matome_flutter/ui/file_type_chip.dart';
 
@@ -387,6 +394,143 @@ void main() {
     });
   });
 
+  group('row-only processing retries', () {
+    for (final testCase in <({String mediaType, Widget Function() screen})>[
+      (
+        mediaType: 'image',
+        screen: () => const FileDetailScreen.imageById(id: 'retry-item'),
+      ),
+      (
+        mediaType: 'document',
+        screen: () => const FileDetailScreen.documentById(id: 'retry-item'),
+      ),
+    ]) {
+      testWidgets('${testCase.mediaType} failed state exposes retry', (
+        tester,
+      ) async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            currentOwnerIdProvider.overrideWithValue('1'),
+          ],
+        );
+        addTearDown(container.dispose);
+        await insertTestFileItem(
+          db,
+          id: 'retry-item',
+          coreId: 42,
+          mediaType: testCase.mediaType,
+          processingState: ProcessingState.failed,
+          processingRunId: 'run-failed',
+          processingAttempt: 1,
+          processingErrorCode: 'processor_unavailable',
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: TranslationProvider(
+              child: MaterialApp(
+                theme: buildLightTheme(),
+                home: testCase.screen(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(
+            const ValueKey('file-view-contents-retry'),
+            skipOffstage: false,
+          ),
+          findsOneWidget,
+        );
+      });
+    }
+
+    testWidgets(
+      'image retry creates a new run while prior output and cloud facts remain',
+      (tester) async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final repository = _RetryRepository();
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            currentOwnerIdProvider.overrideWithValue('1'),
+            recordingsRepositoryProvider.overrideWithValue(repository),
+          ],
+        );
+        addTearDown(container.dispose);
+        await insertTestFileItem(
+          db,
+          id: 'retry-item',
+          coreId: 42,
+          mediaType: 'image',
+          notes: 'User-owned note',
+          description: 'Prior successful description',
+          processingState: ProcessingState.failed,
+          processingRunId: 'run-failed',
+          processingAttempt: 1,
+          processingErrorCode: 'processor_unavailable',
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: TranslationProvider(
+              child: MaterialApp(
+                theme: buildLightTheme(),
+                home: const FileDetailScreen.imageById(id: 'retry-item'),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final retry = find.byKey(
+          const ValueKey('file-view-contents-retry'),
+          skipOffstage: false,
+        );
+        await tester.ensureVisible(retry);
+        await tester.tap(retry);
+        await tester.pump();
+        await repository.pollStarted.future;
+
+        final queued = await db.itemsDao.getById('retry-item', '1');
+        expect(repository.enqueueCalls, 1);
+        expect(queued?.item.processingRunId, 'run-new');
+        expect(queued?.item.processingAttempt, 2);
+        expect(queued?.item.processingState, 'queued');
+        expect(queued?.description, 'Prior successful description');
+        expect(queued?.notes, 'User-owned note');
+        expect(queued?.file?.uploadState, 'uploaded');
+
+        repository.terminal.complete(
+          repository.item(
+            state: ProcessingState.succeeded,
+            outputs: const {
+              'description': {
+                'type': 'description',
+                'text': 'Fresh description',
+              },
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final succeeded = await db.itemsDao.getById('retry-item', '1');
+        expect(succeeded?.item.processingRunId, 'run-new');
+        expect(succeeded?.item.processingState, 'succeeded');
+        expect(succeeded?.description, 'Fresh description');
+        expect(succeeded?.notes, 'User-owned note');
+        expect(succeeded?.file?.uploadState, 'uploaded');
+      },
+    );
+  });
+
   // ── Document Contents: the LIVE state machine (#1454) ───────────────────────
   // The doc host must derive Contents from the row's OWN fields — NOT a hardcoded
   // empty. Before #1454 it forced `ContentsState.empty`, so the stub summary
@@ -430,7 +574,7 @@ void main() {
       filename: 'report.pdf',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       mediaType: 'document',
-      transcript: transcript,
+      extractedText: transcript,
       processingStatus: isProcessing ? 'processing' : processingStatus,
     );
 
@@ -543,4 +687,51 @@ void main() {
       });
     }
   });
+}
+
+class _RetryRepository extends RecordingsRepository {
+  _RetryRepository()
+    : super(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
+
+  final terminal = Completer<Recording?>();
+  final pollStarted = Completer<void>();
+  int enqueueCalls = 0;
+
+  Recording item({
+    required ProcessingState state,
+    Map<String, dynamic> outputs = const {},
+  }) => Recording.fromItemJson(<String, dynamic>{
+    'id': 42,
+    'owner_id': 1,
+    'item_type': 'file',
+    'title': 'Image',
+    'notes': 'Remote note must not replace local notes',
+    'processing_state': state.wireName,
+    'processing_run_id': 'run-new',
+    'processing_attempt': 2,
+    'processing_requested_outputs': const ['description', 'ocr_text'],
+    'processing_outputs': outputs,
+    'processing_error': null,
+    'file': const <String, dynamic>{
+      'media_type': 'image',
+      'upload_state': 'uploaded',
+    },
+  });
+
+  @override
+  Future<Recording> enqueueProcessing(int id) async {
+    enqueueCalls++;
+    return item(state: ProcessingState.queued);
+  }
+
+  @override
+  Future<Recording?> fetchRecording(int id) {
+    if (!pollStarted.isCompleted) pollStarted.complete();
+    return terminal.future;
+  }
 }

@@ -15,8 +15,10 @@ import 'package:matome_flutter/features/home/inbox_upload.dart'
 import 'package:matome_flutter/features/items/matome_item_type.dart';
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matomes_repository.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart'
     show kProcessingStatusPendingUpload;
+import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 /// #1457 — `addFile`/`addPhoto` must KICK the upload queue after the
@@ -62,6 +64,9 @@ void main() {
         // recording fake so no real HTTP is attempted and the POST is asserted.
         matomesRepositoryProvider.overrideWithValue(
           matomesRepo ?? _RecordingMatomesRepo(),
+        ),
+        recordingsRepositoryProvider.overrideWithValue(
+          _TextProcessingRepository(),
         ),
         matomeDetailControllerProvider.overrideWith(
           (ref, id) => MatomeDetailController(
@@ -300,7 +305,7 @@ class _RecordingMatomesRepo extends MatomesRepository {
   final List<({int matomeId, String clientId, String body})> textItemPosts = [];
 
   @override
-  Future<int> createTextItem({
+  Future<Recording> createTextItem({
     required int matomeId,
     required String clientId,
     required String body,
@@ -309,7 +314,47 @@ class _RecordingMatomesRepo extends MatomesRepository {
     if (throwOnPost) {
       throw StateError('simulated Core POST failure (offline / 5xx)');
     }
-    return 555;
+    return Recording.fromItemJson(<String, dynamic>{
+      'id': 555,
+      'owner_id': 1,
+      'client_id': clientId,
+      'item_type': 'text',
+      'title': body,
+      'processing_state': 'not_requested',
+      'processing_run_id': null,
+      'processing_attempt': 0,
+      'processing_requested_outputs': const <String>[],
+      'processing_outputs': const <String, dynamic>{},
+      'processing_error': null,
+      'text': <String, dynamic>{'body': body},
+    });
+  }
+}
+
+class _TextProcessingRepository extends RecordingsRepository {
+  _TextProcessingRepository()
+    : super(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio()..close(),
+        ),
+      );
+
+  @override
+  Future<Recording> enqueueProcessing(int id) async {
+    return Recording.fromItemJson(<String, dynamic>{
+      'id': id,
+      'owner_id': 1,
+      'item_type': 'text',
+      'title': 'Text note',
+      'processing_state': 'queued',
+      'processing_run_id': '00000000-0000-4000-8000-000000000001',
+      'processing_attempt': 1,
+      'processing_requested_outputs': const ['summary', 'title'],
+      'processing_outputs': const <String, dynamic>{},
+      'processing_error': null,
+      'text': const <String, dynamic>{'body': 'Text note'},
+    });
   }
 }
 

@@ -161,6 +161,14 @@
       "description": "Description",
       "document": "Document"
     },
+    "processingState": {
+      "queued": "Queued",
+      "processing": "Processing",
+      "succeeded": "Succeeded",
+      "partial": "Partial",
+      "failed": "Failed",
+      "notAvailable": "Not available"
+    },
     "contentsStatus": {
       "audio": {
         "processing": "Transcribing…",

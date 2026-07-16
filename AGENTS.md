@@ -99,11 +99,12 @@ i18n/      -> slang translations (en/ja JSON → generated strings)
 ### Core API (`services/api`)
 
 Elixir / Phoenix 1.7 with Ecto (Postgres), Guardian for JWT auth, Oban for the
-AI job queue, Phoenix Channels for realtime ingestion status, and `cors_plug`.
+AI job queue, and `cors_plug`.
 Runs on `:7001`. Owns database/storage access and AI orchestration behind the
-API boundary; the Flutter client never touches Postgres or S3 directly. Status
-reaches the client over a `RecordingStatusChannel`, raced against a 2 s poll
-(`recording_result_waiter.dart`).
+API boundary; the Flutter client never touches Postgres or S3 directly. Flutter
+observes the explicit current processing run through bounded owner-scoped REST
+polling (`recording_result_waiter.dart`); Core's watchdog owns authoritative
+timeouts.
 
 ## Testing
 

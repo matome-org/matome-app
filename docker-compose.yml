@@ -64,15 +64,18 @@ services:
         echo "✓ bucket $$STORAGE_MEDIA_BUCKET ready"
 
   ai-stub:
-    build: ./services/ai-stub
+    build:
+      context: .
+      dockerfile: services/ai-stub/Dockerfile
     environment:
       AI_STUB_HOST: 0.0.0.0
       AI_STUB_PORT: ${AI_STUB_PORT}
-      # Stub adapter migration is owned separately; it still reads its legacy
-      # variable for the outbound dispatch side of the v1 contract.
-      AI_ENGINE_TOKEN: ${AI_ENGINE_DISPATCH_TOKEN}
+      AI_ENGINE_DISPATCH_TOKEN: ${AI_ENGINE_DISPATCH_TOKEN}
+      AI_STUB_DATA_DIR: /var/lib/matome-ai/jobs
     expose:
       - "${AI_STUB_PORT}"
+    volumes:
+      - matome_ai_stub_jobs:/var/lib/matome-ai/jobs
 
   core:
     build:
@@ -129,4 +132,5 @@ services:
 
 volumes:
   matome_pgdata:
+  matome_ai_stub_jobs:
   matome_minio:

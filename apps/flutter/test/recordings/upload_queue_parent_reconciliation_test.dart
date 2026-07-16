@@ -13,7 +13,6 @@ import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/features/matome/matome.dart';
 import 'package:matome_flutter/features/matome/matomes_repository.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
-import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -79,9 +78,7 @@ void main() {
         currentOwnerIdProvider.overrideWithValue('owner-1'),
         matomesRepositoryProvider.overrideWithValue(matomes),
         recordingsRepositoryProvider.overrideWithValue(recordings),
-        uploadQueueProvider.overrideWith(
-          (ref) => UploadQueue(ref, awaitResult: _doneAwaiter),
-        ),
+        uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
     );
     addTearDown(container.dispose);
@@ -95,22 +92,9 @@ void main() {
     );
     final child = await db.itemsDao.getById('rec_local_child', 'owner-1');
     expect(child!.coreId, recordings.coreId);
-    expect(child.processingStatus, 'processing');
+    expect(child.processingStatus, 'queued');
   });
 }
-
-Future<RecordingResult> _doneAwaiter({
-  required Recording recording,
-  required Future<Recording?> Function() poll,
-  required Ref ref,
-}) async => RecordingResult.done(
-  Recording(
-    id: recording.id,
-    ownerId: 'owner-1',
-    title: recording.title,
-    status: RecordingStatus.done,
-  ),
-);
 
 class _ParentRepository extends MatomesRepository {
   _ParentRepository({required super.apiClient, required this.calls});
@@ -144,8 +128,18 @@ class _ChildRepository extends RecordingsRepository
   final List<String> calls;
   final int coreId = 202;
 
-  Recording _recording(RecordingStatus status) =>
-      Recording(id: coreId, ownerId: 'owner-1', title: 'Child', status: status);
+  Recording _recording(ProcessingState state) => Recording(
+    id: coreId,
+    ownerId: 'owner-1',
+    title: 'Child',
+    processing: ItemProcessing(
+      state: state,
+      runId: state == ProcessingState.notRequested ? null : 'run-$coreId',
+      attempt: state == ProcessingState.notRequested ? 0 : 1,
+      requestedOutputs: const {ProcessingOutputKind.transcript},
+      outputs: const ProcessingOutputs.empty(),
+    ),
+  );
 
   @override
   Future<List<Recording>> fetchRecordings() async => const [];
@@ -166,7 +160,7 @@ class _ChildRepository extends RecordingsRepository
     expect(matomeId, 101);
     expect(clientId, 'rec_local_child');
     return RecordingCreateResult(
-      recording: _recording(RecordingStatus.pending),
+      recording: _recording(ProcessingState.notRequested),
       upload: const UploadDescriptor(
         method: 'PUT',
         url: 'http://127.0.0.1:9/upload',
@@ -184,6 +178,6 @@ class _ChildRepository extends RecordingsRepository
   @override
   Future<Recording> enqueueProcessing(int id) async {
     calls.add('enqueue');
-    return _recording(RecordingStatus.processing);
+    return _recording(ProcessingState.queued);
   }
 }

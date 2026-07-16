@@ -200,16 +200,14 @@ void main() {
     },
   );
 
-  testWidgets('failed keeps the W5 failure treatment AND the on-device badge', (
+  testWidgets('AI failure keeps cloud sync truth independent', (
     tester,
   ) async {
-    // A failed row still has its bytes on the device, so it reads on-device
-    // even if a stale coreId is present.
     await pump(tester, card(id: '42', processingStatus: 'failed', coreId: 42));
 
     expect(find.byKey(const ValueKey('card-failed')), findsOneWidget);
-    expect(find.byKey(const ValueKey('sync-badge-onDevice')), findsOneWidget);
-    expect(find.byKey(const ValueKey('sync-badge-cloud')), findsNothing);
+    expect(find.byKey(const ValueKey('sync-badge-cloud')), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync-badge-onDevice')), findsNothing);
   });
 
   testWidgets('sync badge is accessible — icon + text, not colour alone', (

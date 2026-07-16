@@ -6,13 +6,13 @@ FROM node:20-alpine
 RUN apk add --no-cache ffmpeg
 
 WORKDIR /app
-COPY package.json ./
-# No third-party deps (Node built-ins + global fetch/FormData only), so there
-# is nothing to install — copy the source and run.
-COPY src ./src
+COPY services/ai-adapter/package.json ./services/ai-adapter/package.json
+COPY services/ai-common/src ./services/ai-common/src
+COPY services/ai-adapter/src ./services/ai-adapter/src
 
 ENV AI_ADAPTER_HOST=0.0.0.0 \
-    AI_ADAPTER_PORT=7005
+    AI_ADAPTER_PORT=7005 \
+    AI_ADAPTER_DATA_DIR=/var/lib/matome-ai/jobs
 
 EXPOSE 7005
-CMD ["node", "src/server.js"]
+CMD ["node", "services/ai-adapter/src/server.js"]

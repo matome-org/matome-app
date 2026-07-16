@@ -234,12 +234,17 @@ class Items extends Table {
       .withDefault(const Constant('not_requested'))();
   TextColumn get processingRunId =>
       text().named('processing_run_id').nullable()();
+  IntColumn get processingAttempt =>
+      integer().named('processing_attempt').withDefault(const Constant(0))();
   IntColumn get sourceRevision =>
       integer().named('source_revision').withDefault(const Constant(1))();
   IntColumn get processingConfigRevision =>
       integer().named('processing_config_revision').nullable()();
   TextColumn get processingOutputs =>
       text().named('processing_outputs').withDefault(const Constant('{}'))();
+  TextColumn get processingRequestedOutputs => text()
+      .named('processing_requested_outputs')
+      .withDefault(const Constant('[]'))();
   TextColumn get processingError =>
       text().named('processing_error').nullable()();
   TextColumn get processingErrorCode =>
