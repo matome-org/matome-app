@@ -4,7 +4,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'meeting_capture_backend.dart';
+import 'package:meeting_capture/meeting_capture.dart';
+
 import 'meeting_loopback_source.dart';
 
 typedef FfmpegSpawner =

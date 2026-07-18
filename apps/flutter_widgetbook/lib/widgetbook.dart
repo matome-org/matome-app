@@ -81,7 +81,7 @@ import 'package:matome_flutter/features/matome/matome_detail_controller.dart'
         matomeDetailControllerProvider;
 import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
-import 'package:matome_flutter/features/recording/meeting_capture_backend.dart';
+import 'package:meeting_capture/meeting_capture.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
 import 'package:matome_flutter/features/recording/recording_finish.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';

@@ -5,7 +5,7 @@ import 'dart:io';
 import 'dart:math';
 
 import '../../core/db/daos/recording_drafts_dao.dart';
-import 'meeting_capture_backend.dart';
+import 'package:meeting_capture/meeting_capture.dart';
 
 typedef MeetingStorageCapacityProbe = Future<int?> Function(String path);
 typedef MeetingArtifactDurabilityBarrier =

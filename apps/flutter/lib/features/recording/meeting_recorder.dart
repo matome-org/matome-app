@@ -2,43 +2,35 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:meeting_capture/meeting_capture.dart';
 
 import '../../core/providers.dart';
 import '../../core/storage/app_storage.dart';
 import '../home/inbox_upload.dart';
-import 'meeting_artifact_inspector.dart';
-import 'meeting_capture_backend.dart';
 import 'meeting_capture_finish.dart';
 import 'meeting_capture_service.dart';
-import 'meeting_loopback_source.dart';
-import 'meeting_recorder_backend.dart';
 
 const int _minimumMeetingFreeBytes = 64 * 1024 * 1024;
 
-final meetingLoopbackSourceProvider = Provider<MeetingLoopbackSource>(
-  (ref) => const MeetingLoopbackSource(),
-);
-
 final meetingCaptureBackendProvider = Provider<MeetingCaptureBackend>((ref) {
-  final backend = MeetingRecorderBackend(
-    loopback: ref.watch(meetingLoopbackSourceProvider),
-  );
+  final backend = MeetingCapturePlatform.instance.createBackend();
   ref.onDispose(() => unawaited(backend.dispose()));
   return backend;
 });
 
 final meetingCaptureCapabilityProvider =
     FutureProvider<MeetingCaptureCapability>(
-      (ref) => ref.watch(meetingCaptureBackendProvider).probe(),
+      (ref) => MeetingCapturePlatform.instance.probe(),
     );
 
 final meetingCaptureServiceProvider = Provider<MeetingCaptureService>((ref) {
-  final inspector = const LinuxMeetingArtifactInspector();
+  final inspectArtifact =
+      MeetingCapturePlatform.instance.createArtifactInspector();
   final service = MeetingCaptureService(
     draftsDao: ref.watch(recordingDraftsDaoProvider),
     backend: ref.watch(meetingCaptureBackendProvider),
     storageDirectory: _secureMeetingStorage,
-    inspectArtifact: inspector.call,
+    inspectArtifact: inspectArtifact,
     availableBytes: _availableBytes,
     durabilityBarrier: _syncPublishedArtifact,
     minimumAvailableBytes: _minimumMeetingFreeBytes,

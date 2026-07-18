@@ -1,0 +1,9 @@
+# Test runner config for the Linux meeting-capture implementation.
+#
+# The `linux_host` tag marks tests that shell out to the real ffmpeg/ffprobe/
+# pactl runtime on a Linux host. They are skipped by default; opt in with:
+#
+#   flutter test --run-skipped --tags linux_host
+tags:
+  linux_host:
+    skip: "Linux host gate — run with --run-skipped --tags linux_host"

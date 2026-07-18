@@ -37,6 +37,13 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
+  # Package-neutral meeting-capture facade (contract + platform interface).
+  # Only the FACADE is a real dependency; the Linux implementation is endorsed
+  # transitively and pulled in per-platform, so its ffmpeg/pactl code never
+  # enters Windows/macOS bundles. See packages/meeting_capture.
+  meeting_capture:
+    path: packages/meeting_capture
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -191,6 +198,15 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Linux meeting-capture implementation — TEST-ONLY. The live meeting e2e
+  # (test/recordings/live_meeting_processing_e2e_test.dart) drives the real
+  # ffmpeg/pactl backend directly. dev_dependencies are stripped from
+  # `flutter build`, so this does NOT put Linux code into release bundles, and
+  # it declares only the linux platform so it contributes no registrant
+  # elsewhere. No shipped app source may import this package (leak-guard grep).
+  meeting_capture_linux:
+    path: packages/meeting_capture_linux
 
   # On-device integration test harness. Used by the F3 audio de-risk
   # (integration_test/audio_recording_live_test.dart) to drive a REAL native

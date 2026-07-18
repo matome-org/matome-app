@@ -4,7 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../home/inbox_upload.dart';
-import 'meeting_capture_backend.dart';
+import 'package:meeting_capture/meeting_capture.dart';
 import 'meeting_capture_service.dart';
 
 typedef MeetingArtifactPersist =

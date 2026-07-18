@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/db/daos/recording_drafts_dao.dart';
-import 'package:matome_flutter/features/recording/meeting_capture_backend.dart';
+import 'package:meeting_capture/meeting_capture.dart';
 import 'package:matome_flutter/features/recording/meeting_capture_finish.dart';
 import 'package:matome_flutter/features/recording/meeting_capture_service.dart';
 

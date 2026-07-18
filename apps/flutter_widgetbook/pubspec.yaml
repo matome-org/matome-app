@@ -13,6 +13,8 @@ dependencies:
     sdk: flutter
   matome_flutter:
     path: ../flutter
+  meeting_capture:
+    path: ../flutter/packages/meeting_capture
   widgetbook: ^4.0.0-beta.8
 
 dev_dependencies:

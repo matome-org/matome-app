@@ -13,13 +13,13 @@ import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/features/auth/auth_models.dart';
 import 'package:matome_flutter/features/items/matome_item_type.dart';
-import 'package:matome_flutter/features/recording/meeting_artifact_inspector.dart';
-import 'package:matome_flutter/features/recording/meeting_loopback_source.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
+import 'package:meeting_capture/meeting_capture.dart';
+import 'package:meeting_capture_linux/meeting_capture_linux.dart';
 
 const _liveCoreUrl = String.fromEnvironment('LIVE_CORE_URL');
 const _password = 'correct horse battery staple';

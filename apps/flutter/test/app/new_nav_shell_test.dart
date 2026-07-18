@@ -12,8 +12,8 @@ import 'package:matome_flutter/app/shell_tabs.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/documents/document_open_policy.dart';
 import 'package:matome_flutter/features/home/inbox_upload.dart';
-import 'package:matome_flutter/features/recording/meeting_capture_backend.dart';
 import 'package:matome_flutter/features/recording/meeting_recorder.dart';
+import 'package:meeting_capture/meeting_capture.dart';
 import 'package:matome_flutter/features/shell/widgets/matome_nav.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 

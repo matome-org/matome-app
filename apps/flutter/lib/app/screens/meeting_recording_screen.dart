@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../features/recording/audio_recording_service.dart';
-import '../../features/recording/meeting_capture_backend.dart';
+import 'package:meeting_capture/meeting_capture.dart';
 import '../../features/recording/meeting_capture_finish.dart';
 import '../../features/recording/meeting_capture_service.dart';
 import '../../features/recording/meeting_recorder.dart';

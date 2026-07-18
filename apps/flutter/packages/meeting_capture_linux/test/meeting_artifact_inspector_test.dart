@@ -1,9 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matome_flutter/features/recording/meeting_artifact_inspector.dart';
-import 'package:matome_flutter/features/recording/meeting_capture_backend.dart';
-import 'package:matome_flutter/features/recording/meeting_loopback_source.dart';
+import 'package:meeting_capture/meeting_capture.dart';
+import 'package:meeting_capture_linux/meeting_capture_linux.dart';
 
 void main() {
   late Directory directory;
