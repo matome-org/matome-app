@@ -25,6 +25,9 @@ Future<ItemWithPayload> insertTestFileItem(
   int durationSeconds = 30,
   String localPath = '/tmp/item.m4a',
   String? filename,
+  String? originalExtension,
+  String? contentType,
+  String openPolicy = 'download_only',
   int byteSize = 0,
   int createdAt = 1000,
   int? coreId,
@@ -40,19 +43,18 @@ Future<ItemWithPayload> insertTestFileItem(
   final isQueueState =
       isUploadQueuePendingStatus(processingStatus) ||
       processingStatus.startsWith('blocked_');
-  final resolvedProcessingState = processingState?.wireName ?? switch (processingStatus) {
-    'processing' => 'processing',
-    'failed' => 'failed',
-    _ => 'succeeded',
-  };
+  final resolvedProcessingState =
+      processingState?.wireName ??
+      switch (processingStatus) {
+        'processing' => 'processing',
+        'failed' => 'failed',
+        _ => 'succeeded',
+      };
   final outputs = <String, dynamic>{
     if (summary != null)
       'summary': <String, dynamic>{'type': 'summary', 'markdown': summary},
     if (transcript != null)
-      'transcript': <String, dynamic>{
-        'type': 'transcript',
-        'text': transcript,
-      },
+      'transcript': <String, dynamic>{'type': 'transcript', 'text': transcript},
     if (description != null)
       'description': <String, dynamic>{
         'type': 'description',
@@ -92,11 +94,16 @@ Future<ItemWithPayload> insertTestFileItem(
     file: FileBlobsCompanion.insert(
       id: payloadId,
       filename: Value(filename),
+      originalExtension: Value(
+        originalExtension ?? _extensionFromFilename(filename),
+      ),
+      contentType: Value(contentType),
       byteSize: Value(byteSize),
       mediaType: mediaType,
       duration: Value(durationSeconds),
       uploadState: Value(coreId == null ? 'pending' : 'uploaded'),
       uploadedAt: Value(coreId == null ? null : createdAt),
+      openPolicy: Value(openPolicy),
       localPath: Value(localPath),
       wrappedFek: Value(wrappedFek),
       fileNoncePrefix: Value(fileNoncePrefix),
@@ -106,6 +113,13 @@ Future<ItemWithPayload> insertTestFileItem(
     ),
   );
   return (await db.itemsDao.getById(id, ownerId))!;
+}
+
+String? _extensionFromFilename(String? filename) {
+  if (filename == null) return null;
+  final dot = filename.lastIndexOf('.');
+  if (dot <= 0 || dot == filename.length - 1) return null;
+  return filename.substring(dot + 1).toLowerCase();
 }
 
 Future<ItemWithPayload> insertTestTextItem(

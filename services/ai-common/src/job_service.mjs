@@ -228,12 +228,14 @@ function validateJob(job, capabilities, { production, dispatchToken }) {
       "checksum_sha256",
       "content_type",
       "expires_at",
+      "filename",
       "method",
       "url"
     ]);
     const media = job.input.media;
     if (media.method !== "GET" || !validUrl(media.url)) invalid();
     if (!boundedString(media.expires_at, 64)) invalid();
+    if (!boundedString(media.filename, 4_096)) invalid();
     if (!capability.content_types.includes(media.content_type)) {
       throw new HttpError(422, "capability_mismatch", "The input content type is not advertised.");
     }

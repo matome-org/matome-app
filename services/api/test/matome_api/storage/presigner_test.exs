@@ -96,4 +96,10 @@ defmodule MatomeApi.Storage.PresignerTest do
                Presigner.presign_upload(@owner_key, content_length: -5)
     end
   end
+
+  test "document download expiry cannot exceed five minutes" do
+    assert {:ok, download} = Presigner.presign_download(@owner_key, expires_in: 3_600)
+    assert download.expires_in == 300
+    assert URI.decode_query(URI.parse(download.url).query)["X-Amz-Expires"] == "300"
+  end
 end

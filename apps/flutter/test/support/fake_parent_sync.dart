@@ -24,6 +24,7 @@ class _TestParentRepository extends MatomesRepository {
 
   @override
   Future<Matome> createMatome({
+    required String clientId,
     required String title,
     int? workspaceId,
     DateTime? happenedAt,

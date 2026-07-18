@@ -13,9 +13,8 @@ import '../i18n/strings.g.dart';
 ///     an unknown extension falls back to a generic file icon,
 ///   * the [fileName] and a [sizeLabel] (or an em-dash placeholder when the size
 ///     is unknown),
-///   * an **"Open" affordance rendered DISABLED** with a "soon" tag — preview /
-///     open is a deferred wave (#1455), so the button carries a null handler and
-///     can never route into a path that does not exist yet.
+///   * a policy-derived external open/download action. It never renders file
+///     contents internally.
 ///
 /// Strictly presentational: it reads its theme through
 /// `context.colors/spacing/radius/typography` only. The host maps the recording
@@ -26,6 +25,9 @@ class FileTypeChip extends StatelessWidget {
     required this.fileName,
     this.extension,
     this.sizeLabel,
+    this.action = FileTypeChipAction.open,
+    this.state = FileTypeChipState.ready,
+    this.onAction,
   });
 
   /// The display file name (e.g. `Q3 roadmap.pdf`).
@@ -38,6 +40,9 @@ class FileTypeChip extends StatelessWidget {
   /// A pre-formatted human size (e.g. `2.4 MB`). Null renders the unknown-size
   /// placeholder rather than a blank slot.
   final String? sizeLabel;
+  final FileTypeChipAction action;
+  final FileTypeChipState state;
+  final VoidCallback? onAction;
 
   /// Pure extension → icon mapping. Kept static so widget tests can assert the
   /// chosen glyph per extension without pumping the widget, and so the mapping
@@ -110,7 +115,7 @@ class FileTypeChip extends StatelessWidget {
             ),
           ),
           SizedBox(width: spacing.sm),
-          const _OpenSoon(),
+          _OpenAction(action: action, state: state, onAction: onAction),
         ],
       ),
     );
@@ -145,11 +150,26 @@ class _TypeIcon extends StatelessWidget {
   }
 }
 
-/// The DISABLED "Open" affordance with a trailing "soon" tag. Open/preview is a
-/// deferred wave (#1455); the button carries a null handler so it reads as
-/// available-soon without routing anywhere.
-class _OpenSoon extends StatelessWidget {
-  const _OpenSoon();
+enum FileTypeChipAction {
+  open,
+  openInApp,
+  download,
+  downloadWithWarning,
+  unavailable,
+}
+
+enum FileTypeChipState { ready, loading, failed, disabled }
+
+class _OpenAction extends StatelessWidget {
+  const _OpenAction({
+    required this.action,
+    required this.state,
+    required this.onAction,
+  });
+
+  final FileTypeChipAction action;
+  final FileTypeChipState state;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -158,39 +178,86 @@ class _OpenSoon extends StatelessWidget {
     final radius = context.radius;
     final typography = context.typography;
 
+    final label = switch ((state, action)) {
+      (FileTypeChipState.failed, _) => t.common.retry,
+      (FileTypeChipState.disabled, _) => t.fileView.fileChip.unavailable,
+      (_, FileTypeChipAction.open) => t.fileView.fileChip.open,
+      (_, FileTypeChipAction.openInApp) => t.fileView.fileChip.openInApp,
+      (
+        _,
+        FileTypeChipAction.download || FileTypeChipAction.downloadWithWarning,
+      ) =>
+        t.fileView.fileChip.download,
+      (_, FileTypeChipAction.unavailable) => t.fileView.fileChip.unavailable,
+    };
+    final icon = switch ((state, action)) {
+      (FileTypeChipState.disabled, _) ||
+      (_, FileTypeChipAction.unavailable) => Icons.block_outlined,
+      (_, FileTypeChipAction.open) => Icons.open_in_new,
+      (_, FileTypeChipAction.openInApp) => Icons.launch,
+      (
+        _,
+        FileTypeChipAction.download || FileTypeChipAction.downloadWithWarning,
+      ) =>
+        Icons.download_outlined,
+    };
+    final enabled =
+        state != FileTypeChipState.loading &&
+        state != FileTypeChipState.disabled &&
+        action != FileTypeChipAction.unavailable &&
+        onAction != null;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        TextButton.icon(
-          key: const ValueKey('file-type-chip-open'),
-          // Disabled: open/preview is deferred (#1455).
-          onPressed: null,
-          icon: Icon(Icons.open_in_new, size: typography.label.fontSize),
-          label: Text(t.fileView.fileChip.open),
-          style: TextButton.styleFrom(
-            foregroundColor: colors.textSecondary,
-            disabledForegroundColor: colors.textMuted,
-            padding: EdgeInsets.symmetric(
-              horizontal: spacing.sm,
-              vertical: spacing.xs,
+        if (state == FileTypeChipState.loading)
+          SizedBox.square(
+            dimension: typography.title.fontSize,
+            child: CircularProgressIndicator(
+              key: const ValueKey('file-type-chip-loading'),
+              strokeWidth: spacing.xxs,
+            ),
+          )
+        else
+          TextButton.icon(
+            key: const ValueKey('file-type-chip-open'),
+            onPressed: enabled ? onAction : null,
+            icon: Icon(icon, size: typography.label.fontSize),
+            label: Text(label),
+            style: TextButton.styleFrom(
+              foregroundColor: colors.textSecondary,
+              disabledForegroundColor: colors.textMuted,
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.sm,
+                vertical: spacing.xs,
+              ),
             ),
           ),
-        ),
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: spacing.xs,
-            vertical: spacing.xxs,
+        if (state == FileTypeChipState.failed)
+          Text(
+            t.fileView.fileChip.openFailed,
+            key: const ValueKey('file-type-chip-error'),
+            style: typography.label.copyWith(color: colors.failed),
           ),
-          decoration: BoxDecoration(
-            color: colors.subtleFill,
-            borderRadius: BorderRadius.circular(radius.pill),
+        if (action == FileTypeChipAction.downloadWithWarning)
+          Container(
+            constraints: BoxConstraints(maxWidth: spacing.xxl * 4),
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.xs,
+              vertical: spacing.xxs,
+            ),
+            decoration: BoxDecoration(
+              color: colors.subtleFill,
+              borderRadius: BorderRadius.circular(radius.sm),
+            ),
+            child: Text(
+              t.fileView.fileChip.activeContentWarning,
+              key: const ValueKey('file-type-chip-warning'),
+              textAlign: TextAlign.end,
+              style: typography.label.copyWith(color: colors.textSecondary),
+            ),
           ),
-          child: Text(
-            t.fileView.fileChip.soon,
-            style: typography.label.copyWith(color: colors.textMuted),
-          ),
-        ),
       ],
     );
   }

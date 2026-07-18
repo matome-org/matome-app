@@ -932,8 +932,8 @@ class _FileTypeChipSample extends StatelessWidget {
   Widget build(BuildContext context) {
     // The doc media header across its three icon families: a known doc type
     // (.pdf), a markdown note (.md), and an unknown extension that falls back to
-    // the generic file glyph — each with the DISABLED "Open" / "soon" affordance.
-    return const Column(
+    // policy-derived open, loading, active-content warning, and failure states.
+    return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -941,19 +941,38 @@ class _FileTypeChipSample extends StatelessWidget {
           fileName: 'Q3 roadmap.pdf',
           extension: 'pdf',
           sizeLabel: '2.4 MB',
+          onAction: _ignoreGoldenAction,
         ),
         SizedBox(height: 12),
         FileTypeChip(
-          fileName: 'meeting-notes.md',
-          extension: 'md',
-          sizeLabel: '4 KB',
+          fileName: 'budget.xlsx',
+          extension: 'xlsx',
+          sizeLabel: '84 KB',
+          action: FileTypeChipAction.openInApp,
+          state: FileTypeChipState.loading,
         ),
         SizedBox(height: 12),
-        FileTypeChip(fileName: 'archive.xyz', extension: 'xyz'),
+        FileTypeChip(
+          fileName: 'page.html',
+          extension: 'html',
+          sizeLabel: '12 KB',
+          action: FileTypeChipAction.downloadWithWarning,
+          onAction: _ignoreGoldenAction,
+        ),
+        SizedBox(height: 12),
+        FileTypeChip(
+          fileName: 'archive.xyz',
+          extension: 'xyz',
+          action: FileTypeChipAction.download,
+          state: FileTypeChipState.failed,
+          onAction: _ignoreGoldenAction,
+        ),
       ],
     );
   }
 }
+
+void _ignoreGoldenAction() {}
 
 /// Golden for the shared relationship atoms (#1460): the filled [MatomeChip]
 /// vs the outlined [SpaceChip] (and their Unfiled / Inbox empty states), the
@@ -1026,38 +1045,38 @@ class _RelationshipPickerSample extends StatelessWidget {
         ),
         child: const RelationshipPicker(
           maxListHeight: 200,
-        data: RelationshipPickerData(
-          title: 'Add people',
-          mode: RelationshipSelectMode.multi,
-          searchHint: 'Search contacts',
-          actions: [
-            RelationshipAction(
-              id: 'create',
-              label: 'Create new contact',
-              icon: Icons.person_add_alt_1_outlined,
-            ),
-          ],
-          candidates: [
-            RelationshipCandidate(
-              id: 'ana',
-              title: 'Ana Ribeiro',
-              subtitle: 'Organizer',
-              icon: Icons.person_outline,
-              linked: true,
-            ),
-            RelationshipCandidate(
-              id: 'ken',
-              title: 'Ken Watanabe',
-              subtitle: 'ken@studio.jp',
-              icon: Icons.person_outline,
-            ),
-            RelationshipCandidate(
-              id: 'mara',
-              title: 'Mara Lopes',
-              subtitle: 'Design',
-              icon: Icons.person_outline,
-            ),
-          ],
+          data: RelationshipPickerData(
+            title: 'Add people',
+            mode: RelationshipSelectMode.multi,
+            searchHint: 'Search contacts',
+            actions: [
+              RelationshipAction(
+                id: 'create',
+                label: 'Create new contact',
+                icon: Icons.person_add_alt_1_outlined,
+              ),
+            ],
+            candidates: [
+              RelationshipCandidate(
+                id: 'ana',
+                title: 'Ana Ribeiro',
+                subtitle: 'Organizer',
+                icon: Icons.person_outline,
+                linked: true,
+              ),
+              RelationshipCandidate(
+                id: 'ken',
+                title: 'Ken Watanabe',
+                subtitle: 'ken@studio.jp',
+                icon: Icons.person_outline,
+              ),
+              RelationshipCandidate(
+                id: 'mara',
+                title: 'Mara Lopes',
+                subtitle: 'Design',
+                icon: Icons.person_outline,
+              ),
+            ],
           ),
         ),
       ),
@@ -1286,7 +1305,8 @@ const _contactDetailFull = ContactDetailData(
   title: 'Product Lead',
   email: 'ana.ribeiro@acme.com',
   phone: '+55 11 99876-5432',
-  notes: 'Met at the Q2 offsite. Owns the billing roadmap; loops in Ken for '
+  notes:
+      'Met at the Q2 offsite. Owns the billing roadmap; loops in Ken for '
       'anything pricing-related. Prefers async updates.',
   matomes: [
     ContactMatomeRef(
@@ -1311,11 +1331,20 @@ const _contactDetailFull = ContactDetailData(
   spaces: ['Marketing', 'Sales'],
   files: [
     ContactFileRef(
-        id: 'f1', name: 'Q3 roadmap.pdf', kind: ContactFileKind.document),
+      id: 'f1',
+      name: 'Q3 roadmap.pdf',
+      kind: ContactFileKind.document,
+    ),
     ContactFileRef(
-        id: 'f2', name: 'Design sync.m4a', kind: ContactFileKind.audio),
+      id: 'f2',
+      name: 'Design sync.m4a',
+      kind: ContactFileKind.audio,
+    ),
     ContactFileRef(
-        id: 'f3', name: 'whiteboard.jpg', kind: ContactFileKind.image),
+      id: 'f3',
+      name: 'whiteboard.jpg',
+      kind: ContactFileKind.image,
+    ),
   ],
 );
 
@@ -1509,8 +1538,8 @@ FileViewData _fileViewSampleData(_FileViewSample sample) {
       place: 'Work',
       syncCoreId: 51,
       processingStatus: 'done',
-      // The doc media header is supplied by the host as a FileTypeChip; preview
-      // is deferred (#1455) and the stub summary converges on the empty state.
+      // The host supplies safe external actions through FileTypeChip; the app
+      // intentionally has no internal document preview.
       mediaHeader: FileTypeChip(
         fileName: 'Q3 roadmap.pdf',
         extension: 'pdf',
@@ -1526,7 +1555,8 @@ FileViewData _fileViewSampleData(_FileViewSample sample) {
       syncCoreId: 7,
       processingStatus: 'done',
       contentsState: ContentsState.ready,
-      contentsText: 'Decisions, owners, and next steps from the product review.',
+      contentsText:
+          'Decisions, owners, and next steps from the product review.',
       notesText:
           'My own follow-ups: ping infra about the staging quota, draft the '
           'rollout note, and book the retro for Friday.',

@@ -264,6 +264,7 @@ class MatomeSyncService {
     }
 
     final created = await _matomesRepo.createMatome(
+      clientId: matome.id,
       title: matome.title,
       workspaceId: coreWorkspaceId,
       happenedAt: DateTime.fromMillisecondsSinceEpoch(matome.happenedAt),

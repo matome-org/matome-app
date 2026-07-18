@@ -51,6 +51,7 @@ class MatomesRepository {
   /// `POST /api/matomes` (Bearer). Creates the remote Matome and returns it
   /// (carrying the freshly-minted Core id reconciled into `matomes.core_id`).
   Future<Matome> createMatome({
+    required String clientId,
     required String title,
     int? workspaceId,
     DateTime? happenedAt,
@@ -61,6 +62,7 @@ class MatomesRepository {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/api/matomes',
         data: <String, dynamic>{
+          'client_id': clientId,
           'title': title,
           'workspace_id': ?workspaceId,
           'happened_at': ?happenedAt?.toUtc().toIso8601String(),

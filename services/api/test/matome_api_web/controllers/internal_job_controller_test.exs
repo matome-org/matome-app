@@ -65,6 +65,85 @@ defmodule MatomeApiWeb.InternalJobControllerTest do
            |> json_response(404) == %{"error" => "not_found"}
   end
 
+  test "a signed persisted revision-one callback is stale after a body revision", %{conn: conn} do
+    {:ok, %{user: user}} =
+      Auth.register_user(%{
+        email: "callback-text-#{System.unique_integer([:positive])}@example.com",
+        password: @password
+      })
+
+    {:ok, item} =
+      Content.create_text_item(user, nil, %{client_id: "callback-text", body: "Revision one"})
+
+    {:ok, revision_one} = Content.enqueue_item_processing(user, item.id)
+
+    {:ok, _payload} =
+      Content.ai_dispatch_payload(
+        item.id,
+        revision_one.processing_run_id,
+        revision_one.source_revision
+      )
+
+    revision_one_callback = %{
+      "contract_version" => "1",
+      "job_id" => Content.processing_job_id(revision_one.processing_run_id),
+      "run_id" => revision_one.processing_run_id,
+      "item_id" => item.id,
+      "input_revision" => 1,
+      "status" => "done",
+      "outputs" => [
+        %{"type" => "summary", "markdown" => "Stale summary"},
+        %{"type" => "title", "text" => "Stale title"}
+      ]
+    }
+
+    assert {:ok, revision_two} = Content.update_text_item(user, item.id, "Revision two", 1)
+    assert revision_two.source_revision == 2
+    assert revision_two.processing_outputs == %{}
+
+    assert conn
+           |> put_req_header(
+             "authorization",
+             "Bearer #{callback_identity(revision_one_callback)}"
+           )
+           |> post(callback_path(revision_one_callback), revision_one_callback)
+           |> response(204) == ""
+
+    stale_checked = Content.get_item(user, item.id)
+    assert stale_checked.source_revision == 2
+    assert stale_checked.processing_state == :not_requested
+    assert stale_checked.processing_outputs == %{}
+
+    assert {:ok, current} = Content.enqueue_item_processing(user, item.id)
+    assert current.source_revision == 2
+    assert current.processing_run_id != revision_one.processing_run_id
+
+    {:ok, _payload} =
+      Content.ai_dispatch_payload(item.id, current.processing_run_id, current.source_revision)
+
+    current_callback = %{
+      "contract_version" => "1",
+      "job_id" => Content.processing_job_id(current.processing_run_id),
+      "run_id" => current.processing_run_id,
+      "item_id" => item.id,
+      "input_revision" => 2,
+      "status" => "done",
+      "outputs" => [
+        %{"type" => "summary", "markdown" => "Current summary"},
+        %{"type" => "title", "text" => "Current title"}
+      ]
+    }
+
+    assert build_conn()
+           |> put_req_header("authorization", "Bearer #{callback_identity(current_callback)}")
+           |> post(callback_path(current_callback), current_callback)
+           |> response(204) == ""
+
+    succeeded = Content.get_item(user, item.id)
+    assert succeeded.processing_state == :succeeded
+    assert succeeded.processing_outputs["summary"]["markdown"] == "Current summary"
+  end
+
   defp queued_callback_fixture do
     {:ok, %{user: user}} =
       Auth.register_user(%{
@@ -79,6 +158,7 @@ defmodule MatomeApiWeb.InternalJobControllerTest do
         byte_size: 123,
         checksum_sha256: String.duplicate("a", 64),
         content_type: "audio/wav",
+        filename: "callback.wav",
         media_type: "audio"
       })
 

@@ -507,12 +507,109 @@ class $RecordingDraftsTable extends RecordingDrafts
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<String> sessionId = GeneratedColumn<String>(
+    'session_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('legacy'),
+  );
+  static const VerificationMeta _captureKindMeta = const VerificationMeta(
+    'captureKind',
+  );
+  @override
+  late final GeneratedColumn<String> captureKind = GeneratedColumn<String>(
+    'capture_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('microphone'),
+  );
+  static const VerificationMeta _backendMeta = const VerificationMeta(
+    'backend',
+  );
+  @override
+  late final GeneratedColumn<String> backend = GeneratedColumn<String>(
+    'backend',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('record'),
+  );
+  static const VerificationMeta _stagingPathMeta = const VerificationMeta(
+    'stagingPath',
+  );
+  @override
+  late final GeneratedColumn<String> stagingPath = GeneratedColumn<String>(
+    'staging_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _finalPathMeta = const VerificationMeta(
+    'finalPath',
+  );
+  @override
+  late final GeneratedColumn<String> finalPath = GeneratedColumn<String>(
+    'final_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _codecMeta = const VerificationMeta('codec');
+  @override
+  late final GeneratedColumn<String> codec = GeneratedColumn<String>(
+    'codec',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('aac_lc'),
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('paused'),
+  );
+  static const VerificationMeta _heartbeatAtMeta = const VerificationMeta(
+    'heartbeatAt',
+  );
+  @override
+  late final GeneratedColumn<String> heartbeatAt = GeneratedColumn<String>(
+    'heartbeat_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
     createdAt,
     segmentsJson,
     durationMs,
+    sessionId,
+    captureKind,
+    backend,
+    stagingPath,
+    finalPath,
+    codec,
+    state,
+    heartbeatAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -554,6 +651,63 @@ class $RecordingDraftsTable extends RecordingDrafts
         durationMs.isAcceptableOrUnknown(data['duration_ms']!, _durationMsMeta),
       );
     }
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    }
+    if (data.containsKey('capture_kind')) {
+      context.handle(
+        _captureKindMeta,
+        captureKind.isAcceptableOrUnknown(
+          data['capture_kind']!,
+          _captureKindMeta,
+        ),
+      );
+    }
+    if (data.containsKey('backend')) {
+      context.handle(
+        _backendMeta,
+        backend.isAcceptableOrUnknown(data['backend']!, _backendMeta),
+      );
+    }
+    if (data.containsKey('staging_path')) {
+      context.handle(
+        _stagingPathMeta,
+        stagingPath.isAcceptableOrUnknown(
+          data['staging_path']!,
+          _stagingPathMeta,
+        ),
+      );
+    }
+    if (data.containsKey('final_path')) {
+      context.handle(
+        _finalPathMeta,
+        finalPath.isAcceptableOrUnknown(data['final_path']!, _finalPathMeta),
+      );
+    }
+    if (data.containsKey('codec')) {
+      context.handle(
+        _codecMeta,
+        codec.isAcceptableOrUnknown(data['codec']!, _codecMeta),
+      );
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    }
+    if (data.containsKey('heartbeat_at')) {
+      context.handle(
+        _heartbeatAtMeta,
+        heartbeatAt.isAcceptableOrUnknown(
+          data['heartbeat_at']!,
+          _heartbeatAtMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -579,6 +733,38 @@ class $RecordingDraftsTable extends RecordingDrafts
         DriftSqlType.int,
         data['${effectivePrefix}duration_ms'],
       )!,
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}session_id'],
+      )!,
+      captureKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}capture_kind'],
+      )!,
+      backend: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}backend'],
+      )!,
+      stagingPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}staging_path'],
+      ),
+      finalPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}final_path'],
+      ),
+      codec: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}codec'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      heartbeatAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}heartbeat_at'],
+      ),
     );
   }
 
@@ -594,11 +780,27 @@ class RecordingDraftRow extends DataClass
   final String createdAt;
   final String segmentsJson;
   final int durationMs;
+  final String sessionId;
+  final String captureKind;
+  final String backend;
+  final String? stagingPath;
+  final String? finalPath;
+  final String codec;
+  final String state;
+  final String? heartbeatAt;
   const RecordingDraftRow({
     required this.id,
     required this.createdAt,
     required this.segmentsJson,
     required this.durationMs,
+    required this.sessionId,
+    required this.captureKind,
+    required this.backend,
+    this.stagingPath,
+    this.finalPath,
+    required this.codec,
+    required this.state,
+    this.heartbeatAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -607,6 +809,20 @@ class RecordingDraftRow extends DataClass
     map['created_at'] = Variable<String>(createdAt);
     map['segments_json'] = Variable<String>(segmentsJson);
     map['duration_ms'] = Variable<int>(durationMs);
+    map['session_id'] = Variable<String>(sessionId);
+    map['capture_kind'] = Variable<String>(captureKind);
+    map['backend'] = Variable<String>(backend);
+    if (!nullToAbsent || stagingPath != null) {
+      map['staging_path'] = Variable<String>(stagingPath);
+    }
+    if (!nullToAbsent || finalPath != null) {
+      map['final_path'] = Variable<String>(finalPath);
+    }
+    map['codec'] = Variable<String>(codec);
+    map['state'] = Variable<String>(state);
+    if (!nullToAbsent || heartbeatAt != null) {
+      map['heartbeat_at'] = Variable<String>(heartbeatAt);
+    }
     return map;
   }
 
@@ -616,6 +832,20 @@ class RecordingDraftRow extends DataClass
       createdAt: Value(createdAt),
       segmentsJson: Value(segmentsJson),
       durationMs: Value(durationMs),
+      sessionId: Value(sessionId),
+      captureKind: Value(captureKind),
+      backend: Value(backend),
+      stagingPath: stagingPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stagingPath),
+      finalPath: finalPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(finalPath),
+      codec: Value(codec),
+      state: Value(state),
+      heartbeatAt: heartbeatAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(heartbeatAt),
     );
   }
 
@@ -629,6 +859,14 @@ class RecordingDraftRow extends DataClass
       createdAt: serializer.fromJson<String>(json['createdAt']),
       segmentsJson: serializer.fromJson<String>(json['segmentsJson']),
       durationMs: serializer.fromJson<int>(json['durationMs']),
+      sessionId: serializer.fromJson<String>(json['sessionId']),
+      captureKind: serializer.fromJson<String>(json['captureKind']),
+      backend: serializer.fromJson<String>(json['backend']),
+      stagingPath: serializer.fromJson<String?>(json['stagingPath']),
+      finalPath: serializer.fromJson<String?>(json['finalPath']),
+      codec: serializer.fromJson<String>(json['codec']),
+      state: serializer.fromJson<String>(json['state']),
+      heartbeatAt: serializer.fromJson<String?>(json['heartbeatAt']),
     );
   }
   @override
@@ -639,6 +877,14 @@ class RecordingDraftRow extends DataClass
       'createdAt': serializer.toJson<String>(createdAt),
       'segmentsJson': serializer.toJson<String>(segmentsJson),
       'durationMs': serializer.toJson<int>(durationMs),
+      'sessionId': serializer.toJson<String>(sessionId),
+      'captureKind': serializer.toJson<String>(captureKind),
+      'backend': serializer.toJson<String>(backend),
+      'stagingPath': serializer.toJson<String?>(stagingPath),
+      'finalPath': serializer.toJson<String?>(finalPath),
+      'codec': serializer.toJson<String>(codec),
+      'state': serializer.toJson<String>(state),
+      'heartbeatAt': serializer.toJson<String?>(heartbeatAt),
     };
   }
 
@@ -647,11 +893,27 @@ class RecordingDraftRow extends DataClass
     String? createdAt,
     String? segmentsJson,
     int? durationMs,
+    String? sessionId,
+    String? captureKind,
+    String? backend,
+    Value<String?> stagingPath = const Value.absent(),
+    Value<String?> finalPath = const Value.absent(),
+    String? codec,
+    String? state,
+    Value<String?> heartbeatAt = const Value.absent(),
   }) => RecordingDraftRow(
     id: id ?? this.id,
     createdAt: createdAt ?? this.createdAt,
     segmentsJson: segmentsJson ?? this.segmentsJson,
     durationMs: durationMs ?? this.durationMs,
+    sessionId: sessionId ?? this.sessionId,
+    captureKind: captureKind ?? this.captureKind,
+    backend: backend ?? this.backend,
+    stagingPath: stagingPath.present ? stagingPath.value : this.stagingPath,
+    finalPath: finalPath.present ? finalPath.value : this.finalPath,
+    codec: codec ?? this.codec,
+    state: state ?? this.state,
+    heartbeatAt: heartbeatAt.present ? heartbeatAt.value : this.heartbeatAt,
   );
   RecordingDraftRow copyWithCompanion(RecordingDraftsCompanion data) {
     return RecordingDraftRow(
@@ -663,6 +925,20 @@ class RecordingDraftRow extends DataClass
       durationMs: data.durationMs.present
           ? data.durationMs.value
           : this.durationMs,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      captureKind: data.captureKind.present
+          ? data.captureKind.value
+          : this.captureKind,
+      backend: data.backend.present ? data.backend.value : this.backend,
+      stagingPath: data.stagingPath.present
+          ? data.stagingPath.value
+          : this.stagingPath,
+      finalPath: data.finalPath.present ? data.finalPath.value : this.finalPath,
+      codec: data.codec.present ? data.codec.value : this.codec,
+      state: data.state.present ? data.state.value : this.state,
+      heartbeatAt: data.heartbeatAt.present
+          ? data.heartbeatAt.value
+          : this.heartbeatAt,
     );
   }
 
@@ -672,13 +948,34 @@ class RecordingDraftRow extends DataClass
           ..write('id: $id, ')
           ..write('createdAt: $createdAt, ')
           ..write('segmentsJson: $segmentsJson, ')
-          ..write('durationMs: $durationMs')
+          ..write('durationMs: $durationMs, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('captureKind: $captureKind, ')
+          ..write('backend: $backend, ')
+          ..write('stagingPath: $stagingPath, ')
+          ..write('finalPath: $finalPath, ')
+          ..write('codec: $codec, ')
+          ..write('state: $state, ')
+          ..write('heartbeatAt: $heartbeatAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, createdAt, segmentsJson, durationMs);
+  int get hashCode => Object.hash(
+    id,
+    createdAt,
+    segmentsJson,
+    durationMs,
+    sessionId,
+    captureKind,
+    backend,
+    stagingPath,
+    finalPath,
+    codec,
+    state,
+    heartbeatAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -686,7 +983,15 @@ class RecordingDraftRow extends DataClass
           other.id == this.id &&
           other.createdAt == this.createdAt &&
           other.segmentsJson == this.segmentsJson &&
-          other.durationMs == this.durationMs);
+          other.durationMs == this.durationMs &&
+          other.sessionId == this.sessionId &&
+          other.captureKind == this.captureKind &&
+          other.backend == this.backend &&
+          other.stagingPath == this.stagingPath &&
+          other.finalPath == this.finalPath &&
+          other.codec == this.codec &&
+          other.state == this.state &&
+          other.heartbeatAt == this.heartbeatAt);
 }
 
 class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
@@ -694,17 +999,41 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
   final Value<String> createdAt;
   final Value<String> segmentsJson;
   final Value<int> durationMs;
+  final Value<String> sessionId;
+  final Value<String> captureKind;
+  final Value<String> backend;
+  final Value<String?> stagingPath;
+  final Value<String?> finalPath;
+  final Value<String> codec;
+  final Value<String> state;
+  final Value<String?> heartbeatAt;
   const RecordingDraftsCompanion({
     this.id = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.segmentsJson = const Value.absent(),
     this.durationMs = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.captureKind = const Value.absent(),
+    this.backend = const Value.absent(),
+    this.stagingPath = const Value.absent(),
+    this.finalPath = const Value.absent(),
+    this.codec = const Value.absent(),
+    this.state = const Value.absent(),
+    this.heartbeatAt = const Value.absent(),
   });
   RecordingDraftsCompanion.insert({
     this.id = const Value.absent(),
     required String createdAt,
     required String segmentsJson,
     this.durationMs = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.captureKind = const Value.absent(),
+    this.backend = const Value.absent(),
+    this.stagingPath = const Value.absent(),
+    this.finalPath = const Value.absent(),
+    this.codec = const Value.absent(),
+    this.state = const Value.absent(),
+    this.heartbeatAt = const Value.absent(),
   }) : createdAt = Value(createdAt),
        segmentsJson = Value(segmentsJson);
   static Insertable<RecordingDraftRow> custom({
@@ -712,12 +1041,28 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
     Expression<String>? createdAt,
     Expression<String>? segmentsJson,
     Expression<int>? durationMs,
+    Expression<String>? sessionId,
+    Expression<String>? captureKind,
+    Expression<String>? backend,
+    Expression<String>? stagingPath,
+    Expression<String>? finalPath,
+    Expression<String>? codec,
+    Expression<String>? state,
+    Expression<String>? heartbeatAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (createdAt != null) 'created_at': createdAt,
       if (segmentsJson != null) 'segments_json': segmentsJson,
       if (durationMs != null) 'duration_ms': durationMs,
+      if (sessionId != null) 'session_id': sessionId,
+      if (captureKind != null) 'capture_kind': captureKind,
+      if (backend != null) 'backend': backend,
+      if (stagingPath != null) 'staging_path': stagingPath,
+      if (finalPath != null) 'final_path': finalPath,
+      if (codec != null) 'codec': codec,
+      if (state != null) 'state': state,
+      if (heartbeatAt != null) 'heartbeat_at': heartbeatAt,
     });
   }
 
@@ -726,12 +1071,28 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
     Value<String>? createdAt,
     Value<String>? segmentsJson,
     Value<int>? durationMs,
+    Value<String>? sessionId,
+    Value<String>? captureKind,
+    Value<String>? backend,
+    Value<String?>? stagingPath,
+    Value<String?>? finalPath,
+    Value<String>? codec,
+    Value<String>? state,
+    Value<String?>? heartbeatAt,
   }) {
     return RecordingDraftsCompanion(
       id: id ?? this.id,
       createdAt: createdAt ?? this.createdAt,
       segmentsJson: segmentsJson ?? this.segmentsJson,
       durationMs: durationMs ?? this.durationMs,
+      sessionId: sessionId ?? this.sessionId,
+      captureKind: captureKind ?? this.captureKind,
+      backend: backend ?? this.backend,
+      stagingPath: stagingPath ?? this.stagingPath,
+      finalPath: finalPath ?? this.finalPath,
+      codec: codec ?? this.codec,
+      state: state ?? this.state,
+      heartbeatAt: heartbeatAt ?? this.heartbeatAt,
     );
   }
 
@@ -750,6 +1111,30 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
     if (durationMs.present) {
       map['duration_ms'] = Variable<int>(durationMs.value);
     }
+    if (sessionId.present) {
+      map['session_id'] = Variable<String>(sessionId.value);
+    }
+    if (captureKind.present) {
+      map['capture_kind'] = Variable<String>(captureKind.value);
+    }
+    if (backend.present) {
+      map['backend'] = Variable<String>(backend.value);
+    }
+    if (stagingPath.present) {
+      map['staging_path'] = Variable<String>(stagingPath.value);
+    }
+    if (finalPath.present) {
+      map['final_path'] = Variable<String>(finalPath.value);
+    }
+    if (codec.present) {
+      map['codec'] = Variable<String>(codec.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (heartbeatAt.present) {
+      map['heartbeat_at'] = Variable<String>(heartbeatAt.value);
+    }
     return map;
   }
 
@@ -759,7 +1144,15 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
           ..write('id: $id, ')
           ..write('createdAt: $createdAt, ')
           ..write('segmentsJson: $segmentsJson, ')
-          ..write('durationMs: $durationMs')
+          ..write('durationMs: $durationMs, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('captureKind: $captureKind, ')
+          ..write('backend: $backend, ')
+          ..write('stagingPath: $stagingPath, ')
+          ..write('finalPath: $finalPath, ')
+          ..write('codec: $codec, ')
+          ..write('state: $state, ')
+          ..write('heartbeatAt: $heartbeatAt')
           ..write(')'))
         .toString();
   }
@@ -3565,6 +3958,18 @@ class $FileBlobsTable extends FileBlobs
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _originalExtensionMeta = const VerificationMeta(
+    'originalExtension',
+  );
+  @override
+  late final GeneratedColumn<String> originalExtension =
+      GeneratedColumn<String>(
+        'original_extension',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _contentTypeMeta = const VerificationMeta(
     'contentType',
   );
@@ -3667,6 +4072,18 @@ class $FileBlobsTable extends FileBlobs
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _openPolicyMeta = const VerificationMeta(
+    'openPolicy',
+  );
+  @override
+  late final GeneratedColumn<String> openPolicy = GeneratedColumn<String>(
+    'open_policy',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('download_only'),
+  );
   static const VerificationMeta _localPathMeta = const VerificationMeta(
     'localPath',
   );
@@ -3743,6 +4160,7 @@ class $FileBlobsTable extends FileBlobs
     coreId,
     storageKey,
     filename,
+    originalExtension,
     contentType,
     byteSize,
     checksumSha256,
@@ -3752,6 +4170,7 @@ class $FileBlobsTable extends FileBlobs
     uploadGeneration,
     uploadedAt,
     multipartContext,
+    openPolicy,
     localPath,
     wrappedFek,
     fileNoncePrefix,
@@ -3792,6 +4211,15 @@ class $FileBlobsTable extends FileBlobs
       context.handle(
         _filenameMeta,
         filename.isAcceptableOrUnknown(data['filename']!, _filenameMeta),
+      );
+    }
+    if (data.containsKey('original_extension')) {
+      context.handle(
+        _originalExtensionMeta,
+        originalExtension.isAcceptableOrUnknown(
+          data['original_extension']!,
+          _originalExtensionMeta,
+        ),
       );
     }
     if (data.containsKey('content_type')) {
@@ -3865,6 +4293,12 @@ class $FileBlobsTable extends FileBlobs
         ),
       );
     }
+    if (data.containsKey('open_policy')) {
+      context.handle(
+        _openPolicyMeta,
+        openPolicy.isAcceptableOrUnknown(data['open_policy']!, _openPolicyMeta),
+      );
+    }
     if (data.containsKey('local_path')) {
       context.handle(
         _localPathMeta,
@@ -3933,6 +4367,10 @@ class $FileBlobsTable extends FileBlobs
         DriftSqlType.string,
         data['${effectivePrefix}filename'],
       ),
+      originalExtension: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}original_extension'],
+      ),
       contentType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}content_type'],
@@ -3969,6 +4407,10 @@ class $FileBlobsTable extends FileBlobs
         DriftSqlType.string,
         data['${effectivePrefix}multipart_context'],
       ),
+      openPolicy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}open_policy'],
+      )!,
       localPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}local_path'],
@@ -4007,6 +4449,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
   final int? coreId;
   final String? storageKey;
   final String? filename;
+  final String? originalExtension;
   final String? contentType;
   final int byteSize;
   final String? checksumSha256;
@@ -4016,6 +4459,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
   final int uploadGeneration;
   final int? uploadedAt;
   final String? multipartContext;
+  final String openPolicy;
   final String? localPath;
   final String? wrappedFek;
   final String? fileNoncePrefix;
@@ -4027,6 +4471,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     this.coreId,
     this.storageKey,
     this.filename,
+    this.originalExtension,
     this.contentType,
     required this.byteSize,
     this.checksumSha256,
@@ -4036,6 +4481,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     required this.uploadGeneration,
     this.uploadedAt,
     this.multipartContext,
+    required this.openPolicy,
     this.localPath,
     this.wrappedFek,
     this.fileNoncePrefix,
@@ -4056,6 +4502,9 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     if (!nullToAbsent || filename != null) {
       map['filename'] = Variable<String>(filename);
     }
+    if (!nullToAbsent || originalExtension != null) {
+      map['original_extension'] = Variable<String>(originalExtension);
+    }
     if (!nullToAbsent || contentType != null) {
       map['content_type'] = Variable<String>(contentType);
     }
@@ -4075,6 +4524,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     if (!nullToAbsent || multipartContext != null) {
       map['multipart_context'] = Variable<String>(multipartContext);
     }
+    map['open_policy'] = Variable<String>(openPolicy);
     if (!nullToAbsent || localPath != null) {
       map['local_path'] = Variable<String>(localPath);
     }
@@ -4102,6 +4552,9 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       filename: filename == null && nullToAbsent
           ? const Value.absent()
           : Value(filename),
+      originalExtension: originalExtension == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalExtension),
       contentType: contentType == null && nullToAbsent
           ? const Value.absent()
           : Value(contentType),
@@ -4121,6 +4574,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       multipartContext: multipartContext == null && nullToAbsent
           ? const Value.absent()
           : Value(multipartContext),
+      openPolicy: Value(openPolicy),
       localPath: localPath == null && nullToAbsent
           ? const Value.absent()
           : Value(localPath),
@@ -4146,6 +4600,9 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       coreId: serializer.fromJson<int?>(json['coreId']),
       storageKey: serializer.fromJson<String?>(json['storageKey']),
       filename: serializer.fromJson<String?>(json['filename']),
+      originalExtension: serializer.fromJson<String?>(
+        json['originalExtension'],
+      ),
       contentType: serializer.fromJson<String?>(json['contentType']),
       byteSize: serializer.fromJson<int>(json['byteSize']),
       checksumSha256: serializer.fromJson<String?>(json['checksumSha256']),
@@ -4155,6 +4612,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       uploadGeneration: serializer.fromJson<int>(json['uploadGeneration']),
       uploadedAt: serializer.fromJson<int?>(json['uploadedAt']),
       multipartContext: serializer.fromJson<String?>(json['multipartContext']),
+      openPolicy: serializer.fromJson<String>(json['openPolicy']),
       localPath: serializer.fromJson<String?>(json['localPath']),
       wrappedFek: serializer.fromJson<String?>(json['wrappedFek']),
       fileNoncePrefix: serializer.fromJson<String?>(json['fileNoncePrefix']),
@@ -4171,6 +4629,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       'coreId': serializer.toJson<int?>(coreId),
       'storageKey': serializer.toJson<String?>(storageKey),
       'filename': serializer.toJson<String?>(filename),
+      'originalExtension': serializer.toJson<String?>(originalExtension),
       'contentType': serializer.toJson<String?>(contentType),
       'byteSize': serializer.toJson<int>(byteSize),
       'checksumSha256': serializer.toJson<String?>(checksumSha256),
@@ -4180,6 +4639,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       'uploadGeneration': serializer.toJson<int>(uploadGeneration),
       'uploadedAt': serializer.toJson<int?>(uploadedAt),
       'multipartContext': serializer.toJson<String?>(multipartContext),
+      'openPolicy': serializer.toJson<String>(openPolicy),
       'localPath': serializer.toJson<String?>(localPath),
       'wrappedFek': serializer.toJson<String?>(wrappedFek),
       'fileNoncePrefix': serializer.toJson<String?>(fileNoncePrefix),
@@ -4194,6 +4654,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     Value<int?> coreId = const Value.absent(),
     Value<String?> storageKey = const Value.absent(),
     Value<String?> filename = const Value.absent(),
+    Value<String?> originalExtension = const Value.absent(),
     Value<String?> contentType = const Value.absent(),
     int? byteSize,
     Value<String?> checksumSha256 = const Value.absent(),
@@ -4203,6 +4664,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     int? uploadGeneration,
     Value<int?> uploadedAt = const Value.absent(),
     Value<String?> multipartContext = const Value.absent(),
+    String? openPolicy,
     Value<String?> localPath = const Value.absent(),
     Value<String?> wrappedFek = const Value.absent(),
     Value<String?> fileNoncePrefix = const Value.absent(),
@@ -4214,6 +4676,9 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     coreId: coreId.present ? coreId.value : this.coreId,
     storageKey: storageKey.present ? storageKey.value : this.storageKey,
     filename: filename.present ? filename.value : this.filename,
+    originalExtension: originalExtension.present
+        ? originalExtension.value
+        : this.originalExtension,
     contentType: contentType.present ? contentType.value : this.contentType,
     byteSize: byteSize ?? this.byteSize,
     checksumSha256: checksumSha256.present
@@ -4227,6 +4692,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     multipartContext: multipartContext.present
         ? multipartContext.value
         : this.multipartContext,
+    openPolicy: openPolicy ?? this.openPolicy,
     localPath: localPath.present ? localPath.value : this.localPath,
     wrappedFek: wrappedFek.present ? wrappedFek.value : this.wrappedFek,
     fileNoncePrefix: fileNoncePrefix.present
@@ -4244,6 +4710,9 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
           ? data.storageKey.value
           : this.storageKey,
       filename: data.filename.present ? data.filename.value : this.filename,
+      originalExtension: data.originalExtension.present
+          ? data.originalExtension.value
+          : this.originalExtension,
       contentType: data.contentType.present
           ? data.contentType.value
           : this.contentType,
@@ -4265,6 +4734,9 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       multipartContext: data.multipartContext.present
           ? data.multipartContext.value
           : this.multipartContext,
+      openPolicy: data.openPolicy.present
+          ? data.openPolicy.value
+          : this.openPolicy,
       localPath: data.localPath.present ? data.localPath.value : this.localPath,
       wrappedFek: data.wrappedFek.present
           ? data.wrappedFek.value
@@ -4285,6 +4757,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
           ..write('coreId: $coreId, ')
           ..write('storageKey: $storageKey, ')
           ..write('filename: $filename, ')
+          ..write('originalExtension: $originalExtension, ')
           ..write('contentType: $contentType, ')
           ..write('byteSize: $byteSize, ')
           ..write('checksumSha256: $checksumSha256, ')
@@ -4294,6 +4767,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
           ..write('uploadGeneration: $uploadGeneration, ')
           ..write('uploadedAt: $uploadedAt, ')
           ..write('multipartContext: $multipartContext, ')
+          ..write('openPolicy: $openPolicy, ')
           ..write('localPath: $localPath, ')
           ..write('wrappedFek: $wrappedFek, ')
           ..write('fileNoncePrefix: $fileNoncePrefix, ')
@@ -4305,11 +4779,12 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     coreId,
     storageKey,
     filename,
+    originalExtension,
     contentType,
     byteSize,
     checksumSha256,
@@ -4319,13 +4794,14 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     uploadGeneration,
     uploadedAt,
     multipartContext,
+    openPolicy,
     localPath,
     wrappedFek,
     fileNoncePrefix,
     isDirty,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4334,6 +4810,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
           other.coreId == this.coreId &&
           other.storageKey == this.storageKey &&
           other.filename == this.filename &&
+          other.originalExtension == this.originalExtension &&
           other.contentType == this.contentType &&
           other.byteSize == this.byteSize &&
           other.checksumSha256 == this.checksumSha256 &&
@@ -4343,6 +4820,7 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
           other.uploadGeneration == this.uploadGeneration &&
           other.uploadedAt == this.uploadedAt &&
           other.multipartContext == this.multipartContext &&
+          other.openPolicy == this.openPolicy &&
           other.localPath == this.localPath &&
           other.wrappedFek == this.wrappedFek &&
           other.fileNoncePrefix == this.fileNoncePrefix &&
@@ -4356,6 +4834,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
   final Value<int?> coreId;
   final Value<String?> storageKey;
   final Value<String?> filename;
+  final Value<String?> originalExtension;
   final Value<String?> contentType;
   final Value<int> byteSize;
   final Value<String?> checksumSha256;
@@ -4365,6 +4844,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
   final Value<int> uploadGeneration;
   final Value<int?> uploadedAt;
   final Value<String?> multipartContext;
+  final Value<String> openPolicy;
   final Value<String?> localPath;
   final Value<String?> wrappedFek;
   final Value<String?> fileNoncePrefix;
@@ -4377,6 +4857,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     this.coreId = const Value.absent(),
     this.storageKey = const Value.absent(),
     this.filename = const Value.absent(),
+    this.originalExtension = const Value.absent(),
     this.contentType = const Value.absent(),
     this.byteSize = const Value.absent(),
     this.checksumSha256 = const Value.absent(),
@@ -4386,6 +4867,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     this.uploadGeneration = const Value.absent(),
     this.uploadedAt = const Value.absent(),
     this.multipartContext = const Value.absent(),
+    this.openPolicy = const Value.absent(),
     this.localPath = const Value.absent(),
     this.wrappedFek = const Value.absent(),
     this.fileNoncePrefix = const Value.absent(),
@@ -4399,6 +4881,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     this.coreId = const Value.absent(),
     this.storageKey = const Value.absent(),
     this.filename = const Value.absent(),
+    this.originalExtension = const Value.absent(),
     this.contentType = const Value.absent(),
     this.byteSize = const Value.absent(),
     this.checksumSha256 = const Value.absent(),
@@ -4408,6 +4891,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     this.uploadGeneration = const Value.absent(),
     this.uploadedAt = const Value.absent(),
     this.multipartContext = const Value.absent(),
+    this.openPolicy = const Value.absent(),
     this.localPath = const Value.absent(),
     this.wrappedFek = const Value.absent(),
     this.fileNoncePrefix = const Value.absent(),
@@ -4424,6 +4908,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     Expression<int>? coreId,
     Expression<String>? storageKey,
     Expression<String>? filename,
+    Expression<String>? originalExtension,
     Expression<String>? contentType,
     Expression<int>? byteSize,
     Expression<String>? checksumSha256,
@@ -4433,6 +4918,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     Expression<int>? uploadGeneration,
     Expression<int>? uploadedAt,
     Expression<String>? multipartContext,
+    Expression<String>? openPolicy,
     Expression<String>? localPath,
     Expression<String>? wrappedFek,
     Expression<String>? fileNoncePrefix,
@@ -4446,6 +4932,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
       if (coreId != null) 'core_id': coreId,
       if (storageKey != null) 'storage_key': storageKey,
       if (filename != null) 'filename': filename,
+      if (originalExtension != null) 'original_extension': originalExtension,
       if (contentType != null) 'content_type': contentType,
       if (byteSize != null) 'byte_size': byteSize,
       if (checksumSha256 != null) 'checksum_sha256': checksumSha256,
@@ -4455,6 +4942,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
       if (uploadGeneration != null) 'upload_generation': uploadGeneration,
       if (uploadedAt != null) 'uploaded_at': uploadedAt,
       if (multipartContext != null) 'multipart_context': multipartContext,
+      if (openPolicy != null) 'open_policy': openPolicy,
       if (localPath != null) 'local_path': localPath,
       if (wrappedFek != null) 'wrapped_fek': wrappedFek,
       if (fileNoncePrefix != null) 'file_nonce_prefix': fileNoncePrefix,
@@ -4470,6 +4958,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     Value<int?>? coreId,
     Value<String?>? storageKey,
     Value<String?>? filename,
+    Value<String?>? originalExtension,
     Value<String?>? contentType,
     Value<int>? byteSize,
     Value<String?>? checksumSha256,
@@ -4479,6 +4968,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     Value<int>? uploadGeneration,
     Value<int?>? uploadedAt,
     Value<String?>? multipartContext,
+    Value<String>? openPolicy,
     Value<String?>? localPath,
     Value<String?>? wrappedFek,
     Value<String?>? fileNoncePrefix,
@@ -4492,6 +4982,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
       coreId: coreId ?? this.coreId,
       storageKey: storageKey ?? this.storageKey,
       filename: filename ?? this.filename,
+      originalExtension: originalExtension ?? this.originalExtension,
       contentType: contentType ?? this.contentType,
       byteSize: byteSize ?? this.byteSize,
       checksumSha256: checksumSha256 ?? this.checksumSha256,
@@ -4501,6 +4992,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
       uploadGeneration: uploadGeneration ?? this.uploadGeneration,
       uploadedAt: uploadedAt ?? this.uploadedAt,
       multipartContext: multipartContext ?? this.multipartContext,
+      openPolicy: openPolicy ?? this.openPolicy,
       localPath: localPath ?? this.localPath,
       wrappedFek: wrappedFek ?? this.wrappedFek,
       fileNoncePrefix: fileNoncePrefix ?? this.fileNoncePrefix,
@@ -4525,6 +5017,9 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     }
     if (filename.present) {
       map['filename'] = Variable<String>(filename.value);
+    }
+    if (originalExtension.present) {
+      map['original_extension'] = Variable<String>(originalExtension.value);
     }
     if (contentType.present) {
       map['content_type'] = Variable<String>(contentType.value);
@@ -4552,6 +5047,9 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     }
     if (multipartContext.present) {
       map['multipart_context'] = Variable<String>(multipartContext.value);
+    }
+    if (openPolicy.present) {
+      map['open_policy'] = Variable<String>(openPolicy.value);
     }
     if (localPath.present) {
       map['local_path'] = Variable<String>(localPath.value);
@@ -4584,6 +5082,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
           ..write('coreId: $coreId, ')
           ..write('storageKey: $storageKey, ')
           ..write('filename: $filename, ')
+          ..write('originalExtension: $originalExtension, ')
           ..write('contentType: $contentType, ')
           ..write('byteSize: $byteSize, ')
           ..write('checksumSha256: $checksumSha256, ')
@@ -4593,6 +5092,7 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
           ..write('uploadGeneration: $uploadGeneration, ')
           ..write('uploadedAt: $uploadedAt, ')
           ..write('multipartContext: $multipartContext, ')
+          ..write('openPolicy: $openPolicy, ')
           ..write('localPath: $localPath, ')
           ..write('wrappedFek: $wrappedFek, ')
           ..write('fileNoncePrefix: $fileNoncePrefix, ')
@@ -4638,6 +5138,17 @@ class $TextContentsTable extends TextContents
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _acceptedBodyMeta = const VerificationMeta(
+    'acceptedBody',
+  );
+  @override
+  late final GeneratedColumn<String> acceptedBody = GeneratedColumn<String>(
+    'accepted_body',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isDirtyMeta = const VerificationMeta(
     'isDirty',
   );
@@ -4680,6 +5191,7 @@ class $TextContentsTable extends TextContents
     id,
     coreId,
     body,
+    acceptedBody,
     isDirty,
     createdAt,
     updatedAt,
@@ -4714,6 +5226,15 @@ class $TextContentsTable extends TextContents
       );
     } else if (isInserting) {
       context.missing(_bodyMeta);
+    }
+    if (data.containsKey('accepted_body')) {
+      context.handle(
+        _acceptedBodyMeta,
+        acceptedBody.isAcceptableOrUnknown(
+          data['accepted_body']!,
+          _acceptedBodyMeta,
+        ),
+      );
     }
     if (data.containsKey('is_dirty')) {
       context.handle(
@@ -4758,6 +5279,10 @@ class $TextContentsTable extends TextContents
         DriftSqlType.string,
         data['${effectivePrefix}body'],
       )!,
+      acceptedBody: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}accepted_body'],
+      ),
       isDirty: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_dirty'],
@@ -4783,6 +5308,7 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
   final String id;
   final int? coreId;
   final String body;
+  final String? acceptedBody;
   final bool isDirty;
   final int createdAt;
   final int updatedAt;
@@ -4790,6 +5316,7 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
     required this.id,
     this.coreId,
     required this.body,
+    this.acceptedBody,
     required this.isDirty,
     required this.createdAt,
     required this.updatedAt,
@@ -4802,6 +5329,9 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
       map['core_id'] = Variable<int>(coreId);
     }
     map['body'] = Variable<String>(body);
+    if (!nullToAbsent || acceptedBody != null) {
+      map['accepted_body'] = Variable<String>(acceptedBody);
+    }
     map['is_dirty'] = Variable<bool>(isDirty);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -4815,6 +5345,9 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
           ? const Value.absent()
           : Value(coreId),
       body: Value(body),
+      acceptedBody: acceptedBody == null && nullToAbsent
+          ? const Value.absent()
+          : Value(acceptedBody),
       isDirty: Value(isDirty),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -4830,6 +5363,7 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
       id: serializer.fromJson<String>(json['id']),
       coreId: serializer.fromJson<int?>(json['coreId']),
       body: serializer.fromJson<String>(json['body']),
+      acceptedBody: serializer.fromJson<String?>(json['acceptedBody']),
       isDirty: serializer.fromJson<bool>(json['isDirty']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
@@ -4842,6 +5376,7 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
       'id': serializer.toJson<String>(id),
       'coreId': serializer.toJson<int?>(coreId),
       'body': serializer.toJson<String>(body),
+      'acceptedBody': serializer.toJson<String?>(acceptedBody),
       'isDirty': serializer.toJson<bool>(isDirty),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
@@ -4852,6 +5387,7 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
     String? id,
     Value<int?> coreId = const Value.absent(),
     String? body,
+    Value<String?> acceptedBody = const Value.absent(),
     bool? isDirty,
     int? createdAt,
     int? updatedAt,
@@ -4859,6 +5395,7 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
     id: id ?? this.id,
     coreId: coreId.present ? coreId.value : this.coreId,
     body: body ?? this.body,
+    acceptedBody: acceptedBody.present ? acceptedBody.value : this.acceptedBody,
     isDirty: isDirty ?? this.isDirty,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -4868,6 +5405,9 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
       id: data.id.present ? data.id.value : this.id,
       coreId: data.coreId.present ? data.coreId.value : this.coreId,
       body: data.body.present ? data.body.value : this.body,
+      acceptedBody: data.acceptedBody.present
+          ? data.acceptedBody.value
+          : this.acceptedBody,
       isDirty: data.isDirty.present ? data.isDirty.value : this.isDirty,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -4880,6 +5420,7 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
           ..write('id: $id, ')
           ..write('coreId: $coreId, ')
           ..write('body: $body, ')
+          ..write('acceptedBody: $acceptedBody, ')
           ..write('isDirty: $isDirty, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -4888,8 +5429,15 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, coreId, body, isDirty, createdAt, updatedAt);
+  int get hashCode => Object.hash(
+    id,
+    coreId,
+    body,
+    acceptedBody,
+    isDirty,
+    createdAt,
+    updatedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4897,6 +5445,7 @@ class TextContentRow extends DataClass implements Insertable<TextContentRow> {
           other.id == this.id &&
           other.coreId == this.coreId &&
           other.body == this.body &&
+          other.acceptedBody == this.acceptedBody &&
           other.isDirty == this.isDirty &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -4906,6 +5455,7 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
   final Value<String> id;
   final Value<int?> coreId;
   final Value<String> body;
+  final Value<String?> acceptedBody;
   final Value<bool> isDirty;
   final Value<int> createdAt;
   final Value<int> updatedAt;
@@ -4914,6 +5464,7 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
     this.id = const Value.absent(),
     this.coreId = const Value.absent(),
     this.body = const Value.absent(),
+    this.acceptedBody = const Value.absent(),
     this.isDirty = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -4923,6 +5474,7 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
     required String id,
     this.coreId = const Value.absent(),
     required String body,
+    this.acceptedBody = const Value.absent(),
     this.isDirty = const Value.absent(),
     required int createdAt,
     required int updatedAt,
@@ -4935,6 +5487,7 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
     Expression<String>? id,
     Expression<int>? coreId,
     Expression<String>? body,
+    Expression<String>? acceptedBody,
     Expression<bool>? isDirty,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
@@ -4944,6 +5497,7 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
       if (id != null) 'id': id,
       if (coreId != null) 'core_id': coreId,
       if (body != null) 'body': body,
+      if (acceptedBody != null) 'accepted_body': acceptedBody,
       if (isDirty != null) 'is_dirty': isDirty,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -4955,6 +5509,7 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
     Value<String>? id,
     Value<int?>? coreId,
     Value<String>? body,
+    Value<String?>? acceptedBody,
     Value<bool>? isDirty,
     Value<int>? createdAt,
     Value<int>? updatedAt,
@@ -4964,6 +5519,7 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
       id: id ?? this.id,
       coreId: coreId ?? this.coreId,
       body: body ?? this.body,
+      acceptedBody: acceptedBody ?? this.acceptedBody,
       isDirty: isDirty ?? this.isDirty,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -4982,6 +5538,9 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
     }
     if (body.present) {
       map['body'] = Variable<String>(body.value);
+    }
+    if (acceptedBody.present) {
+      map['accepted_body'] = Variable<String>(acceptedBody.value);
     }
     if (isDirty.present) {
       map['is_dirty'] = Variable<bool>(isDirty.value);
@@ -5004,6 +5563,7 @@ class TextContentsCompanion extends UpdateCompanion<TextContentRow> {
           ..write('id: $id, ')
           ..write('coreId: $coreId, ')
           ..write('body: $body, ')
+          ..write('acceptedBody: $acceptedBody, ')
           ..write('isDirty: $isDirty, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -5192,6 +5752,17 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _acceptedSourceRevisionMeta =
+      const VerificationMeta('acceptedSourceRevision');
+  @override
+  late final GeneratedColumn<int> acceptedSourceRevision = GeneratedColumn<int>(
+    'accepted_source_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _processingConfigRevisionMeta =
       const VerificationMeta('processingConfigRevision');
   @override
@@ -5299,6 +5870,21 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant('local_saved'),
   );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -5339,6 +5925,7 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     processingRunId,
     processingAttempt,
     sourceRevision,
+    acceptedSourceRevision,
     processingConfigRevision,
     processingOutputs,
     processingRequestedOutputs,
@@ -5348,6 +5935,7 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
     textContentId,
     isDirty,
     syncState,
+    isDeleted,
     createdAt,
     updatedAt,
   ];
@@ -5482,6 +6070,15 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
         ),
       );
     }
+    if (data.containsKey('accepted_source_revision')) {
+      context.handle(
+        _acceptedSourceRevisionMeta,
+        acceptedSourceRevision.isAcceptableOrUnknown(
+          data['accepted_source_revision']!,
+          _acceptedSourceRevisionMeta,
+        ),
+      );
+    }
     if (data.containsKey('processing_config_revision')) {
       context.handle(
         _processingConfigRevisionMeta,
@@ -5555,6 +6152,12 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
       context.handle(
         _syncStateMeta,
         syncState.isAcceptableOrUnknown(data['sync_state']!, _syncStateMeta),
+      );
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
       );
     }
     if (data.containsKey('created_at')) {
@@ -5651,6 +6254,10 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
         DriftSqlType.int,
         data['${effectivePrefix}source_revision'],
       )!,
+      acceptedSourceRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}accepted_source_revision'],
+      )!,
       processingConfigRevision: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}processing_config_revision'],
@@ -5687,6 +6294,10 @@ class $ItemsTable extends Items with TableInfo<$ItemsTable, ItemRow> {
         DriftSqlType.string,
         data['${effectivePrefix}sync_state'],
       )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_deleted'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -5721,6 +6332,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
   final String? processingRunId;
   final int processingAttempt;
   final int sourceRevision;
+  final int acceptedSourceRevision;
   final int? processingConfigRevision;
   final String processingOutputs;
   final String processingRequestedOutputs;
@@ -5730,6 +6342,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
   final String? textContentId;
   final bool isDirty;
   final String syncState;
+  final bool isDeleted;
   final int createdAt;
   final int updatedAt;
   const ItemRow({
@@ -5749,6 +6362,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     this.processingRunId,
     required this.processingAttempt,
     required this.sourceRevision,
+    required this.acceptedSourceRevision,
     this.processingConfigRevision,
     required this.processingOutputs,
     required this.processingRequestedOutputs,
@@ -5758,6 +6372,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     this.textContentId,
     required this.isDirty,
     required this.syncState,
+    required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -5794,6 +6409,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     }
     map['processing_attempt'] = Variable<int>(processingAttempt);
     map['source_revision'] = Variable<int>(sourceRevision);
+    map['accepted_source_revision'] = Variable<int>(acceptedSourceRevision);
     if (!nullToAbsent || processingConfigRevision != null) {
       map['processing_config_revision'] = Variable<int>(
         processingConfigRevision,
@@ -5817,6 +6433,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     }
     map['is_dirty'] = Variable<bool>(isDirty);
     map['sync_state'] = Variable<String>(syncState);
+    map['is_deleted'] = Variable<bool>(isDeleted);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -5854,6 +6471,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           : Value(processingRunId),
       processingAttempt: Value(processingAttempt),
       sourceRevision: Value(sourceRevision),
+      acceptedSourceRevision: Value(acceptedSourceRevision),
       processingConfigRevision: processingConfigRevision == null && nullToAbsent
           ? const Value.absent()
           : Value(processingConfigRevision),
@@ -5873,6 +6491,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           : Value(textContentId),
       isDirty: Value(isDirty),
       syncState: Value(syncState),
+      isDeleted: Value(isDeleted),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -5902,6 +6521,9 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       processingRunId: serializer.fromJson<String?>(json['processingRunId']),
       processingAttempt: serializer.fromJson<int>(json['processingAttempt']),
       sourceRevision: serializer.fromJson<int>(json['sourceRevision']),
+      acceptedSourceRevision: serializer.fromJson<int>(
+        json['acceptedSourceRevision'],
+      ),
       processingConfigRevision: serializer.fromJson<int?>(
         json['processingConfigRevision'],
       ),
@@ -5917,6 +6539,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       textContentId: serializer.fromJson<String?>(json['textContentId']),
       isDirty: serializer.fromJson<bool>(json['isDirty']),
       syncState: serializer.fromJson<String>(json['syncState']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -5941,6 +6564,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       'processingRunId': serializer.toJson<String?>(processingRunId),
       'processingAttempt': serializer.toJson<int>(processingAttempt),
       'sourceRevision': serializer.toJson<int>(sourceRevision),
+      'acceptedSourceRevision': serializer.toJson<int>(acceptedSourceRevision),
       'processingConfigRevision': serializer.toJson<int?>(
         processingConfigRevision,
       ),
@@ -5954,6 +6578,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       'textContentId': serializer.toJson<String?>(textContentId),
       'isDirty': serializer.toJson<bool>(isDirty),
       'syncState': serializer.toJson<String>(syncState),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -5976,6 +6601,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     Value<String?> processingRunId = const Value.absent(),
     int? processingAttempt,
     int? sourceRevision,
+    int? acceptedSourceRevision,
     Value<int?> processingConfigRevision = const Value.absent(),
     String? processingOutputs,
     String? processingRequestedOutputs,
@@ -5985,6 +6611,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     Value<String?> textContentId = const Value.absent(),
     bool? isDirty,
     String? syncState,
+    bool? isDeleted,
     int? createdAt,
     int? updatedAt,
   }) => ItemRow(
@@ -6008,6 +6635,8 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
         : this.processingRunId,
     processingAttempt: processingAttempt ?? this.processingAttempt,
     sourceRevision: sourceRevision ?? this.sourceRevision,
+    acceptedSourceRevision:
+        acceptedSourceRevision ?? this.acceptedSourceRevision,
     processingConfigRevision: processingConfigRevision.present
         ? processingConfigRevision.value
         : this.processingConfigRevision,
@@ -6026,6 +6655,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
         : this.textContentId,
     isDirty: isDirty ?? this.isDirty,
     syncState: syncState ?? this.syncState,
+    isDeleted: isDeleted ?? this.isDeleted,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -6059,6 +6689,9 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
       sourceRevision: data.sourceRevision.present
           ? data.sourceRevision.value
           : this.sourceRevision,
+      acceptedSourceRevision: data.acceptedSourceRevision.present
+          ? data.acceptedSourceRevision.value
+          : this.acceptedSourceRevision,
       processingConfigRevision: data.processingConfigRevision.present
           ? data.processingConfigRevision.value
           : this.processingConfigRevision,
@@ -6082,6 +6715,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           : this.textContentId,
       isDirty: data.isDirty.present ? data.isDirty.value : this.isDirty,
       syncState: data.syncState.present ? data.syncState.value : this.syncState,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -6106,6 +6740,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           ..write('processingRunId: $processingRunId, ')
           ..write('processingAttempt: $processingAttempt, ')
           ..write('sourceRevision: $sourceRevision, ')
+          ..write('acceptedSourceRevision: $acceptedSourceRevision, ')
           ..write('processingConfigRevision: $processingConfigRevision, ')
           ..write('processingOutputs: $processingOutputs, ')
           ..write('processingRequestedOutputs: $processingRequestedOutputs, ')
@@ -6115,6 +6750,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           ..write('textContentId: $textContentId, ')
           ..write('isDirty: $isDirty, ')
           ..write('syncState: $syncState, ')
+          ..write('isDeleted: $isDeleted, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -6139,6 +6775,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     processingRunId,
     processingAttempt,
     sourceRevision,
+    acceptedSourceRevision,
     processingConfigRevision,
     processingOutputs,
     processingRequestedOutputs,
@@ -6148,6 +6785,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
     textContentId,
     isDirty,
     syncState,
+    isDeleted,
     createdAt,
     updatedAt,
   ]);
@@ -6171,6 +6809,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           other.processingRunId == this.processingRunId &&
           other.processingAttempt == this.processingAttempt &&
           other.sourceRevision == this.sourceRevision &&
+          other.acceptedSourceRevision == this.acceptedSourceRevision &&
           other.processingConfigRevision == this.processingConfigRevision &&
           other.processingOutputs == this.processingOutputs &&
           other.processingRequestedOutputs == this.processingRequestedOutputs &&
@@ -6180,6 +6819,7 @@ class ItemRow extends DataClass implements Insertable<ItemRow> {
           other.textContentId == this.textContentId &&
           other.isDirty == this.isDirty &&
           other.syncState == this.syncState &&
+          other.isDeleted == this.isDeleted &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -6201,6 +6841,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
   final Value<String?> processingRunId;
   final Value<int> processingAttempt;
   final Value<int> sourceRevision;
+  final Value<int> acceptedSourceRevision;
   final Value<int?> processingConfigRevision;
   final Value<String> processingOutputs;
   final Value<String> processingRequestedOutputs;
@@ -6210,6 +6851,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
   final Value<String?> textContentId;
   final Value<bool> isDirty;
   final Value<String> syncState;
+  final Value<bool> isDeleted;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -6230,6 +6872,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     this.processingRunId = const Value.absent(),
     this.processingAttempt = const Value.absent(),
     this.sourceRevision = const Value.absent(),
+    this.acceptedSourceRevision = const Value.absent(),
     this.processingConfigRevision = const Value.absent(),
     this.processingOutputs = const Value.absent(),
     this.processingRequestedOutputs = const Value.absent(),
@@ -6239,6 +6882,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     this.textContentId = const Value.absent(),
     this.isDirty = const Value.absent(),
     this.syncState = const Value.absent(),
+    this.isDeleted = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -6260,6 +6904,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     this.processingRunId = const Value.absent(),
     this.processingAttempt = const Value.absent(),
     this.sourceRevision = const Value.absent(),
+    this.acceptedSourceRevision = const Value.absent(),
     this.processingConfigRevision = const Value.absent(),
     this.processingOutputs = const Value.absent(),
     this.processingRequestedOutputs = const Value.absent(),
@@ -6269,6 +6914,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     this.textContentId = const Value.absent(),
     this.isDirty = const Value.absent(),
     this.syncState = const Value.absent(),
+    this.isDeleted = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -6295,6 +6941,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     Expression<String>? processingRunId,
     Expression<int>? processingAttempt,
     Expression<int>? sourceRevision,
+    Expression<int>? acceptedSourceRevision,
     Expression<int>? processingConfigRevision,
     Expression<String>? processingOutputs,
     Expression<String>? processingRequestedOutputs,
@@ -6304,6 +6951,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     Expression<String>? textContentId,
     Expression<bool>? isDirty,
     Expression<String>? syncState,
+    Expression<bool>? isDeleted,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -6325,6 +6973,8 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
       if (processingRunId != null) 'processing_run_id': processingRunId,
       if (processingAttempt != null) 'processing_attempt': processingAttempt,
       if (sourceRevision != null) 'source_revision': sourceRevision,
+      if (acceptedSourceRevision != null)
+        'accepted_source_revision': acceptedSourceRevision,
       if (processingConfigRevision != null)
         'processing_config_revision': processingConfigRevision,
       if (processingOutputs != null) 'processing_outputs': processingOutputs,
@@ -6337,6 +6987,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
       if (textContentId != null) 'text_content_id': textContentId,
       if (isDirty != null) 'is_dirty': isDirty,
       if (syncState != null) 'sync_state': syncState,
+      if (isDeleted != null) 'is_deleted': isDeleted,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -6360,6 +7011,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     Value<String?>? processingRunId,
     Value<int>? processingAttempt,
     Value<int>? sourceRevision,
+    Value<int>? acceptedSourceRevision,
     Value<int?>? processingConfigRevision,
     Value<String>? processingOutputs,
     Value<String>? processingRequestedOutputs,
@@ -6369,6 +7021,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     Value<String?>? textContentId,
     Value<bool>? isDirty,
     Value<String>? syncState,
+    Value<bool>? isDeleted,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -6390,6 +7043,8 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
       processingRunId: processingRunId ?? this.processingRunId,
       processingAttempt: processingAttempt ?? this.processingAttempt,
       sourceRevision: sourceRevision ?? this.sourceRevision,
+      acceptedSourceRevision:
+          acceptedSourceRevision ?? this.acceptedSourceRevision,
       processingConfigRevision:
           processingConfigRevision ?? this.processingConfigRevision,
       processingOutputs: processingOutputs ?? this.processingOutputs,
@@ -6401,6 +7056,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
       textContentId: textContentId ?? this.textContentId,
       isDirty: isDirty ?? this.isDirty,
       syncState: syncState ?? this.syncState,
+      isDeleted: isDeleted ?? this.isDeleted,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -6458,6 +7114,11 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     if (sourceRevision.present) {
       map['source_revision'] = Variable<int>(sourceRevision.value);
     }
+    if (acceptedSourceRevision.present) {
+      map['accepted_source_revision'] = Variable<int>(
+        acceptedSourceRevision.value,
+      );
+    }
     if (processingConfigRevision.present) {
       map['processing_config_revision'] = Variable<int>(
         processingConfigRevision.value,
@@ -6491,6 +7152,9 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
     if (syncState.present) {
       map['sync_state'] = Variable<String>(syncState.value);
     }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -6522,6 +7186,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
           ..write('processingRunId: $processingRunId, ')
           ..write('processingAttempt: $processingAttempt, ')
           ..write('sourceRevision: $sourceRevision, ')
+          ..write('acceptedSourceRevision: $acceptedSourceRevision, ')
           ..write('processingConfigRevision: $processingConfigRevision, ')
           ..write('processingOutputs: $processingOutputs, ')
           ..write('processingRequestedOutputs: $processingRequestedOutputs, ')
@@ -6531,6 +7196,7 @@ class ItemsCompanion extends UpdateCompanion<ItemRow> {
           ..write('textContentId: $textContentId, ')
           ..write('isDirty: $isDirty, ')
           ..write('syncState: $syncState, ')
+          ..write('isDeleted: $isDeleted, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -6610,6 +7276,38 @@ class $WorkQueueTable extends WorkQueue
     aliasedName,
     true,
     type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _operationBodyMeta = const VerificationMeta(
+    'operationBody',
+  );
+  @override
+  late final GeneratedColumn<String> operationBody = GeneratedColumn<String>(
+    'operation_body',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _submittedSourceRevisionMeta =
+      const VerificationMeta('submittedSourceRevision');
+  @override
+  late final GeneratedColumn<int> submittedSourceRevision =
+      GeneratedColumn<int>(
+        'submitted_source_revision',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _expectedSourceRevisionMeta =
+      const VerificationMeta('expectedSourceRevision');
+  @override
+  late final GeneratedColumn<int> expectedSourceRevision = GeneratedColumn<int>(
+    'expected_source_revision',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _attemptMeta = const VerificationMeta(
@@ -6734,6 +7432,9 @@ class $WorkQueueTable extends WorkQueue
     state,
     stage,
     dependsOn,
+    operationBody,
+    submittedSourceRevision,
+    expectedSourceRevision,
     attempt,
     availableAt,
     leaseOwner,
@@ -6806,6 +7507,33 @@ class $WorkQueueTable extends WorkQueue
       context.handle(
         _dependsOnMeta,
         dependsOn.isAcceptableOrUnknown(data['depends_on']!, _dependsOnMeta),
+      );
+    }
+    if (data.containsKey('operation_body')) {
+      context.handle(
+        _operationBodyMeta,
+        operationBody.isAcceptableOrUnknown(
+          data['operation_body']!,
+          _operationBodyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('submitted_source_revision')) {
+      context.handle(
+        _submittedSourceRevisionMeta,
+        submittedSourceRevision.isAcceptableOrUnknown(
+          data['submitted_source_revision']!,
+          _submittedSourceRevisionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('expected_source_revision')) {
+      context.handle(
+        _expectedSourceRevisionMeta,
+        expectedSourceRevision.isAcceptableOrUnknown(
+          data['expected_source_revision']!,
+          _expectedSourceRevisionMeta,
+        ),
       );
     }
     if (data.containsKey('attempt')) {
@@ -6924,6 +7652,18 @@ class $WorkQueueTable extends WorkQueue
         DriftSqlType.string,
         data['${effectivePrefix}depends_on'],
       ),
+      operationBody: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation_body'],
+      ),
+      submittedSourceRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}submitted_source_revision'],
+      ),
+      expectedSourceRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}expected_source_revision'],
+      ),
       attempt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}attempt'],
@@ -6981,6 +7721,9 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
   final String state;
   final String stage;
   final String? dependsOn;
+  final String? operationBody;
+  final int? submittedSourceRevision;
+  final int? expectedSourceRevision;
   final int attempt;
   final int availableAt;
   final String? leaseOwner;
@@ -6999,6 +7742,9 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     required this.state,
     required this.stage,
     this.dependsOn,
+    this.operationBody,
+    this.submittedSourceRevision,
+    this.expectedSourceRevision,
     required this.attempt,
     required this.availableAt,
     this.leaseOwner,
@@ -7021,6 +7767,15 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     map['stage'] = Variable<String>(stage);
     if (!nullToAbsent || dependsOn != null) {
       map['depends_on'] = Variable<String>(dependsOn);
+    }
+    if (!nullToAbsent || operationBody != null) {
+      map['operation_body'] = Variable<String>(operationBody);
+    }
+    if (!nullToAbsent || submittedSourceRevision != null) {
+      map['submitted_source_revision'] = Variable<int>(submittedSourceRevision);
+    }
+    if (!nullToAbsent || expectedSourceRevision != null) {
+      map['expected_source_revision'] = Variable<int>(expectedSourceRevision);
     }
     map['attempt'] = Variable<int>(attempt);
     map['available_at'] = Variable<int>(availableAt);
@@ -7054,6 +7809,15 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
       dependsOn: dependsOn == null && nullToAbsent
           ? const Value.absent()
           : Value(dependsOn),
+      operationBody: operationBody == null && nullToAbsent
+          ? const Value.absent()
+          : Value(operationBody),
+      submittedSourceRevision: submittedSourceRevision == null && nullToAbsent
+          ? const Value.absent()
+          : Value(submittedSourceRevision),
+      expectedSourceRevision: expectedSourceRevision == null && nullToAbsent
+          ? const Value.absent()
+          : Value(expectedSourceRevision),
       attempt: Value(attempt),
       availableAt: Value(availableAt),
       leaseOwner: leaseOwner == null && nullToAbsent
@@ -7088,6 +7852,13 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
       state: serializer.fromJson<String>(json['state']),
       stage: serializer.fromJson<String>(json['stage']),
       dependsOn: serializer.fromJson<String?>(json['dependsOn']),
+      operationBody: serializer.fromJson<String?>(json['operationBody']),
+      submittedSourceRevision: serializer.fromJson<int?>(
+        json['submittedSourceRevision'],
+      ),
+      expectedSourceRevision: serializer.fromJson<int?>(
+        json['expectedSourceRevision'],
+      ),
       attempt: serializer.fromJson<int>(json['attempt']),
       availableAt: serializer.fromJson<int>(json['availableAt']),
       leaseOwner: serializer.fromJson<String?>(json['leaseOwner']),
@@ -7111,6 +7882,11 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
       'state': serializer.toJson<String>(state),
       'stage': serializer.toJson<String>(stage),
       'dependsOn': serializer.toJson<String?>(dependsOn),
+      'operationBody': serializer.toJson<String?>(operationBody),
+      'submittedSourceRevision': serializer.toJson<int?>(
+        submittedSourceRevision,
+      ),
+      'expectedSourceRevision': serializer.toJson<int?>(expectedSourceRevision),
       'attempt': serializer.toJson<int>(attempt),
       'availableAt': serializer.toJson<int>(availableAt),
       'leaseOwner': serializer.toJson<String?>(leaseOwner),
@@ -7132,6 +7908,9 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     String? state,
     String? stage,
     Value<String?> dependsOn = const Value.absent(),
+    Value<String?> operationBody = const Value.absent(),
+    Value<int?> submittedSourceRevision = const Value.absent(),
+    Value<int?> expectedSourceRevision = const Value.absent(),
     int? attempt,
     int? availableAt,
     Value<String?> leaseOwner = const Value.absent(),
@@ -7150,6 +7929,15 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     state: state ?? this.state,
     stage: stage ?? this.stage,
     dependsOn: dependsOn.present ? dependsOn.value : this.dependsOn,
+    operationBody: operationBody.present
+        ? operationBody.value
+        : this.operationBody,
+    submittedSourceRevision: submittedSourceRevision.present
+        ? submittedSourceRevision.value
+        : this.submittedSourceRevision,
+    expectedSourceRevision: expectedSourceRevision.present
+        ? expectedSourceRevision.value
+        : this.expectedSourceRevision,
     attempt: attempt ?? this.attempt,
     availableAt: availableAt ?? this.availableAt,
     leaseOwner: leaseOwner.present ? leaseOwner.value : this.leaseOwner,
@@ -7172,6 +7960,15 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
       state: data.state.present ? data.state.value : this.state,
       stage: data.stage.present ? data.stage.value : this.stage,
       dependsOn: data.dependsOn.present ? data.dependsOn.value : this.dependsOn,
+      operationBody: data.operationBody.present
+          ? data.operationBody.value
+          : this.operationBody,
+      submittedSourceRevision: data.submittedSourceRevision.present
+          ? data.submittedSourceRevision.value
+          : this.submittedSourceRevision,
+      expectedSourceRevision: data.expectedSourceRevision.present
+          ? data.expectedSourceRevision.value
+          : this.expectedSourceRevision,
       attempt: data.attempt.present ? data.attempt.value : this.attempt,
       availableAt: data.availableAt.present
           ? data.availableAt.value
@@ -7205,6 +8002,9 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
           ..write('state: $state, ')
           ..write('stage: $stage, ')
           ..write('dependsOn: $dependsOn, ')
+          ..write('operationBody: $operationBody, ')
+          ..write('submittedSourceRevision: $submittedSourceRevision, ')
+          ..write('expectedSourceRevision: $expectedSourceRevision, ')
           ..write('attempt: $attempt, ')
           ..write('availableAt: $availableAt, ')
           ..write('leaseOwner: $leaseOwner, ')
@@ -7228,6 +8028,9 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     state,
     stage,
     dependsOn,
+    operationBody,
+    submittedSourceRevision,
+    expectedSourceRevision,
     attempt,
     availableAt,
     leaseOwner,
@@ -7250,6 +8053,9 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
           other.state == this.state &&
           other.stage == this.stage &&
           other.dependsOn == this.dependsOn &&
+          other.operationBody == this.operationBody &&
+          other.submittedSourceRevision == this.submittedSourceRevision &&
+          other.expectedSourceRevision == this.expectedSourceRevision &&
           other.attempt == this.attempt &&
           other.availableAt == this.availableAt &&
           other.leaseOwner == this.leaseOwner &&
@@ -7270,6 +8076,9 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
   final Value<String> state;
   final Value<String> stage;
   final Value<String?> dependsOn;
+  final Value<String?> operationBody;
+  final Value<int?> submittedSourceRevision;
+  final Value<int?> expectedSourceRevision;
   final Value<int> attempt;
   final Value<int> availableAt;
   final Value<String?> leaseOwner;
@@ -7289,6 +8098,9 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     this.state = const Value.absent(),
     this.stage = const Value.absent(),
     this.dependsOn = const Value.absent(),
+    this.operationBody = const Value.absent(),
+    this.submittedSourceRevision = const Value.absent(),
+    this.expectedSourceRevision = const Value.absent(),
     this.attempt = const Value.absent(),
     this.availableAt = const Value.absent(),
     this.leaseOwner = const Value.absent(),
@@ -7309,6 +8121,9 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     required String state,
     required String stage,
     this.dependsOn = const Value.absent(),
+    this.operationBody = const Value.absent(),
+    this.submittedSourceRevision = const Value.absent(),
+    this.expectedSourceRevision = const Value.absent(),
     this.attempt = const Value.absent(),
     required int availableAt,
     this.leaseOwner = const Value.absent(),
@@ -7337,6 +8152,9 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     Expression<String>? state,
     Expression<String>? stage,
     Expression<String>? dependsOn,
+    Expression<String>? operationBody,
+    Expression<int>? submittedSourceRevision,
+    Expression<int>? expectedSourceRevision,
     Expression<int>? attempt,
     Expression<int>? availableAt,
     Expression<String>? leaseOwner,
@@ -7357,6 +8175,11 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
       if (state != null) 'state': state,
       if (stage != null) 'stage': stage,
       if (dependsOn != null) 'depends_on': dependsOn,
+      if (operationBody != null) 'operation_body': operationBody,
+      if (submittedSourceRevision != null)
+        'submitted_source_revision': submittedSourceRevision,
+      if (expectedSourceRevision != null)
+        'expected_source_revision': expectedSourceRevision,
       if (attempt != null) 'attempt': attempt,
       if (availableAt != null) 'available_at': availableAt,
       if (leaseOwner != null) 'lease_owner': leaseOwner,
@@ -7379,6 +8202,9 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     Value<String>? state,
     Value<String>? stage,
     Value<String?>? dependsOn,
+    Value<String?>? operationBody,
+    Value<int?>? submittedSourceRevision,
+    Value<int?>? expectedSourceRevision,
     Value<int>? attempt,
     Value<int>? availableAt,
     Value<String?>? leaseOwner,
@@ -7399,6 +8225,11 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
       state: state ?? this.state,
       stage: stage ?? this.stage,
       dependsOn: dependsOn ?? this.dependsOn,
+      operationBody: operationBody ?? this.operationBody,
+      submittedSourceRevision:
+          submittedSourceRevision ?? this.submittedSourceRevision,
+      expectedSourceRevision:
+          expectedSourceRevision ?? this.expectedSourceRevision,
       attempt: attempt ?? this.attempt,
       availableAt: availableAt ?? this.availableAt,
       leaseOwner: leaseOwner ?? this.leaseOwner,
@@ -7436,6 +8267,19 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     }
     if (dependsOn.present) {
       map['depends_on'] = Variable<String>(dependsOn.value);
+    }
+    if (operationBody.present) {
+      map['operation_body'] = Variable<String>(operationBody.value);
+    }
+    if (submittedSourceRevision.present) {
+      map['submitted_source_revision'] = Variable<int>(
+        submittedSourceRevision.value,
+      );
+    }
+    if (expectedSourceRevision.present) {
+      map['expected_source_revision'] = Variable<int>(
+        expectedSourceRevision.value,
+      );
     }
     if (attempt.present) {
       map['attempt'] = Variable<int>(attempt.value);
@@ -7483,6 +8327,9 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
           ..write('state: $state, ')
           ..write('stage: $stage, ')
           ..write('dependsOn: $dependsOn, ')
+          ..write('operationBody: $operationBody, ')
+          ..write('submittedSourceRevision: $submittedSourceRevision, ')
+          ..write('expectedSourceRevision: $expectedSourceRevision, ')
           ..write('attempt: $attempt, ')
           ..write('availableAt: $availableAt, ')
           ..write('leaseOwner: $leaseOwner, ')
@@ -8056,6 +8903,14 @@ typedef $$RecordingDraftsTableCreateCompanionBuilder =
       required String createdAt,
       required String segmentsJson,
       Value<int> durationMs,
+      Value<String> sessionId,
+      Value<String> captureKind,
+      Value<String> backend,
+      Value<String?> stagingPath,
+      Value<String?> finalPath,
+      Value<String> codec,
+      Value<String> state,
+      Value<String?> heartbeatAt,
     });
 typedef $$RecordingDraftsTableUpdateCompanionBuilder =
     RecordingDraftsCompanion Function({
@@ -8063,6 +8918,14 @@ typedef $$RecordingDraftsTableUpdateCompanionBuilder =
       Value<String> createdAt,
       Value<String> segmentsJson,
       Value<int> durationMs,
+      Value<String> sessionId,
+      Value<String> captureKind,
+      Value<String> backend,
+      Value<String?> stagingPath,
+      Value<String?> finalPath,
+      Value<String> codec,
+      Value<String> state,
+      Value<String?> heartbeatAt,
     });
 
 class $$RecordingDraftsTableFilterComposer
@@ -8091,6 +8954,46 @@ class $$RecordingDraftsTableFilterComposer
 
   ColumnFilters<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get captureKind => $composableBuilder(
+    column: $table.captureKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backend => $composableBuilder(
+    column: $table.backend,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stagingPath => $composableBuilder(
+    column: $table.stagingPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get finalPath => $composableBuilder(
+    column: $table.finalPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get codec => $composableBuilder(
+    column: $table.codec,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get heartbeatAt => $composableBuilder(
+    column: $table.heartbeatAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -8123,6 +9026,46 @@ class $$RecordingDraftsTableOrderingComposer
     column: $table.durationMs,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get captureKind => $composableBuilder(
+    column: $table.captureKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get backend => $composableBuilder(
+    column: $table.backend,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stagingPath => $composableBuilder(
+    column: $table.stagingPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get finalPath => $composableBuilder(
+    column: $table.finalPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get codec => $composableBuilder(
+    column: $table.codec,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get heartbeatAt => $composableBuilder(
+    column: $table.heartbeatAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RecordingDraftsTableAnnotationComposer
@@ -8147,6 +9090,36 @@ class $$RecordingDraftsTableAnnotationComposer
 
   GeneratedColumn<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sessionId =>
+      $composableBuilder(column: $table.sessionId, builder: (column) => column);
+
+  GeneratedColumn<String> get captureKind => $composableBuilder(
+    column: $table.captureKind,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get backend =>
+      $composableBuilder(column: $table.backend, builder: (column) => column);
+
+  GeneratedColumn<String> get stagingPath => $composableBuilder(
+    column: $table.stagingPath,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get finalPath =>
+      $composableBuilder(column: $table.finalPath, builder: (column) => column);
+
+  GeneratedColumn<String> get codec =>
+      $composableBuilder(column: $table.codec, builder: (column) => column);
+
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<String> get heartbeatAt => $composableBuilder(
+    column: $table.heartbeatAt,
     builder: (column) => column,
   );
 }
@@ -8192,11 +9165,27 @@ class $$RecordingDraftsTableTableManager
                 Value<String> createdAt = const Value.absent(),
                 Value<String> segmentsJson = const Value.absent(),
                 Value<int> durationMs = const Value.absent(),
+                Value<String> sessionId = const Value.absent(),
+                Value<String> captureKind = const Value.absent(),
+                Value<String> backend = const Value.absent(),
+                Value<String?> stagingPath = const Value.absent(),
+                Value<String?> finalPath = const Value.absent(),
+                Value<String> codec = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<String?> heartbeatAt = const Value.absent(),
               }) => RecordingDraftsCompanion(
                 id: id,
                 createdAt: createdAt,
                 segmentsJson: segmentsJson,
                 durationMs: durationMs,
+                sessionId: sessionId,
+                captureKind: captureKind,
+                backend: backend,
+                stagingPath: stagingPath,
+                finalPath: finalPath,
+                codec: codec,
+                state: state,
+                heartbeatAt: heartbeatAt,
               ),
           createCompanionCallback:
               ({
@@ -8204,11 +9193,27 @@ class $$RecordingDraftsTableTableManager
                 required String createdAt,
                 required String segmentsJson,
                 Value<int> durationMs = const Value.absent(),
+                Value<String> sessionId = const Value.absent(),
+                Value<String> captureKind = const Value.absent(),
+                Value<String> backend = const Value.absent(),
+                Value<String?> stagingPath = const Value.absent(),
+                Value<String?> finalPath = const Value.absent(),
+                Value<String> codec = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<String?> heartbeatAt = const Value.absent(),
               }) => RecordingDraftsCompanion.insert(
                 id: id,
                 createdAt: createdAt,
                 segmentsJson: segmentsJson,
                 durationMs: durationMs,
+                sessionId: sessionId,
+                captureKind: captureKind,
+                backend: backend,
+                stagingPath: stagingPath,
+                finalPath: finalPath,
+                codec: codec,
+                state: state,
+                heartbeatAt: heartbeatAt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -9732,6 +10737,7 @@ typedef $$FileBlobsTableCreateCompanionBuilder =
       Value<int?> coreId,
       Value<String?> storageKey,
       Value<String?> filename,
+      Value<String?> originalExtension,
       Value<String?> contentType,
       Value<int> byteSize,
       Value<String?> checksumSha256,
@@ -9741,6 +10747,7 @@ typedef $$FileBlobsTableCreateCompanionBuilder =
       Value<int> uploadGeneration,
       Value<int?> uploadedAt,
       Value<String?> multipartContext,
+      Value<String> openPolicy,
       Value<String?> localPath,
       Value<String?> wrappedFek,
       Value<String?> fileNoncePrefix,
@@ -9755,6 +10762,7 @@ typedef $$FileBlobsTableUpdateCompanionBuilder =
       Value<int?> coreId,
       Value<String?> storageKey,
       Value<String?> filename,
+      Value<String?> originalExtension,
       Value<String?> contentType,
       Value<int> byteSize,
       Value<String?> checksumSha256,
@@ -9764,6 +10772,7 @@ typedef $$FileBlobsTableUpdateCompanionBuilder =
       Value<int> uploadGeneration,
       Value<int?> uploadedAt,
       Value<String?> multipartContext,
+      Value<String> openPolicy,
       Value<String?> localPath,
       Value<String?> wrappedFek,
       Value<String?> fileNoncePrefix,
@@ -9799,6 +10808,11 @@ class $$FileBlobsTableFilterComposer
 
   ColumnFilters<String> get filename => $composableBuilder(
     column: $table.filename,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originalExtension => $composableBuilder(
+    column: $table.originalExtension,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9844,6 +10858,11 @@ class $$FileBlobsTableFilterComposer
 
   ColumnFilters<String> get multipartContext => $composableBuilder(
     column: $table.multipartContext,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get openPolicy => $composableBuilder(
+    column: $table.openPolicy,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9907,6 +10926,11 @@ class $$FileBlobsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get originalExtension => $composableBuilder(
+    column: $table.originalExtension,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get contentType => $composableBuilder(
     column: $table.contentType,
     builder: (column) => ColumnOrderings(column),
@@ -9949,6 +10973,11 @@ class $$FileBlobsTableOrderingComposer
 
   ColumnOrderings<String> get multipartContext => $composableBuilder(
     column: $table.multipartContext,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get openPolicy => $composableBuilder(
+    column: $table.openPolicy,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10006,6 +11035,11 @@ class $$FileBlobsTableAnnotationComposer
   GeneratedColumn<String> get filename =>
       $composableBuilder(column: $table.filename, builder: (column) => column);
 
+  GeneratedColumn<String> get originalExtension => $composableBuilder(
+    column: $table.originalExtension,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get contentType => $composableBuilder(
     column: $table.contentType,
     builder: (column) => column,
@@ -10042,6 +11076,11 @@ class $$FileBlobsTableAnnotationComposer
 
   GeneratedColumn<String> get multipartContext => $composableBuilder(
     column: $table.multipartContext,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get openPolicy => $composableBuilder(
+    column: $table.openPolicy,
     builder: (column) => column,
   );
 
@@ -10103,6 +11142,7 @@ class $$FileBlobsTableTableManager
                 Value<int?> coreId = const Value.absent(),
                 Value<String?> storageKey = const Value.absent(),
                 Value<String?> filename = const Value.absent(),
+                Value<String?> originalExtension = const Value.absent(),
                 Value<String?> contentType = const Value.absent(),
                 Value<int> byteSize = const Value.absent(),
                 Value<String?> checksumSha256 = const Value.absent(),
@@ -10112,6 +11152,7 @@ class $$FileBlobsTableTableManager
                 Value<int> uploadGeneration = const Value.absent(),
                 Value<int?> uploadedAt = const Value.absent(),
                 Value<String?> multipartContext = const Value.absent(),
+                Value<String> openPolicy = const Value.absent(),
                 Value<String?> localPath = const Value.absent(),
                 Value<String?> wrappedFek = const Value.absent(),
                 Value<String?> fileNoncePrefix = const Value.absent(),
@@ -10124,6 +11165,7 @@ class $$FileBlobsTableTableManager
                 coreId: coreId,
                 storageKey: storageKey,
                 filename: filename,
+                originalExtension: originalExtension,
                 contentType: contentType,
                 byteSize: byteSize,
                 checksumSha256: checksumSha256,
@@ -10133,6 +11175,7 @@ class $$FileBlobsTableTableManager
                 uploadGeneration: uploadGeneration,
                 uploadedAt: uploadedAt,
                 multipartContext: multipartContext,
+                openPolicy: openPolicy,
                 localPath: localPath,
                 wrappedFek: wrappedFek,
                 fileNoncePrefix: fileNoncePrefix,
@@ -10147,6 +11190,7 @@ class $$FileBlobsTableTableManager
                 Value<int?> coreId = const Value.absent(),
                 Value<String?> storageKey = const Value.absent(),
                 Value<String?> filename = const Value.absent(),
+                Value<String?> originalExtension = const Value.absent(),
                 Value<String?> contentType = const Value.absent(),
                 Value<int> byteSize = const Value.absent(),
                 Value<String?> checksumSha256 = const Value.absent(),
@@ -10156,6 +11200,7 @@ class $$FileBlobsTableTableManager
                 Value<int> uploadGeneration = const Value.absent(),
                 Value<int?> uploadedAt = const Value.absent(),
                 Value<String?> multipartContext = const Value.absent(),
+                Value<String> openPolicy = const Value.absent(),
                 Value<String?> localPath = const Value.absent(),
                 Value<String?> wrappedFek = const Value.absent(),
                 Value<String?> fileNoncePrefix = const Value.absent(),
@@ -10168,6 +11213,7 @@ class $$FileBlobsTableTableManager
                 coreId: coreId,
                 storageKey: storageKey,
                 filename: filename,
+                originalExtension: originalExtension,
                 contentType: contentType,
                 byteSize: byteSize,
                 checksumSha256: checksumSha256,
@@ -10177,6 +11223,7 @@ class $$FileBlobsTableTableManager
                 uploadGeneration: uploadGeneration,
                 uploadedAt: uploadedAt,
                 multipartContext: multipartContext,
+                openPolicy: openPolicy,
                 localPath: localPath,
                 wrappedFek: wrappedFek,
                 fileNoncePrefix: fileNoncePrefix,
@@ -10215,6 +11262,7 @@ typedef $$TextContentsTableCreateCompanionBuilder =
       required String id,
       Value<int?> coreId,
       required String body,
+      Value<String?> acceptedBody,
       Value<bool> isDirty,
       required int createdAt,
       required int updatedAt,
@@ -10225,6 +11273,7 @@ typedef $$TextContentsTableUpdateCompanionBuilder =
       Value<String> id,
       Value<int?> coreId,
       Value<String> body,
+      Value<String?> acceptedBody,
       Value<bool> isDirty,
       Value<int> createdAt,
       Value<int> updatedAt,
@@ -10252,6 +11301,11 @@ class $$TextContentsTableFilterComposer
 
   ColumnFilters<String> get body => $composableBuilder(
     column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get acceptedBody => $composableBuilder(
+    column: $table.acceptedBody,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10295,6 +11349,11 @@ class $$TextContentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get acceptedBody => $composableBuilder(
+    column: $table.acceptedBody,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isDirty => $composableBuilder(
     column: $table.isDirty,
     builder: (column) => ColumnOrderings(column),
@@ -10328,6 +11387,11 @@ class $$TextContentsTableAnnotationComposer
 
   GeneratedColumn<String> get body =>
       $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<String> get acceptedBody => $composableBuilder(
+    column: $table.acceptedBody,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<bool> get isDirty =>
       $composableBuilder(column: $table.isDirty, builder: (column) => column);
@@ -10373,6 +11437,7 @@ class $$TextContentsTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<int?> coreId = const Value.absent(),
                 Value<String> body = const Value.absent(),
+                Value<String?> acceptedBody = const Value.absent(),
                 Value<bool> isDirty = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
@@ -10381,6 +11446,7 @@ class $$TextContentsTableTableManager
                 id: id,
                 coreId: coreId,
                 body: body,
+                acceptedBody: acceptedBody,
                 isDirty: isDirty,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -10391,6 +11457,7 @@ class $$TextContentsTableTableManager
                 required String id,
                 Value<int?> coreId = const Value.absent(),
                 required String body,
+                Value<String?> acceptedBody = const Value.absent(),
                 Value<bool> isDirty = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
@@ -10399,6 +11466,7 @@ class $$TextContentsTableTableManager
                 id: id,
                 coreId: coreId,
                 body: body,
+                acceptedBody: acceptedBody,
                 isDirty: isDirty,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -10447,6 +11515,7 @@ typedef $$ItemsTableCreateCompanionBuilder =
       Value<String?> processingRunId,
       Value<int> processingAttempt,
       Value<int> sourceRevision,
+      Value<int> acceptedSourceRevision,
       Value<int?> processingConfigRevision,
       Value<String> processingOutputs,
       Value<String> processingRequestedOutputs,
@@ -10456,6 +11525,7 @@ typedef $$ItemsTableCreateCompanionBuilder =
       Value<String?> textContentId,
       Value<bool> isDirty,
       Value<String> syncState,
+      Value<bool> isDeleted,
       required int createdAt,
       required int updatedAt,
       Value<int> rowid,
@@ -10478,6 +11548,7 @@ typedef $$ItemsTableUpdateCompanionBuilder =
       Value<String?> processingRunId,
       Value<int> processingAttempt,
       Value<int> sourceRevision,
+      Value<int> acceptedSourceRevision,
       Value<int?> processingConfigRevision,
       Value<String> processingOutputs,
       Value<String> processingRequestedOutputs,
@@ -10487,6 +11558,7 @@ typedef $$ItemsTableUpdateCompanionBuilder =
       Value<String?> textContentId,
       Value<bool> isDirty,
       Value<String> syncState,
+      Value<bool> isDeleted,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -10580,6 +11652,11 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<int> get acceptedSourceRevision => $composableBuilder(
+    column: $table.acceptedSourceRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get processingConfigRevision => $composableBuilder(
     column: $table.processingConfigRevision,
     builder: (column) => ColumnFilters(column),
@@ -10622,6 +11699,11 @@ class $$ItemsTableFilterComposer extends Composer<_$AppDatabase, $ItemsTable> {
 
   ColumnFilters<String> get syncState => $composableBuilder(
     column: $table.syncState,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10725,6 +11807,11 @@ class $$ItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get acceptedSourceRevision => $composableBuilder(
+    column: $table.acceptedSourceRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get processingConfigRevision => $composableBuilder(
     column: $table.processingConfigRevision,
     builder: (column) => ColumnOrderings(column),
@@ -10767,6 +11854,11 @@ class $$ItemsTableOrderingComposer
 
   ColumnOrderings<String> get syncState => $composableBuilder(
     column: $table.syncState,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -10850,6 +11942,11 @@ class $$ItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get acceptedSourceRevision => $composableBuilder(
+    column: $table.acceptedSourceRevision,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get processingConfigRevision => $composableBuilder(
     column: $table.processingConfigRevision,
     builder: (column) => column,
@@ -10890,6 +11987,9 @@ class $$ItemsTableAnnotationComposer
 
   GeneratedColumn<String> get syncState =>
       $composableBuilder(column: $table.syncState, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -10942,6 +12042,7 @@ class $$ItemsTableTableManager
                 Value<String?> processingRunId = const Value.absent(),
                 Value<int> processingAttempt = const Value.absent(),
                 Value<int> sourceRevision = const Value.absent(),
+                Value<int> acceptedSourceRevision = const Value.absent(),
                 Value<int?> processingConfigRevision = const Value.absent(),
                 Value<String> processingOutputs = const Value.absent(),
                 Value<String> processingRequestedOutputs = const Value.absent(),
@@ -10951,6 +12052,7 @@ class $$ItemsTableTableManager
                 Value<String?> textContentId = const Value.absent(),
                 Value<bool> isDirty = const Value.absent(),
                 Value<String> syncState = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -10971,6 +12073,7 @@ class $$ItemsTableTableManager
                 processingRunId: processingRunId,
                 processingAttempt: processingAttempt,
                 sourceRevision: sourceRevision,
+                acceptedSourceRevision: acceptedSourceRevision,
                 processingConfigRevision: processingConfigRevision,
                 processingOutputs: processingOutputs,
                 processingRequestedOutputs: processingRequestedOutputs,
@@ -10980,6 +12083,7 @@ class $$ItemsTableTableManager
                 textContentId: textContentId,
                 isDirty: isDirty,
                 syncState: syncState,
+                isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -11002,6 +12106,7 @@ class $$ItemsTableTableManager
                 Value<String?> processingRunId = const Value.absent(),
                 Value<int> processingAttempt = const Value.absent(),
                 Value<int> sourceRevision = const Value.absent(),
+                Value<int> acceptedSourceRevision = const Value.absent(),
                 Value<int?> processingConfigRevision = const Value.absent(),
                 Value<String> processingOutputs = const Value.absent(),
                 Value<String> processingRequestedOutputs = const Value.absent(),
@@ -11011,6 +12116,7 @@ class $$ItemsTableTableManager
                 Value<String?> textContentId = const Value.absent(),
                 Value<bool> isDirty = const Value.absent(),
                 Value<String> syncState = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -11031,6 +12137,7 @@ class $$ItemsTableTableManager
                 processingRunId: processingRunId,
                 processingAttempt: processingAttempt,
                 sourceRevision: sourceRevision,
+                acceptedSourceRevision: acceptedSourceRevision,
                 processingConfigRevision: processingConfigRevision,
                 processingOutputs: processingOutputs,
                 processingRequestedOutputs: processingRequestedOutputs,
@@ -11040,6 +12147,7 @@ class $$ItemsTableTableManager
                 textContentId: textContentId,
                 isDirty: isDirty,
                 syncState: syncState,
+                isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -11075,6 +12183,9 @@ typedef $$WorkQueueTableCreateCompanionBuilder =
       required String state,
       required String stage,
       Value<String?> dependsOn,
+      Value<String?> operationBody,
+      Value<int?> submittedSourceRevision,
+      Value<int?> expectedSourceRevision,
       Value<int> attempt,
       required int availableAt,
       Value<String?> leaseOwner,
@@ -11096,6 +12207,9 @@ typedef $$WorkQueueTableUpdateCompanionBuilder =
       Value<String> state,
       Value<String> stage,
       Value<String?> dependsOn,
+      Value<String?> operationBody,
+      Value<int?> submittedSourceRevision,
+      Value<int?> expectedSourceRevision,
       Value<int> attempt,
       Value<int> availableAt,
       Value<String?> leaseOwner,
@@ -11150,6 +12264,21 @@ class $$WorkQueueTableFilterComposer
 
   ColumnFilters<String> get dependsOn => $composableBuilder(
     column: $table.dependsOn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operationBody => $composableBuilder(
+    column: $table.operationBody,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get submittedSourceRevision => $composableBuilder(
+    column: $table.submittedSourceRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get expectedSourceRevision => $composableBuilder(
+    column: $table.expectedSourceRevision,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11248,6 +12377,21 @@ class $$WorkQueueTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get operationBody => $composableBuilder(
+    column: $table.operationBody,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get submittedSourceRevision => $composableBuilder(
+    column: $table.submittedSourceRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get expectedSourceRevision => $composableBuilder(
+    column: $table.expectedSourceRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get attempt => $composableBuilder(
     column: $table.attempt,
     builder: (column) => ColumnOrderings(column),
@@ -11329,6 +12473,21 @@ class $$WorkQueueTableAnnotationComposer
   GeneratedColumn<String> get dependsOn =>
       $composableBuilder(column: $table.dependsOn, builder: (column) => column);
 
+  GeneratedColumn<String> get operationBody => $composableBuilder(
+    column: $table.operationBody,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get submittedSourceRevision => $composableBuilder(
+    column: $table.submittedSourceRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get expectedSourceRevision => $composableBuilder(
+    column: $table.expectedSourceRevision,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get attempt =>
       $composableBuilder(column: $table.attempt, builder: (column) => column);
 
@@ -11408,6 +12567,9 @@ class $$WorkQueueTableTableManager
                 Value<String> state = const Value.absent(),
                 Value<String> stage = const Value.absent(),
                 Value<String?> dependsOn = const Value.absent(),
+                Value<String?> operationBody = const Value.absent(),
+                Value<int?> submittedSourceRevision = const Value.absent(),
+                Value<int?> expectedSourceRevision = const Value.absent(),
                 Value<int> attempt = const Value.absent(),
                 Value<int> availableAt = const Value.absent(),
                 Value<String?> leaseOwner = const Value.absent(),
@@ -11427,6 +12589,9 @@ class $$WorkQueueTableTableManager
                 state: state,
                 stage: stage,
                 dependsOn: dependsOn,
+                operationBody: operationBody,
+                submittedSourceRevision: submittedSourceRevision,
+                expectedSourceRevision: expectedSourceRevision,
                 attempt: attempt,
                 availableAt: availableAt,
                 leaseOwner: leaseOwner,
@@ -11448,6 +12613,9 @@ class $$WorkQueueTableTableManager
                 required String state,
                 required String stage,
                 Value<String?> dependsOn = const Value.absent(),
+                Value<String?> operationBody = const Value.absent(),
+                Value<int?> submittedSourceRevision = const Value.absent(),
+                Value<int?> expectedSourceRevision = const Value.absent(),
                 Value<int> attempt = const Value.absent(),
                 required int availableAt,
                 Value<String?> leaseOwner = const Value.absent(),
@@ -11467,6 +12635,9 @@ class $$WorkQueueTableTableManager
                 state: state,
                 stage: stage,
                 dependsOn: dependsOn,
+                operationBody: operationBody,
+                submittedSourceRevision: submittedSourceRevision,
+                expectedSourceRevision: expectedSourceRevision,
                 attempt: attempt,
                 availableAt: availableAt,
                 leaseOwner: leaseOwner,

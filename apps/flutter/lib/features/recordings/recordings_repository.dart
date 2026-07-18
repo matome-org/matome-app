@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 import '../../core/http/api_client.dart';
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
+import '../documents/document_open_policy.dart';
+import '../documents/document_open_service.dart';
 import 'recording.dart';
 import 'upload_descriptor.dart';
 
@@ -114,6 +116,8 @@ class RecordingsRepository {
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     AppLog.event(LogCat.upload, 'createRecording: $title');
     try {
@@ -123,6 +127,7 @@ class RecordingsRepository {
           'client_id': clientId,
           'item_type': 'file',
           'title': title,
+          'filename': filename ?? title,
           'media_type': mediaType,
           'workspace_id': ?workspaceId,
           'metadata': <String, dynamic>{'badge': ?badge},
@@ -131,6 +136,7 @@ class RecordingsRepository {
           // presigned PUT AND persists it as `byte_size` so the Files view shows
           // a real size. Omitted when unknown (legacy/streamed callers).
           'content_length': ?contentLength,
+          'content_type': ?contentType,
           'checksum_sha256': ?checksumSha256,
         },
       );
@@ -168,6 +174,134 @@ class RecordingsRepository {
       AppLog.error(LogCat.upload, 'createRecording: transport failed', e, st);
       throw ApiException.fromDio(e);
     }
+  }
+
+  Future<Recording> createTextItem({
+    required String clientId,
+    required String body,
+    int? matomeId,
+    int? workspaceId,
+    String? title,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/api/items/text',
+        data: <String, dynamic>{
+          'client_id': clientId,
+          'body': body,
+          'matome_id': ?matomeId,
+          'workspace_id': ?workspaceId,
+          'title': ?title,
+          'metadata': ?metadata,
+        },
+      );
+      if (response.statusCode == 409 &&
+          _textErrorCode(response.data) == 'client_id_conflict') {
+        final current = response.data?['item'];
+        throw TextClientIdConflict(
+          current is Map<String, dynamic>
+              ? Recording.fromItemJson(current)
+              : null,
+        );
+      }
+      return _textItemResponse(
+        response,
+        operation: 'create',
+        statuses: {200, 201},
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<Recording> updateTextItem(
+    int id, {
+    required String body,
+    required int expectedSourceRevision,
+  }) async {
+    try {
+      final response = await _apiClient.dio.patch<Map<String, dynamic>>(
+        '/api/items/$id/text',
+        data: <String, dynamic>{
+          'body': body,
+          'expected_source_revision': expectedSourceRevision,
+        },
+      );
+      if (response.statusCode == 409 &&
+          _textErrorCode(response.data) == 'version_conflict') {
+        final current = response.data?['item'];
+        throw TextVersionConflict(
+          current is Map<String, dynamic>
+              ? Recording.fromItemJson(current)
+              : null,
+        );
+      }
+      return _textItemResponse(response, operation: 'update', statuses: {200});
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<void> deleteTextItem(
+    int id, {
+    required int expectedSourceRevision,
+  }) async {
+    try {
+      final response = await _apiClient.dio.delete<dynamic>(
+        '/api/items/$id/text',
+        data: <String, dynamic>{
+          'expected_source_revision': expectedSourceRevision,
+        },
+      );
+      final status = response.statusCode ?? 0;
+      if (status == 409 &&
+          _textErrorCode(response.data) == 'version_conflict') {
+        final current = response.data is Map ? response.data!['item'] : null;
+        throw TextVersionConflict(
+          current is Map<String, dynamic>
+              ? Recording.fromItemJson(current)
+              : null,
+        );
+      }
+      if (status != 200 && status != 204 && status != 404) {
+        throw ApiException(
+          'Failed to delete text item.',
+          statusCode: status,
+          code: errorCodeFromBody(response.data),
+        );
+      }
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Recording _textItemResponse(
+    Response<Map<String, dynamic>> response, {
+    required String operation,
+    required Set<int> statuses,
+  }) {
+    final status = response.statusCode ?? 0;
+    final raw = response.data?['item'];
+    if (!statuses.contains(status) || raw is! Map<String, dynamic>) {
+      throw ApiException(
+        'Failed to $operation text item.',
+        statusCode: status,
+        code: errorCodeFromBody(response.data),
+      );
+    }
+    return Recording.fromItemJson(raw);
+  }
+
+  String? _textErrorCode(Object? data) {
+    final legacy = errorCodeFromBody(data);
+    if (legacy != null) return legacy;
+    if (data is! Map) return null;
+    if (data['code'] is String) return data['code'] as String;
+    final error = data['error'];
+    return error is Map && error['code'] is String
+        ? error['code'] as String
+        : null;
   }
 
   /// Creates or resumes Core's active upload generation with fresh credentials.
@@ -232,6 +366,9 @@ class RecordingsRepository {
       );
       final status = response.statusCode ?? 0;
       final raw = response.data?['part'];
+      if (status == 404) {
+        throw const DocumentDescriptorUnavailableException();
+      }
       if (status != 200 || raw is! Map<String, dynamic>) {
         throw ApiException(
           'Failed to presign upload part.',
@@ -559,6 +696,54 @@ class RecordingsRepository {
     }
   }
 
+  /// Fetches one memory-only, owner-scoped document open descriptor. Signed
+  /// URLs are never written to Drift or included in application logs.
+  Future<DocumentOpenDescriptor> documentOpenDescriptor(int id) async {
+    try {
+      final response = await _apiClient.dio.get<Map<String, dynamic>>(
+        '/api/items/$id/download-url',
+      );
+      final status = response.statusCode ?? 0;
+      final raw = response.data?['download'];
+      final code = errorCodeFromBody(response.data);
+      if (status == 404 || (status == 422 && code == 'unsafe_file_type')) {
+        throw const DocumentDescriptorUnavailableException();
+      }
+      if (status != 200 || raw is! Map<String, dynamic>) {
+        throw ApiException(
+          'Document is unavailable.',
+          statusCode: status,
+          code: code,
+        );
+      }
+      final url = Uri.tryParse(raw['url'] as String? ?? '');
+      final expiresAt = DateTime.tryParse(raw['expires_at'] as String? ?? '');
+      final method = (raw['method'] as String? ?? '').toUpperCase();
+      if (method != 'GET' || url == null || expiresAt == null) {
+        throw const DocumentDescriptorUnavailableException();
+      }
+      return DocumentOpenDescriptor(
+        method: method,
+        url: url,
+        expiresAt: expiresAt,
+        openPolicy: DocumentOpenPolicy.fromWire(raw['open_policy'] as String?),
+        action: switch (raw['action']) {
+          'open' => DocumentOpenAction.open,
+          'open_in_app' => DocumentOpenAction.openInApp,
+          _ => DocumentOpenAction.download,
+        },
+      );
+    } on DioException catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'documentOpenDescriptor: Core request failed for id=$id',
+        error,
+        stack,
+      );
+      throw ApiException.fromDio(error);
+    }
+  }
+
   /// `POST /api/items/{id}/process` (Bearer). Enqueues processing.
   /// Returns the (still-pending) recording echoed by the backend.
   Future<Recording> enqueueProcessing(int id) async {
@@ -602,4 +787,16 @@ class RecordingsRepository {
       throw ApiException.fromDio(e);
     }
   }
+}
+
+class TextVersionConflict implements Exception {
+  const TextVersionConflict(this.current);
+
+  final Recording? current;
+}
+
+class TextClientIdConflict implements Exception {
+  const TextClientIdConflict(this.current);
+
+  final Recording? current;
 }

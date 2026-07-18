@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/observability/app_log.dart';
 import '../home/inbox_upload.dart';
 import 'audio_recording_service.dart';
-import 'meeting_recorder.dart';
 import 'recording_controller.dart';
 
 /// Orchestrates the S3 Finish flow, wiring F3 (audio finalize) → S1/F4 (Inbox
@@ -122,6 +121,7 @@ class RecordingFinisher {
         file: File(path),
         title: title ?? AudioRecordingService.generateTitle(null),
         mediaType: 'audio',
+        filename: File(path).uri.pathSegments.last,
       ),
       durationSeconds: durationSeconds.round(),
     );
@@ -142,15 +142,4 @@ class RecordingFinisher {
 /// Provider for the S3 Finish orchestrator (mic recorder).
 final recordingFinisherProvider = Provider<RecordingFinisher>(
   (ref) => RecordingFinisher(ref),
-);
-
-/// Finish orchestrator for the **meeting (loopback) recorder** — same F4 upload
-/// pipeline, wired to the meeting controller/service so the captured WAV flows
-/// through `InboxUploader` unchanged (zero backend change).
-final meetingRecordingFinisherProvider = Provider<RecordingFinisher>(
-  (ref) => RecordingFinisher(
-    ref,
-    controllerProvider: meetingRecordingControllerProvider,
-    serviceProvider: meetingRecordingServiceProvider,
-  ),
 );

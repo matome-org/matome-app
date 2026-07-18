@@ -32,6 +32,22 @@ defmodule MatomeApiWeb.MatomeControllerTest do
     assert delete(owner_conn, ~p"/api/matomes/#{created["id"]}") |> response(204) == ""
   end
 
+  test "client identity makes create replay-safe and conflicts without duplicating", %{conn: conn} do
+    %{conn: owner_conn} = register_conn(conn)
+    params = %{client_id: "matome-local-api-1", title: "Offline parent", description: "Original"}
+
+    first = post(owner_conn, ~p"/api/matomes", params) |> json_response(201)
+    replay = post(owner_conn, ~p"/api/matomes", params) |> json_response(201)
+
+    assert first["matome"]["id"] == replay["matome"]["id"]
+    assert first["matome"]["client_id"] == "matome-local-api-1"
+
+    assert post(owner_conn, ~p"/api/matomes", %{params | description: "Changed"})
+           |> json_response(409) == %{"error" => "client_id_conflict"}
+
+    assert MatomeApi.Repo.aggregate(MatomeApi.Content.Matome, :count, :id) == 1
+  end
+
   test "owner renames a matome and updates happened_at", %{conn: conn} do
     %{conn: owner_conn} = register_conn(conn)
 

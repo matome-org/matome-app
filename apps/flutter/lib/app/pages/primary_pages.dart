@@ -6,6 +6,7 @@ import '../../features/home/home_screen.dart';
 import '../../features/items/text_item_host.dart';
 import '../../features/matome/matome_detail_screen.dart';
 import '../screens/recording_screen.dart';
+import '../screens/meeting_recording_screen.dart';
 
 /// Canonical route target for `/recording`.
 class RecordingPage extends StatelessWidget {
@@ -20,13 +21,14 @@ class RecordingPage extends StatelessWidget {
 
 /// Canonical route target for `/meeting`.
 class MeetingRecordingPage extends StatelessWidget {
-  MeetingRecordingPage({super.key, RecorderBinding? binding})
-    : binding = binding ?? RecorderBinding.meeting;
+  MeetingRecordingPage({super.key, MeetingRecordingBinding? binding})
+    : binding = binding ?? MeetingRecordingBinding();
 
-  final RecorderBinding binding;
+  final MeetingRecordingBinding binding;
 
   @override
-  Widget build(BuildContext context) => RecordingScreen(binding: binding);
+  Widget build(BuildContext context) =>
+      MeetingRecordingScreen(binding: binding);
 }
 
 /// Canonical route target for `/matome/:id`.

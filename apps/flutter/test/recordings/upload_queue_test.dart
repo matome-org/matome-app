@@ -516,6 +516,8 @@ class _ToggleRepository extends RecordingsRepository
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     if (createDelay > Duration.zero) await Future<void>.delayed(createDelay);
     if (unauthorized) {

@@ -187,7 +187,8 @@ Future<void> _seedCloudWork(AppDatabase db) async {
     createdAt: 1000,
   );
   await db.workQueueDao.enqueue(
-    fileUploadWork(
+    ownerId: 'owner-1',
+    work: fileUploadWork(
       itemId: 'local-cloud-item',
       sourceRevision: 1,
       now: 1000,
@@ -228,7 +229,8 @@ Future<void> _seedLocalSpaceWork(AppDatabase db) async {
     createdAt: 1000,
   );
   await db.workQueueDao.enqueue(
-    fileUploadWork(
+    ownerId: 'owner-1',
+    work: fileUploadWork(
       itemId: 'local-private-item',
       sourceRevision: 1,
       now: 1000,

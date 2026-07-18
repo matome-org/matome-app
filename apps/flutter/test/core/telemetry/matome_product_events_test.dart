@@ -70,7 +70,7 @@ void main() {
         ),
       );
 
-      await repository.createMatome(title: 'Cloud');
+      await repository.createMatome(clientId: 'matome-local-7', title: 'Cloud');
       await repository.archiveMatome(7);
       await repository.deleteMatome(7);
 

@@ -104,6 +104,7 @@ class _ParentRepository extends MatomesRepository {
 
   @override
   Future<Matome> createMatome({
+    required String clientId,
     required String title,
     int? workspaceId,
     DateTime? happenedAt,
@@ -155,6 +156,8 @@ class _ChildRepository extends RecordingsRepository
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     calls.add('child');
     expect(matomeId, 101);

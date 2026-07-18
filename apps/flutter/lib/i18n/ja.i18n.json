@@ -122,6 +122,36 @@
     "unsupportedTitle": "マイクを利用できません",
     "unsupportedHint": "このデバイスでは音声録音を利用できません。録音するにはモバイルアプリをご利用ください。"
   },
+  "meetingRecording": {
+    "title": "会議を録音",
+    "ready": "録音準備完了",
+    "startHint": "システム音声とマイクを端末内で録音します。",
+    "recording": "会議を録音中",
+    "recordingHint": "完了するまで音声はこの端末内に保存されます。",
+    "systemAudio": "システム音声",
+    "microphone": "マイク",
+    "start": "録音を開始",
+    "finish": "完了して保存",
+    "processing": "確認して保存中…",
+    "unsupportedTitle": "会議録音を利用できません",
+    "linuxRequired": "会議録音は現在 Linux でのみ利用できます。",
+    "ffmpegRequired": "会議録音には ffmpeg をインストールしてください。",
+    "ffprobeRequired": "音声の確認には ffprobe をインストールしてください。",
+    "pactlRequired": "PipeWire または PulseAudio のツールが必要です。",
+    "audioServerUnavailable": "システムの音声サーバーを利用できません。",
+    "audioDevicesUnavailable": "使用できる出力デバイスとマイクを選択して、もう一度お試しください。",
+    "probeFailed": "このデバイスで会議録音を確認できませんでした。",
+    "startFailed": "会議録音を開始できませんでした。",
+    "saveFailed": "会議は端末内に残っていますが、まだ保存できませんでした。",
+    "deviceLost": "音声デバイスが切断されました。復元できるよう録音途中の音声を保持しました。",
+    "discardTitle": "この会議録音を破棄しますか？",
+    "discardBody": "未保存の端末内音声は削除されます。",
+    "keep": "録音を続ける",
+    "discard": "破棄",
+    "recoveryTitle": "中断された会議録音があります",
+    "recoveryHint": "音声を復元しました。保存できます。",
+    "saveRecovered": "復元した会議を保存"
+  },
   "details": {
     "summary": "要約",
     "notes": "メモ",
@@ -153,7 +183,11 @@
     "viewFullscreen": "全画面で表示",
     "fileChip": {
       "open": "開く",
-      "soon": "近日対応",
+      "openInApp": "アプリで開く",
+      "download": "ダウンロード",
+      "unavailable": "利用できません",
+      "activeContentWarning": "アクティブコンテンツ・ダウンロードのみ",
+      "openFailed": "ファイルを開けませんでした",
       "unknownSize": "—"
     },
     "contentsTag": {
@@ -435,6 +469,12 @@
       "empty": "—",
       "notFound": "連絡先が見つかりません"
     }
+  },
+  "textItem": {
+    "pending": "端末に保存済み · 同期待ち",
+    "conflict": "同期競合 · 端末上のテキストは保持されています",
+    "failed": "同期に失敗しました · 再試行してください",
+    "pendingDelete": "削除待ち"
   },
   "satori": {
     "title": "悟り",

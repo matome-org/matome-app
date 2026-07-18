@@ -52,11 +52,28 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     if (ownerId == null) return;
     try {
       final remote = await _repo.fetchRecordings();
+      final remoteTextCoreIds = <int>{};
       for (final recording in remote) {
         if (recording.ownerId != ownerId) continue;
         final existing =
             await _dao.getByCoreId(recording.id, ownerId) ??
+            (recording.clientId == null
+                ? null
+                : await _dao.getByClientId(recording.clientId!, ownerId)) ??
             await _dao.getById(coreIdToLocalId(recording.id), ownerId);
+        if (existing?.item.isDeleted == true) continue;
+        if (recording.itemType == 'text') {
+          remoteTextCoreIds.add(recording.id);
+          final companions = textToItemCompanions(
+            recording,
+            existing: existing,
+          );
+          await _dao.upsertTextItem(
+            item: companions.item,
+            text: companions.text,
+          );
+          continue;
+        }
         final companions = recordingToItemCompanions(
           recording,
           existing: existing,
@@ -67,6 +84,7 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
           ensureMatome: !FeatureFlags.localFirstSpaces,
         );
       }
+      await _dao.pruneMissingCleanText(ownerId, remoteTextCoreIds);
     } on ApiException catch (error, stack) {
       if (error.isUnauthorized || error.statusCode != null) {
         AppLog.error(LogCat.sync, 'inbox refresh failed', error, stack);
@@ -299,9 +317,10 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
   }
 
   Future<void> retryUpload(String itemId) async {
+    final ownerId = _requireOwner();
     await _dao.updateItem(
       itemId,
-      _requireOwner(),
+      ownerId,
       const ItemsCompanion(
         syncState: Value(kProcessingStatusPendingUpload),
         processingErrorCode: Value(null),
@@ -312,10 +331,11 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     final workDao = _ref.read(workQueueDaoProvider);
     final existing = await workDao.getForItem(itemId, kWorkKindFileUpload);
     if (existing == null) {
-      final item = await _dao.getById(itemId, _requireOwner());
+      final item = await _dao.getById(itemId, ownerId);
       if (item != null) {
         await workDao.enqueueOrIgnore(
-          fileUploadWork(
+          ownerId: ownerId,
+          work: fileUploadWork(
             itemId: itemId,
             sourceRevision: item.item.sourceRevision,
             now: now,
@@ -324,7 +344,11 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
         );
       }
     } else {
-      await workDao.resetForManualRetry(itemId, now);
+      await workDao.resetForManualRetry(
+        ownerId: ownerId,
+        itemId: itemId,
+        now: now,
+      );
     }
     await reloadFromLocal();
     await _ref.read(uploadQueueProvider).drainRow(itemId);

@@ -85,7 +85,7 @@ config :matome_api, MatomeApi.AIEngine,
         "enabled" => true,
         "max_bytes" => 524_288_000,
         "content_types" => ["application/pdf", "text/plain", "application/octet-stream"],
-        "outputs" => ~w(extracted_text summary title)
+        "outputs" => ~w(extracted_text summary)
       },
       "text" => %{
         "enabled" => true,

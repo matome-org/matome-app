@@ -8,6 +8,12 @@ defmodule MatomeApi.AIEngine.Contract do
     "document" => ~w(extracted_text summary title),
     "text" => ~w(summary title)
   }
+  @requested_outputs %{
+    "audio" => ~w(transcript summary title),
+    "image" => ~w(ocr_text description summary title),
+    "document" => ~w(extracted_text summary),
+    "text" => ~w(summary title)
+  }
   @max_capabilities_bytes 65_536
   @max_callback_bytes 4_210_000
   @max_outputs_bytes 4_194_304
@@ -29,6 +35,15 @@ defmodule MatomeApi.AIEngine.Contract do
   end
 
   def validate_capabilities(_capabilities), do: {:error, :invalid_capabilities}
+
+  def requested_outputs(kind, %{"outputs" => advertised}) when is_list(advertised) do
+    case Map.fetch(@requested_outputs, kind) do
+      {:ok, supported} -> Enum.filter(advertised, &(&1 in supported))
+      :error -> []
+    end
+  end
+
+  def requested_outputs(_kind, _capability), do: []
 
   def validate_dispatch_ack(body, payload) when is_map(body) do
     normalized = stringify_keys(body)

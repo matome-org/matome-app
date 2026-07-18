@@ -47,6 +47,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$inbox$en inbox = Translations$inbox$en.internal(_root);
 	late final Translations$cardStatus$en cardStatus = Translations$cardStatus$en.internal(_root);
 	late final Translations$recording$en recording = Translations$recording$en.internal(_root);
+	late final Translations$meetingRecording$en meetingRecording = Translations$meetingRecording$en.internal(_root);
 	late final Translations$details$en details = Translations$details$en.internal(_root);
 	late final Translations$fileView$en fileView = Translations$fileView$en.internal(_root);
 	late final Translations$matome$en matome = Translations$matome$en.internal(_root);
@@ -54,6 +55,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$spaces$en spaces = Translations$spaces$en.internal(_root);
 	late final Translations$calendar$en calendar = Translations$calendar$en.internal(_root);
 	late final Translations$contacts$en contacts = Translations$contacts$en.internal(_root);
+	late final Translations$textItem$en textItem = Translations$textItem$en.internal(_root);
 	late final Translations$satori$en satori = Translations$satori$en.internal(_root);
 	late final Translations$welcome$en welcome = Translations$welcome$en.internal(_root);
 	late final Translations$auth$en auth = Translations$auth$en.internal(_root);
@@ -447,6 +449,99 @@ class Translations$recording$en {
 
 	/// en: 'Audio capture isn't available on this device. Try the mobile app to record.'
 	String get unsupportedHint => 'Audio capture isn\'t available on this device. Try the mobile app to record.';
+}
+
+// Path: meetingRecording
+class Translations$meetingRecording$en {
+	Translations$meetingRecording$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Record meeting'
+	String get title => 'Record meeting';
+
+	/// en: 'Ready to capture'
+	String get ready => 'Ready to capture';
+
+	/// en: 'Matome will capture system audio and your microphone locally.'
+	String get startHint => 'Matome will capture system audio and your microphone locally.';
+
+	/// en: 'Meeting in progress'
+	String get recording => 'Meeting in progress';
+
+	/// en: 'Audio stays on this device until you finish.'
+	String get recordingHint => 'Audio stays on this device until you finish.';
+
+	/// en: 'System audio'
+	String get systemAudio => 'System audio';
+
+	/// en: 'Microphone'
+	String get microphone => 'Microphone';
+
+	/// en: 'Start capture'
+	String get start => 'Start capture';
+
+	/// en: 'Finish and save'
+	String get finish => 'Finish and save';
+
+	/// en: 'Validating and saving…'
+	String get processing => 'Validating and saving…';
+
+	/// en: 'Meeting capture unavailable'
+	String get unsupportedTitle => 'Meeting capture unavailable';
+
+	/// en: 'Meeting capture is currently available on Linux only.'
+	String get linuxRequired => 'Meeting capture is currently available on Linux only.';
+
+	/// en: 'Install ffmpeg to capture meetings.'
+	String get ffmpegRequired => 'Install ffmpeg to capture meetings.';
+
+	/// en: 'Install ffprobe to validate meeting audio.'
+	String get ffprobeRequired => 'Install ffprobe to validate meeting audio.';
+
+	/// en: 'PipeWire or PulseAudio tools are required.'
+	String get pactlRequired => 'PipeWire or PulseAudio tools are required.';
+
+	/// en: 'The system audio server is unavailable.'
+	String get audioServerUnavailable => 'The system audio server is unavailable.';
+
+	/// en: 'Select a working output device and microphone, then retry.'
+	String get audioDevicesUnavailable => 'Select a working output device and microphone, then retry.';
+
+	/// en: 'Matome could not verify meeting capture on this device.'
+	String get probeFailed => 'Matome could not verify meeting capture on this device.';
+
+	/// en: 'Meeting capture could not start.'
+	String get startFailed => 'Meeting capture could not start.';
+
+	/// en: 'The meeting remains on this device, but could not be saved yet.'
+	String get saveFailed => 'The meeting remains on this device, but could not be saved yet.';
+
+	/// en: 'An audio device disconnected. The partial recording was kept for recovery.'
+	String get deviceLost => 'An audio device disconnected. The partial recording was kept for recovery.';
+
+	/// en: 'Discard this meeting?'
+	String get discardTitle => 'Discard this meeting?';
+
+	/// en: 'The unsaved local audio will be deleted.'
+	String get discardBody => 'The unsaved local audio will be deleted.';
+
+	/// en: 'Keep recording'
+	String get keep => 'Keep recording';
+
+	/// en: 'Discard'
+	String get discard => 'Discard';
+
+	/// en: 'Interrupted meeting found'
+	String get recoveryTitle => 'Interrupted meeting found';
+
+	/// en: 'The recovered audio is valid and ready to save.'
+	String get recoveryHint => 'The recovered audio is valid and ready to save.';
+
+	/// en: 'Save recovered meeting'
+	String get saveRecovered => 'Save recovered meeting';
 }
 
 // Path: details
@@ -1012,6 +1107,27 @@ class Translations$contacts$en {
 	late final Translations$contacts$detail$en detail = Translations$contacts$detail$en.internal(_root);
 }
 
+// Path: textItem
+class Translations$textItem$en {
+	Translations$textItem$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Saved on device · waiting to sync'
+	String get pending => 'Saved on device · waiting to sync';
+
+	/// en: 'Sync conflict · your local text is preserved'
+	String get conflict => 'Sync conflict · your local text is preserved';
+
+	/// en: 'Sync failed · retry to continue'
+	String get failed => 'Sync failed · retry to continue';
+
+	/// en: 'Waiting to delete'
+	String get pendingDelete => 'Waiting to delete';
+}
+
 // Path: satori
 class Translations$satori$en {
 	Translations$satori$en.internal(this._root);
@@ -1233,8 +1349,20 @@ class Translations$fileView$fileChip$en {
 	/// en: 'Open'
 	String get open => 'Open';
 
-	/// en: 'soon'
-	String get soon => 'soon';
+	/// en: 'Open in app'
+	String get openInApp => 'Open in app';
+
+	/// en: 'Download'
+	String get download => 'Download';
+
+	/// en: 'Unavailable'
+	String get unavailable => 'Unavailable';
+
+	/// en: 'Active content · download only'
+	String get activeContentWarning => 'Active content · download only';
+
+	/// en: 'Couldn't open file'
+	String get openFailed => 'Couldn\'t open file';
 
 	/// en: '—'
 	String get unknownSize => '—';
@@ -1786,6 +1914,34 @@ extension on Translations {
 			'recording.saveFailed' => 'Couldn\'t save recording.',
 			'recording.unsupportedTitle' => 'Microphone unavailable',
 			'recording.unsupportedHint' => 'Audio capture isn\'t available on this device. Try the mobile app to record.',
+			'meetingRecording.title' => 'Record meeting',
+			'meetingRecording.ready' => 'Ready to capture',
+			'meetingRecording.startHint' => 'Matome will capture system audio and your microphone locally.',
+			'meetingRecording.recording' => 'Meeting in progress',
+			'meetingRecording.recordingHint' => 'Audio stays on this device until you finish.',
+			'meetingRecording.systemAudio' => 'System audio',
+			'meetingRecording.microphone' => 'Microphone',
+			'meetingRecording.start' => 'Start capture',
+			'meetingRecording.finish' => 'Finish and save',
+			'meetingRecording.processing' => 'Validating and saving…',
+			'meetingRecording.unsupportedTitle' => 'Meeting capture unavailable',
+			'meetingRecording.linuxRequired' => 'Meeting capture is currently available on Linux only.',
+			'meetingRecording.ffmpegRequired' => 'Install ffmpeg to capture meetings.',
+			'meetingRecording.ffprobeRequired' => 'Install ffprobe to validate meeting audio.',
+			'meetingRecording.pactlRequired' => 'PipeWire or PulseAudio tools are required.',
+			'meetingRecording.audioServerUnavailable' => 'The system audio server is unavailable.',
+			'meetingRecording.audioDevicesUnavailable' => 'Select a working output device and microphone, then retry.',
+			'meetingRecording.probeFailed' => 'Matome could not verify meeting capture on this device.',
+			'meetingRecording.startFailed' => 'Meeting capture could not start.',
+			'meetingRecording.saveFailed' => 'The meeting remains on this device, but could not be saved yet.',
+			'meetingRecording.deviceLost' => 'An audio device disconnected. The partial recording was kept for recovery.',
+			'meetingRecording.discardTitle' => 'Discard this meeting?',
+			'meetingRecording.discardBody' => 'The unsaved local audio will be deleted.',
+			'meetingRecording.keep' => 'Keep recording',
+			'meetingRecording.discard' => 'Discard',
+			'meetingRecording.recoveryTitle' => 'Interrupted meeting found',
+			'meetingRecording.recoveryHint' => 'The recovered audio is valid and ready to save.',
+			'meetingRecording.saveRecovered' => 'Save recovered meeting',
 			'details.summary' => 'Summary',
 			'details.notes' => 'Notes',
 			'details.transcript' => 'Transcript',
@@ -1813,7 +1969,11 @@ extension on Translations {
 			'fileView.notesHint' => 'Write your own notes…',
 			'fileView.viewFullscreen' => 'View fullscreen',
 			'fileView.fileChip.open' => 'Open',
-			'fileView.fileChip.soon' => 'soon',
+			'fileView.fileChip.openInApp' => 'Open in app',
+			'fileView.fileChip.download' => 'Download',
+			'fileView.fileChip.unavailable' => 'Unavailable',
+			'fileView.fileChip.activeContentWarning' => 'Active content · download only',
+			'fileView.fileChip.openFailed' => 'Couldn\'t open file',
 			'fileView.fileChip.unknownSize' => '—',
 			'fileView.contentsTag.transcript' => 'Transcript',
 			'fileView.contentsTag.description' => 'Description',
@@ -2064,6 +2224,10 @@ extension on Translations {
 			'contacts.detail.onDevice' => 'On device',
 			'contacts.detail.empty' => '—',
 			'contacts.detail.notFound' => 'Contact not found',
+			'textItem.pending' => 'Saved on device · waiting to sync',
+			'textItem.conflict' => 'Sync conflict · your local text is preserved',
+			'textItem.failed' => 'Sync failed · retry to continue',
+			'textItem.pendingDelete' => 'Waiting to delete',
 			'satori.title' => 'Satori',
 			'satori.subtitle' => '悟 · your AI assistant',
 			'satori.soon' => 'SOON',

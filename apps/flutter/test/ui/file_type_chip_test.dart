@@ -12,6 +12,9 @@ Future<void> _pump(
   required String fileName,
   String? extension,
   String? sizeLabel,
+  FileTypeChipAction action = FileTypeChipAction.open,
+  FileTypeChipState state = FileTypeChipState.ready,
+  VoidCallback? onAction,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -23,6 +26,9 @@ Future<void> _pump(
               fileName: fileName,
               extension: extension,
               sizeLabel: sizeLabel,
+              action: action,
+              state: state,
+              onAction: onAction,
             ),
           ),
         ),
@@ -57,42 +63,91 @@ void main() {
       );
     });
 
-    testWidgets('uses a distinct type icon for a .md extension', (tester) async {
+    testWidgets('uses a distinct type icon for a .md extension', (
+      tester,
+    ) async {
       await _pump(tester, fileName: 'notes.md', extension: 'md');
 
       expect(find.byIcon(FileTypeChip.iconForExtension('md')), findsOneWidget);
     });
 
-    testWidgets('renders the Open affordance DISABLED with a "soon" label', (
-      tester,
-    ) async {
-      await _pump(tester, fileName: 'spec.pdf', extension: 'pdf');
+    testWidgets('renders an enabled external Open action', (tester) async {
+      var opened = false;
+      await _pump(
+        tester,
+        fileName: 'spec.pdf',
+        extension: 'pdf',
+        onAction: () => opened = true,
+      );
 
-      // The Open affordance is present and labelled.
       expect(find.text(t.fileView.fileChip.open), findsOneWidget);
-      expect(find.text(t.fileView.fileChip.soon), findsOneWidget);
-
-      // …but it is disabled: the underlying button has a null onPressed so a
-      // tap cannot route into the (deferred) preview path.
       final button = tester.widget<AbstractButton>(
         find.byKey(const ValueKey('file-type-chip-open')),
       );
-      expect(button.onPressed, isNull);
+      expect(button.onPressed, isNotNull);
+      await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+      expect(opened, isTrue);
     });
+
+    testWidgets(
+      'renders loading, failure, download, and active-content warning states',
+      (tester) async {
+        await _pump(
+          tester,
+          fileName: 'page.html',
+          extension: 'html',
+          action: FileTypeChipAction.downloadWithWarning,
+          state: FileTypeChipState.loading,
+        );
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(
+          find.text(t.fileView.fileChip.activeContentWarning),
+          findsOneWidget,
+        );
+
+        await _pump(
+          tester,
+          fileName: 'archive.xyz',
+          extension: 'xyz',
+          action: FileTypeChipAction.download,
+          state: FileTypeChipState.failed,
+          onAction: () {},
+        );
+        expect(find.text(t.fileView.fileChip.openFailed), findsOneWidget);
+        expect(find.text(t.common.retry), findsOneWidget);
+      },
+    );
 
     testWidgets('falls back to a generic icon for an unknown extension', (
       tester,
     ) async {
       await _pump(tester, fileName: 'archive.xyz', extension: 'xyz');
 
-      expect(
-        find.byIcon(FileTypeChip.iconForExtension('xyz')),
-        findsOneWidget,
-      );
+      expect(find.byIcon(FileTypeChip.iconForExtension('xyz')), findsOneWidget);
       expect(
         FileTypeChip.iconForExtension('xyz'),
         FileTypeChip.iconForExtension(null),
       );
+    });
+
+    testWidgets('disabled state is unavailable and never offers retry', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        fileName: 'report.pdf',
+        extension: 'pdf',
+        state: FileTypeChipState.disabled,
+        onAction: () {},
+      );
+
+      expect(find.text(t.fileView.fileChip.unavailable), findsOneWidget);
+      expect(find.text(t.common.retry), findsNothing);
+      expect(find.byIcon(Icons.block_outlined), findsOneWidget);
+      final button = tester.widget<AbstractButton>(
+        find.byKey(const ValueKey('file-type-chip-open')),
+      );
+      expect(button.onPressed, isNull);
     });
 
     testWidgets('renders an em-dash placeholder when size is unknown', (

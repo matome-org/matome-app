@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:matome_flutter/app/pages/auth_pages.dart';
 import 'package:matome_flutter/app/pages/primary_pages.dart';
+import 'package:matome_flutter/app/screens/meeting_recording_screen.dart';
 import 'package:matome_flutter/app/pages/secondary_pages.dart';
 import 'package:matome_flutter/app/screens/recording_screen.dart'
     show RecorderBinding;
@@ -80,6 +81,7 @@ import 'package:matome_flutter/features/matome/matome_detail_controller.dart'
         matomeDetailControllerProvider;
 import 'package:matome_flutter/features/matome/widgets/matome_table.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
+import 'package:matome_flutter/features/recording/meeting_capture_backend.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
 import 'package:matome_flutter/features/recording/recording_finish.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart';
@@ -373,7 +375,10 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
   _component(
     name: 'FileTypeChip',
     path: 'Components/Atoms/File view',
-    docs: 'Document media header chip for file identity and size metadata.',
+    docs:
+        'Document media header for file identity plus policy-derived external '
+        'open/download, loading, warning, and failure states. It never previews '
+        'document content in-app.',
     stories: [const _StorySpec('Document media header', fileTypeChipUseCase)],
   ),
   _component(
@@ -696,8 +701,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     name: 'TextItemPage',
     path: 'Pages/Mobile',
     docs:
-        'Canonical plain-text item route Page (mobile). Fixture seeds text_contents/items only: no file payload, no upload queue, no presign.',
-    stories: const [_StorySpec('Plain text note', textItemPageMobileUseCase)],
+        'Canonical plain-text item route Page (mobile) across clean sync, offline pending, processing, retryable processing failure, and version-conflict states. Fixtures seed text_contents/items only: no file payload, upload queue, or presign.',
+    stories: const [
+      _StorySpec('Clean / synced', textItemPageCleanMobileUseCase),
+      _StorySpec('Pending offline sync', textItemPagePendingMobileUseCase),
+      _StorySpec('Processing', textItemPageProcessingMobileUseCase),
+      _StorySpec('Retryable failure', textItemPageFailureMobileUseCase),
+      _StorySpec('Version conflict', textItemPageConflictMobileUseCase),
+    ],
   ),
   _component(
     name: 'CalendarPage',
@@ -839,8 +850,14 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     name: 'TextItemPage',
     path: 'Pages/Desktop',
     docs:
-        'Canonical plain-text item route Page (desktop). Fixture seeds text_contents/items only: no file payload, no upload queue, no presign.',
-    stories: const [_StorySpec('Plain text note', textItemPageDesktopUseCase)],
+        'Canonical plain-text item route Page (desktop) across clean sync, offline pending, processing, retryable processing failure, and version-conflict states. Fixtures seed text_contents/items only: no file payload, upload queue, or presign.',
+    stories: const [
+      _StorySpec('Clean / synced', textItemPageCleanDesktopUseCase),
+      _StorySpec('Pending offline sync', textItemPagePendingDesktopUseCase),
+      _StorySpec('Processing', textItemPageProcessingDesktopUseCase),
+      _StorySpec('Retryable failure', textItemPageFailureDesktopUseCase),
+      _StorySpec('Version conflict', textItemPageConflictDesktopUseCase),
+    ],
   ),
   _component(
     name: 'CalendarPage',
@@ -2170,11 +2187,35 @@ Widget fileDetailPageVideoDesktopUseCase(BuildContext context) => _desktopPage(
   const ProviderScope(child: FileDetailPage.video(id: 'widgetbook-video')),
 );
 
-Widget textItemPageMobileUseCase(BuildContext context) =>
-    _mobilePage(_textItemPageScene());
+Widget textItemPageCleanMobileUseCase(BuildContext context) =>
+    _mobilePage(_textItemPageScene('widgetbook-text-clean'));
 
-Widget textItemPageDesktopUseCase(BuildContext context) =>
-    _desktopPage(_textItemPageScene());
+Widget textItemPageCleanDesktopUseCase(BuildContext context) =>
+    _desktopPage(_textItemPageScene('widgetbook-text-clean'));
+
+Widget textItemPagePendingMobileUseCase(BuildContext context) =>
+    _mobilePage(_textItemPageScene('widgetbook-text-pending'));
+
+Widget textItemPagePendingDesktopUseCase(BuildContext context) =>
+    _desktopPage(_textItemPageScene('widgetbook-text-pending'));
+
+Widget textItemPageProcessingMobileUseCase(BuildContext context) =>
+    _mobilePage(_textItemPageScene('widgetbook-text-processing'));
+
+Widget textItemPageProcessingDesktopUseCase(BuildContext context) =>
+    _desktopPage(_textItemPageScene('widgetbook-text-processing'));
+
+Widget textItemPageFailureMobileUseCase(BuildContext context) =>
+    _mobilePage(_textItemPageScene('widgetbook-text-failure'));
+
+Widget textItemPageFailureDesktopUseCase(BuildContext context) =>
+    _desktopPage(_textItemPageScene('widgetbook-text-failure'));
+
+Widget textItemPageConflictMobileUseCase(BuildContext context) =>
+    _mobilePage(_textItemPageScene('widgetbook-text-conflict'));
+
+Widget textItemPageConflictDesktopUseCase(BuildContext context) =>
+    _desktopPage(_textItemPageScene('widgetbook-text-conflict'));
 
 Widget recordingPageMobileUseCase(BuildContext context) => _mobilePage(
   ProviderScope(child: RecordingPage(binding: _widgetbookMicRecorderBinding)),
@@ -2318,7 +2359,7 @@ Widget _fileDetailPageScene(String id) {
   );
 }
 
-Widget _textItemPageScene() {
+Widget _textItemPageScene(String itemId) {
   return FutureBuilder<AppDatabase>(
     future: _widgetbookTextItemDb,
     builder: (context, snapshot) {
@@ -2331,7 +2372,7 @@ Widget _textItemPageScene() {
           appDatabaseProvider.overrideWithValue(db),
           currentOwnerIdProvider.overrideWithValue('widgetbook-owner'),
         ],
-        child: const TextItemPage(id: 'widgetbook-text-note'),
+        child: TextItemPage(id: itemId),
       );
     },
   );
@@ -2341,13 +2382,92 @@ final Future<AppDatabase> _widgetbookTextItemDb = _seedTextItemDb();
 
 Future<AppDatabase> _seedTextItemDb() async {
   final db = AppDatabase();
+  await _seedTextItem(
+    db,
+    id: 'widgetbook-text-clean',
+    body:
+        'Interview notes\n\nThe customer values reliable offline capture and a clear separation between their original words and generated summaries.',
+    position: 1,
+    coreId: 20481,
+    summary:
+        'Reliable offline capture and visibly separate generated content are the customer priorities.',
+    processingState: 'succeeded',
+  );
+  await _seedTextItem(
+    db,
+    id: 'widgetbook-text-pending',
+    body:
+        'Train notes\n\nDrafted without a connection. This original remains editable while Matome waits to sync it.',
+    position: 2,
+  );
+  await _seedTextItem(
+    db,
+    id: 'widgetbook-text-processing',
+    body:
+        'Research synthesis\n\nGroup observations by recurring workflow friction, then summarize only this user-authored body.',
+    position: 3,
+    coreId: 20483,
+    processingState: 'processing',
+    processingRunId: 'widgetbook-text-run',
+    processingAttempt: 1,
+  );
+  await _seedTextItem(
+    db,
+    id: 'widgetbook-text-failure',
+    body:
+        'Planning notes\n\nConfirm the rollout sequence and retry summary generation after the temporary processor outage.',
+    position: 4,
+    coreId: 20484,
+    processingState: 'failed',
+    processingRunId: 'widgetbook-failed-run',
+    processingAttempt: 2,
+    processingErrorCode: 'processor_unavailable',
+  );
+  await _seedTextItem(
+    db,
+    id: 'widgetbook-text-conflict',
+    body:
+        'Local workshop notes\n\nKeep this newer local wording visible until the version conflict is resolved explicitly.',
+    position: 5,
+    coreId: 20485,
+    syncState: 'conflict',
+    isDirty: true,
+    sourceRevision: 3,
+    acceptedSourceRevision: 2,
+    acceptedBody:
+        'Workshop notes\n\nThis is the last body accepted by the server.',
+  );
+  return db;
+}
+
+Future<void> _seedTextItem(
+  AppDatabase db, {
+  required String id,
+  required String body,
+  required int position,
+  int? coreId,
+  String? summary,
+  String processingState = 'not_requested',
+  String? processingRunId,
+  int processingAttempt = 0,
+  String? processingErrorCode,
+  String? syncState,
+  bool? isDirty,
+  int sourceRevision = 1,
+  int? acceptedSourceRevision,
+  String? acceptedBody,
+}) async {
+  final textContentId = '$id-content';
+  final dirty = isDirty ?? coreId == null;
   await db
       .into(db.textContents)
       .insert(
         TextContentsCompanion.insert(
-          id: 'widgetbook-text-note-content',
-          body:
-              'Plain text note\n\nThis file-less item is stored in text_contents and joined through items by MatomeItemType.text.',
+          id: textContentId,
+          coreId: Value(coreId),
+          body: body,
+          acceptedBody: Value(acceptedBody ?? (dirty ? null : body)),
+          isDirty: Value(dirty),
           createdAt: _journeyTimestamp,
           updatedAt: _journeyTimestamp,
         ),
@@ -2356,18 +2476,34 @@ Future<AppDatabase> _seedTextItemDb() async {
       .into(db.items)
       .insert(
         ItemsCompanion.insert(
-          id: 'widgetbook-text-note',
+          id: id,
+          coreId: Value(coreId),
           ownerId: 'widgetbook-owner',
-          clientId: 'widgetbook-text-note',
+          clientId: id,
           matomeId: const Value('widgetbook-matome-text'),
-          position: const Value(1),
+          position: Value(position),
           itemType: 'text',
-          textContentId: const Value('widgetbook-text-note-content'),
+          title: Value(body.split('\n').first),
+          processingState: Value(processingState),
+          processingRunId: Value(processingRunId),
+          processingAttempt: Value(processingAttempt),
+          sourceRevision: Value(sourceRevision),
+          acceptedSourceRevision: Value(
+            acceptedSourceRevision ?? (coreId == null ? 0 : 1),
+          ),
+          processingOutputs: Value(
+            summary == null
+                ? '{}'
+                : '{"summary":{"type":"summary","markdown":"$summary"}}',
+          ),
+          processingErrorCode: Value(processingErrorCode),
+          textContentId: Value(textContentId),
+          isDirty: Value(dirty),
+          syncState: Value(syncState ?? (dirty ? 'local_saved' : 'synced')),
           createdAt: _journeyTimestamp,
           updatedAt: _journeyTimestamp,
         ),
       );
-  return db;
 }
 
 Widget _spaceDetailPageScene(String spaceId) {
@@ -2843,12 +2979,14 @@ const _journeyAudioRow = ItemWithPayload(
     processingRunId: '00000000-0000-4000-8000-000000000501',
     processingAttempt: 1,
     sourceRevision: 1,
+    acceptedSourceRevision: 1,
     processingOutputs:
         '{"summary":{"type":"summary","markdown":"Decision log, launch risks, and owners captured from the review."},"transcript":{"type":"transcript","text":"We confirmed the launch checklist, kept analytics instrumentation as the highest risk, and assigned owners for support docs, billing copy, and the Friday go/no-go review."}}',
     processingRequestedOutputs: '["transcript","summary"]',
     fileBlobId: 'widgetbook-audio-review-blob',
     isDirty: false,
     syncState: 'synced',
+    isDeleted: false,
     createdAt: _journeyTimestamp,
     updatedAt: _journeyTimestamp,
   ),
@@ -2863,6 +3001,7 @@ const _journeyAudioRow = ItemWithPayload(
     uploadState: 'uploaded',
     uploadGeneration: 1,
     uploadedAt: _journeyTimestamp,
+    openPolicy: 'download_only',
     localPath: '',
     isDirty: false,
     createdAt: _journeyTimestamp,
@@ -2972,13 +3111,16 @@ final _widgetbookMicRecorderBinding = RecorderBinding(
   unsupportedReason: _widgetbookUnsupportedCaptureReason,
 );
 
-final _widgetbookMeetingRecorderBinding = RecorderBinding(
-  serviceProvider: _widgetbookAudioRecordingServiceProvider,
-  controllerProvider: _widgetbookRecordingControllerProvider,
-  finisherProvider: _widgetbookRecordingFinisherProvider,
-  titleLabel: 'Record meeting',
-  unsupportedReason: _widgetbookUnsupportedCaptureReason,
-  supportsPause: false,
+final _widgetbookMeetingCapabilityProvider =
+    FutureProvider<MeetingCaptureCapability>(
+      (ref) async => const MeetingCaptureCapability.unsupported(
+        backendId: 'widgetbook',
+        reason: 'linux-required',
+      ),
+    );
+
+final _widgetbookMeetingRecorderBinding = MeetingRecordingBinding(
+  capabilityProvider: _widgetbookMeetingCapabilityProvider,
 );
 
 enum _AuthViewport { mobile, desktop }
@@ -3732,9 +3874,9 @@ Widget emptyStateUseCase(BuildContext context) {
 }
 
 Widget fileTypeChipUseCase(BuildContext context) {
-  // The doc media header across its icon families plus a missing-size row, each
-  // with the DISABLED "Open" / "soon" affordance (preview is deferred, #1455).
-  return const _UseCaseSurface(
+  // The catalog handlers are inert: these rows document policy/action states
+  // without opening a local file or a signed URL.
+  return _UseCaseSurface(
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3743,19 +3885,38 @@ Widget fileTypeChipUseCase(BuildContext context) {
           fileName: 'Q3 roadmap.pdf',
           extension: 'pdf',
           sizeLabel: '2.4 MB',
+          onAction: _ignoreCatalogAction,
         ),
         SizedBox(height: 12),
         FileTypeChip(
-          fileName: 'meeting-notes.md',
-          extension: 'md',
-          sizeLabel: '4 KB',
+          fileName: 'budget.xlsx',
+          extension: 'xlsx',
+          sizeLabel: '84 KB',
+          action: FileTypeChipAction.openInApp,
+          state: FileTypeChipState.loading,
         ),
         SizedBox(height: 12),
-        FileTypeChip(fileName: 'archive.xyz', extension: 'xyz'),
+        FileTypeChip(
+          fileName: 'page.html',
+          extension: 'html',
+          sizeLabel: '12 KB',
+          action: FileTypeChipAction.downloadWithWarning,
+          onAction: _ignoreCatalogAction,
+        ),
+        SizedBox(height: 12),
+        FileTypeChip(
+          fileName: 'archive.xyz',
+          extension: 'xyz',
+          action: FileTypeChipAction.download,
+          state: FileTypeChipState.failed,
+          onAction: _ignoreCatalogAction,
+        ),
       ],
     ),
   );
 }
+
+void _ignoreCatalogAction() {}
 
 Widget matomeChipUseCase(BuildContext context) {
   // Filled pill carrying a matome title, plus the italic muted "Unfiled" state

@@ -197,77 +197,77 @@ void main() {
     expect(row.coreId, isNull);
   });
 
-  test('addTextNote creates text_contents/items without durable copy, upload '
-      'queue, or legacy recording row', () async {
-    await seedMatome('m_text');
-    final queue = _RecordingUploadQueue();
-    final durableCopy = _DurableCopySpy();
-    final c = containerWith(queue, durableCopy: durableCopy);
-    final controller = c.read(
-      matomeDetailControllerProvider('m_text').notifier,
-    );
-    await controller.load();
+  test(
+    'addTextNote atomically creates text payload and kicks durable work',
+    () async {
+      await seedMatome('m_text');
+      final queue = _RecordingUploadQueue();
+      final durableCopy = _DurableCopySpy();
+      final c = containerWith(queue, durableCopy: durableCopy);
+      final controller = c.read(
+        matomeDetailControllerProvider('m_text').notifier,
+      );
+      await controller.load();
 
-    final itemId = await controller.addTextNote(
-      '  A typed note from offline  ',
-    );
-    await queue.settle();
+      final itemId = await controller.addTextNote(
+        '  A typed note from offline  ',
+      );
+      await queue.settle();
 
-    expect(durableCopy.calls, 0, reason: 'text notes have no file to copy');
-    expect(queue.drainAttempts, 0, reason: 'text notes must not kick uploads');
-    expect(
-      (await db.itemsDao.listForMatome(
-        'm_text',
-        '1',
-      )).where((item) => item.file != null),
-      isEmpty,
-      reason: 'file-less text notes must not create legacy recording rows',
-    );
+      expect(durableCopy.calls, 0, reason: 'text notes have no file to copy');
+      expect(
+        queue.drainAttempts,
+        1,
+        reason: 'text sync uses the durable queue',
+      );
+      expect(queue.drainedRows, [itemId]);
+      expect(
+        (await db.itemsDao.listForMatome(
+          'm_text',
+          '1',
+        )).where((item) => item.file != null),
+        isEmpty,
+        reason: 'file-less text notes must not create legacy recording rows',
+      );
 
-    final rows = await db.itemsDao.listForMatome('m_text', '1');
-    expect(rows, hasLength(1));
-    expect(rows.single.item.id, itemId);
-    expect(rows.single.type, MatomeItemType.text);
-    expect(rows.single.file, isNull);
-    expect(rows.single.text?.body, 'A typed note from offline');
-  });
+      final rows = await db.itemsDao.listForMatome('m_text', '1');
+      expect(rows, hasLength(1));
+      expect(rows.single.item.id, itemId);
+      expect(rows.single.type, MatomeItemType.text);
+      expect(rows.single.file, isNull);
+      expect(rows.single.text?.body, 'A typed note from offline');
+    },
+  );
 
-  test('W1: addTextNote on a reconciled Matome POSTs the note to Core '
-      '(item_type=text, trimmed body)', () async {
-    await seedMatome('m_text_post'); // coreId 7001 (reconciled)
-    final queue = _RecordingUploadQueue();
-    final matomesRepo = _RecordingMatomesRepo();
-    final c = containerWith(queue, matomesRepo: matomesRepo);
-    final controller = c.read(
-      matomeDetailControllerProvider('m_text_post').notifier,
-    );
-    await controller.load();
+  test(
+    'addTextNote on a reconciled Matome delegates Core writes to the queue',
+    () async {
+      await seedMatome('m_text_post'); // coreId 7001 (reconciled)
+      final queue = _RecordingUploadQueue();
+      final matomesRepo = _RecordingMatomesRepo();
+      final c = containerWith(queue, matomesRepo: matomesRepo);
+      final controller = c.read(
+        matomeDetailControllerProvider('m_text_post').notifier,
+      );
+      await controller.load();
 
-    await controller.addTextNote('  A durable typed note  ');
+      await controller.addTextNote('  A durable typed note  ');
+      await queue.settle();
 
-    expect(
-      matomesRepo.textItemPosts,
-      hasLength(1),
-      reason: 'a reconciled Matome must push the note to Core for durability',
-    );
-    expect(matomesRepo.textItemPosts.single.matomeId, 7001);
-    expect(
-      matomesRepo.textItemPosts.single.clientId,
-      startsWith('text_local_'),
-    );
-    expect(matomesRepo.textItemPosts.single.body, 'A durable typed note');
+      expect(queue.drainAttempts, 1);
+      expect(matomesRepo.textItemPosts, isEmpty);
 
-    // The local mirror still exists regardless of the Core leg (local-first).
-    final rows = await db.itemsDao.listForMatome('m_text_post', '1');
-    expect(rows, hasLength(1));
-    expect(rows.single.text?.body, 'A durable typed note');
-  });
+      // The local mirror still exists regardless of the Core leg (local-first).
+      final rows = await db.itemsDao.listForMatome('m_text_post', '1');
+      expect(rows, hasLength(1));
+      expect(rows.single.text?.body, 'A durable typed note');
+    },
+  );
 
-  test('W1: a failing Core POST does not revert the local note (local-first, '
-      'best-effort)', () async {
+  test('a failing queue kick does not revert the local text or work', () async {
     await seedMatome('m_text_fail');
-    final queue = _RecordingUploadQueue();
-    final matomesRepo = _RecordingMatomesRepo(throwOnPost: true);
+    final queue = _RecordingUploadQueue(throwOnDrain: true);
+    final matomesRepo = _RecordingMatomesRepo();
     final c = containerWith(queue, matomesRepo: matomesRepo);
     final controller = c.read(
       matomeDetailControllerProvider('m_text_fail').notifier,
@@ -276,16 +276,14 @@ void main() {
 
     // The POST throws, but addTextNote completes and the local row survives.
     final itemId = await controller.addTextNote('kept locally');
+    await queue.settle();
 
-    expect(
-      matomesRepo.textItemPosts,
-      hasLength(1),
-      reason: 'the POST was tried',
-    );
+    expect(queue.drainAttempts, 1);
     final rows = await db.itemsDao.listForMatome('m_text_fail', '1');
     expect(rows, hasLength(1));
     expect(rows.single.item.id, itemId);
     expect(rows.single.text?.body, 'kept locally');
+    expect(await db.workQueueDao.listAll(), hasLength(1));
   });
 }
 
@@ -293,7 +291,7 @@ void main() {
 /// controller issues (W1) so the test can assert the durability push fired
 /// (and, optionally, simulate a failing Core leg). No real HTTP.
 class _RecordingMatomesRepo extends MatomesRepository {
-  _RecordingMatomesRepo({this.throwOnPost = false})
+  _RecordingMatomesRepo()
     : super(
         apiClient: ApiClient(
           tokenStore: InMemoryTokenStore(),
@@ -301,7 +299,6 @@ class _RecordingMatomesRepo extends MatomesRepository {
         ),
       );
 
-  final bool throwOnPost;
   final List<({int matomeId, String clientId, String body})> textItemPosts = [];
 
   @override
@@ -311,9 +308,6 @@ class _RecordingMatomesRepo extends MatomesRepository {
     required String body,
   }) async {
     textItemPosts.add((matomeId: matomeId, clientId: clientId, body: body));
-    if (throwOnPost) {
-      throw StateError('simulated Core POST failure (offline / 5xx)');
-    }
     return Recording.fromItemJson(<String, dynamic>{
       'id': 555,
       'owner_id': 1,

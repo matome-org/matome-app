@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../features/recording/audio_recording_service.dart';
-import '../../features/recording/meeting_recorder.dart';
 import '../../features/recording/recording_controller.dart';
 import '../../features/recording/recording_finish.dart';
 import '../../i18n/strings.g.dart';
@@ -52,22 +51,6 @@ class RecorderBinding {
     serviceProvider: audioRecordingServiceProvider,
     controllerProvider: recordingControllerProvider,
     finisherProvider: recordingFinisherProvider,
-  );
-
-  /// Desktop meeting recorder binding — loopback (system output) + mic mixed
-  /// into one WAV via ffmpeg, then through the same F4 upload pipeline. The
-  /// unsupported reason probes the host so off-Linux / missing-ffmpeg hosts get
-  /// a precise message instead of the generic mic copy.
-  static final meeting = RecorderBinding(
-    serviceProvider: meetingRecordingServiceProvider,
-    controllerProvider: meetingRecordingControllerProvider,
-    finisherProvider: meetingRecordingFinisherProvider,
-    titleLabel: 'Record meeting',
-    unsupportedReason: (ref) =>
-        ref.read(meetingCaptureCapabilityProvider).unsupportedReason(),
-    // Single-pass ffmpeg capture has no lossless pause — the meeting modal hides
-    // pause and makes its primary button finish straight through.
-    supportsPause: false,
   );
 }
 

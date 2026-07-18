@@ -387,6 +387,8 @@ class _CoreDownRepository extends RecordingsRepository {
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     throw const ApiException('Core unreachable (test)');
   }

@@ -16,6 +16,7 @@ import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
 import 'package:matome_flutter/features/recordings/recording_ids.dart'
     show kProcessingStatusPendingUpload;
+import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 /// #1449 — generic `addFile`: dynamic mediaType (NOT hardcoded image), the
@@ -33,11 +34,13 @@ void main() {
   });
   tearDown(() async => db.close());
 
-  ProviderContainer containerFor(String matomeId) {
+  ProviderContainer containerFor(String matomeId, {UploadQueue? uploadQueue}) {
     final c = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
         currentOwnerIdProvider.overrideWithValue('1'),
+        if (uploadQueue != null)
+          uploadQueueProvider.overrideWithValue(uploadQueue),
         // Identity durable copy — keep the test off-disk; the real copy is
         // covered by matome_add_photo_e2e_test.
         matomeDetailControllerProvider.overrideWith(
@@ -145,22 +148,26 @@ void main() {
     },
   );
 
-  test('addTextNote on an UNRECONCILED Matome stays local-only', () async {
-    await seedMatome('m_local'); // no coreId
-    final c = containerFor('m_local');
-    final controller = c.read(
-      matomeDetailControllerProvider('m_local').notifier,
-    );
-    await controller.load();
+  test(
+    'addTextNote on an unreconciled Matome stays local and queues work',
+    () async {
+      await seedMatome('m_local'); // no coreId
+      final c = containerFor('m_local', uploadQueue: _NoopUploadQueue());
+      final controller = c.read(
+        matomeDetailControllerProvider('m_local').notifier,
+      );
+      await controller.load();
 
-    final itemId = await controller.addTextNote('a note with no home yet');
+      final itemId = await controller.addTextNote('a note with no home yet');
 
-    final rows = await db.itemsDao.listForMatome('m_local', '1');
-    expect(rows, hasLength(1));
-    expect(rows.single.id, itemId);
-    expect(rows.single.text?.body, 'a note with no home yet');
-    expect(rows.single.coreId, isNull);
-  });
+      final rows = await db.itemsDao.listForMatome('m_local', '1');
+      expect(rows, hasLength(1));
+      expect(rows.single.id, itemId);
+      expect(rows.single.text?.body, 'a note with no home yet');
+      expect(rows.single.coreId, isNull);
+      expect(await db.workQueueDao.listAll(), hasLength(1));
+    },
+  );
 
   test('addFile of a .png still stores mediaType=image (derivation, not a doc '
       'override) with the extension persisted', () async {
@@ -331,7 +338,7 @@ void main() {
     );
   });
 
-  testWidgets('Text note action is hidden for local-only matomes', (
+  testWidgets('Text note action is available for local-only matomes', (
     tester,
   ) async {
     await seedMatome('m_local_text');
@@ -369,10 +376,22 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('relationship-action-text-note')),
-      findsNothing,
+      findsOneWidget,
       reason:
-          'items.matome_id is Core-shaped today, so local-only Matomes must not '
-          'show an action that would throw before local item reconciliation exists',
+          'durable parent reconciliation allows text creation before Core ids exist',
     );
   });
+}
+
+class _NoopUploadQueue extends UploadQueue {
+  _NoopUploadQueue() : super(_NullRef());
+
+  @override
+  Future<void> drainRow(String localId) async {}
+}
+
+class _NullRef implements Ref {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('No provider reads are expected');
 }

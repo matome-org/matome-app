@@ -102,6 +102,7 @@ void main() {
     AppDatabase db,
     Directory tmp, {
     required String extension,
+    required String contentType,
   }) async {
     final localId = mintLocalRecordingId();
     // A document is imported from within a matome (MatomeDetailController.addFile),
@@ -130,11 +131,12 @@ void main() {
       db,
       id: localId,
       matomeId: matomeId,
-      title: 'Report.$extension',
+      title: 'Quarterly report',
       localPath: durable.path,
       filename: 'Report.$extension',
       createdAt: now.millisecondsSinceEpoch,
       mediaType: 'document',
+      contentType: contentType,
       processingStatus: kProcessingStatusPendingUpload,
     );
     return (localId, durable, bytes);
@@ -188,119 +190,136 @@ void main() {
   });
 
   // ── The core characterization: drain a document row end-to-end ────────────
-  for (final ext in const ['txt', 'md', 'pdf', 'docx']) {
-    test(
-      'document[$ext] drains through Core processing acceptance '
-      '(create → reconcile coreId → uploadFile → enqueue); '
-      'PUT preserves the document bytes; row resolves to the DOC host',
-      () async {
-        final db = AppDatabase.forTesting(NativeDatabase.memory());
-        addTearDown(db.close);
+  for (final entry in const {
+    'txt': 'text/plain',
+    'md': 'text/markdown',
+    'pdf': 'application/pdf',
+    'docx':
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  }.entries) {
+    final ext = entry.key;
+    final contentType = entry.value;
+    test('document[$ext] drains through Core processing acceptance '
+        '(create → reconcile coreId → uploadFile → enqueue); '
+        'PUT preserves the document bytes; row resolves to the DOC host', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
 
-        final repo = _DocCapturingRepository(
-          apiClient: ApiClient(
-            tokenStore: InMemoryTokenStore(),
-            dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
-          ),
-          presignUrl: presignUrl(),
-        );
-        final container = containerFor(db, repo);
-        addTearDown(container.dispose);
+      final repo = _DocCapturingRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+        presignUrl: presignUrl(),
+      );
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
 
-        final (localId, file, bytes) = await seedPendingDocumentRow(
-          db,
-          tmp,
-          extension: ext,
-        );
+      final (localId, file, bytes) = await seedPendingDocumentRow(
+        db,
+        tmp,
+        extension: ext,
+        contentType: contentType,
+      );
 
-        // Drive the REAL queue drain.
-        await container.read(uploadQueueProvider).drain();
-        // The real _uploadStream PUT landed on the loopback server.
-        await putReceived.future.timeout(const Duration(seconds: 5));
+      // Drive the REAL queue drain.
+      await container.read(uploadQueueProvider).drain();
+      // The real _uploadStream PUT landed on the loopback server.
+      await putReceived.future.timeout(const Duration(seconds: 5));
 
-        // 1. Pipeline ran in order, end-to-end.
-        expect(
-          repo.createCalls,
-          1,
-          reason: 'create happened for the $ext document',
-        );
-        expect(
-          repo.createdMediaType,
-          'document',
-          reason:
-              'createRecording carried mediaType=document (row.mediaType '
-              'flows straight through — the queue never forces audio)',
-        );
-        // #1471: the queue computed the on-disk size and declared it as
-        // content_length so Core can persist byte_size (the send leg of the
-        // size round-trip).
-        expect(
-          repo.createdContentLength,
-          bytes.length,
-          reason: 'createRecording declared the real document byte size',
-        );
-        expect(
-          repo.enqueueCalls,
-          greaterThanOrEqualTo(1),
-          reason: 'processing was enqueued after upload',
-        );
+      // 1. Pipeline ran in order, end-to-end.
+      expect(
+        repo.createCalls,
+        1,
+        reason: 'create happened for the $ext document',
+      );
+      expect(
+        repo.createdMediaType,
+        'document',
+        reason:
+            'createRecording carried mediaType=document (row.mediaType '
+            'flows straight through — the queue never forces audio)',
+      );
+      // #1471: the queue computed the on-disk size and declared it as
+      // content_length so Core can persist byte_size (the send leg of the
+      // size round-trip).
+      expect(
+        repo.createdContentLength,
+        bytes.length,
+        reason: 'createRecording declared the real document byte size',
+      );
+      expect(
+        repo.createdFilename,
+        'Report.$ext',
+        reason:
+            'Core receives the preserved source filename, not the display title',
+      );
+      expect(
+        repo.createdContentType,
+        contentType,
+        reason: 'Core receives the persisted document MIME on creation',
+      );
+      expect(
+        repo.enqueueCalls,
+        greaterThanOrEqualTo(1),
+        reason: 'processing was enqueued after upload',
+      );
 
-        // 2. The presigned PUT carried the DOCUMENT bytes (extension preserved
-        //    THROUGH the upload — the queue uploaded File(row.audioFilePath),
-        //    which for a document is the .$ext file, byte-for-byte).
-        expect(capturedMethod, 'PUT', reason: 'presigned PUT method');
-        expect(
-          capturedBody,
-          bytes,
-          reason: 'the exact $ext document bytes were streamed to storage',
-        );
-        // INTEL: production hardcodes application/octet-stream for the PUT and
-        // does NOT encode the extension in the content-type. Extension fidelity
-        // rides on the persisted originalExtension column + storageKey, NOT this
-        // header. Captured + asserted so any future change is caught.
-        expect(
-          capturedContentType,
-          'application/octet-stream',
-          reason:
-              'queue streams a generic binary content-type; the original '
-              'extension is carried by originalExtension, not this header',
-        );
+      // 2. The presigned PUT carried the DOCUMENT bytes (extension preserved
+      //    THROUGH the upload — the queue uploaded File(row.audioFilePath),
+      //    which for a document is the .$ext file, byte-for-byte).
+      expect(capturedMethod, 'PUT', reason: 'presigned PUT method');
+      expect(
+        capturedBody,
+        bytes,
+        reason: 'the exact $ext document bytes were streamed to storage',
+      );
+      // INTEL: production hardcodes application/octet-stream for the PUT and
+      // does NOT encode the extension in the content-type. Extension fidelity
+      // rides on the persisted originalExtension column + storageKey, NOT this
+      // header. Captured + asserted so any future change is caught.
+      expect(
+        capturedContentType,
+        'application/octet-stream',
+        reason:
+            'queue streams a generic binary content-type; the original '
+            'extension is carried by originalExtension, not this header',
+      );
 
-        // 3. Device-terminal state: Core owns processing from acceptance onward.
-        final row = await db.itemsDao.getById(localId, '1');
-        expect(
-          row!.processingStatus,
-          'queued',
-          reason: 'document row stopped after Core accepted processing',
-        );
-        expect(row.isProcessing, isTrue);
-        expect(row.coreId, repo.coreIdMinted, reason: 'coreId reconciled');
-        expect(
-          row.mediaType,
-          'document',
-          reason: 'stored media_type stays document through the drain',
-        );
-        expect(
-          row.originalExtension,
-          ext,
-          reason: 'original extension preserved on the row',
-        );
-        expect(
-          await file.exists(),
-          isTrue,
-          reason: 'local file retained after the Core handoff',
-        );
+      // 3. Device-terminal state: Core owns processing from acceptance onward.
+      final row = await db.itemsDao.getById(localId, '1');
+      expect(
+        row!.processingStatus,
+        'queued',
+        reason: 'document row stopped after Core accepted processing',
+      );
+      expect(row.isProcessing, isTrue);
+      expect(row.coreId, repo.coreIdMinted, reason: 'coreId reconciled');
+      expect(
+        row.mediaType,
+        'document',
+        reason: 'stored media_type stays document through the drain',
+      );
+      expect(
+        row.originalExtension,
+        ext,
+        reason: 'original extension preserved on the row',
+      );
+      expect(
+        await file.exists(),
+        isTrue,
+        reason: 'local file retained after the Core handoff',
+      );
 
-        // 4. After draining, the row still resolves to the DOCUMENT host.
-        expect(
-          mediaKindForType(row.mediaType),
-          FileMediaKind.doc,
-          reason:
-              'a drained document routes to the doc host, not the audio '
-              'host (FileDetailScreen.byId)',
-        );
-      },
-    );
+      // 4. After draining, the row still resolves to the DOCUMENT host.
+      expect(
+        mediaKindForType(row.mediaType),
+        FileMediaKind.doc,
+        reason:
+            'a drained document routes to the doc host, not the audio '
+            'host (FileDetailScreen.byId)',
+      );
+    });
   }
 }
 
@@ -318,6 +337,8 @@ class _DocCapturingRepository extends RecordingsRepository
   int createCalls = 0;
   int enqueueCalls = 0;
   String? createdMediaType;
+  String? createdFilename;
+  String? createdContentType;
   int? createdContentLength;
   final int coreIdMinted = 7777;
 
@@ -364,9 +385,13 @@ class _DocCapturingRepository extends RecordingsRepository
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     createCalls++;
     createdMediaType = mediaType;
+    createdFilename = filename;
+    createdContentType = contentType;
     createdContentLength = contentLength;
     return RecordingCreateResult(
       recording: _recording(state: ProcessingState.notRequested),

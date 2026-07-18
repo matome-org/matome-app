@@ -30,10 +30,56 @@ defmodule MatomeApi.ContentTest do
     assert Content.presign_item_upload(other_owner, item.id) == nil
     assert Content.delete_item(other_owner, item.id) == nil
     assert {:error, :text_item_not_presignable} = Content.presign_item_upload(owner, item.id)
+    assert {:error, :text_endpoint_required} = Content.delete_item(owner, item.id)
 
     text_content_id = item.text_content_id
-    assert {:ok, _} = Content.delete_item(owner, item.id)
+    assert {:ok, _} = Content.delete_text_item(owner, item.id, item.source_revision)
     assert MatomeApi.Repo.get(MatomeApi.Content.TextContent, text_content_id) == nil
+  end
+
+  test "text body mutation increments once, invalidates processing, and version-guards delete" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+
+    assert {:ok, item} =
+             Content.create_text_item(owner, nil, %{client_id: "context-text", body: "Before"})
+
+    processing = %{
+      processing_state: :succeeded,
+      processing_run_id: Ecto.UUID.generate(),
+      processing_attempt: 1,
+      processing_config_revision: 1,
+      processing_capabilities: %{"input_kind" => "text"},
+      processing_requested_outputs: ["summary", "title"],
+      processing_requested_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      processing_deadline_at:
+        DateTime.utc_now() |> DateTime.add(60) |> DateTime.truncate(:second),
+      processing_outputs: %{"summary" => %{"markdown" => "Old"}},
+      processing_error: nil
+    }
+
+    item |> MatomeApi.Content.Item.changeset(processing) |> Repo.update!()
+
+    assert Content.update_text_item(other_owner, item.id, "Stolen", 1) == nil
+    assert {:ok, revised} = Content.update_text_item(owner, item.id, "After", 1)
+    assert revised.source_revision == 2
+    assert revised.text_content.body == "After"
+    assert revised.processing_state == :not_requested
+    assert revised.processing_run_id == nil
+    assert revised.processing_attempt == 0
+    assert revised.processing_outputs == %{}
+    assert revised.processing_error == nil
+
+    assert {:ok, replay} = Content.update_text_item(owner, item.id, "After", 1)
+    assert replay.source_revision == 2
+
+    assert {:error, {:version_conflict, current}} =
+             Content.update_text_item(owner, item.id, "Stale", 1)
+
+    assert current.source_revision == 2
+    assert {:error, {:version_conflict, _}} = Content.delete_text_item(owner, item.id, 1)
+    assert {:ok, _deleted} = Content.delete_text_item(owner, item.id, 2)
+    assert Content.delete_text_item(owner, item.id, 2) == nil
   end
 
   test "file items are scoped by matome owner and delete their payload" do
@@ -152,6 +198,29 @@ defmodule MatomeApi.ContentTest do
     assert Content.update_matome(other_owner, matome.id, %{title: "Stolen"}) == nil
     assert Content.delete_matome(other_owner, matome.id) == nil
     assert {:ok, _} = Content.delete_matome(owner, matome.id)
+  end
+
+  test "matome client identity replays exactly and conflicts owner scoped" do
+    owner = user_fixture()
+    other_owner = user_fixture()
+
+    attrs = %{client_id: "matome-local-1", title: "Offline parent", description: "Original"}
+    assert {:ok, first} = Content.create_matome(owner, attrs)
+    assert {:ok, replay} = Content.create_matome(owner, attrs)
+    assert replay.id == first.id
+    assert replay.client_id == "matome-local-1"
+
+    assert {:error, :client_id_conflict} =
+             Content.create_matome(owner, %{attrs | description: "Changed"})
+
+    assert {:ok, isolated} = Content.create_matome(other_owner, attrs)
+    refute isolated.id == first.id
+    assert Repo.aggregate(MatomeApi.Content.Matome, :count, :id) == 2
+
+    assert {:error, changeset} =
+             Content.create_matome(owner, %{client_id: "   ", title: "Invalid identity"})
+
+    assert %{client_id: [_ | _]} = errors_on(changeset)
   end
 
   test "matomes reject workspaces owned by another user" do

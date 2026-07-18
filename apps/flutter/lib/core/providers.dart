@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/contacts/contacts_repository.dart';
+import '../features/documents/document_external_launcher.dart';
+import '../features/documents/document_open_service.dart';
 import '../features/matome/matomes_repository.dart';
 import '../features/recordings/recordings_repository.dart';
 import '../features/spaces/spaces_repository.dart';
@@ -74,6 +76,15 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 
 final recordingsRepositoryProvider = Provider<RecordingsRepository>((ref) {
   return RecordingsRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+final documentOpenServiceProvider = Provider<DocumentOpenService>((ref) {
+  final repository = ref.watch(recordingsRepositoryProvider);
+  return DocumentOpenService(
+    descriptorSource: repository.documentOpenDescriptor,
+    launcher: createExternalDocumentLauncher(),
+    environment: currentDocumentOpenEnvironment(),
+  );
 });
 
 final productEventReporterProvider = Provider<ProductEventReporter>((ref) {

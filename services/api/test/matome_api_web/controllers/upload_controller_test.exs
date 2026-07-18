@@ -254,6 +254,122 @@ defmodule MatomeApiWeb.UploadControllerTest do
            |> json_response(422) == %{"error" => "upload_not_complete"}
   end
 
+  test "image upload records its declared content type before capability dispatch", %{
+    conn: conn,
+    store: store
+  } do
+    %{conn: owner_conn} = register_conn(conn)
+    matome = create_matome!(owner_conn)
+
+    created =
+      post(owner_conn, "/api/matomes/#{matome["id"]}/items", %{
+        "client_id" => "image-content-type",
+        "item_type" => "file",
+        "title" => "Launch board",
+        "filename" => "launch-board.png",
+        "byte_size" => 1024,
+        "checksum_sha256" => @whole_checksum,
+        "media_type" => "image"
+      })
+      |> json_response(201)
+
+    item = created["item"]
+
+    requested =
+      post(owner_conn, "/api/v1/items/#{item["id"]}/uploads", %{
+        "contract_version" => "1",
+        "mode" => "auto",
+        "content_type" => "image/png",
+        "checksum_sha256" => @whole_checksum
+      })
+      |> json_response(200)
+      |> Map.fetch!("upload")
+
+    blob = Repo.get!(FileBlob, item["file"]["id"])
+    assert blob.content_type == "image/png"
+
+    assert post(owner_conn, "/api/v1/items/#{item["id"]}/uploads", %{
+             "contract_version" => "1",
+             "mode" => "auto",
+             "content_type" => "image/jpeg",
+             "checksum_sha256" => @whole_checksum
+           })
+           |> json_response(422) == %{"error" => "content_type_mismatch"}
+
+    Store.put_object(store, blob.storage_key, %{
+      byte_size: 1024,
+      checksum_sha256: @whole_checksum,
+      etag: "etag-image"
+    })
+
+    assert post(owner_conn, "/api/v1/uploads/#{requested["upload_id"]}/complete", %{
+             "upload_generation" => requested["upload_generation"],
+             "etag" => "etag-image",
+             "checksum_sha256" => @whole_checksum
+           })
+           |> json_response(200)
+           |> get_in(["upload", "state"]) == "uploaded"
+
+    queued =
+      post(owner_conn, "/api/items/#{item["id"]}/process", %{})
+      |> json_response(202)
+      |> Map.fetch!("item")
+
+    assert queued["processing_state"] == "queued"
+
+    assert MapSet.new(queued["processing_requested_outputs"]) ==
+             MapSet.new(~w(ocr_text description summary title))
+  end
+
+  test "document completion normalizes MIME and downgrades a mismatched signature", %{
+    conn: conn,
+    store: store
+  } do
+    %{conn: owner_conn} = register_conn(conn)
+    matome = create_matome!(owner_conn)
+
+    created =
+      post(owner_conn, "/api/matomes/#{matome["id"]}/items", %{
+        "item_type" => "file",
+        "filename" => "report.pdf",
+        "content_type" => "application/pdf",
+        "byte_size" => 1024,
+        "checksum_sha256" => @whole_checksum,
+        "media_type" => "document"
+      })
+      |> json_response(201)
+
+    item = created["item"]
+
+    requested =
+      post(owner_conn, "/api/v1/items/#{item["id"]}/uploads", %{
+        "mode" => "auto",
+        "content_type" => " Application/PDF ; charset=binary "
+      })
+      |> json_response(200)
+      |> Map.fetch!("upload")
+
+    blob = Repo.get!(FileBlob, item["file"]["id"])
+    assert blob.content_type == "application/pdf"
+
+    Store.put_object(store, blob.storage_key, %{
+      byte_size: 1024,
+      checksum_sha256: @whole_checksum,
+      etag: "etag-document",
+      body: "plain text pretending to be a PDF"
+    })
+
+    assert post(owner_conn, "/api/v1/uploads/#{requested["upload_id"]}/complete", %{
+             "upload_generation" => requested["upload_generation"],
+             "etag" => "etag-document",
+             "checksum_sha256" => @whole_checksum
+           })
+           |> json_response(200)
+           |> get_in(["upload", "state"]) == "uploaded"
+
+    assert Repo.get!(FileBlob, blob.id).open_policy == "download_only"
+  end
+
   test "multipart abort and expiry cleanup leave no provider upload", %{conn: conn, store: store} do
     %{conn: owner_conn} = register_conn(conn)
     matome = create_matome!(owner_conn)
@@ -465,6 +581,21 @@ defmodule MatomeApiWeb.UploadControllerTest do
         case state.objects[storage_key] do
           nil -> {:error, :not_found}
           object -> {:ok, object}
+        end
+      end)
+    end
+
+    def get_prefix(storage_key, max_bytes, store) do
+      Agent.get(store, fn state ->
+        case state.objects[storage_key] do
+          nil ->
+            {:error, :not_found}
+
+          object ->
+            {:ok,
+             object
+             |> Map.get(:body, "")
+             |> binary_part(0, min(byte_size(Map.get(object, :body, "")), max_bytes))}
         end
       end)
     end

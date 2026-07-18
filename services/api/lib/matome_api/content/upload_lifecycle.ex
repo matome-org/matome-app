@@ -4,7 +4,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
   import Ecto.Query
 
   alias MatomeApi.Auth.User
-  alias MatomeApi.Content.{FileBlob, Item, UploadCleanupJob}
+  alias MatomeApi.Content.{DocumentOpenPolicy, FileBlob, Item, UploadCleanupJob}
   alias MatomeApi.Repo
   alias MatomeApi.Storage.{ObjectStore, Presigner, UploadPolicy}
 
@@ -16,7 +16,8 @@ defmodule MatomeApi.Content.UploadLifecycle do
              owned_item(owner_id, item_id, lock: true),
            :ok <- UploadPolicy.validate_size(blob.media_type, blob.byte_size),
            {:ok, checksum} <- requested_checksum(blob, attrs),
-           {:ok, mode} <- requested_mode(blob, attrs) do
+           {:ok, mode} <- requested_mode(blob, attrs),
+           {:ok, blob} <- persist_content_type(blob, attrs) do
         request_locked(item, blob, mode, checksum)
       else
         %Item{item_type: :text} -> {:error, :text_item_not_presignable}
@@ -25,6 +26,47 @@ defmodule MatomeApi.Content.UploadLifecycle do
       end
     end)
   end
+
+  defp persist_content_type(%FileBlob{} = blob, attrs) do
+    content_type = Map.get(attrs, "content_type") || Map.get(attrs, :content_type)
+    normalized = DocumentOpenPolicy.normalize_content_type(content_type)
+
+    cond do
+      is_nil(content_type) ->
+        {:ok, blob}
+
+      not is_binary(content_type) or byte_size(content_type) not in 1..255 ->
+        {:error, :invalid_content_type}
+
+      is_nil(blob.content_type) ->
+        persist_content_type_update(blob, normalized)
+
+      DocumentOpenPolicy.normalize_content_type(blob.content_type) == normalized and
+          blob.content_type != normalized ->
+        persist_content_type_update(blob, normalized)
+
+      DocumentOpenPolicy.normalize_content_type(blob.content_type) == normalized ->
+        {:ok, blob}
+
+      true ->
+        {:error, :content_type_mismatch}
+    end
+  end
+
+  defp persist_content_type_update(%FileBlob{media_type: "document"} = blob, content_type) do
+    with {:ok, metadata} <- DocumentOpenPolicy.metadata(blob.filename, content_type) do
+      update_blob(blob, %{
+        filename: metadata.filename,
+        original_extension: metadata.original_extension,
+        content_type: metadata.content_type,
+        open_policy: metadata.open_policy
+      })
+    end
+  end
+
+  defp persist_content_type_update(blob, content_type),
+    do:
+      update_blob(blob, %{content_type: DocumentOpenPolicy.normalize_content_type(content_type)})
 
   def inspect(%User{id: owner_id}, upload_id) do
     with {:ok, item_id, generation} <- parse_upload_id(upload_id) do
@@ -457,16 +499,27 @@ defmodule MatomeApi.Content.UploadLifecycle do
   defp mark_uploaded(blob, checksum) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    with {:ok, uploaded} <-
+    with {:ok, open_policy} <- verified_open_policy(blob),
+         {:ok, uploaded} <-
            update_blob(blob, %{
              upload_state: "uploaded",
              checksum_sha256: checksum,
              uploaded_at: now,
-             multipart_context: nil
+             multipart_context: nil,
+             open_policy: open_policy
            }) do
       {:ok, uploaded_descriptor(uploaded)}
     end
   end
+
+  defp verified_open_policy(%FileBlob{media_type: "document", open_policy: policy} = blob)
+       when policy in ["external", "system_app"] do
+    with {:ok, prefix} <- ObjectStore.get_prefix(blob.storage_key, min(blob.byte_size, 8192)) do
+      {:ok, DocumentOpenPolicy.verify_signature(blob, prefix)}
+    end
+  end
+
+  defp verified_open_policy(%FileBlob{open_policy: policy}), do: {:ok, policy}
 
   defp fail_verification(blob) do
     cleanup_result =

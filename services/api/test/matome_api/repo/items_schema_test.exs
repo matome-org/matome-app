@@ -30,6 +30,31 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
              ))
   end
 
+  test "matomes expose owner-scoped permanent client identity" do
+    assert columns("matomes") >= MapSet.new(~w(client_id client_fingerprint))
+
+    owner = user_fixture()
+
+    Repo.query!(
+      "INSERT INTO matomes (owner_id, client_id, client_fingerprint, title, inserted_at, updated_at) VALUES ($1, $2, $3, 'One', now(), now())",
+      [owner.id, "matome-local", String.duplicate("a", 64)]
+    )
+
+    assert_raise Postgrex.Error, ~r/matomes_owner_id_client_id_index/, fn ->
+      Repo.query!(
+        "INSERT INTO matomes (owner_id, client_id, client_fingerprint, title, inserted_at, updated_at) VALUES ($1, $2, $3, 'Two', now(), now())",
+        [owner.id, "matome-local", String.duplicate("b", 64)]
+      )
+    end
+
+    assert_raise Postgrex.Error, ~r/matomes_client_identity_check/, fn ->
+      Repo.query!(
+        "INSERT INTO matomes (owner_id, client_id, title, inserted_at, updated_at) VALUES ($1, 'missing-fingerprint', 'Invalid', now(), now())",
+        [owner.id]
+      )
+    end
+  end
+
   test "items enforce one payload matching item_type" do
     user = user_fixture()
     matome_id = insert_matome!(user.id)
@@ -169,6 +194,18 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
       insert_text_item_for_owner!(user.id, processing_state: "queued")
     end
 
+    assert_raise Postgrex.Error, ~r/items_processing_run_check/, fn ->
+      insert_text_item_for_owner!(user.id,
+        processing_outputs: %{"summary" => %{"markdown" => "stale"}}
+      )
+    end
+
+    insert_text_item_for_owner!(user.id,
+      processing_state: "queued",
+      processing_run_id: Ecto.UUID.generate(),
+      processing_outputs: %{"summary" => %{"markdown" => "prior retry output"}}
+    )
+
     assert_raise Postgrex.Error, ~r/items_processing_outputs_check/, fn ->
       insert_text_item_for_owner!(user.id,
         processing_state: "queued",
@@ -283,6 +320,10 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
   end
 
   defp insert_file_blob!(media_type \\ "audio", attrs \\ []) do
+    filename = if media_type == "document", do: "schema.pdf"
+    original_extension = if media_type == "document", do: "pdf"
+    content_type = if media_type == "document", do: "application/pdf"
+    open_policy = if media_type == "document", do: "external", else: "download_only"
     checksum_sha256 = Keyword.get(attrs, :checksum_sha256)
     upload_state = Keyword.get(attrs, :upload_state, "pending")
     upload_generation = Keyword.get(attrs, :upload_generation, 1)
@@ -293,19 +334,25 @@ defmodule MatomeApi.Repo.ItemsSchemaTest do
       Repo.query!(
         """
         INSERT INTO file_blobs (
-          storage_key, byte_size, media_type, checksum_sha256, upload_state,
-          upload_generation, uploaded_at, multipart_context, inserted_at, updated_at
+          storage_key, filename, original_extension, content_type, byte_size, media_type,
+          checksum_sha256, upload_state, upload_generation, uploaded_at, multipart_context,
+          open_policy, inserted_at, updated_at
         )
-        VALUES ($1, 123, $2, $3, $4, $5, $6, $7::jsonb, now(), now()) RETURNING id
+        VALUES ($1, $2, $3, $4, 123, $5, $6, $7, $8, $9, $10::jsonb, $11, now(), now())
+        RETURNING id
         """,
         [
           "objects/#{System.unique_integer([:positive])}",
+          filename,
+          original_extension,
+          content_type,
           media_type,
           checksum_sha256,
           upload_state,
           upload_generation,
           uploaded_at,
-          multipart_context
+          multipart_context,
+          open_policy
         ]
       )
 

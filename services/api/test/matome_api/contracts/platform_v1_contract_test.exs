@@ -86,6 +86,38 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
              ~w(succeeded partial failed not_available)
 
     assert contract["ai"]["max_outputs_bytes"] == 4_194_304
+
+    text_input = contract["ai"]["text_input"]
+    assert text_input["content_source"] == "text_contents.body"
+    assert text_input["excluded_automatic_sources"] == ["items.notes", "matomes.description"]
+
+    assert text_input["canonical_wire_input"] == %{
+             "required_keys" => ["kind", "body"],
+             "additional_properties" => false
+           }
+
+    assert text_input["optional_non_content_metadata"] == ["locale"]
+
+    source_selection = fixtures["ai"]["text_source_selection"]
+
+    assert source_selection["sources"] == %{
+             "text_contents.body" => "BODY_SENTINEL_INCLUDED",
+             "items.notes" => "ITEM_NOTES_SENTINEL_EXCLUDED",
+             "matomes.description" => "MATOME_DESCRIPTION_SENTINEL_EXCLUDED"
+           }
+
+    assert source_selection["expected_wire_input"] == %{
+             "kind" => "text",
+             "body" => "BODY_SENTINEL_INCLUDED"
+           }
+
+    assert Map.keys(source_selection["expected_wire_input"]) |> Enum.sort() == ~w(body kind)
+    refute Jason.encode!(source_selection["expected_wire_input"]) =~ "EXCLUDED"
+
+    assert contract["ai"]["requested_output_policy"]["document"] ==
+             ~w(extracted_text summary)
+
+    assert "filename" in contract["ai"]["file_input_required"]
     assert Map.keys(fixtures["ai"]["jobs"]) |> Enum.sort() == ~w(audio document image text)
     assert fixtures["ai"]["callbacks"]["partial"]["outputs"] |> length() == 1
 

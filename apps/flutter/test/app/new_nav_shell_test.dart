@@ -1,13 +1,19 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'package:matome_flutter/app/shell_scaffold.dart';
 import 'package:matome_flutter/app/shell_tabs.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/documents/document_open_policy.dart';
+import 'package:matome_flutter/features/home/inbox_upload.dart';
+import 'package:matome_flutter/features/recording/meeting_capture_backend.dart';
+import 'package:matome_flutter/features/recording/meeting_recorder.dart';
 import 'package:matome_flutter/features/shell/widgets/matome_nav.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
@@ -92,8 +98,19 @@ GoRouter _buildOnRouter({GlobalKey<NavigatorState>? rootKey}) {
   );
 }
 
-Widget _app(GoRouter router) {
+Widget _app(
+  GoRouter router, {
+  List<Override> overrides = const [],
+  MeetingCaptureCapability meetingCapability =
+      const MeetingCaptureCapability.supported(backendId: 'test'),
+}) {
   return ProviderScope(
+    overrides: [
+      meetingCaptureCapabilityProvider.overrideWith(
+        (ref) async => meetingCapability,
+      ),
+      ...overrides,
+    ],
     child: TranslationProvider(
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
@@ -109,6 +126,39 @@ Widget _app(GoRouter router) {
       ),
     ),
   );
+}
+
+class _FakeFilePicker extends FilePicker with MockPlatformInterfaceMixin {
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = false,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) async => FilePickerResult([
+    PlatformFile(name: 'payload.sh', path: '/tmp/payload.sh', size: 1),
+  ]);
+}
+
+class _UnsafeInboxUploader extends InboxUploader {
+  _UnsafeInboxUploader(super.ref);
+
+  @override
+  Future<String> upload(
+    PickedUpload picked, {
+    int durationSeconds = 0,
+    bool importFromExternalSource = false,
+  }) async {
+    throw const UnsafeDocumentTypeException('payload.sh');
+  }
 }
 
 void _phone(WidgetTester tester) {
@@ -161,36 +211,35 @@ void main() {
       }
       // Satori is neither a destination nor reachable.
       expect(
-        find.descendant(
-          of: dock,
-          matching: find.byIcon(ShellTab.satori.icon),
-        ),
+        find.descendant(of: dock, matching: find.byIcon(ShellTab.satori.icon)),
         findsNothing,
       );
     });
 
-    testWidgets('tapping a dock destination switches the StatefulShell branch', (
+    testWidgets(
+      'tapping a dock destination switches the StatefulShell branch',
+      (tester) async {
+        _phone(tester);
+        await tester.pumpWidget(_app(_buildOnRouter()));
+        await tester.pumpAndSettle();
+
+        expect(find.text('SCREEN:/inbox'), findsOneWidget);
+
+        // Tap the Calendar destination (inactive → outline glyph).
+        await tester.tap(find.byIcon(ShellTab.calendar.icon));
+        await tester.pumpAndSettle();
+        expect(find.text('SCREEN:/calendar'), findsOneWidget);
+
+        // Tap Files (the route promoted from a root deep-link to a branch).
+        await tester.tap(find.byIcon(ShellTab.files.icon));
+        await tester.pumpAndSettle();
+        expect(find.text('SCREEN:/files'), findsOneWidget);
+      },
+    );
+
+    testWidgets('Add FAB opens the available flows (Add file gated off)', (
       tester,
     ) async {
-      _phone(tester);
-      await tester.pumpWidget(_app(_buildOnRouter()));
-      await tester.pumpAndSettle();
-
-      expect(find.text('SCREEN:/inbox'), findsOneWidget);
-
-      // Tap the Calendar destination (inactive → outline glyph).
-      await tester.tap(find.byIcon(ShellTab.calendar.icon));
-      await tester.pumpAndSettle();
-      expect(find.text('SCREEN:/calendar'), findsOneWidget);
-
-      // Tap Files (the route promoted from a root deep-link to a branch).
-      await tester.tap(find.byIcon(ShellTab.files.icon));
-      await tester.pumpAndSettle();
-      expect(find.text('SCREEN:/files'), findsOneWidget);
-    });
-
-    testWidgets('Add FAB opens the available flows (Add file gated off)',
-        (tester) async {
       _phone(tester);
       await tester.pumpWidget(_app(_buildOnRouter()));
       await tester.pumpAndSettle();
@@ -240,6 +289,59 @@ void main() {
       expect(find.text('SCREEN:meeting'), findsOneWidget);
     });
 
+    testWidgets('unsupported meeting capture never pushes the route', (
+      tester,
+    ) async {
+      _phone(tester);
+      await tester.pumpWidget(
+        _app(
+          _buildOnRouter(),
+          meetingCapability: const MeetingCaptureCapability.unsupported(
+            backendId: 'test',
+            reason: 'ffmpeg-required',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(MatomeAddFab));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(t.nav.recordMeeting));
+      await tester.pumpAndSettle();
+
+      expect(find.text('SCREEN:meeting'), findsNothing);
+      expect(find.text(t.meetingRecording.ffmpegRequired), findsOneWidget);
+    });
+
+    testWidgets('unsafe picker upload is awaited and surfaces an error', (
+      tester,
+    ) async {
+      _phone(tester);
+      FilePicker.platform = _FakeFilePicker();
+      addTearDown(() => FilePicker.platform = _FakeFilePicker());
+      const exception = UnsafeDocumentTypeException('payload.sh');
+      await tester.pumpWidget(
+        _app(
+          _buildOnRouter(),
+          overrides: [
+            inboxUploaderProvider.overrideWith(_UnsafeInboxUploader.new),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(MatomeAddFab));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(t.nav.addPhoto));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.text(t.matome.addFileFailed(error: '$exception')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('dock Settings affordance routes to /inbox/settings', (
       tester,
     ) async {
@@ -259,7 +361,9 @@ void main() {
   });
 
   group('flag ON — desktop sidebar', () {
-    testWidgets('renders MatomeSidebar, not the NavigationRail', (tester) async {
+    testWidgets('renders MatomeSidebar, not the NavigationRail', (
+      tester,
+    ) async {
       _desktop(tester);
       await tester.pumpWidget(_app(_buildOnRouter()));
       await tester.pumpAndSettle();
@@ -302,8 +406,9 @@ void main() {
       expect(find.text('SCREEN:settings'), findsOneWidget);
     });
 
-    testWidgets('sidebar Add opens the available flows (Add file gated off)',
-        (tester) async {
+    testWidgets('sidebar Add opens the available flows (Add file gated off)', (
+      tester,
+    ) async {
       _desktop(tester);
       await tester.pumpWidget(_app(_buildOnRouter()));
       await tester.pumpAndSettle();
@@ -417,7 +522,9 @@ void main() {
       }
 
       // Seed traversal: focus the root scope so nextFocus() has a starting node.
-      final rootScope = FocusScope.of(tester.element(find.byType(MatomeSidebar)));
+      final rootScope = FocusScope.of(
+        tester.element(find.byType(MatomeSidebar)),
+      );
       rootScope.requestFocus();
       await tester.pumpAndSettle();
 
@@ -441,7 +548,8 @@ void main() {
       for (var i = 0; i < 30 && !activated; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.enter);
         await tester.pumpAndSettle();
-        activated = find.text('SCREEN:/calendar').evaluate().isNotEmpty ||
+        activated =
+            find.text('SCREEN:/calendar').evaluate().isNotEmpty ||
             find.text('SCREEN:/files').evaluate().isNotEmpty ||
             find.text('SCREEN:/contacts').evaluate().isNotEmpty ||
             find.text('SCREEN:/spaces').evaluate().isNotEmpty ||

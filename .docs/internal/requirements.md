@@ -46,6 +46,8 @@
 - **FR-CAP-4** A capture interrupted by a crash/kill is recoverable as a draft on next entry.
 - **FR-CAP-5** Where microphone capture is unsupported (some web targets), the app degrades gracefully with a clear notice.
 - **FR-CAP-6** A captured/imported item is persisted **locally first** (Drift) before any network activity.
+- **FR-CAP-7** Meeting capture writes only to app-owned local staging while active. Finish independently validates one decodable M4A/AAC-LC mono artifact before atomically creating its Item, file payload, and upload work; queue egress starts only afterward.
+- **FR-CAP-8** Meeting drafts record capture kind, session, backend, owned staging/final paths, codec, state, duration heartbeat, and storage health. Crash, failed finalization, cancel, and low storage leave either one recoverable owned artifact or no owned files.
 
 ### Ingestion & processing — `FR-ING`
 
@@ -58,6 +60,7 @@
 - **FR-ING-7** The client polls `GET /api/items/:id` for the accepted run id with one request in flight and bounded backoff. Its 30-second observation timeout does not fail the Core run; Core's watchdog is authoritative.
 - **FR-ING-8** On `failed`, the client surfaces the failure and the User can retry; retry re-enqueues server-side (Oban) — the client never processes media locally.
 - **FR-ING-9** Callback handling is idempotent and current-run guarded by job id, run id, Item id, and source revision.
+- **FR-ING-10** Text processing skips object storage and sends canonical AI `input` exactly as `{kind: "text", body: text_contents.body}`. `items.notes` and `matomes.description` are neither concatenated nor sent as separate fields; optional `locale` is non-content metadata.
 
 ### Matome (the central aggregate) — `FR-MAT`
 
@@ -116,8 +119,9 @@
 - **FR-ITM-3** A User can edit an item's notes (user-owned, with a leave guard).
 - **FR-ITM-4** A User can retry failed processing as a new Core run; the client observes only that current run through bounded polling.
 - **FR-ITM-5** A User can view an image item inline and fullscreen.
-- **FR-ITM-6** A User can view a document item's metadata (name, size, type).
+- **FR-ITM-6** A User can view a document item's metadata and safely open or download it through the system handler: approved types may open externally, active or unknown content stays attachment/download-only, and executable or script types are rejected.
 - **FR-ITM-7** A User can delete an item (removes on-disk file + Drift row + Core row) and move an item to a Space.
+- **FR-ITM-8** A User can create, edit, and delete a standalone plain-text item and open it at `/items/text/:id`. Each mutation commits to Drift first and survives restart in the durable queue; cloud create uses `POST /api/items/text`, while edit/delete use `PATCH`/`DELETE /api/items/:id/text` with `expected_source_revision`, preserving local body or deletion intent and surfacing a conflict instead of overwriting a newer revision.
 
 ### Calendar — `FR-CAL`
 
@@ -145,7 +149,7 @@
 - **NFR-ARCH-1 (Thin client).** The client only captures, uploads raw bytes, and reads results. It never runs transcription, OCR, or summarization.
 - **NFR-ARCH-2 (Backend owns processing).** Adding a media type or model is a backend change; the client is media-agnostic.
 - **NFR-ARCH-3 (Single source of record).** Core Postgres is authoritative; the client's Drift store is an offline mirror reconciled against Core, never the authority.
-- **NFR-ARCH-4 (One ingestion contract).** Every media type uses the same `upload → pending → process → done` path.
+- **NFR-ARCH-4 (One processing contract).** Every supported input uses the same explicit `pending → process → done` lifecycle; file inputs first complete verified upload, while text deliberately skips upload.
 - **NFR-ARCH-5 (Boundary).** The client talks only to Core + object storage; only Core talks to the AI Engine; the AI Engine is never client-facing.
 - **NFR-ARCH-6 (Stable local PK).** A local row keeps its `rec_local_*` / `mat_local_*` id forever; reconciliation fills in `core_id` alongside it — the PK is never remapped.
 
@@ -153,6 +157,7 @@
 
 - **NFR-SYNC-1 (Local-first).** The UI watches the local DB; capture, edits, archive, and filing succeed offline and sync in the background.
 - **NFR-SYNC-2 (Offline-first writes).** Archive/restore/rename/edit are written to Drift first and are not rolled back if the Core leg fails; the two ends converge on next sync.
+- **NFR-SYNC-2A (Durable text mutations).** Standalone text create/edit/delete operations are revisioned durable work, not best-effort requests. Text work skips file hashing, presign, and byte upload while retaining explicit `local_saved`, `pending_sync`/`pending_delete`, `synced`, `failed`, and `conflict` states.
 - **NFR-SYNC-3 (One resolver, one gate).** Exactly one resolver computes effective space / cloud-eligibility, and exactly one operation-keyed gate decides sync — no second predicate, no inline `if isCloud`, no role enum.
 - **NFR-SYNC-4 (Two axes, never collapsed).** Sync mode (`is_local`) ⟂ tenancy (`space_type`); invariants `local ⟹ personal`, `org ⟹ cloud` couple them without merging.
 - **NFR-SYNC-5 (Accepted data-loss risk).** A local-only item exists only on the device; a device wipe loses it. This is an owner-accepted trade-off of the local-first default; the mitigation is consented promotion + clear local/cloud affordances.

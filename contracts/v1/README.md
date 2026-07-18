@@ -66,6 +66,9 @@ an idempotency key. Core selects single or multipart for `mode=auto` using the
 desired upload policy and declared byte size.
 
 - `request` creates or resumes one active upload generation.
+- The request may establish the file's bounded content type when item creation
+  did not know it; later requests may omit it or repeat the same value, but a
+  different non-null value cannot relabel the input.
 - `inspect` reloads provider-accepted parts after a Core or client restart.
 - `presign_part` binds one part number, exact byte size, and SHA-256 to a fresh
   short-lived PUT while retaining the provider upload when that URL expires.
@@ -110,11 +113,20 @@ appears in Oban args, Events, Item state, or `system_config`.
   current run. Duplicate terminal callbacks are no-ops.
 
 Audio, image, document, and text item jobs share one envelope. File inputs use
-a short-lived Core-issued GET URL. Text input contains only the user-authored
-text item body. File notes and Matome notes are never automatic AI input.
-Capabilities and global policy both apply; the lower limit wins. Outputs are a
-typed list, not arbitrary result JSON. Error messages are sanitized and carry
-a stable code plus a `retryable` boolean.
+a short-lived Core-issued GET URL addressed through the server-reachable storage
+endpoint; client download URLs retain the public endpoint. Text input contains
+exactly `{kind,body}`: `kind` is `text` and `body` is copied only from
+`text_contents.body`. Core does not concatenate `items.notes`,
+`matomes.description`, or any other context into `body`, and it does not send
+notes or descriptions as separate input fields. `locale` remains optional
+non-content metadata outside `input`; it is not another text source.
+The file envelope carries Core's bounded stored filename plus the verified MIME,
+byte size, and SHA-256; it never exposes the storage key. Every dispatch issues
+fresh, expiring GET access for that logical run. Capabilities and global policy
+both apply; the lower limit wins. Core intersects service-advertised outputs with
+its per-kind contract policy. Document work requests only `extracted_text` and
+`summary`. Outputs are a typed list, not arbitrary result JSON. Error messages
+are sanitized and carry a stable code plus a `retryable` boolean.
 
 Under the Item row lock, a new logical request snapshots source/config
 revisions, the advertised input capability, requested outputs, deadline, and a
@@ -213,4 +225,11 @@ conformance for the top-level `upload.request` envelope and permanent
 for automatic parent-first reconciliation, immediate child drain, streamed
 upload, and restart-safe replay while preserving explicit durable block reasons.
 The AI-stub suite executes the shared capabilities, job, and typed-callback
-fixtures; adapter/stub transport conformance remains separately owned.
+fixtures; adapter/stub transport conformance remains separately owned. The
+opt-in Flutter live image test additionally proves a real upload through Core
+and object storage, deterministic image callback, typed Drift persistence, and
+routed rendering without a model implementation. Its document counterpart runs
+both PDF and `text/plain` fixtures through the same stack and renders typed
+extracted text plus summary. Replacing the fixture service later requires only
+the processor endpoint, credentials, and v1 capability/job/callback conformance;
+Core and Flutter need no document-processing redesign.

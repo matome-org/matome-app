@@ -31,6 +31,16 @@ class RecordingDrafts extends Table {
   TextColumn get segmentsJson => text().named('segments_json')();
   IntColumn get durationMs =>
       integer().named('duration_ms').withDefault(const Constant(0))();
+  TextColumn get sessionId =>
+      text().named('session_id').withDefault(const Constant('legacy'))();
+  TextColumn get captureKind =>
+      text().named('capture_kind').withDefault(const Constant('microphone'))();
+  TextColumn get backend => text().withDefault(const Constant('record'))();
+  TextColumn get stagingPath => text().named('staging_path').nullable()();
+  TextColumn get finalPath => text().named('final_path').nullable()();
+  TextColumn get codec => text().withDefault(const Constant('aac_lc'))();
+  TextColumn get state => text().withDefault(const Constant('paused'))();
+  TextColumn get heartbeatAt => text().named('heartbeat_at').nullable()();
 }
 
 @DataClassName('SpaceMemberRow')
@@ -165,6 +175,8 @@ class FileBlobs extends Table {
   IntColumn get coreId => integer().named('core_id').nullable()();
   TextColumn get storageKey => text().named('storage_key').nullable()();
   TextColumn get filename => text().nullable()();
+  TextColumn get originalExtension =>
+      text().named('original_extension').nullable()();
   TextColumn get contentType => text().named('content_type').nullable()();
   IntColumn get byteSize =>
       integer().named('byte_size').withDefault(const Constant(0))();
@@ -178,6 +190,9 @@ class FileBlobs extends Table {
   IntColumn get uploadedAt => integer().named('uploaded_at').nullable()();
   TextColumn get multipartContext =>
       text().named('multipart_context').nullable()();
+  TextColumn get openPolicy => text()
+      .named('open_policy')
+      .withDefault(const Constant('download_only'))();
   TextColumn get localPath => text().named('local_path').nullable()();
   TextColumn get wrappedFek => text().named('wrapped_fek').nullable()();
   TextColumn get fileNoncePrefix =>
@@ -199,6 +214,7 @@ class TextContents extends Table {
   TextColumn get id => text()();
   IntColumn get coreId => integer().named('core_id').nullable()();
   TextColumn get body => text()();
+  TextColumn get acceptedBody => text().named('accepted_body').nullable()();
   BoolColumn get isDirty =>
       boolean().named('is_dirty').withDefault(const Constant(true))();
   IntColumn get createdAt => integer().named('created_at')();
@@ -238,6 +254,9 @@ class Items extends Table {
       integer().named('processing_attempt').withDefault(const Constant(0))();
   IntColumn get sourceRevision =>
       integer().named('source_revision').withDefault(const Constant(1))();
+  IntColumn get acceptedSourceRevision => integer()
+      .named('accepted_source_revision')
+      .withDefault(const Constant(0))();
   IntColumn get processingConfigRevision =>
       integer().named('processing_config_revision').nullable()();
   TextColumn get processingOutputs =>
@@ -255,6 +274,8 @@ class Items extends Table {
       boolean().named('is_dirty').withDefault(const Constant(true))();
   TextColumn get syncState =>
       text().named('sync_state').withDefault(const Constant('local_saved'))();
+  BoolColumn get isDeleted =>
+      boolean().named('is_deleted').withDefault(const Constant(false))();
   IntColumn get createdAt => integer().named('created_at')();
   IntColumn get updatedAt => integer().named('updated_at')();
 
@@ -269,8 +290,8 @@ class Items extends Table {
 }
 
 /// Durable executor state for every device-owned asynchronous operation.
-/// Operation-specific payload remains on the canonical local entity; this row
-/// only owns scheduling, resumability, and bounded failure metadata.
+/// Mutable canonical state remains on the Item, while revisioned text work also
+/// snapshots its submitted body/version so replay never reads a newer edit.
 @DataClassName('WorkQueueRow')
 class WorkQueue extends Table {
   @override
@@ -283,6 +304,11 @@ class WorkQueue extends Table {
   TextColumn get state => text()();
   TextColumn get stage => text()();
   TextColumn get dependsOn => text().named('depends_on').nullable()();
+  TextColumn get operationBody => text().named('operation_body').nullable()();
+  IntColumn get submittedSourceRevision =>
+      integer().named('submitted_source_revision').nullable()();
+  IntColumn get expectedSourceRevision =>
+      integer().named('expected_source_revision').nullable()();
   IntColumn get attempt => integer().withDefault(const Constant(0))();
   IntColumn get availableAt => integer().named('available_at')();
   TextColumn get leaseOwner => text().named('lease_owner').nullable()();

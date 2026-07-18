@@ -25,22 +25,82 @@ defmodule MatomeApiWeb.ItemController do
   end
 
   def create(conn, %{"matome_id" => matome_id, "item_type" => "text"} = params) do
-    case Content.create_text_item(conn.assigns.current_user, matome_id, params) do
+    create_text(conn, Map.put(params, "matome_id", matome_id))
+  end
+
+  def create(conn, %{"matome_id" => _matome_id, "item_type" => "file"} = params),
+    do: create_file(conn, params)
+
+  def create_text(conn, params) do
+    with :ok <- require_nonblank(params, "client_id"),
+         :ok <- require_nonblank(params, "body") do
+      case Content.create_text_item(conn.assigns.current_user, params["matome_id"], params) do
+        nil ->
+          not_found(conn)
+
+        {:ok, item} ->
+          conn |> put_status(:created) |> json(%{contract_version: "1", item: item_json(item)})
+
+        {:error, {:client_id_conflict, item}} ->
+          client_id_conflict(conn, item)
+
+        {:error, changeset} ->
+          validation_error(conn, changeset)
+      end
+    else
+      {:error, field} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: %{field => ["can't be blank"]}})
+    end
+  end
+
+  def update_text(conn, %{"id" => id, "body" => body, "expected_source_revision" => revision})
+      when is_binary(body) and is_integer(revision) and revision > 0 do
+    case Content.update_text_item(conn.assigns.current_user, id, body, revision) do
       nil ->
         not_found(conn)
 
       {:ok, item} ->
-        conn |> put_status(:created) |> json(%{contract_version: "1", item: item_json(item)})
+        json(conn, %{item: item_json(item)})
 
-      {:error, :client_id_conflict} ->
-        conn |> put_status(:conflict) |> json(%{error: "client_id_conflict"})
+      {:error, {:version_conflict, item}} ->
+        version_conflict(conn, item)
 
-      {:error, changeset} ->
+      {:error, :item_type_mismatch} ->
+        type_error(conn)
+
+      {:error, %Ecto.Changeset{} = changeset} ->
         validation_error(conn, changeset)
     end
   end
 
-  def create(conn, %{"matome_id" => matome_id, "item_type" => "file"} = params) do
+  def update_text(conn, _params), do: invalid_text_mutation(conn)
+
+  def delete_text(conn, %{"id" => id, "expected_source_revision" => revision})
+      when is_integer(revision) and revision > 0 do
+    case Content.delete_text_item(conn.assigns.current_user, id, revision) do
+      nil ->
+        not_found(conn)
+
+      {:ok, _item} ->
+        send_resp(conn, :no_content, "")
+
+      {:error, {:version_conflict, item}} ->
+        version_conflict(conn, item)
+
+      {:error, :item_type_mismatch} ->
+        type_error(conn)
+
+      {:error, reason} ->
+        Logger.error("text item delete failed: #{MatomeApi.LogRedaction.redact(reason)}")
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "delete_failed"})
+    end
+  end
+
+  def delete_text(conn, _params), do: invalid_text_mutation(conn)
+
+  defp create_file(conn, %{"matome_id" => matome_id} = params) do
     case Content.create_file_item(conn.assigns.current_user, matome_id, params) do
       nil ->
         not_found(conn)
@@ -76,7 +136,7 @@ defmodule MatomeApiWeb.ItemController do
       {:error, :space_not_writable} ->
         conn |> put_status(:forbidden) |> json(%{error: "space_not_writable"})
 
-      {:error, :client_id_conflict} ->
+      {:error, {:client_id_conflict, _item}} ->
         conn |> put_status(:conflict) |> json(%{error: "client_id_conflict"})
 
       {:error, reason} when is_atom(reason) ->
@@ -106,7 +166,9 @@ defmodule MatomeApiWeb.ItemController do
         not_found(conn)
 
       {:ok, presign} ->
-        json(conn, %{download: presign_json(presign)})
+        conn
+        |> put_resp_header("cache-control", "private, no-store")
+        |> json(%{download: presign_json(presign)})
 
       {:error, reason} ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: to_string(reason)})
@@ -172,6 +234,9 @@ defmodule MatomeApiWeb.ItemController do
       {:ok, _item} ->
         send_resp(conn, :no_content, "")
 
+      {:error, :text_endpoint_required} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "text_endpoint_required"})
+
       {:error, reason} ->
         Logger.error("item delete failed: #{MatomeApi.LogRedaction.redact(reason)}")
         conn |> put_status(:unprocessable_entity) |> json(%{error: "delete_failed"})
@@ -214,6 +279,7 @@ defmodule MatomeApiWeb.ItemController do
     %{
       id: file_blob.id,
       filename: file_blob.filename,
+      original_extension: file_blob.original_extension,
       content_type: file_blob.content_type,
       byte_size: file_blob.byte_size,
       checksum_sha256: file_blob.checksum_sha256,
@@ -221,7 +287,8 @@ defmodule MatomeApiWeb.ItemController do
       duration: file_blob.duration,
       upload_state: file_blob.upload_state,
       upload_generation: file_blob.upload_generation,
-      uploaded_at: file_blob.uploaded_at
+      uploaded_at: file_blob.uploaded_at,
+      open_policy: file_blob.open_policy
     }
   end
 
@@ -254,12 +321,51 @@ defmodule MatomeApiWeb.ItemController do
       method: presign.method,
       url: presign.url,
       expires_in: presign.expires_in,
+      expires_at: presign.expires_at,
       content_length: presign.content_length,
       max_bytes: presign.max_bytes
     }
+    |> maybe_put(:filename, presign[:filename])
+    |> maybe_put(:original_extension, presign[:original_extension])
+    |> maybe_put(:content_type, presign[:content_type])
+    |> maybe_put(:byte_size, presign[:byte_size])
+    |> maybe_put(:open_policy, presign[:open_policy])
+    |> maybe_put(:action, presign[:action])
+    |> maybe_put(:warning, presign[:warning])
   end
 
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
   defp not_found(conn), do: conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+  defp type_error(conn),
+    do: conn |> put_status(:unprocessable_entity) |> json(%{error: "item_type_mismatch"})
+
+  defp version_conflict(conn, item) do
+    conn
+    |> put_status(:conflict)
+    |> json(%{error: "version_conflict", item: item_json(item)})
+  end
+
+  defp client_id_conflict(conn, item) do
+    conn
+    |> put_status(:conflict)
+    |> json(%{error: "client_id_conflict", item: item_json(item)})
+  end
+
+  defp invalid_text_mutation(conn) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "invalid_text_mutation"})
+  end
+
+  defp require_nonblank(params, field) do
+    case params[field] do
+      value when is_binary(value) -> if String.trim(value) == "", do: {:error, field}, else: :ok
+      _missing -> {:error, field}
+    end
+  end
 
   defp validation_error(conn, changeset) do
     conn |> put_status(:unprocessable_entity) |> json(%{errors: errors_on(changeset)})

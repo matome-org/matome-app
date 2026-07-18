@@ -181,6 +181,26 @@ export function registerV1ServiceConformance({
     }
   });
 
+  test("v1 conformance: rejects non-canonical text input fields", async () => {
+    if (!capabilities.inputs.text?.enabled) return;
+
+    await withService({ createServer }, async ({ baseUrl }) => {
+      for (const key of ["notes", "context", "matome_description"]) {
+        const job = canonicalJob("text", {
+          callbackBaseUrl: "http://127.0.0.1:1",
+          mediaBaseUrl: "http://127.0.0.1:1",
+          mediaBytes: Buffer.alloc(0),
+          capability: capabilities.inputs.text
+        });
+        job.input[key] = `${key}_must_not_be_accepted`;
+
+        const response = await postJob(baseUrl, job);
+        assert.equal(response.status, 400, key);
+        assert.equal((await response.json()).error.code, "invalid_job", key);
+      }
+    });
+  });
+
   test("v1 conformance: accepted work survives restart and replay is deterministic", async () => {
     const kind = kinds[0];
     const dataDir = await mkdtemp(join(tmpdir(), "matome-ai-conformance-"));
@@ -372,6 +392,10 @@ export function registerV1ServiceConformance({
 
           const serialized = JSON.stringify(entries);
           assert.doesNotMatch(serialized, /private text content/);
+          if (kind !== "text") {
+            assert.ok(job.input.media.filename);
+            assert.ok(!serialized.includes(job.input.media.filename));
+          }
           assert.doesNotMatch(serialized, /callback-secret-value/);
           assert.doesNotMatch(serialized, /presigned-(callback|media)-secret/);
           assert.doesNotMatch(serialized, /test-dispatch-token/);

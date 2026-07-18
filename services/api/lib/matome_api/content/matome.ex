@@ -6,6 +6,8 @@ defmodule MatomeApi.Content.Matome do
   alias MatomeApi.Content.{Item, MatomeContact, Workspace}
 
   schema "matomes" do
+    field :client_id, :string
+    field :client_fingerprint, :string
     field :title, :string
     field :happened_at, :utc_datetime
     field :description, :string
@@ -41,6 +43,16 @@ defmodule MatomeApi.Content.Matome do
     |> validate_length(:title, min: 1, max: 255)
     |> validate_happened_at()
     |> foreign_key_constraint(:workspace_id)
+  end
+
+  def create_changeset(matome, attrs) do
+    matome
+    |> changeset(attrs)
+    |> cast(attrs, [:client_id, :client_fingerprint])
+    |> validate_length(:client_id, min: 1, max: 255)
+    |> validate_format(:client_id, ~r/\S/, message: "can't be blank")
+    |> unique_constraint([:owner_id, :client_id], name: :matomes_owner_id_client_id_index)
+    |> check_constraint(:client_id, name: :matomes_client_identity_check)
   end
 
   @doc """

@@ -158,6 +158,9 @@ dependencies:
   # v10 compiles against a current Android SDK (v8's android-34 module fails the
   # AAR metadata check against the lifecycle plugin Flutter 3.44 ships).
   file_picker: ^10.0.0
+  # Launches approved local files on desktop and fresh HTTPS descriptors on
+  # native clients. Web uses a synchronous reserved tab via package:web.
+  url_launcher: ^6.3.2
 
   # UUID v4 generator for local-first recording ids (`rec_local_<uuid>`),
   # mirroring the workspace local-id precedent. Used by the id-minter helper

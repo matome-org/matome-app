@@ -45,6 +45,14 @@ defmodule MatomeApi.Storage.ObjectStore do
     dispatch(:get_object, [storage_key], fn -> get_via_s3(storage_key) end)
   end
 
+  def get_prefix(storage_key, max_bytes) when is_integer(max_bytes) and max_bytes in 1..8192 do
+    dispatch(:get_prefix, [storage_key, max_bytes], fn ->
+      get_prefix_via_s3(storage_key, max_bytes)
+    end)
+  end
+
+  def get_prefix(_storage_key, _max_bytes), do: {:error, :invalid_prefix_size}
+
   defp dispatch(operation, args, fallback) do
     case Application.get_env(:matome_api, __MODULE__, [])[:adapter] do
       {module, arg} -> apply(module, operation, args ++ [arg])
@@ -138,6 +146,24 @@ defmodule MatomeApi.Storage.ObjectStore do
     else
       {:ok, 404, _headers, _body} -> {:error, :not_found}
       {:ok, status, _headers, body} -> {:error, {:storage_get_failed, status, body}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp get_prefix_via_s3(storage_key, max_bytes) do
+    with {:ok, download} <-
+           Presigner.presign_download(storage_key,
+             server: true,
+             headers: %{"range" => "bytes=0-#{max_bytes - 1}"}
+           ),
+         {:ok, 206, _headers, body} <- request(:get, download),
+         prefix <- IO.iodata_to_binary(body),
+         true <- byte_size(prefix) <= max_bytes do
+      {:ok, prefix}
+    else
+      {:ok, 404, _headers, _body} -> {:error, :not_found}
+      {:ok, status, _headers, body} -> {:error, {:storage_range_failed, status, body}}
+      false -> {:error, :invalid_storage_response}
       {:error, reason} -> {:error, reason}
     end
   end
@@ -293,6 +319,7 @@ end
 defmodule MatomeApi.Storage.ObjectStore.Noop do
   def delete_object(_storage_key), do: :ok
   def get_object(_storage_key), do: {:error, :not_found}
+  def get_prefix(_storage_key, _max_bytes), do: {:error, :not_found}
   def head_object(_storage_key), do: {:error, :not_found}
   def initiate_multipart(_storage_key, _opts), do: {:error, :storage_unavailable}
 

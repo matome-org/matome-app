@@ -136,7 +136,8 @@ defmodule MatomeApi.Storage.Presigner do
 
   def presign_download(storage_key, opts \\ []) do
     with :ok <- validate_storage_key(storage_key) do
-      {:ok, presign(:get, storage_key, Keyword.put_new(opts, :expires_in, download_expires_in()))}
+      expires_in = min(Keyword.get(opts, :expires_in, download_expires_in()), 300)
+      {:ok, presign(:get, storage_key, Keyword.put(opts, :expires_in, expires_in))}
     end
   end
 

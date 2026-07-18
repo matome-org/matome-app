@@ -8,6 +8,7 @@ import '../../../features/recordings/recording_ids.dart'
     show kLocalRecordingIdPrefix, kUploadQueuePendingStatuses;
 import '../../../features/recordings/recording.dart';
 import '../app_database.dart';
+import 'work_queue_dao.dart';
 import '../file_row.dart';
 import '../tables.dart';
 
@@ -43,13 +44,7 @@ class ItemWithPayload {
   String? get wrappedFek => file?.wrappedFek;
   String? get fileNoncePrefix => file?.fileNoncePrefix;
   int? get byteSize => file?.byteSize;
-  String? get originalExtension {
-    final filename = file?.filename;
-    if (filename == null) return null;
-    final dot = filename.lastIndexOf('.');
-    if (dot <= 0 || dot == filename.length - 1) return null;
-    return filename.substring(dot + 1).toLowerCase();
-  }
+  String? get originalExtension => file?.originalExtension;
 
   bool get isProcessing =>
       item.processingState == 'queued' || item.processingState == 'processing';
@@ -129,11 +124,24 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
   Future<void> createTextItem({
     required ItemsCompanion item,
     required TextContentsCompanion text,
+    WorkQueueCompanion? initialWork,
   }) {
     _requirePayloadArc(item, MatomeItemType.text);
     return transaction(() async {
       await into(textContents).insert(text);
       await into(items).insert(await _normalizePlacement(item));
+      if (initialWork != null) await into(workQueue).insert(initialWork);
+    });
+  }
+
+  Future<void> upsertTextItem({
+    required ItemsCompanion item,
+    required TextContentsCompanion text,
+  }) {
+    _requirePayloadArc(item, MatomeItemType.text);
+    return transaction(() async {
+      await into(textContents).insertOnConflictUpdate(text);
+      await into(items).insertOnConflictUpdate(await _normalizePlacement(item));
     });
   }
 
@@ -234,6 +242,7 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
     final row = await _joined(
       ownerId: ownerId,
       extraWhere: items.id.equals(itemId),
+      includeDeleted: true,
     ).getSingleOrNull();
     return row == null ? null : _rowWithPayload(row);
   }
@@ -243,9 +252,27 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
       ownerId: ownerId,
       extraWhere: items.coreId.equals(coreId),
       orderNewestFirst: true,
+      includeDeleted: true,
     )..limit(1)).getSingleOrNull();
     return row == null ? null : _rowWithPayload(row);
   }
+
+  Future<ItemWithPayload?> getByClientId(
+    String clientId,
+    String ownerId,
+  ) async {
+    final row = await _joined(
+      ownerId: ownerId,
+      extraWhere: items.clientId.equals(clientId),
+      includeDeleted: true,
+    ).getSingleOrNull();
+    return row == null ? null : _rowWithPayload(row);
+  }
+
+  Stream<ItemWithPayload?> watchById(String itemId, String ownerId) => _joined(
+    ownerId: ownerId,
+    extraWhere: items.id.equals(itemId) & items.isDeleted.equals(false),
+  ).watchSingleOrNull().map((row) => row == null ? null : _rowWithPayload(row));
 
   Future<List<ItemWithPayload>> listPendingUploads(String ownerId) {
     return _joined(
@@ -279,20 +306,160 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
     )..where((file) => file.id.equals(fileId))).write(patch);
   }
 
-  Future<int> updateTextBody(String itemId, String ownerId, String body) async {
+  Future<int> updateText(
+    String itemId,
+    String ownerId,
+    TextContentsCompanion patch,
+  ) async {
     final item = await getById(itemId, ownerId);
     final textId = item?.item.textContentId;
     if (textId == null) return 0;
-    final now = DateTime.now().millisecondsSinceEpoch;
     return (update(
       textContents,
-    )..where((text) => text.id.equals(textId))).write(
-      TextContentsCompanion(
-        body: Value(body),
-        updatedAt: Value(now),
-        isDirty: const Value(true),
-      ),
-    );
+    )..where((text) => text.id.equals(textId))).write(patch);
+  }
+
+  Future<int> editTextBody({
+    required String itemId,
+    required String ownerId,
+    required String body,
+    required int now,
+    required int configRevision,
+  }) {
+    return transaction(() async {
+      final current = await getById(itemId, ownerId);
+      final textId = current?.item.textContentId;
+      if (current == null || textId == null || current.item.isDeleted) return 0;
+      await (update(
+        textContents,
+      )..where((text) => text.id.equals(textId))).write(
+        TextContentsCompanion(
+          body: Value(body),
+          updatedAt: Value(now),
+          isDirty: const Value(true),
+        ),
+      );
+      final changed = await updateItem(
+        itemId,
+        ownerId,
+        ItemsCompanion(
+          title: Value(body.split('\n').first),
+          sourceRevision: Value(current.item.sourceRevision + 1),
+          processingState: const Value('not_requested'),
+          processingRunId: const Value(null),
+          processingAttempt: const Value(0),
+          processingOutputs: const Value('{}'),
+          processingRequestedOutputs: const Value('[]'),
+          processingError: const Value(null),
+          processingErrorCode: const Value(null),
+          syncState: const Value('pending_sync'),
+          isDirty: const Value(true),
+          updatedAt: Value(now),
+        ),
+      );
+      final submittedRevision = current.item.sourceRevision + 1;
+      final predecessor =
+          await (select(workQueue)
+                ..where(
+                  (work) =>
+                      work.itemId.equals(itemId) &
+                      work.kind.isIn([
+                        kWorkKindTextCreate,
+                        kWorkKindTextUpdate,
+                      ]) &
+                      work.state.isIn([
+                        kWorkStateQueued,
+                        kWorkStateRunning,
+                        kWorkStateRetry,
+                        kWorkStateBlocked,
+                      ]),
+                )
+                ..orderBy([
+                  (work) => OrderingTerm.desc(work.submittedSourceRevision),
+                  (work) => OrderingTerm.desc(work.createdAt),
+                ])
+                ..limit(1))
+              .getSingleOrNull();
+      await into(workQueue).insert(
+        textWork(
+          kind: kWorkKindTextUpdate,
+          itemId: itemId,
+          submittedSourceRevision: submittedRevision,
+          expectedSourceRevision:
+              predecessor?.submittedSourceRevision ??
+              current.item.acceptedSourceRevision,
+          operationBody: body,
+          now: now,
+          configRevision: configRevision,
+          stage: kWorkStageCreateRemote,
+          dependsOn: predecessor?.id,
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+      return changed;
+    });
+  }
+
+  Future<int> tombstoneText({
+    required String itemId,
+    required String ownerId,
+    required int now,
+    required int configRevision,
+  }) {
+    return transaction(() async {
+      final current = await getById(itemId, ownerId);
+      if (current == null || current.text == null) return 0;
+      final predecessor =
+          await (select(workQueue)
+                ..where(
+                  (work) =>
+                      work.itemId.equals(itemId) &
+                      work.kind.isIn([
+                        kWorkKindTextCreate,
+                        kWorkKindTextUpdate,
+                      ]) &
+                      work.state.isIn([
+                        kWorkStateQueued,
+                        kWorkStateRunning,
+                        kWorkStateRetry,
+                        kWorkStateBlocked,
+                      ]),
+                )
+                ..orderBy([
+                  (work) => OrderingTerm.desc(work.submittedSourceRevision),
+                  (work) => OrderingTerm.desc(work.createdAt),
+                ])
+                ..limit(1))
+              .getSingleOrNull();
+      final expectedRevision =
+          predecessor?.submittedSourceRevision ??
+          current.item.acceptedSourceRevision;
+      final changed = await updateItem(
+        itemId,
+        ownerId,
+        ItemsCompanion(
+          isDeleted: const Value(true),
+          syncState: const Value('pending_delete'),
+          isDirty: const Value(true),
+          updatedAt: Value(now),
+        ),
+      );
+      await into(workQueue).insert(
+        textWork(
+          kind: kWorkKindTextDelete,
+          itemId: itemId,
+          submittedSourceRevision: current.item.sourceRevision,
+          expectedSourceRevision: expectedRevision,
+          operationBody: current.text!.body,
+          now: now,
+          configRevision: configRevision,
+          stage: kWorkStageCreateRemote,
+          dependsOn: predecessor?.id,
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+      return changed;
+    });
   }
 
   Future<int> deleteWithPayload(String itemId, String ownerId) {
@@ -324,6 +491,53 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
         await _markMatomeSummaryStale(row.item.matomeId!);
       }
       return deleted;
+    });
+  }
+
+  Future<int> pruneMissingCleanText(String ownerId, Set<int> remoteCoreIds) {
+    return transaction(() async {
+      final candidates =
+          await (select(items)..where(
+                (item) =>
+                    item.ownerId.equals(ownerId) &
+                    item.itemType.equals(MatomeItemType.text.wireName) &
+                    item.coreId.isNotNull() &
+                    item.isDirty.equals(false) &
+                    item.syncState.equals('synced') &
+                    item.isDeleted.equals(false),
+              ))
+              .get();
+      var removed = 0;
+      for (final item in candidates) {
+        if (remoteCoreIds.contains(item.coreId)) continue;
+        final activeWork =
+            await (select(workQueue)
+                  ..where(
+                    (work) =>
+                        work.itemId.equals(item.id) &
+                        work.state.isNotIn([
+                          kWorkStateSucceeded,
+                          kWorkStateDead,
+                        ]),
+                  )
+                  ..limit(1))
+                .getSingleOrNull();
+        if (activeWork != null) continue;
+        await (delete(
+          itemContacts,
+        )..where((edge) => edge.itemId.equals(item.id))).go();
+        await (delete(items)..where((row) => row.id.equals(item.id))).go();
+        if (item.textContentId != null) {
+          await (delete(
+            textContents,
+          )..where((text) => text.id.equals(item.textContentId!))).go();
+        }
+        await (delete(
+          workQueue,
+        )..where((work) => work.itemId.equals(item.id))).go();
+        removed++;
+      }
+      return removed;
     });
   }
 
@@ -559,6 +773,7 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
     bool orderNewestFirst = false,
     bool orderByPosition = false,
     bool includePlacement = false,
+    bool includeDeleted = false,
   }) {
     final joins = <Join<HasResultSet, dynamic>>[
       leftOuterJoin(fileBlobs, fileBlobs.id.equalsExp(items.fileBlobId)),
@@ -580,6 +795,7 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
     ];
     final query = select(items).join(joins)
       ..where(items.ownerId.equals(ownerId));
+    if (!includeDeleted) query.where(items.isDeleted.equals(false));
     if (extraWhere != null) query.where(extraWhere);
     if (orderNewestFirst) {
       query.orderBy([OrderingTerm.desc(items.createdAt)]);

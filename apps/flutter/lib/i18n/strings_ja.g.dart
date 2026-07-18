@@ -46,6 +46,7 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$inbox$ja inbox = _Translations$inbox$ja._(_root);
 	@override late final _Translations$cardStatus$ja cardStatus = _Translations$cardStatus$ja._(_root);
 	@override late final _Translations$recording$ja recording = _Translations$recording$ja._(_root);
+	@override late final _Translations$meetingRecording$ja meetingRecording = _Translations$meetingRecording$ja._(_root);
 	@override late final _Translations$details$ja details = _Translations$details$ja._(_root);
 	@override late final _Translations$fileView$ja fileView = _Translations$fileView$ja._(_root);
 	@override late final _Translations$matome$ja matome = _Translations$matome$ja._(_root);
@@ -53,6 +54,7 @@ class TranslationsJa extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$spaces$ja spaces = _Translations$spaces$ja._(_root);
 	@override late final _Translations$calendar$ja calendar = _Translations$calendar$ja._(_root);
 	@override late final _Translations$contacts$ja contacts = _Translations$contacts$ja._(_root);
+	@override late final _Translations$textItem$ja textItem = _Translations$textItem$ja._(_root);
 	@override late final _Translations$satori$ja satori = _Translations$satori$ja._(_root);
 	@override late final _Translations$welcome$ja welcome = _Translations$welcome$ja._(_root);
 	@override late final _Translations$auth$ja auth = _Translations$auth$ja._(_root);
@@ -228,6 +230,43 @@ class _Translations$recording$ja extends Translations$recording$en {
 	@override String get saveFailed => '録音を保存できませんでした。';
 	@override String get unsupportedTitle => 'マイクを利用できません';
 	@override String get unsupportedHint => 'このデバイスでは音声録音を利用できません。録音するにはモバイルアプリをご利用ください。';
+}
+
+// Path: meetingRecording
+class _Translations$meetingRecording$ja extends Translations$meetingRecording$en {
+	_Translations$meetingRecording$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '会議を録音';
+	@override String get ready => '録音準備完了';
+	@override String get startHint => 'システム音声とマイクを端末内で録音します。';
+	@override String get recording => '会議を録音中';
+	@override String get recordingHint => '完了するまで音声はこの端末内に保存されます。';
+	@override String get systemAudio => 'システム音声';
+	@override String get microphone => 'マイク';
+	@override String get start => '録音を開始';
+	@override String get finish => '完了して保存';
+	@override String get processing => '確認して保存中…';
+	@override String get unsupportedTitle => '会議録音を利用できません';
+	@override String get linuxRequired => '会議録音は現在 Linux でのみ利用できます。';
+	@override String get ffmpegRequired => '会議録音には ffmpeg をインストールしてください。';
+	@override String get ffprobeRequired => '音声の確認には ffprobe をインストールしてください。';
+	@override String get pactlRequired => 'PipeWire または PulseAudio のツールが必要です。';
+	@override String get audioServerUnavailable => 'システムの音声サーバーを利用できません。';
+	@override String get audioDevicesUnavailable => '使用できる出力デバイスとマイクを選択して、もう一度お試しください。';
+	@override String get probeFailed => 'このデバイスで会議録音を確認できませんでした。';
+	@override String get startFailed => '会議録音を開始できませんでした。';
+	@override String get saveFailed => '会議は端末内に残っていますが、まだ保存できませんでした。';
+	@override String get deviceLost => '音声デバイスが切断されました。復元できるよう録音途中の音声を保持しました。';
+	@override String get discardTitle => 'この会議録音を破棄しますか？';
+	@override String get discardBody => '未保存の端末内音声は削除されます。';
+	@override String get keep => '録音を続ける';
+	@override String get discard => '破棄';
+	@override String get recoveryTitle => '中断された会議録音があります';
+	@override String get recoveryHint => '音声を復元しました。保存できます。';
+	@override String get saveRecovered => '復元した会議を保存';
 }
 
 // Path: details
@@ -464,6 +503,19 @@ class _Translations$contacts$ja extends Translations$contacts$en {
 	@override late final _Translations$contacts$detail$ja detail = _Translations$contacts$detail$ja._(_root);
 }
 
+// Path: textItem
+class _Translations$textItem$ja extends Translations$textItem$en {
+	_Translations$textItem$ja._(TranslationsJa root) : this._root = root, super.internal(root);
+
+	final TranslationsJa _root; // ignore: unused_field
+
+	// Translations
+	@override String get pending => '端末に保存済み · 同期待ち';
+	@override String get conflict => '同期競合 · 端末上のテキストは保持されています';
+	@override String get failed => '同期に失敗しました · 再試行してください';
+	@override String get pendingDelete => '削除待ち';
+}
+
 // Path: satori
 class _Translations$satori$ja extends Translations$satori$en {
 	_Translations$satori$ja._(TranslationsJa root) : this._root = root, super.internal(root);
@@ -560,7 +612,11 @@ class _Translations$fileView$fileChip$ja extends Translations$fileView$fileChip$
 
 	// Translations
 	@override String get open => '開く';
-	@override String get soon => '近日対応';
+	@override String get openInApp => 'アプリで開く';
+	@override String get download => 'ダウンロード';
+	@override String get unavailable => '利用できません';
+	@override String get activeContentWarning => 'アクティブコンテンツ・ダウンロードのみ';
+	@override String get openFailed => 'ファイルを開けませんでした';
 	@override String get unknownSize => '—';
 }
 
@@ -886,6 +942,34 @@ extension on TranslationsJa {
 			'recording.saveFailed' => '録音を保存できませんでした。',
 			'recording.unsupportedTitle' => 'マイクを利用できません',
 			'recording.unsupportedHint' => 'このデバイスでは音声録音を利用できません。録音するにはモバイルアプリをご利用ください。',
+			'meetingRecording.title' => '会議を録音',
+			'meetingRecording.ready' => '録音準備完了',
+			'meetingRecording.startHint' => 'システム音声とマイクを端末内で録音します。',
+			'meetingRecording.recording' => '会議を録音中',
+			'meetingRecording.recordingHint' => '完了するまで音声はこの端末内に保存されます。',
+			'meetingRecording.systemAudio' => 'システム音声',
+			'meetingRecording.microphone' => 'マイク',
+			'meetingRecording.start' => '録音を開始',
+			'meetingRecording.finish' => '完了して保存',
+			'meetingRecording.processing' => '確認して保存中…',
+			'meetingRecording.unsupportedTitle' => '会議録音を利用できません',
+			'meetingRecording.linuxRequired' => '会議録音は現在 Linux でのみ利用できます。',
+			'meetingRecording.ffmpegRequired' => '会議録音には ffmpeg をインストールしてください。',
+			'meetingRecording.ffprobeRequired' => '音声の確認には ffprobe をインストールしてください。',
+			'meetingRecording.pactlRequired' => 'PipeWire または PulseAudio のツールが必要です。',
+			'meetingRecording.audioServerUnavailable' => 'システムの音声サーバーを利用できません。',
+			'meetingRecording.audioDevicesUnavailable' => '使用できる出力デバイスとマイクを選択して、もう一度お試しください。',
+			'meetingRecording.probeFailed' => 'このデバイスで会議録音を確認できませんでした。',
+			'meetingRecording.startFailed' => '会議録音を開始できませんでした。',
+			'meetingRecording.saveFailed' => '会議は端末内に残っていますが、まだ保存できませんでした。',
+			'meetingRecording.deviceLost' => '音声デバイスが切断されました。復元できるよう録音途中の音声を保持しました。',
+			'meetingRecording.discardTitle' => 'この会議録音を破棄しますか？',
+			'meetingRecording.discardBody' => '未保存の端末内音声は削除されます。',
+			'meetingRecording.keep' => '録音を続ける',
+			'meetingRecording.discard' => '破棄',
+			'meetingRecording.recoveryTitle' => '中断された会議録音があります',
+			'meetingRecording.recoveryHint' => '音声を復元しました。保存できます。',
+			'meetingRecording.saveRecovered' => '復元した会議を保存',
 			'details.summary' => '要約',
 			'details.notes' => 'メモ',
 			'details.transcript' => 'トランスクリプト',
@@ -913,7 +997,11 @@ extension on TranslationsJa {
 			'fileView.notesHint' => '自分用のメモを書く…',
 			'fileView.viewFullscreen' => '全画面で表示',
 			'fileView.fileChip.open' => '開く',
-			'fileView.fileChip.soon' => '近日対応',
+			'fileView.fileChip.openInApp' => 'アプリで開く',
+			'fileView.fileChip.download' => 'ダウンロード',
+			'fileView.fileChip.unavailable' => '利用できません',
+			'fileView.fileChip.activeContentWarning' => 'アクティブコンテンツ・ダウンロードのみ',
+			'fileView.fileChip.openFailed' => 'ファイルを開けませんでした',
 			'fileView.fileChip.unknownSize' => '—',
 			'fileView.contentsTag.transcript' => 'トランスクリプト',
 			'fileView.contentsTag.description' => '説明',
@@ -1164,6 +1252,10 @@ extension on TranslationsJa {
 			'contacts.detail.onDevice' => '端末のみ',
 			'contacts.detail.empty' => '—',
 			'contacts.detail.notFound' => '連絡先が見つかりません',
+			'textItem.pending' => '端末に保存済み · 同期待ち',
+			'textItem.conflict' => '同期競合 · 端末上のテキストは保持されています',
+			'textItem.failed' => '同期に失敗しました · 再試行してください',
+			'textItem.pendingDelete' => '削除待ち',
 			'satori.title' => '悟り',
 			'satori.subtitle' => '悟 · あなたのAIアシスタント',
 			'satori.soon' => '近日公開',

@@ -122,6 +122,36 @@
     "unsupportedTitle": "Microphone unavailable",
     "unsupportedHint": "Audio capture isn't available on this device. Try the mobile app to record."
   },
+  "meetingRecording": {
+    "title": "Record meeting",
+    "ready": "Ready to capture",
+    "startHint": "Matome will capture system audio and your microphone locally.",
+    "recording": "Meeting in progress",
+    "recordingHint": "Audio stays on this device until you finish.",
+    "systemAudio": "System audio",
+    "microphone": "Microphone",
+    "start": "Start capture",
+    "finish": "Finish and save",
+    "processing": "Validating and saving…",
+    "unsupportedTitle": "Meeting capture unavailable",
+    "linuxRequired": "Meeting capture is currently available on Linux only.",
+    "ffmpegRequired": "Install ffmpeg to capture meetings.",
+    "ffprobeRequired": "Install ffprobe to validate meeting audio.",
+    "pactlRequired": "PipeWire or PulseAudio tools are required.",
+    "audioServerUnavailable": "The system audio server is unavailable.",
+    "audioDevicesUnavailable": "Select a working output device and microphone, then retry.",
+    "probeFailed": "Matome could not verify meeting capture on this device.",
+    "startFailed": "Meeting capture could not start.",
+    "saveFailed": "The meeting remains on this device, but could not be saved yet.",
+    "deviceLost": "An audio device disconnected. The partial recording was kept for recovery.",
+    "discardTitle": "Discard this meeting?",
+    "discardBody": "The unsaved local audio will be deleted.",
+    "keep": "Keep recording",
+    "discard": "Discard",
+    "recoveryTitle": "Interrupted meeting found",
+    "recoveryHint": "The recovered audio is valid and ready to save.",
+    "saveRecovered": "Save recovered meeting"
+  },
   "details": {
     "summary": "Summary",
     "notes": "Notes",
@@ -153,7 +183,11 @@
     "viewFullscreen": "View fullscreen",
     "fileChip": {
       "open": "Open",
-      "soon": "soon",
+      "openInApp": "Open in app",
+      "download": "Download",
+      "unavailable": "Unavailable",
+      "activeContentWarning": "Active content · download only",
+      "openFailed": "Couldn't open file",
       "unknownSize": "—"
     },
     "contentsTag": {
@@ -435,6 +469,12 @@
       "empty": "—",
       "notFound": "Contact not found"
     }
+  },
+  "textItem": {
+    "pending": "Saved on device · waiting to sync",
+    "conflict": "Sync conflict · your local text is preserved",
+    "failed": "Sync failed · retry to continue",
+    "pendingDelete": "Waiting to delete"
   },
   "satori": {
     "title": "Satori",

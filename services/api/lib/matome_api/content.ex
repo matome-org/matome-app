@@ -6,6 +6,7 @@ defmodule MatomeApi.Content do
 
   alias MatomeApi.Content.{
     Contact,
+    DocumentOpenPolicy,
     FileBlob,
     Item,
     Matome,
@@ -277,11 +278,20 @@ defmodule MatomeApi.Content do
   end
 
   def create_matome(%User{} = owner, attrs) do
-    %Matome{owner_id: owner.id}
-    |> Matome.changeset(attrs)
-    |> validate_workspace_owner(owner)
-    |> Repo.insert()
-    |> preload_matome_contacts()
+    client_id = item_attr(attrs, :client_id)
+    fingerprint = matome_create_fingerprint(attrs, client_id)
+
+    idempotent_matome_create(owner, client_id, fingerprint, fn ->
+      attrs =
+        attrs
+        |> put_file_attr(:client_fingerprint, fingerprint)
+
+      %Matome{owner_id: owner.id}
+      |> Matome.create_changeset(attrs)
+      |> validate_workspace_owner(owner)
+      |> Repo.insert()
+      |> preload_matome_contacts()
+    end)
   end
 
   def update_matome(%User{} = owner, id, attrs) do
@@ -388,7 +398,8 @@ defmodule MatomeApi.Content do
   end
 
   def create_file_item(%User{} = owner, matome_id, attrs) do
-    with {:ok, placement} <- resolve_item_placement(owner, matome_id, attrs) do
+    with {:ok, placement} <- resolve_item_placement(owner, matome_id, attrs),
+         {:ok, attrs} <- prepare_file_attrs(attrs) do
       attrs =
         attrs
         |> put_byte_size_from_content_length()
@@ -439,6 +450,7 @@ defmodule MatomeApi.Content do
       end)
     else
       {:error, :not_found} -> nil
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -479,7 +491,38 @@ defmodule MatomeApi.Content do
   def presign_item_download(%User{} = owner, id) do
     with %Item{} = item <- get_item(owner, id),
          %Item{item_type: :file, file_blob: %FileBlob{} = file_blob} <- item do
-      Presigner.presign_download(file_blob.storage_key)
+      cond do
+        file_blob.media_type == "document" and file_blob.upload_state != "uploaded" ->
+          {:error, :file_not_uploaded}
+
+        file_blob.media_type == "document" ->
+          with :ok <- block_unsafe_document(file_blob),
+               {:ok, descriptor} <- DocumentOpenPolicy.download_descriptor(file_blob),
+               {:ok, file_blob} <- persist_document_policy(file_blob, descriptor.open_policy),
+               {:ok, presign} <-
+                 Presigner.presign_download(file_blob.storage_key,
+                   expires_in: 300,
+                   query: %{
+                     "response-content-type" => descriptor.content_type,
+                     "response-content-disposition" => descriptor.content_disposition,
+                     "response-cache-control" => descriptor.cache_control
+                   }
+                 ) do
+            {:ok,
+             Map.merge(presign, %{
+               filename: descriptor.filename,
+               original_extension: descriptor.original_extension,
+               content_type: descriptor.content_type,
+               byte_size: file_blob.byte_size,
+               open_policy: descriptor.open_policy,
+               action: descriptor.action,
+               warning: descriptor.warning
+             })}
+          end
+
+        true ->
+          Presigner.presign_download(file_blob.storage_key)
+      end
     else
       %Item{item_type: :text} -> {:error, :text_item_not_downloadable}
       nil -> nil
@@ -501,6 +544,104 @@ defmodule MatomeApi.Content do
         {:ok, updated} -> {:ok, updated}
         {:error, reason} -> {:error, reason}
       end
+    end
+  end
+
+  def update_text_item(%User{id: owner_id}, id, body, expected_source_revision)
+      when is_binary(body) and is_integer(expected_source_revision) and
+             expected_source_revision > 0 do
+    Repo.transaction(fn ->
+      item =
+        Item
+        |> where([item], item.id == ^id and item.owner_id == ^owner_id)
+        |> lock("FOR UPDATE")
+        |> Repo.one()
+
+      case item do
+        nil ->
+          Repo.rollback(:not_found)
+
+        %Item{item_type: item_type} when item_type != :text ->
+          Repo.rollback(:item_type_mismatch)
+
+        %Item{} = item ->
+          text_content = Repo.get!(TextContent, item.text_content_id)
+
+          cond do
+            text_content.body == body and
+                expected_source_revision in [item.source_revision, item.source_revision - 1] ->
+              preload_item(item)
+
+            expected_source_revision != item.source_revision ->
+              Repo.rollback({:version_conflict, preload_item(item)})
+
+            true ->
+              with {:ok, _text_content} <-
+                     text_content |> TextContent.changeset(%{body: body}) |> Repo.update(),
+                   {:ok, revised} <-
+                     item
+                     |> Item.changeset(%{
+                       source_revision: item.source_revision + 1,
+                       processing_state: :not_requested,
+                       processing_run_id: nil,
+                       processing_attempt: 0,
+                       processing_config_revision: nil,
+                       processing_capabilities: nil,
+                       processing_requested_outputs: [],
+                       processing_requested_at: nil,
+                       processing_deadline_at: nil,
+                       processing_outputs: %{},
+                       processing_error: nil
+                     })
+                     |> Repo.update() do
+                preload_item(revised)
+              else
+                {:error, reason} -> Repo.rollback(reason)
+              end
+          end
+      end
+    end)
+    |> case do
+      {:ok, item} -> {:ok, item}
+      {:error, :not_found} -> nil
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def delete_text_item(%User{id: owner_id}, id, expected_source_revision)
+      when is_integer(expected_source_revision) and expected_source_revision > 0 do
+    Repo.transaction(fn ->
+      item =
+        Item
+        |> where([item], item.id == ^id and item.owner_id == ^owner_id)
+        |> lock("FOR UPDATE")
+        |> Repo.one()
+
+      case item do
+        nil ->
+          Repo.rollback(:not_found)
+
+        %Item{item_type: item_type} when item_type != :text ->
+          Repo.rollback(:item_type_mismatch)
+
+        %Item{source_revision: revision} = item when revision != expected_source_revision ->
+          Repo.rollback({:version_conflict, preload_item(item)})
+
+        %Item{} = item ->
+          text_content = Repo.get!(TextContent, item.text_content_id)
+
+          with {:ok, deleted} <- Repo.delete(item),
+               {:ok, _payload} <- Repo.delete(text_content) do
+            deleted
+          else
+            {:error, reason} -> Repo.rollback(reason)
+          end
+      end
+    end)
+    |> case do
+      {:ok, item} -> {:ok, item}
+      {:error, :not_found} -> nil
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -631,10 +772,17 @@ defmodule MatomeApi.Content do
   end
 
   def delete_item(%User{} = owner, id) do
-    with %Item{} = item <- get_item(owner, id) do
-      {result, storage_keys} = delete_item_transaction(item)
-      delete_storage_objects(storage_keys)
-      result
+    case get_item(owner, id) do
+      nil ->
+        nil
+
+      %Item{item_type: :text} ->
+        {:error, :text_endpoint_required}
+
+      %Item{} = item ->
+        {result, storage_keys} = delete_item_transaction(item)
+        delete_storage_objects(storage_keys)
+        result
     end
   end
 
@@ -947,10 +1095,49 @@ defmodule MatomeApi.Content do
     end
   end
 
+  defp preload_item(item),
+    do: Repo.preload(item, [:workspace, :matome, :file_blob, :text_content], force: true)
+
   defp replay_item(%Item{client_fingerprint: fingerprint} = item, fingerprint),
     do: {:ok, item}
 
-  defp replay_item(%Item{}, _fingerprint), do: {:error, :client_id_conflict}
+  defp replay_item(%Item{} = item, _fingerprint), do: {:error, {:client_id_conflict, item}}
+
+  defp idempotent_matome_create(_owner, nil, _fingerprint, create), do: create.()
+
+  defp idempotent_matome_create(%User{} = owner, client_id, fingerprint, create) do
+    case get_matome_by_client_id(owner, client_id) do
+      nil ->
+        case create.() do
+          {:error, _reason} = error ->
+            case get_matome_by_client_id(owner, client_id) do
+              nil -> error
+              matome -> replay_matome(matome, fingerprint)
+            end
+
+          result ->
+            result
+        end
+
+      matome ->
+        replay_matome(matome, fingerprint)
+    end
+  end
+
+  defp get_matome_by_client_id(%User{id: owner_id}, client_id) do
+    Matome
+    |> where([matome], matome.owner_id == ^owner_id and matome.client_id == ^client_id)
+    |> Repo.one()
+    |> case do
+      nil -> nil
+      matome -> Repo.preload(matome, :matome_contacts)
+    end
+  end
+
+  defp replay_matome(%Matome{client_fingerprint: fingerprint} = matome, fingerprint),
+    do: {:ok, matome}
+
+  defp replay_matome(%Matome{}, _fingerprint), do: {:error, :client_id_conflict}
 
   defp resolve_item_placement(%User{} = owner, matome_id, attrs) do
     with {:ok, matome} <- resolve_item_matome(owner, matome_id),
@@ -1102,7 +1289,10 @@ defmodule MatomeApi.Content do
     retry_policy = config["desired"]["retry"]
     processing_policy = config["desired"]["ai"]
     input_capability = capabilities["inputs"][source.kind]
-    available? = capability_available?(source, input_capability, config)
+    requested_outputs = Contract.requested_outputs(source.kind, input_capability)
+
+    available? =
+      requested_outputs != [] and capability_available?(source, input_capability, config)
 
     capabilities_snapshot = %{
       "contract_version" => capabilities["contract_version"],
@@ -1122,6 +1312,7 @@ defmodule MatomeApi.Content do
              mark_item_processing_requested(
                item,
                capabilities_snapshot,
+               requested_outputs,
                available?,
                config_revision,
                processing_policy
@@ -1152,6 +1343,7 @@ defmodule MatomeApi.Content do
   defp mark_item_processing_requested(
          %Item{processing_state: state} = item,
          _capabilities_snapshot,
+         _requested_outputs,
          _available?,
          _config_revision,
          _processing_policy
@@ -1162,6 +1354,7 @@ defmodule MatomeApi.Content do
   defp mark_item_processing_requested(
          %Item{} = item,
          capabilities_snapshot,
+         requested_outputs,
          available?,
          config_revision,
          processing_policy
@@ -1170,8 +1363,7 @@ defmodule MatomeApi.Content do
     from_state = item.processing_state
     state = if available?, do: :queued, else: :not_available
 
-    requested_outputs =
-      if available?, do: capabilities_snapshot["input"]["outputs"], else: []
+    requested_outputs = if available?, do: requested_outputs, else: []
 
     item
     |> Item.processing_changeset(%{
@@ -1208,6 +1400,7 @@ defmodule MatomeApi.Content do
       %{file_blob: file_blob} ->
         file_blob.byte_size <=
           min(capability["max_bytes"], config["desired"]["uploads"]["max_bytes"]) and
+          is_binary(file_blob.filename) and byte_size(file_blob.filename) in 1..1024 and
           file_blob.content_type in capability["content_types"] and
           is_binary(file_blob.checksum_sha256) and
           Regex.match?(~r/^[0-9a-f]{64}$/, file_blob.checksum_sha256)
@@ -1319,9 +1512,23 @@ defmodule MatomeApi.Content do
   defp dispatch_input(%Item{item_type: :text, text_content: %TextContent{} = text}),
     do: {:ok, %{kind: "text", body: text.body}}
 
-  defp dispatch_input(%Item{item_type: :file, file_blob: %FileBlob{} = file_blob}) do
+  defp dispatch_input(%Item{
+         item_type: :file,
+         processing_run_id: processing_run_id,
+         file_blob: %FileBlob{} = file_blob
+       }) do
     with true <- file_blob.upload_state == "uploaded" || {:discard, :upload_not_complete},
-         {:ok, media} <- Presigner.presign_download(file_blob.storage_key) do
+         true <-
+           (is_binary(file_blob.filename) and byte_size(file_blob.filename) in 1..1024) ||
+             {:discard, :invalid_input_metadata},
+         {:ok, media} <-
+           Presigner.presign_download(file_blob.storage_key,
+             server: true,
+             query: %{
+               "response-cache-control" =>
+                 ~s(private, no-store, max-age=0, matome-run="#{processing_run_id}")
+             }
+           ) do
       {:ok,
        %{
          kind: file_blob.media_type,
@@ -1329,6 +1536,7 @@ defmodule MatomeApi.Content do
            method: "GET",
            url: media.url,
            expires_at: DateTime.to_iso8601(media.expires_at),
+           filename: file_blob.filename,
            content_type: file_blob.content_type,
            byte_size: file_blob.byte_size,
            checksum_sha256: file_blob.checksum_sha256
@@ -1527,6 +1735,20 @@ defmodule MatomeApi.Content do
 
   defp item_client_id(attrs), do: item_attr(attrs, :client_id)
 
+  defp matome_create_fingerprint(_attrs, nil), do: nil
+
+  defp matome_create_fingerprint(attrs, _client_id) do
+    {
+      :matome,
+      item_attr(attrs, :workspace_id),
+      item_attr(attrs, :title),
+      item_attr(attrs, :happened_at),
+      item_attr(attrs, :description),
+      item_attr(attrs, :aggregated_summary)
+    }
+    |> fingerprint()
+  end
+
   defp item_create_fingerprint(_type, _placement, _attrs, nil), do: nil
 
   defp item_create_fingerprint(:text, placement, attrs, _client_id) do
@@ -1553,10 +1775,12 @@ defmodule MatomeApi.Content do
       item_attr(attrs, :notes),
       item_attr(attrs, :media_type),
       item_attr(attrs, :filename),
+      item_attr(attrs, :original_extension),
       item_attr(attrs, :content_type),
       incoming_byte_size(attrs),
       item_attr(attrs, :checksum_sha256),
       item_attr(attrs, :duration),
+      item_attr(attrs, :open_policy),
       item_metadata(attrs)
     }
     |> fingerprint()
@@ -1625,6 +1849,61 @@ defmodule MatomeApi.Content do
 
   defp item_metadata(attrs) do
     Map.get(attrs, :metadata) || Map.get(attrs, "metadata") || %{}
+  end
+
+  defp prepare_file_attrs(attrs) do
+    attrs =
+      Map.drop(attrs, [:original_extension, "original_extension", :open_policy, "open_policy"])
+
+    media_type = item_attr(attrs, :media_type)
+    filename = item_attr(attrs, :filename)
+    content_type = item_attr(attrs, :content_type)
+
+    with {:ok, metadata} <- DocumentOpenPolicy.metadata(filename, content_type) do
+      {:ok,
+       attrs
+       |> put_file_attr(
+         :filename,
+         if(media_type == "document" or not is_nil(filename), do: metadata.filename)
+       )
+       |> put_file_attr(:original_extension, metadata.original_extension)
+       |> put_file_attr(
+         :content_type,
+         if(media_type == "document" or not is_nil(content_type), do: metadata.content_type)
+       )
+       |> put_file_attr(
+         :open_policy,
+         if(media_type == "document", do: metadata.open_policy, else: "download_only")
+       )}
+    end
+  end
+
+  defp put_file_attr(attrs, _key, nil), do: attrs
+
+  defp put_file_attr(attrs, key, value) do
+    if Enum.any?(Map.keys(attrs), &is_atom/1) do
+      Map.put(attrs, key, value)
+    else
+      Map.put(attrs, Atom.to_string(key), value)
+    end
+  end
+
+  defp persist_document_policy(%FileBlob{open_policy: policy} = blob, policy), do: {:ok, blob}
+
+  defp persist_document_policy(blob, policy) do
+    blob
+    |> FileBlob.changeset(%{open_policy: policy})
+    |> Repo.update()
+  end
+
+  defp block_unsafe_document(blob) do
+    if DocumentOpenPolicy.current_policy(blob) == "blocked" do
+      with {:ok, _blob} <- persist_document_policy(blob, "blocked") do
+        {:error, :unsafe_file_type}
+      end
+    else
+      :ok
+    end
   end
 
   defp validate_workspace_owner(changeset, owner) do

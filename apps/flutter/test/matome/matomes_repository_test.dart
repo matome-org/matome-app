@@ -19,10 +19,12 @@ void main() {
   late ContactsRepository contactsRepo;
 
   setUp(() {
-    dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:7001',
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    dio = Dio(
+      BaseOptions(
+        baseUrl: 'http://localhost:7001',
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
     adapter = DioAdapter(dio: dio);
     tokenStore = InMemoryTokenStore();
     final client = ApiClient(tokenStore: tokenStore, dio: dio);
@@ -60,21 +62,35 @@ void main() {
     expect(matomes.single.contacts.single.role, 'organizer');
   });
 
-  test('createMatome returns the created remote (carrying its Core id)',
-      () async {
-    adapter.onPost(
-      '/api/matomes',
-      (server) => server.reply(201, {
-        'matome': {'id': 99, 'owner_id': 1, 'title': 'New', 'workspace_id': 42},
-      }),
-      data: Matchers.any,
-    );
+  test(
+    'createMatome returns the created remote (carrying its Core id)',
+    () async {
+      adapter.onPost(
+        '/api/matomes',
+        (server) => server.reply(201, {
+          'matome': {
+            'id': 99,
+            'owner_id': 1,
+            'title': 'New',
+            'workspace_id': 42,
+          },
+        }),
+        data: {
+          'client_id': 'matome-local-99',
+          'title': 'New',
+          'workspace_id': 42,
+        },
+      );
 
-    final created =
-        await matomesRepo.createMatome(title: 'New', workspaceId: 42);
-    expect(created.id, 99);
-    expect(created.workspaceId, 42);
-  });
+      final created = await matomesRepo.createMatome(
+        clientId: 'matome-local-99',
+        title: 'New',
+        workspaceId: 42,
+      );
+      expect(created.id, 99);
+      expect(created.workspaceId, 42);
+    },
+  );
 
   test('createTextItem POSTs {item_type:text, body} and returns the item id '
       '(W1)', () async {
@@ -127,73 +143,99 @@ void main() {
     expect(sentBody?['body'], 'A durable note');
   });
 
-  test('createTextItem surfaces a 422 validation error as an ApiException',
-      () async {
-    await tokenStore.saveTokens(accessToken: 'access-123');
+  test(
+    'createTextItem surfaces a 422 validation error as an ApiException',
+    () async {
+      await tokenStore.saveTokens(accessToken: 'access-123');
+      adapter.onPost(
+        '/api/matomes/7/items',
+        (server) => server.reply(422, {
+          'errors': {
+            'body': ["can't be blank"],
+          },
+        }),
+        data: Matchers.any,
+      );
+      expect(
+        matomesRepo.createTextItem(
+          matomeId: 7,
+          clientId: 'text_local_2',
+          body: '',
+        ),
+        throwsA(
+          isA<ApiException>().having((e) => e.statusCode, 'statusCode', 422),
+        ),
+      );
+    },
+  );
+
+  test('createMatome parses a 200 replay for the same client id', () async {
     adapter.onPost(
-      '/api/matomes/7/items',
-      (server) => server.reply(422, {
-        'errors': {
-          'body': ["can't be blank"],
-        },
-      }),
-      data: Matchers.any,
-    );
-    expect(
-      matomesRepo.createTextItem(
-        matomeId: 7,
-        clientId: 'text_local_2',
-        body: '',
-      ),
-      throwsA(isA<ApiException>()
-          .having((e) => e.statusCode, 'statusCode', 422)),
-    );
-  });
-
-  test('updateMatome PATCHes title + happenedAt and parses the result',
-      () async {
-    final happenedAt = DateTime.utc(2026, 1, 15, 10, 30);
-    adapter.onPatch(
-      '/api/matomes/7',
+      '/api/matomes',
       (server) => server.reply(200, {
-        'matome': {
-          'id': 7,
-          'owner_id': 1,
-          'title': 'Renamed',
-          'workspace_id': 42,
-          'happened_at': '2026-01-15T10:30:00Z',
-        },
+        'matome': {'id': 99, 'owner_id': 1, 'title': 'Existing'},
       }),
-      data: Matchers.any,
+      data: {'client_id': 'stable-parent', 'title': 'Existing'},
     );
 
-    final updated = await matomesRepo.updateMatome(
-      7,
-      title: 'Renamed',
-      happenedAt: happenedAt,
+    final replayed = await matomesRepo.createMatome(
+      clientId: 'stable-parent',
+      title: 'Existing',
     );
-    expect(updated.id, 7);
-    expect(updated.title, 'Renamed');
-    expect(updated.happenedAt, happenedAt);
+
+    expect(replayed.id, 99);
+    expect(replayed.title, 'Existing');
   });
 
-  test('updateMatome surfaces a 422 validation error as an ApiException',
-      () async {
-    adapter.onPatch(
-      '/api/matomes/7',
-      (server) => server.reply(422, {
-        'errors': {
-          'happened_at': ['is too far in the future'],
-        },
-      }),
-      data: Matchers.any,
-    );
-    expect(
-      matomesRepo.updateMatome(7, title: ''),
-      throwsA(isA<ApiException>()
-          .having((e) => e.statusCode, 'statusCode', 422)),
-    );
-  });
+  test(
+    'updateMatome PATCHes title + happenedAt and parses the result',
+    () async {
+      final happenedAt = DateTime.utc(2026, 1, 15, 10, 30);
+      adapter.onPatch(
+        '/api/matomes/7',
+        (server) => server.reply(200, {
+          'matome': {
+            'id': 7,
+            'owner_id': 1,
+            'title': 'Renamed',
+            'workspace_id': 42,
+            'happened_at': '2026-01-15T10:30:00Z',
+          },
+        }),
+        data: Matchers.any,
+      );
+
+      final updated = await matomesRepo.updateMatome(
+        7,
+        title: 'Renamed',
+        happenedAt: happenedAt,
+      );
+      expect(updated.id, 7);
+      expect(updated.title, 'Renamed');
+      expect(updated.happenedAt, happenedAt);
+    },
+  );
+
+  test(
+    'updateMatome surfaces a 422 validation error as an ApiException',
+    () async {
+      adapter.onPatch(
+        '/api/matomes/7',
+        (server) => server.reply(422, {
+          'errors': {
+            'happened_at': ['is too far in the future'],
+          },
+        }),
+        data: Matchers.any,
+      );
+      expect(
+        matomesRepo.updateMatome(7, title: ''),
+        throwsA(
+          isA<ApiException>().having((e) => e.statusCode, 'statusCode', 422),
+        ),
+      );
+    },
+  );
 
   test('attachContact accepts 201; detachContact accepts 204', () async {
     adapter
@@ -255,8 +297,9 @@ void main() {
     );
     expect(
       matomesRepo.archiveMatome(7),
-      throwsA(isA<ApiException>()
-          .having((e) => e.statusCode, 'statusCode', 404)),
+      throwsA(
+        isA<ApiException>().having((e) => e.statusCode, 'statusCode', 404),
+      ),
     );
   });
 
@@ -267,8 +310,13 @@ void main() {
     );
     expect(
       matomesRepo.fetchMatomes(),
-      throwsA(isA<ApiException>()
-          .having((e) => e.isUnauthorized, 'isUnauthorized', true)),
+      throwsA(
+        isA<ApiException>().having(
+          (e) => e.isUnauthorized,
+          'isUnauthorized',
+          true,
+        ),
+      ),
     );
   });
 

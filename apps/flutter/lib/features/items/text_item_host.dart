@@ -11,6 +11,7 @@ import '../../ui/loading_indicator.dart';
 import '../home/inbox_sync.dart';
 import '../recordings/recording.dart';
 import '../recordings/recording_result_waiter.dart';
+import '../recordings/upload_queue.dart';
 import 'matome_item_type.dart';
 
 const double _kTextNoteReadingWidth = 720;
@@ -28,7 +29,6 @@ class TextItemHost extends ConsumerStatefulWidget {
 
 class _TextItemHostState extends ConsumerState<TextItemHost> {
   late final TextEditingController _field;
-  Future<ItemWithPayload?>? _load;
   bool _editing = false;
   bool _retrying = false;
 
@@ -44,22 +44,53 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
     super.dispose();
   }
 
-  Future<ItemWithPayload?> _loadItem() {
-    final ownerId = ref.read(currentOwnerIdProvider);
-    if (ownerId == null) return Future.value(null);
-    return ref.read(itemsDaoProvider).getById(widget.itemId, ownerId);
-  }
-
   Future<void> _save() async {
     final ownerId = ref.read(currentOwnerIdProvider);
     if (ownerId == null) return;
     final dao = ref.read(itemsDaoProvider);
-    await dao.updateTextBody(widget.itemId, ownerId, _field.text.trim());
+    await dao.editTextBody(
+      itemId: widget.itemId,
+      ownerId: ownerId,
+      body: _field.text.trim(),
+      now: DateTime.now().millisecondsSinceEpoch,
+      configRevision: ref.read(systemPolicyProvider).revision,
+    );
+    await ref.read(uploadQueueProvider).drainRow(widget.itemId);
     if (!mounted) return;
-    setState(() {
-      _editing = false;
-      _load = dao.getById(widget.itemId, ownerId);
-    });
+    setState(() => _editing = false);
+  }
+
+  Future<void> _delete() async {
+    final ownerId = ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    await ref
+        .read(itemsDaoProvider)
+        .tombstoneText(
+          itemId: widget.itemId,
+          ownerId: ownerId,
+          now: DateTime.now().millisecondsSinceEpoch,
+          configRevision: ref.read(systemPolicyProvider).revision,
+        );
+    await ref.read(uploadQueueProvider).drain();
+    final remaining = await ref
+        .read(itemsDaoProvider)
+        .getById(widget.itemId, ownerId);
+    if (mounted && remaining == null && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _retrySync() async {
+    final ownerId = ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    await ref
+        .read(workQueueDaoProvider)
+        .resetForManualRetry(
+          ownerId: ownerId,
+          itemId: widget.itemId,
+          now: DateTime.now().millisecondsSinceEpoch,
+        );
+    await ref.read(uploadQueueProvider).drain();
   }
 
   Future<void> _retry(ItemWithPayload item) async {
@@ -96,7 +127,6 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
       if (mounted) {
         setState(() {
           _retrying = false;
-          _load = dao.getById(widget.itemId, ownerId);
         });
       }
     }
@@ -125,7 +155,10 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
     final colors = context.colors;
     final spacing = context.spacing;
     final typography = context.typography;
-    _load ??= _loadItem();
+    final ownerId = ref.watch(currentOwnerIdProvider);
+    final items = ownerId == null
+        ? Stream<ItemWithPayload?>.value(null)
+        : ref.watch(itemsDaoProvider).watchById(widget.itemId, ownerId);
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -133,11 +166,20 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
         backgroundColor: colors.background,
         surfaceTintColor: colors.background,
         title: const Text('Text note'),
+        actions: [
+          IconButton(
+            key: const ValueKey('text-item-delete'),
+            onPressed: _delete,
+            tooltip: t.details.delete,
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ],
       ),
-      body: FutureBuilder<ItemWithPayload?>(
-        future: _load,
+      body: StreamBuilder<ItemWithPayload?>(
+        stream: items,
         builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
+          if (!snapshot.hasData &&
+              snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: LoadingIndicator(color: colors.accent));
           }
 
@@ -215,6 +257,10 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
                       ),
                     ),
                   if (!_editing) ...[
+                    _TextSyncStatus(
+                      syncState: item.item.syncState,
+                      onRetry: _retrySync,
+                    ),
                     if (item.summary case final summary?) ...[
                       SizedBox(height: spacing.lg),
                       Text(
@@ -245,6 +291,51 @@ class _TextItemHostState extends ConsumerState<TextItemHost> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _TextSyncStatus extends StatelessWidget {
+  const _TextSyncStatus({required this.syncState, required this.onRetry});
+
+  final String syncState;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (syncState == 'synced') return const SizedBox.shrink();
+    final colors = context.colors;
+    final label = switch (syncState) {
+      'conflict' => t.textItem.conflict,
+      'failed' => t.textItem.failed,
+      'pending_delete' => t.textItem.pendingDelete,
+      _ => t.textItem.pending,
+    };
+    final retryable = syncState == 'failed';
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.spacing.md),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              key: const ValueKey('text-item-sync-status'),
+              style: context.typography.label.copyWith(
+                color: syncState == 'conflict' || syncState == 'failed'
+                    ? colors.failed
+                    : colors.textSecondary,
+              ),
+            ),
+          ),
+          if (retryable)
+            AppTextButton.icon(
+              key: const ValueKey('text-item-sync-retry'),
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: Text(t.common.retry),
+            ),
+        ],
       ),
     );
   }

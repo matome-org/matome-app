@@ -16,6 +16,8 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/details/file_view.dart';
+import 'package:matome_flutter/features/documents/document_open_policy.dart';
+import 'package:matome_flutter/features/documents/document_open_service.dart';
 import 'package:matome_flutter/features/items/matome_item_type.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
@@ -50,6 +52,30 @@ RecordingItem _imageItem({
   );
 }
 
+class _HostDocumentOpenService extends DocumentOpenService {
+  _HostDocumentOpenService()
+    : super(
+        descriptorSource: (_) => throw UnimplementedError(),
+        launcher: _UnusedDocumentLauncher(),
+        environment: DocumentOpenEnvironment.mobile,
+      );
+
+  Future<DocumentOpenResult> Function(DocumentOpenRequest request) handler =
+      (_) async => DocumentOpenResult.unavailable;
+  final List<DocumentOpenRequest> requests = [];
+
+  @override
+  Future<DocumentOpenResult> open(DocumentOpenRequest request) {
+    requests.add(request);
+    return handler(request);
+  }
+}
+
+class _UnusedDocumentLauncher implements ExternalDocumentLauncher {
+  @override
+  ExternalOpenReservation reserve() => throw UnimplementedError();
+}
+
 Future<void> _pump(WidgetTester tester, RecordingItem item) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -75,7 +101,8 @@ void main() {
         find.byKey(const ValueKey('file-detail-image-header')),
         findsOneWidget,
       );
-      // Contents section is shown (image → "Description"), honest-empty for now.
+      // Contents section is shown (image -> "Description") and is honestly
+      // empty when this fixture has no typed processing output.
       // It can sit below the fold under the framed media header — the ListView
       // builds all children eagerly, so assert structure regardless of offstage.
       expect(
@@ -93,8 +120,7 @@ void main() {
   );
 
   testWidgets(
-    'image host Contents converges on EMPTY ("No description yet"), never a '
-    'fake "Describing…" — the description producer is deferred (#1440/#1445)',
+    'image host Contents is honestly empty when no typed output exists',
     (tester) async {
       await _pump(tester, _imageItem());
 
@@ -112,7 +138,7 @@ void main() {
       );
       expect(find.text('Describing…', skipOffstage: false), findsNothing);
       expect(find.text('Transcribing…', skipOffstage: false), findsNothing);
-      // No producer → no processing spinner / retry inside Contents.
+      // No active run -> no processing spinner / retry inside Contents.
       expect(
         find.byKey(
           const ValueKey('file-view-contents-processing'),
@@ -206,8 +232,7 @@ void main() {
     expect(FileDetailScreen.mediaKindOf(item), FileMediaKind.image);
   });
 
-  // ── Document host (#1450): row-only load, NEVER the audio host ──────────────
-  group('FileDetailScreen.documentById (document host)', () {
+  group('FileDetailScreen.imageById — typed outputs and honest states', () {
     late AppDatabase db;
     late ProviderContainer container;
 
@@ -226,12 +251,168 @@ void main() {
       await db.close();
     });
 
+    Widget app(String id) => UncontrolledProviderScope(
+      container: container,
+      child: TranslationProvider(
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: FileDetailScreen.imageById(id: id),
+        ),
+      ),
+    );
+
+    testWidgets(
+      'ready renders description, OCR, and summary while preserving notes',
+      (tester) async {
+        await insertTestFileItem(
+          db,
+          id: 'image-ready',
+          coreId: 42,
+          mediaType: 'image',
+          description: 'A whiteboard covered in launch plans.',
+          ocrText: 'LAUNCH FRIDAY',
+          summary: 'The team is planning a Friday launch.',
+          notes: 'Ask Morgan about the final checklist.',
+          processingState: ProcessingState.succeeded,
+          processingRunId: 'run-image-ready',
+          processingAttempt: 1,
+        );
+
+        await tester.pumpWidget(app('image-ready'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-ready')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('A whiteboard covered in launch plans.'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('LAUNCH FRIDAY'), findsOneWidget);
+        expect(
+          find.textContaining('The team is planning a Friday launch.'),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('file-view-notes')),
+            matching: find.text('Ask Morgan about the final checklist.'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('file-detail-image-header')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    for (final testCase
+        in <
+          ({ProcessingState state, String key, String label, String? summary})
+        >[
+          (
+            state: ProcessingState.queued,
+            key: 'file-view-contents-processing',
+            label: 'Queued',
+            summary: null,
+          ),
+          (
+            state: ProcessingState.processing,
+            key: 'file-view-contents-processing',
+            label: 'Describing…',
+            summary: null,
+          ),
+          (
+            state: ProcessingState.partial,
+            key: 'file-view-contents-partial',
+            label: 'Partial',
+            summary: 'Only the image summary completed.',
+          ),
+          (
+            state: ProcessingState.failed,
+            key: 'file-view-contents-failed',
+            label: 'Failed',
+            summary: null,
+          ),
+          (
+            state: ProcessingState.notAvailable,
+            key: 'file-view-contents-failed',
+            label: 'Not available',
+            summary: null,
+          ),
+        ]) {
+      testWidgets(
+        '${testCase.state.wireName} projects the Core state truthfully',
+        (tester) async {
+          await insertTestFileItem(
+            db,
+            id: 'image-state',
+            coreId: 42,
+            mediaType: 'image',
+            summary: testCase.summary,
+            notes: 'User note remains separate.',
+            processingState: testCase.state,
+            processingRunId: 'run-image-state',
+            processingAttempt: 1,
+            processingErrorCode: testCase.state == ProcessingState.failed
+                ? 'processor_unavailable'
+                : null,
+          );
+
+          await tester.pumpWidget(app('image-state'));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+
+          expect(find.byKey(ValueKey(testCase.key)), findsOneWidget);
+          expect(find.text(testCase.label), findsWidgets);
+          if (testCase.summary != null) {
+            expect(find.textContaining(testCase.summary!), findsOneWidget);
+          }
+          expect(
+            find.descendant(
+              of: find.byKey(const ValueKey('file-view-notes')),
+              matching: find.text('User note remains separate.'),
+            ),
+            findsOneWidget,
+          );
+        },
+      );
+    }
+  });
+
+  // ── Document host (#1450): row-only load, NEVER the audio host ──────────────
+  group('FileDetailScreen.documentById (document host)', () {
+    late AppDatabase db;
+    late ProviderContainer container;
+    late _HostDocumentOpenService openService;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      openService = _HostDocumentOpenService();
+      container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+          documentOpenServiceProvider.overrideWithValue(openService),
+        ],
+      );
+    });
+
+    tearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+
     Future<void> seedDoc(String id) => insertTestFileItem(
       db,
       id: id,
       title: 'Quarterly report',
       localPath: '/tmp/report.pdf',
       filename: 'report.pdf',
+      contentType: 'application/pdf',
+      openPolicy: 'external',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       mediaType: 'document',
     );
@@ -264,12 +445,89 @@ void main() {
         expect(find.byType(AudioPlayerBar), findsNothing);
         // Title from the loaded row.
         expect(find.text('Quarterly report'), findsWidgets);
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('file-type-chip')),
+            matching: find.text('report.pdf'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'renders extracted plain text and summary while preserving user notes',
+      (tester) async {
+        await insertTestFileItem(
+          db,
+          id: 'doc-ready',
+          coreId: 43,
+          title: 'Quarterly report',
+          localPath: '/tmp/report.pdf',
+          filename: 'report.pdf',
+          mediaType: 'document',
+          extractedText: 'Revenue grew 12% year over year.',
+          summary: 'A concise quarterly performance summary.',
+          notes: 'Ask Finance about the regional split.',
+          processingState: ProcessingState.succeeded,
+          processingRunId: 'run-doc-ready',
+          processingAttempt: 1,
+        );
+
+        await tester.pumpWidget(app('doc-ready'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-ready')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Revenue grew 12% year over year.'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('A concise quarterly performance summary.'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Ask Finance about the regional split.'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'renders not available without fixture claims when document capability is absent',
+      (tester) async {
+        await insertTestFileItem(
+          db,
+          id: 'doc-unavailable',
+          coreId: 44,
+          title: 'Stored report',
+          localPath: '/tmp/stored.pdf',
+          filename: 'stored.pdf',
+          mediaType: 'document',
+          processingState: ProcessingState.notAvailable,
+          processingRunId: 'run-doc-unavailable',
+          processingAttempt: 1,
+        );
+
+        await tester.pumpWidget(app('doc-unavailable'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-failed')),
+          findsOneWidget,
+        );
+        expect(find.text('Not available'), findsWidgets);
+        expect(find.textContaining('[FIXTURE]'), findsNothing);
+        expect(find.byKey(const ValueKey('file-type-chip')), findsOneWidget);
       },
     );
 
     testWidgets(
       'renders the FileTypeChip media header: type icon from the persisted '
-      'original_extension (.pdf) + file name + DISABLED "Open" labelled "soon"',
+      'original_extension (.pdf) + file name + external Open action',
       (tester) async {
         await seedDoc('rec_doc');
         await tester.pumpWidget(app('rec_doc'));
@@ -293,13 +551,127 @@ void main() {
           ),
           findsOneWidget,
         );
-        // The Open affordance is present, labelled, and DISABLED ("soon").
+        // The policy-derived Open affordance is present and actionable.
         expect(find.text(t.fileView.fileChip.open), findsOneWidget);
-        expect(find.text(t.fileView.fileChip.soon), findsOneWidget);
         final open = tester.widget<TextButton>(
           find.byKey(const ValueKey('file-type-chip-open')),
         );
-        expect(open.onPressed, isNull);
+        expect(open.onPressed, isNotNull);
+      },
+    );
+
+    testWidgets('sends row facts and renders pending then success', (
+      tester,
+    ) async {
+      final pending = Completer<DocumentOpenResult>();
+      openService.handler = (_) => pending.future;
+      await seedDoc('doc-open');
+      await tester.pumpWidget(app('doc-open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('file-type-chip-loading')),
+        findsOneWidget,
+      );
+      final request = openService.requests.single;
+      expect(request.coreId, isNull);
+      expect(request.localPath, '/tmp/report.pdf');
+      expect(request.extension, 'pdf');
+      expect(request.mimeType, 'application/pdf');
+      expect(request.openPolicy, DocumentOpenPolicy.external);
+
+      pending.complete(DocumentOpenResult.openedRemote);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('file-type-chip-loading')),
+        findsNothing,
+      );
+      expect(find.text(t.fileView.fileChip.open), findsOneWidget);
+    });
+
+    testWidgets(
+      'transient failure retries and thrown service errors leave loading',
+      (tester) async {
+        var calls = 0;
+        openService.handler = (_) async {
+          calls += 1;
+          if (calls == 1) throw StateError('unexpected provider failure');
+          return DocumentOpenResult.openedRemote;
+        };
+        await seedDoc('doc-retry');
+        await tester.pumpWidget(app('doc-retry'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('file-type-chip-loading')),
+          findsNothing,
+        );
+        expect(find.text(t.common.retry), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('file-type-chip-error')),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+        await tester.pumpAndSettle();
+        expect(calls, 2);
+        expect(find.text(t.common.retry), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'policy labels, warning, blocked, and unavailable stay stable',
+      (tester) async {
+        await insertTestFileItem(
+          db,
+          id: 'doc-warning',
+          filename: 'page.html',
+          originalExtension: 'html',
+          contentType: 'text/html',
+          mediaType: 'document',
+          openPolicy: 'attachment_only',
+        );
+        await tester.pumpWidget(app('doc-warning'));
+        await tester.pumpAndSettle();
+        expect(find.text(t.fileView.fileChip.download), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('file-type-chip-warning')),
+          findsOneWidget,
+        );
+
+        await insertTestFileItem(
+          db,
+          id: 'doc-blocked',
+          filename: 'setup.exe',
+          originalExtension: 'exe',
+          mediaType: 'document',
+          openPolicy: 'blocked',
+        );
+        await tester.pumpWidget(app('doc-blocked'));
+        await tester.pumpAndSettle();
+        expect(find.text(t.fileView.fileChip.unavailable), findsOneWidget);
+        final blocked = tester.widget<TextButton>(
+          find.byKey(const ValueKey('file-type-chip-open')),
+        );
+        expect(blocked.onPressed, isNull);
+
+        openService.handler = (_) async => DocumentOpenResult.unavailable;
+        await seedDoc('doc-unavailable-open');
+        await tester.pumpWidget(app('doc-unavailable-open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+        await tester.pumpAndSettle();
+        expect(find.text(t.fileView.fileChip.unavailable), findsOneWidget);
+        expect(find.text(t.common.retry), findsNothing);
+        expect(
+          find.byKey(const ValueKey('file-type-chip-error')),
+          findsNothing,
+        );
       },
     );
 

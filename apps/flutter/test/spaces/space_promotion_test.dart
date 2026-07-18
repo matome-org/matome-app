@@ -482,6 +482,7 @@ class _CountingMatomesRepo extends MatomesRepository {
 
   @override
   Future<Matome> createMatome({
+    required String clientId,
     required String title,
     int? workspaceId,
     DateTime? happenedAt,
@@ -543,6 +544,8 @@ class _CountingRecordingsRepo extends RecordingsRepository
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     createCalls++;
     final id = _nextCoreId++;
@@ -606,6 +609,8 @@ class _FlakyRecordingsRepo extends _CountingRecordingsRepo {
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     if (failCreateForTitleOnce && !_failedOnce) {
       _failedOnce = true;
@@ -624,6 +629,9 @@ class _FlakyRecordingsRepo extends _CountingRecordingsRepo {
       mediaType: mediaType,
       workspaceId: workspaceId,
       contentLength: contentLength,
+      checksumSha256: checksumSha256,
+      filename: filename,
+      contentType: contentType,
     );
   }
 }

@@ -28,6 +28,131 @@ void main() {
     expect(mediaTypeForPath('/a/b.pdf'), 'document');
   });
 
+  test('contentTypeForPath preserves configured image MIME types', () {
+    expect(contentTypeForPath('/a/board.PNG'), 'image/png');
+    expect(contentTypeForPath('/a/photo.jpg'), 'image/jpeg');
+    expect(contentTypeForPath('/a/photo.JPEG'), 'image/jpeg');
+    expect(contentTypeForPath('/a/scan.webp'), 'application/octet-stream');
+  });
+
+  test(
+    'persist is local-only, atomic, and idempotent for a stable capture id',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final file = File('${Directory.systemTemp.path}/persist_only_test.m4a');
+      await file.writeAsBytes(List<int>.filled(16, 1));
+      addTearDown(
+        () => file.exists().then((exists) => exists ? file.delete() : null),
+      );
+      final repo = _CoreDownRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+          testParentSyncOverride(),
+          recordingsRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final uploader = container.read(inboxUploaderProvider);
+      const stableId = 'rec_local_meeting_stable';
+      final localId = await uploader.persist(
+        PickedUpload(file: file, title: 'Local', mediaType: 'audio'),
+        durationSeconds: 3,
+        localId: stableId,
+      );
+      final retryId = await uploader.persist(
+        PickedUpload(file: file, title: 'Local', mediaType: 'audio'),
+        durationSeconds: 3,
+        localId: stableId,
+      );
+
+      expect(repo.createCalls, 0);
+      expect(localId, stableId);
+      expect(retryId, stableId);
+      expect(await db.itemsDao.getById(localId, '1'), isNotNull);
+      expect(
+        await db.workQueueDao.getForItem(localId, 'file_upload'),
+        isNotNull,
+      );
+      expect(await db.workQueueDao.listAll(), hasLength(1));
+    },
+  );
+
+  test(
+    'durable image import preserves source MIME when the stored suffix changes',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final source = File(
+        '${Directory.systemTemp.path}/inbox_image_mime_source.png',
+      );
+      await source.writeAsBytes(List<int>.filled(16, 1));
+      addTearDown(
+        () => source.exists().then((e) => e ? source.delete() : null),
+      );
+      final durableDir = await Directory.systemTemp.createTemp(
+        'inbox_image_mime_',
+      );
+      addTearDown(() => durableDir.delete(recursive: true));
+
+      Future<PickedUpload> encryptedStyleCopy(PickedUpload picked) async {
+        final durable = await picked.file.copy('${durableDir.path}/image.enc');
+        return PickedUpload(
+          file: durable,
+          title: picked.title,
+          mediaType: picked.mediaType,
+        );
+      }
+
+      final repo = _CoreDownRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+          testParentSyncOverride(),
+          recordingsRepositoryProvider.overrideWithValue(repo),
+          inboxUploaderProvider.overrideWith(
+            (ref) => InboxUploader(ref, durableCopy: encryptedStyleCopy),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final localId = await container
+          .read(inboxUploaderProvider)
+          .upload(
+            PickedUpload(
+              file: source,
+              title: 'Launch board',
+              mediaType: 'image',
+              mimeType: 'IMAGE/PNG; charset=binary',
+              byteSize: 16,
+            ),
+            importFromExternalSource: true,
+          );
+
+      final row = await db.itemsDao.getById(localId, '1');
+      expect(row?.localPath, endsWith('.enc'));
+      expect(row?.file?.contentType, 'image/png');
+      expect(row?.file?.byteSize, 16);
+      expect(row?.title, 'Launch board');
+      expect(row?.file?.filename, 'inbox_image_mime_source.png');
+    },
+  );
+
   test(
     'upload creates a local row and stops after Core accepts processing',
     () async {
@@ -560,6 +685,8 @@ void main() {
 class _CoreDownRepository extends RecordingsRepository {
   _CoreDownRepository({required super.apiClient});
 
+  int createCalls = 0;
+
   @override
   Future<RecordingCreateResult> createItemRecording({
     required String title,
@@ -571,7 +698,10 @@ class _CoreDownRepository extends RecordingsRepository {
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
+    createCalls += 1;
     throw const ApiException('Core unreachable');
   }
 }

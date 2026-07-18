@@ -23,6 +23,7 @@ import '../spaces/effective_space.dart';
 import '../spaces/space_ref_mapping.dart';
 import '../spaces/sync_policy.dart';
 import 'recording_ids.dart';
+import 'recording.dart';
 import 'recordings_repository.dart';
 import 'upload_descriptor.dart';
 
@@ -118,7 +119,12 @@ class UploadQueue {
   /// Explicit user resume makes held/delayed upload work due without erasing its
   /// attempt history. The normal automatic drain still honors backoff.
   Future<void> resumeNow() async {
-    await _work.makeDue(kWorkKindFileUpload, _now);
+    final ownerId = _ref.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    await _work.makeDue(ownerId: ownerId, kind: kWorkKindFileUpload, now: _now);
+    await _work.makeDue(ownerId: ownerId, kind: kWorkKindTextCreate, now: _now);
+    await _work.makeDue(ownerId: ownerId, kind: kWorkKindTextUpdate, now: _now);
+    await _work.makeDue(ownerId: ownerId, kind: kWorkKindTextDelete, now: _now);
     await drain();
   }
 
@@ -138,7 +144,11 @@ class UploadQueue {
       for (final item in await _items.listPendingUploads(ownerId)) {
         await _ensureWork(item);
       }
-      await _work.prepareDrain(now: now, configRevision: _configRevision());
+      await _work.prepareDrain(
+        ownerId: ownerId,
+        now: now,
+        configRevision: _configRevision(),
+      );
     } catch (error, stack) {
       AppLog.error(
         LogCat.upload,
@@ -152,11 +162,18 @@ class UploadQueue {
     final visited = <String>{};
     while (true) {
       final work = await _work.claimNext(
+        ownerId: ownerId,
         leaseOwner: _leaseOwner,
         now: _now,
         leaseDuration: leaseDuration,
         excludedIds: visited,
-        kinds: const {kWorkKindFileUpload},
+        kinds: const {
+          kWorkKindFileUpload,
+          kWorkKindTextCreate,
+          kWorkKindTextUpdate,
+          kWorkKindTextDelete,
+          kWorkKindTextProcess,
+        },
       );
       if (work == null) return;
       visited.add(work.id);
@@ -165,10 +182,12 @@ class UploadQueue {
   }
 
   Future<void> _ensureWork(ItemWithPayload item) async {
+    if (item.file == null) return;
     final existing = await _work.getForItem(item.id, kWorkKindFileUpload);
     if (existing != null) return;
     await _work.enqueueOrIgnore(
-      fileUploadWork(
+      ownerId: item.item.ownerId,
+      work: fileUploadWork(
         itemId: item.id,
         sourceRevision: item.item.sourceRevision,
         now: _now,
@@ -188,7 +207,10 @@ class UploadQueue {
   }
 
   Future<void> _execute(WorkQueueRow work, String ownerId) async {
-    if (work.kind != kWorkKindFileUpload) return;
+    if (work.kind != kWorkKindFileUpload) {
+      await _executeText(work, ownerId);
+      return;
+    }
     try {
       var item = await _items.getById(work.itemId, ownerId);
       if (item == null || item.file == null) {
@@ -444,6 +466,191 @@ class UploadQueue {
     }
   }
 
+  Future<void> _executeText(WorkQueueRow work, String ownerId) async {
+    try {
+      var item = await _items.getById(work.itemId, ownerId);
+      if (item == null || item.text == null) {
+        throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+      }
+      final submittedRevision = work.submittedSourceRevision;
+      final expectedRevision = work.expectedSourceRevision;
+      if (submittedRevision == null || expectedRevision == null) {
+        throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+      }
+
+      if (work.kind == kWorkKindTextProcess) {
+        if (item.item.isDeleted ||
+            item.item.isDirty ||
+            item.item.sourceRevision != submittedRevision ||
+            item.item.acceptedSourceRevision != submittedRevision) {
+          await _work.complete(work.id, leaseOwner: _leaseOwner, now: _now);
+          return;
+        }
+        final coreId = item.coreId;
+        if (coreId == null) {
+          throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+        }
+        final accepted = await _repo.enqueueProcessing(coreId);
+        await _work.completeTextProcessingAccepted(
+          work.id,
+          itemId: item.id,
+          ownerId: ownerId,
+          leaseOwner: _leaseOwner,
+          now: _now,
+          processingState: accepted.processing.state.wireName,
+          processingRunId: accepted.processing.runId,
+          processingAttempt: accepted.processing.attempt,
+          processingRequestedOutputs: accepted.processing.requestedOutputs.map(
+            (kind) => kind.wireName,
+          ),
+        );
+        await _inbox.reloadFromLocal();
+        return;
+      }
+
+      if (work.kind == kWorkKindTextDelete) {
+        final coreId = item.coreId;
+        if (coreId == null) {
+          throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+        }
+        try {
+          await _repo.deleteTextItem(
+            coreId,
+            expectedSourceRevision: expectedRevision,
+          );
+        } on TextVersionConflict catch (conflict) {
+          final current = conflict.current;
+          if (current?.textBody == null) rethrow;
+          await _work.restoreTextDeleteConflict(
+            work.id,
+            itemId: item.id,
+            ownerId: ownerId,
+            leaseOwner: _leaseOwner,
+            now: _now,
+            remoteId: current!.id,
+            remoteSourceRevision: current.sourceRevision,
+            remoteBody: current.textBody!,
+          );
+          await _inbox.reloadFromLocal();
+          return;
+        }
+        if (!await _work.completeTextDelete(
+          work.id,
+          itemId: item.id,
+          ownerId: ownerId,
+          leaseOwner: _leaseOwner,
+          now: _now,
+        )) {
+          return;
+        }
+        await _inbox.reloadFromLocal();
+        return;
+      }
+
+      final submittedBody = work.operationBody;
+      if (submittedBody == null) {
+        throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+      }
+      Recording remote;
+      if (work.kind == kWorkKindTextCreate) {
+        int? coreMatomeId;
+        if (item.matomeId != null) {
+          coreMatomeId = await _requireCoreParent(item);
+        }
+        try {
+          remote = await _repo.createTextItem(
+            clientId: item.item.clientId,
+            body: submittedBody,
+            matomeId: coreMatomeId,
+            workspaceId: int.tryParse(item.workspaceId ?? ''),
+            title: item.title,
+            metadata: _metadata(item.item.metadata),
+          );
+        } on TextClientIdConflict catch (conflict) {
+          final current = conflict.current;
+          if (current?.textBody == null) rethrow;
+          await _work.reconcileTextClientConflict(
+            work.id,
+            itemId: item.id,
+            ownerId: ownerId,
+            leaseOwner: _leaseOwner,
+            now: _now,
+            remoteId: current!.id,
+            remoteSourceRevision: current.sourceRevision,
+            remoteBody: current.textBody!,
+            configRevision: _configRevision(),
+          );
+          return;
+        }
+      } else {
+        final coreId = item.coreId;
+        if (coreId == null) {
+          throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+        }
+        try {
+          remote = await _repo.updateTextItem(
+            coreId,
+            body: submittedBody,
+            expectedSourceRevision: expectedRevision,
+          );
+        } on TextVersionConflict catch (conflict) {
+          final current = conflict.current;
+          if (current?.textBody != submittedBody) {
+            if (current?.textBody != null) {
+              await _work.restoreTextDeleteConflict(
+                work.id,
+                itemId: item.id,
+                ownerId: ownerId,
+                leaseOwner: _leaseOwner,
+                now: _now,
+                remoteId: current!.id,
+                remoteSourceRevision: current.sourceRevision,
+                remoteBody: current.textBody!,
+              );
+              await _inbox.reloadFromLocal();
+              return;
+            }
+            rethrow;
+          }
+          remote = current!;
+        }
+      }
+      final remoteBody = remote.textBody;
+      if (remoteBody == null) {
+        throw const _PermanentWorkFailure(kWorkErrorContentRejected);
+      }
+      await _work.completeTextMutation(
+        work.id,
+        itemId: item.id,
+        ownerId: ownerId,
+        leaseOwner: _leaseOwner,
+        now: _now,
+        remoteId: remote.id,
+        remoteSourceRevision: remote.sourceRevision,
+        remoteBody: remoteBody,
+        configRevision: _configRevision(),
+      );
+      await _inbox.reloadFromLocal();
+    } catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'durable text work failed kind=${work.kind}',
+        error,
+        stack,
+      );
+      await _handleFailure(work, error, ownerId);
+    }
+  }
+
+  Map<String, dynamic> _metadata(String value) {
+    try {
+      final decoded = jsonDecode(value);
+      return decoded is Map<String, dynamic> ? decoded : const {};
+    } on FormatException {
+      return const {};
+    }
+  }
+
   Future<int> _requireCoreParent(ItemWithPayload item) async {
     final matomeId = item.matomeId;
     if (matomeId == null) throw const _BlockedWork(kWorkBlockParent);
@@ -468,6 +675,8 @@ class UploadQueue {
       mediaType: item.mediaType,
       contentLength: await _byteSizeOf(localPath),
       checksumSha256: item.file?.checksumSha256,
+      filename: item.file?.filename,
+      contentType: item.file?.contentType,
     );
   }
 
@@ -687,7 +896,28 @@ class UploadQueue {
       await _block(work, error.reason);
       return;
     }
-    final current = await _work.getForItem(work.itemId, kWorkKindFileUpload);
+    final current = await _work.getById(work.id);
+    if (error is TextVersionConflict) {
+      await _work.retry(
+        work.id,
+        leaseOwner: _leaseOwner,
+        errorCode: kWorkErrorVersionConflict,
+        availableAt: _now,
+        maxAttempts: work.attempt + 1,
+        now: _now,
+      );
+      await _items.updateItem(
+        work.itemId,
+        ownerId,
+        const ItemsCompanion(
+          syncState: Value('conflict'),
+          processingErrorCode: Value(kWorkErrorVersionConflict),
+          isDirty: Value(true),
+        ),
+      );
+      await _inbox.reloadFromLocal();
+      return;
+    }
     if (error is ApiException &&
         _refreshesUpload(error.code) &&
         current != null &&
@@ -718,13 +948,15 @@ class UploadQueue {
     );
     if (!changed) return;
 
-    final updated = await _work.getForItem(work.itemId, kWorkKindFileUpload);
+    final updated = await _work.getById(work.id);
     if (updated?.state == kWorkStateDead) {
       await _items.updateItem(
         work.itemId,
         ownerId,
         ItemsCompanion(
-          processingState: const Value('failed'),
+          processingState: work.kind == kWorkKindFileUpload
+              ? const Value('failed')
+              : const Value.absent(),
           syncState: const Value('failed'),
           processingErrorCode: Value(failure.code),
           isDirty: const Value(true),

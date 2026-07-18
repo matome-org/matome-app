@@ -24,6 +24,17 @@ defmodule MatomeApi.Storage.ObjectStoreTest do
     assert_receive {:deleted_with_arg, "owners/1/items/file"}
   end
 
+  test "delegates bounded prefix reads to the configured adapter" do
+    previous = Application.get_env(:matome_api, ObjectStore)
+    Application.put_env(:matome_api, ObjectStore, adapter: {__MODULE__.ArgAdapter, self()})
+
+    on_exit(fn -> restore(previous) end)
+
+    assert {:ok, "%PDF-"} = ObjectStore.get_prefix("owners/1/items/file", 8192)
+    assert_receive {:prefix_read, "owners/1/items/file", 8192}
+    assert {:error, :invalid_prefix_size} = ObjectStore.get_prefix("owners/1/items/file", 8193)
+  end
+
   test "treats successful and missing HTTP deletes as reaped" do
     previous = Application.get_env(:matome_api, ObjectStore)
     Application.put_env(:matome_api, ObjectStore, http_client: __MODULE__.SuccessHttp)
@@ -34,6 +45,15 @@ defmodule MatomeApi.Storage.ObjectStoreTest do
 
     Application.put_env(:matome_api, ObjectStore, http_client: __MODULE__.MissingHttp)
     assert :ok = ObjectStore.delete_object("owners/1/items/file")
+  end
+
+  test "reads only the requested prefix through an HTTP range request" do
+    previous = Application.get_env(:matome_api, ObjectStore)
+    Application.put_env(:matome_api, ObjectStore, http_client: __MODULE__.RangeHttp)
+
+    on_exit(fn -> restore(previous) end)
+
+    assert {:ok, "%PDF-"} = ObjectStore.get_prefix("owners/1/items/file", 5)
   end
 
   test "returns HTTP delete failures" do
@@ -70,6 +90,11 @@ defmodule MatomeApi.Storage.ObjectStoreTest do
       send(parent, {:deleted_with_arg, storage_key})
       :ok
     end
+
+    def get_prefix(storage_key, max_bytes, parent) do
+      send(parent, {:prefix_read, storage_key, max_bytes})
+      {:ok, "%PDF-"}
+    end
   end
 
   defmodule SuccessHttp do
@@ -89,6 +114,18 @@ defmodule MatomeApi.Storage.ObjectStoreTest do
 
   defmodule ErrorHttp do
     def request(:delete, _request, [], []), do: {:error, :closed}
+  end
+
+  defmodule RangeHttp do
+    def request(:get, {_url, headers}, [], []) do
+      if {~c"range", ~c"bytes=0-4"} in headers do
+        {:ok,
+         {{~c"HTTP/1.1", 206, ~c"Partial Content"}, [{~c"content-range", ~c"bytes 0-4/1000000"}],
+          ~c"%PDF-"}}
+      else
+        {:ok, {{~c"HTTP/1.1", 400, ~c"Bad Request"}, [], ~c"missing range"}}
+      end
+    end
   end
 
   setup do

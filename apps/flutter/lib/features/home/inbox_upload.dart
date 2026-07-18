@@ -17,6 +17,7 @@ import '../../core/storage/app_storage.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/work_queue_dao.dart';
 import '../items/matome_item_type.dart';
+import '../documents/document_open_policy.dart';
 import '../recordings/recording.dart';
 import '../recordings/recording_ids.dart';
 import '../recordings/recording_result_waiter.dart';
@@ -38,12 +39,18 @@ class PickedUpload {
     required this.file,
     required this.title,
     required this.mediaType,
+    this.filename,
+    this.mimeType,
+    this.byteSize,
     this.wrappedFekBase64,
     this.fileNoncePrefixBase64,
   });
 
   final File file;
   final String title;
+  final String? filename;
+  final String? mimeType;
+  final int? byteSize;
 
   /// `audio` / `image` / `document`, derived from the picked file extension.
   final String mediaType;
@@ -117,6 +124,9 @@ Future<PickedUpload> durableImportCopy(PickedUpload picked) async {
       file: durable,
       title: picked.title,
       mediaType: picked.mediaType,
+      filename: picked.filename,
+      mimeType: picked.mimeType,
+      byteSize: picked.byteSize,
     );
   } catch (e, st) {
     AppLog.error(
@@ -171,6 +181,9 @@ Future<PickedUpload> encryptedDurableImportCopy(
     file: destination,
     title: picked.title,
     mediaType: picked.mediaType,
+    filename: picked.filename,
+    mimeType: picked.mimeType,
+    byteSize: picked.byteSize,
     wrappedFekBase64: wrappedFekBase64,
     fileNoncePrefixBase64: fileNoncePrefixBase64,
   );
@@ -230,6 +243,38 @@ String mediaTypeForPath(String path) {
   return 'document';
 }
 
+/// MIME types currently advertised by the deterministic processing service.
+/// Unsupported extensions stay generic so Core truthfully records
+/// `not_available` instead of claiming a processor can decode them.
+String contentTypeForPath(String path) {
+  final ext = path.split('.').last.toLowerCase();
+  return switch (ext) {
+    'wav' => 'audio/wav',
+    'mp3' => 'audio/mpeg',
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'pdf' => 'application/pdf',
+    'txt' || 'text' || 'log' => 'text/plain',
+    'html' || 'htm' => 'text/html',
+    'svg' => 'image/svg+xml',
+    'xml' => 'application/xml',
+    'doc' => 'application/msword',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls' => 'application/vnd.ms-excel',
+    'xlsx' =>
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt' => 'application/vnd.ms-powerpoint',
+    'pptx' =>
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'rtf' => 'application/rtf',
+    'odt' => 'application/vnd.oasis.opendocument.text',
+    'ods' => 'application/vnd.oasis.opendocument.spreadsheet',
+    'odp' => 'application/vnd.oasis.opendocument.presentation',
+    _ => 'application/octet-stream',
+  };
+}
+
 /// Orchestrates an Inbox file upload (S1, #780), local-first (plan #43, W2).
 ///
 /// The order is **inverted** from the original mobile port: the local Drift row
@@ -282,10 +327,42 @@ class InboxUploader {
     int durationSeconds = 0,
     bool importFromExternalSource = false,
   }) async {
+    final localId = await persist(
+      picked,
+      durationSeconds: durationSeconds,
+      importFromExternalSource: importFromExternalSource,
+    );
+    await drainPersisted(localId);
+    return localId;
+  }
+
+  /// Commit the Item, file payload, and work row without touching the network.
+  /// Capture finishers use this boundary before scheduling a later queue drain.
+  Future<String> persist(
+    PickedUpload picked, {
+    int durationSeconds = 0,
+    bool importFromExternalSource = false,
+    String? localId,
+    int? expectedByteSize,
+  }) async {
     AppLog.event(
       LogCat.upload,
       'upload: ${picked.mediaType} import=$importFromExternalSource',
     );
+    final pathSegments = picked.file.uri.pathSegments;
+    final rawSourceFilename =
+        picked.filename ??
+        (pathSegments.isEmpty ? picked.title : pathSegments.last);
+    final probeBytes = picked.mediaType == 'document' && !kIsWeb
+        ? await _readDocumentPrefix(picked.file)
+        : const <int>[];
+    final fileMetadata = DocumentMetadata.fromImport(
+      filename: rawSourceFilename,
+      mimeType: picked.mimeType ?? contentTypeForPath(rawSourceFilename),
+      probeBytes: probeBytes,
+    );
+    final sourceFilename = fileMetadata.filename;
+    final contentType = fileMetadata.mimeType;
     // 0. DURABLE-COPY (plan #45 W1): a file-picker import names the user's SOURCE
     //    file (e.g. ~/Videos/…mp3) which can vanish, leaving playback dead. The
     //    import must enter the SAME pipeline as a captured recording — copy the
@@ -338,26 +415,59 @@ class InboxUploader {
 
     // 1. LOCAL-FIRST: persist the row before touching Core so the capture can
     //    never be orphaned (the #828 root cause). The card appears immediately.
-    final localId = mintLocalRecordingId();
-    final pending = _pendingCompanions(localId, stored, resolvedDuration);
+    final resolvedLocalId = localId ?? mintLocalRecordingId();
+    if (localId != null) {
+      final ownerId = _ref.read(currentOwnerIdProvider);
+      if (ownerId == null) {
+        throw StateError(
+          'An authenticated owner is required to create an Item',
+        );
+      }
+      final existing = await _ref
+          .read(appDatabaseProvider)
+          .itemsDao
+          .getById(localId, ownerId);
+      if (existing != null) {
+        if (existing.localPath != stored.file.path) {
+          throw StateError('Stable local Item id belongs to another file');
+        }
+        return localId;
+      }
+    }
+    if (!kIsWeb &&
+        expectedByteSize != null &&
+        stored.file.lengthSync() != expectedByteSize) {
+      throw StateError('Local artifact changed before persistence');
+    }
+    final pending = _pendingCompanions(
+      resolvedLocalId,
+      stored,
+      resolvedDuration,
+      contentType,
+      sourceFilename,
+      fileMetadata,
+    );
     await _inbox.insertLocalUpload(
       item: pending.item,
       file: pending.file,
       initialWork: pending.work,
     );
 
-    // 2. Hand the persisted row to the retry queue, which drives the Core
-    //    handoff and is itself the connectivity-driven background drain. This
-    //    in-line drain attempts the upload immediately; if Core is unreachable
-    //    the row stays pending_upload and a later trigger (app start /
-    //    connectivity regained) re-drains it. Never throws out of upload().
-    await _queue.drainRow(localId);
-
-    return localId;
+    return resolvedLocalId;
   }
 
+  /// Start the network-capable queue only after local persistence succeeds.
+  Future<void> drainPersisted(String localId) => _queue.drainRow(localId);
+
   ({ItemsCompanion item, FileBlobsCompanion file, WorkQueueCompanion work})
-  _pendingCompanions(String localId, PickedUpload picked, int durationSeconds) {
+  _pendingCompanions(
+    String localId,
+    PickedUpload picked,
+    int durationSeconds,
+    String contentType,
+    String filename,
+    DocumentMetadata fileMetadata,
+  ) {
     final now = DateTime.now();
     final ownerId = _ref.read(currentOwnerIdProvider);
     if (ownerId == null) {
@@ -380,9 +490,23 @@ class InboxUploader {
       ),
       file: FileBlobsCompanion.insert(
         id: fileId,
-        filename: Value(picked.title),
+        filename: Value(filename),
+        originalExtension: Value(fileMetadata.extension),
+        contentType: Value(contentType),
+        byteSize: Value(
+          kIsWeb
+              ? (picked.byteSize != null && picked.byteSize! > 0
+                    ? picked.byteSize!
+                    : 0)
+              : picked.file.lengthSync(),
+        ),
         mediaType: picked.mediaType,
         duration: Value(durationSeconds > 0 ? durationSeconds : null),
+        openPolicy: Value(
+          picked.mediaType == 'document'
+              ? fileMetadata.openPolicy.wireName
+              : 'download_only',
+        ),
         localPath: Value(picked.file.path),
         wrappedFek: Value(picked.wrappedFekBase64),
         fileNoncePrefix: Value(picked.fileNoncePrefixBase64),
@@ -396,6 +520,19 @@ class InboxUploader {
         configRevision: _ref.read(systemPolicyProvider).revision,
       ),
     );
+  }
+}
+
+Future<List<int>> _readDocumentPrefix(File file) async {
+  try {
+    final handle = await file.open();
+    try {
+      return handle.read(documentContentProbeLimit);
+    } finally {
+      await handle.close();
+    }
+  } catch (_) {
+    return const [];
   }
 }
 

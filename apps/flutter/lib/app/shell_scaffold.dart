@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -208,7 +207,7 @@ Future<void> _handleAddOption(
     case NavAddOption.recordAudio:
       context.push('/recording');
     case NavAddOption.recordMeeting:
-      context.push('/meeting');
+      await _openMeeting(context);
     case NavAddOption.addPhoto:
       await _pickAndUpload(context, ref, type: FileType.image);
     case NavAddOption.addVideo:
@@ -217,6 +216,31 @@ Future<void> _handleAddOption(
       await _pickAndUpload(context, ref, type: FileType.any);
   }
 }
+
+Future<void> _openMeeting(BuildContext context) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final capability = await container.read(
+    meetingCaptureCapabilityProvider.future,
+  );
+  if (!context.mounted) return;
+  if (capability.supported) {
+    context.push('/meeting');
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(_meetingCapabilityReason(capability.reason))),
+  );
+}
+
+String _meetingCapabilityReason(String? reason) => switch (reason) {
+  'linux-required' => t.meetingRecording.linuxRequired,
+  'ffmpeg-required' => t.meetingRecording.ffmpegRequired,
+  'ffprobe-required' => t.meetingRecording.ffprobeRequired,
+  'pactl-required' => t.meetingRecording.pactlRequired,
+  'audio-server-unavailable' => t.meetingRecording.audioServerUnavailable,
+  'audio-devices-unavailable' => t.meetingRecording.audioDevicesUnavailable,
+  _ => t.meetingRecording.probeFailed,
+};
 
 /// Picker → Inbox-upload, shared by Add photo / Add file. Identical to the
 /// legacy `_NewCaptureMenu._importFile` flow (durable-copy + local-first insert
@@ -231,37 +255,41 @@ Future<void> _pickAndUpload(
   AppLog.event(LogCat.action, 'nav add: picker opening (type=$type)');
   try {
     final result = await FilePicker.platform.pickFiles(type: type);
-    final path = result?.files.single.path;
+    final platformFile = result?.files.single;
+    final path = platformFile?.path;
     if (path == null) {
       AppLog.event(LogCat.action, 'nav add: cancelled (no path)');
       return;
     }
     if (!context.mounted) return;
 
-    final name = result!.files.single.name;
+    final name = platformFile!.name;
     final dot = name.lastIndexOf('.');
     final base = (dot > 0 ? name.substring(0, dot) : name).trim();
+    final mediaType = mediaTypeForPath(name);
     final picked = PickedUpload(
       file: File(path),
       title: base.isEmpty ? 'Untitled' : base,
-      mediaType: mediaTypeForPath(path),
+      mediaType: mediaType,
+      filename: name,
+      byteSize: platformFile.size,
     );
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Uploading "${picked.title}"…')));
     AppLog.event(LogCat.action, 'nav add: uploading "${picked.title}"');
-    unawaited(
-      ref
-          .read(inboxUploaderProvider)
-          .upload(picked, importFromExternalSource: true),
-    );
+    await ref
+        .read(inboxUploaderProvider)
+        .upload(picked, importFromExternalSource: true);
   } catch (e, st) {
     // A picker/copy/insert failure on desktop must surface, not vanish.
     AppLog.error(LogCat.action, 'nav add: pick/upload failed', e, st);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(t.matome.addFileFailed(error: '$e'))),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(t.matome.addFileFailed(error: '$e'))),
+      );
   }
 }
 
@@ -529,25 +557,18 @@ class _MeetingFab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
     final capability = ref.watch(meetingCaptureCapabilityProvider);
-    return FutureBuilder<String?>(
-      // null reason ⇒ supported. While probing, optimistically enable.
-      future: capability.unsupportedReason(),
-      builder: (context, snapshot) {
-        final reason = snapshot.data;
-        final probing = snapshot.connectionState == ConnectionState.waiting;
-        final supported = probing || reason == null;
-        final onPressed = supported ? () => context.push('/meeting') : null;
-        final disabledColor = Theme.of(context).disabledColor;
-        final icon = Icon(Icons.groups, size: spacing.md + spacing.xxs);
-        return FloatingActionButton.extended(
-          heroTag: 'meeting-fab',
-          tooltip: supported ? null : reason,
-          backgroundColor: supported ? null : disabledColor,
-          onPressed: onPressed,
-          icon: icon,
-          label: const Text('Meeting'),
-        );
-      },
+    final result = capability.valueOrNull;
+    final supported = result?.supported == true;
+    final reason = result == null
+        ? t.recording.loading
+        : _meetingCapabilityReason(result.reason);
+    return FloatingActionButton.extended(
+      heroTag: 'meeting-fab',
+      tooltip: supported ? null : reason,
+      backgroundColor: supported ? null : Theme.of(context).disabledColor,
+      onPressed: supported ? () => _openMeeting(context) : null,
+      icon: Icon(Icons.groups, size: spacing.md + spacing.xxs),
+      label: Text(t.nav.recordMeeting),
     );
   }
 }
@@ -563,31 +584,8 @@ class _NewCaptureMenu extends ConsumerWidget {
   /// When false the trigger collapses to an icon-only FAB for a narrow rail.
   final bool extended;
 
-  Future<void> _importFile(BuildContext context, WidgetRef ref) async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.any);
-    final path = result?.files.single.path;
-    if (path == null || !context.mounted) return;
-
-    final name = result!.files.single.name;
-    final dot = name.lastIndexOf('.');
-    final base = (dot > 0 ? name.substring(0, dot) : name).trim();
-    final picked = PickedUpload(
-      file: File(path),
-      title: base.isEmpty ? 'Untitled' : base,
-      mediaType: mediaTypeForPath(path),
-    );
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(content: Text('Uploading "${picked.title}"…')),
-    );
-    // Same pipeline as the Inbox import: the uploader inserts a local recording
-    // row into a fresh Inbox matome immediately, then syncs in the background.
-    unawaited(
-      ref
-          .read(inboxUploaderProvider)
-          .upload(picked, importFromExternalSource: true),
-    );
-  }
+  Future<void> _importFile(BuildContext context, WidgetRef ref) =>
+      _pickAndUpload(context, ref, type: FileType.any);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -640,20 +638,17 @@ class _MeetingMenuItem extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (!_isDesktop) return const SizedBox.shrink();
     final capability = ref.watch(meetingCaptureCapabilityProvider);
-    return FutureBuilder<String?>(
-      future: capability.unsupportedReason(),
-      builder: (context, snapshot) {
-        final reason = snapshot.data;
-        final probing = snapshot.connectionState == ConnectionState.waiting;
-        final supported = probing || reason == null;
-        final item = MenuItemButton(
-          leadingIcon: const Icon(Icons.groups),
-          onPressed: supported ? () => context.push('/meeting') : null,
-          child: Text(t.nav.recordMeeting),
-        );
-        return supported ? item : Tooltip(message: reason, child: item);
-      },
+    final result = capability.valueOrNull;
+    final supported = result?.supported == true;
+    final reason = result == null
+        ? t.recording.loading
+        : _meetingCapabilityReason(result.reason);
+    final item = MenuItemButton(
+      leadingIcon: const Icon(Icons.groups),
+      onPressed: supported ? () => _openMeeting(context) : null,
+      child: Text(t.nav.recordMeeting),
     );
+    return supported ? item : Tooltip(message: reason, child: item);
   }
 }
 

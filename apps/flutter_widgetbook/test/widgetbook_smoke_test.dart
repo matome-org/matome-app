@@ -89,6 +89,31 @@ final _pageJourneyMatrix = <_SmokeCase>[
     variant: _lightEnglish,
   ),
   _SmokeCase(
+    label: 'text item clean mobile',
+    builder: textItemPageCleanMobileUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'text item pending offline desktop',
+    builder: textItemPagePendingDesktopUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'text item processing mobile',
+    builder: textItemPageProcessingMobileUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'text item retryable failure desktop',
+    builder: textItemPageFailureDesktopUseCase,
+    variant: _lightEnglish,
+  ),
+  _SmokeCase(
+    label: 'text item version conflict locale stress',
+    builder: textItemPageConflictMobileUseCase,
+    variant: _darkJapanese,
+  ),
+  _SmokeCase(
     label: 'settings locale stress',
     builder: settingsPageDesktopUseCase,
     variant: _darkJapanese,

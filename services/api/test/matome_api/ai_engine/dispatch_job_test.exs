@@ -42,6 +42,7 @@ defmodule MatomeApi.AIEngine.DispatchJobTest do
         byte_size: 123,
         checksum_sha256: String.duplicate("a", 64),
         content_type: "audio/wav",
+        filename: "dispatch.wav",
         media_type: "audio"
       })
 

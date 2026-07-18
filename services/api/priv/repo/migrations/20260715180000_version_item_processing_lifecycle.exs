@@ -28,8 +28,10 @@ defmodule MatomeApi.Repo.Migrations.VersionItemProcessingLifecycle do
                AND processing_config_revision IS NULL
                AND processing_capabilities IS NULL
                AND cardinality(processing_requested_outputs) = 0
-               AND processing_requested_at IS NULL
-               AND processing_deadline_at IS NULL
+                AND processing_requested_at IS NULL
+                AND processing_deadline_at IS NULL
+                AND processing_outputs = '{}'::jsonb
+                AND processing_error IS NULL
              )
              OR
              (

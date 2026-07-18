@@ -99,6 +99,11 @@ Future<void> _seedFile(
   required String title,
   String mediaType = 'audio',
   int createdAt = 1000,
+  String? description,
+  String? ocrText,
+  String? extractedText,
+  String? summary,
+  String? notes,
 }) {
   return insertTestFileItem(
     db,
@@ -108,6 +113,11 @@ Future<void> _seedFile(
     createdAt: createdAt,
     ownerId: _owner,
     mediaType: mediaType,
+    description: description,
+    ocrText: ocrText,
+    extractedText: extractedText,
+    summary: summary,
+    notes: notes,
   );
 }
 
@@ -193,6 +203,83 @@ void main() {
             .widgetList<ConstrainedBox>(find.byType(ConstrainedBox))
             .where((b) => b.constraints.maxWidth == 1080);
         expect(cap, isEmpty);
+      },
+      skip: !_flagOn,
+    );
+
+    testWidgets(
+      'image pane renders description, OCR, summary, and independent notes',
+      (tester) async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        await _seedFile(
+          db,
+          id: 'image-1',
+          title: 'Launch board',
+          mediaType: 'image',
+          description: 'A launch board with three columns.',
+          ocrText: 'TODO DOING DONE',
+          summary: 'The launch board tracks work in progress.',
+          notes: 'My private launch note.',
+        );
+
+        _setSize(tester, const Size(1280, 900));
+        final container = _container(db, mode: ReadingPaneMode.always);
+        container.read(filesSelectionProvider.notifier).state = 'image-1';
+
+        await tester.pumpWidget(_app(container, _RouteSpy()));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('files-pane-view')), findsOneWidget);
+        expect(
+          find.textContaining('A launch board with three columns.'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('TODO DOING DONE'), findsOneWidget);
+        expect(
+          find.textContaining('The launch board tracks work in progress.'),
+          findsOneWidget,
+        );
+        expect(find.text('My private launch note.'), findsOneWidget);
+      },
+      skip: !_flagOn,
+    );
+
+    testWidgets(
+      'document pane renders extracted text, summary, and independent notes',
+      (tester) async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        await _seedFile(
+          db,
+          id: 'document-1',
+          title: 'Quarterly report',
+          mediaType: 'document',
+          extractedText: 'Revenue grew 12% year over year.',
+          summary: 'A concise quarterly performance summary.',
+          notes: 'Ask Finance about the regional split.',
+        );
+
+        _setSize(tester, const Size(1280, 900));
+        final container = _container(db, mode: ReadingPaneMode.always);
+        container.read(filesSelectionProvider.notifier).state = 'document-1';
+
+        await tester.pumpWidget(_app(container, _RouteSpy()));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('files-pane-view')), findsOneWidget);
+        expect(
+          find.textContaining('Revenue grew 12% year over year.'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('A concise quarterly performance summary.'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Ask Finance about the regional split.'),
+          findsOneWidget,
+        );
       },
       skip: !_flagOn,
     );

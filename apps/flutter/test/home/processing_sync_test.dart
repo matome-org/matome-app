@@ -13,6 +13,9 @@ Recording _remote({
   Map<String, dynamic> outputs = const {},
   String uploadState = 'uploaded',
   String? storageKey,
+  String? filename,
+  String? contentType,
+  String? checksumSha256,
   DateTime? uploadedAt,
   DateTime? updatedAt,
 }) {
@@ -40,6 +43,13 @@ Recording _remote({
       'media_type': 'audio',
       'upload_state': uploadState,
       'storage_key': storageKey,
+      'filename': filename,
+      'original_extension': filename?.split('.').last.toLowerCase(),
+      'content_type': contentType,
+      'open_policy': contentType == 'application/pdf'
+          ? 'external'
+          : 'download_only',
+      'checksum_sha256': checksumSha256,
       'uploaded_at': uploadedAt?.toIso8601String(),
       'byte_size': 10,
     },
@@ -264,4 +274,60 @@ void main() {
     expect(row?.file?.uploadedAt, isNull);
     expect(row?.item.processingState, 'failed');
   });
+
+  test(
+    'fresh sync preserves file identity separately from the display title',
+    () async {
+      final companions = recordingToItemCompanions(
+        _remote(
+          runId: 'run-document',
+          attempt: 1,
+          state: ProcessingState.succeeded,
+          filename: 'quarterly-report.pdf',
+          contentType: 'application/pdf',
+          checksumSha256: 'a' * 64,
+        ),
+      );
+      await db.itemsDao.upsertFileItem(
+        item: companions.item,
+        file: companions.file,
+      );
+
+      final row = await db.itemsDao.getById('5', '1');
+      expect(row?.title, 'Audio');
+      expect(row?.file?.filename, 'quarterly-report.pdf');
+      expect(row?.file?.contentType, 'application/pdf');
+      expect(row?.file?.checksumSha256, 'a' * 64);
+      expect(row?.originalExtension, 'pdf');
+    },
+  );
+
+  test(
+    'normalizes untrusted server file metadata before persistence',
+    () async {
+      final companions = recordingToItemCompanions(
+        const Recording(
+          id: 5,
+          ownerId: '1',
+          title: 'Remote file',
+          filename: '../unsafe/Report.PDF\r\n',
+          originalExtension: '../../EXE',
+          contentType: 'APPLICATION/PDF; charset=binary',
+          openPolicy: 'made_up_policy',
+          byteSize: -50,
+        ),
+      );
+      await db.itemsDao.upsertFileItem(
+        item: companions.item,
+        file: companions.file,
+      );
+
+      final row = await db.itemsDao.getById('5', '1');
+      expect(row?.file?.filename, 'Report.PDF__');
+      expect(row?.file?.originalExtension, 'pdf__');
+      expect(row?.file?.contentType, 'application/pdf');
+      expect(row?.file?.openPolicy, 'download_only');
+      expect(row?.file?.byteSize, 0);
+    },
+  );
 }

@@ -20,7 +20,7 @@ export const capabilities = {
       enabled: true,
       max_bytes: 524_288_000,
       content_types: ["application/pdf", "text/plain"],
-      outputs: ["extracted_text", "summary", "title"]
+      outputs: ["extracted_text", "summary"]
     },
     text: {
       enabled: true,
@@ -49,10 +49,14 @@ export function createAiStubServer(options = {}) {
         );
       }
 
-      if (job.input.kind !== "text") await fetchVerifiedMedia(job, fetchImpl);
-      return job.requested_outputs.map((type) => fixtureOutput(type, job.input.kind));
+      return executeFixtureJob(job, fetchImpl);
     }
   });
+}
+
+export async function executeFixtureJob(job, fetchImpl = globalThis.fetch) {
+  if (job.input.kind !== "text") await fetchVerifiedMedia(job, fetchImpl);
+  return job.requested_outputs.map((type) => fixtureOutput(type, job.input.kind));
 }
 
 function fixtureOutput(type, kind) {

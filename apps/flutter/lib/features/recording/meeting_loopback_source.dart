@@ -1,52 +1,110 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import '../../core/observability/app_log.dart';
 
-/// Result of running an external command, narrowed to what the loopback
-/// resolver needs. Mirrors `ProcessResult` so the production runner is a 1:1
-/// delegate while tests inject canned stdout/exit codes (no real `pactl`).
 class CommandResult {
-  const CommandResult({required this.exitCode, required this.stdout});
+  const CommandResult({
+    required this.exitCode,
+    required this.stdout,
+    this.stderr = '',
+  });
 
   final int exitCode;
   final String stdout;
+  final String stderr;
 }
 
-/// Runs an external command and returns its result. Injectable so the
-/// PipeWire/Pulse source resolution below is unit-testable without spawning
-/// `which` / `pactl`. Mirrors the codebase idiom of `Process.run` +
-/// `which fmedia` in [AudioRecordingService].
 typedef CommandRunner =
     Future<CommandResult> Function(String executable, List<String> arguments);
 
-/// Production [CommandRunner] — straight delegate to [Process.run].
 Future<CommandResult> defaultCommandRunner(
   String executable,
   List<String> arguments,
-) async {
-  final result = await Process.run(executable, arguments);
+) => runBoundedCommand(executable, arguments);
+
+Future<CommandResult> runBoundedCommand(
+  String executable,
+  List<String> arguments, {
+  Duration timeout = const Duration(seconds: 2),
+  Duration terminationGrace = const Duration(seconds: 1),
+  int outputLimit = 64 * 1024,
+}) async {
+  final process = await Process.start(executable, arguments);
+  final stdout = _BoundedOutput(outputLimit);
+  final stderr = _BoundedOutput(outputLimit);
+  final stdoutDone = process.stdout.listen(stdout.add).asFuture<void>();
+  final stderrDone = process.stderr.listen(stderr.add).asFuture<void>();
+  int? exitCode;
+  try {
+    exitCode = await process.exitCode.timeout(timeout);
+  } on TimeoutException {
+    process.kill(ProcessSignal.sigterm);
+    try {
+      exitCode = await process.exitCode.timeout(terminationGrace);
+    } on TimeoutException {
+      process.kill(ProcessSignal.sigkill);
+      try {
+        exitCode = await process.exitCode.timeout(terminationGrace);
+      } on TimeoutException {
+        throw TimeoutException('$executable did not terminate', timeout);
+      }
+    }
+    throw TimeoutException('$executable timed out', timeout);
+  } finally {
+    try {
+      await Future.wait([stdoutDone, stderrDone]).timeout(terminationGrace);
+    } on TimeoutException {
+      process.kill(ProcessSignal.sigkill);
+    }
+  }
   return CommandResult(
-    exitCode: result.exitCode,
-    stdout: (result.stdout as String?) ?? '',
+    exitCode: exitCode,
+    stdout: stdout.text,
+    stderr: stderr.text,
   );
 }
 
-/// Resolves the Linux loopback (system-output) capture device for the meeting
-/// recorder: the PulseAudio/PipeWire `.monitor` source of the default sink.
-///
-/// On a PipeWire (or PulseAudio) host every output sink exposes a matching
-/// `<sink>.monitor` source that carries exactly what is being played back —
-/// this is the loopback tap the meeting recorder mixes with the mic. We resolve
-/// it generically (default sink → its monitor) rather than hard-coding a device
-/// so it tracks whatever the user has selected as output.
-///
-/// Everything that touches the host is funnelled through an injected
-/// [CommandRunner] so the resolution logic is unit-testable with canned
-/// `pactl` output.
-///
-/// Linux-only by design (MVP). Windows (WASAPI loopback) and macOS (virtual
-/// device / ScreenCaptureKit) are out of scope for this increment; the resolver
-/// simply reports unavailable off Linux, leaving a clean seam for those backends.
+class _BoundedOutput {
+  _BoundedOutput(this.limit);
+
+  final int limit;
+  final List<int> _bytes = [];
+
+  void add(List<int> chunk) {
+    final remaining = limit - _bytes.length;
+    if (remaining <= 0) return;
+    _bytes.addAll(chunk.take(remaining));
+  }
+
+  String get text => utf8.decode(_bytes, allowMalformed: true);
+}
+
+class LinuxMeetingDevices {
+  const LinuxMeetingDevices({
+    required this.monitorSource,
+    required this.microphoneSource,
+  });
+
+  final String monitorSource;
+  final String microphoneSource;
+}
+
+class MeetingHostProbe {
+  const MeetingHostProbe.supported(this.devices)
+    : supported = true,
+      reason = null;
+
+  const MeetingHostProbe.unsupported(this.reason)
+    : supported = false,
+      devices = null;
+
+  final bool supported;
+  final String? reason;
+  final LinuxMeetingDevices? devices;
+}
+
 class MeetingLoopbackSource {
   const MeetingLoopbackSource({
     CommandRunner runner = defaultCommandRunner,
@@ -68,112 +126,113 @@ class MeetingLoopbackSource {
     }
   }
 
-  /// Whether ffmpeg is on PATH. Same external-dependency probe shape the
-  /// service uses for `fmedia` (`which <bin>`, exit 0 ⇒ present).
-  Future<bool> hasFfmpeg() async {
+  Future<bool> hasFfmpeg() => _hasExecutable('ffmpeg');
+  Future<bool> hasFfprobe() => _hasExecutable('ffprobe');
+  Future<bool> hasPactl() => _hasExecutable('pactl');
+
+  Future<bool> _hasExecutable(String executable) async {
     try {
-      final result = await _run('which', ['ffmpeg']);
-      return result.exitCode == 0;
-    } catch (e, st) {
-      AppLog.error(LogCat.error, 'hasFfmpeg: which ffmpeg failed', e, st);
-      return false;
-    }
-  }
-
-  /// Whether `pactl` (PulseAudio/PipeWire control) is on PATH — needed to
-  /// resolve the default sink's monitor source.
-  Future<bool> hasPactl() async {
-    try {
-      final result = await _run('which', ['pactl']);
-      return result.exitCode == 0;
-    } catch (e, st) {
-      AppLog.error(LogCat.error, 'hasPactl: which pactl failed', e, st);
-      return false;
-    }
-  }
-
-  /// Whether the host can do loopback meeting capture: Linux + ffmpeg + pactl +
-  /// a resolvable monitor source. Used by the capability gate so the
-  /// meeting-recorder entry can disable with a precise reason off-support.
-  Future<bool> isSupported() async {
-    if (!_onLinux) return false;
-    if (!await hasFfmpeg()) return false;
-    if (!await hasPactl()) return false;
-    return await resolveMonitorSource() != null;
-  }
-
-  /// Resolve the default sink's `.monitor` source name, or null when it can't
-  /// be determined (no pactl, no default sink, no matching monitor).
-  ///
-  /// Strategy:
-  ///   1. `pactl get-default-sink` → the active output sink name.
-  ///   2. `pactl list short sources` → find the `<sink>.monitor` row.
-  ///   3. Fallback: any `*.monitor` source (covers exotic naming) so a present
-  ///      loopback tap is still usable rather than failing hard.
-  Future<String?> resolveMonitorSource() async {
-    if (!_onLinux) return null;
-
-    final sources = await _listMonitorSources();
-    if (sources.isEmpty) return null;
-
-    final defaultSink = await _defaultSink();
-    if (defaultSink != null) {
-      final expected = '$defaultSink.monitor';
-      if (sources.contains(expected)) return expected;
-    }
-
-    // Fallback: first available monitor source (deterministic — pactl lists in
-    // a stable index order).
-    return sources.first;
-  }
-
-  Future<String?> _defaultSink() async {
-    try {
-      final result = await _run('pactl', ['get-default-sink']);
-      if (result.exitCode != 0) return null;
-      final name = result.stdout.trim();
-      return name.isEmpty ? null : name;
-    } catch (e, st) {
+      final result = await _run('which', [executable]);
+      return result.exitCode == 0 && result.stdout.trim().isNotEmpty;
+    } catch (error, stackTrace) {
       AppLog.error(
         LogCat.error,
-        '_defaultSink: pactl get-default-sink failed',
-        e,
-        st,
+        'meeting probe: which $executable failed',
+        error,
+        stackTrace,
       );
+      return false;
+    }
+  }
+
+  Future<bool> isSupported() async => (await probe()).supported;
+
+  Future<MeetingHostProbe> probe() async {
+    if (!_onLinux) {
+      return const MeetingHostProbe.unsupported('linux-required');
+    }
+    if (!await hasFfmpeg()) {
+      return const MeetingHostProbe.unsupported('ffmpeg-required');
+    }
+    if (!await hasFfprobe()) {
+      return const MeetingHostProbe.unsupported('ffprobe-required');
+    }
+    if (!await hasPactl()) {
+      return const MeetingHostProbe.unsupported('pactl-required');
+    }
+    try {
+      final info = await _run('pactl', ['info']);
+      if (info.exitCode != 0) {
+        return const MeetingHostProbe.unsupported('audio-server-unavailable');
+      }
+      final devices = await resolveDevices();
+      if (devices == null) {
+        return const MeetingHostProbe.unsupported('audio-devices-unavailable');
+      }
+      return MeetingHostProbe.supported(devices);
+    } catch (error, stackTrace) {
+      AppLog.error(LogCat.error, 'meeting probe failed', error, stackTrace);
+      return const MeetingHostProbe.unsupported('probe-failed');
+    }
+  }
+
+  Future<LinuxMeetingDevices?> resolveDevices() async {
+    if (!_onLinux) return null;
+    final results = await Future.wait([
+      _run('pactl', ['get-default-sink']),
+      _run('pactl', ['get-default-source']),
+      _run('pactl', ['list', 'short', 'sources']),
+    ]);
+    if (results.any((result) => result.exitCode != 0)) return null;
+    final sink = results[0].stdout.trim();
+    final microphone = results[1].stdout.trim();
+    if (sink.isEmpty || microphone.isEmpty || microphone.endsWith('.monitor')) {
+      return null;
+    }
+    final sources = parseSources(results[2].stdout);
+    final monitor = '$sink.monitor';
+    if (!sources.contains(monitor) || !sources.contains(microphone)) {
+      return null;
+    }
+    return LinuxMeetingDevices(
+      monitorSource: monitor,
+      microphoneSource: microphone,
+    );
+  }
+
+  Future<({bool system, bool microphone})?> availability(
+    LinuxMeetingDevices devices,
+  ) async {
+    try {
+      final result = await _run('pactl', ['list', 'short', 'sources']);
+      if (result.exitCode != 0) return null;
+      final sources = parseSources(result.stdout);
+      return (
+        system: sources.contains(devices.monitorSource),
+        microphone: sources.contains(devices.microphoneSource),
+      );
+    } catch (_) {
       return null;
     }
   }
 
-  /// Parse `pactl list short sources` into the list of `.monitor` source names,
-  /// preserving order. Each row is tab-separated: `index\tname\tdriver\t...`.
-  Future<List<String>> _listMonitorSources() async {
-    try {
-      final result = await _run('pactl', ['list', 'short', 'sources']);
-      if (result.exitCode != 0) return const [];
-      return parseMonitorSources(result.stdout);
-    } catch (e, st) {
-      AppLog.error(
-        LogCat.error,
-        '_listMonitorSources: pactl list short sources failed',
-        e,
-        st,
-      );
-      return const [];
-    }
-  }
+  Future<String?> resolveMonitorSource() async =>
+      (await resolveDevices())?.monitorSource;
 
-  /// Pure parser for `pactl list short sources` output — extracts the source
-  /// NAME column (index 1) for every row whose name ends in `.monitor`.
-  /// Exposed for unit testing the parse independently of process spawning.
-  static List<String> parseMonitorSources(String pactlShortOutput) {
-    final names = <String>[];
+  static Set<String> parseSources(String pactlShortOutput) {
+    final names = <String>{};
     for (final line in pactlShortOutput.split('\n')) {
       if (line.trim().isEmpty) continue;
-      final cols = line.split('\t');
-      if (cols.length < 2) continue;
-      final name = cols[1].trim();
-      if (name.endsWith('.monitor')) names.add(name);
+      final columns = line.split('\t');
+      if (columns.length < 2) continue;
+      final name = columns[1].trim();
+      if (name.isNotEmpty) names.add(name);
     }
     return names;
   }
+
+  static List<String> parseMonitorSources(String pactlShortOutput) =>
+      parseSources(
+        pactlShortOutput,
+      ).where((name) => name.endsWith('.monitor')).toList(growable: false);
 }

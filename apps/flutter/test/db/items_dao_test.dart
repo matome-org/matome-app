@@ -254,7 +254,13 @@ void main() {
       _ownerA,
       const ItemsCompanion(title: Value('Edited file')),
     );
-    await db.itemsDao.updateTextBody('text-local', _ownerA, 'Edited body');
+    await db.itemsDao.editTextBody(
+      itemId: 'text-local',
+      ownerId: _ownerA,
+      body: 'Edited body',
+      now: 2000,
+      configRevision: 0,
+    );
     await db.close();
 
     db = AppDatabase.forTesting(NativeDatabase(file));

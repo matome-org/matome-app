@@ -78,8 +78,23 @@ void main() {
     });
 
     test('a dependency and an unexpired lease prevent a claim', () async {
+      for (final id in ['parent-item', 'child-item']) {
+        await db
+            .into(db.items)
+            .insert(
+              ItemsCompanion.insert(
+                id: id,
+                ownerId: 'owner-1',
+                clientId: id,
+                itemType: 'text',
+                createdAt: 1000,
+                updatedAt: 1000,
+              ),
+            );
+      }
       await db.workQueueDao.enqueue(
-        genericWork(
+        ownerId: 'owner-1',
+        work: genericWork(
           id: 'parent',
           kind: 'parent_sync',
           itemId: 'parent-item',
@@ -88,7 +103,8 @@ void main() {
         ),
       );
       await db.workQueueDao.enqueue(
-        genericWork(
+        ownerId: 'owner-1',
+        work: genericWork(
           id: 'child',
           kind: kWorkKindFileUpload,
           itemId: 'child-item',
@@ -99,6 +115,7 @@ void main() {
       );
 
       final parent = await db.workQueueDao.claimNext(
+        ownerId: 'owner-1',
         leaseOwner: 'worker-a',
         now: 1000,
         leaseDuration: const Duration(seconds: 10),
@@ -106,6 +123,7 @@ void main() {
       expect(parent?.id, 'parent');
       expect(
         await db.workQueueDao.claimNext(
+          ownerId: 'owner-1',
           leaseOwner: 'worker-b',
           now: 9999,
           leaseDuration: const Duration(seconds: 10),
@@ -114,6 +132,7 @@ void main() {
       );
 
       final recovered = await db.workQueueDao.claimNext(
+        ownerId: 'owner-1',
         leaseOwner: 'worker-b',
         now: 11000,
         leaseDuration: const Duration(seconds: 10),
@@ -129,6 +148,7 @@ void main() {
       );
 
       final child = await db.workQueueDao.claimNext(
+        ownerId: 'owner-1',
         leaseOwner: 'worker-b',
         now: 11002,
         leaseDuration: const Duration(seconds: 10),
@@ -807,6 +827,8 @@ class _WorkRepository extends RecordingsRepository {
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     createCalls++;
     createdChecksumSha256 = checksumSha256;
@@ -814,7 +836,7 @@ class _WorkRepository extends RecordingsRepository {
     if (createError case final error?) throw error;
     createdClientIds.add(clientId);
     return RecordingCreateResult(
-        recording: _recording(ProcessingState.notRequested),
+      recording: _recording(ProcessingState.notRequested),
       upload: const UploadDescriptor(
         method: 'PUT',
         url: 'http://127.0.0.1:9/upload',

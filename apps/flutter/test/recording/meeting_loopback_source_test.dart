@@ -1,214 +1,120 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:matome_flutter/features/recording/meeting_capture_backend.dart';
 import 'package:matome_flutter/features/recording/meeting_loopback_source.dart';
 import 'package:matome_flutter/features/recording/meeting_recorder_backend.dart';
 
-// ---------------------------------------------------------------------------
-// Unit tests for the desktop meeting recorder's host-resolution seam: the
-// PipeWire/Pulse `.monitor` loopback source resolver + capability gate. No real
-// `pactl`/`which`/ffmpeg — every host call is funnelled through an injected
-// CommandRunner with canned output, so the resolution logic is deterministic.
-// ---------------------------------------------------------------------------
-
-/// Canned command runner: maps `<exe> <args...>` to a [CommandResult].
 CommandRunner fakeRunner(
   Map<String, CommandResult> responses, {
   CommandResult fallback = const CommandResult(exitCode: 1, stdout: ''),
 }) {
-  return (executable, arguments) async {
-    final key = '$executable ${arguments.join(' ')}'.trim();
-    return responses[key] ?? fallback;
-  };
+  return (executable, arguments) async =>
+      responses['$executable ${arguments.join(' ')}'.trim()] ?? fallback;
 }
 
-/// A realistic `pactl list short sources` dump (tab-separated) with two output
-/// monitors + a real mic input.
-const _pactlSources = '''
-46\talsa_input.pci-0000_c1_00.6.HiFi__Mic1__source\tPipeWire\ts32le 2ch 48000Hz\tSUSPENDED
-57\talsa_output.pci-0000_c1_00.6.HiFi__Speaker__sink.monitor\tPipeWire\ts32le 2ch 48000Hz\tSUSPENDED
-1201\talsa_output.usb-Logitech_G522.analog-stereo.monitor\tPipeWire\ts24le 2ch 48000Hz\tSUSPENDED
+const _sources = '''
+46\talsa_input.mic\tPipeWire\ts16le 1ch 48000Hz\tSUSPENDED
+57\talsa_output.speaker.monitor\tPipeWire\ts32le 2ch 48000Hz\tIDLE
 ''';
 
+Map<String, CommandResult> supportedHost() => {
+  'which ffmpeg': const CommandResult(exitCode: 0, stdout: '/usr/bin/ffmpeg\n'),
+  'which ffprobe': const CommandResult(
+    exitCode: 0,
+    stdout: '/usr/bin/ffprobe\n',
+  ),
+  'which pactl': const CommandResult(exitCode: 0, stdout: '/usr/bin/pactl\n'),
+  'pactl info': const CommandResult(exitCode: 0, stdout: 'Server: PipeWire'),
+  'pactl get-default-sink': const CommandResult(
+    exitCode: 0,
+    stdout: 'alsa_output.speaker\n',
+  ),
+  'pactl get-default-source': const CommandResult(
+    exitCode: 0,
+    stdout: 'alsa_input.mic\n',
+  ),
+  'pactl list short sources': const CommandResult(
+    exitCode: 0,
+    stdout: _sources,
+  ),
+};
+
 void main() {
-  group('parseMonitorSources', () {
-    test('extracts only .monitor names, in order', () {
-      final names = MeetingLoopbackSource.parseMonitorSources(_pactlSources);
-      expect(names, [
-        'alsa_output.pci-0000_c1_00.6.HiFi__Speaker__sink.monitor',
-        'alsa_output.usb-Logitech_G522.analog-stereo.monitor',
-      ]);
-    });
+  test('probe requires Linux and every runtime dependency', () async {
+    final offLinux = MeetingLoopbackSource(
+      isLinux: () => false,
+      runner: fakeRunner(supportedHost()),
+    );
+    expect((await offLinux.probe()).reason, 'linux-required');
 
-    test('ignores blank lines and malformed rows', () {
-      final names = MeetingLoopbackSource.parseMonitorSources(
-        '\n  \nbad-row-no-tabs\n5\tfoo.monitor\tx\n',
-      );
-      expect(names, ['foo.monitor']);
-    });
-
-    test('returns empty when no monitor sources present', () {
-      final names = MeetingLoopbackSource.parseMonitorSources(
-        '46\talsa_input.mic\tPipeWire\tx\n',
-      );
-      expect(names, isEmpty);
-    });
+    final missing = supportedHost()..remove('which ffprobe');
+    final noFfprobe = MeetingLoopbackSource(
+      isLinux: () => true,
+      runner: fakeRunner(missing),
+    );
+    expect((await noFfprobe.probe()).reason, 'ffprobe-required');
   });
 
-  group('resolveMonitorSource', () {
-    test('prefers the default sink\'s own .monitor', () async {
-      final src = MeetingLoopbackSource(
-        isLinux: () => true,
-        runner: fakeRunner({
-          'pactl get-default-sink': const CommandResult(
-            exitCode: 0,
-            stdout: 'alsa_output.usb-Logitech_G522.analog-stereo\n',
-          ),
-          'pactl list short sources':
-              const CommandResult(exitCode: 0, stdout: _pactlSources),
-        }),
-      );
-      expect(
-        await src.resolveMonitorSource(),
-        'alsa_output.usb-Logitech_G522.analog-stereo.monitor',
-      );
-    });
+  test('selects the exact default sink monitor and microphone', () async {
+    final source = MeetingLoopbackSource(
+      isLinux: () => true,
+      runner: fakeRunner(supportedHost()),
+    );
 
-    test('falls back to the first monitor when default sink has no monitor row',
-        () async {
-      final src = MeetingLoopbackSource(
-        isLinux: () => true,
-        runner: fakeRunner({
-          'pactl get-default-sink': const CommandResult(
-            exitCode: 0,
-            stdout: 'some_other_sink_without_a_monitor\n',
-          ),
-          'pactl list short sources':
-              const CommandResult(exitCode: 0, stdout: _pactlSources),
-        }),
-      );
-      expect(
-        await src.resolveMonitorSource(),
-        'alsa_output.pci-0000_c1_00.6.HiFi__Speaker__sink.monitor',
-      );
-    });
+    final devices = await source.resolveDevices();
 
-    test('returns null when there are no monitor sources', () async {
-      final src = MeetingLoopbackSource(
-        isLinux: () => true,
-        runner: fakeRunner({
-          'pactl get-default-sink':
-              const CommandResult(exitCode: 0, stdout: 'sink\n'),
-          'pactl list short sources': const CommandResult(
-            exitCode: 0,
-            stdout: '46\talsa_input.mic\tPipeWire\tx\n',
-          ),
-        }),
-      );
-      expect(await src.resolveMonitorSource(), isNull);
-    });
-
-    test('returns null off Linux (out of MVP scope)', () async {
-      final src = MeetingLoopbackSource(
-        isLinux: () => false,
-        runner: fakeRunner({
-          'pactl list short sources':
-              const CommandResult(exitCode: 0, stdout: _pactlSources),
-        }),
-      );
-      expect(await src.resolveMonitorSource(), isNull);
-    });
+    expect(devices?.monitorSource, 'alsa_output.speaker.monitor');
+    expect(devices?.microphoneSource, 'alsa_input.mic');
+    expect((await source.probe()).supported, isTrue);
   });
 
-  group('isSupported (capability gate)', () {
-    MeetingLoopbackSource gate({
-      required bool linux,
-      required bool ffmpeg,
-      required bool pactl,
-      String sources = _pactlSources,
-    }) {
-      return MeetingLoopbackSource(
-        isLinux: () => linux,
-        runner: fakeRunner({
-          'which ffmpeg': CommandResult(exitCode: ffmpeg ? 0 : 1, stdout: ''),
-          'which pactl': CommandResult(exitCode: pactl ? 0 : 1, stdout: ''),
-          'pactl get-default-sink': const CommandResult(
-            exitCode: 0,
-            stdout: 'alsa_output.usb-Logitech_G522.analog-stereo\n',
-          ),
-          'pactl list short sources':
-              CommandResult(exitCode: 0, stdout: sources),
-        }),
-      );
-    }
+  test('does not fall back to an unrelated monitor', () async {
+    final responses = supportedHost();
+    responses['pactl get-default-sink'] = const CommandResult(
+      exitCode: 0,
+      stdout: 'alsa_output.missing\n',
+    );
+    final source = MeetingLoopbackSource(
+      isLinux: () => true,
+      runner: fakeRunner(responses),
+    );
 
-    test('supported: Linux + ffmpeg + pactl + a monitor source', () async {
-      expect(
-        await gate(linux: true, ffmpeg: true, pactl: true).isSupported(),
-        isTrue,
-      );
-    });
-
-    test('unsupported off Linux', () async {
-      expect(
-        await gate(linux: false, ffmpeg: true, pactl: true).isSupported(),
-        isFalse,
-      );
-    });
-
-    test('unsupported without ffmpeg', () async {
-      expect(
-        await gate(linux: true, ffmpeg: false, pactl: true).isSupported(),
-        isFalse,
-      );
-    });
-
-    test('unsupported without pactl', () async {
-      expect(
-        await gate(linux: true, ffmpeg: true, pactl: false).isSupported(),
-        isFalse,
-      );
-    });
-
-    test('unsupported when no monitor source exists', () async {
-      expect(
-        await gate(
-          linux: true,
-          ffmpeg: true,
-          pactl: true,
-          sources: '46\talsa_input.mic\tPipeWire\tx\n',
-        ).isSupported(),
-        isFalse,
-      );
-    });
+    expect(await source.resolveDevices(), isNull);
   });
 
-  group('buildFfmpegArgs (capture command)', () {
-    test('mixes monitor + mic into one WAV with the loopback first', () {
-      final args = MeetingRecorderBackend.buildFfmpegArgs(
-        monitorSource: 'sink.monitor',
-        outputPath: '/tmp/meeting.wav',
-      );
-      // Two pulse inputs: loopback monitor THEN mic.
-      final firstInput = args.indexOf('sink.monitor');
-      final secondInput = args.indexOf('default');
-      expect(firstInput, greaterThan(0));
-      expect(secondInput, greaterThan(firstInput));
-      // Mixed (not two tracks) via amix of 2 inputs.
-      expect(
-        args,
-        containsAllInOrder(['-filter_complex', 'amix=inputs=2:duration=longest:normalize=0']),
-      );
-      // Single WAV (pcm_s16le) at the requested path.
-      expect(args, containsAllInOrder(['-c:a', 'pcm_s16le']));
-      expect(args.last, '/tmp/meeting.wav');
-    });
+  test('rejects a monitor selected as the default microphone', () async {
+    final responses = supportedHost();
+    responses['pactl get-default-source'] = const CommandResult(
+      exitCode: 0,
+      stdout: 'alsa_output.speaker.monitor\n',
+    );
+    final source = MeetingLoopbackSource(
+      isLinux: () => true,
+      runner: fakeRunner(responses),
+    );
 
-    test('honours a custom mic source', () {
-      final args = MeetingRecorderBackend.buildFfmpegArgs(
-        monitorSource: 'sink.monitor',
-        outputPath: '/tmp/m.wav',
-        micSource: 'alsa_input.custom',
-      );
-      expect(args, contains('alsa_input.custom'));
-    });
+    expect(await source.resolveDevices(), isNull);
+  });
+
+  test('builds the fixed AAC-LC mix and limiter contract', () {
+    const request = MeetingCaptureRequest(
+      sessionId: 'meeting_test',
+      stagingPath: '/tmp/meeting.partial.m4a',
+    );
+
+    final args = MeetingRecorderBackend.buildFfmpegArgs(
+      request: request,
+      monitorSource: 'sink.monitor',
+      microphoneSource: 'mic.source',
+    );
+
+    final filter = args[args.indexOf('-filter_complex') + 1];
+    expect(args.indexOf('sink.monitor'), lessThan(args.indexOf('mic.source')));
+    expect(filter, contains('[sysmix]volume=-6.0dB'));
+    expect(filter, contains('[micmix]volume=-6.0dB'));
+    expect(filter, contains('normalize=0'));
+    expect(filter, contains('limit=0.891250938:level=disabled'));
+    expect(args, containsAllInOrder(['-c:a', 'aac', '-profile:a', 'aac_low']));
+    expect(args, containsAllInOrder(['-b:a', '96000']));
+    expect(args.last, request.stagingPath);
   });
 }

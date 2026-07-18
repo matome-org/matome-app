@@ -11,6 +11,9 @@ tags:
   live:
     # Skipped by default; explicit `--tags live` clears this skip.
     skip: "live integration test — run with --tags live and LIVE_TOKEN set"
+  linux_host:
+    # Requires the Linux ffmpeg/ffprobe runtime used by meeting capture.
+    skip: "Linux host gate — run with --run-skipped --tags linux_host"
   native_spike:
     # Spike #815 (task #1847): requires a hand-built SQLCipher .so (see
     # tool/spike_815_sqlcipher/build_libsqlcipher.sh) — not buildable in

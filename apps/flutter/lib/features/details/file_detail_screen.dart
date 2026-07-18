@@ -13,6 +13,8 @@ import '../../ui/app_button.dart';
 import '../../ui/app_dialog.dart';
 import '../../ui/file_type_chip.dart';
 import '../../ui/loading_indicator.dart';
+import '../documents/document_open_policy.dart';
+import '../documents/document_open_service.dart';
 import '../items/matome_item_type.dart';
 import '../home/inbox_sync.dart';
 import '../recordings/processing_error.dart';
@@ -40,10 +42,10 @@ FileMediaKind mediaKindForType(String mediaType) {
   return FileMediaKind.audio;
 }
 
-String? _contentsFor(ItemWithPayload row, FileMediaKind kind) {
+String? fileContentsFor(ItemWithPayload row, FileMediaKind kind) {
   final values = switch (kind) {
     FileMediaKind.audio => [row.transcript],
-    FileMediaKind.image => [row.description, row.ocrText],
+    FileMediaKind.image => [row.description, row.ocrText, row.summary],
     FileMediaKind.doc => [row.extractedText, row.summary],
     FileMediaKind.video => const <String?>[],
   };
@@ -374,8 +376,8 @@ class _FileDetailById extends ConsumerWidget {
     }
     // Route by the row's media kind (NOT a bare `startsWith('image')`):
     //   * image  → the framed image host,
-    //   * doc    → the generic file host (no inline preview; v1 only STORES
-    //              documents — open/extract/parse is deferred, #1449),
+    //   * doc    → the generic file host (no inline preview; safe external
+    //              open/download is exposed through the document header),
     //   * video  → the lightweight video file host,
     //   * audio  → the audio host (the default).
     switch (mediaKindForType(row.mediaType)) {
@@ -423,6 +425,10 @@ class _ImageDetailHost extends StatelessWidget {
       processingStatus = item.processingStatus,
       processingErrorCode = item.processingErrorCode,
       path = item.filePath,
+      filename = null,
+      contentType = null,
+      byteSize = null,
+      openPolicy = DocumentOpenPolicy.downloadOnly,
       notes = item.notes,
       mediaKind = mediaKindForType(item.mediaType),
       originalExtension = null,
@@ -451,8 +457,12 @@ class _ImageDetailHost extends StatelessWidget {
        // The image's on-disk path lives in the `audioFilePath` column (the
        // generic media-path column shared across kinds).
        path = row.localPath,
+       filename = row.file?.filename,
+       contentType = row.file?.contentType,
+       byteSize = row.file?.byteSize,
+       openPolicy = DocumentOpenPolicy.fromWire(row.file?.openPolicy),
        notes = row.notes,
-       contentsText = _contentsFor(row, mediaKind),
+       contentsText = fileContentsFor(row, mediaKind),
        processingState = row.processingState,
        // The persisted source extension (#1449) drives the doc chip's type
        // icon; null on non-document rows (and on the item-driven path).
@@ -464,11 +474,14 @@ class _ImageDetailHost extends StatelessWidget {
   final String? processingStatus;
   final String? processingErrorCode;
   final String? path;
+  final String? filename;
+  final String? contentType;
+  final int? byteSize;
+  final DocumentOpenPolicy openPolicy;
   final String? notes;
 
-  /// The machine-produced Contents text (Core-owned `transcript` column). On the
-  /// doc path this carries the AI-stub summary once the upload pipeline resolves;
-  /// null on the image path (its description producer is deferred, #1445).
+  /// The machine-produced Contents text projected from the current typed output
+  /// envelope for this media kind.
   final String? contentsText;
 
   final ProcessingState processingState;
@@ -495,8 +508,7 @@ class _ImageDetailHost extends StatelessWidget {
       processingStatus: processingStatus,
       // Each kind swaps its own media header:
       //   * image → the framed inline preview that opens the fullscreen viewer,
-      //   * doc   → the FileTypeChip (type icon + name + size + DISABLED "Open"
-      //             labelled "soon"; open/preview is deferred, #1455),
+      //   * doc   → the FileTypeChip with a policy-derived external action,
       //   * video → a minimal file-host player shell (no AI dispatch),
       //   * audio → handled by the audio host, not here.
       mediaHeader: switch (mediaKind) {
@@ -504,10 +516,16 @@ class _ImageDetailHost extends StatelessWidget {
           path: path,
           onOpenFullscreen: () => _openFullscreen(context),
         ),
-        FileMediaKind.doc => FileTypeChip(
-          fileName: title,
+        FileMediaKind.doc => _DocumentFileHeader(
+          fileName: filename ?? title,
           extension: originalExtension,
-          sizeLabel: _fileSizeLabel(path),
+          mimeType: contentType,
+          sizeLabel: byteSize != null && byteSize! > 0
+              ? _formatBytes(byteSize!)
+              : _fileSizeLabel(path),
+          coreId: coreId,
+          localPath: path,
+          openPolicy: openPolicy,
         ),
         FileMediaKind.video => _VideoMediaHeader(title: title, path: path),
         FileMediaKind.audio => null,
@@ -586,6 +604,84 @@ class _ImageDetailHost extends StatelessWidget {
           data: _viewData(context),
         ),
       ),
+    );
+  }
+}
+
+class _DocumentFileHeader extends ConsumerStatefulWidget {
+  const _DocumentFileHeader({
+    required this.fileName,
+    required this.extension,
+    required this.mimeType,
+    required this.sizeLabel,
+    required this.coreId,
+    required this.localPath,
+    required this.openPolicy,
+  });
+
+  final String fileName;
+  final String? extension;
+  final String? mimeType;
+  final String? sizeLabel;
+  final int? coreId;
+  final String? localPath;
+  final DocumentOpenPolicy openPolicy;
+
+  @override
+  ConsumerState<_DocumentFileHeader> createState() =>
+      _DocumentFileHeaderState();
+}
+
+class _DocumentFileHeaderState extends ConsumerState<_DocumentFileHeader> {
+  FileTypeChipState _state = FileTypeChipState.ready;
+
+  FileTypeChipAction get _action => switch (widget.openPolicy) {
+    DocumentOpenPolicy.external => FileTypeChipAction.open,
+    DocumentOpenPolicy.systemApp => FileTypeChipAction.openInApp,
+    DocumentOpenPolicy.attachmentOnly => FileTypeChipAction.downloadWithWarning,
+    DocumentOpenPolicy.downloadOnly => FileTypeChipAction.download,
+    DocumentOpenPolicy.blocked => FileTypeChipAction.unavailable,
+  };
+
+  Future<void> _open() async {
+    final service = ref.read(documentOpenServiceProvider);
+    setState(() => _state = FileTypeChipState.loading);
+    DocumentOpenResult result;
+    try {
+      result = await service.open(
+        DocumentOpenRequest(
+          coreId: widget.coreId,
+          localPath: widget.localPath,
+          openPolicy: widget.openPolicy,
+          extension: widget.extension,
+          mimeType: widget.mimeType,
+        ),
+      );
+    } catch (_) {
+      result = DocumentOpenResult.failed;
+    }
+    if (!mounted) return;
+    setState(() {
+      _state = switch (result) {
+        DocumentOpenResult.openedLocal ||
+        DocumentOpenResult.openedRemote ||
+        DocumentOpenResult.downloadStarted => FileTypeChipState.ready,
+        DocumentOpenResult.blocked ||
+        DocumentOpenResult.unavailable => FileTypeChipState.disabled,
+        DocumentOpenResult.failed => FileTypeChipState.failed,
+      };
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FileTypeChip(
+      fileName: widget.fileName,
+      extension: widget.extension,
+      sizeLabel: widget.sizeLabel,
+      action: _action,
+      state: _state,
+      onAction: widget.openPolicy == DocumentOpenPolicy.blocked ? null : _open,
     );
   }
 }

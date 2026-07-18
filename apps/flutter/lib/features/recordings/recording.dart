@@ -237,12 +237,21 @@ class Recording {
     required this.id,
     required this.ownerId,
     required this.title,
+    this.clientId,
+    this.itemType = 'file',
+    this.sourceRevision = 1,
+    this.textBody,
     this.processing = const ItemProcessing.notRequested(),
     this.status = RecordingStatus.unknown,
     this.summary,
     this.transcript,
     this.notes,
     this.mediaType,
+    this.filename,
+    this.originalExtension,
+    this.contentType,
+    this.openPolicy,
+    this.checksumSha256,
     this.storageKey,
     this.uploadState,
     this.uploadedAt,
@@ -259,6 +268,10 @@ class Recording {
   final int id;
   final String? ownerId;
   final String title;
+  final String? clientId;
+  final String itemType;
+  final int sourceRevision;
+  final String? textBody;
   final ItemProcessing processing;
 
   /// Capture-progress compatibility only; network code must use [processing].
@@ -267,6 +280,11 @@ class Recording {
   final String? transcript;
   final String? notes;
   final String? mediaType;
+  final String? filename;
+  final String? originalExtension;
+  final String? contentType;
+  final String? openPolicy;
+  final String? checksumSha256;
   final String? storageKey;
   final String? uploadState;
   final DateTime? uploadedAt;
@@ -294,12 +312,21 @@ class Recording {
       id: asInt(json['id']),
       ownerId: _ownerIdOrNull(json['owner_id']),
       title: asString(json['title'], fallback: 'Untitled'),
+      clientId: asStringOrNull(json['client_id']),
+      itemType: asString(json['item_type'], fallback: 'file'),
+      sourceRevision: asIntOrNull(json['source_revision']) ?? 1,
+      textBody: _textBody(json),
       processing: processing,
       status: _legacyStatus(processing.state),
       summary: processing.outputs.summary?.markdown,
       transcript: processing.outputs.transcript?.text,
       notes: asStringOrNull(json['notes']),
       mediaType: asStringOrNull(file['media_type']),
+      filename: asStringOrNull(file['filename']),
+      originalExtension: asStringOrNull(file['original_extension']),
+      contentType: asStringOrNull(file['content_type']),
+      openPolicy: asStringOrNull(file['open_policy']),
+      checksumSha256: asStringOrNull(file['checksum_sha256']),
       storageKey: asStringOrNull(file['storage_key']),
       uploadState: asStringOrNull(file['upload_state']),
       uploadedAt: asDateTimeOrNull(file['uploaded_at']),
@@ -317,6 +344,12 @@ class Recording {
   static String? _ownerIdOrNull(Object? value) {
     final id = asStringOrNull(value)?.trim();
     return id == null || id.isEmpty ? null : id;
+  }
+
+  static String? _textBody(Map<String, dynamic> json) {
+    final text = json['text'];
+    if (text is Map) return asStringOrNull(text['body']);
+    return asStringOrNull(json['body']);
   }
 
   static RecordingStatus _legacyStatus(ProcessingState state) =>
@@ -345,7 +378,6 @@ class Recording {
     if (raw is! List) return const [];
     return raw
         .whereType<Map<String, dynamic>>()
-        .where((item) => item['item_type'] == 'file')
         .map(Recording.fromItemJson)
         .toList(growable: false);
   }

@@ -4,6 +4,8 @@ defmodule MatomeApi.Repo.Migrations.CreateMatomesAndContacts do
   def change do
     create table(:matomes) do
       add :owner_id, references(:users, on_delete: :delete_all), null: false
+      add :client_id, :text
+      add :client_fingerprint, :string
       add :workspace_id, references(:workspaces, on_delete: :nilify_all)
       add :title, :string, null: false
       add :happened_at, :utc_datetime
@@ -15,6 +17,25 @@ defmodule MatomeApi.Repo.Migrations.CreateMatomesAndContacts do
 
     create index(:matomes, [:owner_id])
     create index(:matomes, [:owner_id, :workspace_id])
+
+    create unique_index(:matomes, [:owner_id, :client_id],
+             where: "client_id IS NOT NULL",
+             name: :matomes_owner_id_client_id_index
+           )
+
+    create constraint(:matomes, :matomes_client_identity_check,
+             check: """
+             (client_id IS NULL AND client_fingerprint IS NULL)
+             OR
+             (
+               client_id IS NOT NULL
+               AND char_length(client_id) BETWEEN 1 AND 255
+               AND client_id ~ '\\S'
+               AND client_fingerprint IS NOT NULL
+               AND client_fingerprint ~ '^[0-9a-f]{64}$'
+             )
+             """
+           )
 
     alter table(:recordings) do
       add :matome_id, references(:matomes, on_delete: :nilify_all)

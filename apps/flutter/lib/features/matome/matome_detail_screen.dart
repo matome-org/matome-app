@@ -1422,12 +1422,11 @@ Future<void> _openMatomeAddAnything(
           label: t.matome.addFile,
           icon: Icons.upload_file_outlined,
         ),
-      if (matome.coreId != null)
-        RelationshipAction(
-          id: 'text-note',
-          label: 'Text note',
-          icon: Icons.notes_outlined,
-        ),
+      RelationshipAction(
+        id: 'text-note',
+        label: 'Text note',
+        icon: Icons.notes_outlined,
+      ),
       // Record audio into this matome has no flow yet — a deferred stub.
       RelationshipAction(
         id: 'record',
@@ -1544,7 +1543,7 @@ Future<void> _importFileIntoMatome(
     }
     await container
         .read(matomeDetailControllerProvider(matomeId).notifier)
-        .addFile(file: File(path), name: picked!.name);
+        .addFile(file: File(path), name: picked!.name, byteSize: picked.size);
     AppLog.event(LogCat.action, '$label: imported ${path.split('/').last}');
   } on FileTooLargeException catch (e) {
     AppLog.event(LogCat.action, '$label: rejected oversize ${e.name}');

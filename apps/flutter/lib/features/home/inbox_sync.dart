@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/items_dao.dart';
 import '../items/matome_item_type.dart';
+import '../documents/document_open_policy.dart';
 import '../recordings/recording.dart';
 
 String coreIdToLocalId(int coreId) => coreId.toString();
@@ -65,6 +66,21 @@ String formatClock(DateTime when) {
               existingLocalPath.startsWith('file:'))
       ? existingLocalPath
       : null;
+  final incomingFilename = recording.filename == null
+      ? null
+      : sanitizeDocumentFilename(recording.filename!);
+  final incomingExtension = incomingFilename != null
+      ? documentExtension(incomingFilename)
+      : documentExtension('file.${recording.originalExtension ?? ''}');
+  final incomingContentType = recording.contentType == null
+      ? null
+      : normalizeDocumentMime(recording.contentType);
+  final incomingOpenPolicy = recording.openPolicy == null
+      ? null
+      : DocumentOpenPolicy.fromWire(recording.openPolicy).wireName;
+  final incomingByteSize = recording.byteSize == null
+      ? null
+      : (recording.byteSize! < 0 ? 0 : recording.byteSize!);
 
   return (
     item: ItemsCompanion.insert(
@@ -98,16 +114,24 @@ String formatClock(DateTime when) {
       id: fileId,
       coreId: Value(existing?.file?.coreId),
       storageKey: Value(storageKey ?? existing?.file?.storageKey),
-      filename: Value(existing?.file?.filename),
-      contentType: Value(existing?.file?.contentType),
-      byteSize: Value(recording.byteSize ?? existing?.byteSize ?? 0),
-      checksumSha256: Value(existing?.file?.checksumSha256),
+      filename: Value(incomingFilename ?? existing?.file?.filename),
+      originalExtension: Value(
+        incomingExtension ?? existing?.file?.originalExtension,
+      ),
+      contentType: Value(incomingContentType ?? existing?.file?.contentType),
+      byteSize: Value(incomingByteSize ?? existing?.byteSize ?? 0),
+      checksumSha256: Value(
+        recording.checksumSha256 ?? existing?.file?.checksumSha256,
+      ),
       mediaType: recording.mediaType ?? existing?.mediaType ?? 'audio',
       duration: Value(recording.duration ?? existing?.durationSeconds),
       uploadState: Value(uploadState),
       uploadGeneration: Value(existing?.file?.uploadGeneration ?? 1),
       uploadedAt: Value(uploadedAt),
       multipartContext: Value(existing?.file?.multipartContext),
+      openPolicy: Value(
+        incomingOpenPolicy ?? existing?.file?.openPolicy ?? 'download_only',
+      ),
       localPath: Value(localPath),
       wrappedFek: Value(existing?.wrappedFek),
       fileNoncePrefix: Value(existing?.fileNoncePrefix),
@@ -127,10 +151,15 @@ ItemsCompanion itemProcessingUpdate(
   final incoming = recording.processing;
   final existingAttempt = existing?.item.processingAttempt ?? -1;
   final existingRunId = existing?.item.processingRunId;
-  final applies =
+  final sourceIsCurrent =
       existing == null ||
-      incoming.attempt > existingAttempt ||
-      (incoming.attempt == existingAttempt && incoming.runId == existingRunId);
+      recording.sourceRevision >= existing.item.sourceRevision;
+  final applies =
+      sourceIsCurrent &&
+      (existing == null ||
+          incoming.attempt > existingAttempt ||
+          (incoming.attempt == existingAttempt &&
+              incoming.runId == existingRunId));
   final state = applies
       ? incoming.state.wireName
       : existing.item.processingState;
@@ -170,6 +199,107 @@ ItemsCompanion itemProcessingUpdate(
     processingRequestedOutputs: Value(requestedOutputs),
     processingError: Value(error),
     processingErrorCode: Value(errorCode),
+  );
+}
+
+({ItemsCompanion item, TextContentsCompanion text}) textToItemCompanions(
+  Recording remote, {
+  ItemWithPayload? existing,
+}) {
+  final ownerId = remote.ownerId?.trim();
+  final clientId = remote.clientId?.trim();
+  if (ownerId == null ||
+      ownerId.isEmpty ||
+      clientId == null ||
+      clientId.isEmpty) {
+    throw const FormatException(
+      'Text item owner_id and client_id are required',
+    );
+  }
+  final now = DateTime.now().millisecondsSinceEpoch;
+  final createdAt =
+      (remote.insertedAt ?? DateTime.now()).millisecondsSinceEpoch;
+  final localId = existing?.id ?? clientId;
+  final textId = existing?.text?.id ?? 'text_content_$localId';
+  final incomingBody = remote.textBody ?? '';
+  final dirty =
+      existing?.text?.isDirty == true || existing?.item.isDirty == true;
+  final sameBody = existing?.text?.body == incomingBody;
+  final acceptedRevision = existing?.item.acceptedSourceRevision ?? 0;
+  final incomingIsCurrent = remote.sourceRevision >= acceptedRevision;
+  final acceptsRemote =
+      existing == null || sameBody || (!dirty && incomingIsCurrent);
+  final diverged =
+      existing != null &&
+      dirty &&
+      !sameBody &&
+      (remote.sourceRevision >= existing.item.sourceRevision ||
+          remote.sourceRevision > existing.item.acceptedSourceRevision);
+  final processing = existing != null && dirty && !sameBody
+      ? ItemsCompanion(
+          processingState: Value(existing.item.processingState),
+          processingRunId: Value(existing.item.processingRunId),
+          processingAttempt: Value(existing.item.processingAttempt),
+          processingOutputs: Value(existing.item.processingOutputs),
+          processingRequestedOutputs: Value(
+            existing.item.processingRequestedOutputs,
+          ),
+          processingError: Value(existing.item.processingError),
+          processingErrorCode: Value(existing.item.processingErrorCode),
+        )
+      : itemProcessingUpdate(remote, existing: existing);
+
+  return (
+    item: ItemsCompanion.insert(
+      id: localId,
+      coreId: Value(remote.id),
+      ownerId: ownerId,
+      clientId: clientId,
+      workspaceId: Value(
+        coreWorkspaceIdToLocal(remote.workspaceId) ?? existing?.workspaceId,
+      ),
+      matomeId: Value(existing?.matomeId),
+      position: Value(existing?.item.position),
+      itemType: MatomeItemType.text.wireName,
+      title: Value(remote.title),
+      notes: Value(existing?.notes),
+      metadata: Value(existing?.item.metadata ?? '{}'),
+      processingState: processing.processingState,
+      processingRunId: processing.processingRunId,
+      processingAttempt: processing.processingAttempt,
+      sourceRevision: Value(
+        acceptsRemote && incomingIsCurrent
+            ? remote.sourceRevision
+            : existing?.item.sourceRevision ?? remote.sourceRevision,
+      ),
+      acceptedSourceRevision: Value(
+        remote.sourceRevision > acceptedRevision
+            ? remote.sourceRevision
+            : acceptedRevision,
+      ),
+      processingConfigRevision: Value(existing?.item.processingConfigRevision),
+      processingOutputs: processing.processingOutputs,
+      processingRequestedOutputs: processing.processingRequestedOutputs,
+      processingError: processing.processingError,
+      processingErrorCode: processing.processingErrorCode,
+      textContentId: Value(textId),
+      isDirty: Value(!acceptsRemote),
+      syncState: Value(
+        diverged ? 'conflict' : (acceptsRemote ? 'synced' : 'pending_sync'),
+      ),
+      isDeleted: Value(existing?.item.isDeleted ?? false),
+      createdAt: existing?.createdAt ?? createdAt,
+      updatedAt: now,
+    ),
+    text: TextContentsCompanion.insert(
+      id: textId,
+      coreId: Value(remote.id),
+      body: acceptsRemote ? incomingBody : existing.text!.body,
+      acceptedBody: Value(incomingBody),
+      isDirty: Value(!acceptsRemote),
+      createdAt: existing?.text?.createdAt ?? createdAt,
+      updatedAt: now,
+    ),
   );
 }
 

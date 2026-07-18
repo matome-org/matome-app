@@ -127,6 +127,42 @@ void main() {
     );
   });
 
+  test('freezes body-only canonical text AI input selection', () {
+    final ai = contract['ai'] as Map<String, dynamic>;
+    final textInput = ai['text_input'] as Map<String, dynamic>;
+    expect(textInput['content_source'], 'text_contents.body');
+    expect(textInput['excluded_automatic_sources'], <String>[
+      'items.notes',
+      'matomes.description',
+    ]);
+    expect(textInput['canonical_wire_input'], <String, dynamic>{
+      'required_keys': <String>['kind', 'body'],
+      'additional_properties': false,
+    });
+    expect(textInput['optional_non_content_metadata'], <String>['locale']);
+
+    final sourceSelection =
+        (fixtures['ai'] as Map<String, dynamic>)['text_source_selection']
+            as Map<String, dynamic>;
+    expect(sourceSelection['sources'], <String, dynamic>{
+      'text_contents.body': 'BODY_SENTINEL_INCLUDED',
+      'items.notes': 'ITEM_NOTES_SENTINEL_EXCLUDED',
+      'matomes.description': 'MATOME_DESCRIPTION_SENTINEL_EXCLUDED',
+    });
+    expect(sourceSelection['expected_wire_input'], <String, dynamic>{
+      'kind': 'text',
+      'body': 'BODY_SENTINEL_INCLUDED',
+    });
+    expect(
+      (sourceSelection['expected_wire_input'] as Map<String, dynamic>).keys,
+      unorderedEquals(<String>['kind', 'body']),
+    );
+    expect(
+      jsonEncode(sourceSelection['expected_wire_input']),
+      isNot(contains('EXCLUDED')),
+    );
+  });
+
   test('executes all known current mismatch proofs', () {
     final mismatches = (known['mismatches'] as List<dynamic>)
         .cast<Map<String, dynamic>>();

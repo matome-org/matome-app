@@ -160,10 +160,26 @@
     "timeout_rule": "Core inserts one run-keyed watchdog atomically with dispatch; the callback deadline conditionally fails only the still-current queued or processing run.",
     "metadata_allowlist": ["locale"],
     "automatic_text_rule": "Only text item body is sent automatically; file notes and Matome notes are excluded.",
+    "text_input": {
+      "content_source": "text_contents.body",
+      "excluded_automatic_sources": ["items.notes", "matomes.description"],
+      "canonical_wire_input": {
+        "required_keys": ["kind", "body"],
+        "additional_properties": false
+      },
+      "optional_non_content_metadata": ["locale"]
+    },
+    "file_input_required": ["method", "url", "expires_at", "filename", "content_type", "byte_size", "checksum_sha256"],
     "typed_outputs": {
       "audio": ["transcript", "summary", "title"],
       "image": ["ocr_text", "description", "summary", "title"],
       "document": ["extracted_text", "summary", "title"],
+      "text": ["summary", "title"]
+    },
+    "requested_output_policy": {
+      "audio": ["transcript", "summary", "title"],
+      "image": ["ocr_text", "description", "summary", "title"],
+      "document": ["extracted_text", "summary"],
       "text": ["summary", "title"]
     },
     "output_value_types": {

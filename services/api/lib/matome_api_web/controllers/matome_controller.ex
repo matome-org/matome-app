@@ -23,6 +23,9 @@ defmodule MatomeApiWeb.MatomeController do
       {:ok, matome} ->
         conn |> put_status(:created) |> json(%{matome: matome_json(matome)})
 
+      {:error, :client_id_conflict} ->
+        conn |> put_status(:conflict) |> json(%{error: "client_id_conflict"})
+
       {:error, changeset} ->
         conn |> put_status(:unprocessable_entity) |> json(%{errors: errors_on(changeset)})
     end
@@ -113,6 +116,7 @@ defmodule MatomeApiWeb.MatomeController do
     %{
       id: matome.id,
       owner_id: matome.owner_id,
+      client_id: matome.client_id,
       workspace_id: matome.workspace_id,
       title: matome.title,
       happened_at: matome.happened_at,

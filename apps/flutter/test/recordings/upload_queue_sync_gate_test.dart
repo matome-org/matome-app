@@ -496,6 +496,8 @@ class _CountingRepository extends RecordingsRepository
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     createCalls++;
     final id = _nextCoreId++;

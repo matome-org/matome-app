@@ -31,7 +31,7 @@ behind a confirm). Download is presented in the UI but is a stub.
 ## Alternate & exception flows
 - **Scope resolution** — the scope filter uses the effective-space resolver to decide loose vs in-space membership.
 - **Delete** — delete is a permanent hard-delete, gated behind a confirmation. When the deleted file was open in the reading pane, the pane selection clears.
-- **Download** — selecting download shows a "not available" notice; the action is a stub.
+- **Bulk download** — selecting download for multiple files shows a "not available" notice; the action is a stub. Opening or downloading one document from its detail is handled separately by UC-10.
 - **Master–detail reading pane (flag-gated, `FeatureFlags.masterDetailLayout`)** — when ON, Files renders through the unified `MasterDetailScaffold`. The shared `MasterDetailScaffold.showsPane` predicate (global `readingPaneProvider` position × current width class) is the single source of truth for tap behaviour:
   - Reading pane = Right AND width class = expanded → the grid/table renders FULL-WIDTH (no 1080-cap centring, killing the wide-window whitespace) beside a read-only `FileView` reading pane; tapping a file selects it in the pane (`filesSelectionProvider`) instead of navigating.
   - Reading pane = Off, or a narrower (medium/compact) width → the master is full-width and tapping a file routes to its media-typed detail (UC-10), exactly as the flag-OFF reality.

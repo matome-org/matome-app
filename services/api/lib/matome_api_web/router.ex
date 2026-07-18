@@ -158,6 +158,9 @@ defmodule MatomeApiWeb.Router do
       resources "/matomes", MatomeController, except: [:new, :edit]
 
       get "/items", ItemController, :index
+      post "/items/text", ItemController, :create_text
+      patch "/items/:id/text", ItemController, :update_text
+      delete "/items/:id/text", ItemController, :delete_text
       get "/items/:id", ItemController, :show
       patch "/items/:id", ItemController, :update
       post "/items/:id/presign", ItemController, :presign

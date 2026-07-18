@@ -20,7 +20,7 @@
 1. **Thin client.** The app only *captures* (record / pick a file), *uploads raw bytes*, and *reads results*. It never runs transcription, OCR, or summarization.
 2. **The backend owns all processing.** Transcription, OCR, and summarization are server-side. Adding a media type or model is a backend change — the client doesn't ship.
 3. **Server is the source of record.** Records live in Core's Postgres. The client's Drift (SQLite) store is an offline mirror, reconciled against Core — not the authority.
-4. **One ingestion contract for every media type.** Audio, meetings, images, documents, and text use one verified upload/process contract with explicit run state and typed outputs. The client is media-agnostic.
+4. **One processing contract for every input kind.** Audio, meetings, images, documents, and text use explicit run state and typed outputs. File inputs use verified upload before processing; text uses durable local-first reconciliation and deliberately skips upload.
 5. **Local-first organization, decoupled from sync.** Items are organized on-device; whether they sync is a separate question answered by a single resolver (§5).
 6. **Owned backends, one client language.** Core API is Elixir; the AI Engine is Python; the client is Dart/Flutter.
 7. **Contract-first.** Core publishes a REST (OpenAPI) surface consumed by the Flutter `dio` layer. The client observes one explicit current processing run through bounded owner-scoped polling; Core remains authoritative.
@@ -74,7 +74,10 @@ Owns everything except AI.
 
 Responsibilities: register/login + tokens; CRUD on matomes / recordings / spaces / contacts; create the `pending` record; issue presigned upload URLs; enqueue ingestion jobs; receive AI results via internal callback; archive/restore.
 
-**Public processing surface (owner-scoped):** `POST /api/items/:id/process`. **Internal:** `POST /internal/v1/jobs/:id/result` (per-run signed AI callback).
+**Public processing surface (owner-scoped):** `POST /api/items/:id/process`.
+Standalone text creation is `POST /api/items/text`; revision-guarded text edit
+and delete are `PATCH /api/items/:id/text` and `DELETE /api/items/:id/text`.
+**Internal:** `POST /internal/v1/jobs/:id/result` (per-run signed AI callback).
 
 > Note: the physical `workspaces` table / `workspace_id` FK is the **Space** concept (logical rename); the code keeps the legacy name.
 
@@ -86,7 +89,7 @@ Responsibilities: register/login + tokens; CRUD on matomes / recordings / spaces
 
 Stateless processors (`transcribe`, `ocr`, `summarize`). Only Core reaches it (service token, private network). It downloads media via presigned GET and returns one terminal result via callback. It stores nothing durable.
 
-**Contract.** Core → AI: versioned `POST /v1/jobs` with opaque job/run ids, source revision, tagged audio/image/document/text input, typed requested outputs, signed callback descriptor, and locale-only metadata. AI → Core: `POST /internal/v1/jobs/:job_id/result` with terminal `done` typed outputs or sanitized `failed` error. Dispatch and callback use separate credentials. Core conditionally applies only the current run/revision; exact duplicates, stale callbacks, and the callback-before-dispatch-ack race are safe. See [processing-lifecycle.md](../../services/api/docs/processing-lifecycle.md).
+**Contract.** Core → AI: versioned `POST /v1/jobs` with opaque job/run ids, source revision, tagged audio/image/document/text input, typed requested outputs, signed callback descriptor, and optional locale-only non-content metadata. Canonical text `input` has exactly `{kind,body}` and selects `body` only from `text_contents.body`; `items.notes` and `matomes.description` are neither concatenated nor sent as separate fields. AI → Core: `POST /internal/v1/jobs/:job_id/result` with terminal `done` typed outputs or sanitized `failed` error. Dispatch and callback use separate credentials. Core conditionally applies only the current run/revision; exact duplicates, stale callbacks, and the callback-before-dispatch-ack race are safe. See [processing-lifecycle.md](../../services/api/docs/processing-lifecycle.md).
 
 ---
 
@@ -151,7 +154,7 @@ Orthogonal columns, never merged. Invariants couple them: **`local ⟹ personal`
 
 ---
 
-## 6. Ingestion pipeline (one path for every media type)
+## 6. Ingestion pipeline (one processing path for every input kind)
 
 ```mermaid
 sequenceDiagram
@@ -160,16 +163,26 @@ sequenceDiagram
   participant ST as Object Storage
   participant OB as Oban
   participant AI as AI Engine
-  C->>API: POST /api/matomes/:id/items
-  API-->>C: Item + upload envelope
-  C->>ST: PUT bytes (presigned, streamed)
-  C->>API: POST /api/v1/uploads/:id/complete
-  API-->>C: provider-verified upload
+  alt file Item
+    C->>API: POST /api/matomes/:id/items
+    API-->>C: Item + upload envelope
+    C->>ST: PUT bytes (presigned, streamed)
+    C->>API: POST /api/v1/uploads/:id/complete
+    API-->>C: provider-verified upload
+  else standalone text Item
+    C->>API: POST /api/items/text or PATCH /api/items/:id/text
+    API-->>C: Item + accepted source_revision
+    Note over C,ST: text skips hashing, presign, and upload
+  end
   C->>API: POST /api/items/:id/process
   API->>OB: enqueue run-keyed dispatch + watchdog
   API-->>C: 202 (queued + run id + attempt)
   OB->>AI: dispatch job
-  AI->>ST: GET raw bytes (presigned)
+  alt file Item
+    AI->>ST: GET raw bytes (presigned)
+  else text Item
+    Note over API,AI: input exactly {kind: text, body: text_contents.body}
+  end
   alt audio or meeting
     AI->>AI: transcribe
   else image
@@ -188,6 +201,12 @@ sequenceDiagram
 - **Processing states:** `not_requested | not_available | queued | processing | succeeded | partial | failed`.
 - **Input kinds:** `audio | image | document | text`; video is upload-only unless a future version advertises it.
 - **Retry:** transport retries retain the run; a terminal user retry creates a new run and logical attempt.
+- **Text mutation durability:** create/edit/delete commit to Drift first and are
+  persisted as revisioned queue work across restart. Edit/delete send
+  `expected_source_revision`; `409 version_conflict` preserves local intent and
+  records an explicit sync conflict instead of overwriting either side. Sync
+  states remain explicit: `local_saved`, `pending_sync`/`pending_delete`,
+  `synced`, `failed`, or `conflict`.
 
 ---
 
@@ -259,9 +278,20 @@ contacts (+ matome_contacts, space_contacts, matome_shares, space_members)
   metadata, dirty flags, and current upload reconciliation state. Capture
   recovery remains in the separate `recording_drafts` table because draft
   lifetime is independent from Item lifetime.
+- Meeting capture uses a package-neutral backend contract and a separate
+  local-only lifecycle. Its typed draft is persisted before native start and
+  heartbeat-updated during capture. Stop is bounded; an independent inspector
+  verifies container, codec, sample rate, channel count, duration,
+  decodability, and byte size before staging is atomically renamed. Only then
+  may the Item, file payload, and `file_upload` work row commit together; queue
+  drain is a separate post-finish operation. Microphone and meeting drafts are
+  partitioned by capture kind so their recovery paths cannot cross.
 - Device-owned upload work is persisted in the durable `work_queue` executor.
   It completes after Core accepts processing; AI execution and terminal state
   remain server-owned and are observed separately through the Item projection.
+- Text create/edit/delete work uses the same durable executor but bypasses every
+  file stage. User-authored `text_contents.body`, machine-generated summary,
+  AI processing status, and text sync status remain separate fields/state axes.
 
 ---
 

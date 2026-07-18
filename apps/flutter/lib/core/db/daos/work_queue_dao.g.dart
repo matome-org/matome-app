@@ -6,6 +6,8 @@ part of 'work_queue_dao.dart';
 mixin _$WorkQueueDaoMixin on DatabaseAccessor<AppDatabase> {
   $WorkQueueTable get workQueue => attachedDatabase.workQueue;
   $ItemsTable get items => attachedDatabase.items;
+  $TextContentsTable get textContents => attachedDatabase.textContents;
+  $ItemContactsTable get itemContacts => attachedDatabase.itemContacts;
   WorkQueueDaoManager get managers => WorkQueueDaoManager(this);
 }
 
@@ -16,4 +18,8 @@ class WorkQueueDaoManager {
       $$WorkQueueTableTableManager(_db.attachedDatabase, _db.workQueue);
   $$ItemsTableTableManager get items =>
       $$ItemsTableTableManager(_db.attachedDatabase, _db.items);
+  $$TextContentsTableTableManager get textContents =>
+      $$TextContentsTableTableManager(_db.attachedDatabase, _db.textContents);
+  $$ItemContactsTableTableManager get itemContacts =>
+      $$ItemContactsTableTableManager(_db.attachedDatabase, _db.itemContacts);
 }

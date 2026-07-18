@@ -1,401 +1,415 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
-import 'package:record/record.dart';
-
-import '../../core/observability/app_log.dart';
+import 'meeting_capture_backend.dart';
 import 'meeting_loopback_source.dart';
-import 'recorder_backend.dart';
 
-/// Spawns ffmpeg. Injectable so the backend's lifecycle (start → stop, cancel,
-/// args) is unit-testable without a real ffmpeg / live audio. Mirrors the
-/// `Process.run`/`which fmedia` subprocess idiom already in the codebase, but
-/// uses [Process.start] because ffmpeg is a long-running capture, not a
-/// one-shot command.
 typedef FfmpegSpawner =
     Future<Process> Function(String executable, List<String> arguments);
+typedef MeetingStagingPreparer = Future<void> Function(String path);
 
 Future<Process> _defaultFfmpegSpawner(
   String executable,
   List<String> arguments,
 ) => Process.start(executable, arguments);
 
-/// [RecorderBackend] that captures the **system output (loopback) mixed with
-/// the microphone into ONE WAV file** via an ffmpeg subprocess — the desktop
-/// meeting recorder (MVP **Linux**).
-///
-/// ---------------------------------------------------------------------------
-/// WHY ffmpeg-subprocess (not the `record` native backend)
-/// ---------------------------------------------------------------------------
-/// The default [RecordRecorderBackend] captures the microphone only. A meeting
-/// also needs the *remote participants*, whose audio comes out of the speakers
-/// and is otherwise lost. On Linux (PipeWire/PulseAudio) every output sink
-/// exposes a `<sink>.monitor` loopback source; ffmpeg can open that monitor AND
-/// the default mic as two `-f pulse` inputs and `amix` them into a single WAV.
-/// This stays true to the "dumb client" philosophy: we only capture + hand the
-/// finished WAV to the existing F4 upload pipeline; Core does the transcription.
-///
-/// The produced file is a normal single-file WAV, so the existing
-/// [AudioRecordingService] single-file model and the F4 upload pipeline accept
-/// it unchanged (`wav` is already an accepted audio extension in
-/// `inbox_upload.mediaTypeForPath`).
-///
-/// ---------------------------------------------------------------------------
-/// PAUSE/RESUME
-/// ---------------------------------------------------------------------------
-/// A raw capture subprocess has no lossless mid-stream pause the way the native
-/// recorder does, and meetings are recorded straight through, so this MVP
-/// backend is **start → stop** only. [pause]/[resume] throw
-/// [UnsupportedError] rather than silently dropping audio — the meeting UI does
-/// not surface pause. (A future enhancement could segment + concat via ffmpeg.)
-///
-/// ---------------------------------------------------------------------------
-/// PER-OS SEAM
-/// ---------------------------------------------------------------------------
-/// Linux only for this increment. Windows (WASAPI loopback) and macOS (virtual
-/// device / ScreenCaptureKit — ffmpeg avfoundation can't tap output) are out of
-/// scope; the capability gate ([MeetingLoopbackSource.isSupported]) reports
-/// unsupported off Linux so those backends can slot in later behind the same
-/// [RecorderBackend] seam.
-class MeetingRecorderBackend implements RecorderBackend {
+Future<void> _defaultPrepareStaging(String path) async {
+  final directory = File(path).parent.path;
+  final secureDirectory = await runBoundedCommand('chmod', ['700', directory]);
+  if (secureDirectory.exitCode != 0) {
+    throw FileSystemException('Could not secure meeting directory', directory);
+  }
+  await File(path).create(exclusive: true);
+  final chmod = await runBoundedCommand('chmod', ['600', path]);
+  if (chmod.exitCode != 0) {
+    throw FileSystemException('Could not secure meeting staging file', path);
+  }
+}
+
+class MeetingRecorderBackend implements MeetingCaptureBackend {
   MeetingRecorderBackend({
     MeetingLoopbackSource? loopback,
     FfmpegSpawner spawn = _defaultFfmpegSpawner,
-    bool Function()? hasMicPermission,
+    MeetingStagingPreparer prepareStaging = _defaultPrepareStaging,
+    Duration startupGrace = const Duration(seconds: 5),
     Duration stopGrace = const Duration(seconds: 5),
+    Duration devicePollInterval = const Duration(seconds: 2),
   }) : _loopback = loopback ?? const MeetingLoopbackSource(),
-       // ignore: prefer_initializing_formals
        _spawn = spawn,
-       // ignore: prefer_initializing_formals
-       _hasMicPermission = hasMicPermission,
-       // ignore: prefer_initializing_formals
-       _stopGrace = stopGrace;
+       _prepareStaging = prepareStaging,
+       _startupGrace = startupGrace,
+       _stopGrace = stopGrace,
+       _devicePollInterval = devicePollInterval;
 
   final MeetingLoopbackSource _loopback;
   final FfmpegSpawner _spawn;
-  final bool Function()? _hasMicPermission;
-
-  /// Per-step grace before the stop() escalation moves on (SIGINT → SIGKILL →
-  /// give-up). Short by default; injectable so tests can drive the escalation
-  /// without waiting real seconds.
+  final MeetingStagingPreparer _prepareStaging;
+  final Duration _startupGrace;
   final Duration _stopGrace;
+  final Duration _devicePollInterval;
+  final _events = StreamController<MeetingCaptureEvent>.broadcast();
 
-  /// The running ffmpeg capture, or null when idle.
   Process? _process;
-
-  /// Output WAV path of the active capture.
-  String? _outputPath;
-
-  /// Drains ffmpeg's stderr (progress/diagnostics) so the pipe never blocks the
-  /// subprocess; the tail is kept for a diagnosable failure message.
-  final List<String> _stderrTail = <String>[];
-  StreamSubscription<List<int>>? _stderrSub;
-
-  final _stateCtrl = StreamController<RecordState>.broadcast();
+  MeetingCaptureRequest? _request;
+  StreamSubscription<String>? _stdoutSub;
+  StreamSubscription<String>? _stderrSub;
+  Completer<void>? _stdoutDone;
+  Completer<void>? _stderrDone;
+  bool _terminationExpected = false;
+  bool _disposed = false;
+  final List<String> _diagnostics = [];
+  Timer? _deviceTimer;
+  Future<void>? _devicePollInFlight;
+  LinuxMeetingDevices? _devices;
+  bool _deviceLossReported = false;
 
   @override
-  Future<bool> hasPermission() async {
-    // On Linux there is no per-app mic permission prompt (PipeWire/Pulse grant
-    // at the session level), so capture is permitted by default. The hook is
-    // injectable for tests / future OSes.
-    final probe = _hasMicPermission;
-    if (probe != null) return probe();
-    return true;
+  String get backendId => 'linux-ffmpeg-pulse';
+
+  @override
+  Stream<MeetingCaptureEvent> get events => _events.stream;
+
+  @override
+  Future<MeetingCaptureCapability> probe() async {
+    final result = await _loopback.probe();
+    if (result.supported) {
+      return MeetingCaptureCapability.supported(backendId: backendId);
+    }
+    return MeetingCaptureCapability.unsupported(
+      backendId: backendId,
+      reason: result.reason ?? 'probe-failed',
+    );
   }
 
-  /// Start the mixed loopback + mic capture, writing a single WAV to [path].
-  /// The [encoder] arg is ignored — the meeting backend always produces WAV
-  /// (pcm_s16le); it exists only to satisfy the [RecorderBackend] contract.
   @override
-  Future<void> start(
-    String path, {
-    AudioEncoder encoder = AudioEncoder.wav,
-  }) async {
-    if (_process != null) {
-      throw StateError('MeetingRecorderBackend: capture already in progress');
-    }
+  Future<MeetingCapturePermission> requestPermission() async =>
+      MeetingCapturePermission.granted;
 
-    final monitor = await _loopback.resolveMonitorSource();
-    if (monitor == null) {
-      throw const MeetingCaptureUnsupportedError(
-        'no system-output monitor source available (loopback unsupported)',
-      );
+  @override
+  Future<void> start(MeetingCaptureRequest request) async {
+    if (_disposed) throw StateError('Meeting backend is disposed');
+    if (_process != null) throw StateError('Meeting capture is already active');
+    final devices = await _loopback.resolveDevices();
+    if (devices == null) {
+      throw const MeetingCaptureUnsupportedError('audio-devices-unavailable');
     }
-
-    final args = buildFfmpegArgs(monitorSource: monitor, outputPath: path);
-    final Process process;
-    try {
-      process = await _spawn('ffmpeg', args);
-    } catch (e, st) {
-      AppLog.error(LogCat.error, 'start: failed to launch ffmpeg', e, st);
-      throw MeetingCaptureUnsupportedError('failed to launch ffmpeg: $e');
-    }
-
+    await _prepareStaging(request.stagingPath);
+    final process = await _spawn(
+      'ffmpeg',
+      buildFfmpegArgs(
+        request: request,
+        monitorSource: devices.monitorSource,
+        microphoneSource: devices.microphoneSource,
+      ),
+    );
     _process = process;
-    _outputPath = path;
-    _stderrTail.clear();
-    _stderrSub = process.stderr.listen((chunk) {
-      // ffmpeg stderr is UTF-8; decode tolerantly so a chunk that splits a
-      // multi-byte sequence at the buffer boundary never throws.
-      final text = utf8.decode(chunk, allowMalformed: true);
-      _stderrTail.add(text);
-      // Bound the buffer — capture can run for the length of a meeting.
-      if (_stderrTail.length > 50) _stderrTail.removeAt(0);
+    _request = request;
+    _devices = devices;
+    _deviceLossReported = false;
+    _terminationExpected = false;
+    _diagnostics.clear();
+    _stdoutDone = Completer<void>();
+    _stderrDone = Completer<void>();
+    final systemReady = Completer<void>();
+    final microphoneReady = Completer<void>();
+    _stdoutSub = process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen((_) {}, onDone: _stdoutDone!.complete);
+    _stderrSub = process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(
+          (line) => _handleFfmpegLine(line, systemReady, microphoneReady),
+          onDone: _stderrDone!.complete,
+        );
+    unawaited(_watchUnexpectedExit(process));
+    try {
+      await Future.any<void>([
+        Future.wait([
+          systemReady.future,
+          microphoneReady.future,
+        ]).then<void>((_) {}),
+        process.exitCode.then<void>((code) {
+          throw MeetingCaptureProcessError(
+            'ffmpeg exited during start: $code ${_diagnostics.join(' ')}',
+          );
+        }),
+      ]).timeout(_startupGrace);
+    } catch (error) {
+      await _terminate(allowGraceful: false);
+      if (error is TimeoutException) {
+        throw MeetingCaptureProcessError(
+          'ffmpeg input readiness timed out '
+          '(system=${systemReady.isCompleted}, '
+          'microphone=${microphoneReady.isCompleted}): '
+          '${_diagnostics.join(' ')}',
+        );
+      }
+      rethrow;
+    }
+    _events.add(const MeetingCaptureEvent.state(MeetingCaptureState.recording));
+    _deviceTimer = Timer.periodic(_devicePollInterval, (_) {
+      if (_devicePollInFlight != null) return;
+      final poll = _pollDevices();
+      _devicePollInFlight = poll;
+      unawaited(poll.whenComplete(() => _devicePollInFlight = null));
     });
-
-    _stateCtrl.add(RecordState.record);
-    AppLog.event(
-      LogCat.action,
-      'start: meeting capture started (monitor=$monitor)',
-    );
   }
 
-  /// Not supported — see class doc. A meeting is captured straight through.
   @override
-  Future<void> pause() async {
-    throw UnsupportedError(
-      'MeetingRecorderBackend does not support pause (single-pass capture).',
-    );
+  Future<MeetingCaptureCandidate> stop() async {
+    final request = _request;
+    if (_process == null || request == null) {
+      throw StateError('No meeting capture is active');
+    }
+    final forced = await _terminate(allowGraceful: true);
+    if (forced) {
+      throw const MeetingCaptureProcessError(
+        'ffmpeg required SIGKILL and may not have finalized the artifact',
+      );
+    }
+    _events.add(const MeetingCaptureEvent.state(MeetingCaptureState.completed));
+    return MeetingCaptureCandidate(path: request.stagingPath);
   }
 
-  /// Not supported — see class doc.
   @override
-  Future<void> resume() async {
-    throw UnsupportedError(
-      'MeetingRecorderBackend does not support resume (single-pass capture).',
-    );
+  Future<void> cancel() async {
+    if (_process != null) await _terminate(allowGraceful: false);
+    _events.add(const MeetingCaptureEvent.state(MeetingCaptureState.cancelled));
   }
 
-  /// Stop the capture gracefully: ask ffmpeg to finalize the WAV (flush the
-  /// header so the file is valid), then return the path.
-  ///
-  /// Escalation (so stop() ALWAYS returns — audit #828 warning #1): a bare
-  /// `await exitCode` could hang forever if ffmpeg, spawned without a TTY, never
-  /// reads the `q` from stdin. We instead try `q`, then race exit against a
-  /// timeout and escalate SIGINT → SIGKILL, awaiting exit at each step under the
-  /// same bounded race. The final SIGKILL await is also time-boxed so a wedged
-  /// process can never pin the modal in "processing".
   @override
-  Future<String?> stop() async {
+  Future<void> dispose() async {
+    if (_disposed) return;
+    if (_process != null) await _terminate(allowGraceful: false);
+    _disposed = true;
+    await _events.close();
+  }
+
+  Future<bool> _terminate({required bool allowGraceful}) async {
     final process = _process;
-    final path = _outputPath;
-    if (process == null || path == null) {
-      throw StateError('MeetingRecorderBackend: no capture in progress');
-    }
-
-    // `q` on stdin asks ffmpeg to stop cleanly and flush the container so the
-    // WAV is well-formed.
+    if (process == null) return false;
+    _terminationExpected = true;
+    _deviceTimer?.cancel();
+    _deviceTimer = null;
     try {
-      process.stdin.write('q');
-      await process.stdin.flush();
-    } catch (e, st) {
-      AppLog.error(
-        LogCat.error,
-        'stop: ffmpeg stdin q write failed (escalation will handle)',
-        e,
-        st,
-      );
-      // stdin already closed / unavailable — escalation below handles it.
+      await _devicePollInFlight?.timeout(_stopGrace);
+    } on TimeoutException {
+      // Process termination remains authoritative if a device probe is wedged.
     }
-
-    // ffmpeg exits 0 on a clean `q` finalize; 255 is its conventional code for
-    // an interrupted-but-finalized capture. Treat both as success. Once we have
-    // to send a signal, the exit code reflects OUR intervention (e.g. 137 for
-    // SIGKILL), not ffmpeg's own status — so [escalated] makes the on-disk file
-    // the source of truth instead of the code.
-    var escalated = false;
-    var exitCode = await _awaitExitWithin(process, _stopGrace);
-    if (exitCode == null) {
-      // No clean exit on `q` — interrupt, give it the same grace, then SIGKILL.
-      escalated = true;
+    var forced = false;
+    int? exitCode;
+    if (allowGraceful) {
       process.kill(ProcessSignal.sigint);
-      exitCode = await _awaitExitWithin(process, _stopGrace);
+      exitCode = await _awaitExit(process, _stopGrace);
     }
     if (exitCode == null) {
+      process.kill(ProcessSignal.sigterm);
+      exitCode = await _awaitExit(process, _stopGrace);
+    }
+    if (exitCode == null) {
+      forced = true;
       process.kill(ProcessSignal.sigkill);
-      exitCode = await _awaitExitWithin(process, _stopGrace);
+      exitCode = await _awaitExit(process, _stopGrace);
     }
-    await _teardown();
-
-    final file = File(path);
-    final exists = await file.exists();
-    final size = exists ? await file.length() : 0;
-    final exitLabel = exitCode?.toString() ?? 'timed-out';
-    if (!exists || size == 0) {
-      throw MeetingCaptureFailedError(
-        'ffmpeg produced no audio (exit $exitLabel). ${_diagnostic()}',
+    if (exitCode == null) {
+      throw const MeetingCaptureProcessError(
+        'ffmpeg termination could not be confirmed',
       );
     }
-    // Only fail on a *known* clean-path bad exit code. If we had to escalate
-    // (SIGINT/SIGKILL), the process had already written a non-empty WAV, so we
-    // accept the file rather than discard a real capture over a signal-derived
-    // exit code (the alternative is the hang this escalation exists to kill).
-    if (!escalated && exitCode != null && exitCode != 0 && exitCode != 255) {
-      throw MeetingCaptureFailedError(
-        'ffmpeg exited $exitCode. ${_diagnostic()}',
-      );
+    await Future.wait([
+      _stdoutDone?.future ?? Future<void>.value(),
+      _stderrDone?.future ?? Future<void>.value(),
+    ]).timeout(_stopGrace);
+    await _stdoutSub?.cancel();
+    await _stderrSub?.cancel();
+    _stdoutSub = null;
+    _stderrSub = null;
+    _stdoutDone = null;
+    _stderrDone = null;
+    _process = null;
+    _request = null;
+    _devices = null;
+    if (allowGraceful && !forced && exitCode != 0 && exitCode != 255) {
+      throw MeetingCaptureProcessError('ffmpeg exited $exitCode');
     }
-    _stateCtrl.add(RecordState.stop);
-    AppLog.event(
-      LogCat.action,
-      'stop: meeting capture finalized (exit $exitLabel, escalated=$escalated, '
-      '${size}B)',
-    );
-    return path;
+    return forced;
   }
 
-  /// Await [process] exit, but no longer than [grace]; returns the exit code, or
-  /// null if the process had not exited within the window. Bounds every step of
-  /// the stop() escalation so a wedged ffmpeg can never block the caller.
-  Future<int?> _awaitExitWithin(Process process, Duration grace) async {
+  Future<int?> _awaitExit(Process process, Duration timeout) async {
     try {
-      return await process.exitCode.timeout(grace);
+      return await process.exitCode.timeout(timeout);
     } on TimeoutException {
       return null;
     }
   }
 
-  /// Cancel + discard: kill ffmpeg and delete the partial WAV.
-  @override
-  Future<void> cancel() async {
-    final process = _process;
-    final path = _outputPath;
-    AppLog.event(LogCat.action, 'cancel: kill ffmpeg + discard partial');
-    if (process != null) {
-      process.kill(ProcessSignal.sigkill);
-      try {
-        await process.exitCode;
-      } catch (e, st) {
-        AppLog.error(
-          LogCat.error,
-          'cancel: awaiting ffmpeg exit failed',
-          e,
-          st,
-        );
-        // best effort
-      }
+  Future<void> _watchUnexpectedExit(Process process) async {
+    final code = await process.exitCode;
+    if (_terminationExpected || _process != process || _disposed) return;
+    _events.add(MeetingCaptureEvent.failed(message: 'ffmpeg-exited:$code'));
+  }
+
+  Future<void> _pollDevices() async {
+    final devices = _devices;
+    if (devices == null || _terminationExpected || _deviceLossReported) return;
+    final availability = await _loopback.availability(devices);
+    if (_terminationExpected || _devices != devices || _deviceLossReported) {
+      return;
     }
-    await _teardown();
-    if (path != null) {
-      try {
-        final f = File(path);
-        if (await f.exists()) await f.delete();
-      } catch (e, st) {
-        AppLog.error(
-          LogCat.error,
-          'cancel: deleting partial WAV failed',
-          e,
-          st,
-        );
-        // best effort
-      }
+    if (availability == null) {
+      _deviceLossReported = true;
+      _events.add(
+        const MeetingCaptureEvent.failed(message: 'device-probe-failed'),
+      );
+      return;
     }
-    _stateCtrl.add(RecordState.stop);
-  }
-
-  /// ffmpeg does not stream amplitude back cheaply; emit a steady mid-level
-  /// value so the existing waveform UI animates without faking peaks. The
-  /// meeting UI treats the waveform as a "capturing" liveness indicator.
-  @override
-  Stream<Amplitude> onAmplitudeChanged(Duration interval) {
-    return Stream<Amplitude>.periodic(interval, (i) {
-      if (_process == null) return Amplitude(current: -160, max: 0);
-      // Gentle deterministic oscillation (-30..-15 dBFS) for a live look.
-      final db = -30.0 + 7.5 * (1 + sin(i / 3));
-      return Amplitude(current: db, max: 0);
-    });
-  }
-
-  @override
-  Stream<RecordState> onStateChanged() => _stateCtrl.stream;
-
-  @override
-  Future<void> dispose() async {
-    if (_process != null) {
-      try {
-        await cancel();
-      } catch (e, st) {
-        AppLog.error(LogCat.error, 'dispose: cancel failed', e, st);
-        // best effort
-      }
+    if (!availability.system) {
+      _deviceLossReported = true;
+      _events.add(
+        const MeetingCaptureEvent.unavailable(
+          source: MeetingCaptureSource.system,
+          message: 'system-device-lost',
+        ),
+      );
     }
-    await _stateCtrl.close();
+    if (!availability.microphone) {
+      _deviceLossReported = true;
+      _events.add(
+        const MeetingCaptureEvent.unavailable(
+          source: MeetingCaptureSource.microphone,
+          message: 'microphone-device-lost',
+        ),
+      );
+    }
   }
 
-  // --------------------------------------------------------------------------
-  // Helpers
-  // --------------------------------------------------------------------------
-
-  Future<void> _teardown() async {
-    await _stderrSub?.cancel();
-    _stderrSub = null;
-    _process = null;
-    _outputPath = null;
+  void _handleFfmpegLine(
+    String line,
+    Completer<void> systemReady,
+    Completer<void> microphoneReady,
+  ) {
+    final source = line.contains('[ebur128@system ')
+        ? MeetingCaptureSource.system
+        : line.contains('[ebur128@microphone ')
+        ? MeetingCaptureSource.microphone
+        : null;
+    final level = parseMeterLevel(line);
+    if (source == null || level == null) {
+      if (line.trim().isNotEmpty) {
+        _diagnostics.add(line.trim());
+        if (_diagnostics.length > 20) _diagnostics.removeAt(0);
+      }
+      return;
+    }
+    final ready = source == MeetingCaptureSource.system
+        ? systemReady
+        : microphoneReady;
+    if (!ready.isCompleted) ready.complete();
+    _events.add(MeetingCaptureEvent.level(source: source, levelDb: level));
   }
 
-  String _diagnostic() {
-    final tail = _stderrTail.join().trim();
-    if (tail.isEmpty) return '';
-    final lines = tail.split('\n');
-    final last = lines.length > 3 ? lines.sublist(lines.length - 3) : lines;
-    return last.join(' ').trim();
+  static double? parseMeterLevel(String line) {
+    const prefix = 'lavfi.astats.Overall.RMS_level=';
+    final index = line.indexOf(prefix);
+    final raw = index >= 0
+        ? line.substring(index + prefix.length).trim()
+        : RegExp(
+            r'\bM:\s*(-?(?:\d+(?:\.\d+)?|inf))',
+          ).firstMatch(line)?.group(1);
+    if (raw == null) return null;
+    if (raw == '-inf') return -160;
+    final value = double.tryParse(raw);
+    if (value == null || !value.isFinite) return null;
+    return value.clamp(-160, 0).toDouble();
   }
 
-  /// Build the ffmpeg argument vector that mixes the [monitorSource] (system
-  /// output / loopback) with the default microphone into a single WAV at
-  /// [outputPath]. Pure + static so the exact capture command is unit-testable.
-  ///
-  ///   ffmpeg -y
-  ///     -f pulse -i `<sink>.monitor`   # loopback (remote participants)
-  ///     -f pulse -i default            # microphone (me)
-  ///     -filter_complex amix=inputs=2:duration=longest:normalize=0
-  ///     -ac 1 -ar 48000 -c:a pcm_s16le
-  ///     `<outputPath>`
-  ///
-  /// `normalize=0` keeps each source at unity gain (no auto-attenuation when one
-  /// side is silent), so neither voice is dimmed. `duration=longest` keeps the
-  /// capture running until stop, not until the shorter input ends.
   static List<String> buildFfmpegArgs({
+    required MeetingCaptureRequest request,
     required String monitorSource,
-    required String outputPath,
-    String micSource = 'default',
+    required String microphoneSource,
   }) {
+    final filter = buildAudioFilter(request);
     return [
       '-hide_banner',
+      '-loglevel',
+      'info',
+      '-nostats',
       '-y',
-      '-f', 'pulse', '-i', monitorSource,
-      '-f', 'pulse', '-i', micSource,
-      '-filter_complex', 'amix=inputs=2:duration=longest:normalize=0',
-      // Mono: the mix is for transcription, not stereo playback — halves the WAV
-      // size with no transcription-relevant loss (both sources collapse to one
-      // channel that Core ingests identically).
-      '-ac', '1',
-      '-ar', '48000',
-      '-c:a', 'pcm_s16le',
-      outputPath,
+      '-thread_queue_size',
+      '512',
+      '-f',
+      'pulse',
+      '-i',
+      monitorSource,
+      '-thread_queue_size',
+      '512',
+      '-f',
+      'pulse',
+      '-i',
+      microphoneSource,
+      '-filter_complex',
+      filter,
+      '-map',
+      '[mixed]',
+      '-vn',
+      '-sn',
+      '-dn',
+      '-ac',
+      request.channels.toString(),
+      '-ar',
+      request.sampleRate.toString(),
+      '-c:a',
+      'aac',
+      '-profile:a',
+      'aac_low',
+      '-b:a',
+      request.bitrate.toString(),
+      '-movflags',
+      '+faststart',
+      '-f',
+      'ipod',
+      request.stagingPath,
     ];
+  }
+
+  static String buildAudioFilter(MeetingCaptureRequest request) {
+    final systemGain = request.mix.systemGainDb;
+    final microphoneGain = request.mix.microphoneGainDb;
+    final limiter = _dbToLinear(request.mix.limiterCeilingDb);
+    return '[0:a]aresample=${request.sampleRate}:async=1:first_pts=0,'
+        'aformat=sample_fmts=fltp:channel_layouts=mono,'
+        'asplit=2[sysmix][sysmeter];'
+        '[1:a]aresample=${request.sampleRate}:async=1:first_pts=0,'
+        'aformat=sample_fmts=fltp:channel_layouts=mono,'
+        'asplit=2[micmix][micmeter];'
+        '[sysmeter]ebur128@system=peak=true,anullsink;'
+        '[micmeter]ebur128@microphone=peak=true,anullsink;'
+        '[sysmix]volume=${systemGain}dB[sysgain];'
+        '[micmix]volume=${microphoneGain}dB[micgain];'
+        '[sysgain][micgain]amix=inputs=2:duration=longest:'
+        'dropout_transition=0:normalize=0,'
+        'alimiter=limit=$limiter:level=disabled[mixed]';
+  }
+
+  static String _dbToLinear(double db) {
+    if (db == -1) return '0.891250938';
+    throw ArgumentError.value(
+      db,
+      'limiterCeilingDb',
+      'Only -1 dB is supported',
+    );
   }
 }
 
-/// Thrown when the host cannot do loopback meeting capture (off Linux, no
-/// monitor source, ffmpeg missing/failed to launch). Parallels
-/// [AudioCaptureUnsupportedError] for the mic-only path.
-class MeetingCaptureUnsupportedError implements Exception {
-  const MeetingCaptureUnsupportedError([this.reason]);
-  final String? reason;
-  @override
-  String toString() =>
-      'MeetingCaptureUnsupportedError: '
-      'loopback meeting capture is not available on this host'
-      '${reason == null ? '' : ' ($reason)'}.';
-}
-
-/// Thrown when ffmpeg ran but failed to produce a usable WAV.
-class MeetingCaptureFailedError implements Exception {
-  const MeetingCaptureFailedError(this.reason);
+class MeetingCaptureProcessError implements Exception {
+  const MeetingCaptureProcessError(this.reason);
   final String reason;
+
   @override
-  String toString() => 'MeetingCaptureFailedError: $reason';
+  String toString() => 'MeetingCaptureProcessError: $reason';
 }

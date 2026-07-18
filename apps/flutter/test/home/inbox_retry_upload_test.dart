@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
+import 'package:matome_flutter/core/db/daos/work_queue_dao.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
@@ -21,6 +22,8 @@ import 'package:matome_flutter/features/recordings/upload_queue.dart';
 
 import '../support/item_fixtures.dart';
 import '../support/verified_upload_repository_fake.dart';
+
+final _testOwnerProvider = StateProvider<String?>((ref) => '1');
 
 /// W5 (plan #43): the manual retry affordance must RE-ENQUEUE through the same
 /// auto-retry upload queue (drainRow), not a parallel pipeline. A `failed` row
@@ -89,7 +92,9 @@ void main() {
     return ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
-        currentOwnerIdProvider.overrideWithValue('1'),
+        currentOwnerIdProvider.overrideWith(
+          (ref) => ref.watch(_testOwnerProvider),
+        ),
         recordingsRepositoryProvider.overrideWithValue(repo),
         uploadQueueProvider.overrideWith(UploadQueue.new),
       ],
@@ -203,6 +208,50 @@ void main() {
       );
     },
   );
+
+  test(
+    'manual retry after an account switch leaves prior-owner work dead',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final repo = _ToggleRepository(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
+      final (localId, _) = await seedFailedRow(db);
+      await db.itemsDao.updateItem(
+        localId,
+        '1',
+        const ItemsCompanion(syncState: Value('failed')),
+      );
+      await db.workQueueDao.enqueue(
+        ownerId: '1',
+        work: fileUploadWork(itemId: localId, sourceRevision: 1, now: 1000),
+      );
+      await (db.update(db.workQueue)
+            ..where((work) => work.itemId.equals(localId)))
+          .write(const WorkQueueCompanion(state: Value(kWorkStateDead)));
+
+      final container = containerFor(db, repo);
+      addTearDown(container.dispose);
+      final controller = container.read(inboxControllerProvider.notifier);
+      container.read(_testOwnerProvider.notifier).state = '2';
+
+      await controller.retryUpload(localId);
+
+      final work = await db.workQueueDao.getForItem(
+        localId,
+        kWorkKindFileUpload,
+      );
+      expect(work?.state, kWorkStateDead);
+      expect(
+        (await db.itemsDao.getById(localId, '1'))?.item.syncState,
+        'failed',
+      );
+    },
+  );
 }
 
 class _ToggleRepository extends RecordingsRepository
@@ -250,6 +299,8 @@ class _ToggleRepository extends RecordingsRepository
     int? workspaceId,
     int? contentLength,
     String? checksumSha256,
+    String? filename,
+    String? contentType,
   }) async {
     if (!coreUp) throw const ApiException('Core unreachable');
     createCalls++;
