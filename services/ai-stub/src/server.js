@@ -7,7 +7,7 @@ export const capabilities = {
     audio: {
       enabled: true,
       max_bytes: 2_147_483_648,
-      content_types: ["audio/wav", "audio/mpeg"],
+      content_types: ["audio/wav", "audio/mpeg", "audio/mp4", "audio/aac"],
       outputs: ["transcript", "summary", "title"]
     },
     image: {
