@@ -3,6 +3,7 @@
 /// only meeting-capture package the app imports.
 library;
 
+export 'src/channel_backend.dart';
 export 'src/meeting_capture_backend.dart';
 export 'src/meeting_capture_platform.dart';
 export 'src/process_runner.dart';

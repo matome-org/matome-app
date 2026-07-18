@@ -21,6 +21,10 @@ dependencies:
   # AOT snapshots.
   meeting_capture_linux:
     path: ../meeting_capture_linux
+  meeting_capture_windows:
+    path: ../meeting_capture_windows
+  meeting_capture_macos:
+    path: ../meeting_capture_macos
 
 dev_dependencies:
   flutter_test:
@@ -32,8 +36,7 @@ flutter:
     platforms:
       linux:
         default_package: meeting_capture_linux
-      # windows / macos are intentionally ABSENT. With no platform entry the
-      # generated registrant on those targets never references an impl, so
-      # MeetingCapturePlatform.instance stays the unsupported default. Do NOT add
-      # empty windows/macos keys — an empty key demands an implementation and
-      # fails `flutter pub get`.
+      windows:
+        default_package: meeting_capture_windows
+      macos:
+        default_package: meeting_capture_macos

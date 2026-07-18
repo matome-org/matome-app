@@ -698,6 +698,20 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  meeting_capture_macos:
+    dependency: transitive
+    description:
+      path: "packages/meeting_capture_macos"
+      relative: true
+    source: path
+    version: "0.1.0"
+  meeting_capture_windows:
+    dependency: transitive
+    description:
+      path: "packages/meeting_capture_windows"
+      relative: true
+    source: path
+    version: "0.1.0"
   meta:
     dependency: transitive
     description:
