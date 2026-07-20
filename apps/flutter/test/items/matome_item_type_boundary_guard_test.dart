@@ -25,32 +25,35 @@ void main() {
     expect(_openApiItemTypeValues(openApi), dart);
   });
 
-  test('new item types add no per-type switch sites outside canonical mapping', () {
-    final root = Directory.current;
-    final lib = Directory('${root.path}/lib');
-    final violations = <String>[];
+  test(
+    'new item types add no per-type switch sites outside canonical mapping',
+    () {
+      final root = Directory.current;
+      final lib = Directory('${root.path}/lib');
+      final violations = <String>[];
 
-    for (final entity in lib.listSync(recursive: true)) {
-      if (entity is! File || !entity.path.endsWith('.dart')) continue;
-      if (entity.path.endsWith('/features/items/matome_item_type.dart')) {
-        continue;
+      for (final entity in lib.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        if (entity.path.endsWith('/features/items/matome_item_type.dart')) {
+          continue;
+        }
+
+        final source = entity.readAsStringSync();
+        if (scattersItemTypeDispatch(source)) {
+          violations.add(entity.path.replaceFirst('${root.path}/', ''));
+        }
       }
 
-      final source = entity.readAsStringSync();
-      if (scattersItemTypeDispatch(source)) {
-        violations.add(entity.path.replaceFirst('${root.path}/', ''));
-      }
-    }
-
-    expect(
-      violations,
-      isEmpty,
-      reason:
-          'Item-type dispatch must stay in features/items/matome_item_type.dart '
-          '(use mapMatomeItemType). A hypothetical new item type should not '
-          'require scattering new switch sites.',
-    );
-  });
+      expect(
+        violations,
+        isEmpty,
+        reason:
+            'Item-type dispatch must stay in features/items/matome_item_type.dart '
+            '(use mapMatomeItemType). A hypothetical new item type should not '
+            'require scattering new switch sites.',
+      );
+    },
+  );
 
   test('the guard catches per-type switch sites that the old regex evaded', () {
     // Regression for I3: the old regex only matched `switch(...itemType...)` /
@@ -86,10 +89,7 @@ void main() {
     );
 
     // The old explicit forms are still caught…
-    expect(
-      scattersItemTypeDispatch('switch (item.itemType) { }'),
-      isTrue,
-    );
+    expect(scattersItemTypeDispatch('switch (item.itemType) { }'), isTrue);
     // …and a mere equality comparison (the tile getters) is NOT a violation:
     // it does not branch per-type, so it must stay allowed.
     expect(
@@ -97,7 +97,8 @@ void main() {
         'bool get isFile => item.itemType == MatomeItemType.file;',
       ),
       isFalse,
-      reason: 'an `== MatomeItemType.file` comparison is not scattered dispatch',
+      reason:
+          'an `== MatomeItemType.file` comparison is not scattered dispatch',
     );
     // A mediaType routing switch is a DIFFERENT discriminator and stays allowed.
     expect(
@@ -122,9 +123,7 @@ bool scattersItemTypeDispatch(String source) {
   // pattern-arrow form `MatomeItemType.file =>` or the classic `case
   // MatomeItemType.file:`. The trailing `=>`/`:` is what distinguishes a case
   // arm from an equality comparison (`== MatomeItemType.file;`).
-  final caseArm = RegExp(
-    r'MatomeItemType\.\w+\s*(=>|:)',
-  ).hasMatch(source);
+  final caseArm = RegExp(r'MatomeItemType\.\w+\s*(=>|:)').hasMatch(source);
   return explicitSwitch || caseArm;
 }
 

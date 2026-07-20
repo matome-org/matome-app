@@ -101,9 +101,6 @@ class _ScreenService extends MeetingCaptureService {
 
   @override
   Future<void> cancel() async {}
-
-  @override
-  Future<void> dispose() => super.dispose();
 }
 
 void main() {

@@ -84,7 +84,6 @@ Future<void> _seed(
     db,
     id: '5',
     title: 'Standup',
-    localPath: '',
     createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     notes: notes,
     transcript: transcript,

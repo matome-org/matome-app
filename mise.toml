@@ -216,6 +216,14 @@ exec flutter run -d "$DEV" \
   --dart-define-from-file=feature_flags.json
 """
 
+[tasks."flutter-e2e-linux"]
+description = "Run the product E2E matrix against the real Linux desktop target"
+run = "apps/flutter/tool/run_e2e_linux.sh"
+
+[tasks."flutter-e2e-web"]
+description = "Run the product E2E matrix against Chromium via WebDriver"
+run = "apps/flutter/tool/run_e2e_web.sh"
+
 [tasks.storybook]
 description = "Run the isolated Flutter Widgetbook design catalog on Chromium"
 run = """
@@ -290,7 +298,7 @@ flutter test --dart-define=ff.newNavShell=false $NAV_SUITE
 # rots as later waves wire effective-space resolution, loose capture, inbox
 # behaviour and sync gating behind this single flag. The lane file self-skips
 # the wrong-build group, so each invocation proves exactly its reality.
-LFS_SUITE="test/core/config/local_first_spaces_flag_test.dart test/home/loose_import_test.dart test/recording/loose_recording_test.dart test/home/inbox_effective_view_test.dart test/home/inbox_hero_collision_test.dart test/spaces/sync_policy_test.dart test/recordings/upload_queue_sync_gate_test.dart test/spaces/space_promotion_test.dart test/matome/matome_sync_pushfiled_gate_test.dart test/home/file_into_space_test.dart test/features/files/files_scope_partition_test.dart"
+LFS_SUITE="test/core/config/local_first_spaces_flag_test.dart test/home/media_ingest_pipeline_test.dart test/home/inbox_effective_view_test.dart test/home/inbox_hero_collision_test.dart test/spaces/sync_policy_test.dart test/matome/matome_sync_pushfiled_gate_test.dart test/home/file_into_space_test.dart test/features/files/files_scope_partition_test.dart"
 echo "── local-first-spaces lane: ff.localFirstSpaces=false (OFF / shipped reality) ──"
 flutter test --dart-define=ff.localFirstSpaces=false $LFS_SUITE
 echo "── local-first-spaces lane: ff.localFirstSpaces=true (ON / future-wave reality) ──"

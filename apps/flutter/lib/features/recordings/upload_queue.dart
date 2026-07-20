@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:matome_vault/matome_vault.dart';
 
 import '../../core/config/feature_flags.dart';
 import '../../core/db/app_database.dart';
@@ -29,21 +29,6 @@ import 'upload_descriptor.dart';
 
 typedef ProcessingEligibility = bool Function(ItemWithPayload item);
 
-Future<void> deleteAudioFile(String audioFilePath) async {
-  if (audioFilePath.isEmpty) return;
-  try {
-    final file = File(audioFilePath);
-    if (await file.exists()) await file.delete();
-  } catch (error, stack) {
-    AppLog.error(
-      LogCat.upload,
-      'deleteAudioFile: best-effort delete failed',
-      error,
-      stack,
-    );
-  }
-}
-
 /// Single-flight device executor backed by Drift's one durable [WorkQueue]
 /// table. The current file-upload operation persists every restart boundary and
 /// finishes as soon as Core accepts processing; Core/Oban own AI execution and
@@ -64,9 +49,9 @@ class UploadQueue {
        _shouldProcess = shouldProcess ?? _defaultProcessingEligibility,
        _configRevision =
            configRevision ?? (() => _ref.read(systemPolicyProvider).revision),
-       _leaseOwner =
-           'device-${DateTime.now().microsecondsSinceEpoch}-'
-           '${Random().nextInt(1 << 32)}';
+        _leaseOwner =
+            'device-${DateTime.now().microsecondsSinceEpoch}-'
+            '${Random().nextInt(0x100000000)}';
 
   final Ref _ref;
   final DateTime Function() _clock;
@@ -122,6 +107,7 @@ class UploadQueue {
     final ownerId = _ref.read(currentOwnerIdProvider);
     if (ownerId == null) return;
     await _work.makeDue(ownerId: ownerId, kind: kWorkKindFileUpload, now: _now);
+    await _work.makeDue(ownerId: ownerId, kind: kWorkKindFileDelete, now: _now);
     await _work.makeDue(ownerId: ownerId, kind: kWorkKindTextCreate, now: _now);
     await _work.makeDue(ownerId: ownerId, kind: kWorkKindTextUpdate, now: _now);
     await _work.makeDue(ownerId: ownerId, kind: kWorkKindTextDelete, now: _now);
@@ -169,6 +155,7 @@ class UploadQueue {
         excludedIds: visited,
         kinds: const {
           kWorkKindFileUpload,
+          kWorkKindFileDelete,
           kWorkKindTextCreate,
           kWorkKindTextUpdate,
           kWorkKindTextDelete,
@@ -182,13 +169,16 @@ class UploadQueue {
   }
 
   Future<void> _ensureWork(ItemWithPayload item) async {
-    if (item.file == null) return;
+    final blobId = item.file?.blobId;
+    if (blobId == null) return;
     final existing = await _work.getForItem(item.id, kWorkKindFileUpload);
     if (existing != null) return;
     await _work.enqueueOrIgnore(
       ownerId: item.item.ownerId,
       work: fileUploadWork(
         itemId: item.id,
+        blobId: blobId,
+        blobRevision: item.item.sourceRevision,
         sourceRevision: item.item.sourceRevision,
         now: _now,
         configRevision: _configRevision(),
@@ -207,13 +197,22 @@ class UploadQueue {
   }
 
   Future<void> _execute(WorkQueueRow work, String ownerId) async {
+    if (work.kind == kWorkKindFileDelete) {
+      await _executeFileDelete(work, ownerId);
+      return;
+    }
     if (work.kind != kWorkKindFileUpload) {
       await _executeText(work, ownerId);
       return;
     }
+    VaultBlobReadLease? blobLease;
     try {
       var item = await _items.getById(work.itemId, ownerId);
       if (item == null || item.file == null) {
+        throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+      }
+      if (work.blobId != item.file!.blobId ||
+          work.blobRevision != item.item.sourceRevision) {
         throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
       }
 
@@ -222,6 +221,7 @@ class UploadQueue {
         await _block(work, hold);
         return;
       }
+      final lease = blobLease = await _acquireBlob(item);
 
       var stage = work.stage;
       UploadDescriptor? upload;
@@ -300,16 +300,20 @@ class UploadQueue {
             stage = await _nextAfterUpload(work, item);
           } else {
             final request = upload.request;
-            final file = await _localFile(item);
             if (request == null || upload.mode != UploadMode.single) {
               throw const _PermanentWorkFailure(kWorkErrorContentRejected);
             }
             if (!await _renew(work)) return;
-            final etag = await _repo.uploadFileRange(
+            final read = await lease.openAuthenticatedRead(
+              range: PlaintextRange(
+                start: 0,
+                endExclusive: item.file!.byteSize,
+              ),
+            );
+            final etag = await _repo.uploadStreamRange(
               request,
-              file,
-              start: 0,
-              endExclusive: item.file!.byteSize,
+              read.bytes,
+              item.file!.byteSize,
             );
             await _persistUploadContext(item, ownerId, upload, etag: etag);
             if (!await _advance(work, kWorkStageCompleteUpload, 0.82)) return;
@@ -331,7 +335,6 @@ class UploadQueue {
           if (upload.mode != UploadMode.multipart || upload.partSize == null) {
             throw const _PermanentWorkFailure(kWorkErrorContentRejected);
           }
-          final file = await _localFile(item);
           final accepted = <int, UploadPart>{
             for (final part in upload.acceptedParts) part.partNumber: part,
           };
@@ -344,7 +347,7 @@ class UploadQueue {
           for (final partNumber in upload.missingParts) {
             final start = (partNumber - 1) * upload.partSize!;
             final end = min(start + upload.partSize!, item.file!.byteSize);
-            final checksum = await _checksumRange(file, start, end);
+            final checksum = await _checksumRange(lease, start, end);
             final part = await _repo.presignUploadPart(
               upload.uploadId,
               partNumber: partNumber,
@@ -355,11 +358,13 @@ class UploadQueue {
               throw const _PermanentWorkFailure(kWorkErrorContentRejected);
             }
             if (!await _renew(work)) return;
-            final etag = await _repo.uploadFileRange(
+            final read = await lease.openAuthenticatedRead(
+              range: PlaintextRange(start: start, endExclusive: end),
+            );
+            final etag = await _repo.uploadStreamRange(
               part.request,
-              file,
-              start: start,
-              endExclusive: end,
+              read.bytes,
+              end - start,
             );
             accepted[partNumber] = UploadPart(
               partNumber: partNumber,
@@ -459,6 +464,60 @@ class UploadQueue {
       AppLog.error(
         LogCat.upload,
         'durable work failed kind=${work.kind} stage=${work.stage}',
+        error,
+        stack,
+      );
+      await _handleFailure(work, error, ownerId);
+    } finally {
+      await blobLease?.dispose();
+    }
+  }
+
+  Future<void> _executeFileDelete(WorkQueueRow work, String ownerId) async {
+    try {
+      var item = await _items.getByIdIncludingDeleted(work.itemId, ownerId);
+      if (item == null) {
+        await _work.complete(work.id, leaseOwner: _leaseOwner, now: _now);
+        return;
+      }
+      if (!item.item.isDeleted || item.file == null) {
+        throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+      }
+      final blobId = item.file!.blobId;
+      if (blobId == null || blobId != work.blobId) {
+        throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
+      }
+
+      var stage = work.stage;
+      if (stage == kWorkStagePrepareDelete) {
+        await _ref
+            .read(mediaBlobStoreProvider)
+            .prepareDelete(VaultBlobId(blobId));
+        if (!await _advance(work, kWorkStageDeleteRemote, 0.25)) return;
+        stage = kWorkStageDeleteRemote;
+      }
+      if (stage == kWorkStageDeleteRemote) {
+        final coreId = item.coreId;
+        if (coreId != null) await _repo.deleteRecording(coreId);
+        if (!await _advance(work, kWorkStageDeleteCiphertext, 0.5)) return;
+        stage = kWorkStageDeleteCiphertext;
+        item = (await _items.getByIdIncludingDeleted(work.itemId, ownerId))!;
+      }
+      if (stage == kWorkStageDeleteCiphertext) {
+        // Active upload/playback/preview leases make this fail retryably. The
+        // tombstoned Item remains hidden while the durable executor waits.
+        await _ref.read(mediaBlobStoreProvider).delete(VaultBlobId(blobId));
+        if (!await _advance(work, kWorkStageDeleteMetadata, 0.9)) return;
+        stage = kWorkStageDeleteMetadata;
+      }
+      if (stage == kWorkStageDeleteMetadata) {
+        await _items.completeFileDelete(itemId: item.id, ownerId: ownerId);
+        await _inbox.reloadFromLocal();
+      }
+    } catch (error, stack) {
+      AppLog.error(
+        LogCat.upload,
+        'durable file delete failed stage=${work.stage}',
         error,
         stack,
       );
@@ -663,8 +722,8 @@ class UploadQueue {
 
   Future<RecordingCreateResult> _createRemote(ItemWithPayload item) async {
     final coreMatomeId = await _requireCoreParent(item);
-    final localPath = item.localPath;
-    if (localPath == null || localPath.isEmpty) {
+    final file = item.file;
+    if (file == null || file.blobId == null || file.byteSize <= 0) {
       throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
     }
     return _repo.createItemRecording(
@@ -673,7 +732,7 @@ class UploadQueue {
       clientId: item.id,
       durationSeconds: item.durationSeconds ?? 0,
       mediaType: item.mediaType,
-      contentLength: await _byteSizeOf(localPath),
+      contentLength: file.byteSize,
       checksumSha256: item.file?.checksumSha256,
       filename: item.file?.filename,
       contentType: item.file?.contentType,
@@ -681,30 +740,12 @@ class UploadQueue {
   }
 
   Future<void> _persistFileFacts(ItemWithPayload item, String ownerId) async {
-    final file = await _localFile(item, requireKnownLength: false);
-    final before = await file.stat();
-    if (before.size <= 0) {
-      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
-    }
-    final checksum = await _checksumRange(file, 0, before.size);
-    final after = await file.stat();
-    if (after.size != before.size || after.modified != before.modified) {
-      throw const _BlockedWork(kWorkBlockCore);
-    }
-    final changed = await _items.updateFile(
-      item.id,
-      ownerId,
-      FileBlobsCompanion(
-        byteSize: Value(after.size),
-        checksumSha256: Value(checksum),
-        uploadState: const Value('pending'),
-        uploadedAt: const Value(null),
-        multipartContext: const Value(null),
-        updatedAt: Value(_now),
-        isDirty: const Value(true),
-      ),
-    );
-    if (changed != 1) {
+    final file = item.file;
+    if (file == null ||
+        file.blobId == null ||
+        file.blobState != 'ready' ||
+        file.byteSize <= 0 ||
+        file.checksumSha256 == null) {
       throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
     }
   }
@@ -727,30 +768,35 @@ class UploadQueue {
     );
   }
 
-  Future<File> _localFile(
-    ItemWithPayload item, {
-    bool requireKnownLength = true,
-  }) async {
-    final path = item.localPath;
-    if (path == null || path.isEmpty) {
+  Future<VaultBlobReadLease> _acquireBlob(ItemWithPayload item) async {
+    final file = item.file;
+    final rawBlobId = file?.blobId;
+    if (file == null || rawBlobId == null || rawBlobId.isEmpty) {
       throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
     }
-    final file = File(path);
-    if (!await file.exists()) {
+    final store = _ref.read(mediaBlobStoreProvider);
+    final blobId = VaultBlobId(rawBlobId);
+    final stat = await store.stat(blobId);
+    if (stat.state != VaultBlobState.ready ||
+        stat.plaintextLength != file.byteSize ||
+        stat.plaintextSha256 != file.checksumSha256) {
       throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
     }
-    if (requireKnownLength && await file.length() != item.file?.byteSize) {
-      throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
-    }
-    return file;
+    return store.acquireReadLease(blobId);
   }
 
-  Future<String> _checksumRange(File file, int start, int endExclusive) async {
+  Future<String> _checksumRange(
+    VaultBlobReadLease lease,
+    int start,
+    int endExclusive,
+  ) async {
     if (start < 0 || endExclusive <= start) {
       throw const _PermanentWorkFailure(kWorkErrorInvalidLocalData);
     }
-    return (await sha256.bind(file.openRead(start, endExclusive)).first)
-        .toString();
+    final read = await lease.openAuthenticatedRead(
+      range: PlaintextRange(start: start, endExclusive: endExclusive),
+    );
+    return (await sha256.bind(read.bytes).first).toString();
   }
 
   Future<void> _persistUploadContext(
@@ -929,7 +975,12 @@ class UploadQueue {
         }.contains(current.stage)) {
       await _advance(work, kWorkStageRequestUpload, 0.2);
     }
-    final failure = _classify(error);
+    final failure =
+        work.kind == kWorkKindFileDelete &&
+            !(error is ApiException && error.isUnauthorized) &&
+            error is! _PermanentWorkFailure
+        ? const _WorkFailure(kWorkErrorTransport, retryable: true)
+        : _classify(error);
     if (failure.blocked) {
       await _block(work, failure.blockedReason!);
       return;
@@ -943,13 +994,17 @@ class UploadQueue {
       errorCode: failure.code,
       blockedReason: failure.blockedReason,
       availableAt: availableAt,
-      maxAttempts: failure.retryable ? maxAttempts : nextAttempt,
+      maxAttempts: work.kind == kWorkKindFileDelete
+          ? 0x7fffffff
+          : (failure.retryable ? maxAttempts : nextAttempt),
       now: _now,
     );
     if (!changed) return;
 
     final updated = await _work.getById(work.id);
-    if (updated?.state == kWorkStateDead) {
+    if (work.kind == kWorkKindFileDelete) {
+      return;
+    } else if (updated?.state == kWorkStateDead) {
       await _items.updateItem(
         work.itemId,
         ownerId,
@@ -977,6 +1032,10 @@ class UploadQueue {
       return _WorkFailure(error.code, retryable: false);
     }
     if (error is ApiException) {
+      if (error.code == 'streaming_upload_unsupported' ||
+          error.code == 'invalid_local_data') {
+        return const _WorkFailure(kWorkErrorContentRejected, retryable: false);
+      }
       if (error.isUnauthorized) {
         return const _WorkFailure(
           kWorkErrorUnauthorized,
@@ -1007,6 +1066,33 @@ class UploadQueue {
         return const _WorkFailure(kWorkErrorServerUnavailable, retryable: true);
       }
       return const _WorkFailure(kWorkErrorContentRejected, retryable: false);
+    }
+    if (error is VaultFailure) {
+      return switch (error.code) {
+        VaultFailureCode.locked ||
+        VaultFailureCode.keyUnavailable => const _WorkFailure(
+          kWorkErrorUnauthorized,
+          retryable: false,
+          blocked: true,
+          blockedReason: kWorkBlockSignedOut,
+        ),
+        VaultFailureCode.backendUnavailable ||
+        VaultFailureCode.crashRecoveryRequired => const _WorkFailure(
+          kWorkErrorUnexpected,
+          retryable: true,
+        ),
+        VaultFailureCode.blobMissing ||
+        VaultFailureCode.blobNotReady ||
+        VaultFailureCode.corruptCiphertext ||
+        VaultFailureCode.wrongKey ||
+        VaultFailureCode.unsupportedFormat ||
+        VaultFailureCode.invalidRange ||
+        VaultFailureCode.leaseExpired ||
+        VaultFailureCode.quotaExceeded => const _WorkFailure(
+          kWorkErrorInvalidLocalData,
+          retryable: false,
+        ),
+      };
     }
     return const _WorkFailure(kWorkErrorUnexpected, retryable: true);
   }
@@ -1051,15 +1137,6 @@ class UploadQueue {
       ),
     );
     await _inbox.reloadFromLocal();
-  }
-
-  Future<int?> _byteSizeOf(String path) async {
-    try {
-      final file = File(path);
-      return await file.exists() ? file.length() : null;
-    } catch (_) {
-      return null;
-    }
   }
 
   int get _now => _clock().millisecondsSinceEpoch;

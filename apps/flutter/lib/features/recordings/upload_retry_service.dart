@@ -149,6 +149,8 @@ class UploadRetryService {
   }
 
   /// Stop polling and release the timer. Idempotent.
+  void stop() => dispose();
+
   void dispose() {
     AppLog.event(LogCat.upload, 'dispose: retry service stopped');
     _timer?.cancel();

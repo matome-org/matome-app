@@ -113,16 +113,18 @@ void main() {
       expect(find.text(t.files.emptyBody), findsOneWidget);
     });
 
-    testWidgets('size is never fabricated — absent size shows a dash',
-        (tester) async {
+    testWidgets('size is never fabricated — absent size shows a dash', (
+      tester,
+    ) async {
       await _pump(tester, files: [_files[0]]);
       // f1 has a null sizeLabel (#1461 schema gap) and tagged contacts, so the
       // only dash on screen is the Size cell — never a fabricated size.
       expect(find.text(t.files.noSize), findsOneWidget);
     });
 
-    testWidgets('compact layout below the breakpoint shows the sort selector',
-        (tester) async {
+    testWidgets('compact layout below the breakpoint shows the sort selector', (
+      tester,
+    ) async {
       await _pump(tester, width: 380);
       expect(find.text(t.files.sortBy.toUpperCase()), findsOneWidget);
       expect(
@@ -134,38 +136,46 @@ void main() {
   });
 
   group('Unfiled / Inbox states (DR-003)', () {
-    testWidgets('a fully-filed file shows its matome + space names',
-        (tester) async {
+    testWidgets('a fully-filed file shows its matome + space names', (
+      tester,
+    ) async {
       await _pump(tester, files: [_files[0]]);
       expect(find.text('Client X — weekly sync'), findsOneWidget);
       expect(find.text('Marketing'), findsOneWidget);
     });
 
-    testWidgets('a matome-less, space-less file shows BOTH Unfiled and Inbox',
-        (tester) async {
+    testWidgets('a matome-less, space-less file shows BOTH Unfiled and Inbox', (
+      tester,
+    ) async {
       await _pump(tester, files: [_files[1]]);
       expect(find.text(t.files.unfiled), findsOneWidget);
       expect(find.text(t.matome.placeInbox), findsOneWidget);
     });
 
-    testWidgets('Unfiled but in a space: Unfiled chip + the space name (not Inbox)',
-        (tester) async {
-      await _pump(tester, files: [_files[2]]);
-      expect(find.text(t.files.unfiled), findsOneWidget);
-      expect(find.text('Personal'), findsOneWidget);
-      expect(find.text(t.matome.placeInbox), findsNothing);
-    });
+    testWidgets(
+      'Unfiled but in a space: Unfiled chip + the space name (not Inbox)',
+      (tester) async {
+        await _pump(tester, files: [_files[2]]);
+        expect(find.text(t.files.unfiled), findsOneWidget);
+        expect(find.text('Personal'), findsOneWidget);
+        expect(find.text(t.matome.placeInbox), findsNothing);
+      },
+    );
   });
 
   group('Sorting', () {
-    testWidgets('tapping the Name header sorts A→Z and emits onSort',
-        (tester) async {
+    testWidgets('tapping the Name header sorts A→Z and emits onSort', (
+      tester,
+    ) async {
       FileSortKey? sortKey;
       bool? ascending;
-      await _pump(tester, onSort: (k, a) {
-        sortKey = k;
-        ascending = a;
-      });
+      await _pump(
+        tester,
+        onSort: (k, a) {
+          sortKey = k;
+          ascending = a;
+        },
+      );
       await tester.tap(find.text(t.files.colName.toUpperCase()));
       await tester.pumpAndSettle();
       expect(sortKey, FileSortKey.name);
@@ -174,32 +184,38 @@ void main() {
   });
 
   group('Selection → bulk bar', () {
-    testWidgets('selecting a row reveals the bulk bar and emits the selection',
-        (tester) async {
-      Set<String>? selection;
-      await _pump(tester, onSelectionChanged: (s) => selection = s);
+    testWidgets(
+      'selecting a row reveals the bulk bar and emits the selection',
+      (tester) async {
+        Set<String>? selection;
+        await _pump(tester, onSelectionChanged: (s) => selection = s);
 
-      expect(find.byKey(const ValueKey('files-bulk-bar')), findsNothing);
-      await tester.tap(find.byType(Checkbox).at(1)); // first data row checkbox
-      await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('files-bulk-bar')), findsNothing);
+        await tester.tap(
+          find.byType(Checkbox).at(1),
+        ); // first data row checkbox
+        await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('files-bulk-bar')), findsOneWidget);
-      expect(selection, isNotNull);
-      expect(selection!.length, 1);
-    });
+        expect(find.byKey(const ValueKey('files-bulk-bar')), findsOneWidget);
+        expect(selection, isNotNull);
+        expect(selection!.length, 1);
+      },
+    );
 
-    testWidgets('select-all header checkbox selects every file', (tester) async {
+    testWidgets('select-all header checkbox selects every file', (
+      tester,
+    ) async {
       await _pump(tester);
       await tester.tap(find.byType(Checkbox).first); // header tristate
       await tester.pumpAndSettle();
-      expect(
-          find.text(t.files.selected(n: _files.length)), findsOneWidget);
+      expect(find.text(t.files.selected(n: _files.length)), findsOneWidget);
     });
   });
 
   group('Destructive ops: confirm + undo', () {
-    testWidgets('bulk delete confirms, removes the file, then offers undo',
-        (tester) async {
+    testWidgets('bulk delete confirms, removes the file, then offers undo', (
+      tester,
+    ) async {
       FileAction? bulkAction;
       Set<String>? bulkIds;
       await _pump(

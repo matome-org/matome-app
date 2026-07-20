@@ -14,8 +14,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'argon2id.dart' show deriveArgon2id;
-import 'envelope.dart'
-    show PayloadType, WrappedEnvelope, WrapperType, wrapKey;
+import 'envelope.dart' show PayloadType, WrappedEnvelope, WrapperType, wrapKey;
 import 'kdf_params.dart' show Argon2idParams, kArgon2SaltLen;
 import 'key_material.dart' show Dek, Kek, secureRandomBytes;
 import 'key_unwrapper.dart' show KeyUnwrapperUnwrap;
@@ -129,7 +128,8 @@ Future<RecoveryResetResult> resetPasswordWithRecoveryCode({
   // themselves. Must never be set outside test code — mirrors the
   // `timerFactory`/`dekSource` injection pattern already used in
   // `dek_session_guard.dart`/`inbox_upload.dart`.
-  @visibleForTesting Future<void> Function(Dek dek)? debugFailAfterRecoveryUnwrap,
+  @visibleForTesting
+  Future<void> Function(Dek dek)? debugFailAfterRecoveryUnwrap,
 }) async {
   final unwrapper = RecoveryKeyUnwrapper(
     recoveryCode: enteredCode,

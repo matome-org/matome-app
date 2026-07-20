@@ -42,7 +42,6 @@ Future<void> _seedItem(
     db,
     id: id,
     title: 'Rec',
-    localPath: '/tmp/$id.m4a',
     createdAt: createdAt,
     matomeId: matomeId,
   );

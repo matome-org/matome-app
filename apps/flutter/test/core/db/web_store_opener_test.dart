@@ -23,56 +23,61 @@ Uint8List _salt16(int seed) =>
 
 void main() {
   group('WebStoreOpener.open — cold start', () {
-    test('fresh install (no persisted blob yet): unwraps the DEK but '
-        'reports plaintextImage == null (never fabricates an empty image)',
-        () async {
-      const password = 'first ever login on this browser';
-      final saltEnc = _salt16(1);
-      final dek = Dek.generate();
-      final wrappedDekPw = await wrapKey(
-        plaintext: dek.bytes,
-        wrappingKey: await _kekFor(password, saltEnc),
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
+    test(
+      'fresh install (no persisted blob yet): unwraps the DEK but '
+      'reports plaintextImage == null (never fabricates an empty image)',
+      () async {
+        const password = 'first ever login on this browser';
+        final saltEnc = _salt16(1);
+        final dek = Dek.generate();
+        final wrappedDekPw = await wrapKey(
+          plaintext: dek.bytes,
+          wrappingKey: await _kekFor(password, saltEnc),
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
 
-      final opener = WebStoreOpener(blobStore: InMemoryBlobStore());
-      final result = await opener.open(
-        unwrapper: PasswordKeyUnwrapper(password: password, saltEnc: saltEnc),
-        wrappedDekPw: wrappedDekPw,
-      );
+        final opener = WebStoreOpener(blobStore: InMemoryBlobStore());
+        final result = await opener.open(
+          unwrapper: PasswordKeyUnwrapper(password: password, saltEnc: saltEnc),
+          wrappedDekPw: wrappedDekPw,
+        );
 
-      expect(result.plaintextImage, isNull);
-      expect(result.dek.bytes, dek.bytes);
-    });
+        expect(result.plaintextImage, isNull);
+        expect(result.dek.bytes, dek.bytes);
+      },
+    );
 
-    test('returning user: correct password decrypts the persisted image',
-        () async {
-      const password = 'correct horse battery staple';
-      final saltEnc = _salt16(2);
-      final dek = Dek.generate();
-      final wrappedDekPw = await wrapKey(
-        plaintext: dek.bytes,
-        wrappingKey: await _kekFor(password, saltEnc),
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
+    test(
+      'returning user: correct password decrypts the persisted image',
+      () async {
+        const password = 'correct horse battery staple';
+        final saltEnc = _salt16(2);
+        final dek = Dek.generate();
+        final wrappedDekPw = await wrapKey(
+          plaintext: dek.bytes,
+          wrappingKey: await _kekFor(password, saltEnc),
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
 
-      final blobStore = InMemoryBlobStore();
-      final plaintextImage =
-          Uint8List.fromList(utf8.encode('SQLite format 3 fake db bytes'));
-      await blobStore.write(
-        await encryptDbImage(plaintext: plaintextImage, dek: dek.bytes),
-      );
+        final blobStore = InMemoryBlobStore();
+        final plaintextImage = Uint8List.fromList(
+          utf8.encode('SQLite format 3 fake db bytes'),
+        );
+        await blobStore.write(
+          await encryptDbImage(plaintext: plaintextImage, dek: dek.bytes),
+        );
 
-      final opener = WebStoreOpener(blobStore: blobStore);
-      final result = await opener.open(
-        unwrapper: PasswordKeyUnwrapper(password: password, saltEnc: saltEnc),
-        wrappedDekPw: wrappedDekPw,
-      );
+        final opener = WebStoreOpener(blobStore: blobStore);
+        final result = await opener.open(
+          unwrapper: PasswordKeyUnwrapper(password: password, saltEnc: saltEnc),
+          wrappedDekPw: wrappedDekPw,
+        );
 
-      expect(result.plaintextImage, plaintextImage);
-    });
+        expect(result.plaintextImage, plaintextImage);
+      },
+    );
 
     test('fails closed: wrong password throws and does NOT open an empty '
         'store (no fallback branch)', () async {
@@ -101,45 +106,48 @@ void main() {
       );
 
       await expectLater(
-        () => opener.open(
-          unwrapper: wrongUnwrapper,
-          wrappedDekPw: wrappedDekPw,
-        ),
+        () =>
+            opener.open(unwrapper: wrongUnwrapper, wrappedDekPw: wrappedDekPw),
         throwsA(isA<EnvelopeTamperException>()),
       );
     });
 
-    test('fails closed: a corrupted persisted blob throws (even with the '
-        'correct password) — never silently drops to an empty database',
-        () async {
-      const password = 'right password 2';
-      final saltEnc = _salt16(4);
-      final dek = Dek.generate();
-      final wrappedDekPw = await wrapKey(
-        plaintext: dek.bytes,
-        wrappingKey: await _kekFor(password, saltEnc),
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
+    test(
+      'fails closed: a corrupted persisted blob throws (even with the '
+      'correct password) — never silently drops to an empty database',
+      () async {
+        const password = 'right password 2';
+        final saltEnc = _salt16(4);
+        final dek = Dek.generate();
+        final wrappedDekPw = await wrapKey(
+          plaintext: dek.bytes,
+          wrappingKey: await _kekFor(password, saltEnc),
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
 
-      final blobStore = InMemoryBlobStore();
-      final cipher = await encryptDbImage(
-        plaintext: Uint8List.fromList(utf8.encode('real data')),
-        dek: dek.bytes,
-      );
-      cipher[cipher.length - 1] ^= 0xff; // corrupt the last tag byte
-      await blobStore.write(cipher);
+        final blobStore = InMemoryBlobStore();
+        final cipher = await encryptDbImage(
+          plaintext: Uint8List.fromList(utf8.encode('real data')),
+          dek: dek.bytes,
+        );
+        cipher[cipher.length - 1] ^= 0xff; // corrupt the last tag byte
+        await blobStore.write(cipher);
 
-      final opener = WebStoreOpener(blobStore: blobStore);
+        final opener = WebStoreOpener(blobStore: blobStore);
 
-      await expectLater(
-        () => opener.open(
-          unwrapper: PasswordKeyUnwrapper(password: password, saltEnc: saltEnc),
-          wrappedDekPw: wrappedDekPw,
-        ),
-        throwsA(isA<DbImageDecryptException>()),
-      );
-    });
+        await expectLater(
+          () => opener.open(
+            unwrapper: PasswordKeyUnwrapper(
+              password: password,
+              saltEnc: saltEnc,
+            ),
+            wrappedDekPw: wrappedDekPw,
+          ),
+          throwsA(isA<DbImageDecryptException>()),
+        );
+      },
+    );
   });
 
   group('WebStoreOpener.persist', () {
@@ -177,7 +185,8 @@ void main() {
 }
 
 Future<Uint8List> _kekFor(String password, Uint8List saltEnc) {
-  return PasswordKeyUnwrapper(password: password, saltEnc: saltEnc)
-      .deriveKEK()
-      .then((kek) => kek.bytes);
+  return PasswordKeyUnwrapper(
+    password: password,
+    saltEnc: saltEnc,
+  ).deriveKEK().then((kek) => kek.bytes);
 }

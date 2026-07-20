@@ -104,7 +104,11 @@ void main() {
 
     test('empty list yields no sections', () {
       expect(
-        groupMatomesByDate([], todayLabel: 'Today', yesterdayLabel: 'Yesterday'),
+        groupMatomesByDate(
+          [],
+          todayLabel: 'Today',
+          yesterdayLabel: 'Yesterday',
+        ),
         isEmpty,
       );
     });

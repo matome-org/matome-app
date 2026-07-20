@@ -19,8 +19,7 @@ void main() {
       expect(a.rawBytes, isNot(equals(b.rawBytes)));
     });
 
-    test('formatted string uses Crockford Base32 grouped in 4-char blocks',
-        () {
+    test('formatted string uses Crockford Base32 grouped in 4-char blocks', () {
       final code = RecoveryCode.generate();
       final formatted = code.formatted;
       final groups = formatted.split('-');
@@ -30,8 +29,11 @@ void main() {
       expect(groups.last.length, 2);
       const crockfordAlphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
       for (final ch in formatted.replaceAll('-', '').split('')) {
-        expect(crockfordAlphabet.contains(ch), isTrue,
-            reason: '$ch is not a valid Crockford Base32 character');
+        expect(
+          crockfordAlphabet.contains(ch),
+          isTrue,
+          reason: '$ch is not a valid Crockford Base32 character',
+        );
       }
       // Ambiguous characters must never appear.
       for (final banned in ['I', 'L', 'O', 'U']) {

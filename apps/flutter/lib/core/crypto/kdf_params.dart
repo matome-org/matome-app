@@ -150,14 +150,14 @@ class Argon2idParams {
   }
 
   Map<String, dynamic> toJson() => {
-        'profile': profile,
-        'algorithm': algorithm,
-        'version': version,
-        'memory_kib': memoryKib,
-        'iterations': iterations,
-        'parallelism': parallelism,
-        'output_len': outputLen,
-      };
+    'profile': profile,
+    'algorithm': algorithm,
+    'version': version,
+    'memory_kib': memoryKib,
+    'iterations': iterations,
+    'parallelism': parallelism,
+    'output_len': outputLen,
+  };
 
   @override
   bool operator ==(Object other) =>
@@ -172,14 +172,14 @@ class Argon2idParams {
 
   @override
   int get hashCode => Object.hash(
-        profile,
-        algorithm,
-        version,
-        memoryKib,
-        iterations,
-        parallelism,
-        outputLen,
-      );
+    profile,
+    algorithm,
+    version,
+    memoryKib,
+    iterations,
+    parallelism,
+    outputLen,
+  );
 
   @override
   String toString() => 'Argon2idParams($profile)';

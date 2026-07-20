@@ -1,16 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:matome_vault/matome_vault.dart';
 
 import '../../core/audio/audio_playback.dart';
+import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../i18n/strings.g.dart';
 import 'details_controller.dart';
 
 /// Compact audio player for the Details screen (S2): a play/pause button, a
 /// scrubbable progress bar, current position / total duration and the file size
-/// when known. Loads from a local file path or a Core presigned URL via
+/// when known. Loads from a revocable Vault lease or a Core presigned URL via
 /// [AudioSource]. Mirrors the apps/mobile Details player (play/pause + progress
 /// + time + file size) using a Material slider in place of the RN waveform.
-class AudioPlayerBar extends StatefulWidget {
+class AudioPlayerBar extends ConsumerStatefulWidget {
   const AudioPlayerBar({super.key, required this.source, this.player});
 
   final AudioSource source;
@@ -20,13 +25,15 @@ class AudioPlayerBar extends StatefulWidget {
   final AudioPlayback? player;
 
   @override
-  State<AudioPlayerBar> createState() => _AudioPlayerBarState();
+  ConsumerState<AudioPlayerBar> createState() => _AudioPlayerBarState();
 }
 
-class _AudioPlayerBarState extends State<AudioPlayerBar> {
+class _AudioPlayerBarState extends ConsumerState<AudioPlayerBar> {
   late final AudioPlayback _player;
   bool _ownsPlayer = false;
   Object? _loadError;
+  VaultPlaintextLease? _lease;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -41,7 +48,7 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
     super.didUpdateWidget(oldWidget);
     // When the resolved source changes (e.g. a local file was missing on first
     // build and a Core presigned URL resolved later, or a retry produced a new
-    // path), clear the stale `_loadError` and reload — otherwise a previously
+    // lease), clear the stale `_loadError` and reload — otherwise a previously
     // failed source stays stuck on the "audio unavailable" surface forever.
     final old = oldWidget.source;
     final now = widget.source;
@@ -52,24 +59,48 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
   }
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     final source = widget.source;
+    final previous = _lease;
+    _lease = null;
     if (source.kind == AudioSourceKind.none || source.value == null) return;
     try {
+      final store = source.kind == AudioSourceKind.vaultBlob
+          ? ref.read(mediaBlobStoreProvider)
+          : null;
+      await previous?.dispose();
       switch (source.kind) {
-        case AudioSourceKind.localFile:
-          await _player.setFilePath(source.value!);
+        case AudioSourceKind.vaultBlob:
+          final lease = await store!.createLease(
+            VaultBlobId(source.value!),
+            purpose: VaultLeasePurpose.playback,
+            ttl: const Duration(hours: 2),
+          );
+          if (!mounted || generation != _loadGeneration) {
+            await lease.dispose();
+            return;
+          }
+          _lease = lease;
+          if (lease.location.scheme == 'file') {
+            await _player.setFilePath(lease.location.toFilePath());
+          } else {
+            await _player.setUrl(lease.location.toString());
+          }
         case AudioSourceKind.remoteUrl:
           await _player.setUrl(source.value!);
         case AudioSourceKind.none:
           break;
       }
     } catch (error) {
+      await previous?.dispose();
       if (mounted) setState(() => _loadError = error);
     }
   }
 
   @override
   void dispose() {
+    ++_loadGeneration;
+    unawaited(_lease?.dispose());
     if (_ownsPlayer) _player.dispose();
     super.dispose();
   }
@@ -92,7 +123,7 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
   }
 
   /// Graceful "audio unavailable" state (plan #45 W1): shown when no playable
-  /// source resolved — neither a local file nor a remote URL — so the user gets
+  /// source resolved — neither a Vault blob nor a remote URL — so the user gets
   /// a clear, disabled affordance + message instead of a dead silent play
   /// button. Distinct surface (muted) so it reads as inert, not actionable.
   Widget _buildUnavailable(BuildContext context) {

@@ -100,10 +100,7 @@ void main() {
     test('unwrapDek fails explicitly (does not silently wipe/regenerate) '
         'when the stored device KEK is wrong for the wrapped blob', () async {
       final store = _FakeKeyStore();
-      await store.write(
-        DeviceKeystoreKeyUnwrapper.storageKey,
-        hex(key32(1)),
-      );
+      await store.write(DeviceKeystoreKeyUnwrapper.storageKey, hex(key32(1)));
 
       final dek = Dek.generate();
       final wrappedDekDevice = await wrapKey(
@@ -157,8 +154,7 @@ void main() {
   // ---------------------------------------------------------------------------
   group('FlutterSecureKeyStore.deviceKek (production device-KEK construction '
       'path)', () {
-    test(
-        'the exact factory constructor connection_native.dart and '
+    test('the exact factory constructor connection_native.dart and '
         'inbox_upload.dart call is backed by hardened storage '
         '(resetOnError: false)', () {
       final store = FlutterSecureKeyStore.deviceKek();
@@ -215,45 +211,48 @@ void main() {
       expect(second.bytes, first.bytes);
     });
 
-    test('two independent stores bootstrap different DEKs (entropy sanity)',
-        () async {
-      final a = await NativeDekProvisioner(_FakeKeyStore()).obtainDek();
-      final b = await NativeDekProvisioner(_FakeKeyStore()).obtainDek();
-      expect(a.bytes, isNot(b.bytes));
-    });
+    test(
+      'two independent stores bootstrap different DEKs (entropy sanity)',
+      () async {
+        final a = await NativeDekProvisioner(_FakeKeyStore()).obtainDek();
+        final b = await NativeDekProvisioner(_FakeKeyStore()).obtainDek();
+        expect(a.bytes, isNot(b.bytes));
+      },
+    );
 
-    test('fails closed: an enrolled device (wrapped DEK present) whose '
-        'device-KEK has vanished from the keystore throws — NEVER mints a '
-        'replacement DEK that would orphan the existing encrypted database',
-        () async {
-      final store = _FakeKeyStore();
-      await NativeDekProvisioner(store).obtainDek(); // enroll once
-      await store.remove(DeviceKeystoreKeyUnwrapper.storageKey); // simulate
-      // a wiped/corrupted OS keystore entry (e.g. the resetOnError footgun).
+    test(
+      'fails closed: an enrolled device (wrapped DEK present) whose '
+      'device-KEK has vanished from the keystore throws — NEVER mints a '
+      'replacement DEK that would orphan the existing encrypted database',
+      () async {
+        final store = _FakeKeyStore();
+        await NativeDekProvisioner(store).obtainDek(); // enroll once
+        await store.remove(DeviceKeystoreKeyUnwrapper.storageKey); // simulate
+        // a wiped/corrupted OS keystore entry (e.g. the resetOnError footgun).
 
-      expect(
-        NativeDekProvisioner(store).obtainDek(),
-        throwsA(isA<StateError>()),
-      );
-    });
+        expect(
+          NativeDekProvisioner(store).obtainDek(),
+          throwsA(isA<StateError>()),
+        );
+      },
+    );
 
-    test('fails closed: an enrolled device whose device-KEK bytes changed '
-        '(tampered/wrong) throws on unwrap — never silently regenerates',
-        () async {
-      final store = _FakeKeyStore();
-      await NativeDekProvisioner(store).obtainDek(); // enroll once
-      // Overwrite the device-KEK with different, well-formed hex bytes —
-      // simulates a corrupted keystore entry that still *reads* successfully
-      // but no longer unwraps the previously-wrapped DEK.
-      await store.write(
-        DeviceKeystoreKeyUnwrapper.storageKey,
-        'ff' * 32,
-      );
+    test(
+      'fails closed: an enrolled device whose device-KEK bytes changed '
+      '(tampered/wrong) throws on unwrap — never silently regenerates',
+      () async {
+        final store = _FakeKeyStore();
+        await NativeDekProvisioner(store).obtainDek(); // enroll once
+        // Overwrite the device-KEK with different, well-formed hex bytes —
+        // simulates a corrupted keystore entry that still *reads* successfully
+        // but no longer unwraps the previously-wrapped DEK.
+        await store.write(DeviceKeystoreKeyUnwrapper.storageKey, 'ff' * 32);
 
-      expect(
-        NativeDekProvisioner(store).obtainDek(),
-        throwsA(isA<EnvelopeTamperException>()),
-      );
-    });
+        expect(
+          NativeDekProvisioner(store).obtainDek(),
+          throwsA(isA<EnvelopeTamperException>()),
+        );
+      },
+    );
   });
 }

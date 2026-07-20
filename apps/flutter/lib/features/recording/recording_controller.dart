@@ -117,7 +117,7 @@ class RecordingController extends StateNotifier<RecordingState> {
     if (draft == null) return;
     await _service.resumeFromDraft(draft);
     await _service.startRecording();
-    _service.restoreSegments(draft.segments);
+    await _service.resumeFromDraft(draft);
     _subscribe();
     state = state.copyWith(
       phase: RecordingPhase.recording,
@@ -126,7 +126,7 @@ class RecordingController extends StateNotifier<RecordingState> {
     );
     AppLog.event(
       LogCat.action,
-      'resumeFromDraft: resumed ${draft.segments.length} segment(s)',
+      'resumeFromDraft: resumed ${draft.segmentHandles.length} segment(s)',
     );
   }
 

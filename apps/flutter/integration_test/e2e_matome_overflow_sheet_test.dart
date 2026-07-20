@@ -1,5 +1,4 @@
 import 'package:drift/drift.dart' show Value;
-import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,8 +13,9 @@ import 'package:matome_flutter/features/auth/auth_controller.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 
+import 'support/e2e_database.dart';
 import 'support/e2e_harness.dart';
-import '../test/support/item_fixtures.dart';
+import 'support/item_fixtures.dart';
 
 /// Ground-truth probes against the REAL production [routerProvider]: does a
 /// go_router rebuild (auth tick / matome reload) dismiss an imperatively-opened
@@ -39,7 +39,6 @@ Future<void> _seed(AppDatabase db) async {
     id: 'img1',
     title: 'A photo',
     durationSeconds: 10,
-    localPath: '/tmp/does-not-exist.bin',
     createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     mediaType: 'image',
     matomeId: 'm1',
@@ -47,6 +46,8 @@ Future<void> _seed(AppDatabase db) async {
 }
 
 Future<void> _bootToHubItems(WidgetTester tester, AppDatabase db) async {
+  final seeded = await db.matomesDao.getMatomeWithItems('m1', '1');
+  expect(seeded?.recordings.map((item) => item.id), contains('img1'));
   final store = InMemoryTokenStore();
   await store.saveTokens(accessToken: 'a', refreshToken: 'r');
   await tester.pumpWidget(
@@ -56,6 +57,9 @@ Future<void> _bootToHubItems(WidgetTester tester, AppDatabase db) async {
         tokenStoreProvider.overrideWithValue(store),
         settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
         authRepositoryProvider.overrideWithValue(FakeE2EAuthRepository(store)),
+        vaultSessionProvider.overrideWith(
+          (ref) => buildE2EVaultSession(restoreReady: true),
+        ),
       ],
     ),
   );
@@ -65,8 +69,9 @@ Future<void> _bootToHubItems(WidgetTester tester, AppDatabase db) async {
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('matome-show-more')));
   await tester.pumpAndSettle();
+  expect(find.byKey(const ValueKey('matome-details')), findsOneWidget);
   await tester.scrollUntilVisible(
-    find.byKey(const ValueKey('matome-item-overflow-img1')),
+    find.byKey(const ValueKey('matome-image-img1')),
     200,
   );
   await tester.pumpAndSettle();
@@ -78,12 +83,12 @@ void main() {
   testWidgets(
     'PROBE: overflow sheet survives a matome reload (go_router rebuild)',
     (tester) async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final db = await createE2EDatabase();
       addTearDown(db.close);
       await _seed(db);
       await _bootToHubItems(tester, db);
 
-      await tester.tap(find.byKey(const ValueKey('matome-item-overflow-img1')));
+      await tester.longPress(find.byKey(const ValueKey('matome-image-img1')));
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('matome-item-delete-img1')),
@@ -114,7 +119,7 @@ void main() {
   testWidgets(
     'PROBE: image detail survives a matome reload (go_router rebuild)',
     (tester) async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final db = await createE2EDatabase();
       addTearDown(db.close);
       await _seed(db);
       await _bootToHubItems(tester, db);

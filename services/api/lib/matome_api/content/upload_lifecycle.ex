@@ -9,6 +9,8 @@ defmodule MatomeApi.Content.UploadLifecycle do
   alias MatomeApi.Storage.{ObjectStore, Presigner, UploadPolicy}
 
   @checksum_pattern ~r/^[0-9a-f]{64}$/
+  @default_transport "direct_signed_length"
+  @browser_transport "browser_stream"
 
   def request(%User{id: owner_id}, item_id, attrs \\ %{}) do
     transaction(fn ->
@@ -17,8 +19,10 @@ defmodule MatomeApi.Content.UploadLifecycle do
            :ok <- UploadPolicy.validate_size(blob.media_type, blob.byte_size),
            {:ok, checksum} <- requested_checksum(blob, attrs),
            {:ok, mode} <- requested_mode(blob, attrs),
+           {:ok, transport} <- requested_transport(attrs),
+           :ok <- require_transport_checksum(transport, checksum),
            {:ok, blob} <- persist_content_type(blob, attrs) do
-        request_locked(item, blob, mode, checksum)
+        request_locked(item, blob, mode, checksum, transport)
       else
         %Item{item_type: :text} -> {:error, :text_item_not_presignable}
         nil -> nil
@@ -106,7 +110,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
                      blob.storage_key,
                      context["provider_upload_id"],
                      part_number,
-                     content_length: byte_size,
+                     content_length: signed_content_length(context, byte_size),
                      checksum_sha256: checksum
                    ) do
               {:ok,
@@ -201,7 +205,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
           multipart_context: %{} = context
         } = blob ->
           if expired?(context, now) do
-            with :ok <- abort_provider(blob, context),
+            with :ok <- cleanup_provider(blob, context),
                  {:ok, _blob} <- mark_failed(blob) do
               :ok
             end
@@ -215,60 +219,126 @@ defmodule MatomeApi.Content.UploadLifecycle do
     end)
   end
 
-  defp request_locked(_item, %FileBlob{upload_state: "uploaded"} = blob, _mode, _checksum),
-    do: {:ok, uploaded_descriptor(blob)}
+  defp request_locked(
+         _item,
+         %FileBlob{upload_state: "uploaded"} = blob,
+         _mode,
+         _checksum,
+         _transport
+       ),
+       do: {:ok, uploaded_descriptor(blob)}
 
-  defp request_locked(item, blob, :single, checksum) do
+  defp request_locked(item, blob, :single, checksum, transport) do
     cond do
-      is_map(blob.multipart_context) ->
+      is_map(blob.multipart_context) and context_mode(blob.multipart_context) == "multipart" ->
         {:error, :multipart_upload_in_progress}
+
+      is_map(blob.multipart_context) and
+          context_transport(blob.multipart_context) != transport ->
+        {:error, :upload_transport_mismatch}
+
+      is_map(blob.multipart_context) and expired?(blob.multipart_context) ->
+        with :ok <- cleanup_provider(blob, blob.multipart_context),
+             {:ok, failed} <- mark_failed(blob) do
+          start_single(item, failed, checksum, transport)
+        end
+
+      is_map(blob.multipart_context) ->
+        resume_single(item, blob, checksum, transport)
 
       blob.upload_state == "uploading" and
           UploadPolicy.mode_for(blob.media_type, blob.byte_size) == :multipart ->
         {:error, :multipart_required}
 
       true ->
-        generation = retry_generation(blob)
-
-        with :ok <- maybe_delete_failed_object(blob),
-             {:ok, request} <-
-               Presigner.presign_upload(blob.storage_key,
-                 content_length: blob.byte_size,
-                 checksum_sha256: checksum
-               ),
-             {:ok, updated} <-
-               update_blob(blob, %{
-                 upload_state: "uploading",
-                 upload_generation: generation,
-                 checksum_sha256: checksum,
-                 uploaded_at: nil,
-                 multipart_context: nil
-               }) do
-          {:ok, single_descriptor(item, updated, request)}
-        end
+        start_single(item, blob, checksum, transport)
     end
   end
 
-  defp request_locked(item, blob, :multipart, checksum) do
+  defp request_locked(item, blob, :multipart, checksum, transport) do
     with :ok <- require_checksum(checksum) do
       case active_context(blob) do
         {:ok, context} ->
-          if expired?(context) do
-            with :ok <- abort_provider(blob, context),
-                 {:ok, failed} <- mark_failed(blob) do
-              start_multipart(item, failed, checksum)
-            end
-          else
-            resume_multipart(item, blob, context)
+          cond do
+            context_mode(context) != "multipart" ->
+              {:error, :single_upload_in_progress}
+
+            context_transport(context) != transport ->
+              {:error, :upload_transport_mismatch}
+
+            expired?(context) ->
+              with :ok <- cleanup_provider(blob, context),
+                   {:ok, failed} <- mark_failed(blob) do
+                start_multipart(item, failed, checksum, transport)
+              end
+
+            true ->
+              resume_multipart(item, blob, context)
           end
 
         {:error, :upload_not_active} ->
-          start_multipart(item, blob, checksum)
+          start_multipart(item, blob, checksum, transport)
       end
     end
   end
 
-  defp start_multipart(item, blob, checksum) do
+  defp start_single(item, blob, checksum, transport) do
+    generation = retry_generation(blob)
+
+    with :ok <- maybe_delete_failed_object(blob),
+         {:ok, request} <- presign_single(blob, checksum, transport),
+         context = %{
+           "mode" => "single",
+           "transport" => transport,
+           "generation" => generation,
+           "created_at" =>
+             DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601(),
+           "expires_at" =>
+             request.expires_at |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+         },
+         {:ok, updated} <-
+           update_blob(blob, %{
+             upload_state: "uploading",
+             upload_generation: generation,
+             upload_transport: transport,
+             checksum_sha256: checksum,
+             uploaded_at: nil,
+             multipart_context: context
+           }) do
+      case schedule_cleanup(updated, request.expires_at) do
+        {:ok, _job} ->
+          {:ok, single_descriptor(item, updated, request, transport)}
+
+        {:error, reason} ->
+          _ = cleanup_provider(updated, context)
+          _ = mark_failed(updated)
+          {:error, reason}
+      end
+    end
+  end
+
+  defp resume_single(item, blob, checksum, transport) do
+    with {:ok, expires_at, _offset} <-
+           DateTime.from_iso8601(blob.multipart_context["expires_at"]),
+         expires_in <- max(DateTime.diff(expires_at, DateTime.utc_now(), :second), 1),
+         {:ok, request} <- presign_single(blob, checksum, transport, expires_in) do
+      {:ok, single_descriptor(item, blob, request, transport)}
+    else
+      _ -> {:error, :upload_expired}
+    end
+  end
+
+  defp presign_single(blob, checksum, transport, expires_in \\ nil) do
+    opts = [
+      content_length: signed_content_length(transport, blob.byte_size),
+      checksum_sha256: checksum
+    ]
+
+    opts = if expires_in, do: Keyword.put(opts, :expires_in, expires_in), else: opts
+    Presigner.presign_upload(blob.storage_key, opts)
+  end
+
+  defp start_multipart(item, blob, checksum, transport) do
     generation = retry_generation(blob)
     upload_id = upload_id(item.id, generation)
     now = DateTime.utc_now() |> DateTime.truncate(:second)
@@ -282,6 +352,8 @@ defmodule MatomeApi.Content.UploadLifecycle do
              content_type: blob.content_type
            ) do
       context = %{
+        "mode" => "multipart",
+        "transport" => transport,
         "upload_id" => upload_id,
         "provider_upload_id" => provider_upload_id,
         "generation" => generation,
@@ -294,6 +366,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
       case update_blob(blob, %{
              upload_state: "uploading",
              upload_generation: generation,
+             upload_transport: transport,
              checksum_sha256: checksum,
              uploaded_at: nil,
              multipart_context: context
@@ -323,7 +396,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
 
       {:error, :no_such_upload} ->
         with {:ok, failed} <- mark_failed(blob) do
-          start_multipart(item, failed, blob.checksum_sha256)
+          start_multipart(item, failed, blob.checksum_sha256, context_transport(context))
         end
 
       {:error, reason} ->
@@ -339,9 +412,15 @@ defmodule MatomeApi.Content.UploadLifecycle do
        do: {:ok, terminal_descriptor(blob)}
 
   defp inspect_locked(item, %FileBlob{multipart_context: %{} = context} = blob) do
-    with :ok <- ensure_not_expired(blob, context),
-         {:ok, parts} <- ObjectStore.list_parts(blob.storage_key, context["provider_upload_id"]) do
-      multipart_descriptor(item, blob, context, parts)
+    with :ok <- ensure_not_expired(blob, context) do
+      if context_mode(context) == "single" do
+        {:ok, terminal_descriptor(blob)}
+      else
+        with {:ok, parts} <-
+               ObjectStore.list_parts(blob.storage_key, context["provider_upload_id"]) do
+          multipart_descriptor(item, blob, context, parts)
+        end
+      end
     end
   end
 
@@ -352,23 +431,24 @@ defmodule MatomeApi.Content.UploadLifecycle do
 
   defp complete_locked(item, %FileBlob{multipart_context: %{} = context} = blob, checksum, attrs) do
     with :ok <- ensure_not_expired(blob, context) do
-      case verify_head(blob, checksum, nil) do
-        :ok ->
-          mark_uploaded(blob, checksum)
-
-        {:error, :not_found} ->
-          complete_active_multipart(item, blob, context, checksum, attrs)
-
-        {:error, :verification_failed} ->
-          fail_verification(blob)
-
-        {:error, reason} ->
-          {:error, reason}
+      if context_mode(context) == "single" do
+        complete_single(blob, checksum, attrs)
+      else
+        case verify_head(blob, checksum, nil) do
+          :ok -> mark_uploaded(blob, checksum)
+          {:error, :not_found} -> complete_active_multipart(item, blob, context, checksum, attrs)
+          {:error, :verification_failed} -> fail_verification(blob)
+          {:error, reason} -> {:error, reason}
+        end
       end
     end
   end
 
   defp complete_locked(_item, blob, checksum, attrs) do
+    complete_single(blob, checksum, attrs)
+  end
+
+  defp complete_single(blob, checksum, attrs) do
     etag = attr(attrs, :etag)
 
     cond do
@@ -524,7 +604,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
   defp fail_verification(blob) do
     cleanup_result =
       case blob.multipart_context do
-        %{} = context -> abort_provider(blob, context)
+        %{} = context -> cleanup_provider(blob, context)
         nil -> ObjectStore.delete_object(blob.storage_key)
       end
 
@@ -541,7 +621,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
     do: {:ok, uploaded_descriptor(blob)}
 
   defp abort_locked(%FileBlob{multipart_context: %{} = context} = blob) do
-    with :ok <- abort_provider(blob, context),
+    with :ok <- cleanup_provider(blob, context),
          {:ok, aborted} <-
            update_blob(blob, %{upload_state: "aborted", uploaded_at: nil, multipart_context: nil}) do
       {:ok, terminal_descriptor(aborted)}
@@ -563,9 +643,21 @@ defmodule MatomeApi.Content.UploadLifecycle do
     end
   end
 
+  defp cleanup_provider(blob, context) do
+    if context_mode(context) == "single" do
+      case ObjectStore.head_object(blob.storage_key) do
+        {:ok, _head} -> ObjectStore.delete_object(blob.storage_key)
+        {:error, :not_found} -> :ok
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      abort_provider(blob, context)
+    end
+  end
+
   defp ensure_not_expired(blob, context) do
     if expired?(context) do
-      with :ok <- abort_provider(blob, context),
+      with :ok <- cleanup_provider(blob, context),
            {:ok, _failed} <- mark_failed(blob) do
         {:error, :upload_expired}
       end
@@ -618,6 +710,29 @@ defmodule MatomeApi.Content.UploadLifecycle do
       _ -> {:error, :invalid_upload_mode}
     end
   end
+
+  defp requested_transport(attrs) do
+    case attr(attrs, :transport) do
+      nil -> {:ok, @default_transport}
+      transport when transport in [@default_transport, @browser_transport] -> {:ok, transport}
+      _ -> {:error, :invalid_upload_transport}
+    end
+  end
+
+  defp require_transport_checksum(@browser_transport, checksum), do: require_checksum(checksum)
+  defp require_transport_checksum(_transport, _checksum), do: :ok
+
+  defp context_mode(%{"mode" => mode}) when mode in ["single", "multipart"], do: mode
+  defp context_mode(%{"provider_upload_id" => _upload_id}), do: "multipart"
+  defp context_mode(_context), do: "single"
+
+  defp context_transport(context), do: context["transport"] || @default_transport
+
+  defp signed_content_length(%{} = context, byte_size),
+    do: signed_content_length(context_transport(context), byte_size)
+
+  defp signed_content_length(@browser_transport, _byte_size), do: nil
+  defp signed_content_length(_transport, byte_size), do: byte_size
 
   defp requested_checksum(blob, attrs) do
     incoming = attr(attrs, :checksum_sha256)
@@ -722,11 +837,12 @@ defmodule MatomeApi.Content.UploadLifecycle do
     |> Oban.insert()
   end
 
-  defp single_descriptor(item, blob, request) do
+  defp single_descriptor(item, blob, request, transport) do
     %{
       upload_id: upload_id(item.id, blob.upload_generation),
       upload_generation: blob.upload_generation,
       mode: "single",
+      transport: transport,
       state: blob.upload_state,
       expires_at: request.expires_at,
       request: request_json(request)
@@ -746,6 +862,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
        upload_id: upload_id(item.id, blob.upload_generation),
        upload_generation: blob.upload_generation,
        mode: "multipart",
+       transport: context_transport(context),
        state: blob.upload_state,
        part_size: context["part_size"],
        accepted_parts: accepted_parts,
@@ -759,6 +876,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
       upload_id: upload_id_for_blob(blob),
       upload_generation: blob.upload_generation,
       mode: mode_string(blob),
+      transport: blob.upload_transport,
       state: "uploaded",
       verified_byte_size: blob.byte_size,
       verified_checksum_sha256: blob.checksum_sha256,
@@ -771,6 +889,7 @@ defmodule MatomeApi.Content.UploadLifecycle do
       upload_id: upload_id_for_blob(blob),
       upload_generation: blob.upload_generation,
       mode: mode_string(blob),
+      transport: blob.upload_transport,
       state: blob.upload_state
     }
   end

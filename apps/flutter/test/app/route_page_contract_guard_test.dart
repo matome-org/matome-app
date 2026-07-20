@@ -16,6 +16,7 @@ const _pendingRoutePageMigrations = <String, String>{};
 const _routerPathLiterals = <String>{
   '/',
   '/login',
+  '/unlock',
   '/signup',
   '/forgot-password',
   '/reset-password',
@@ -42,6 +43,7 @@ const _routerPathLiterals = <String>{
 const _routerEvidence = <String, List<String>>{
   '/': ["path: '/'", 'WelcomePage()'],
   '/login': ["path: '/login'", 'LoginPage()'],
+  '/unlock': ["path: '/unlock'", 'UnlockPage()'],
   '/signup': ["path: '/signup'", 'SignupPage()'],
   '/forgot-password': ["path: '/forgot-password'", 'ForgotPasswordPage()'],
   '/reset-password': ["path: '/reset-password'", 'ResetPasswordPage('],
@@ -143,13 +145,20 @@ void main() {
 
       final invalidStatuses = rows
           .where(
-            (row) => !{'Required', 'Deferred', 'Exempt'}.contains(row.status),
+            (row) => !{
+              'Required',
+              'Deferred',
+              'Exempt',
+              'Compatibility',
+            }.contains(row.status),
           )
           .toList();
       expect(
         invalidStatuses,
         isEmpty,
-        reason: 'Route contract rows must use Required, Deferred, or Exempt.',
+        reason:
+            'Route contract rows must use Required, Deferred, Exempt, or '
+            'Compatibility.',
       );
 
       final missingEvidence = <String>[];

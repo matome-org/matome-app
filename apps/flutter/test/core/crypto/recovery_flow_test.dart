@@ -22,8 +22,7 @@ import 'package:matome_flutter/core/crypto/recovery_key_unwrapper.dart';
 
 void main() {
   group('recovery enrollment + reset round trip', () {
-    test(
-        'enroll -> forget password -> reset with recovery code -> DEK bytes '
+    test('enroll -> forget password -> reset with recovery code -> DEK bytes '
         'intact (re-wrap, not re-encrypt)', () async {
       final dek = Dek.generate();
       final originalDekBytes = Uint8List.fromList(dek.bytes);
@@ -115,21 +114,25 @@ void main() {
       );
     });
 
-    test('RecoveryKeyUnwrapper is a KeyUnwrapper backend like PasswordKeyUnwrapper '
-        '— no per-platform fork of the unwrap core', () async {
-      final dek = Dek.generate();
-      final enrollment = await enrollRecovery(dek: dek);
-
-      final KeyUnwrapper backend = RecoveryKeyUnwrapper(
-        recoveryCode: enrollment.code,
-        saltRec: enrollment.saltRec,
-      );
-      final recovered = await backend.unwrapDek(enrollment.wrappedDekRecovery);
-      expect(recovered.bytes, dek.bytes);
-    });
-
     test(
-        'wipes the recovered DEK on the throw path — a later step failing '
+      'RecoveryKeyUnwrapper is a KeyUnwrapper backend like PasswordKeyUnwrapper '
+      '— no per-platform fork of the unwrap core',
+      () async {
+        final dek = Dek.generate();
+        final enrollment = await enrollRecovery(dek: dek);
+
+        final KeyUnwrapper backend = RecoveryKeyUnwrapper(
+          recoveryCode: enrollment.code,
+          saltRec: enrollment.saltRec,
+        );
+        final recovered = await backend.unwrapDek(
+          enrollment.wrappedDekRecovery,
+        );
+        expect(recovered.bytes, dek.bytes);
+      },
+    );
+
+    test('wipes the recovered DEK on the throw path — a later step failing '
         'AFTER the recovery-code unwrap already succeeded must not leave '
         'the DEK live with no reachable owner (okt-audit B3 info '
         'follow-up)', () async {
@@ -140,8 +143,10 @@ void main() {
       Dek? capturedDek;
       Future<void> injectedLaterStepFailure(Dek recoveredDek) async {
         capturedDek = recoveredDek;
-        throw StateError('simulated failure in a step after the DEK was '
-            'already recovered');
+        throw StateError(
+          'simulated failure in a step after the DEK was '
+          'already recovered',
+        );
       }
 
       await expectLater(

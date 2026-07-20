@@ -109,8 +109,9 @@ void main() {
       expect(find.text('00:48'), findsOneWidget);
     });
 
-    testWidgets('size is never fabricated — absent size shows a dash',
-        (tester) async {
+    testWidgets('size is never fabricated — absent size shows a dash', (
+      tester,
+    ) async {
       await _pump(tester, files: [_files[0]]);
       // The tile meta line is "<size> · <when>"; with no size the dash stands in.
       expect(find.text(t.files.noSize), findsOneWidget);
@@ -118,20 +119,23 @@ void main() {
   });
 
   group('Unfiled / Inbox states (DR-003)', () {
-    testWidgets('a matome-less, space-less tile shows BOTH Unfiled and Inbox',
-        (tester) async {
+    testWidgets('a matome-less, space-less tile shows BOTH Unfiled and Inbox', (
+      tester,
+    ) async {
       await _pump(tester, files: [_files[1]]);
       expect(find.text(t.files.unfiled), findsOneWidget);
       expect(find.text(t.matome.placeInbox), findsOneWidget);
     });
 
-    testWidgets('Unfiled but in a space shows Unfiled + the space (not Inbox)',
-        (tester) async {
-      await _pump(tester, files: [_files[2]]);
-      expect(find.text(t.files.unfiled), findsOneWidget);
-      expect(find.text('Personal'), findsOneWidget);
-      expect(find.text(t.matome.placeInbox), findsNothing);
-    });
+    testWidgets(
+      'Unfiled but in a space shows Unfiled + the space (not Inbox)',
+      (tester) async {
+        await _pump(tester, files: [_files[2]]);
+        expect(find.text(t.files.unfiled), findsOneWidget);
+        expect(find.text('Personal'), findsOneWidget);
+        expect(find.text(t.matome.placeInbox), findsNothing);
+      },
+    );
   });
 
   group('Selection → bulk', () {
@@ -141,8 +145,9 @@ void main() {
       expect(find.text(t.files.selected(n: 1)), findsOneWidget);
     });
 
-    testWidgets('bulk delete confirms, removes the tile, then offers undo',
-        (tester) async {
+    testWidgets('bulk delete confirms, removes the tile, then offers undo', (
+      tester,
+    ) async {
       FileAction? bulkAction;
       await _pump(
         tester,

@@ -328,6 +328,14 @@ independent and can land first (Wave 1, task #1849).
 
 ## 8. File lifecycle — local save → at-rest → cloud
 
+> **Superseded:** [`file-lifecycle.md`](file-lifecycle.md) is the canonical
+> description of the implemented Matome Vault lifecycle and the required
+> cloud-only eviction contract. The remainder of this section is retained as
+> historical key-design context; its proposed ciphertext-cloud flow is not the
+> current architecture. Core/object storage currently receive the original
+> bytes through an authenticated HTTPS stream so server-side processing can
+> operate on them.
+
 ### 8.1 Where files live today (the gap)
 
 | | Today | Target |

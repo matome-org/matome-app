@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_models.dart';
+import '../core/providers.dart' show vaultSessionProvider;
+import '../core/vault/vault_session_controller.dart';
 
 /// Resolved auth state consumed by the nav guard.
 ///
@@ -16,11 +18,15 @@ class AuthState {
   const AuthState({
     required this.isAuthenticated,
     required this.isLoading,
+    this.isVaultReady = true,
+    this.isVaultLoading = false,
     this.user,
   });
 
   final bool isAuthenticated;
   final bool isLoading;
+  final bool isVaultReady;
+  final bool isVaultLoading;
   final AuthUser? user;
 
   @override
@@ -28,17 +34,30 @@ class AuthState {
       other is AuthState &&
       other.isAuthenticated == isAuthenticated &&
       other.isLoading == isLoading &&
+      other.isVaultReady == isVaultReady &&
+      other.isVaultLoading == isVaultLoading &&
       other.user?.id == user?.id;
 
   @override
-  int get hashCode => Object.hash(isAuthenticated, isLoading, user?.id);
+  int get hashCode => Object.hash(
+    isAuthenticated,
+    isLoading,
+    isVaultReady,
+    isVaultLoading,
+    user?.id,
+  );
 }
 
 final authStateProvider = Provider<AuthState>((ref) {
   final session = ref.watch(authControllerProvider);
+  final vault = ref.watch(vaultSessionProvider);
   return AuthState(
     isAuthenticated: session.valueOrNull != null,
     isLoading: session.isLoading,
+    isVaultReady: vault.phase == VaultSessionPhase.ready,
+    isVaultLoading:
+        vault.phase == VaultSessionPhase.unlocking ||
+        vault.phase == VaultSessionPhase.opening,
     user: session.valueOrNull?.user,
   );
 });

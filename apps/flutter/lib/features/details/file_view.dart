@@ -753,7 +753,10 @@ class _PartialBody extends StatelessWidget {
         Text(label, style: typography.label.copyWith(color: colors.accent)),
         if (text != null) ...[
           SizedBox(height: spacing.sm),
-          Text(text!, style: typography.body.copyWith(color: colors.textPrimary)),
+          Text(
+            text!,
+            style: typography.body.copyWith(color: colors.textPrimary),
+          ),
         ],
         if (onRetry != null) ...[
           SizedBox(height: spacing.sm),

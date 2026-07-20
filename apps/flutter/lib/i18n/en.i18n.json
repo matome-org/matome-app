@@ -38,7 +38,12 @@
     "readingPaneInbox": "Inbox",
     "readingPaneFiles": "Files",
     "readingPaneSpaces": "Spaces",
-    "readingPaneContacts": "Contacts"
+    "readingPaneContacts": "Contacts",
+    "storage": "Local storage",
+    "retentionKeepForever": "Keep local files",
+    "retentionKeepForeverHint": "Default. Matome never removes local Vault files automatically.",
+    "retentionThirtyDays": "Remove eligible local files after 30 days",
+    "retentionThirtyDaysHint": "Opt in. Only unreferenced files verified in the cloud can be removed."
   },
   "nav": {
     "createNew": "New",
@@ -389,6 +394,7 @@
     "deleteBody": "Delete $n file(s)? You can undo this.",
     "deletedMsg": "Deleted $n",
     "downloadUnavailable": "Download isn't available yet",
+    "exportedOutsideVault": "$n file(s) exported. The copy is outside Matome Vault control.",
     "moveSheetTitle": "Move to matome",
     "moveUnfiled": "Unfiled",
     "moveUnfiledHint": "No matome",
@@ -541,6 +547,10 @@
     "errorPasswordMismatch": "Passwords do not match.",
     "errorEmailTaken": "That email is already registered.",
     "errorResetTokenInvalid": "That reset code is invalid or has expired.",
-    "errorGeneric": "Something went wrong. Please try again."
+    "errorGeneric": "Something went wrong. Please try again.",
+    "unlockTitle": "Unlock your Vault",
+    "unlockSubtitle": "Enter your account password to open your private data.",
+    "unlockSubmit": "Unlock",
+    "unlockError": "The Vault could not be unlocked. Check your password and try again."
   }
 }

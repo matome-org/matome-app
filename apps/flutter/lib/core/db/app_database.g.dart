@@ -484,17 +484,17 @@ class $RecordingDraftsTable extends RecordingDrafts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _segmentsJsonMeta = const VerificationMeta(
-    'segmentsJson',
-  );
+  static const VerificationMeta _segmentHandlesJsonMeta =
+      const VerificationMeta('segmentHandlesJson');
   @override
-  late final GeneratedColumn<String> segmentsJson = GeneratedColumn<String>(
-    'segments_json',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
+  late final GeneratedColumn<String> segmentHandlesJson =
+      GeneratedColumn<String>(
+        'segment_handles_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
   static const VerificationMeta _durationMsMeta = const VerificationMeta(
     'durationMs',
   );
@@ -543,23 +543,12 @@ class $RecordingDraftsTable extends RecordingDrafts
     requiredDuringInsert: false,
     defaultValue: const Constant('record'),
   );
-  static const VerificationMeta _stagingPathMeta = const VerificationMeta(
-    'stagingPath',
+  static const VerificationMeta _stagingHandleMeta = const VerificationMeta(
+    'stagingHandle',
   );
   @override
-  late final GeneratedColumn<String> stagingPath = GeneratedColumn<String>(
-    'staging_path',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _finalPathMeta = const VerificationMeta(
-    'finalPath',
-  );
-  @override
-  late final GeneratedColumn<String> finalPath = GeneratedColumn<String>(
-    'final_path',
+  late final GeneratedColumn<String> stagingHandle = GeneratedColumn<String>(
+    'staging_handle',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -600,13 +589,12 @@ class $RecordingDraftsTable extends RecordingDrafts
   List<GeneratedColumn> get $columns => [
     id,
     createdAt,
-    segmentsJson,
+    segmentHandlesJson,
     durationMs,
     sessionId,
     captureKind,
     backend,
-    stagingPath,
-    finalPath,
+    stagingHandle,
     codec,
     state,
     heartbeatAt,
@@ -634,16 +622,16 @@ class $RecordingDraftsTable extends RecordingDrafts
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
-    if (data.containsKey('segments_json')) {
+    if (data.containsKey('segment_handles_json')) {
       context.handle(
-        _segmentsJsonMeta,
-        segmentsJson.isAcceptableOrUnknown(
-          data['segments_json']!,
-          _segmentsJsonMeta,
+        _segmentHandlesJsonMeta,
+        segmentHandlesJson.isAcceptableOrUnknown(
+          data['segment_handles_json']!,
+          _segmentHandlesJsonMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_segmentsJsonMeta);
+      context.missing(_segmentHandlesJsonMeta);
     }
     if (data.containsKey('duration_ms')) {
       context.handle(
@@ -672,19 +660,13 @@ class $RecordingDraftsTable extends RecordingDrafts
         backend.isAcceptableOrUnknown(data['backend']!, _backendMeta),
       );
     }
-    if (data.containsKey('staging_path')) {
+    if (data.containsKey('staging_handle')) {
       context.handle(
-        _stagingPathMeta,
-        stagingPath.isAcceptableOrUnknown(
-          data['staging_path']!,
-          _stagingPathMeta,
+        _stagingHandleMeta,
+        stagingHandle.isAcceptableOrUnknown(
+          data['staging_handle']!,
+          _stagingHandleMeta,
         ),
-      );
-    }
-    if (data.containsKey('final_path')) {
-      context.handle(
-        _finalPathMeta,
-        finalPath.isAcceptableOrUnknown(data['final_path']!, _finalPathMeta),
       );
     }
     if (data.containsKey('codec')) {
@@ -725,9 +707,9 @@ class $RecordingDraftsTable extends RecordingDrafts
         DriftSqlType.string,
         data['${effectivePrefix}created_at'],
       )!,
-      segmentsJson: attachedDatabase.typeMapping.read(
+      segmentHandlesJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}segments_json'],
+        data['${effectivePrefix}segment_handles_json'],
       )!,
       durationMs: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -745,13 +727,9 @@ class $RecordingDraftsTable extends RecordingDrafts
         DriftSqlType.string,
         data['${effectivePrefix}backend'],
       )!,
-      stagingPath: attachedDatabase.typeMapping.read(
+      stagingHandle: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}staging_path'],
-      ),
-      finalPath: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}final_path'],
+        data['${effectivePrefix}staging_handle'],
       ),
       codec: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -778,26 +756,24 @@ class RecordingDraftRow extends DataClass
     implements Insertable<RecordingDraftRow> {
   final int id;
   final String createdAt;
-  final String segmentsJson;
+  final String segmentHandlesJson;
   final int durationMs;
   final String sessionId;
   final String captureKind;
   final String backend;
-  final String? stagingPath;
-  final String? finalPath;
+  final String? stagingHandle;
   final String codec;
   final String state;
   final String? heartbeatAt;
   const RecordingDraftRow({
     required this.id,
     required this.createdAt,
-    required this.segmentsJson,
+    required this.segmentHandlesJson,
     required this.durationMs,
     required this.sessionId,
     required this.captureKind,
     required this.backend,
-    this.stagingPath,
-    this.finalPath,
+    this.stagingHandle,
     required this.codec,
     required this.state,
     this.heartbeatAt,
@@ -807,16 +783,13 @@ class RecordingDraftRow extends DataClass
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['created_at'] = Variable<String>(createdAt);
-    map['segments_json'] = Variable<String>(segmentsJson);
+    map['segment_handles_json'] = Variable<String>(segmentHandlesJson);
     map['duration_ms'] = Variable<int>(durationMs);
     map['session_id'] = Variable<String>(sessionId);
     map['capture_kind'] = Variable<String>(captureKind);
     map['backend'] = Variable<String>(backend);
-    if (!nullToAbsent || stagingPath != null) {
-      map['staging_path'] = Variable<String>(stagingPath);
-    }
-    if (!nullToAbsent || finalPath != null) {
-      map['final_path'] = Variable<String>(finalPath);
+    if (!nullToAbsent || stagingHandle != null) {
+      map['staging_handle'] = Variable<String>(stagingHandle);
     }
     map['codec'] = Variable<String>(codec);
     map['state'] = Variable<String>(state);
@@ -830,17 +803,14 @@ class RecordingDraftRow extends DataClass
     return RecordingDraftsCompanion(
       id: Value(id),
       createdAt: Value(createdAt),
-      segmentsJson: Value(segmentsJson),
+      segmentHandlesJson: Value(segmentHandlesJson),
       durationMs: Value(durationMs),
       sessionId: Value(sessionId),
       captureKind: Value(captureKind),
       backend: Value(backend),
-      stagingPath: stagingPath == null && nullToAbsent
+      stagingHandle: stagingHandle == null && nullToAbsent
           ? const Value.absent()
-          : Value(stagingPath),
-      finalPath: finalPath == null && nullToAbsent
-          ? const Value.absent()
-          : Value(finalPath),
+          : Value(stagingHandle),
       codec: Value(codec),
       state: Value(state),
       heartbeatAt: heartbeatAt == null && nullToAbsent
@@ -857,13 +827,14 @@ class RecordingDraftRow extends DataClass
     return RecordingDraftRow(
       id: serializer.fromJson<int>(json['id']),
       createdAt: serializer.fromJson<String>(json['createdAt']),
-      segmentsJson: serializer.fromJson<String>(json['segmentsJson']),
+      segmentHandlesJson: serializer.fromJson<String>(
+        json['segmentHandlesJson'],
+      ),
       durationMs: serializer.fromJson<int>(json['durationMs']),
       sessionId: serializer.fromJson<String>(json['sessionId']),
       captureKind: serializer.fromJson<String>(json['captureKind']),
       backend: serializer.fromJson<String>(json['backend']),
-      stagingPath: serializer.fromJson<String?>(json['stagingPath']),
-      finalPath: serializer.fromJson<String?>(json['finalPath']),
+      stagingHandle: serializer.fromJson<String?>(json['stagingHandle']),
       codec: serializer.fromJson<String>(json['codec']),
       state: serializer.fromJson<String>(json['state']),
       heartbeatAt: serializer.fromJson<String?>(json['heartbeatAt']),
@@ -875,13 +846,12 @@ class RecordingDraftRow extends DataClass
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'createdAt': serializer.toJson<String>(createdAt),
-      'segmentsJson': serializer.toJson<String>(segmentsJson),
+      'segmentHandlesJson': serializer.toJson<String>(segmentHandlesJson),
       'durationMs': serializer.toJson<int>(durationMs),
       'sessionId': serializer.toJson<String>(sessionId),
       'captureKind': serializer.toJson<String>(captureKind),
       'backend': serializer.toJson<String>(backend),
-      'stagingPath': serializer.toJson<String?>(stagingPath),
-      'finalPath': serializer.toJson<String?>(finalPath),
+      'stagingHandle': serializer.toJson<String?>(stagingHandle),
       'codec': serializer.toJson<String>(codec),
       'state': serializer.toJson<String>(state),
       'heartbeatAt': serializer.toJson<String?>(heartbeatAt),
@@ -891,26 +861,26 @@ class RecordingDraftRow extends DataClass
   RecordingDraftRow copyWith({
     int? id,
     String? createdAt,
-    String? segmentsJson,
+    String? segmentHandlesJson,
     int? durationMs,
     String? sessionId,
     String? captureKind,
     String? backend,
-    Value<String?> stagingPath = const Value.absent(),
-    Value<String?> finalPath = const Value.absent(),
+    Value<String?> stagingHandle = const Value.absent(),
     String? codec,
     String? state,
     Value<String?> heartbeatAt = const Value.absent(),
   }) => RecordingDraftRow(
     id: id ?? this.id,
     createdAt: createdAt ?? this.createdAt,
-    segmentsJson: segmentsJson ?? this.segmentsJson,
+    segmentHandlesJson: segmentHandlesJson ?? this.segmentHandlesJson,
     durationMs: durationMs ?? this.durationMs,
     sessionId: sessionId ?? this.sessionId,
     captureKind: captureKind ?? this.captureKind,
     backend: backend ?? this.backend,
-    stagingPath: stagingPath.present ? stagingPath.value : this.stagingPath,
-    finalPath: finalPath.present ? finalPath.value : this.finalPath,
+    stagingHandle: stagingHandle.present
+        ? stagingHandle.value
+        : this.stagingHandle,
     codec: codec ?? this.codec,
     state: state ?? this.state,
     heartbeatAt: heartbeatAt.present ? heartbeatAt.value : this.heartbeatAt,
@@ -919,9 +889,9 @@ class RecordingDraftRow extends DataClass
     return RecordingDraftRow(
       id: data.id.present ? data.id.value : this.id,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      segmentsJson: data.segmentsJson.present
-          ? data.segmentsJson.value
-          : this.segmentsJson,
+      segmentHandlesJson: data.segmentHandlesJson.present
+          ? data.segmentHandlesJson.value
+          : this.segmentHandlesJson,
       durationMs: data.durationMs.present
           ? data.durationMs.value
           : this.durationMs,
@@ -930,10 +900,9 @@ class RecordingDraftRow extends DataClass
           ? data.captureKind.value
           : this.captureKind,
       backend: data.backend.present ? data.backend.value : this.backend,
-      stagingPath: data.stagingPath.present
-          ? data.stagingPath.value
-          : this.stagingPath,
-      finalPath: data.finalPath.present ? data.finalPath.value : this.finalPath,
+      stagingHandle: data.stagingHandle.present
+          ? data.stagingHandle.value
+          : this.stagingHandle,
       codec: data.codec.present ? data.codec.value : this.codec,
       state: data.state.present ? data.state.value : this.state,
       heartbeatAt: data.heartbeatAt.present
@@ -947,13 +916,12 @@ class RecordingDraftRow extends DataClass
     return (StringBuffer('RecordingDraftRow(')
           ..write('id: $id, ')
           ..write('createdAt: $createdAt, ')
-          ..write('segmentsJson: $segmentsJson, ')
+          ..write('segmentHandlesJson: $segmentHandlesJson, ')
           ..write('durationMs: $durationMs, ')
           ..write('sessionId: $sessionId, ')
           ..write('captureKind: $captureKind, ')
           ..write('backend: $backend, ')
-          ..write('stagingPath: $stagingPath, ')
-          ..write('finalPath: $finalPath, ')
+          ..write('stagingHandle: $stagingHandle, ')
           ..write('codec: $codec, ')
           ..write('state: $state, ')
           ..write('heartbeatAt: $heartbeatAt')
@@ -965,13 +933,12 @@ class RecordingDraftRow extends DataClass
   int get hashCode => Object.hash(
     id,
     createdAt,
-    segmentsJson,
+    segmentHandlesJson,
     durationMs,
     sessionId,
     captureKind,
     backend,
-    stagingPath,
-    finalPath,
+    stagingHandle,
     codec,
     state,
     heartbeatAt,
@@ -982,13 +949,12 @@ class RecordingDraftRow extends DataClass
       (other is RecordingDraftRow &&
           other.id == this.id &&
           other.createdAt == this.createdAt &&
-          other.segmentsJson == this.segmentsJson &&
+          other.segmentHandlesJson == this.segmentHandlesJson &&
           other.durationMs == this.durationMs &&
           other.sessionId == this.sessionId &&
           other.captureKind == this.captureKind &&
           other.backend == this.backend &&
-          other.stagingPath == this.stagingPath &&
-          other.finalPath == this.finalPath &&
+          other.stagingHandle == this.stagingHandle &&
           other.codec == this.codec &&
           other.state == this.state &&
           other.heartbeatAt == this.heartbeatAt);
@@ -997,26 +963,24 @@ class RecordingDraftRow extends DataClass
 class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
   final Value<int> id;
   final Value<String> createdAt;
-  final Value<String> segmentsJson;
+  final Value<String> segmentHandlesJson;
   final Value<int> durationMs;
   final Value<String> sessionId;
   final Value<String> captureKind;
   final Value<String> backend;
-  final Value<String?> stagingPath;
-  final Value<String?> finalPath;
+  final Value<String?> stagingHandle;
   final Value<String> codec;
   final Value<String> state;
   final Value<String?> heartbeatAt;
   const RecordingDraftsCompanion({
     this.id = const Value.absent(),
     this.createdAt = const Value.absent(),
-    this.segmentsJson = const Value.absent(),
+    this.segmentHandlesJson = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.sessionId = const Value.absent(),
     this.captureKind = const Value.absent(),
     this.backend = const Value.absent(),
-    this.stagingPath = const Value.absent(),
-    this.finalPath = const Value.absent(),
+    this.stagingHandle = const Value.absent(),
     this.codec = const Value.absent(),
     this.state = const Value.absent(),
     this.heartbeatAt = const Value.absent(),
@@ -1024,28 +988,26 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
   RecordingDraftsCompanion.insert({
     this.id = const Value.absent(),
     required String createdAt,
-    required String segmentsJson,
+    required String segmentHandlesJson,
     this.durationMs = const Value.absent(),
     this.sessionId = const Value.absent(),
     this.captureKind = const Value.absent(),
     this.backend = const Value.absent(),
-    this.stagingPath = const Value.absent(),
-    this.finalPath = const Value.absent(),
+    this.stagingHandle = const Value.absent(),
     this.codec = const Value.absent(),
     this.state = const Value.absent(),
     this.heartbeatAt = const Value.absent(),
   }) : createdAt = Value(createdAt),
-       segmentsJson = Value(segmentsJson);
+       segmentHandlesJson = Value(segmentHandlesJson);
   static Insertable<RecordingDraftRow> custom({
     Expression<int>? id,
     Expression<String>? createdAt,
-    Expression<String>? segmentsJson,
+    Expression<String>? segmentHandlesJson,
     Expression<int>? durationMs,
     Expression<String>? sessionId,
     Expression<String>? captureKind,
     Expression<String>? backend,
-    Expression<String>? stagingPath,
-    Expression<String>? finalPath,
+    Expression<String>? stagingHandle,
     Expression<String>? codec,
     Expression<String>? state,
     Expression<String>? heartbeatAt,
@@ -1053,13 +1015,13 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (createdAt != null) 'created_at': createdAt,
-      if (segmentsJson != null) 'segments_json': segmentsJson,
+      if (segmentHandlesJson != null)
+        'segment_handles_json': segmentHandlesJson,
       if (durationMs != null) 'duration_ms': durationMs,
       if (sessionId != null) 'session_id': sessionId,
       if (captureKind != null) 'capture_kind': captureKind,
       if (backend != null) 'backend': backend,
-      if (stagingPath != null) 'staging_path': stagingPath,
-      if (finalPath != null) 'final_path': finalPath,
+      if (stagingHandle != null) 'staging_handle': stagingHandle,
       if (codec != null) 'codec': codec,
       if (state != null) 'state': state,
       if (heartbeatAt != null) 'heartbeat_at': heartbeatAt,
@@ -1069,13 +1031,12 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
   RecordingDraftsCompanion copyWith({
     Value<int>? id,
     Value<String>? createdAt,
-    Value<String>? segmentsJson,
+    Value<String>? segmentHandlesJson,
     Value<int>? durationMs,
     Value<String>? sessionId,
     Value<String>? captureKind,
     Value<String>? backend,
-    Value<String?>? stagingPath,
-    Value<String?>? finalPath,
+    Value<String?>? stagingHandle,
     Value<String>? codec,
     Value<String>? state,
     Value<String?>? heartbeatAt,
@@ -1083,13 +1044,12 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
     return RecordingDraftsCompanion(
       id: id ?? this.id,
       createdAt: createdAt ?? this.createdAt,
-      segmentsJson: segmentsJson ?? this.segmentsJson,
+      segmentHandlesJson: segmentHandlesJson ?? this.segmentHandlesJson,
       durationMs: durationMs ?? this.durationMs,
       sessionId: sessionId ?? this.sessionId,
       captureKind: captureKind ?? this.captureKind,
       backend: backend ?? this.backend,
-      stagingPath: stagingPath ?? this.stagingPath,
-      finalPath: finalPath ?? this.finalPath,
+      stagingHandle: stagingHandle ?? this.stagingHandle,
       codec: codec ?? this.codec,
       state: state ?? this.state,
       heartbeatAt: heartbeatAt ?? this.heartbeatAt,
@@ -1105,8 +1065,8 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
     if (createdAt.present) {
       map['created_at'] = Variable<String>(createdAt.value);
     }
-    if (segmentsJson.present) {
-      map['segments_json'] = Variable<String>(segmentsJson.value);
+    if (segmentHandlesJson.present) {
+      map['segment_handles_json'] = Variable<String>(segmentHandlesJson.value);
     }
     if (durationMs.present) {
       map['duration_ms'] = Variable<int>(durationMs.value);
@@ -1120,11 +1080,8 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
     if (backend.present) {
       map['backend'] = Variable<String>(backend.value);
     }
-    if (stagingPath.present) {
-      map['staging_path'] = Variable<String>(stagingPath.value);
-    }
-    if (finalPath.present) {
-      map['final_path'] = Variable<String>(finalPath.value);
+    if (stagingHandle.present) {
+      map['staging_handle'] = Variable<String>(stagingHandle.value);
     }
     if (codec.present) {
       map['codec'] = Variable<String>(codec.value);
@@ -1143,13 +1100,12 @@ class RecordingDraftsCompanion extends UpdateCompanion<RecordingDraftRow> {
     return (StringBuffer('RecordingDraftsCompanion(')
           ..write('id: $id, ')
           ..write('createdAt: $createdAt, ')
-          ..write('segmentsJson: $segmentsJson, ')
+          ..write('segmentHandlesJson: $segmentHandlesJson, ')
           ..write('durationMs: $durationMs, ')
           ..write('sessionId: $sessionId, ')
           ..write('captureKind: $captureKind, ')
           ..write('backend: $backend, ')
-          ..write('stagingPath: $stagingPath, ')
-          ..write('finalPath: $finalPath, ')
+          ..write('stagingHandle: $stagingHandle, ')
           ..write('codec: $codec, ')
           ..write('state: $state, ')
           ..write('heartbeatAt: $heartbeatAt')
@@ -4084,38 +4040,50 @@ class $FileBlobsTable extends FileBlobs
     requiredDuringInsert: false,
     defaultValue: const Constant('download_only'),
   );
-  static const VerificationMeta _localPathMeta = const VerificationMeta(
-    'localPath',
-  );
+  static const VerificationMeta _blobIdMeta = const VerificationMeta('blobId');
   @override
-  late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
-    'local_path',
+  late final GeneratedColumn<String> blobId = GeneratedColumn<String>(
+    'blob_id',
     aliasedName,
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _wrappedFekMeta = const VerificationMeta(
-    'wrappedFek',
+  static const VerificationMeta _blobStateMeta = const VerificationMeta(
+    'blobState',
   );
   @override
-  late final GeneratedColumn<String> wrappedFek = GeneratedColumn<String>(
-    'wrapped_fek',
+  late final GeneratedColumn<String> blobState = GeneratedColumn<String>(
+    'blob_state',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant('missing'),
   );
-  static const VerificationMeta _fileNoncePrefixMeta = const VerificationMeta(
-    'fileNoncePrefix',
+  static const VerificationMeta _cipherFormatMeta = const VerificationMeta(
+    'cipherFormat',
   );
   @override
-  late final GeneratedColumn<String> fileNoncePrefix = GeneratedColumn<String>(
-    'file_nonce_prefix',
+  late final GeneratedColumn<String> cipherFormat = GeneratedColumn<String>(
+    'cipher_format',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant('mec1'),
+  );
+  static const VerificationMeta _cipherVersionMeta = const VerificationMeta(
+    'cipherVersion',
+  );
+  @override
+  late final GeneratedColumn<int> cipherVersion = GeneratedColumn<int>(
+    'cipher_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
   );
   static const VerificationMeta _isDirtyMeta = const VerificationMeta(
     'isDirty',
@@ -4171,9 +4139,10 @@ class $FileBlobsTable extends FileBlobs
     uploadedAt,
     multipartContext,
     openPolicy,
-    localPath,
-    wrappedFek,
-    fileNoncePrefix,
+    blobId,
+    blobState,
+    cipherFormat,
+    cipherVersion,
     isDirty,
     createdAt,
     updatedAt,
@@ -4299,24 +4268,33 @@ class $FileBlobsTable extends FileBlobs
         openPolicy.isAcceptableOrUnknown(data['open_policy']!, _openPolicyMeta),
       );
     }
-    if (data.containsKey('local_path')) {
+    if (data.containsKey('blob_id')) {
       context.handle(
-        _localPathMeta,
-        localPath.isAcceptableOrUnknown(data['local_path']!, _localPathMeta),
+        _blobIdMeta,
+        blobId.isAcceptableOrUnknown(data['blob_id']!, _blobIdMeta),
       );
     }
-    if (data.containsKey('wrapped_fek')) {
+    if (data.containsKey('blob_state')) {
       context.handle(
-        _wrappedFekMeta,
-        wrappedFek.isAcceptableOrUnknown(data['wrapped_fek']!, _wrappedFekMeta),
+        _blobStateMeta,
+        blobState.isAcceptableOrUnknown(data['blob_state']!, _blobStateMeta),
       );
     }
-    if (data.containsKey('file_nonce_prefix')) {
+    if (data.containsKey('cipher_format')) {
       context.handle(
-        _fileNoncePrefixMeta,
-        fileNoncePrefix.isAcceptableOrUnknown(
-          data['file_nonce_prefix']!,
-          _fileNoncePrefixMeta,
+        _cipherFormatMeta,
+        cipherFormat.isAcceptableOrUnknown(
+          data['cipher_format']!,
+          _cipherFormatMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cipher_version')) {
+      context.handle(
+        _cipherVersionMeta,
+        cipherVersion.isAcceptableOrUnknown(
+          data['cipher_version']!,
+          _cipherVersionMeta,
         ),
       );
     }
@@ -4411,18 +4389,22 @@ class $FileBlobsTable extends FileBlobs
         DriftSqlType.string,
         data['${effectivePrefix}open_policy'],
       )!,
-      localPath: attachedDatabase.typeMapping.read(
+      blobId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}local_path'],
+        data['${effectivePrefix}blob_id'],
       ),
-      wrappedFek: attachedDatabase.typeMapping.read(
+      blobState: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}wrapped_fek'],
-      ),
-      fileNoncePrefix: attachedDatabase.typeMapping.read(
+        data['${effectivePrefix}blob_state'],
+      )!,
+      cipherFormat: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}file_nonce_prefix'],
-      ),
+        data['${effectivePrefix}cipher_format'],
+      )!,
+      cipherVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cipher_version'],
+      )!,
       isDirty: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_dirty'],
@@ -4460,9 +4442,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
   final int? uploadedAt;
   final String? multipartContext;
   final String openPolicy;
-  final String? localPath;
-  final String? wrappedFek;
-  final String? fileNoncePrefix;
+  final String? blobId;
+  final String blobState;
+  final String cipherFormat;
+  final int cipherVersion;
   final bool isDirty;
   final int createdAt;
   final int updatedAt;
@@ -4482,9 +4465,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     this.uploadedAt,
     this.multipartContext,
     required this.openPolicy,
-    this.localPath,
-    this.wrappedFek,
-    this.fileNoncePrefix,
+    this.blobId,
+    required this.blobState,
+    required this.cipherFormat,
+    required this.cipherVersion,
     required this.isDirty,
     required this.createdAt,
     required this.updatedAt,
@@ -4525,15 +4509,12 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       map['multipart_context'] = Variable<String>(multipartContext);
     }
     map['open_policy'] = Variable<String>(openPolicy);
-    if (!nullToAbsent || localPath != null) {
-      map['local_path'] = Variable<String>(localPath);
+    if (!nullToAbsent || blobId != null) {
+      map['blob_id'] = Variable<String>(blobId);
     }
-    if (!nullToAbsent || wrappedFek != null) {
-      map['wrapped_fek'] = Variable<String>(wrappedFek);
-    }
-    if (!nullToAbsent || fileNoncePrefix != null) {
-      map['file_nonce_prefix'] = Variable<String>(fileNoncePrefix);
-    }
+    map['blob_state'] = Variable<String>(blobState);
+    map['cipher_format'] = Variable<String>(cipherFormat);
+    map['cipher_version'] = Variable<int>(cipherVersion);
     map['is_dirty'] = Variable<bool>(isDirty);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -4575,15 +4556,12 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
           ? const Value.absent()
           : Value(multipartContext),
       openPolicy: Value(openPolicy),
-      localPath: localPath == null && nullToAbsent
+      blobId: blobId == null && nullToAbsent
           ? const Value.absent()
-          : Value(localPath),
-      wrappedFek: wrappedFek == null && nullToAbsent
-          ? const Value.absent()
-          : Value(wrappedFek),
-      fileNoncePrefix: fileNoncePrefix == null && nullToAbsent
-          ? const Value.absent()
-          : Value(fileNoncePrefix),
+          : Value(blobId),
+      blobState: Value(blobState),
+      cipherFormat: Value(cipherFormat),
+      cipherVersion: Value(cipherVersion),
       isDirty: Value(isDirty),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -4613,9 +4591,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       uploadedAt: serializer.fromJson<int?>(json['uploadedAt']),
       multipartContext: serializer.fromJson<String?>(json['multipartContext']),
       openPolicy: serializer.fromJson<String>(json['openPolicy']),
-      localPath: serializer.fromJson<String?>(json['localPath']),
-      wrappedFek: serializer.fromJson<String?>(json['wrappedFek']),
-      fileNoncePrefix: serializer.fromJson<String?>(json['fileNoncePrefix']),
+      blobId: serializer.fromJson<String?>(json['blobId']),
+      blobState: serializer.fromJson<String>(json['blobState']),
+      cipherFormat: serializer.fromJson<String>(json['cipherFormat']),
+      cipherVersion: serializer.fromJson<int>(json['cipherVersion']),
       isDirty: serializer.fromJson<bool>(json['isDirty']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
@@ -4640,9 +4619,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       'uploadedAt': serializer.toJson<int?>(uploadedAt),
       'multipartContext': serializer.toJson<String?>(multipartContext),
       'openPolicy': serializer.toJson<String>(openPolicy),
-      'localPath': serializer.toJson<String?>(localPath),
-      'wrappedFek': serializer.toJson<String?>(wrappedFek),
-      'fileNoncePrefix': serializer.toJson<String?>(fileNoncePrefix),
+      'blobId': serializer.toJson<String?>(blobId),
+      'blobState': serializer.toJson<String>(blobState),
+      'cipherFormat': serializer.toJson<String>(cipherFormat),
+      'cipherVersion': serializer.toJson<int>(cipherVersion),
       'isDirty': serializer.toJson<bool>(isDirty),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
@@ -4665,9 +4645,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     Value<int?> uploadedAt = const Value.absent(),
     Value<String?> multipartContext = const Value.absent(),
     String? openPolicy,
-    Value<String?> localPath = const Value.absent(),
-    Value<String?> wrappedFek = const Value.absent(),
-    Value<String?> fileNoncePrefix = const Value.absent(),
+    Value<String?> blobId = const Value.absent(),
+    String? blobState,
+    String? cipherFormat,
+    int? cipherVersion,
     bool? isDirty,
     int? createdAt,
     int? updatedAt,
@@ -4693,11 +4674,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
         ? multipartContext.value
         : this.multipartContext,
     openPolicy: openPolicy ?? this.openPolicy,
-    localPath: localPath.present ? localPath.value : this.localPath,
-    wrappedFek: wrappedFek.present ? wrappedFek.value : this.wrappedFek,
-    fileNoncePrefix: fileNoncePrefix.present
-        ? fileNoncePrefix.value
-        : this.fileNoncePrefix,
+    blobId: blobId.present ? blobId.value : this.blobId,
+    blobState: blobState ?? this.blobState,
+    cipherFormat: cipherFormat ?? this.cipherFormat,
+    cipherVersion: cipherVersion ?? this.cipherVersion,
     isDirty: isDirty ?? this.isDirty,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -4737,13 +4717,14 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
       openPolicy: data.openPolicy.present
           ? data.openPolicy.value
           : this.openPolicy,
-      localPath: data.localPath.present ? data.localPath.value : this.localPath,
-      wrappedFek: data.wrappedFek.present
-          ? data.wrappedFek.value
-          : this.wrappedFek,
-      fileNoncePrefix: data.fileNoncePrefix.present
-          ? data.fileNoncePrefix.value
-          : this.fileNoncePrefix,
+      blobId: data.blobId.present ? data.blobId.value : this.blobId,
+      blobState: data.blobState.present ? data.blobState.value : this.blobState,
+      cipherFormat: data.cipherFormat.present
+          ? data.cipherFormat.value
+          : this.cipherFormat,
+      cipherVersion: data.cipherVersion.present
+          ? data.cipherVersion.value
+          : this.cipherVersion,
       isDirty: data.isDirty.present ? data.isDirty.value : this.isDirty,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -4768,9 +4749,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
           ..write('uploadedAt: $uploadedAt, ')
           ..write('multipartContext: $multipartContext, ')
           ..write('openPolicy: $openPolicy, ')
-          ..write('localPath: $localPath, ')
-          ..write('wrappedFek: $wrappedFek, ')
-          ..write('fileNoncePrefix: $fileNoncePrefix, ')
+          ..write('blobId: $blobId, ')
+          ..write('blobState: $blobState, ')
+          ..write('cipherFormat: $cipherFormat, ')
+          ..write('cipherVersion: $cipherVersion, ')
           ..write('isDirty: $isDirty, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -4795,9 +4777,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
     uploadedAt,
     multipartContext,
     openPolicy,
-    localPath,
-    wrappedFek,
-    fileNoncePrefix,
+    blobId,
+    blobState,
+    cipherFormat,
+    cipherVersion,
     isDirty,
     createdAt,
     updatedAt,
@@ -4821,9 +4804,10 @@ class FileBlobRow extends DataClass implements Insertable<FileBlobRow> {
           other.uploadedAt == this.uploadedAt &&
           other.multipartContext == this.multipartContext &&
           other.openPolicy == this.openPolicy &&
-          other.localPath == this.localPath &&
-          other.wrappedFek == this.wrappedFek &&
-          other.fileNoncePrefix == this.fileNoncePrefix &&
+          other.blobId == this.blobId &&
+          other.blobState == this.blobState &&
+          other.cipherFormat == this.cipherFormat &&
+          other.cipherVersion == this.cipherVersion &&
           other.isDirty == this.isDirty &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -4845,9 +4829,10 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
   final Value<int?> uploadedAt;
   final Value<String?> multipartContext;
   final Value<String> openPolicy;
-  final Value<String?> localPath;
-  final Value<String?> wrappedFek;
-  final Value<String?> fileNoncePrefix;
+  final Value<String?> blobId;
+  final Value<String> blobState;
+  final Value<String> cipherFormat;
+  final Value<int> cipherVersion;
   final Value<bool> isDirty;
   final Value<int> createdAt;
   final Value<int> updatedAt;
@@ -4868,9 +4853,10 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     this.uploadedAt = const Value.absent(),
     this.multipartContext = const Value.absent(),
     this.openPolicy = const Value.absent(),
-    this.localPath = const Value.absent(),
-    this.wrappedFek = const Value.absent(),
-    this.fileNoncePrefix = const Value.absent(),
+    this.blobId = const Value.absent(),
+    this.blobState = const Value.absent(),
+    this.cipherFormat = const Value.absent(),
+    this.cipherVersion = const Value.absent(),
     this.isDirty = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -4892,9 +4878,10 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     this.uploadedAt = const Value.absent(),
     this.multipartContext = const Value.absent(),
     this.openPolicy = const Value.absent(),
-    this.localPath = const Value.absent(),
-    this.wrappedFek = const Value.absent(),
-    this.fileNoncePrefix = const Value.absent(),
+    this.blobId = const Value.absent(),
+    this.blobState = const Value.absent(),
+    this.cipherFormat = const Value.absent(),
+    this.cipherVersion = const Value.absent(),
     this.isDirty = const Value.absent(),
     required int createdAt,
     required int updatedAt,
@@ -4919,9 +4906,10 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     Expression<int>? uploadedAt,
     Expression<String>? multipartContext,
     Expression<String>? openPolicy,
-    Expression<String>? localPath,
-    Expression<String>? wrappedFek,
-    Expression<String>? fileNoncePrefix,
+    Expression<String>? blobId,
+    Expression<String>? blobState,
+    Expression<String>? cipherFormat,
+    Expression<int>? cipherVersion,
     Expression<bool>? isDirty,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
@@ -4943,9 +4931,10 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
       if (uploadedAt != null) 'uploaded_at': uploadedAt,
       if (multipartContext != null) 'multipart_context': multipartContext,
       if (openPolicy != null) 'open_policy': openPolicy,
-      if (localPath != null) 'local_path': localPath,
-      if (wrappedFek != null) 'wrapped_fek': wrappedFek,
-      if (fileNoncePrefix != null) 'file_nonce_prefix': fileNoncePrefix,
+      if (blobId != null) 'blob_id': blobId,
+      if (blobState != null) 'blob_state': blobState,
+      if (cipherFormat != null) 'cipher_format': cipherFormat,
+      if (cipherVersion != null) 'cipher_version': cipherVersion,
       if (isDirty != null) 'is_dirty': isDirty,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -4969,9 +4958,10 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     Value<int?>? uploadedAt,
     Value<String?>? multipartContext,
     Value<String>? openPolicy,
-    Value<String?>? localPath,
-    Value<String?>? wrappedFek,
-    Value<String?>? fileNoncePrefix,
+    Value<String?>? blobId,
+    Value<String>? blobState,
+    Value<String>? cipherFormat,
+    Value<int>? cipherVersion,
     Value<bool>? isDirty,
     Value<int>? createdAt,
     Value<int>? updatedAt,
@@ -4993,9 +4983,10 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
       uploadedAt: uploadedAt ?? this.uploadedAt,
       multipartContext: multipartContext ?? this.multipartContext,
       openPolicy: openPolicy ?? this.openPolicy,
-      localPath: localPath ?? this.localPath,
-      wrappedFek: wrappedFek ?? this.wrappedFek,
-      fileNoncePrefix: fileNoncePrefix ?? this.fileNoncePrefix,
+      blobId: blobId ?? this.blobId,
+      blobState: blobState ?? this.blobState,
+      cipherFormat: cipherFormat ?? this.cipherFormat,
+      cipherVersion: cipherVersion ?? this.cipherVersion,
       isDirty: isDirty ?? this.isDirty,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -5051,14 +5042,17 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
     if (openPolicy.present) {
       map['open_policy'] = Variable<String>(openPolicy.value);
     }
-    if (localPath.present) {
-      map['local_path'] = Variable<String>(localPath.value);
+    if (blobId.present) {
+      map['blob_id'] = Variable<String>(blobId.value);
     }
-    if (wrappedFek.present) {
-      map['wrapped_fek'] = Variable<String>(wrappedFek.value);
+    if (blobState.present) {
+      map['blob_state'] = Variable<String>(blobState.value);
     }
-    if (fileNoncePrefix.present) {
-      map['file_nonce_prefix'] = Variable<String>(fileNoncePrefix.value);
+    if (cipherFormat.present) {
+      map['cipher_format'] = Variable<String>(cipherFormat.value);
+    }
+    if (cipherVersion.present) {
+      map['cipher_version'] = Variable<int>(cipherVersion.value);
     }
     if (isDirty.present) {
       map['is_dirty'] = Variable<bool>(isDirty.value);
@@ -5093,12 +5087,628 @@ class FileBlobsCompanion extends UpdateCompanion<FileBlobRow> {
           ..write('uploadedAt: $uploadedAt, ')
           ..write('multipartContext: $multipartContext, ')
           ..write('openPolicy: $openPolicy, ')
-          ..write('localPath: $localPath, ')
-          ..write('wrappedFek: $wrappedFek, ')
-          ..write('fileNoncePrefix: $fileNoncePrefix, ')
+          ..write('blobId: $blobId, ')
+          ..write('blobState: $blobState, ')
+          ..write('cipherFormat: $cipherFormat, ')
+          ..write('cipherVersion: $cipherVersion, ')
           ..write('isDirty: $isDirty, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $VaultRetentionPoliciesTable extends VaultRetentionPolicies
+    with TableInfo<$VaultRetentionPoliciesTable, VaultRetentionPolicyRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $VaultRetentionPoliciesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('keep_forever'),
+  );
+  static const VerificationMeta _expiryDaysMeta = const VerificationMeta(
+    'expiryDays',
+  );
+  @override
+  late final GeneratedColumn<int> expiryDays = GeneratedColumn<int>(
+    'expiry_days',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, mode, expiryDays, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'vault_retention_policies';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<VaultRetentionPolicyRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    }
+    if (data.containsKey('expiry_days')) {
+      context.handle(
+        _expiryDaysMeta,
+        expiryDays.isAcceptableOrUnknown(data['expiry_days']!, _expiryDaysMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  VaultRetentionPolicyRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return VaultRetentionPolicyRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mode'],
+      )!,
+      expiryDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}expiry_days'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $VaultRetentionPoliciesTable createAlias(String alias) {
+    return $VaultRetentionPoliciesTable(attachedDatabase, alias);
+  }
+}
+
+class VaultRetentionPolicyRow extends DataClass
+    implements Insertable<VaultRetentionPolicyRow> {
+  final int id;
+  final String mode;
+  final int? expiryDays;
+  final int updatedAt;
+  const VaultRetentionPolicyRow({
+    required this.id,
+    required this.mode,
+    this.expiryDays,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['mode'] = Variable<String>(mode);
+    if (!nullToAbsent || expiryDays != null) {
+      map['expiry_days'] = Variable<int>(expiryDays);
+    }
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  VaultRetentionPoliciesCompanion toCompanion(bool nullToAbsent) {
+    return VaultRetentionPoliciesCompanion(
+      id: Value(id),
+      mode: Value(mode),
+      expiryDays: expiryDays == null && nullToAbsent
+          ? const Value.absent()
+          : Value(expiryDays),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory VaultRetentionPolicyRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return VaultRetentionPolicyRow(
+      id: serializer.fromJson<int>(json['id']),
+      mode: serializer.fromJson<String>(json['mode']),
+      expiryDays: serializer.fromJson<int?>(json['expiryDays']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'mode': serializer.toJson<String>(mode),
+      'expiryDays': serializer.toJson<int?>(expiryDays),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  VaultRetentionPolicyRow copyWith({
+    int? id,
+    String? mode,
+    Value<int?> expiryDays = const Value.absent(),
+    int? updatedAt,
+  }) => VaultRetentionPolicyRow(
+    id: id ?? this.id,
+    mode: mode ?? this.mode,
+    expiryDays: expiryDays.present ? expiryDays.value : this.expiryDays,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  VaultRetentionPolicyRow copyWithCompanion(
+    VaultRetentionPoliciesCompanion data,
+  ) {
+    return VaultRetentionPolicyRow(
+      id: data.id.present ? data.id.value : this.id,
+      mode: data.mode.present ? data.mode.value : this.mode,
+      expiryDays: data.expiryDays.present
+          ? data.expiryDays.value
+          : this.expiryDays,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VaultRetentionPolicyRow(')
+          ..write('id: $id, ')
+          ..write('mode: $mode, ')
+          ..write('expiryDays: $expiryDays, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, mode, expiryDays, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is VaultRetentionPolicyRow &&
+          other.id == this.id &&
+          other.mode == this.mode &&
+          other.expiryDays == this.expiryDays &&
+          other.updatedAt == this.updatedAt);
+}
+
+class VaultRetentionPoliciesCompanion
+    extends UpdateCompanion<VaultRetentionPolicyRow> {
+  final Value<int> id;
+  final Value<String> mode;
+  final Value<int?> expiryDays;
+  final Value<int> updatedAt;
+  const VaultRetentionPoliciesCompanion({
+    this.id = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.expiryDays = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  VaultRetentionPoliciesCompanion.insert({
+    this.id = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.expiryDays = const Value.absent(),
+    required int updatedAt,
+  }) : updatedAt = Value(updatedAt);
+  static Insertable<VaultRetentionPolicyRow> custom({
+    Expression<int>? id,
+    Expression<String>? mode,
+    Expression<int>? expiryDays,
+    Expression<int>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (mode != null) 'mode': mode,
+      if (expiryDays != null) 'expiry_days': expiryDays,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  VaultRetentionPoliciesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? mode,
+    Value<int?>? expiryDays,
+    Value<int>? updatedAt,
+  }) {
+    return VaultRetentionPoliciesCompanion(
+      id: id ?? this.id,
+      mode: mode ?? this.mode,
+      expiryDays: expiryDays ?? this.expiryDays,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<String>(mode.value);
+    }
+    if (expiryDays.present) {
+      map['expiry_days'] = Variable<int>(expiryDays.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('VaultRetentionPoliciesCompanion(')
+          ..write('id: $id, ')
+          ..write('mode: $mode, ')
+          ..write('expiryDays: $expiryDays, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BlobGcDecisionsTable extends BlobGcDecisions
+    with TableInfo<$BlobGcDecisionsTable, BlobGcDecisionRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BlobGcDecisionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _blobIdMeta = const VerificationMeta('blobId');
+  @override
+  late final GeneratedColumn<String> blobId = GeneratedColumn<String>(
+    'blob_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _decisionMeta = const VerificationMeta(
+    'decision',
+  );
+  @override
+  late final GeneratedColumn<String> decision = GeneratedColumn<String>(
+    'decision',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _decidedAtMeta = const VerificationMeta(
+    'decidedAt',
+  );
+  @override
+  late final GeneratedColumn<int> decidedAt = GeneratedColumn<int>(
+    'decided_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [blobId, decision, reason, decidedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'blob_gc_decisions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BlobGcDecisionRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('blob_id')) {
+      context.handle(
+        _blobIdMeta,
+        blobId.isAcceptableOrUnknown(data['blob_id']!, _blobIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_blobIdMeta);
+    }
+    if (data.containsKey('decision')) {
+      context.handle(
+        _decisionMeta,
+        decision.isAcceptableOrUnknown(data['decision']!, _decisionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_decisionMeta);
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('decided_at')) {
+      context.handle(
+        _decidedAtMeta,
+        decidedAt.isAcceptableOrUnknown(data['decided_at']!, _decidedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_decidedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {blobId};
+  @override
+  BlobGcDecisionRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BlobGcDecisionRow(
+      blobId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}blob_id'],
+      )!,
+      decision: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}decision'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      decidedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}decided_at'],
+      )!,
+    );
+  }
+
+  @override
+  $BlobGcDecisionsTable createAlias(String alias) {
+    return $BlobGcDecisionsTable(attachedDatabase, alias);
+  }
+}
+
+class BlobGcDecisionRow extends DataClass
+    implements Insertable<BlobGcDecisionRow> {
+  final String blobId;
+  final String decision;
+  final String reason;
+  final int decidedAt;
+  const BlobGcDecisionRow({
+    required this.blobId,
+    required this.decision,
+    required this.reason,
+    required this.decidedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['blob_id'] = Variable<String>(blobId);
+    map['decision'] = Variable<String>(decision);
+    map['reason'] = Variable<String>(reason);
+    map['decided_at'] = Variable<int>(decidedAt);
+    return map;
+  }
+
+  BlobGcDecisionsCompanion toCompanion(bool nullToAbsent) {
+    return BlobGcDecisionsCompanion(
+      blobId: Value(blobId),
+      decision: Value(decision),
+      reason: Value(reason),
+      decidedAt: Value(decidedAt),
+    );
+  }
+
+  factory BlobGcDecisionRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BlobGcDecisionRow(
+      blobId: serializer.fromJson<String>(json['blobId']),
+      decision: serializer.fromJson<String>(json['decision']),
+      reason: serializer.fromJson<String>(json['reason']),
+      decidedAt: serializer.fromJson<int>(json['decidedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'blobId': serializer.toJson<String>(blobId),
+      'decision': serializer.toJson<String>(decision),
+      'reason': serializer.toJson<String>(reason),
+      'decidedAt': serializer.toJson<int>(decidedAt),
+    };
+  }
+
+  BlobGcDecisionRow copyWith({
+    String? blobId,
+    String? decision,
+    String? reason,
+    int? decidedAt,
+  }) => BlobGcDecisionRow(
+    blobId: blobId ?? this.blobId,
+    decision: decision ?? this.decision,
+    reason: reason ?? this.reason,
+    decidedAt: decidedAt ?? this.decidedAt,
+  );
+  BlobGcDecisionRow copyWithCompanion(BlobGcDecisionsCompanion data) {
+    return BlobGcDecisionRow(
+      blobId: data.blobId.present ? data.blobId.value : this.blobId,
+      decision: data.decision.present ? data.decision.value : this.decision,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      decidedAt: data.decidedAt.present ? data.decidedAt.value : this.decidedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BlobGcDecisionRow(')
+          ..write('blobId: $blobId, ')
+          ..write('decision: $decision, ')
+          ..write('reason: $reason, ')
+          ..write('decidedAt: $decidedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(blobId, decision, reason, decidedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BlobGcDecisionRow &&
+          other.blobId == this.blobId &&
+          other.decision == this.decision &&
+          other.reason == this.reason &&
+          other.decidedAt == this.decidedAt);
+}
+
+class BlobGcDecisionsCompanion extends UpdateCompanion<BlobGcDecisionRow> {
+  final Value<String> blobId;
+  final Value<String> decision;
+  final Value<String> reason;
+  final Value<int> decidedAt;
+  final Value<int> rowid;
+  const BlobGcDecisionsCompanion({
+    this.blobId = const Value.absent(),
+    this.decision = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.decidedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  BlobGcDecisionsCompanion.insert({
+    required String blobId,
+    required String decision,
+    required String reason,
+    required int decidedAt,
+    this.rowid = const Value.absent(),
+  }) : blobId = Value(blobId),
+       decision = Value(decision),
+       reason = Value(reason),
+       decidedAt = Value(decidedAt);
+  static Insertable<BlobGcDecisionRow> custom({
+    Expression<String>? blobId,
+    Expression<String>? decision,
+    Expression<String>? reason,
+    Expression<int>? decidedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (blobId != null) 'blob_id': blobId,
+      if (decision != null) 'decision': decision,
+      if (reason != null) 'reason': reason,
+      if (decidedAt != null) 'decided_at': decidedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  BlobGcDecisionsCompanion copyWith({
+    Value<String>? blobId,
+    Value<String>? decision,
+    Value<String>? reason,
+    Value<int>? decidedAt,
+    Value<int>? rowid,
+  }) {
+    return BlobGcDecisionsCompanion(
+      blobId: blobId ?? this.blobId,
+      decision: decision ?? this.decision,
+      reason: reason ?? this.reason,
+      decidedAt: decidedAt ?? this.decidedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (blobId.present) {
+      map['blob_id'] = Variable<String>(blobId.value);
+    }
+    if (decision.present) {
+      map['decision'] = Variable<String>(decision.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (decidedAt.present) {
+      map['decided_at'] = Variable<int>(decidedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BlobGcDecisionsCompanion(')
+          ..write('blobId: $blobId, ')
+          ..write('decision: $decision, ')
+          ..write('reason: $reason, ')
+          ..write('decidedAt: $decidedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7238,6 +7848,26 @@ class $WorkQueueTable extends WorkQueue
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _blobIdMeta = const VerificationMeta('blobId');
+  @override
+  late final GeneratedColumn<String> blobId = GeneratedColumn<String>(
+    'blob_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _blobRevisionMeta = const VerificationMeta(
+    'blobRevision',
+  );
+  @override
+  late final GeneratedColumn<int> blobRevision = GeneratedColumn<int>(
+    'blob_revision',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _dedupeKeyMeta = const VerificationMeta(
     'dedupeKey',
   );
@@ -7428,6 +8058,8 @@ class $WorkQueueTable extends WorkQueue
     id,
     kind,
     itemId,
+    blobId,
+    blobRevision,
     dedupeKey,
     state,
     stage,
@@ -7478,6 +8110,21 @@ class $WorkQueueTable extends WorkQueue
       );
     } else if (isInserting) {
       context.missing(_itemIdMeta);
+    }
+    if (data.containsKey('blob_id')) {
+      context.handle(
+        _blobIdMeta,
+        blobId.isAcceptableOrUnknown(data['blob_id']!, _blobIdMeta),
+      );
+    }
+    if (data.containsKey('blob_revision')) {
+      context.handle(
+        _blobRevisionMeta,
+        blobRevision.isAcceptableOrUnknown(
+          data['blob_revision']!,
+          _blobRevisionMeta,
+        ),
+      );
     }
     if (data.containsKey('dedupe_key')) {
       context.handle(
@@ -7636,6 +8283,14 @@ class $WorkQueueTable extends WorkQueue
         DriftSqlType.string,
         data['${effectivePrefix}item_id'],
       )!,
+      blobId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}blob_id'],
+      ),
+      blobRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}blob_revision'],
+      ),
       dedupeKey: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}dedupe_key'],
@@ -7717,6 +8372,8 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
   final String id;
   final String kind;
   final String itemId;
+  final String? blobId;
+  final int? blobRevision;
   final String dedupeKey;
   final String state;
   final String stage;
@@ -7738,6 +8395,8 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     required this.id,
     required this.kind,
     required this.itemId,
+    this.blobId,
+    this.blobRevision,
     required this.dedupeKey,
     required this.state,
     required this.stage,
@@ -7762,6 +8421,12 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     map['id'] = Variable<String>(id);
     map['kind'] = Variable<String>(kind);
     map['item_id'] = Variable<String>(itemId);
+    if (!nullToAbsent || blobId != null) {
+      map['blob_id'] = Variable<String>(blobId);
+    }
+    if (!nullToAbsent || blobRevision != null) {
+      map['blob_revision'] = Variable<int>(blobRevision);
+    }
     map['dedupe_key'] = Variable<String>(dedupeKey);
     map['state'] = Variable<String>(state);
     map['stage'] = Variable<String>(stage);
@@ -7803,6 +8468,12 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
       id: Value(id),
       kind: Value(kind),
       itemId: Value(itemId),
+      blobId: blobId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(blobId),
+      blobRevision: blobRevision == null && nullToAbsent
+          ? const Value.absent()
+          : Value(blobRevision),
       dedupeKey: Value(dedupeKey),
       state: Value(state),
       stage: Value(stage),
@@ -7848,6 +8519,8 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
       id: serializer.fromJson<String>(json['id']),
       kind: serializer.fromJson<String>(json['kind']),
       itemId: serializer.fromJson<String>(json['itemId']),
+      blobId: serializer.fromJson<String?>(json['blobId']),
+      blobRevision: serializer.fromJson<int?>(json['blobRevision']),
       dedupeKey: serializer.fromJson<String>(json['dedupeKey']),
       state: serializer.fromJson<String>(json['state']),
       stage: serializer.fromJson<String>(json['stage']),
@@ -7878,6 +8551,8 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
       'id': serializer.toJson<String>(id),
       'kind': serializer.toJson<String>(kind),
       'itemId': serializer.toJson<String>(itemId),
+      'blobId': serializer.toJson<String?>(blobId),
+      'blobRevision': serializer.toJson<int?>(blobRevision),
       'dedupeKey': serializer.toJson<String>(dedupeKey),
       'state': serializer.toJson<String>(state),
       'stage': serializer.toJson<String>(stage),
@@ -7904,6 +8579,8 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     String? id,
     String? kind,
     String? itemId,
+    Value<String?> blobId = const Value.absent(),
+    Value<int?> blobRevision = const Value.absent(),
     String? dedupeKey,
     String? state,
     String? stage,
@@ -7925,6 +8602,8 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     id: id ?? this.id,
     kind: kind ?? this.kind,
     itemId: itemId ?? this.itemId,
+    blobId: blobId.present ? blobId.value : this.blobId,
+    blobRevision: blobRevision.present ? blobRevision.value : this.blobRevision,
     dedupeKey: dedupeKey ?? this.dedupeKey,
     state: state ?? this.state,
     stage: stage ?? this.stage,
@@ -7956,6 +8635,10 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
       id: data.id.present ? data.id.value : this.id,
       kind: data.kind.present ? data.kind.value : this.kind,
       itemId: data.itemId.present ? data.itemId.value : this.itemId,
+      blobId: data.blobId.present ? data.blobId.value : this.blobId,
+      blobRevision: data.blobRevision.present
+          ? data.blobRevision.value
+          : this.blobRevision,
       dedupeKey: data.dedupeKey.present ? data.dedupeKey.value : this.dedupeKey,
       state: data.state.present ? data.state.value : this.state,
       stage: data.stage.present ? data.stage.value : this.stage,
@@ -7998,6 +8681,8 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
           ..write('id: $id, ')
           ..write('kind: $kind, ')
           ..write('itemId: $itemId, ')
+          ..write('blobId: $blobId, ')
+          ..write('blobRevision: $blobRevision, ')
           ..write('dedupeKey: $dedupeKey, ')
           ..write('state: $state, ')
           ..write('stage: $stage, ')
@@ -8020,10 +8705,12 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     kind,
     itemId,
+    blobId,
+    blobRevision,
     dedupeKey,
     state,
     stage,
@@ -8041,7 +8728,7 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
     configRevision,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -8049,6 +8736,8 @@ class WorkQueueRow extends DataClass implements Insertable<WorkQueueRow> {
           other.id == this.id &&
           other.kind == this.kind &&
           other.itemId == this.itemId &&
+          other.blobId == this.blobId &&
+          other.blobRevision == this.blobRevision &&
           other.dedupeKey == this.dedupeKey &&
           other.state == this.state &&
           other.stage == this.stage &&
@@ -8072,6 +8761,8 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
   final Value<String> id;
   final Value<String> kind;
   final Value<String> itemId;
+  final Value<String?> blobId;
+  final Value<int?> blobRevision;
   final Value<String> dedupeKey;
   final Value<String> state;
   final Value<String> stage;
@@ -8094,6 +8785,8 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     this.id = const Value.absent(),
     this.kind = const Value.absent(),
     this.itemId = const Value.absent(),
+    this.blobId = const Value.absent(),
+    this.blobRevision = const Value.absent(),
     this.dedupeKey = const Value.absent(),
     this.state = const Value.absent(),
     this.stage = const Value.absent(),
@@ -8117,6 +8810,8 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     required String id,
     required String kind,
     required String itemId,
+    this.blobId = const Value.absent(),
+    this.blobRevision = const Value.absent(),
     required String dedupeKey,
     required String state,
     required String stage,
@@ -8148,6 +8843,8 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     Expression<String>? id,
     Expression<String>? kind,
     Expression<String>? itemId,
+    Expression<String>? blobId,
+    Expression<int>? blobRevision,
     Expression<String>? dedupeKey,
     Expression<String>? state,
     Expression<String>? stage,
@@ -8171,6 +8868,8 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
       if (id != null) 'id': id,
       if (kind != null) 'kind': kind,
       if (itemId != null) 'item_id': itemId,
+      if (blobId != null) 'blob_id': blobId,
+      if (blobRevision != null) 'blob_revision': blobRevision,
       if (dedupeKey != null) 'dedupe_key': dedupeKey,
       if (state != null) 'state': state,
       if (stage != null) 'stage': stage,
@@ -8198,6 +8897,8 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     Value<String>? id,
     Value<String>? kind,
     Value<String>? itemId,
+    Value<String?>? blobId,
+    Value<int?>? blobRevision,
     Value<String>? dedupeKey,
     Value<String>? state,
     Value<String>? stage,
@@ -8221,6 +8922,8 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
       id: id ?? this.id,
       kind: kind ?? this.kind,
       itemId: itemId ?? this.itemId,
+      blobId: blobId ?? this.blobId,
+      blobRevision: blobRevision ?? this.blobRevision,
       dedupeKey: dedupeKey ?? this.dedupeKey,
       state: state ?? this.state,
       stage: stage ?? this.stage,
@@ -8255,6 +8958,12 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
     }
     if (itemId.present) {
       map['item_id'] = Variable<String>(itemId.value);
+    }
+    if (blobId.present) {
+      map['blob_id'] = Variable<String>(blobId.value);
+    }
+    if (blobRevision.present) {
+      map['blob_revision'] = Variable<int>(blobRevision.value);
     }
     if (dedupeKey.present) {
       map['dedupe_key'] = Variable<String>(dedupeKey.value);
@@ -8323,6 +9032,8 @@ class WorkQueueCompanion extends UpdateCompanion<WorkQueueRow> {
           ..write('id: $id, ')
           ..write('kind: $kind, ')
           ..write('itemId: $itemId, ')
+          ..write('blobId: $blobId, ')
+          ..write('blobRevision: $blobRevision, ')
           ..write('dedupeKey: $dedupeKey, ')
           ..write('state: $state, ')
           ..write('stage: $stage, ')
@@ -8624,6 +9335,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SpaceContactsTable spaceContacts = $SpaceContactsTable(this);
   late final $MatomeSharesTable matomeShares = $MatomeSharesTable(this);
   late final $FileBlobsTable fileBlobs = $FileBlobsTable(this);
+  late final $VaultRetentionPoliciesTable vaultRetentionPolicies =
+      $VaultRetentionPoliciesTable(this);
+  late final $BlobGcDecisionsTable blobGcDecisions = $BlobGcDecisionsTable(
+    this,
+  );
   late final $TextContentsTable textContents = $TextContentsTable(this);
   late final $ItemsTable items = $ItemsTable(this);
   late final $WorkQueueTable workQueue = $WorkQueueTable(this);
@@ -8652,6 +9368,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     spaceContacts,
     matomeShares,
     fileBlobs,
+    vaultRetentionPolicies,
+    blobGcDecisions,
     textContents,
     items,
     workQueue,
@@ -8901,13 +9619,12 @@ typedef $$RecordingDraftsTableCreateCompanionBuilder =
     RecordingDraftsCompanion Function({
       Value<int> id,
       required String createdAt,
-      required String segmentsJson,
+      required String segmentHandlesJson,
       Value<int> durationMs,
       Value<String> sessionId,
       Value<String> captureKind,
       Value<String> backend,
-      Value<String?> stagingPath,
-      Value<String?> finalPath,
+      Value<String?> stagingHandle,
       Value<String> codec,
       Value<String> state,
       Value<String?> heartbeatAt,
@@ -8916,13 +9633,12 @@ typedef $$RecordingDraftsTableUpdateCompanionBuilder =
     RecordingDraftsCompanion Function({
       Value<int> id,
       Value<String> createdAt,
-      Value<String> segmentsJson,
+      Value<String> segmentHandlesJson,
       Value<int> durationMs,
       Value<String> sessionId,
       Value<String> captureKind,
       Value<String> backend,
-      Value<String?> stagingPath,
-      Value<String?> finalPath,
+      Value<String?> stagingHandle,
       Value<String> codec,
       Value<String> state,
       Value<String?> heartbeatAt,
@@ -8947,8 +9663,8 @@ class $$RecordingDraftsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get segmentsJson => $composableBuilder(
-    column: $table.segmentsJson,
+  ColumnFilters<String> get segmentHandlesJson => $composableBuilder(
+    column: $table.segmentHandlesJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8972,13 +9688,8 @@ class $$RecordingDraftsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get stagingPath => $composableBuilder(
-    column: $table.stagingPath,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get finalPath => $composableBuilder(
-    column: $table.finalPath,
+  ColumnFilters<String> get stagingHandle => $composableBuilder(
+    column: $table.stagingHandle,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9017,8 +9728,8 @@ class $$RecordingDraftsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get segmentsJson => $composableBuilder(
-    column: $table.segmentsJson,
+  ColumnOrderings<String> get segmentHandlesJson => $composableBuilder(
+    column: $table.segmentHandlesJson,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9042,13 +9753,8 @@ class $$RecordingDraftsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get stagingPath => $composableBuilder(
-    column: $table.stagingPath,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get finalPath => $composableBuilder(
-    column: $table.finalPath,
+  ColumnOrderings<String> get stagingHandle => $composableBuilder(
+    column: $table.stagingHandle,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9083,8 +9789,8 @@ class $$RecordingDraftsTableAnnotationComposer
   GeneratedColumn<String> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<String> get segmentsJson => $composableBuilder(
-    column: $table.segmentsJson,
+  GeneratedColumn<String> get segmentHandlesJson => $composableBuilder(
+    column: $table.segmentHandlesJson,
     builder: (column) => column,
   );
 
@@ -9104,13 +9810,10 @@ class $$RecordingDraftsTableAnnotationComposer
   GeneratedColumn<String> get backend =>
       $composableBuilder(column: $table.backend, builder: (column) => column);
 
-  GeneratedColumn<String> get stagingPath => $composableBuilder(
-    column: $table.stagingPath,
+  GeneratedColumn<String> get stagingHandle => $composableBuilder(
+    column: $table.stagingHandle,
     builder: (column) => column,
   );
-
-  GeneratedColumn<String> get finalPath =>
-      $composableBuilder(column: $table.finalPath, builder: (column) => column);
 
   GeneratedColumn<String> get codec =>
       $composableBuilder(column: $table.codec, builder: (column) => column);
@@ -9163,26 +9866,24 @@ class $$RecordingDraftsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<String> createdAt = const Value.absent(),
-                Value<String> segmentsJson = const Value.absent(),
+                Value<String> segmentHandlesJson = const Value.absent(),
                 Value<int> durationMs = const Value.absent(),
                 Value<String> sessionId = const Value.absent(),
                 Value<String> captureKind = const Value.absent(),
                 Value<String> backend = const Value.absent(),
-                Value<String?> stagingPath = const Value.absent(),
-                Value<String?> finalPath = const Value.absent(),
+                Value<String?> stagingHandle = const Value.absent(),
                 Value<String> codec = const Value.absent(),
                 Value<String> state = const Value.absent(),
                 Value<String?> heartbeatAt = const Value.absent(),
               }) => RecordingDraftsCompanion(
                 id: id,
                 createdAt: createdAt,
-                segmentsJson: segmentsJson,
+                segmentHandlesJson: segmentHandlesJson,
                 durationMs: durationMs,
                 sessionId: sessionId,
                 captureKind: captureKind,
                 backend: backend,
-                stagingPath: stagingPath,
-                finalPath: finalPath,
+                stagingHandle: stagingHandle,
                 codec: codec,
                 state: state,
                 heartbeatAt: heartbeatAt,
@@ -9191,26 +9892,24 @@ class $$RecordingDraftsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required String createdAt,
-                required String segmentsJson,
+                required String segmentHandlesJson,
                 Value<int> durationMs = const Value.absent(),
                 Value<String> sessionId = const Value.absent(),
                 Value<String> captureKind = const Value.absent(),
                 Value<String> backend = const Value.absent(),
-                Value<String?> stagingPath = const Value.absent(),
-                Value<String?> finalPath = const Value.absent(),
+                Value<String?> stagingHandle = const Value.absent(),
                 Value<String> codec = const Value.absent(),
                 Value<String> state = const Value.absent(),
                 Value<String?> heartbeatAt = const Value.absent(),
               }) => RecordingDraftsCompanion.insert(
                 id: id,
                 createdAt: createdAt,
-                segmentsJson: segmentsJson,
+                segmentHandlesJson: segmentHandlesJson,
                 durationMs: durationMs,
                 sessionId: sessionId,
                 captureKind: captureKind,
                 backend: backend,
-                stagingPath: stagingPath,
-                finalPath: finalPath,
+                stagingHandle: stagingHandle,
                 codec: codec,
                 state: state,
                 heartbeatAt: heartbeatAt,
@@ -10748,9 +11447,10 @@ typedef $$FileBlobsTableCreateCompanionBuilder =
       Value<int?> uploadedAt,
       Value<String?> multipartContext,
       Value<String> openPolicy,
-      Value<String?> localPath,
-      Value<String?> wrappedFek,
-      Value<String?> fileNoncePrefix,
+      Value<String?> blobId,
+      Value<String> blobState,
+      Value<String> cipherFormat,
+      Value<int> cipherVersion,
       Value<bool> isDirty,
       required int createdAt,
       required int updatedAt,
@@ -10773,9 +11473,10 @@ typedef $$FileBlobsTableUpdateCompanionBuilder =
       Value<int?> uploadedAt,
       Value<String?> multipartContext,
       Value<String> openPolicy,
-      Value<String?> localPath,
-      Value<String?> wrappedFek,
-      Value<String?> fileNoncePrefix,
+      Value<String?> blobId,
+      Value<String> blobState,
+      Value<String> cipherFormat,
+      Value<int> cipherVersion,
       Value<bool> isDirty,
       Value<int> createdAt,
       Value<int> updatedAt,
@@ -10866,18 +11567,23 @@ class $$FileBlobsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get localPath => $composableBuilder(
-    column: $table.localPath,
+  ColumnFilters<String> get blobId => $composableBuilder(
+    column: $table.blobId,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get wrappedFek => $composableBuilder(
-    column: $table.wrappedFek,
+  ColumnFilters<String> get blobState => $composableBuilder(
+    column: $table.blobState,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get fileNoncePrefix => $composableBuilder(
-    column: $table.fileNoncePrefix,
+  ColumnFilters<String> get cipherFormat => $composableBuilder(
+    column: $table.cipherFormat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cipherVersion => $composableBuilder(
+    column: $table.cipherVersion,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10981,18 +11687,23 @@ class $$FileBlobsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get localPath => $composableBuilder(
-    column: $table.localPath,
+  ColumnOrderings<String> get blobId => $composableBuilder(
+    column: $table.blobId,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get wrappedFek => $composableBuilder(
-    column: $table.wrappedFek,
+  ColumnOrderings<String> get blobState => $composableBuilder(
+    column: $table.blobState,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get fileNoncePrefix => $composableBuilder(
-    column: $table.fileNoncePrefix,
+  ColumnOrderings<String> get cipherFormat => $composableBuilder(
+    column: $table.cipherFormat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get cipherVersion => $composableBuilder(
+    column: $table.cipherVersion,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -11084,16 +11795,19 @@ class $$FileBlobsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get localPath =>
-      $composableBuilder(column: $table.localPath, builder: (column) => column);
+  GeneratedColumn<String> get blobId =>
+      $composableBuilder(column: $table.blobId, builder: (column) => column);
 
-  GeneratedColumn<String> get wrappedFek => $composableBuilder(
-    column: $table.wrappedFek,
+  GeneratedColumn<String> get blobState =>
+      $composableBuilder(column: $table.blobState, builder: (column) => column);
+
+  GeneratedColumn<String> get cipherFormat => $composableBuilder(
+    column: $table.cipherFormat,
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get fileNoncePrefix => $composableBuilder(
-    column: $table.fileNoncePrefix,
+  GeneratedColumn<int> get cipherVersion => $composableBuilder(
+    column: $table.cipherVersion,
     builder: (column) => column,
   );
 
@@ -11153,9 +11867,10 @@ class $$FileBlobsTableTableManager
                 Value<int?> uploadedAt = const Value.absent(),
                 Value<String?> multipartContext = const Value.absent(),
                 Value<String> openPolicy = const Value.absent(),
-                Value<String?> localPath = const Value.absent(),
-                Value<String?> wrappedFek = const Value.absent(),
-                Value<String?> fileNoncePrefix = const Value.absent(),
+                Value<String?> blobId = const Value.absent(),
+                Value<String> blobState = const Value.absent(),
+                Value<String> cipherFormat = const Value.absent(),
+                Value<int> cipherVersion = const Value.absent(),
                 Value<bool> isDirty = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
@@ -11176,9 +11891,10 @@ class $$FileBlobsTableTableManager
                 uploadedAt: uploadedAt,
                 multipartContext: multipartContext,
                 openPolicy: openPolicy,
-                localPath: localPath,
-                wrappedFek: wrappedFek,
-                fileNoncePrefix: fileNoncePrefix,
+                blobId: blobId,
+                blobState: blobState,
+                cipherFormat: cipherFormat,
+                cipherVersion: cipherVersion,
                 isDirty: isDirty,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -11201,9 +11917,10 @@ class $$FileBlobsTableTableManager
                 Value<int?> uploadedAt = const Value.absent(),
                 Value<String?> multipartContext = const Value.absent(),
                 Value<String> openPolicy = const Value.absent(),
-                Value<String?> localPath = const Value.absent(),
-                Value<String?> wrappedFek = const Value.absent(),
-                Value<String?> fileNoncePrefix = const Value.absent(),
+                Value<String?> blobId = const Value.absent(),
+                Value<String> blobState = const Value.absent(),
+                Value<String> cipherFormat = const Value.absent(),
+                Value<int> cipherVersion = const Value.absent(),
                 Value<bool> isDirty = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
@@ -11224,9 +11941,10 @@ class $$FileBlobsTableTableManager
                 uploadedAt: uploadedAt,
                 multipartContext: multipartContext,
                 openPolicy: openPolicy,
-                localPath: localPath,
-                wrappedFek: wrappedFek,
-                fileNoncePrefix: fileNoncePrefix,
+                blobId: blobId,
+                blobState: blobState,
+                cipherFormat: cipherFormat,
+                cipherVersion: cipherVersion,
                 isDirty: isDirty,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -11255,6 +11973,389 @@ typedef $$FileBlobsTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $FileBlobsTable, FileBlobRow>,
       ),
       FileBlobRow,
+      PrefetchHooks Function()
+    >;
+typedef $$VaultRetentionPoliciesTableCreateCompanionBuilder =
+    VaultRetentionPoliciesCompanion Function({
+      Value<int> id,
+      Value<String> mode,
+      Value<int?> expiryDays,
+      required int updatedAt,
+    });
+typedef $$VaultRetentionPoliciesTableUpdateCompanionBuilder =
+    VaultRetentionPoliciesCompanion Function({
+      Value<int> id,
+      Value<String> mode,
+      Value<int?> expiryDays,
+      Value<int> updatedAt,
+    });
+
+class $$VaultRetentionPoliciesTableFilterComposer
+    extends Composer<_$AppDatabase, $VaultRetentionPoliciesTable> {
+  $$VaultRetentionPoliciesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get expiryDays => $composableBuilder(
+    column: $table.expiryDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$VaultRetentionPoliciesTableOrderingComposer
+    extends Composer<_$AppDatabase, $VaultRetentionPoliciesTable> {
+  $$VaultRetentionPoliciesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get expiryDays => $composableBuilder(
+    column: $table.expiryDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$VaultRetentionPoliciesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $VaultRetentionPoliciesTable> {
+  $$VaultRetentionPoliciesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
+
+  GeneratedColumn<int> get expiryDays => $composableBuilder(
+    column: $table.expiryDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$VaultRetentionPoliciesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $VaultRetentionPoliciesTable,
+          VaultRetentionPolicyRow,
+          $$VaultRetentionPoliciesTableFilterComposer,
+          $$VaultRetentionPoliciesTableOrderingComposer,
+          $$VaultRetentionPoliciesTableAnnotationComposer,
+          $$VaultRetentionPoliciesTableCreateCompanionBuilder,
+          $$VaultRetentionPoliciesTableUpdateCompanionBuilder,
+          (
+            VaultRetentionPolicyRow,
+            BaseReferences<
+              _$AppDatabase,
+              $VaultRetentionPoliciesTable,
+              VaultRetentionPolicyRow
+            >,
+          ),
+          VaultRetentionPolicyRow,
+          PrefetchHooks Function()
+        > {
+  $$VaultRetentionPoliciesTableTableManager(
+    _$AppDatabase db,
+    $VaultRetentionPoliciesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$VaultRetentionPoliciesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$VaultRetentionPoliciesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$VaultRetentionPoliciesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> mode = const Value.absent(),
+                Value<int?> expiryDays = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+              }) => VaultRetentionPoliciesCompanion(
+                id: id,
+                mode: mode,
+                expiryDays: expiryDays,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> mode = const Value.absent(),
+                Value<int?> expiryDays = const Value.absent(),
+                required int updatedAt,
+              }) => VaultRetentionPoliciesCompanion.insert(
+                id: id,
+                mode: mode,
+                expiryDays: expiryDays,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$VaultRetentionPoliciesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $VaultRetentionPoliciesTable,
+      VaultRetentionPolicyRow,
+      $$VaultRetentionPoliciesTableFilterComposer,
+      $$VaultRetentionPoliciesTableOrderingComposer,
+      $$VaultRetentionPoliciesTableAnnotationComposer,
+      $$VaultRetentionPoliciesTableCreateCompanionBuilder,
+      $$VaultRetentionPoliciesTableUpdateCompanionBuilder,
+      (
+        VaultRetentionPolicyRow,
+        BaseReferences<
+          _$AppDatabase,
+          $VaultRetentionPoliciesTable,
+          VaultRetentionPolicyRow
+        >,
+      ),
+      VaultRetentionPolicyRow,
+      PrefetchHooks Function()
+    >;
+typedef $$BlobGcDecisionsTableCreateCompanionBuilder =
+    BlobGcDecisionsCompanion Function({
+      required String blobId,
+      required String decision,
+      required String reason,
+      required int decidedAt,
+      Value<int> rowid,
+    });
+typedef $$BlobGcDecisionsTableUpdateCompanionBuilder =
+    BlobGcDecisionsCompanion Function({
+      Value<String> blobId,
+      Value<String> decision,
+      Value<String> reason,
+      Value<int> decidedAt,
+      Value<int> rowid,
+    });
+
+class $$BlobGcDecisionsTableFilterComposer
+    extends Composer<_$AppDatabase, $BlobGcDecisionsTable> {
+  $$BlobGcDecisionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get blobId => $composableBuilder(
+    column: $table.blobId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get decision => $composableBuilder(
+    column: $table.decision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get decidedAt => $composableBuilder(
+    column: $table.decidedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BlobGcDecisionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BlobGcDecisionsTable> {
+  $$BlobGcDecisionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get blobId => $composableBuilder(
+    column: $table.blobId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get decision => $composableBuilder(
+    column: $table.decision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get decidedAt => $composableBuilder(
+    column: $table.decidedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BlobGcDecisionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BlobGcDecisionsTable> {
+  $$BlobGcDecisionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get blobId =>
+      $composableBuilder(column: $table.blobId, builder: (column) => column);
+
+  GeneratedColumn<String> get decision =>
+      $composableBuilder(column: $table.decision, builder: (column) => column);
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<int> get decidedAt =>
+      $composableBuilder(column: $table.decidedAt, builder: (column) => column);
+}
+
+class $$BlobGcDecisionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BlobGcDecisionsTable,
+          BlobGcDecisionRow,
+          $$BlobGcDecisionsTableFilterComposer,
+          $$BlobGcDecisionsTableOrderingComposer,
+          $$BlobGcDecisionsTableAnnotationComposer,
+          $$BlobGcDecisionsTableCreateCompanionBuilder,
+          $$BlobGcDecisionsTableUpdateCompanionBuilder,
+          (
+            BlobGcDecisionRow,
+            BaseReferences<
+              _$AppDatabase,
+              $BlobGcDecisionsTable,
+              BlobGcDecisionRow
+            >,
+          ),
+          BlobGcDecisionRow,
+          PrefetchHooks Function()
+        > {
+  $$BlobGcDecisionsTableTableManager(
+    _$AppDatabase db,
+    $BlobGcDecisionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BlobGcDecisionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BlobGcDecisionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BlobGcDecisionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> blobId = const Value.absent(),
+                Value<String> decision = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<int> decidedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => BlobGcDecisionsCompanion(
+                blobId: blobId,
+                decision: decision,
+                reason: reason,
+                decidedAt: decidedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String blobId,
+                required String decision,
+                required String reason,
+                required int decidedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => BlobGcDecisionsCompanion.insert(
+                blobId: blobId,
+                decision: decision,
+                reason: reason,
+                decidedAt: decidedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BlobGcDecisionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BlobGcDecisionsTable,
+      BlobGcDecisionRow,
+      $$BlobGcDecisionsTableFilterComposer,
+      $$BlobGcDecisionsTableOrderingComposer,
+      $$BlobGcDecisionsTableAnnotationComposer,
+      $$BlobGcDecisionsTableCreateCompanionBuilder,
+      $$BlobGcDecisionsTableUpdateCompanionBuilder,
+      (
+        BlobGcDecisionRow,
+        BaseReferences<_$AppDatabase, $BlobGcDecisionsTable, BlobGcDecisionRow>,
+      ),
+      BlobGcDecisionRow,
       PrefetchHooks Function()
     >;
 typedef $$TextContentsTableCreateCompanionBuilder =
@@ -12179,6 +13280,8 @@ typedef $$WorkQueueTableCreateCompanionBuilder =
       required String id,
       required String kind,
       required String itemId,
+      Value<String?> blobId,
+      Value<int?> blobRevision,
       required String dedupeKey,
       required String state,
       required String stage,
@@ -12203,6 +13306,8 @@ typedef $$WorkQueueTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> kind,
       Value<String> itemId,
+      Value<String?> blobId,
+      Value<int?> blobRevision,
       Value<String> dedupeKey,
       Value<String> state,
       Value<String> stage,
@@ -12244,6 +13349,16 @@ class $$WorkQueueTableFilterComposer
 
   ColumnFilters<String> get itemId => $composableBuilder(
     column: $table.itemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get blobId => $composableBuilder(
+    column: $table.blobId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get blobRevision => $composableBuilder(
+    column: $table.blobRevision,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12357,6 +13472,16 @@ class $$WorkQueueTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get blobId => $composableBuilder(
+    column: $table.blobId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get blobRevision => $composableBuilder(
+    column: $table.blobRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get dedupeKey => $composableBuilder(
     column: $table.dedupeKey,
     builder: (column) => ColumnOrderings(column),
@@ -12461,6 +13586,14 @@ class $$WorkQueueTableAnnotationComposer
   GeneratedColumn<String> get itemId =>
       $composableBuilder(column: $table.itemId, builder: (column) => column);
 
+  GeneratedColumn<String> get blobId =>
+      $composableBuilder(column: $table.blobId, builder: (column) => column);
+
+  GeneratedColumn<int> get blobRevision => $composableBuilder(
+    column: $table.blobRevision,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get dedupeKey =>
       $composableBuilder(column: $table.dedupeKey, builder: (column) => column);
 
@@ -12563,6 +13696,8 @@ class $$WorkQueueTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> kind = const Value.absent(),
                 Value<String> itemId = const Value.absent(),
+                Value<String?> blobId = const Value.absent(),
+                Value<int?> blobRevision = const Value.absent(),
                 Value<String> dedupeKey = const Value.absent(),
                 Value<String> state = const Value.absent(),
                 Value<String> stage = const Value.absent(),
@@ -12585,6 +13720,8 @@ class $$WorkQueueTableTableManager
                 id: id,
                 kind: kind,
                 itemId: itemId,
+                blobId: blobId,
+                blobRevision: blobRevision,
                 dedupeKey: dedupeKey,
                 state: state,
                 stage: stage,
@@ -12609,6 +13746,8 @@ class $$WorkQueueTableTableManager
                 required String id,
                 required String kind,
                 required String itemId,
+                Value<String?> blobId = const Value.absent(),
+                Value<int?> blobRevision = const Value.absent(),
                 required String dedupeKey,
                 required String state,
                 required String stage,
@@ -12631,6 +13770,8 @@ class $$WorkQueueTableTableManager
                 id: id,
                 kind: kind,
                 itemId: itemId,
+                blobId: blobId,
+                blobRevision: blobRevision,
                 dedupeKey: dedupeKey,
                 state: state,
                 stage: stage,
@@ -12861,6 +14002,13 @@ class $AppDatabaseManager {
       $$MatomeSharesTableTableManager(_db, _db.matomeShares);
   $$FileBlobsTableTableManager get fileBlobs =>
       $$FileBlobsTableTableManager(_db, _db.fileBlobs);
+  $$VaultRetentionPoliciesTableTableManager get vaultRetentionPolicies =>
+      $$VaultRetentionPoliciesTableTableManager(
+        _db,
+        _db.vaultRetentionPolicies,
+      );
+  $$BlobGcDecisionsTableTableManager get blobGcDecisions =>
+      $$BlobGcDecisionsTableTableManager(_db, _db.blobGcDecisions);
   $$TextContentsTableTableManager get textContents =>
       $$TextContentsTableTableManager(_db, _db.textContents);
   $$ItemsTableTableManager get items =>

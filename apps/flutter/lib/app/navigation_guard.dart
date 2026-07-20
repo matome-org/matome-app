@@ -25,6 +25,8 @@ abstract final class GuardTargets {
 
   /// First authenticated tab (Inbox), the RN equivalent of the tabs group.
   static const home = '/inbox';
+
+  static const unlock = '/unlock';
 }
 
 /// Route prefixes that belong to the authenticated shell.
@@ -52,9 +54,23 @@ bool _hasPrefix(String location, String prefix) =>
 String? decideRedirect({
   required bool isAuthenticated,
   required bool isLoading,
+  bool isVaultReady = true,
+  bool isVaultLoading = false,
   required String location,
 }) {
   if (isLoading) return null;
+
+  if (isAuthenticated && isVaultLoading) return null;
+  if (isAuthenticated && !isVaultReady && location != GuardTargets.unlock) {
+    return GuardTargets.unlock;
+  }
+  if (isAuthenticated && !isVaultReady) return null;
+  if (isAuthenticated && isVaultReady && location == GuardTargets.unlock) {
+    return GuardTargets.home;
+  }
+  if (!isAuthenticated && location == GuardTargets.unlock) {
+    return GuardTargets.welcome;
+  }
 
   final inTabs = _tabPrefixes.any((p) => _hasPrefix(location, p));
   final inRecording = _recordingPrefixes.any((p) => _hasPrefix(location, p));

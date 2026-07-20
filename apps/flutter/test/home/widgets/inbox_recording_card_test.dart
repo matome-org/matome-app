@@ -200,9 +200,7 @@ void main() {
     },
   );
 
-  testWidgets('AI failure keeps cloud sync truth independent', (
-    tester,
-  ) async {
+  testWidgets('AI failure keeps cloud sync truth independent', (tester) async {
     await pump(tester, card(id: '42', processingStatus: 'failed', coreId: 42));
 
     expect(find.byKey(const ValueKey('card-failed')), findsOneWidget);

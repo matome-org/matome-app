@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/auth_controller.dart';
@@ -6,17 +7,28 @@ import '../features/contacts/contacts_repository.dart';
 import '../features/documents/document_external_launcher.dart';
 import '../features/documents/document_open_service.dart';
 import '../features/matome/matomes_repository.dart';
+import '../features/items/item_deletion_service.dart';
 import '../features/recordings/recordings_repository.dart';
+import '../features/recordings/upload_queue.dart';
 import '../features/spaces/spaces_repository.dart';
 import 'config/endpoint_controller.dart';
 import 'config/system_policy.dart';
 import 'db/app_database.dart';
+import 'db/db_encryption.dart';
 import 'http/api_client.dart';
 import 'http/api_exception.dart';
 import 'http/token_store.dart';
 import 'settings/settings_store.dart';
 import 'telemetry/product_event_reporter.dart';
 import 'telemetry/device_queue_reporter.dart';
+import 'vault/account_device_wrap_gateway.dart';
+import 'vault/key_bundle_repository.dart';
+import 'vault/media_ingest_service.dart';
+import 'vault/vault_session_controller.dart';
+import 'vault/vault_boot_coordinator.dart';
+import 'vault/vault_retention_service.dart';
+import 'vault/vault_export_service.dart';
+import 'package:matome_vault/matome_vault.dart';
 
 export '../features/auth/current_owner.dart' show currentOwnerIdProvider;
 
@@ -39,6 +51,25 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     baseUrl: ref.watch(endpointConfigProvider),
   );
 });
+
+final keyBundleRepositoryProvider = Provider<KeyBundleGateway>((ref) {
+  return KeyBundleRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+final deviceWrapGatewayProvider = Provider<DeviceWrapGateway?>((ref) {
+  if (kIsWeb) return null;
+  return AccountDeviceWrapGateway(FlutterSecureKeyStore.deviceKek());
+});
+
+final vaultSessionProvider =
+    StateNotifierProvider<VaultSessionController, VaultSessionSnapshot>((ref) {
+      return VaultSessionController(
+        keyBundles: ref.watch(keyBundleRepositoryProvider),
+        deviceWraps: ref.watch(deviceWrapGatewayProvider),
+        platform: kIsWeb ? VaultPlatform.web : VaultPlatform.native,
+        openVault: ref.read(vaultBootCoordinatorProvider.notifier).open,
+      );
+    });
 
 final systemPolicyProvider =
     StateNotifierProvider<SystemPolicyController, SystemPolicy>((ref) {
@@ -68,7 +99,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
       }
     },
     onSignOut: () async {
-      ref.read(authControllerProvider.notifier).signedOutByInterceptor();
+      await ref.read(authControllerProvider.notifier).signedOutByInterceptor();
     },
   );
   return repo;
@@ -84,6 +115,7 @@ final documentOpenServiceProvider = Provider<DocumentOpenService>((ref) {
     descriptorSource: repository.documentOpenDescriptor,
     launcher: createExternalDocumentLauncher(),
     environment: currentDocumentOpenEnvironment(),
+    blobStore: () => ref.read(mediaBlobStoreProvider),
   );
 });
 
@@ -125,13 +157,54 @@ final spacesRepositoryProvider = Provider<SpacesRepository>((ref) {
   return SpacesRepository(apiClient: ref.watch(apiClientProvider));
 });
 
-/// Offline-first local store (Drift). Opened once and disposed with the
-/// container. Overridable in tests with [AppDatabase.forTesting] over an
-/// in-memory NativeDatabase.
+/// Ready-only account store. Authenticated screens are routed away until the
+/// Vault boot coordinator has atomically published its validated resources.
+/// Tests may still override this with [AppDatabase.forTesting].
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
-  final db = AppDatabase();
-  ref.onDispose(db.close);
-  return db;
+  final boot = ref.watch(vaultBootCoordinatorProvider);
+  final database = boot.stores?.database;
+  if (boot.phase != VaultBootPhase.ready || database == null) {
+    throw StateError('Account database requested before Vault boot is ready.');
+  }
+  return database;
+});
+
+final mediaBlobStoreProvider = Provider<MediaBlobStore>((ref) {
+  final boot = ref.watch(vaultBootCoordinatorProvider);
+  final blobs = boot.stores?.blobs;
+  if (boot.phase != VaultBootPhase.ready || blobs == null) {
+    throw StateError('Media Vault requested before boot is ready.');
+  }
+  return blobs;
+});
+
+final mediaIngestServiceProvider = Provider<MediaIngestService>(
+  (ref) => MediaIngestService(ref.watch(mediaBlobStoreProvider)),
+);
+
+final vaultExportServiceProvider = Provider<VaultExportService>(
+  (ref) => VaultExportService(ref.watch(mediaBlobStoreProvider)),
+);
+
+final vaultRetentionServiceProvider = Provider<VaultRetentionService>((ref) {
+  return VaultRetentionService(
+    ref.watch(appDatabaseProvider),
+    ref.watch(mediaBlobStoreProvider),
+  );
+});
+
+final vaultRetentionPolicyProvider = FutureProvider<VaultRetentionPolicy>((
+  ref,
+) {
+  return ref.watch(vaultRetentionServiceProvider).readPolicy();
+});
+
+final itemDeletionServiceProvider = Provider<ItemDeletionService>((ref) {
+  return ItemDeletionService(
+    ref.watch(itemsDaoProvider),
+    () => ref.read(uploadQueueProvider).drain(),
+    configRevision: () => ref.read(systemPolicyProvider).revision,
+  );
 });
 
 /// Typed DAO providers for the local store — the plain-Dart persistence

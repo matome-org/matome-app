@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../core/http/api_client.dart';
 import '../../core/http/api_exception.dart';
@@ -8,6 +7,7 @@ import '../../core/observability/app_log.dart';
 import '../documents/document_open_policy.dart';
 import '../documents/document_open_service.dart';
 import 'recording.dart';
+import 'presigned_upload_transport.dart';
 import 'upload_descriptor.dart';
 
 /// Reads and drives the authenticated user's file items against the Core API.
@@ -81,6 +81,7 @@ class RecordingsRepository {
       if (raw is! Map<String, dynamic>) return null;
       return Recording.fromItemJson(raw);
     } on DioException catch (e, st) {
+      if (e.response?.statusCode == 404) return null;
       AppLog.error(
         LogCat.upload,
         'fetchRecording: transport failed for id=$id',
@@ -138,6 +139,7 @@ class RecordingsRepository {
           'content_length': ?contentLength,
           'content_type': ?contentType,
           'checksum_sha256': ?checksumSha256,
+          'transport': _uploadTransport,
         },
       );
       final status = response.statusCode ?? 0;
@@ -320,6 +322,7 @@ class RecordingsRepository {
           'idempotency_key': 'item-$itemId-rev-$inputRevision-upload',
           'input_revision': inputRevision,
           'mode': 'auto',
+          'transport': _uploadTransport,
           'byte_size': byteSize,
           'content_type': ?contentType,
           'checksum_sha256': checksumSha256,
@@ -336,6 +339,9 @@ class RecordingsRepository {
       throw ApiException.fromDio(error);
     }
   }
+
+  static String get _uploadTransport =>
+      kIsWeb ? 'browser_stream' : 'direct_signed_length';
 
   Future<UploadDescriptor> inspectUpload(String uploadId) async {
     try {
@@ -435,24 +441,6 @@ class RecordingsRepository {
     return UploadDescriptor.fromJson(raw);
   }
 
-  /// Streams [file] to the presigned [upload] URL.
-  ///
-  /// Uses a streamed body (`file.openRead()`), so the audio is never fully
-  /// loaded into memory. A bare [Dio] avoids injecting the Core Bearer token;
-  /// the exact storage headers carried by the descriptor are sent instead.
-  Future<void> uploadFile(UploadDescriptor upload, File file) async {
-    final length = await file.length();
-    AppLog.event(LogCat.upload, 'uploadFile: $length bytes -> presign');
-    final request = upload.request;
-    if (request == null) {
-      throw const ApiException(
-        'Upload credentials are missing.',
-        code: 'malformed_response',
-      );
-    }
-    await _uploadRequest(request, file.openRead(), length, requireEtag: false);
-  }
-
   /// Stream-upload variant taking a raw byte stream + known [length].
   /// Exposed for callers that already hold a stream (and for testing with a
   /// mocked adapter).
@@ -471,27 +459,20 @@ class RecordingsRepository {
     await _uploadRequest(request, stream, length, requireEtag: false);
   }
 
-  /// Uploads exactly `[start, endExclusive)` and returns the provider ETag used
-  /// by Core's completion verification.
-  Future<String> uploadFileRange(
+  /// Uploads exactly the supplied authenticated plaintext stream and returns
+  /// the provider ETag used by Core's completion verification.
+  Future<String> uploadStreamRange(
     UploadRequest request,
-    File file, {
-    required int start,
-    required int endExclusive,
-  }) async {
-    final fileLength = await file.length();
-    if (start < 0 || endExclusive <= start || endExclusive > fileLength) {
+    Stream<List<int>> stream,
+    int length,
+  ) async {
+    if (length <= 0) {
       throw const ApiException(
-        'Invalid upload file range.',
+        'Invalid upload stream length.',
         code: 'invalid_local_data',
       );
     }
-    return _uploadRequest(
-      request,
-      file.openRead(start, endExclusive),
-      endExclusive - start,
-      requireEtag: true,
-    );
+    return _uploadRequest(request, stream, length, requireEtag: true);
   }
 
   Future<String> _uploadRequest(
@@ -500,56 +481,12 @@ class RecordingsRepository {
     int length, {
     required bool requireEtag,
   }) async {
-    final rawDio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        sendTimeout: const Duration(minutes: 5),
-        receiveTimeout: const Duration(seconds: 30),
-        validateStatus: (status) => status != null && status < 500,
-      ),
+    return sendPresignedUpload(
+      request,
+      stream,
+      length,
+      requireEtag: requireEtag,
     );
-    try {
-      final response = await rawDio.requestUri<void>(
-        Uri.parse(request.url),
-        data: stream,
-        options: Options(
-          method: request.method,
-          headers: <String, dynamic>{
-            ...request.headers,
-            Headers.contentLengthHeader: length,
-            // Core signs required checksum/length headers. Content type remains
-            // generic because object identity preserves the original filename.
-            Headers.contentTypeHeader: 'application/octet-stream',
-          },
-        ),
-      );
-      final status = response.statusCode ?? 0;
-      if (status < 200 || status >= 300) {
-        throw ApiException(
-          'Recording upload failed.',
-          statusCode: status,
-          code: 'upload_failed',
-        );
-      }
-      final etag = response.headers.value('etag')?.replaceAll('"', '').trim();
-      if (requireEtag && (etag == null || etag.isEmpty)) {
-        throw const ApiException(
-          'Upload response did not include an ETag.',
-          code: 'upload_missing_etag',
-        );
-      }
-      return etag ?? '';
-    } on DioException catch (e, st) {
-      AppLog.error(
-        LogCat.upload,
-        '_uploadStream: presigned PUT/POST failed',
-        e,
-        st,
-      );
-      throw ApiException.fromDio(e);
-    } finally {
-      rawDio.close(force: true);
-    }
   }
 
   /// `PATCH /api/items/{id}` (Bearer). Persists edits to the Core item.
@@ -651,6 +588,7 @@ class RecordingsRepository {
         );
       }
     } on DioException catch (e, st) {
+      if (e.response?.statusCode == 404) return;
       AppLog.error(
         LogCat.upload,
         'deleteRecording: transport failed for id=$id',

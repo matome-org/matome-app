@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../core/config/feature_flags.dart';
 import '../core/observability/app_log.dart';
 import '../core/theme/app_theme.dart';
+import '../core/vault/media_inputs.dart';
 import '../features/home/inbox_upload.dart';
 import '../features/recording/meeting_recorder.dart';
 import '../features/shell/widgets/matome_nav.dart';
@@ -254,21 +255,24 @@ Future<void> _pickAndUpload(
   // (cancel, or a Linux picker backend that yields no path) is never silent.
   AppLog.event(LogCat.action, 'nav add: picker opening (type=$type)');
   try {
-    final result = await FilePicker.platform.pickFiles(type: type);
+    final result = await FilePicker.platform.pickFiles(
+      type: type,
+      withReadStream: true,
+      readSequential: true,
+    );
     final platformFile = result?.files.single;
-    final path = platformFile?.path;
-    if (path == null) {
-      AppLog.event(LogCat.action, 'nav add: cancelled (no path)');
+    if (platformFile == null) {
+      AppLog.event(LogCat.action, 'nav add: cancelled');
       return;
     }
     if (!context.mounted) return;
 
-    final name = platformFile!.name;
+    final name = platformFile.name;
     final dot = name.lastIndexOf('.');
     final base = (dot > 0 ? name.substring(0, dot) : name).trim();
     final mediaType = mediaTypeForPath(name);
     final picked = PickedUpload(
-      file: File(path),
+      input: mediaInputFromPlatformFile(platformFile),
       title: base.isEmpty ? 'Untitled' : base,
       mediaType: mediaType,
       filename: name,
@@ -277,7 +281,7 @@ Future<void> _pickAndUpload(
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Uploading "${picked.title}"…')));
-    AppLog.event(LogCat.action, 'nav add: uploading "${picked.title}"');
+    AppLog.event(LogCat.action, 'nav add: sealing picker input');
     await ref
         .read(inboxUploaderProvider)
         .upload(picked, importFromExternalSource: true);
@@ -313,14 +317,12 @@ class _DockShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
     // The dock + Add FAB FLOAT over the content (edge-to-edge, no notch), so a
-    // scrollable's last item would otherwise sit permanently under the dock —
-    // unlike the legacy `bottomNavigationBar`, which reserved layout space. Add
-    // that space back as bottom padding via MediaQuery so every branch screen's
-    // bottom content stays reachable (e.g. the Settings "Sign out" tile). The
+    // scrollable's last item and a nested Scaffold's FAB would otherwise sit
+    // permanently under the dock. Unlike a MediaQuery padding override, a real
+    // layout inset also moves nested Scaffold chrome above the overlay. The
     // reserve ≈ FAB + gap + dock (a 48dp tap target plus its vertical padding)
     // + the bottom anchor inset, derived from the same spacing tokens the
     // overlay below is laid out with (no magic number).
-    final media = MediaQuery.of(context);
     final dockReserve =
         _kDockFabSize +
         spacing.sm +
@@ -331,12 +333,8 @@ class _DockShell extends ConsumerWidget {
       body: Stack(
         children: [
           Positioned.fill(
-            child: MediaQuery(
-              data: media.copyWith(
-                padding: media.padding.copyWith(
-                  bottom: media.padding.bottom + dockReserve,
-                ),
-              ),
+            child: Padding(
+              padding: EdgeInsets.only(bottom: dockReserve),
               child: navigationShell,
             ),
           ),

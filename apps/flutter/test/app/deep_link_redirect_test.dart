@@ -87,7 +87,6 @@ void main() {
       db,
       id: recId,
       title: 'Child',
-      localPath: '/tmp/$recId.m4a',
       createdAt: 1000,
       matomeId: matId,
     );
@@ -116,7 +115,6 @@ void main() {
       db,
       id: 'orphan',
       title: 'Orphan',
-      localPath: '/tmp/orphan.m4a',
       createdAt: 1000,
     );
     await tester.pumpWidget(_app(db));

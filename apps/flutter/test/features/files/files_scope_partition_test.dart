@@ -56,7 +56,6 @@ Future<String> _seedFile(
     db,
     id: id,
     title: id,
-    localPath: '/tmp/$id',
     ownerId: _owner,
     matomeId: matomeId,
     workspaceId: workspaceId,

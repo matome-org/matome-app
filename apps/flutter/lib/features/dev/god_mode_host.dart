@@ -29,7 +29,8 @@ class GodModeHostButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!FeatureFlags.godMode) return const SizedBox.shrink();
-    final overridden = ref.watch(endpointConfigProvider) !=
+    final overridden =
+        ref.watch(endpointConfigProvider) !=
         ref.read(endpointConfigProvider.notifier).defaultBaseUrl;
     return IconButton(
       tooltip: 'God mode · custom host',
@@ -103,8 +104,9 @@ class _GodModeHostDialog extends StatefulWidget {
 }
 
 class _GodModeHostDialogState extends State<_GodModeHostDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.current);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.current,
+  );
   String? _error;
 
   @override
@@ -116,8 +118,10 @@ class _GodModeHostDialogState extends State<_GodModeHostDialog> {
   void _apply() {
     final normalized = EndpointController.normalizeBaseUrl(_controller.text);
     if (normalized == null) {
-      setState(() => _error =
-          'Enter an absolute http(s) URL (e.g. http://192.168.1.9:7001).');
+      setState(
+        () => _error =
+            'Enter an absolute http(s) URL (e.g. http://192.168.1.9:7001).',
+      );
       return;
     }
     Navigator.of(context).pop(normalized);

@@ -6,10 +6,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
+import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
+import 'package:matome_flutter/core/observability/app_log.dart';
 import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
+import 'package:matome_vault/matome_vault.dart';
 
 void main() {
   late Dio dio;
@@ -104,6 +107,7 @@ void main() {
             'upload_id': 'item-42-upload-3',
             'upload_generation': 3,
             'mode': 'multipart',
+            'transport': 'direct_signed_length',
             'state': 'uploading',
             'part_size': 16 * 1024 * 1024,
             'accepted_parts': [
@@ -123,6 +127,7 @@ void main() {
           'idempotency_key': 'item-42-rev-1-upload',
           'input_revision': 1,
           'mode': 'auto',
+          'transport': 'direct_signed_length',
           'byte_size': 26 * 1024 * 1024,
           'content_type': 'audio/wav',
           'checksum_sha256': fileChecksum,
@@ -139,6 +144,7 @@ void main() {
 
       expect(upload.uploadId, 'item-42-upload-3');
       expect(upload.mode, UploadMode.multipart);
+      expect(upload.transport, UploadTransport.directSignedLength);
       expect(upload.acceptedParts.single.etag, 'part-1');
       expect(upload.missingParts, [2]);
       expect(upload.request, isNull, reason: 'multipart URLs are per-part');
@@ -255,22 +261,16 @@ void main() {
           await request.response.close();
           received.complete(body);
         });
-        final temp = await Directory.systemTemp.createTemp(
-          'upload_range_test_',
-        );
-        addTearDown(() => temp.delete(recursive: true));
-        final file = File('${temp.path}/media.bin');
-        await file.writeAsBytes(List<int>.generate(32, (index) => index));
+        final bytes = List<int>.generate(32, (index) => index);
 
-        final etag = await repo.uploadFileRange(
+        final etag = await repo.uploadStreamRange(
           UploadRequest(
             method: 'PUT',
             url: 'http://${server.address.host}:${server.port}/part',
             headers: const {'x-amz-checksum-sha256': 'part-checksum'},
           ),
-          file,
-          start: 8,
-          endExclusive: 20,
+          Stream.value(bytes.sublist(8, 20)),
+          12,
         );
 
         expect(
@@ -280,6 +280,55 @@ void main() {
         expect(etag, 'part-etag');
       },
     );
+
+    test('preserves Vault corruption and never logs a signed URL', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((request) async {
+        await request.drain<void>();
+        request.response.statusCode = 200;
+        await request.response.close();
+      });
+      await expectLater(
+        repo.uploadStreamRange(
+          UploadRequest(
+            method: 'PUT',
+            url: 'http://${server.address.host}:${server.port}/signed',
+          ),
+          Stream.error(
+            const VaultFailure(
+              VaultFailureCode.corruptCiphertext,
+              'authenticated chunk failed',
+            ),
+          ),
+          1,
+        ),
+        throwsA(
+          isA<VaultFailure>().having(
+            (failure) => failure.code,
+            'code',
+            VaultFailureCode.corruptCiphertext,
+          ),
+        ),
+      );
+
+      final logs = <String>[];
+      AppLog.testSink = logs.add;
+      addTearDown(() => AppLog.testSink = null);
+      await expectLater(
+        repo.uploadStreamRange(
+          const UploadRequest(
+            method: 'PUT',
+            url: 'http://127.0.0.1:1/object?X-Amz-Signature=secret',
+          ),
+          Stream.value(const [1]),
+          1,
+        ),
+        throwsA(isA<ApiException>()),
+      );
+      expect(logs.join('\n'), isNot(contains('X-Amz')));
+      expect(logs.join('\n'), isNot(contains('secret')));
+    });
   });
 
   group('fetchRecording (poll source)', () {

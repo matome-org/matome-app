@@ -107,7 +107,8 @@ class UnsupportedAlgorithmException extends EnvelopeUnwrapException {
   const UnsupportedAlgorithmException(this.foundAlgId);
 
   @override
-  String toString() => 'UnsupportedAlgorithmException: alg_id=0x'
+  String toString() =>
+      'UnsupportedAlgorithmException: alg_id=0x'
       '${foundAlgId.toRadixString(16).padLeft(2, '0')} not supported';
 }
 
@@ -119,7 +120,8 @@ class InvalidEnvelopeLengthException implements Exception {
   const InvalidEnvelopeLengthException(this.foundLength);
 
   @override
-  String toString() => 'InvalidEnvelopeLengthException: got $foundLength '
+  String toString() =>
+      'InvalidEnvelopeLengthException: got $foundLength '
       'bytes, expected exactly $kWrappedEnvelopeLength';
 }
 
@@ -139,13 +141,13 @@ class WrappedEnvelope {
   Uint8List get nonce =>
       bytes.sublist(kHeaderLength, kHeaderLength + kNonceLength);
   Uint8List get ciphertext => bytes.sublist(
-        kHeaderLength + kNonceLength,
-        kHeaderLength + kNonceLength + kCiphertextLength,
-      );
+    kHeaderLength + kNonceLength,
+    kHeaderLength + kNonceLength + kCiphertextLength,
+  );
   Uint8List get tag => bytes.sublist(
-        kHeaderLength + kNonceLength + kCiphertextLength,
-        kWrappedEnvelopeLength,
-      );
+    kHeaderLength + kNonceLength + kCiphertextLength,
+    kWrappedEnvelopeLength,
+  );
 
   int get formatVersion => bytes[0];
   int get payloadType => bytes[1];

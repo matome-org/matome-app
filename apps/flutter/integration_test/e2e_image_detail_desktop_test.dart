@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart' show Value;
-import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -12,8 +11,9 @@ import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 
+import 'support/e2e_database.dart';
 import 'support/e2e_harness.dart';
-import '../test/support/item_fixtures.dart';
+import 'support/item_fixtures.dart';
 
 /// A repo whose presigned-download call NEVER completes — simulates a real Core
 /// that is slow/unreachable for a SYNCED image (storage-key path, no local
@@ -51,7 +51,6 @@ Future<void> _seedImage(
     db,
     id: id,
     title: 'screenshot-2026-06-20',
-    localPath: 'owners/2/recordings/1/media',
     coreId: 1,
     createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     mediaType: 'image',
@@ -71,7 +70,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final db = await createE2EDatabase();
     addTearDown(db.close);
     await _seedMatome(db, id: 'm1');
     await _seedImage(db, id: 'img1', matomeId: 'm1');
@@ -87,6 +86,9 @@ void main() {
           settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
           authRepositoryProvider.overrideWithValue(
             FakeE2EAuthRepository(store),
+          ),
+          vaultSessionProvider.overrideWith(
+            (ref) => buildE2EVaultSession(restoreReady: true),
           ),
         ],
       ),
@@ -146,7 +148,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final db = await createE2EDatabase();
       addTearDown(db.close);
       await _seedMatome(db, id: 'm1');
       await _seedImage(db, id: 'img1', matomeId: 'm1');
@@ -162,6 +164,9 @@ void main() {
             settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
             authRepositoryProvider.overrideWithValue(
               FakeE2EAuthRepository(store),
+            ),
+            vaultSessionProvider.overrideWith(
+              (ref) => buildE2EVaultSession(restoreReady: true),
             ),
             recordingsRepositoryProvider.overrideWith(
               (ref) =>

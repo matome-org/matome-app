@@ -117,8 +117,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull,
-          reason: 'loose-variant triage open must not collide on a hero tag');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'loose-variant triage open must not collide on a hero tag',
+      );
       // Dismiss the picker.
       await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
@@ -131,8 +134,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull,
-          reason: 'draft-variant triage open must not collide on a hero tag');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'draft-variant triage open must not collide on a hero tag',
+      );
     },
   );
 }

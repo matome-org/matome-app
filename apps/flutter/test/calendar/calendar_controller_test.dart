@@ -42,8 +42,7 @@ Future<void> _seed(
     overrides: [
       appDatabaseProvider.overrideWithValue(db),
       currentOwnerIdProvider.overrideWithValue('1'),
-      if (now != null)
-        calendarNowProvider.overrideWithValue(() => now),
+      if (now != null) calendarNowProvider.overrideWithValue(() => now),
     ],
   );
   return (
@@ -133,15 +132,17 @@ void main() {
     });
 
     test('filters to one space when its chip is active', () async {
-      final eng =
-          controller.state.spaces.firstWhere((s) => s.name == 'Engineering');
+      final eng = controller.state.spaces.firstWhere(
+        (s) => s.name == 'Engineering',
+      );
       controller.setSpaceFilter(eng.id);
       expect(controller.state.dayMatomes.map((r) => r.id), ['r1', 'r3']);
     });
 
     test('clears the filter (toggle off) restores all recordings', () {
-      final eng =
-          controller.state.spaces.firstWhere((s) => s.name == 'Engineering');
+      final eng = controller.state.spaces.firstWhere(
+        (s) => s.name == 'Engineering',
+      );
       controller.setSpaceFilter(eng.id);
       controller.setSpaceFilter(null);
       expect(controller.state.dayMatomes.length, 4);
@@ -189,8 +190,7 @@ void main() {
     expect(controller.state.month, 0); // January
   });
 
-  test('changeMonth clamps the selected day to the new month length',
-      () async {
+  test('changeMonth clamps the selected day to the new month length', () async {
     // Mar 31 -> Feb (2026, 28 days): selectedDay should clamp to 1.
     final b = _build(db, now: DateTime(2026, 3, 31));
     addTearDown(b.container.dispose);

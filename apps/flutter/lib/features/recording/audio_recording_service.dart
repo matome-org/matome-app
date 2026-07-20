@@ -53,7 +53,7 @@ class AudioRecordingService {
     Future<bool> Function()? captureSupportedProbe,
     this.segmentExtension = 'm4a',
   }) : _recorder = recorder ?? RecordRecorderBackend(),
-       _documentsDirProvider = documentsDirProvider ?? matomeStorageDir,
+       _documentsDirProvider = documentsDirProvider ?? matomeRecorderStagingDir,
        _durationProbe = durationProbe ?? _probeDurationMs,
        // ignore: prefer_initializing_formals
        _captureSupportedProbe = captureSupportedProbe,
@@ -219,7 +219,10 @@ class AudioRecordingService {
     await _safeDeleteAll(previous.where((p) => p != snapshot));
 
     // Autosave draft to Drift on pause (F2). Crash recovery reads this back.
-    await _draftsDao.saveDraft(_sessionSegments, _lastDurationMs);
+    await _draftsDao.saveDraft(
+      _sessionSegments.map(_handleForPath).toList(growable: false),
+      _lastDurationMs,
+    );
     AppLog.event(LogCat.action, 'pauseRecording: paused + draft saved');
 
     return snapshot;
@@ -343,7 +346,12 @@ class AudioRecordingService {
     final paths = <String>{..._sessionSegments};
     try {
       final draft = await _draftsDao.loadDraft();
-      if (draft != null) paths.addAll(draft.segments);
+      if (draft != null) {
+        final root = await _documentsDirProvider();
+        paths.addAll(
+          draft.segmentHandles.map((handle) => _pathForHandle(root, handle)),
+        );
+      }
     } catch (e, st) {
       AppLog.error(
         LogCat.error,
@@ -372,12 +380,14 @@ class AudioRecordingService {
   Future<RecordingDraft?> detectRecoverableDraft() async {
     final draft = await _draftsDao.loadDraft();
     if (draft == null) return null;
-    if (draft.segments.isEmpty) {
+    if (draft.segmentHandles.isEmpty) {
       await _draftsDao.deleteDraft();
       return null;
     }
     final existing = <String>[];
-    for (final seg in draft.segments) {
+    final root = await _documentsDirProvider();
+    for (final handle in draft.segmentHandles) {
+      final seg = _pathForHandle(root, handle);
       if (await File(seg).exists()) existing.add(seg);
     }
     if (existing.isEmpty) {
@@ -393,18 +403,26 @@ class AudioRecordingService {
       LogCat.action,
       'detectRecoverableDraft: recoverable (${existing.length} segment(s))',
     );
-    return RecordingDraft(segments: existing, durationMs: draft.durationMs);
+    return RecordingDraft(
+      segmentHandles: existing.map(_handleForPath).toList(growable: false),
+      durationMs: draft.durationMs,
+    );
   }
 
   /// Resume a recovered draft: seed its spans so Finish can save from segments.
   /// The accumulated duration is restored too. Mirrors the RN resume flow.
   Future<void> resumeFromDraft(RecordingDraft draft) async {
-    restoreSegments(draft.segments);
+    final root = await _documentsDirProvider();
+    restoreSegments(
+      draft.segmentHandles
+          .map((handle) => _pathForHandle(root, handle))
+          .toList(),
+    );
     _lastDurationMs = draft.durationMs;
     _runBaseMs = draft.durationMs;
     AppLog.event(
       LogCat.action,
-      'resumeFromDraft: restored ${draft.segments.length} segment(s)',
+      'resumeFromDraft: restored ${draft.segmentHandles.length} segment(s)',
     );
   }
 
@@ -446,9 +464,8 @@ class AudioRecordingService {
   /// This is the split half of [discardSegments]: a confirmed finish has a
   /// durable saved+uploaded recording, so its draft must be cleared (otherwise
   /// [detectRecoverableDraft] would prompt the user to "recover" an
-  /// already-saved recording on next launch). But the segment files MUST survive
-  /// — with the single-file finish flow the durable `audioFilePath` IS one of
-  /// the segments, so deleting them would wipe the local-first copy.
+  /// already-saved recording on next launch). Segment ownership remains scoped
+  /// here until encrypted Vault ingest has committed.
   ///
   /// [sessionPaths] is the snapshot ([snapshotSessionCleanupPaths]) taken at
   /// finish() time. The draft is dropped ONLY if it still describes THIS session
@@ -462,7 +479,10 @@ class AudioRecordingService {
       final draft = await _draftsDao.loadDraft();
       if (draft == null) return;
       final ownedByThisSession =
-          draft.segments.isNotEmpty && draft.segments.every(snapshot.contains);
+          draft.segmentHandles.isNotEmpty &&
+          draft.segmentHandles.every(
+            (handle) => snapshot.any((path) => _handleForPath(path) == handle),
+          );
       if (ownedByThisSession) {
         await _draftsDao.deleteDraft();
       }
@@ -501,7 +521,10 @@ class AudioRecordingService {
       final draft = await _draftsDao.loadDraft();
       if (draft == null) return;
       final ownedByThisSession =
-          draft.segments.isNotEmpty && draft.segments.every(snapshot.contains);
+          draft.segmentHandles.isNotEmpty &&
+          draft.segmentHandles.every(
+            (handle) => snapshot.any((path) => _handleForPath(path) == handle),
+          );
       if (ownedByThisSession) {
         await _draftsDao.deleteDraft();
       }
@@ -668,6 +691,17 @@ class AudioRecordingService {
     final minute = date.minute.toString().padLeft(2, '0');
     return '$hour12:$minute $period';
   }
+}
+
+String _handleForPath(String path) => path.split(Platform.pathSeparator).last;
+
+String _pathForHandle(Directory root, String handle) {
+  if (!RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(handle) ||
+      handle == '.' ||
+      handle == '..') {
+    throw StateError('Invalid recorder staging handle.');
+  }
+  return '${root.path}${Platform.pathSeparator}$handle';
 }
 
 /// Thrown by [AudioRecordingService.startRecording] when the host has no mic

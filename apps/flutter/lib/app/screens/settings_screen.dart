@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/feature_flags.dart';
 import '../../core/i18n/locale_controller.dart';
 import '../../core/settings/reading_pane.dart';
+import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_controller.dart';
+import '../../core/vault/vault_retention_service.dart';
 import '../../features/auth/auth_controller.dart';
 import '../../features/dev/god_mode_host.dart';
 import '../../features/files/files_screen.dart';
@@ -27,6 +31,7 @@ class SettingsScreen extends ConsumerWidget {
     final inboxView = ref.watch(inboxViewProvider);
     final filesView = ref.watch(filesViewProvider);
     final user = ref.watch(authStateProvider).user;
+    final retention = ref.watch(vaultRetentionPolicyProvider).valueOrNull;
 
     return Scaffold(
       appBar: AppBar(title: Text(t.settings.title)),
@@ -142,6 +147,41 @@ class SettingsScreen extends ConsumerWidget {
             label: t.settings.readingPaneContacts,
           ),
           const Divider(),
+          _SectionHeader(t.settings.storage),
+          RadioGroup<VaultRetentionMode>(
+            groupValue: retention?.mode ?? VaultRetentionMode.keepForever,
+            onChanged: (mode) {
+              if (mode == null || retention == null) return;
+              unawaited(() async {
+                await ref
+                    .read(vaultRetentionServiceProvider)
+                    .setPolicy(
+                      mode == VaultRetentionMode.keepForever
+                          ? const VaultRetentionPolicy.keepForever()
+                          : const VaultRetentionPolicy(
+                              mode: VaultRetentionMode.expireAfterUpload,
+                              expiryDays: 30,
+                            ),
+                    );
+                ref.invalidate(vaultRetentionPolicyProvider);
+              }());
+            },
+            child: Column(
+              children: [
+                RadioListTile<VaultRetentionMode>(
+                  value: VaultRetentionMode.keepForever,
+                  title: Text(t.settings.retentionKeepForever),
+                  subtitle: Text(t.settings.retentionKeepForeverHint),
+                ),
+                RadioListTile<VaultRetentionMode>(
+                  value: VaultRetentionMode.expireAfterUpload,
+                  title: Text(t.settings.retentionThirtyDays),
+                  subtitle: Text(t.settings.retentionThirtyDaysHint),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
           _SectionHeader(t.settings.account),
           if (user != null)
             ListTile(
@@ -149,6 +189,7 @@ class SettingsScreen extends ConsumerWidget {
               title: Text(user.email),
             ),
           ListTile(
+            key: const ValueKey('settings-sign-out'),
             leading: const Icon(Icons.logout),
             title: Text(t.settings.signOut),
             onTap: () => ref.read(authControllerProvider.notifier).logout(),

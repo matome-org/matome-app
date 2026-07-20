@@ -1,8 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../observability/app_log.dart';
-import 'connection.dart';
-import 'db_encryption.dart';
 import 'daos/contacts_dao.dart';
 import 'daos/items_dao.dart';
 import 'daos/matomes_dao.dart';
@@ -14,10 +12,9 @@ import 'tables.dart';
 
 part 'app_database.g.dart';
 
-/// Destructive canonical-Items reset. There are no deployed databases, so v22
-/// intentionally rebuilds the local store instead of carrying legacy data,
-/// aliases, or dual reads forward.
-const int kSchemaVersion = 28;
+/// Destructive Vault-media reset. The app is unreleased, so every earlier
+/// schema is discarded instead of preserving path-based media identities.
+const int kSchemaVersion = 30;
 
 @DriftDatabase(
   tables: [
@@ -31,6 +28,8 @@ const int kSchemaVersion = 28;
     SpaceContacts,
     MatomeShares,
     FileBlobs,
+    VaultRetentionPolicies,
+    BlobGcDecisions,
     TextContents,
     Items,
     WorkQueue,
@@ -47,10 +46,18 @@ const int kSchemaVersion = 28;
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase({SecureKeyStore? keyStore})
-    : super(openConnection(keyStore: keyStore));
-
   AppDatabase.forTesting(super.executor);
+
+  AppDatabase.opened(super.executor);
+
+  /// Forces create/migrate and validates readable SQLite pages before boot can
+  /// publish this database to any provider.
+  Future<void> validateReady() async {
+    final rows = await customSelect('PRAGMA integrity_check').get();
+    if (rows.length != 1 || rows.single.data.values.single != 'ok') {
+      throw StateError('Database integrity validation failed.');
+    }
+  }
 
   @override
   int get schemaVersion => kSchemaVersion;
@@ -61,6 +68,7 @@ class AppDatabase extends _$AppDatabase {
       AppLog.event(LogCat.db, 'db onCreate version=$kSchemaVersion');
       await m.createAll();
       await _seedDefaultWorkspace();
+      await _seedRetentionPolicy();
     },
     onUpgrade: (m, from, to) async {
       AppLog.event(LogCat.db, 'db destructive reset $from->$to');
@@ -77,6 +85,8 @@ class AppDatabase extends _$AppDatabase {
         'matome_contacts',
         'items',
         'text_contents',
+        'blob_gc_decisions',
+        'vault_retention_policies',
         'file_blobs',
         'recordings',
         'contacts',
@@ -90,6 +100,7 @@ class AppDatabase extends _$AppDatabase {
       }
       await m.createAll();
       await _seedDefaultWorkspace();
+      await _seedRetentionPolicy();
     },
     beforeOpen: (_) => customStatement('PRAGMA foreign_keys = ON'),
   );
@@ -102,6 +113,15 @@ class AppDatabase extends _$AppDatabase {
         isDefault: const Value(1),
         createdAt: DateTime.now().millisecondsSinceEpoch,
         spaceType: const Value('personal'),
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+
+  Future<void> _seedRetentionPolicy() async {
+    await into(vaultRetentionPolicies).insert(
+      VaultRetentionPoliciesCompanion.insert(
+        updatedAt: DateTime.now().millisecondsSinceEpoch,
       ),
       mode: InsertMode.insertOrIgnore,
     );

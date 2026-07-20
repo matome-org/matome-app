@@ -23,10 +23,12 @@ void main() {
   late RecoveryRepository repo;
 
   setUp(() {
-    dio = Dio(BaseOptions(
-      baseUrl: 'http://localhost:7001',
-      validateStatus: (s) => s != null && s < 500,
-    ));
+    dio = Dio(
+      BaseOptions(
+        baseUrl: 'http://localhost:7001',
+        validateStatus: (s) => s != null && s < 500,
+      ),
+    );
     adapter = DioAdapter(dio: dio);
     repo = RecoveryRepository(dio: dio);
   });
@@ -56,22 +58,23 @@ void main() {
     expect(bundle.kdfParams['profile'], 'argon2id-v1-portable');
   });
 
-  test('fetchRecoveryBundle surfaces 404 as ApiException (no bundle enrolled)',
-      () async {
-    adapter.onGet(
-      '/api/keybundle/recovery',
-      (server) => server.reply(404, {'error': 'not_found'}),
-      headers: {'authorization': 'Bearer reset-tok-404'},
-    );
-
-    expect(
-      () => repo.fetchRecoveryBundle(resetToken: 'reset-tok-404'),
-      throwsA(isA<Exception>()),
-    );
-  });
-
   test(
-      'fetchRecoveryBundle surfaces a malformed 200 key_bundle as an '
+    'fetchRecoveryBundle surfaces 404 as ApiException (no bundle enrolled)',
+    () async {
+      adapter.onGet(
+        '/api/keybundle/recovery',
+        (server) => server.reply(404, {'error': 'not_found'}),
+        headers: {'authorization': 'Bearer reset-tok-404'},
+      );
+
+      expect(
+        () => repo.fetchRecoveryBundle(resetToken: 'reset-tok-404'),
+        throwsA(isA<Exception>()),
+      );
+    },
+  );
+
+  test('fetchRecoveryBundle surfaces a malformed 200 key_bundle as an '
       'ApiException (okt-audit info follow-up #1866) — RecoveryKeyBundle.'
       'fromJson\'s RecoveryBundleFormatException must NOT leak past this '
       'method\'s established ApiException contract', () async {
@@ -92,19 +95,21 @@ void main() {
     );
   });
 
-  test('fetchRecoveryBundle surfaces 401 (invalid/expired reset token)',
-      () async {
-    adapter.onGet(
-      '/api/keybundle/recovery',
-      (server) => server.reply(401, {'error': 'unauthorized'}),
-      headers: {'authorization': 'Bearer bad-token'},
-    );
+  test(
+    'fetchRecoveryBundle surfaces 401 (invalid/expired reset token)',
+    () async {
+      adapter.onGet(
+        '/api/keybundle/recovery',
+        (server) => server.reply(401, {'error': 'unauthorized'}),
+        headers: {'authorization': 'Bearer bad-token'},
+      );
 
-    expect(
-      () => repo.fetchRecoveryBundle(resetToken: 'bad-token'),
-      throwsA(isA<Exception>()),
-    );
-  });
+      expect(
+        () => repo.fetchRecoveryBundle(resetToken: 'bad-token'),
+        throwsA(isA<Exception>()),
+      );
+    },
+  );
 
   test('uploadRotatedBundle PUTs the new wrapped fields under the reset '
       'token', () async {
@@ -148,13 +153,13 @@ void main() {
   group('RecoveryKeyBundle.fromJson — boundary validation (okt-audit info '
       'follow-up #1866)', () {
     Map<String, dynamic> validJson() => {
-          'wrapped_dek_pw': 'pw-blob',
-          'wrapped_dek_recovery': 'recovery-blob',
-          'salt_enc': 'salt-enc',
-          'salt_rec': 'salt-rec',
-          'salt_auth': 'salt-auth',
-          'kdf_params': {'profile': 'argon2id-v1-portable'},
-        };
+      'wrapped_dek_pw': 'pw-blob',
+      'wrapped_dek_recovery': 'recovery-blob',
+      'salt_enc': 'salt-enc',
+      'salt_rec': 'salt-rec',
+      'salt_auth': 'salt-auth',
+      'kdf_params': {'profile': 'argon2id-v1-portable'},
+    };
 
     test('parses a well-formed bundle', () {
       final bundle = RecoveryKeyBundle.fromJson(validJson());
@@ -197,14 +202,16 @@ void main() {
       });
     }
 
-    test('throws RecoveryBundleFormatException when "kdf_params" is missing',
-        () {
-      final json = validJson()..remove('kdf_params');
-      expect(
-        () => RecoveryKeyBundle.fromJson(json),
-        throwsA(isA<RecoveryBundleFormatException>()),
-      );
-    });
+    test(
+      'throws RecoveryBundleFormatException when "kdf_params" is missing',
+      () {
+        final json = validJson()..remove('kdf_params');
+        expect(
+          () => RecoveryKeyBundle.fromJson(json),
+          throwsA(isA<RecoveryBundleFormatException>()),
+        );
+      },
+    );
 
     test('throws RecoveryBundleFormatException when "kdf_params" is not a '
         'Map', () {

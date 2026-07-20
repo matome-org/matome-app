@@ -29,8 +29,9 @@ void main() {
     // Reopen the same file (mirrors a subsequent boot reusing the key) and read
     // the persisted row back.
     db = AppDatabase.forTesting(NativeDatabase(file));
-    final names =
-        (await db.workspacesDao.getWorkspaces()).map((w) => w.name).toList();
+    final names = (await db.workspacesDao.getWorkspaces())
+        .map((w) => w.name)
+        .toList();
     await db.close();
 
     expect(names, contains('KeyedCheck'));

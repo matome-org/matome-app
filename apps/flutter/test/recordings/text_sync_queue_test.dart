@@ -220,6 +220,8 @@ void main() {
       );
       final fileWork = fileUploadWork(
         itemId: 'owner-a-delayed',
+        blobId: 'blob-owner-a-delayed',
+        blobRevision: 1,
         sourceRevision: 1,
         now: 1,
         dependsOn: 'owner-a-hold',

@@ -3,6 +3,8 @@ import 'recording.dart';
 
 enum UploadMode { single, multipart }
 
+enum UploadTransport { directSignedLength, browserStream }
+
 enum UploadState { pending, uploading, uploaded, failed, aborted, stale }
 
 /// A short-lived, unauthenticated storage request. Callers must never persist
@@ -95,6 +97,7 @@ class UploadDescriptor {
     this.uploadId = '',
     this.uploadGeneration = 1,
     this.mode = UploadMode.single,
+    this.transport = UploadTransport.directSignedLength,
     this.state = UploadState.pending,
     this.partSize,
     this.acceptedParts = const [],
@@ -122,6 +125,9 @@ class UploadDescriptor {
       mode: asString(json['mode']) == 'multipart'
           ? UploadMode.multipart
           : UploadMode.single,
+      transport: asString(json['transport']) == 'browser_stream'
+          ? UploadTransport.browserStream
+          : UploadTransport.directSignedLength,
       state: _uploadState(json['state']),
       partSize: asIntOrNull(json['part_size']),
       acceptedParts: accepted is List
@@ -154,6 +160,7 @@ class UploadDescriptor {
   final String uploadId;
   final int uploadGeneration;
   final UploadMode mode;
+  final UploadTransport transport;
   final UploadState state;
   final int? partSize;
   final List<UploadPart> acceptedParts;

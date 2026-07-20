@@ -78,21 +78,21 @@ GoRouter _buildRealOnRouter() {
 }
 
 Widget _app(GoRouter router) => ProviderScope(
-      child: TranslationProvider(
-        child: MaterialApp.router(
-          debugShowCheckedModeBanner: false,
-          theme: buildLightTheme(),
-          darkTheme: buildDarkTheme(),
-          supportedLocales: AppLocaleUtils.supportedLocales,
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          routerConfig: router,
-        ),
-      ),
-    );
+  child: TranslationProvider(
+    child: MaterialApp.router(
+      debugShowCheckedModeBanner: false,
+      theme: buildLightTheme(),
+      darkTheme: buildDarkTheme(),
+      supportedLocales: AppLocaleUtils.supportedLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      routerConfig: router,
+    ),
+  ),
+);
 
 void _phone(WidgetTester tester) {
   tester.view.physicalSize = const Size(420, 900);
@@ -113,16 +113,13 @@ void main() {
 
   group('real ON flag — router wiring', () {
     test('shellBranches is the DR-002 order with satori excluded', () {
-      expect(
-        shellBranches,
-        const [
-          ShellTab.inbox,
-          ShellTab.calendar,
-          ShellTab.files,
-          ShellTab.contacts,
-          ShellTab.spaces,
-        ],
-      );
+      expect(shellBranches, const [
+        ShellTab.inbox,
+        ShellTab.calendar,
+        ShellTab.files,
+        ShellTab.contacts,
+        ShellTab.spaces,
+      ]);
       expect(shellBranches, isNot(contains(ShellTab.satori)));
       expect(shellBranches, contains(ShellTab.files));
     });
@@ -227,41 +224,42 @@ void main() {
   });
 
   group('real ON flag — a11y on the reordered destinations', () {
-    testWidgets('each destination exposes a Semantics label; tap targets ≥48dp', (
-      tester,
-    ) async {
-      _phone(tester);
-      final router = _buildRealOnRouter();
-      await tester.pumpWidget(_app(router));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'each destination exposes a Semantics label; tap targets ≥48dp',
+      (tester) async {
+        _phone(tester);
+        final router = _buildRealOnRouter();
+        await tester.pumpWidget(_app(router));
+        await tester.pumpAndSettle();
 
-      final handle = tester.ensureSemantics();
+        final handle = tester.ensureSemantics();
 
-      // Screen-reader labels for the REAL ON destination set.
-      for (final tab in shellBranches) {
-        expect(
-          find.bySemanticsLabel(tab.label),
-          findsWidgets,
-          reason: '${tab.name} exposes a screen-reader label under ON',
+        // Screen-reader labels for the REAL ON destination set.
+        for (final tab in shellBranches) {
+          expect(
+            find.bySemanticsLabel(tab.label),
+            findsWidgets,
+            reason: '${tab.name} exposes a screen-reader label under ON',
+          );
+        }
+
+        // Tap targets ≥48dp (WCAG 2.5.5) on every dock destination.
+        final inkwells = find.descendant(
+          of: find.byType(MatomeBottomDock),
+          matching: find.byType(InkWell),
         );
-      }
+        for (final element in inkwells.evaluate()) {
+          final size = tester.getSize(find.byWidget(element.widget));
+          expect(size.width, greaterThanOrEqualTo(48.0));
+          expect(size.height, greaterThanOrEqualTo(48.0));
+        }
 
-      // Tap targets ≥48dp (WCAG 2.5.5) on every dock destination.
-      final inkwells = find.descendant(
-        of: find.byType(MatomeBottomDock),
-        matching: find.byType(InkWell),
-      );
-      for (final element in inkwells.evaluate()) {
-        final size = tester.getSize(find.byWidget(element.widget));
-        expect(size.width, greaterThanOrEqualTo(48.0));
-        expect(size.height, greaterThanOrEqualTo(48.0));
-      }
+        // The Add affordance is screen-reader labelled too.
+        expect(find.bySemanticsLabel(t.nav.add), findsWidgets);
 
-      // The Add affordance is screen-reader labelled too.
-      expect(find.bySemanticsLabel(t.nav.add), findsWidgets);
-
-      handle.dispose();
-    });
+        handle.dispose();
+      },
+    );
 
     testWidgets('focus order: keyboard traversal reaches the dock destinations '
         'in DR-002 order', (tester) async {
@@ -311,9 +309,11 @@ void main() {
       for (var i = 0; i < 40 && !activated; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.enter);
         await tester.pumpAndSettle();
-        activated = shellBranches.any((tab) =>
-            tab != ShellTab.inbox &&
-            find.text('SCREEN:${tab.location}').evaluate().isNotEmpty);
+        activated = shellBranches.any(
+          (tab) =>
+              tab != ShellTab.inbox &&
+              find.text('SCREEN:${tab.location}').evaluate().isNotEmpty,
+        );
         if (!activated && focusInDock()) {
           FocusManager.instance.primaryFocus?.nextFocus();
           await tester.pumpAndSettle();

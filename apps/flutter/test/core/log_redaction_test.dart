@@ -80,5 +80,19 @@ void main() {
         expect(out, isNot(contains(secret)));
       }
     });
+
+    test('redacts Android private paths and ephemeral Vault URLs', () {
+      final out = redactSensitiveLogData(
+        'FileSystemException: /data/user/0/com.matome/files/audio.lease '
+        'preview=blob:https://matome.test/private-object-id '
+        'file=file:///private/var/mobile/document.lease',
+      );
+
+      expect(out, isNot(contains('/data/user')));
+      expect(out, isNot(contains('private-object-id')));
+      expect(out, isNot(contains('/private/var/mobile')));
+      expect(out, contains('[REDACTED_PATH]'));
+      expect(out, contains('[REDACTED_URI]'));
+    });
   });
 }

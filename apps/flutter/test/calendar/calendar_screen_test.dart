@@ -46,10 +46,7 @@ Widget _app(AppDatabase db, {required DateTime now}) {
   final router = GoRouter(
     initialLocation: '/calendar',
     routes: [
-      GoRoute(
-        path: '/calendar',
-        builder: (_, _) => const CalendarScreen(),
-      ),
+      GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
       GoRoute(
         path: '/matome/:id',
         builder: (_, state) {
@@ -130,12 +127,7 @@ void main() {
       createdAt: day,
       workspaceId: eng.id,
     );
-    await _seed(
-      db,
-      id: 'r-inbox',
-      title: 'Inbox note',
-      createdAt: day,
-    );
+    await _seed(db, id: 'r-inbox', title: 'Inbox note', createdAt: day);
 
     await tester.pumpWidget(_app(db, now: DateTime(2026, 4, 10, 9)));
     await tester.pumpAndSettle();

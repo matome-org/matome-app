@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +6,7 @@ import '../../core/db/recording_card.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/vault/vault_lease_image.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_button.dart';
 import '../../ui/app_dialog.dart';
@@ -54,20 +53,6 @@ String? fileContentsFor(ItemWithPayload row, FileMediaKind kind) {
       .where((value) => value.trim().isNotEmpty)
       .toList(growable: false);
   return present.isEmpty ? null : present.join('\n\n');
-}
-
-/// Best-effort human size for the on-disk document, read synchronously from the
-/// file at [path]. Returns null (→ the chip renders its unknown-size
-/// placeholder) when the path is absent or the file cannot be stat-ed — a
-/// missing size must never block the chip from rendering.
-String? _fileSizeLabel(String? path) {
-  if (path == null || path.isEmpty) return null;
-  try {
-    final bytes = File(path).lengthSync();
-    return _formatBytes(bytes);
-  } catch (_) {
-    return null;
-  }
 }
 
 /// Formats a byte count into a compact unit string (e.g. `2.4 MB`). Uses 1024
@@ -424,7 +409,7 @@ class _ImageDetailHost extends StatelessWidget {
       coreId = item.coreId,
       processingStatus = item.processingStatus,
       processingErrorCode = item.processingErrorCode,
-      path = item.filePath,
+      blobId = item.blobId,
       filename = null,
       contentType = null,
       byteSize = null,
@@ -454,9 +439,7 @@ class _ImageDetailHost extends StatelessWidget {
        coreId = row.coreId,
        processingStatus = row.processingStatus,
        processingErrorCode = row.processingErrorCode,
-       // The image's on-disk path lives in the `audioFilePath` column (the
-       // generic media-path column shared across kinds).
-       path = row.localPath,
+       blobId = row.blobId,
        filename = row.file?.filename,
        contentType = row.file?.contentType,
        byteSize = row.file?.byteSize,
@@ -473,7 +456,7 @@ class _ImageDetailHost extends StatelessWidget {
   final int? coreId;
   final String? processingStatus;
   final String? processingErrorCode;
-  final String? path;
+  final String? blobId;
   final String? filename;
   final String? contentType;
   final int? byteSize;
@@ -513,7 +496,7 @@ class _ImageDetailHost extends StatelessWidget {
       //   * audio → handled by the audio host, not here.
       mediaHeader: switch (mediaKind) {
         FileMediaKind.image => _ImageMediaHeader(
-          path: path,
+          blobId: blobId,
           onOpenFullscreen: () => _openFullscreen(context),
         ),
         FileMediaKind.doc => _DocumentFileHeader(
@@ -522,12 +505,13 @@ class _ImageDetailHost extends StatelessWidget {
           mimeType: contentType,
           sizeLabel: byteSize != null && byteSize! > 0
               ? _formatBytes(byteSize!)
-              : _fileSizeLabel(path),
+              : null,
+          byteSize: byteSize,
           coreId: coreId,
-          localPath: path,
+          blobId: blobId,
           openPolicy: openPolicy,
         ),
-        FileMediaKind.video => _VideoMediaHeader(title: title, path: path),
+        FileMediaKind.video => _VideoMediaHeader(title: title, blobId: blobId),
         FileMediaKind.audio => null,
       },
       contentsText: contentsText,
@@ -567,8 +551,8 @@ class _ImageDetailHost extends StatelessWidget {
   }
 
   void _openFullscreen(BuildContext context) {
-    final path = this.path;
-    if (path == null || path.isEmpty) return;
+    final blobId = this.blobId;
+    if (blobId == null || blobId.isEmpty) return;
     // Push the fullscreen viewer on the LOCAL navigator (the one that owns this
     // detail screen), NOT the root navigator: this detail screen is itself a
     // go_router page, so its enclosing Navigator is the right host for a
@@ -576,7 +560,7 @@ class _ImageDetailHost extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => _FullscreenImageViewer(path: path, title: title),
+        builder: (_) => _FullscreenImageViewer(blobId: blobId, title: title),
       ),
     );
   }
@@ -614,8 +598,9 @@ class _DocumentFileHeader extends ConsumerStatefulWidget {
     required this.extension,
     required this.mimeType,
     required this.sizeLabel,
+    required this.byteSize,
     required this.coreId,
-    required this.localPath,
+    required this.blobId,
     required this.openPolicy,
   });
 
@@ -623,8 +608,9 @@ class _DocumentFileHeader extends ConsumerStatefulWidget {
   final String? extension;
   final String? mimeType;
   final String? sizeLabel;
+  final int? byteSize;
   final int? coreId;
-  final String? localPath;
+  final String? blobId;
   final DocumentOpenPolicy openPolicy;
 
   @override
@@ -634,6 +620,19 @@ class _DocumentFileHeader extends ConsumerStatefulWidget {
 
 class _DocumentFileHeaderState extends ConsumerState<_DocumentFileHeader> {
   FileTypeChipState _state = FileTypeChipState.ready;
+  late final DocumentOpenService _service;
+
+  @override
+  void initState() {
+    super.initState();
+    _service = ref.read(documentOpenServiceProvider);
+  }
+
+  @override
+  void dispose() {
+    _service.releaseLocalLease();
+    super.dispose();
+  }
 
   FileTypeChipAction get _action => switch (widget.openPolicy) {
     DocumentOpenPolicy.external => FileTypeChipAction.open,
@@ -644,19 +643,35 @@ class _DocumentFileHeaderState extends ConsumerState<_DocumentFileHeader> {
   };
 
   Future<void> _open() async {
-    final service = ref.read(documentOpenServiceProvider);
     setState(() => _state = FileTypeChipState.loading);
     DocumentOpenResult result;
     try {
-      result = await service.open(
-        DocumentOpenRequest(
-          coreId: widget.coreId,
-          localPath: widget.localPath,
-          openPolicy: widget.openPolicy,
-          extension: widget.extension,
-          mimeType: widget.mimeType,
-        ),
-      );
+      if ((widget.openPolicy == DocumentOpenPolicy.attachmentOnly ||
+              widget.openPolicy == DocumentOpenPolicy.downloadOnly) &&
+          widget.blobId != null) {
+        final exported = await ref
+            .read(vaultExportServiceProvider)
+            .export(blobId: widget.blobId!, suggestedFilename: widget.fileName);
+        if (exported && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(t.files.exportedOutsideVault(n: 1))),
+          );
+        }
+        result = exported
+            ? DocumentOpenResult.downloadStarted
+            : DocumentOpenResult.unavailable;
+      } else {
+        result = await _service.open(
+          DocumentOpenRequest(
+            coreId: widget.coreId,
+            blobId: widget.blobId,
+            openPolicy: widget.openPolicy,
+            extension: widget.extension,
+            mimeType: widget.mimeType,
+            byteSize: widget.byteSize,
+          ),
+        );
+      }
     } catch (_) {
       result = DocumentOpenResult.failed;
     }
@@ -687,10 +702,10 @@ class _DocumentFileHeaderState extends ConsumerState<_DocumentFileHeader> {
 }
 
 class _VideoMediaHeader extends StatelessWidget {
-  const _VideoMediaHeader({required this.title, required this.path});
+  const _VideoMediaHeader({required this.title, required this.blobId});
 
   final String title;
-  final String? path;
+  final String? blobId;
 
   @override
   Widget build(BuildContext context) {
@@ -698,7 +713,7 @@ class _VideoMediaHeader extends StatelessWidget {
     final spacing = context.spacing;
     final radius = context.radius;
     final typography = context.typography;
-    final hasPath = path != null && path!.isNotEmpty;
+    final isAvailable = blobId != null && blobId!.isNotEmpty;
 
     return Container(
       key: const ValueKey('file-detail-video-header'),
@@ -726,7 +741,7 @@ class _VideoMediaHeader extends StatelessWidget {
                 ),
                 SizedBox(height: spacing.xxs),
                 Text(
-                  hasPath ? title : 'Video file unavailable',
+                  isAvailable ? title : 'Video file unavailable',
                   style: typography.body.copyWith(color: colors.textPrimary),
                 ),
               ],
@@ -1054,9 +1069,12 @@ class _RetryBanner extends StatelessWidget {
 /// it opens the fullscreen viewer — the lightbox is now a header *action*, not
 /// the whole screen.
 class _ImageMediaHeader extends StatelessWidget {
-  const _ImageMediaHeader({required this.path, required this.onOpenFullscreen});
+  const _ImageMediaHeader({
+    required this.blobId,
+    required this.onOpenFullscreen,
+  });
 
-  final String? path;
+  final String? blobId;
   final VoidCallback onOpenFullscreen;
 
   @override
@@ -1065,14 +1083,14 @@ class _ImageMediaHeader extends StatelessWidget {
     final radius = context.radius;
     final spacing = context.spacing;
     final typography = context.typography;
-    final path = this.path;
+    final blobId = this.blobId;
 
-    final Widget frame = path == null
+    final Widget frame = blobId == null
         ? const _UnavailableFrame()
-        : Image.file(
-            File(path),
+        : VaultLeaseImage(
+            blobId: blobId,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const _UnavailableFrame(),
+            errorBuilder: (_) => const _UnavailableFrame(),
           );
 
     return Material(
@@ -1080,7 +1098,7 @@ class _ImageMediaHeader extends StatelessWidget {
       borderRadius: BorderRadius.circular(radius.lg),
       child: InkWell(
         key: const ValueKey('file-detail-image-header'),
-        onTap: path == null ? null : onOpenFullscreen,
+        onTap: blobId == null ? null : onOpenFullscreen,
         borderRadius: BorderRadius.circular(radius.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1142,9 +1160,9 @@ class _UnavailableFrame extends StatelessWidget {
 /// Fullscreen pinch-zoom viewer — the relocated lightbox, now a media-header
 /// action rather than the entire image experience.
 class _FullscreenImageViewer extends StatelessWidget {
-  const _FullscreenImageViewer({required this.path, required this.title});
+  const _FullscreenImageViewer({required this.blobId, required this.title});
 
-  final String path;
+  final String blobId;
   final String title;
 
   @override
@@ -1161,10 +1179,10 @@ class _FullscreenImageViewer extends StatelessWidget {
       body: Center(
         child: InteractiveViewer(
           key: const ValueKey('file-detail-fullscreen-viewer'),
-          child: Image.file(
-            File(path),
+          child: VaultLeaseImage(
+            blobId: blobId,
             fit: BoxFit.contain,
-            errorBuilder: (_, _, _) => const _ViewerUnavailable(),
+            errorBuilder: (_) => const _ViewerUnavailable(),
           ),
         ),
       ),

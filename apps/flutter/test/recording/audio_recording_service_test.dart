@@ -33,7 +33,10 @@ class FakeRecorderBackend implements RecorderBackend {
   Future<bool> hasPermission() async => permission;
 
   @override
-  Future<void> start(String p, {AudioEncoder encoder = AudioEncoder.aacLc}) async {
+  Future<void> start(
+    String p, {
+    AudioEncoder encoder = AudioEncoder.aacLc,
+  }) async {
     path = p;
     started = true;
     paused = false;
@@ -128,31 +131,33 @@ void main() {
   // De-risk: single continuous file across pause/resume.
   // -------------------------------------------------------------------------
   group('pause/resume single-file model', () {
-    test('record → pause → resume → finish yields ONE file with full duration',
-        () async {
-      final db = _memDb();
-      final backend = FakeRecorderBackend();
-      final svc = makeService(db, backend: backend);
+    test(
+      'record → pause → resume → finish yields ONE file with full duration',
+      () async {
+        final db = _memDb();
+        final backend = FakeRecorderBackend();
+        final svc = makeService(db, backend: backend);
 
-      await svc.startRecording();
-      await svc.pauseRecording();
-      await svc.resumeRecording();
-      final segment = await svc.stopRecording();
+        await svc.startRecording();
+        await svc.pauseRecording();
+        await svc.resumeRecording();
+        final segment = await svc.stopRecording();
 
-      // Exactly one resolved segment (continuous session collapses to one file).
-      expect(svc.getSegments().length, 1);
-      final merged = await svc.mergeSegments();
-      expect(merged, segment);
-      expect(await File(merged).exists(), isTrue);
+        // Exactly one resolved segment (continuous session collapses to one file).
+        expect(svc.getSegments().length, 1);
+        final merged = await svc.mergeSegments();
+        expect(merged, segment);
+        expect(await File(merged).exists(), isTrue);
 
-      // The finalized file contains BOTH spans (1000 + 1000 bytes) — no audio
-      // lost on pause. Duration proxy == 2000.
-      final durationSec = await svc.getAudioDurationSeconds(merged);
-      expect(durationSec, 2.0); // 2000 ms
+        // The finalized file contains BOTH spans (1000 + 1000 bytes) — no audio
+        // lost on pause. Duration proxy == 2000.
+        final durationSec = await svc.getAudioDurationSeconds(merged);
+        expect(durationSec, 2.0); // 2000 ms
 
-      await svc.dispose();
-      await db.close();
-    });
+        await svc.dispose();
+        await db.close();
+      },
+    );
 
     test('multiple pause/resume cycles still resolve to one file', () async {
       final db = _memDb();
@@ -203,52 +208,57 @@ void main() {
 
       final draft = await db.recordingDraftsDao.loadDraft();
       expect(draft, isNotNull);
-      expect(draft!.segments, isNotEmpty);
+      expect(draft!.segmentHandles, isNotEmpty);
 
       await svc.dispose();
       await db.close();
     });
 
-    test('detectRecoverableDraft returns a draft whose files still exist',
-        () async {
-      final db = _memDb();
-      final svc = makeService(db);
+    test(
+      'detectRecoverableDraft returns a draft whose files still exist',
+      () async {
+        final db = _memDb();
+        final svc = makeService(db);
 
-      await svc.startRecording();
-      final snapshot = await svc.pauseRecording();
-      // Simulate "kill" by tearing down the service (draft + file persist).
-      await svc.dispose();
+        await svc.startRecording();
+        final snapshot = await svc.pauseRecording();
+        // Simulate "kill" by tearing down the service (draft + file persist).
+        await svc.dispose();
 
-      // New service on the SAME db (next app start).
-      final svc2 = makeService(db);
-      final detected = await svc2.detectRecoverableDraft();
-      expect(detected, isNotNull);
-      expect(detected!.segments, contains(snapshot));
+        // New service on the SAME db (next app start).
+        final svc2 = makeService(db);
+        final detected = await svc2.detectRecoverableDraft();
+        expect(detected, isNotNull);
+        expect(detected!.segmentHandles, contains(snapshot.split('/').last));
 
-      await svc2.dispose();
-      await db.close();
-    });
+        await svc2.dispose();
+        await db.close();
+      },
+    );
 
-    test('detectRecoverableDraft discards a stale draft (files gone)', () async {
-      final db = _memDb();
-      final svc = makeService(db);
+    test(
+      'detectRecoverableDraft discards a stale draft (files gone)',
+      () async {
+        final db = _memDb();
+        final svc = makeService(db);
 
-      await svc.startRecording();
-      final snapshot = await svc.pauseRecording();
-      await svc.dispose();
+        await svc.startRecording();
+        final snapshot = await svc.pauseRecording();
+        await svc.dispose();
 
-      // Files vanish (e.g. OS cache cleared) but the draft row remains.
-      await File(snapshot).delete();
+        // Files vanish (e.g. OS cache cleared) but the draft row remains.
+        await File(snapshot).delete();
 
-      final svc2 = makeService(db);
-      final detected = await svc2.detectRecoverableDraft();
-      expect(detected, isNull);
-      // Stale draft swept.
-      expect(await db.recordingDraftsDao.loadDraft(), isNull);
+        final svc2 = makeService(db);
+        final detected = await svc2.detectRecoverableDraft();
+        expect(detected, isNull);
+        // Stale draft swept.
+        expect(await db.recordingDraftsDao.loadDraft(), isNull);
 
-      await svc2.dispose();
-      await db.close();
-    });
+        await svc2.dispose();
+        await db.close();
+      },
+    );
 
     test('resumeFromDraft seeds segments + restores duration', () async {
       final db = _memDb();
@@ -269,31 +279,34 @@ void main() {
       await db.close();
     });
 
-    test('recovered draft: straight-through resumed span APPENDS (preserves prior)',
-        () async {
-      // Cross-restart: resume a recovered draft, record a NEW span (no pause),
-      // finish. The new span is appended → 2 segments; mergeSegments returns the
-      // LAST (documented limitation).
-      final db = _memDb();
-      final svc = makeService(db);
-      await svc.startRecording();
-      final priorSnapshot = await svc.pauseRecording();
-      await svc.dispose();
+    test(
+      'recovered draft: straight-through resumed span APPENDS (preserves prior)',
+      () async {
+        // Cross-restart: resume a recovered draft, record a NEW span (no pause),
+        // finish. The new span is appended → 2 segments; mergeSegments returns the
+        // LAST (documented limitation).
+        final db = _memDb();
+        final svc = makeService(db);
+        await svc.startRecording();
+        final priorSnapshot = await svc.pauseRecording();
+        await svc.dispose();
 
-      final svc2 = makeService(db, backend: FakeRecorderBackend());
-      final detected = await svc2.detectRecoverableDraft();
-      // Resume flow: start a fresh recorder, re-seed prior spans.
-      await svc2.startRecording();
-      svc2.restoreSegments(detected!.segments);
-      final newSegment = await svc2.stopRecording(); // straight-through, not continuous
+        final svc2 = makeService(db, backend: FakeRecorderBackend());
+        final detected = await svc2.detectRecoverableDraft();
+        // Resume flow: start a fresh recorder, re-seed prior spans.
+        await svc2.startRecording();
+        await svc2.resumeFromDraft(detected!);
+        final newSegment = await svc2
+            .stopRecording(); // straight-through, not continuous
 
-      final segs = svc2.getSegments();
-      expect(segs, [priorSnapshot, newSegment]);
-      expect(await svc2.mergeSegments(), newSegment); // last-span fallback
+        final segs = svc2.getSegments();
+        expect(segs, [priorSnapshot, newSegment]);
+        expect(await svc2.mergeSegments(), newSegment); // last-span fallback
 
-      await svc2.dispose();
-      await db.close();
-    });
+        await svc2.dispose();
+        await db.close();
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -335,82 +348,105 @@ void main() {
   // lands mid-capture of a back-to-back session cannot destroy the new audio.
   // -------------------------------------------------------------------------
   group('discardSegmentPaths (snapshot-bound cleanup)', () {
-    test('CROSS-SESSION: A confirms while B records → B segments + draft survive',
-        () async {
-      final db = _memDb();
-      final svc = makeService(db);
+    test(
+      'CROSS-SESSION: A confirms while B records → B segments + draft survive',
+      () async {
+        final db = _memDb();
+        final svc = makeService(db);
 
-      // --- Session A: record → finish → snapshot A's paths (as finish() does)
-      await svc.startRecording();
-      final aSegment = await svc.stopRecording();
-      final aSnapshot = await svc.snapshotSessionCleanupPaths();
-      expect(aSnapshot, [aSegment]);
-      expect(await File(aSegment).exists(), isTrue);
+        // --- Session A: record → finish → snapshot A's paths (as finish() does)
+        await svc.startRecording();
+        final aSegment = await svc.stopRecording();
+        final aSnapshot = await svc.snapshotSessionCleanupPaths();
+        expect(aSnapshot, [aSegment]);
+        expect(await File(aSegment).exists(), isTrue);
 
-      // --- Session B starts on the SAME singleton recorder and captures, which
-      //     RESETS the live _sessionSegments and (on pause) writes B's draft.
-      await svc.startRecording();
-      final bSnapshot = await svc.pauseRecording(); // B's live segment + draft
-      expect(svc.getSegments(), [bSnapshot]);
-      expect(await File(bSnapshot).exists(), isTrue);
-      final bDraft = await db.recordingDraftsDao.loadDraft();
-      expect(bDraft, isNotNull, reason: 'B owns the live draft now');
-      expect(bDraft!.segments, contains(bSnapshot));
+        // --- Session B starts on the SAME singleton recorder and captures, which
+        //     RESETS the live _sessionSegments and (on pause) writes B's draft.
+        await svc.startRecording();
+        final bSnapshot = await svc
+            .pauseRecording(); // B's live segment + draft
+        expect(svc.getSegments(), [bSnapshot]);
+        expect(await File(bSnapshot).exists(), isTrue);
+        final bDraft = await db.recordingDraftsDao.loadDraft();
+        expect(bDraft, isNotNull, reason: 'B owns the live draft now');
+        expect(bDraft!.segmentHandles, contains(bSnapshot.split('/').last));
 
-      // --- A's upload confirms NOW (deferred). The OLD bug called the live
-      //     discardSegments() → would wipe B. The snapshot-bound hook must only
-      //     delete A's file and must NOT touch B's segment or B's draft.
-      await svc.discardSegmentPaths(aSnapshot);
+        // --- A's upload confirms NOW (deferred). The OLD bug called the live
+        //     discardSegments() → would wipe B. The snapshot-bound hook must only
+        //     delete A's file and must NOT touch B's segment or B's draft.
+        await svc.discardSegmentPaths(aSnapshot);
 
-      expect(await File(aSegment).exists(), isFalse,
-          reason: "A's own file is cleaned");
-      expect(await File(bSnapshot).exists(), isTrue,
-          reason: "B's in-progress audio MUST survive A's confirm");
-      expect(svc.getSegments(), [bSnapshot],
-          reason: "B's live session state is untouched");
-      final draftAfter = await db.recordingDraftsDao.loadDraft();
-      expect(draftAfter, isNotNull,
-          reason: "B's draft MUST survive (it isn't A's snapshot)");
-      expect(draftAfter!.segments, contains(bSnapshot));
+        expect(
+          await File(aSegment).exists(),
+          isFalse,
+          reason: "A's own file is cleaned",
+        );
+        expect(
+          await File(bSnapshot).exists(),
+          isTrue,
+          reason: "B's in-progress audio MUST survive A's confirm",
+        );
+        expect(svc.getSegments(), [
+          bSnapshot,
+        ], reason: "B's live session state is untouched");
+        final draftAfter = await db.recordingDraftsDao.loadDraft();
+        expect(
+          draftAfter,
+          isNotNull,
+          reason: "B's draft MUST survive (it isn't A's snapshot)",
+        );
+        expect(draftAfter!.segmentHandles, contains(bSnapshot.split('/').last));
 
-      await svc.dispose();
-      await db.close();
-    });
+        await svc.dispose();
+        await db.close();
+      },
+    );
 
-    test('single-recording: deletes the snapshot files AND this session draft',
-        () async {
-      final db = _memDb();
-      final svc = makeService(db);
+    test(
+      'single-recording: deletes the snapshot files AND this session draft',
+      () async {
+        final db = _memDb();
+        final svc = makeService(db);
 
-      // Record with a pause so a draft exists, finish, snapshot. The continuous
-      // session's draft still names the (now-superseded) pause snapshot, which
-      // snapshotSessionCleanupPaths() folds in — so the draft is recognized as
-      // owned by THIS session and cleared on confirm.
-      await svc.startRecording();
-      await svc.pauseRecording();
-      await svc.resumeRecording();
-      final segment = await svc.stopRecording();
-      final snapshot = await svc.snapshotSessionCleanupPaths();
-      expect(await File(segment).exists(), isTrue);
+        // Record with a pause so a draft exists, finish, snapshot. The continuous
+        // session's draft still names the (now-superseded) pause snapshot, which
+        // snapshotSessionCleanupPaths() folds in — so the draft is recognized as
+        // owned by THIS session and cleared on confirm.
+        await svc.startRecording();
+        await svc.pauseRecording();
+        await svc.resumeRecording();
+        final segment = await svc.stopRecording();
+        final snapshot = await svc.snapshotSessionCleanupPaths();
+        expect(await File(segment).exists(), isTrue);
 
-      // The pause draft is folded into the snapshot, so it is owned by THIS
-      // session and must be cleared on confirm (normal cleanup intact).
-      await svc.discardSegmentPaths(snapshot);
+        // The pause draft is folded into the snapshot, so it is owned by THIS
+        // session and must be cleared on confirm (normal cleanup intact).
+        await svc.discardSegmentPaths(snapshot);
 
-      expect(await File(segment).exists(), isFalse,
-          reason: 'normal single-recording cleanup still deletes the audio');
-      expect(await db.recordingDraftsDao.loadDraft(), isNull,
-          reason: "this session's own draft is cleared on confirm");
+        expect(
+          await File(segment).exists(),
+          isFalse,
+          reason: 'normal single-recording cleanup still deletes the audio',
+        );
+        expect(
+          await db.recordingDraftsDao.loadDraft(),
+          isNull,
+          reason: "this session's own draft is cleared on confirm",
+        );
 
-      await svc.dispose();
-      await db.close();
-    });
+        await svc.dispose();
+        await db.close();
+      },
+    );
 
     test('is safe with empty/missing paths and no draft', () async {
       final db = _memDb();
       final svc = makeService(db);
       await svc.discardSegmentPaths(const []); // must not throw
-      await svc.discardSegmentPaths(['/nonexistent/segment.m4a']); // must not throw
+      await svc.discardSegmentPaths([
+        '/nonexistent/segment.m4a',
+      ]); // must not throw
       expect(await db.recordingDraftsDao.loadDraft(), isNull);
       await svc.dispose();
       await db.close();
@@ -465,21 +501,26 @@ void main() {
   // Capability + permission degradation.
   // -------------------------------------------------------------------------
   group('platform degradation', () {
-    test('start throws AudioCaptureUnsupportedError when capture unsupported',
-        () async {
-      final db = _memDb();
-      final svc = makeService(db, captureSupported: false);
-      await expectLater(
-        svc.startRecording(),
-        throwsA(isA<AudioCaptureUnsupportedError>()),
-      );
-      await svc.dispose();
-      await db.close();
-    });
+    test(
+      'start throws AudioCaptureUnsupportedError when capture unsupported',
+      () async {
+        final db = _memDb();
+        final svc = makeService(db, captureSupported: false);
+        await expectLater(
+          svc.startRecording(),
+          throwsA(isA<AudioCaptureUnsupportedError>()),
+        );
+        await svc.dispose();
+        await db.close();
+      },
+    );
 
     test('start throws MicrophonePermissionDeniedError when denied', () async {
       final db = _memDb();
-      final svc = makeService(db, backend: FakeRecorderBackend(permission: false));
+      final svc = makeService(
+        db,
+        backend: FakeRecorderBackend(permission: false),
+      );
       await expectLater(
         svc.startRecording(),
         throwsA(isA<MicrophonePermissionDeniedError>()),
@@ -510,30 +551,42 @@ void main() {
     });
 
     test('generateTitle: default when empty, truncates long transcripts', () {
-      expect(AudioRecordingService.generateTitle(null), startsWith('New Recording'));
-      expect(AudioRecordingService.generateTitle(''), startsWith('New Recording'));
+      expect(
+        AudioRecordingService.generateTitle(null),
+        startsWith('New Recording'),
+      );
+      expect(
+        AudioRecordingService.generateTitle(''),
+        startsWith('New Recording'),
+      );
       expect(AudioRecordingService.generateTitle('Hello world'), 'Hello world');
       final long = 'x' * 60;
       final title = AudioRecordingService.generateTitle(long);
       expect(title.length, 50);
       expect(title, endsWith('...'));
-      expect(AudioRecordingService.generateTitle('First line\nsecond'),
-          'First line');
+      expect(
+        AudioRecordingService.generateTitle('First line\nsecond'),
+        'First line',
+      );
     });
 
     test('formatTimestamp 12-hour clock', () {
       expect(
-          AudioRecordingService.formatTimestamp(DateTime(2026, 1, 1, 10, 42)),
-          '10:42 AM');
+        AudioRecordingService.formatTimestamp(DateTime(2026, 1, 1, 10, 42)),
+        '10:42 AM',
+      );
       expect(
-          AudioRecordingService.formatTimestamp(DateTime(2026, 1, 1, 0, 5)),
-          '12:05 AM');
+        AudioRecordingService.formatTimestamp(DateTime(2026, 1, 1, 0, 5)),
+        '12:05 AM',
+      );
       expect(
-          AudioRecordingService.formatTimestamp(DateTime(2026, 1, 1, 13, 7)),
-          '1:07 PM');
+        AudioRecordingService.formatTimestamp(DateTime(2026, 1, 1, 13, 7)),
+        '1:07 PM',
+      );
       expect(
-          AudioRecordingService.formatTimestamp(DateTime(2026, 1, 1, 12, 0)),
-          '12:00 PM');
+        AudioRecordingService.formatTimestamp(DateTime(2026, 1, 1, 12, 0)),
+        '12:00 PM',
+      );
     });
   });
 }

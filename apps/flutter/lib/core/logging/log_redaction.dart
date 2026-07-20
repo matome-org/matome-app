@@ -43,7 +43,12 @@ final RegExp _bearerPattern = RegExp(
 );
 
 final RegExp _localPathPattern = RegExp(
-  r'''(?:file://)?(?:/(?:home|Users|tmp)/[^\s"'&]+|[A-Za-z]:\\[^\s"'&]+)''',
+  r'''(?:file://)?(?:/(?:home|Users|tmp|var|private|data|storage)/[^\s"'&]+|[A-Za-z]:\\[^\s"'&]+)''',
+);
+
+final RegExp _ephemeralUriPattern = RegExp(
+  r'''\b(?:blob|file):[^\s"']+''',
+  caseSensitive: false,
 );
 
 /// Replaces the values of any sensitive query params in [message] with
@@ -64,6 +69,7 @@ String redactSensitiveLogData(String message) {
     _sensitiveFieldPattern,
     (match) => '${match.group(1)}[REDACTED]',
   );
+  out = out.replaceAll(_ephemeralUriPattern, '[REDACTED_URI]');
   return out.replaceAll(_localPathPattern, '[REDACTED_PATH]');
 }
 

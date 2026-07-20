@@ -70,9 +70,10 @@ Uint8List _buildPlaintextWithMarkers({
   // one of these, so a chunk-framing bug (e.g. accidentally writing a
   // chunk's tail in the clear) would be caught, not just interior placements
   // far from any boundary.
-  final boundaries = [chunkSize, chunkSize * 2]
-      .where((b) => b < minLength)
-      .toList();
+  final boundaries = [
+    chunkSize,
+    chunkSize * 2,
+  ].where((b) => b < minLength).toList();
 
   var cursor = 64; // leave some filler before the first interior marker
   var boundaryCycle = 0;
@@ -121,52 +122,48 @@ void _expectNoPlaintextMarkers(Uint8List ciphertext, {required String label}) {
 
 void main() {
   group('OPFS plaintext-scan — DB image', () {
-    test(
-      'the exact bytes WebStoreOpener.persist writes to the OPFS blob store '
-      'contain zero plaintext markers, including markers straddling a chunk '
-      'boundary',
-      () async {
-        final dek = Dek.generate();
-        final plaintext = _buildPlaintextWithMarkers(
-          minLength: kDefaultChunkSize * 3, // spans multiple 64KiB chunks
-          chunkSize: kDefaultChunkSize,
-        );
-
-        final blobStore = InMemoryBlobStore();
-        final opener = WebStoreOpener(blobStore: blobStore);
-        await opener.persist(plaintextImage: plaintext, dek: dek);
-
-        final persisted = await blobStore.read();
-        expect(persisted, isNotNull);
-        _expectNoPlaintextMarkers(persisted!, label: 'DB image (OPFS)');
-
-        // Round-trip proof that this really is the SAME plaintext (i.e. the
-        // scan above is meaningful — it is not merely scanning empty/wrong
-        // bytes).
-        final reopened = await decryptDbImage(
-          ciphertext: persisted,
-          dek: dek.bytes,
-        );
-        expect(reopened, plaintext);
-      },
-    );
-
-    test('an empty DB image (fresh install edge case) still round-trips '
-        'with no marker leakage (vacuous but must not crash the scan)',
-        () async {
+    test('the exact bytes WebStoreOpener.persist writes to the OPFS blob store '
+        'contain zero plaintext markers, including markers straddling a chunk '
+        'boundary', () async {
       final dek = Dek.generate();
+      final plaintext = _buildPlaintextWithMarkers(
+        minLength: kDefaultChunkSize * 3, // spans multiple 64KiB chunks
+        chunkSize: kDefaultChunkSize,
+      );
+
       final blobStore = InMemoryBlobStore();
       final opener = WebStoreOpener(blobStore: blobStore);
-
-      await opener.persist(
-        plaintextImage: Uint8List(0),
-        dek: dek,
-      );
+      await opener.persist(plaintextImage: plaintext, dek: dek);
 
       final persisted = await blobStore.read();
       expect(persisted, isNotNull);
-      _expectNoPlaintextMarkers(persisted!, label: 'empty DB image (OPFS)');
+      _expectNoPlaintextMarkers(persisted!, label: 'DB image (OPFS)');
+
+      // Round-trip proof that this really is the SAME plaintext (i.e. the
+      // scan above is meaningful — it is not merely scanning empty/wrong
+      // bytes).
+      final reopened = await decryptDbImage(
+        ciphertext: persisted,
+        dek: dek.bytes,
+      );
+      expect(reopened, plaintext);
     });
+
+    test(
+      'an empty DB image (fresh install edge case) still round-trips '
+      'with no marker leakage (vacuous but must not crash the scan)',
+      () async {
+        final dek = Dek.generate();
+        final blobStore = InMemoryBlobStore();
+        final opener = WebStoreOpener(blobStore: blobStore);
+
+        await opener.persist(plaintextImage: Uint8List(0), dek: dek);
+
+        final persisted = await blobStore.read();
+        expect(persisted, isNotNull);
+        _expectNoPlaintextMarkers(persisted!, label: 'empty DB image (OPFS)');
+      },
+    );
   });
 
   group('OPFS plaintext-scan — media', () {
@@ -182,48 +179,46 @@ void main() {
       }
     });
 
-    test(
-      'the on-disk ciphertext produced by the media codec (the format used '
-      'for imported/recorded audio at rest) contains zero plaintext markers, '
-      'including markers straddling a chunk boundary',
-      () async {
-        final dek = Dek.generate();
-        final plaintext = _buildPlaintextWithMarkers(
-          minLength: kMediaChunkPlaintextSize * 3,
-          chunkSize: kMediaChunkPlaintextSize,
+    test('the on-disk ciphertext produced by the media codec (the format used '
+        'for imported/recorded audio at rest) contains zero plaintext markers, '
+        'including markers straddling a chunk boundary', () async {
+      final dek = Dek.generate();
+      final plaintext = _buildPlaintextWithMarkers(
+        minLength: kMediaChunkPlaintextSize * 3,
+        chunkSize: kMediaChunkPlaintextSize,
+      );
+
+      final source = File('${tmp.path}/plaintext_media.bin');
+      await source.writeAsBytes(plaintext);
+      final destination = File('${tmp.path}/encrypted_media.enc');
+
+      await encryptFileToFile(
+        source: source,
+        destination: destination,
+        dek: dek,
+      );
+
+      final ciphertextBytes = await destination.readAsBytes();
+      _expectNoPlaintextMarkers(
+        Uint8List.fromList(ciphertextBytes),
+        label: 'media file',
+      );
+
+      // The source plaintext file itself obviously still has the markers
+      // (it's the input) — assert that as a sanity check the markers
+      // really were present before encryption, so the scan above isn't
+      // vacuously true against an empty/garbled input.
+      final sourceBytes = await source.readAsBytes();
+      final sourceAsLatin1 = String.fromCharCodes(sourceBytes);
+      for (final marker in _kPlaintextMarkers) {
+        expect(
+          sourceAsLatin1.contains(marker),
+          isTrue,
+          reason:
+              'test setup bug: marker "$marker" missing from the '
+              'plaintext fixture itself',
         );
-
-        final source = File('${tmp.path}/plaintext_media.bin');
-        await source.writeAsBytes(plaintext);
-        final destination = File('${tmp.path}/encrypted_media.enc');
-
-        await encryptFileToFile(
-          source: source,
-          destination: destination,
-          dek: dek,
-        );
-
-        final ciphertextBytes = await destination.readAsBytes();
-        _expectNoPlaintextMarkers(
-          Uint8List.fromList(ciphertextBytes),
-          label: 'media file',
-        );
-
-        // The source plaintext file itself obviously still has the markers
-        // (it's the input) — assert that as a sanity check the markers
-        // really were present before encryption, so the scan above isn't
-        // vacuously true against an empty/garbled input.
-        final sourceBytes = await source.readAsBytes();
-        final sourceAsLatin1 = String.fromCharCodes(sourceBytes);
-        for (final marker in _kPlaintextMarkers) {
-          expect(
-            sourceAsLatin1.contains(marker),
-            isTrue,
-            reason: 'test setup bug: marker "$marker" missing from the '
-                'plaintext fixture itself',
-          );
-        }
-      },
-    );
+      }
+    });
   });
 }

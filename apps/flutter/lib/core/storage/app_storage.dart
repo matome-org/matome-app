@@ -34,6 +34,17 @@ Future<Directory> matomeStorageDir() async {
   return dir;
 }
 
+/// Private native staging for recorder output before Vault ingestion.
+/// Paths under this root are ephemeral implementation details, never media IDs.
+Future<Directory> matomeRecorderStagingDir() async {
+  final support = await getApplicationSupportDirectory();
+  final dir = Directory('${support.path}/matome_recorder_staging/v1');
+  if (!await dir.exists()) {
+    await dir.create(recursive: true);
+  }
+  return dir;
+}
+
 const List<String> _dbFileNames = [
   'matome.sqlite',
   'matome.sqlite-wal',

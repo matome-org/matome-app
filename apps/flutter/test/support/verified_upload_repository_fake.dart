@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 
@@ -37,18 +35,22 @@ mixin VerifiedSingleUploadRepositoryFake on RecordingsRepository {
   }
 
   @override
-  Future<String> uploadFileRange(
+  Future<String> uploadStreamRange(
     UploadRequest request,
-    File file, {
-    required int start,
-    required int endExclusive,
-  }) async {
+    Stream<List<int>> stream,
+    int length,
+  ) async {
     final itemId = _verifiedItemId!;
-    if (start != 0 || endExclusive != _verifiedByteSize) {
+    if (length != _verifiedByteSize) {
       throw StateError('Single-upload fake received a partial file range');
     }
-    final descriptor = descriptorForVerifiedUpload(itemId);
-    await uploadFile(descriptor, file);
+    var received = 0;
+    await for (final chunk in stream) {
+      received += chunk.length;
+    }
+    if (received != length) {
+      throw StateError('Single-upload stream length did not match');
+    }
     return 'etag-$itemId';
   }
 

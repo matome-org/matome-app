@@ -57,6 +57,25 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
 
+# sqlite3_flutter_libs is already required by drift_flutter on every native
+# platform. On Linux, replace that target's stock SQLite amalgamation so every
+# Matome database call uses the packaged SQLCipher implementation.
+find_package(OpenSSL REQUIRED)
+set(MATOME_SQLCIPHER_SOURCE_DIR "${PROJECT_BINARY_DIR}/matome_sqlcipher_source")
+file(MAKE_DIRECTORY "${MATOME_SQLCIPHER_SOURCE_DIR}")
+file(DOWNLOAD
+  "https://fsn1.your-objectstorage.com/simon-public/assets/sqlcipher/v4_10_0.c"
+  "${MATOME_SQLCIPHER_SOURCE_DIR}/sqlite3.c"
+  EXPECTED_HASH SHA512=ea4ad61eb636a3b6b0a4d8a1b57b51af187ac8724fe853bd9ce58c7ee4054bd62c4e6d7d11788c8af9ff8e95c6a52eb36a41062172022bc1cbc0567de0aec8c1
+  TLS_VERIFY ON
+)
+# FetchContent_MakeAvailable requires a CMake project in an overridden source
+# directory. The plugin itself owns the library target and compiles sqlite3.c.
+file(WRITE "${MATOME_SQLCIPHER_SOURCE_DIR}/CMakeLists.txt"
+  "cmake_minimum_required(VERSION 3.13)\nproject(matome_sqlcipher_source LANGUAGES C)\n")
+set(FETCHCONTENT_SOURCE_DIR_SQLITE3 "${MATOME_SQLCIPHER_SOURCE_DIR}" CACHE PATH
+  "Use Matome's pinned SQLCipher source for sqlite3_flutter_libs on Linux" FORCE)
+
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
@@ -76,6 +95,24 @@ set_target_properties(${BINARY_NAME}
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+if(NOT TARGET sqlite3_flutter_libs_plugin)
+  message(FATAL_ERROR
+    "sqlite3_flutter_libs_plugin is required: refusing a stock SQLite fallback")
+endif()
+target_link_libraries(sqlite3_flutter_libs_plugin PRIVATE OpenSSL::Crypto)
+# GTK dependencies may bring their own private use of system SQLite into the
+# process. Bind this DSO's internal references locally so ELF symbol
+# interposition cannot redirect SQLCipher internals to that stock library.
+target_link_options(sqlite3_flutter_libs_plugin PRIVATE "LINKER:-Bsymbolic")
+target_compile_definitions(sqlite3_flutter_libs_plugin PRIVATE
+  SQLITE_HAS_CODEC
+  SQLITE_EXTRA_INIT=sqlcipher_extra_init
+  SQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown
+  HAVE_STDINT_H
+)
+set_target_properties(sqlite3_flutter_libs_plugin PROPERTIES
+  OUTPUT_NAME "matome_sqlcipher")
 
 
 # === Installation ===

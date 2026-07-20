@@ -92,7 +92,8 @@ library;
 
 import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart' show Mac, SecretBox, SecretBoxAuthenticationError, SecretKey;
+import 'package:cryptography/cryptography.dart'
+    show Mac, SecretBox, SecretBoxAuthenticationError, SecretKey;
 import 'package:cryptography/dart.dart' show DartAesGcm;
 
 import 'envelope.dart'
@@ -125,7 +126,8 @@ const int _kNonceLength = _kNoncePrefixLength + _kChunkIndexLength; // 12
 const int _kTagLength = 16;
 
 const int _kWrappedFekOffset = 8;
-const int _kNoncePrefixOffset = _kWrappedFekOffset + kWrappedEnvelopeLength; // 72
+const int _kNoncePrefixOffset =
+    _kWrappedFekOffset + kWrappedEnvelopeLength; // 72
 const int _kChunkSizeOffset = _kNoncePrefixOffset + _kNoncePrefixLength; // 76
 const int _kPlaintextLengthOffset = _kChunkSizeOffset + 4; // 80
 
@@ -174,7 +176,7 @@ class DbImageTamperException extends DbImageDecryptException {
   @override
   String toString() => chunkIndex < 0
       ? 'DbImageTamperException: header/wrapped-FEK failed authentication '
-          '(wrong DEK, or a tampered wrapped_fek)'
+            '(wrong DEK, or a tampered wrapped_fek)'
       : 'DbImageTamperException: chunk $chunkIndex failed authentication';
 }
 
@@ -254,9 +256,7 @@ void validateDbImagePlaintextLengthBound({
     throw const DbImageHeaderException('chunk_size must be positive');
   }
   if (plaintextLength < 0) {
-    throw const DbImageHeaderException(
-      'plaintext_length must be non-negative',
-    );
+    throw const DbImageHeaderException('plaintext_length must be non-negative');
   }
   // Even a `plaintext_length == 0` image now always carries exactly ONE
   // chunk-0 AEAD frame (a zero-length ciphertext + a real 16-byte tag) so
@@ -306,13 +306,17 @@ Future<Uint8List> encryptDbImage({
   // "EMPTY-IMAGE HEADER AUTHENTICATION" note (okt-audit PASS-2 FINDING-2):
   // chunk 0's AEAD call is what authenticates the header fields, so it must
   // run unconditionally.
-  final chunkCount = plaintext.isEmpty ? 1 : (plaintext.length / chunkSize).ceil();
+  final chunkCount = plaintext.isEmpty
+      ? 1
+      : (plaintext.length / chunkSize).ceil();
   final encryptedChunks = <Uint8List>[];
   var totalCipherLen = 0;
 
   for (var i = 0; i < chunkCount; i++) {
     final start = i * chunkSize;
-    final end = (start + chunkSize > plaintext.length) ? plaintext.length : start + chunkSize;
+    final end = (start + chunkSize > plaintext.length)
+        ? plaintext.length
+        : start + chunkSize;
     final chunkPlaintext = plaintext.sublist(start, end);
 
     final chunkIndexBytes = _beBytes(i, _kChunkIndexLength);
@@ -336,7 +340,11 @@ Future<Uint8List> encryptDbImage({
 
     final framed = Uint8List(box.cipherText.length + _kTagLength)
       ..setRange(0, box.cipherText.length, box.cipherText)
-      ..setRange(box.cipherText.length, box.cipherText.length + _kTagLength, box.mac.bytes);
+      ..setRange(
+        box.cipherText.length,
+        box.cipherText.length + _kTagLength,
+        box.mac.bytes,
+      );
     encryptedChunks.add(framed);
     totalCipherLen += framed.length;
   }
@@ -369,7 +377,11 @@ Future<Uint8List> encryptDbImage({
     _kNoncePrefixOffset + _kNoncePrefixLength,
     noncePrefix,
   );
-  out.setRange(_kChunkSizeOffset, _kChunkSizeOffset + 4, _beBytes(chunkSize, 4));
+  out.setRange(
+    _kChunkSizeOffset,
+    _kChunkSizeOffset + 4,
+    _beBytes(chunkSize, 4),
+  );
   out.setRange(
     _kPlaintextLengthOffset,
     kDbImageHeaderLength,
@@ -481,16 +493,19 @@ Future<Uint8List> decryptDbImage({
     var chunkIndex = 0;
     while (chunkIndex < chunkCount) {
       final remainingPlaintext = plaintextLength - writeOffset;
-      final thisChunkPlaintextLen =
-          remainingPlaintext < chunkSize ? remainingPlaintext : chunkSize;
+      final thisChunkPlaintextLen = remainingPlaintext < chunkSize
+          ? remainingPlaintext
+          : chunkSize;
       final framedLen = thisChunkPlaintextLen + _kTagLength;
 
       if (readOffset + framedLen > ciphertext.length) {
         throw DbImageTamperException(chunkIndex);
       }
 
-      final chunkCiphertext =
-          ciphertext.sublist(readOffset, readOffset + thisChunkPlaintextLen);
+      final chunkCiphertext = ciphertext.sublist(
+        readOffset,
+        readOffset + thisChunkPlaintextLen,
+      );
       final tag = ciphertext.sublist(
         readOffset + thisChunkPlaintextLen,
         readOffset + framedLen,
@@ -521,7 +536,11 @@ Future<Uint8List> decryptDbImage({
         throw DbImageTamperException(chunkIndex);
       }
 
-      out.setRange(writeOffset, writeOffset + chunkPlaintext.length, chunkPlaintext);
+      out.setRange(
+        writeOffset,
+        writeOffset + chunkPlaintext.length,
+        chunkPlaintext,
+      );
 
       readOffset += framedLen;
       writeOffset += thisChunkPlaintextLen;

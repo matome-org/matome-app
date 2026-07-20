@@ -140,7 +140,9 @@ void main() {
     expect(lastChange, 'edited note');
   });
 
-  testWidgets('empty contents shows a placeholder, not a crash', (tester) async {
+  testWidgets('empty contents shows a placeholder, not a crash', (
+    tester,
+  ) async {
     await _pump(tester, _data(contentsText: null));
 
     expect(find.byKey(const ValueKey('file-view-contents')), findsOneWidget);
@@ -269,28 +271,27 @@ void main() {
   });
 
   group('contents state machine — image', () {
-    testWidgets(
-      'empty → "No description yet", never a fake "Transcribing…"',
-      (tester) async {
-        await _pump(
-          tester,
-          _data(
-            mediaKind: FileMediaKind.image,
-            contentsTag: 'Description',
-            contentsText: null,
-            contentsState: ContentsState.empty,
-          ),
-        );
+    testWidgets('empty → "No description yet", never a fake "Transcribing…"', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _data(
+          mediaKind: FileMediaKind.image,
+          contentsTag: 'Description',
+          contentsText: null,
+          contentsState: ContentsState.empty,
+        ),
+      );
 
-        expect(
-          find.byKey(const ValueKey('file-view-contents-empty')),
-          findsOneWidget,
-        );
-        expect(find.text('No description yet'), findsOneWidget);
-        expect(find.text('Transcribing…'), findsNothing);
-        expect(find.text('Describing…'), findsNothing);
-      },
-    );
+      expect(
+        find.byKey(const ValueKey('file-view-contents-empty')),
+        findsOneWidget,
+      );
+      expect(find.text('No description yet'), findsOneWidget);
+      expect(find.text('Transcribing…'), findsNothing);
+      expect(find.text('Describing…'), findsNothing);
+    });
 
     testWidgets('processing → "Describing…"', (tester) async {
       await _pump(
@@ -397,10 +398,7 @@ void main() {
   });
 
   testWidgets('state defaults from text: text present → ready', (tester) async {
-    await _pump(
-      tester,
-      _data(contentsText: 'Some transcript.'),
-    );
+    await _pump(tester, _data(contentsText: 'Some transcript.'));
 
     expect(
       find.byKey(const ValueKey('file-view-contents-ready')),

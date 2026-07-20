@@ -175,9 +175,13 @@ void main() {
   // `--dart-define=ff.newNavShell=false`, which is where this OFF proof stays
   // green. The ON reality is characterized in test/app/new_nav_*_test.dart.
   if (FeatureFlags.newNavShell) {
-    test('legacy shell characterization is skipped under the ON build', () {},
-        skip: 'ff.newNavShell is ON; OFF chrome not rendered. '
-            'Run with --dart-define=ff.newNavShell=false to exercise.');
+    test(
+      'legacy shell characterization is skipped under the ON build',
+      () {},
+      skip:
+          'ff.newNavShell is ON; OFF chrome not rendered. '
+          'Run with --dart-define=ff.newNavShell=false to exercise.',
+    );
     return;
   }
 
@@ -205,7 +209,10 @@ void main() {
     // collide with the destination glyphs.
     final bottomBar = find.byType(BottomAppBar);
     expect(
-      find.descendant(of: bottomBar, matching: find.byIcon(Icons.inbox_outlined)),
+      find.descendant(
+        of: bottomBar,
+        matching: find.byIcon(Icons.inbox_outlined),
+      ),
       findsOneWidget,
     );
     expect(

@@ -30,7 +30,6 @@ Future<void> _seed(AppDatabase db) async {
     db,
     id: 'a_filed',
     title: 'A filed',
-    localPath: '/tmp/a_filed.m4a',
     createdAt: 100,
     ownerId: '1',
     matomeId: 'm_a',
@@ -39,7 +38,6 @@ Future<void> _seed(AppDatabase db) async {
     db,
     id: 'a_loose',
     title: 'A loose',
-    localPath: '/tmp/a_loose.m4a',
     createdAt: 200,
     ownerId: '1',
   );
@@ -47,7 +45,6 @@ Future<void> _seed(AppDatabase db) async {
     db,
     id: 'b_loose',
     title: 'B loose',
-    localPath: '/tmp/b_loose.m4a',
     createdAt: 300,
     ownerId: '2',
   );

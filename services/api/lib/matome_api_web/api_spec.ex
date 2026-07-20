@@ -535,6 +535,10 @@ defmodule MatomeApiWeb.ApiSpec do
       properties: %{
         contract_version: %OpenApiSpex.Schema{type: :string, enum: ["1"]},
         mode: %OpenApiSpex.Schema{type: :string, enum: ["auto", "single", "multipart"]},
+        transport: %OpenApiSpex.Schema{
+          type: :string,
+          enum: ["direct_signed_length", "browser_stream"]
+        },
         content_type: %OpenApiSpex.Schema{type: :string, maxLength: 255},
         checksum_sha256: checksum_schema()
       }
@@ -675,6 +679,7 @@ defmodule MatomeApiWeb.ApiSpec do
             :upload_id,
             :upload_generation,
             :mode,
+            :transport,
             :state,
             :expires_at
           ],
@@ -682,6 +687,10 @@ defmodule MatomeApiWeb.ApiSpec do
             upload_id: %OpenApiSpex.Schema{type: :string},
             upload_generation: %OpenApiSpex.Schema{type: :integer, minimum: 1},
             mode: %OpenApiSpex.Schema{type: :string, enum: ["single", "multipart"]},
+            transport: %OpenApiSpex.Schema{
+              type: :string,
+              enum: ["direct_signed_length", "browser_stream"]
+            },
             state: %OpenApiSpex.Schema{type: :string, enum: ["pending", "uploading"]},
             expires_at: %OpenApiSpex.Schema{type: :string, format: :"date-time"},
             part_size: %OpenApiSpex.Schema{type: :integer, minimum: 5_242_880},

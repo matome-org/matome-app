@@ -77,6 +77,20 @@ class WebStoreOpener {
     return WebColdStartResult(plaintextImage: plaintext, dek: dek);
   }
 
+  /// Opens with an already-unlocked account DEK. This is the production boot
+  /// path: the DB layer neither retains a password nor derives a KEK again.
+  Future<WebColdStartResult> openWithDek(Dek dek) async {
+    final cipherBytes = await blobStore.read();
+    if (cipherBytes == null) {
+      return WebColdStartResult(plaintextImage: null, dek: dek);
+    }
+    final plaintext = await decryptDbImage(
+      ciphertext: cipherBytes,
+      dek: dek.bytes,
+    );
+    return WebColdStartResult(plaintextImage: plaintext, dek: dek);
+  }
+
   /// Encrypts [plaintextImage] under [dek] and persists the ciphertext,
   /// replacing whatever was previously stored. The bytes handed to
   /// [EncryptedBlobStore.write] are ALWAYS ciphertext — this function is the
@@ -86,7 +100,10 @@ class WebStoreOpener {
     required Uint8List plaintextImage,
     required Dek dek,
   }) async {
-    final cipher = await encryptDbImage(plaintext: plaintextImage, dek: dek.bytes);
+    final cipher = await encryptDbImage(
+      plaintext: plaintextImage,
+      dek: dek.bytes,
+    );
     await blobStore.write(cipher);
   }
 }

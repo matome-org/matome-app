@@ -1,20 +1,9 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/app_database.dart';
 import '../../core/db/daos/items_dao.dart';
 import '../../core/db/daos/workspaces_dao.dart';
-import '../../core/crypto/key_material.dart' show Dek;
-import '../../core/crypto/media_playback_resolver.dart'
-    show
-        PlaybackScratchDirSource,
-        defaultPlaybackScratchDir,
-        evictPlaybackScratch,
-        resolvePlaybackPath;
-import '../../core/db/db_encryption.dart'
-    show FlutterSecureKeyStore, NativeDekProvisioner;
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../recordings/recording.dart';
@@ -26,13 +15,8 @@ import '../home/inbox_controller.dart';
 import '../home/inbox_sync.dart';
 import '../home/inbox_upload.dart';
 
-/// Resolved audio playback source for the Details player.
-///
-/// Local file is preferred (offline, mobile-captured recordings store a real
-/// path); otherwise the Core presigned download URL is used. `none` means there
-/// is nothing to play (e.g. a synced row whose storageKey is just an object key
-/// and the download-url could not be resolved).
-enum AudioSourceKind { localFile, remoteUrl, none }
+/// Opaque Vault identity is preferred; signed remote URLs stay memory-only.
+enum AudioSourceKind { vaultBlob, remoteUrl, none }
 
 class AudioSource {
   const AudioSource(this.kind, this.value);
@@ -132,16 +116,7 @@ class DetailsController extends StateNotifier<DetailsState> {
     this._ref,
     String id, {
     RecordingResultAwaiter awaitResult = liveRecordingResultAwaiter,
-    Future<Dek> Function()? mediaDekSource,
-    PlaybackScratchDirSource? playbackScratchDirSource,
   }) : _awaitTerminal = awaitResult,
-       _mediaDekSource =
-           mediaDekSource ??
-           (() => NativeDekProvisioner(
-             FlutterSecureKeyStore.deviceKek(),
-           ).obtainDek()),
-       _playbackScratchDirSource =
-           playbackScratchDirSource ?? defaultPlaybackScratchDir,
        super(DetailsState(id: id)) {
     load();
   }
@@ -151,30 +126,6 @@ class DetailsController extends StateNotifier<DetailsState> {
   /// Observes one explicit Core run through bounded polling; injected in tests.
   /// The observation timeout never authors a failed Core state.
   final RecordingResultAwaiter _awaitTerminal;
-
-  /// Encrypted-media read seam (task #1866): supplies the DEK
-  /// [resolvePlaybackPath] unwraps a recording's `wrappedFek` with. Defaults
-  /// to the SAME `NativeDekProvisioner(FlutterSecureKeyStore.deviceKek())`
-  /// wiring `inbox_upload.dart` uses on the write side; injected in tests so
-  /// the encrypted branch is exercisable without a `flutter_secure_storage`
-  /// platform channel.
-  final Future<Dek> Function() _mediaDekSource;
-
-  /// Where [resolvePlaybackPath] decrypts a `wrappedFek`-bearing recording
-  /// to before handing it to the player; injected in tests, defaults to
-  /// [defaultPlaybackScratchDir].
-  final PlaybackScratchDirSource _playbackScratchDirSource;
-
-  /// The scratch-file path the last successful [resolvePlaybackPath] call
-  /// produced for THIS recording, if any (`null` when the row is plaintext —
-  /// `wrappedFek == null` — or no resolution has succeeded yet). Tracked so
-  /// [dispose] can unlink exactly that file: okt-audit PASS-2 FINDING-1 named
-  /// the never-deleted decrypted scratch file a permanent plaintext-at-rest
-  /// leak, violating `media_cipher.dart` `decryptToFile`'s own "delete once
-  /// playback ends" contract. `AudioPlayerBar` (the actual player) only
-  /// exists while its owning Details screen — and this controller — is
-  /// mounted, so controller disposal is this app's "player stopped" boundary.
-  String? _resolvedScratchPath;
 
   ItemsDao get _dao => _ref.read(itemsDaoProvider);
   WorkspacesDao get _workspacesDao => _ref.read(workspacesDaoProvider);
@@ -244,53 +195,10 @@ class DetailsController extends StateNotifier<DetailsState> {
     );
   }
 
-  /// Audio source strategy: a real local file wins (mobile-captured rows store a
-  /// playable path in `audioFilePath`); otherwise ask Core for a presigned
-  /// download URL. Synced rows whose `audioFilePath` is just a storage key (not
-  /// an existing file) fall through to the remote URL.
-  ///
-  /// ENCRYPTED-MEDIA READ SEAM (task #1866, okt-audit warning on #1857): a
-  /// non-null `wrappedFek` means `audioFilePath` names `media_cipher.dart`
-  /// ciphertext (written by `inbox_upload.dart`'s `encryptedDurableImportCopy`
-  /// once `kMediaEncryptionEnabled` is on) — it is routed through
-  /// [resolvePlaybackPath] to decrypt to a private scratch file BEFORE the
-  /// player ever opens it. A null `wrappedFek` is today's exact behavior,
-  /// unchanged: the raw path is handed straight to the player.
-  ///
-  /// A decrypt failure (tampered ciphertext, wrong/missing DEK, malformed
-  /// `wrappedFek`, ...) is caught here rather than left to propagate out of
-  /// [load] — every OTHER failure branch in this function degrades to a
-  /// fallback source instead of throwing, and `load()` has no catch around
-  /// this call, so an uncaught exception here would strand the controller at
-  /// `isLoading: true` forever with no recovery signal.
   Future<AudioSource> _resolveAudioSource(ItemWithPayload row) async {
-    final path = row.localPath;
-    if (path != null && _isLocalPath(path) && File(path).existsSync()) {
-      final wrappedFek = row.wrappedFek;
-      if (wrappedFek == null) {
-        return AudioSource(AudioSourceKind.localFile, path);
-      }
-      try {
-        final resolvedPath = await resolvePlaybackPath(
-          recordingId: row.id,
-          sourcePath: path,
-          wrappedFekBase64: wrappedFek,
-          dekSource: _mediaDekSource,
-          scratchDirSource: _playbackScratchDirSource,
-        );
-        // Remember it so `dispose()` can unlink it — see [_resolvedScratchPath].
-        _resolvedScratchPath = resolvedPath;
-        return AudioSource(AudioSourceKind.localFile, resolvedPath);
-      } catch (e, st) {
-        // Never let this crash `load()` — fall through to the remote-URL
-        // attempt below, same as any other "local file not usable" case.
-        AppLog.error(
-          LogCat.error,
-          'details resolve audio decrypt failed id=${row.id}',
-          e,
-          st,
-        );
-      }
+    final blobId = row.blobId;
+    if (blobId != null && row.blobState == 'ready') {
+      return AudioSource(AudioSourceKind.vaultBlob, blobId);
     }
     // Read coreId off the row being resolved (state.row isn't published yet at
     // this point in load()). A local-only row (coreId null) has no remote URL.
@@ -312,34 +220,6 @@ class DetailsController extends StateNotifier<DetailsState> {
       }
     }
     return const AudioSource.none();
-  }
-
-  static bool _isLocalPath(String path) {
-    return path.startsWith('/') || path.startsWith('file:');
-  }
-
-  /// Unlinks this recording's decrypted playback scratch file (if any) the
-  /// moment this controller is torn down — the "player stopped / controller
-  /// dispose" eviction point for okt-audit PASS-2 FINDING-1. A plaintext row
-  /// (`_resolvedScratchPath == null`) is a no-op. Best-effort: a cleanup
-  /// failure is logged, never rethrown — teardown must still complete.
-  @override
-  void dispose() {
-    final path = _resolvedScratchPath;
-    if (path != null) {
-      try {
-        final file = File(path);
-        if (file.existsSync()) file.deleteSync();
-      } catch (e, st) {
-        AppLog.error(
-          LogCat.error,
-          'details dispose scratch evict failed id=${state.id}',
-          e,
-          st,
-        );
-      }
-    }
-    super.dispose();
   }
 
   /// Persists the edited buffer to Drift (`notes`) AND Core (`notes`), keeping
@@ -435,7 +315,9 @@ class DetailsController extends StateNotifier<DetailsState> {
     final ownerId = _requireOwner();
     final current = await _dao.getById(state.id, ownerId);
     if (current == null) return;
-    if (expectedRunId != null && remote.processing.runId != expectedRunId) return;
+    if (expectedRunId != null && remote.processing.runId != expectedRunId) {
+      return;
+    }
     await _dao.updateItem(
       state.id,
       ownerId,
@@ -443,46 +325,13 @@ class DetailsController extends StateNotifier<DetailsState> {
     );
   }
 
-  /// Deletes the recording: the local audio FILE, the Drift row, AND Core.
-  ///
-  /// This is the EXPLICIT, user-initiated deletion (plan #46, W2 / #871). Since
-  /// the upload queue no longer auto-evicts the local audio on `done`, the
-  /// local-first `audioFilePath` is the durable source of truth and lives until
-  /// the user deletes it here. So this path must free the on-disk file too —
-  /// otherwise a user-delete would leave an orphaned WAV on disk forever.
-  ///
-  /// Order: drop the on-disk file FIRST (we still hold the row + its path),
-  /// then the Drift row, then Core (best-effort). We delete the file straight
-  /// from the row's `audioFilePath` when it is a real local path (not a remote
-  /// storage key) — deliberately NOT gated on the resolved playback source, so a
-  /// `done`/synced row that still owns its local-first copy (exactly the W2
-  /// scenario) still has that file freed. A synced-only row whose path is a Core
-  /// object key is skipped — there is no local file to remove.
+  /// Creates a durable tombstone. The shared executor orders remote delete,
+  /// lease-aware Vault deletion and metadata convergence across restarts.
   Future<void> delete() async {
     AppLog.event(LogCat.action, 'delete recording=${state.id}');
-    final path = state.row?.localPath ?? '';
-    if (path.isNotEmpty && (path.startsWith('/') || path.startsWith('file:'))) {
-      // Reuse the queue's best-effort path delete (never throws).
-      await deleteAudioFile(path);
-    }
-    // A decrypted playback scratch copy (if this row was ever encrypted
-    // media) must not outlive the recording it was decrypted from — okt-audit
-    // PASS-2 FINDING-1. Idempotent no-op when nothing was ever resolved.
-    await evictPlaybackScratch(
-      recordingId: state.id,
-      scratchDirSource: _playbackScratchDirSource,
-    );
-    await _dao.deleteWithPayload(state.id, _requireOwner());
-    final coreId = state.coreId;
-    if (coreId != null) {
-      try {
-        await _repo.deleteRecording(coreId);
-      } catch (e, st) {
-        // Local row already gone; tolerate a Core failure (e.g. already
-        // deleted server-side) so the UX still navigates away.
-        AppLog.error(LogCat.sync, 'delete Core failed coreId=$coreId', e, st);
-      }
-    }
+    await _ref
+        .read(itemDeletionServiceProvider)
+        .delete(state.id, _requireOwner());
   }
 
   /// All workspaces available as move-to-space targets.

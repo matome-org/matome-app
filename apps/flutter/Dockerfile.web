@@ -11,13 +11,17 @@ ARG FLUTTER_IMAGE=ghcr.io/cirruslabs/flutter:3.44.0
 FROM ${FLUTTER_IMAGE} AS build
 
 ARG API_BASE_URL=http://localhost:7001
-WORKDIR /app
+WORKDIR /app/apps/flutter
 
-# pub deps first (cached).
-COPY pubspec.yaml pubspec.lock ./
+# Pub dependencies first (cached). Local path packages must exist before
+# `pub get`; the repository-root build context also makes matome_vault
+# available at the same relative path used by pubspec.yaml.
+COPY apps/flutter/pubspec.yaml apps/flutter/pubspec.lock ./
+COPY apps/flutter/packages ./packages
+COPY packages/matome_vault /app/packages/matome_vault
 RUN flutter pub get
 
-COPY . .
+COPY apps/flutter .
 # godMode on so the custom-host switcher is available; feature flags from file.
 RUN flutter build web --release \
   --no-web-resources-cdn \
@@ -55,6 +59,6 @@ RUN set -eu; \
   ! grep -q "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline';" build/web/index.html
 
 FROM nginx:alpine
-COPY --from=build /app/build/web /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/flutter/build/web /usr/share/nginx/html
+COPY apps/flutter/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

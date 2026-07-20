@@ -385,6 +385,28 @@ void main() {
     await repo.deleteTextItem(9, expectedSourceRevision: 2);
   });
 
+  test('Dio-thrown 404 is idempotent for fetch and delete', () async {
+    await tokenStore.saveTokens(accessToken: 'access-123');
+    final strictDio = Dio(BaseOptions(baseUrl: 'http://localhost:7001'));
+    final strictAdapter = DioAdapter(dio: strictDio);
+    final strictRepo = RecordingsRepository(
+      apiClient: ApiClient(tokenStore: tokenStore, dio: strictDio),
+    );
+    strictAdapter.onGet(
+      '/api/items/9',
+      (server) => server.reply(404, null),
+      headers: {'Authorization': 'Bearer access-123'},
+    );
+    strictAdapter.onDelete(
+      '/api/items/9',
+      (server) => server.reply(404, null),
+      headers: {'Authorization': 'Bearer access-123'},
+    );
+
+    expect(await strictRepo.fetchRecording(9), isNull);
+    await strictRepo.deleteRecording(9);
+  });
+
   test('text update exposes Core current item on version conflict', () async {
     await tokenStore.saveTokens(accessToken: 'access-123');
     adapter.onPatch(

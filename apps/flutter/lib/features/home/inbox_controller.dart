@@ -333,10 +333,14 @@ class InboxController extends StateNotifier<AsyncValue<List<InboxItem>>> {
     if (existing == null) {
       final item = await _dao.getById(itemId, ownerId);
       if (item != null) {
+        final blobId = item.file?.blobId;
+        if (blobId == null) return;
         await workDao.enqueueOrIgnore(
           ownerId: ownerId,
           work: fileUploadWork(
             itemId: itemId,
+            blobId: blobId,
+            blobRevision: item.item.sourceRevision,
             sourceRevision: item.item.sourceRevision,
             now: now,
             configRevision: _ref.read(systemPolicyProvider).revision,

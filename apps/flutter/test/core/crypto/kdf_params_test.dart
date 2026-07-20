@@ -35,11 +35,13 @@ void main() {
         'parallelism': 1,
         'output_len': 32,
       };
-      expect(Argon2idParams.fromJson(legacyButValid), Argon2idParams.portableV1);
+      expect(
+        Argon2idParams.fromJson(legacyButValid),
+        Argon2idParams.portableV1,
+      );
     });
 
-    test(
-        'throws KdfProfileMismatchException when a legacy blob claims a known '
+    test('throws KdfProfileMismatchException when a legacy blob claims a known '
         'profile name but carries different (weaker) cost params', () {
       // Fixture: a hypothetical legacy keybundle that names the current
       // profile but was actually produced under old/weaker parameters
@@ -61,55 +63,61 @@ void main() {
       );
     });
 
-    test('throws KdfProfileMismatchException on Argon2 spec version mismatch',
-        () {
-      final legacyBlob = {
-        'profile': 'argon2id-v1-portable',
-        'algorithm': 'argon2id',
-        'version': 16, // pre-RFC9106 draft version, not 19 (0x13)
-        'memory_kib': 19456,
-        'iterations': 2,
-        'parallelism': 1,
-        'output_len': 32,
-      };
-      expect(
-        () => Argon2idParams.fromJson(legacyBlob),
-        throwsA(isA<KdfProfileMismatchException>()),
-      );
-    });
+    test(
+      'throws KdfProfileMismatchException on Argon2 spec version mismatch',
+      () {
+        final legacyBlob = {
+          'profile': 'argon2id-v1-portable',
+          'algorithm': 'argon2id',
+          'version': 16, // pre-RFC9106 draft version, not 19 (0x13)
+          'memory_kib': 19456,
+          'iterations': 2,
+          'parallelism': 1,
+          'output_len': 32,
+        };
+        expect(
+          () => Argon2idParams.fromJson(legacyBlob),
+          throwsA(isA<KdfProfileMismatchException>()),
+        );
+      },
+    );
 
-    test('throws UnknownKdfProfileException for an unregistered profile name',
-        () {
-      final futureBlob = {
-        'profile': 'argon2id-v2-portable',
-        'algorithm': 'argon2id',
-        'version': 19,
-        'memory_kib': 65536,
-        'iterations': 3,
-        'parallelism': 1,
-        'output_len': 32,
-      };
-      expect(
-        () => Argon2idParams.fromJson(futureBlob),
-        throwsA(isA<UnknownKdfProfileException>()),
-      );
-    });
+    test(
+      'throws UnknownKdfProfileException for an unregistered profile name',
+      () {
+        final futureBlob = {
+          'profile': 'argon2id-v2-portable',
+          'algorithm': 'argon2id',
+          'version': 19,
+          'memory_kib': 65536,
+          'iterations': 3,
+          'parallelism': 1,
+          'output_len': 32,
+        };
+        expect(
+          () => Argon2idParams.fromJson(futureBlob),
+          throwsA(isA<UnknownKdfProfileException>()),
+        );
+      },
+    );
 
-    test('throws KdfProfileMismatchException when algorithm field is wrong',
-        () {
-      final badBlob = {
-        'profile': 'argon2id-v1-portable',
-        'algorithm': 'argon2i', // wrong variant
-        'version': 19,
-        'memory_kib': 19456,
-        'iterations': 2,
-        'parallelism': 1,
-        'output_len': 32,
-      };
-      expect(
-        () => Argon2idParams.fromJson(badBlob),
-        throwsA(isA<KdfProfileMismatchException>()),
-      );
-    });
+    test(
+      'throws KdfProfileMismatchException when algorithm field is wrong',
+      () {
+        final badBlob = {
+          'profile': 'argon2id-v1-portable',
+          'algorithm': 'argon2i', // wrong variant
+          'version': 19,
+          'memory_kib': 19456,
+          'iterations': 2,
+          'parallelism': 1,
+          'output_len': 32,
+        };
+        expect(
+          () => Argon2idParams.fromJson(badBlob),
+          throwsA(isA<KdfProfileMismatchException>()),
+        );
+      },
+    );
   });
 }

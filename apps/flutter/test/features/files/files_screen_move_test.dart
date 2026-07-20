@@ -7,6 +7,7 @@ import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/core/vault/vault_export_service.dart';
 import 'package:matome_flutter/features/files/files_screen.dart';
 import 'package:matome_flutter/features/files/widgets/files_grid.dart';
 import 'package:matome_flutter/features/files/widgets/files_table.dart';
@@ -14,6 +15,7 @@ import 'package:matome_flutter/features/files/widgets/files_view_shared.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 import '../../support/item_fixtures.dart';
+import '../../support/fake_media_blob_store.dart';
 
 // ---------------------------------------------------------------------------
 // Files view — move-to-matome interaction tests (#1473). Per Maes: real
@@ -29,7 +31,12 @@ const String _otherOwner = '2';
 /// control. Tests that need a specific layout seed the persisted preference via
 /// the [SettingsStore] so the screen comes up already showing that view. The
 /// move/selection tests default to the table (deterministic checkbox-per-row).
-Widget _app(AppDatabase db, {String? owner = _owner, String view = 'table'}) {
+Widget _app(
+  AppDatabase db, {
+  String? owner = _owner,
+  String view = 'table',
+  VaultExportService? exporter,
+}) {
   return ProviderScope(
     overrides: [
       appDatabaseProvider.overrideWithValue(db),
@@ -37,6 +44,8 @@ Widget _app(AppDatabase db, {String? owner = _owner, String view = 'table'}) {
       settingsStoreProvider.overrideWithValue(
         InMemorySettingsStore({'matome.files_view': view}),
       ),
+      if (exporter != null)
+        vaultExportServiceProvider.overrideWithValue(exporter),
     ],
     child: TranslationProvider(
       child: MaterialApp(theme: buildLightTheme(), home: const FilesScreen()),
@@ -66,7 +75,6 @@ Future<void> _seedFile(
   title: title,
   matomeId: matomeId,
   createdAt: createdAt,
-  localPath: '/tmp/$id.m4a',
 );
 
 /// Select a table row by tapping its checkbox. The whole row is a
@@ -259,7 +267,7 @@ void main() {
     expect(find.text('Theirs'), findsNothing);
   });
 
-  testWidgets('download remains the unchanged stub (not available notice)', (
+  testWidgets('download explicitly exports outside Vault and warns the user', (
     tester,
   ) async {
     await db.matomesDao.create(_matome(id: 'm1', title: 'M1'));
@@ -271,23 +279,30 @@ void main() {
       matomeId: 'm1',
     );
 
-    await tester.pumpWidget(_app(db));
+    final exports = <String>[];
+    final exporter = VaultExportService(
+      FakeMediaBlobStore(),
+      override: ({required blobId, required suggestedFilename}) async {
+        exports.add('$blobId:$suggestedFilename');
+        return true;
+      },
+    );
+    await tester.pumpWidget(_app(db, exporter: exporter));
     await tester.pumpAndSettle();
 
     await _selectRow(tester, 'Alpha');
     await tester.tap(find.text(t.files.download).first);
     await tester.pumpAndSettle();
 
-    // Still the stub: surfaces the "not available" notice, no DB mutation.
-    expect(find.text(t.files.downloadUnavailable), findsOneWidget);
+    expect(exports, ['fixture-blob:Alpha']);
+    expect(find.text(t.files.exportedOutsideVault(n: 1)), findsOneWidget);
     final files = await db.itemsDao.filesForOwner(_owner);
     expect(files.single.matome, 'M1'); // unchanged
   });
 
-  testWidgets('FileAction enum still exposes the download stub action', (
+  testWidgets('FileAction enum exposes explicit download/export', (
     tester,
   ) async {
-    // Belt-and-suspenders: the download affordance is still wired (not removed).
     expect(FileAction.values, contains(FileAction.download));
   });
 

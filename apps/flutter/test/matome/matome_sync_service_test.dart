@@ -332,7 +332,6 @@ void main() {
       ownerId: 'owner-1',
       title: 'Child',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       coreId: 7,
       matomeId: 'mat_local_c',
@@ -369,7 +368,6 @@ void main() {
         ownerId: 'owner-1',
         title: 'Unsynced child',
         durationSeconds: 30,
-        localPath: '/tmp/a.m4a',
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
         matomeId: 'mat_local_d',
       );

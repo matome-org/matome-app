@@ -28,13 +28,14 @@ void main() {
     expect(find.text('Synced'), findsOneWidget);
   });
 
-  testWidgets('partial rollup → "Syncing" (failed child stays here, 3 states)', (
-    tester,
-  ) async {
-    await pump(tester, MatomeSyncRollup.partial);
-    expect(find.text(t.cardStatus.syncing), findsOneWidget);
-    expect(find.text('Syncing'), findsOneWidget);
-  });
+  testWidgets(
+    'partial rollup → "Syncing" (failed child stays here, 3 states)',
+    (tester) async {
+      await pump(tester, MatomeSyncRollup.partial);
+      expect(find.text(t.cardStatus.syncing), findsOneWidget);
+      expect(find.text('Syncing'), findsOneWidget);
+    },
+  );
 
   testWidgets('onDevice rollup → "On device" with the cloud_off glyph', (
     tester,
@@ -45,7 +46,9 @@ void main() {
     expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
   });
 
-  testWidgets('no triage suffix — filing is a separate concern', (tester) async {
+  testWidgets('no triage suffix — filing is a separate concern', (
+    tester,
+  ) async {
     await pump(tester, MatomeSyncRollup.cloud);
     expect(find.textContaining('not filed'), findsNothing);
     expect(find.textContaining('·'), findsNothing);

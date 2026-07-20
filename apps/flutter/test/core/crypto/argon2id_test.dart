@@ -23,22 +23,24 @@ void main() {
       expect(a.length, 32);
     });
 
-    test('different salts produce different output (domain separation)',
-        () async {
-      final saltA = Uint8List.fromList(List.generate(16, (i) => i));
-      final saltB = Uint8List.fromList(List.generate(16, (i) => i + 1));
-      final a = await deriveArgon2id(
-        password: 'same-password',
-        salt: saltA,
-        params: Argon2idParams.portableV1,
-      );
-      final b = await deriveArgon2id(
-        password: 'same-password',
-        salt: saltB,
-        params: Argon2idParams.portableV1,
-      );
-      expect(a, isNot(equals(b)));
-    });
+    test(
+      'different salts produce different output (domain separation)',
+      () async {
+        final saltA = Uint8List.fromList(List.generate(16, (i) => i));
+        final saltB = Uint8List.fromList(List.generate(16, (i) => i + 1));
+        final a = await deriveArgon2id(
+          password: 'same-password',
+          salt: saltA,
+          params: Argon2idParams.portableV1,
+        );
+        final b = await deriveArgon2id(
+          password: 'same-password',
+          salt: saltB,
+          params: Argon2idParams.portableV1,
+        );
+        expect(a, isNot(equals(b)));
+      },
+    );
 
     test('different passwords produce different output', () async {
       final salt = Uint8List.fromList(List.generate(16, (i) => i));

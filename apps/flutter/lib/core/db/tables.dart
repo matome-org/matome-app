@@ -28,7 +28,7 @@ class RecordingDrafts extends Table {
 
   IntColumn get id => integer().autoIncrement()();
   TextColumn get createdAt => text().named('created_at')();
-  TextColumn get segmentsJson => text().named('segments_json')();
+  TextColumn get segmentHandlesJson => text().named('segment_handles_json')();
   IntColumn get durationMs =>
       integer().named('duration_ms').withDefault(const Constant(0))();
   TextColumn get sessionId =>
@@ -36,8 +36,7 @@ class RecordingDrafts extends Table {
   TextColumn get captureKind =>
       text().named('capture_kind').withDefault(const Constant('microphone'))();
   TextColumn get backend => text().withDefault(const Constant('record'))();
-  TextColumn get stagingPath => text().named('staging_path').nullable()();
-  TextColumn get finalPath => text().named('final_path').nullable()();
+  TextColumn get stagingHandle => text().named('staging_handle').nullable()();
   TextColumn get codec => text().withDefault(const Constant('aac_lc'))();
   TextColumn get state => text().withDefault(const Constant('paused'))();
   TextColumn get heartbeatAt => text().named('heartbeat_at').nullable()();
@@ -164,8 +163,8 @@ class MatomeShares extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Canonical local-first file payload. Core upload facts live beside the
-/// device-only media path and encryption envelope.
+/// Canonical local-first file payload. Physical location and cryptographic key
+/// material are owned exclusively by the account Vault.
 @DataClassName('FileBlobRow')
 class FileBlobs extends Table {
   @override
@@ -193,10 +192,13 @@ class FileBlobs extends Table {
   TextColumn get openPolicy => text()
       .named('open_policy')
       .withDefault(const Constant('download_only'))();
-  TextColumn get localPath => text().named('local_path').nullable()();
-  TextColumn get wrappedFek => text().named('wrapped_fek').nullable()();
-  TextColumn get fileNoncePrefix =>
-      text().named('file_nonce_prefix').nullable()();
+  TextColumn get blobId => text().named('blob_id').nullable()();
+  TextColumn get blobState =>
+      text().named('blob_state').withDefault(const Constant('missing'))();
+  TextColumn get cipherFormat =>
+      text().named('cipher_format').withDefault(const Constant('mec1'))();
+  IntColumn get cipherVersion =>
+      integer().named('cipher_version').withDefault(const Constant(1))();
   BoolColumn get isDirty =>
       boolean().named('is_dirty').withDefault(const Constant(true))();
   IntColumn get createdAt => integer().named('created_at')();
@@ -204,6 +206,36 @@ class FileBlobs extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
+}
+
+/// Account-local automatic-retention policy. Physical paths are never stored.
+@DataClassName('VaultRetentionPolicyRow')
+class VaultRetentionPolicies extends Table {
+  @override
+  String get tableName => 'vault_retention_policies';
+
+  IntColumn get id => integer().withDefault(const Constant(1))();
+  TextColumn get mode => text().withDefault(const Constant('keep_forever'))();
+  IntColumn get expiryDays => integer().named('expiry_days').nullable()();
+  IntColumn get updatedAt => integer().named('updated_at')();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Durable, redaction-safe evidence for each automatic GC decision.
+@DataClassName('BlobGcDecisionRow')
+class BlobGcDecisions extends Table {
+  @override
+  String get tableName => 'blob_gc_decisions';
+
+  TextColumn get blobId => text().named('blob_id')();
+  TextColumn get decision => text()();
+  TextColumn get reason => text()();
+  IntColumn get decidedAt => integer().named('decided_at')();
+
+  @override
+  Set<Column> get primaryKey => {blobId};
 }
 
 @DataClassName('TextContentRow')
@@ -300,6 +332,8 @@ class WorkQueue extends Table {
   TextColumn get id => text()();
   TextColumn get kind => text()();
   TextColumn get itemId => text().named('item_id')();
+  TextColumn get blobId => text().named('blob_id').nullable()();
+  IntColumn get blobRevision => integer().named('blob_revision').nullable()();
   TextColumn get dedupeKey => text().named('dedupe_key')();
   TextColumn get state => text()();
   TextColumn get stage => text()();

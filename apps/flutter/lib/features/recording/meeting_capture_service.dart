@@ -112,19 +112,17 @@ class MeetingCaptureService {
         'meeting_${timestamp.microsecondsSinceEpoch}_${_randomSuffix(6)}';
     final separator = Platform.pathSeparator;
     final stagingPath = '$_storageRoot$separator$sessionId.partial.m4a';
-    final finalPath = '$_storageRoot$separator$sessionId.m4a';
     final request = MeetingCaptureRequest(
       sessionId: sessionId,
       stagingPath: stagingPath,
     );
     _draft = RecordingDraft(
-      segments: [stagingPath],
+      segmentHandles: ['$sessionId.partial.m4a'],
       durationMs: 0,
       sessionId: sessionId,
       captureKind: RecordingCaptureKind.meeting,
       backend: _backend.backendId,
-      stagingPath: stagingPath,
-      finalPath: finalPath,
+      stagingHandle: '$sessionId.partial.m4a',
       codec: request.codec.wireName,
       state: RecordingDraftState.starting,
       heartbeatAt: timestamp,
@@ -172,7 +170,7 @@ class MeetingCaptureService {
     try {
       final candidate = await _bounded('stop', _backend.stop());
       final draft = _draft!;
-      if (candidate.path != draft.stagingPath ||
+      if (candidate.path != _expectedStagingPath(draft) ||
           !await _isOwnedRegularFile(candidate.path)) {
         throw const MeetingArtifactInvalidError(
           'Backend returned a file outside the owned staging path',
@@ -187,7 +185,7 @@ class MeetingCaptureService {
         expectedFacts: facts,
       );
       _draft = draft.copyWith(
-        segments: [finalPath],
+        segmentHandles: ['${draft.sessionId}.m4a'],
         durationMs: publishedFacts.duration.inMilliseconds,
         state: RecordingDraftState.completed,
         heartbeatAt: _now().toUtc(),
@@ -230,9 +228,8 @@ class MeetingCaptureService {
     _draft = draft;
 
     final candidates = <String>{
-      if (draft.finalPath != null) draft.finalPath!,
-      if (draft.stagingPath != null) draft.stagingPath!,
-      ...draft.segments,
+      _expectedFinalPath(draft),
+      _expectedStagingPath(draft),
     }.where(_owns).toList(growable: false);
     String? candidate;
     MeetingArtifactFacts? facts;
@@ -266,7 +263,7 @@ class MeetingCaptureService {
       expectedFacts: facts!,
     );
     _draft = draft.copyWith(
-      segments: [finalPath],
+      segmentHandles: ['${draft.sessionId}.m4a'],
       durationMs: publishedFacts.duration.inMilliseconds,
       state: RecordingDraftState.completed,
       heartbeatAt: _now().toUtc(),
@@ -293,6 +290,8 @@ class MeetingCaptureService {
         current?.state != RecordingDraftState.completed) {
       return;
     }
+    final finalPath = _expectedFinalPath(current!);
+    if (await _isOwnedRegularFile(finalPath)) await File(finalPath).delete();
     final deleted = await _draftsDao.deleteDraftIfSession(
       captureKind: RecordingCaptureKind.meeting,
       sessionId: sessionId,
@@ -330,7 +329,7 @@ class MeetingCaptureService {
         final draft = _draft;
         if (draft == null ||
             draft.sessionId != artifact.sessionId ||
-            draft.finalPath != artifact.path ||
+            _expectedFinalPath(draft) != artifact.path ||
             !await _isOwnedRegularFile(artifact.path)) {
           throw const MeetingArtifactInvalidError(
             'Published artifact is no longer owned by this session',
@@ -368,7 +367,10 @@ class MeetingCaptureService {
       rethrow;
     }
 
-    final paths = _draft?.segments ?? const <String>[];
+    final draft = _draft;
+    final paths = draft == null
+        ? const <String>[]
+        : <String>[_expectedStagingPath(draft), _expectedFinalPath(draft)];
     for (final path in paths) {
       if (await _isOwnedRegularFile(path)) await File(path).delete();
     }
@@ -420,7 +422,7 @@ class MeetingCaptureService {
       if (_state != MeetingCaptureState.recording || _draft == null) return;
       final free = await _bounded(
         'storage-capacity',
-        _availableBytes(_draft!.stagingPath!),
+        _availableBytes(_expectedStagingPath(_draft!)),
       );
       if (_state != MeetingCaptureState.recording || _draft == null) return;
       if (free != null && free < minimumAvailableBytes) {

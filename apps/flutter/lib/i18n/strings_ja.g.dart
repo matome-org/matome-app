@@ -120,6 +120,11 @@ class _Translations$settings$ja extends Translations$settings$en {
 	@override String get readingPaneFiles => 'ファイル';
 	@override String get readingPaneSpaces => 'スペース';
 	@override String get readingPaneContacts => '連絡先';
+	@override String get storage => 'ローカルストレージ';
+	@override String get retentionKeepForever => 'ローカルファイルを保持';
+	@override String get retentionKeepForeverHint => 'デフォルト。Vault のローカルファイルは自動削除されません。';
+	@override String get retentionThirtyDays => '対象ファイルを30日後に削除';
+	@override String get retentionThirtyDaysHint => '任意設定。クラウドで検証済みかつ未参照のファイルのみ削除できます。';
 }
 
 // Path: nav
@@ -419,6 +424,7 @@ class _Translations$files$ja extends Translations$files$en {
 	@override String deleteBody({required Object n}) => '${n} 件のファイルを削除します。元に戻せます。';
 	@override String deletedMsg({required Object n}) => '${n} 件を削除しました';
 	@override String get downloadUnavailable => 'ダウンロードはまだ利用できません';
+	@override String exportedOutsideVault({required Object n}) => '${n} 件をエクスポートしました。コピーは Matome Vault の管理外です。';
 	@override String get moveSheetTitle => 'まとめに移動';
 	@override String get moveUnfiled => '未整理';
 	@override String get moveUnfiledHint => 'まとめなし';
@@ -602,6 +608,10 @@ class _Translations$auth$ja extends Translations$auth$en {
 	@override String get errorEmailTaken => 'そのメールアドレスは既に登録されています。';
 	@override String get errorResetTokenInvalid => 'そのリセットコードは無効か、有効期限が切れています。';
 	@override String get errorGeneric => '問題が発生しました。もう一度お試しください。';
+	@override String get unlockTitle => 'Vaultのロックを解除';
+	@override String get unlockSubtitle => '非公開データを開くには、アカウントのパスワードを入力してください。';
+	@override String get unlockSubmit => 'ロック解除';
+	@override String get unlockError => 'Vaultのロックを解除できませんでした。パスワードを確認して、もう一度お試しください。';
 }
 
 // Path: fileView.fileChip
@@ -868,6 +878,11 @@ extension on TranslationsJa {
 			'settings.readingPaneFiles' => 'ファイル',
 			'settings.readingPaneSpaces' => 'スペース',
 			'settings.readingPaneContacts' => '連絡先',
+			'settings.storage' => 'ローカルストレージ',
+			'settings.retentionKeepForever' => 'ローカルファイルを保持',
+			'settings.retentionKeepForeverHint' => 'デフォルト。Vault のローカルファイルは自動削除されません。',
+			'settings.retentionThirtyDays' => '対象ファイルを30日後に削除',
+			'settings.retentionThirtyDaysHint' => '任意設定。クラウドで検証済みかつ未参照のファイルのみ削除できます。',
 			'nav.createNew' => '新規',
 			'nav.add' => '追加',
 			'nav.recordAudio' => '音声を録音',
@@ -1180,6 +1195,7 @@ extension on TranslationsJa {
 			'files.deleteBody' => ({required Object n}) => '${n} 件のファイルを削除します。元に戻せます。',
 			'files.deletedMsg' => ({required Object n}) => '${n} 件を削除しました',
 			'files.downloadUnavailable' => 'ダウンロードはまだ利用できません',
+			'files.exportedOutsideVault' => ({required Object n}) => '${n} 件をエクスポートしました。コピーは Matome Vault の管理外です。',
 			'files.moveSheetTitle' => 'まとめに移動',
 			'files.moveUnfiled' => '未整理',
 			'files.moveUnfiledHint' => 'まとめなし',
@@ -1317,6 +1333,10 @@ extension on TranslationsJa {
 			'auth.errorEmailTaken' => 'そのメールアドレスは既に登録されています。',
 			'auth.errorResetTokenInvalid' => 'そのリセットコードは無効か、有効期限が切れています。',
 			'auth.errorGeneric' => '問題が発生しました。もう一度お試しください。',
+			'auth.unlockTitle' => 'Vaultのロックを解除',
+			'auth.unlockSubtitle' => '非公開データを開くには、アカウントのパスワードを入力してください。',
+			'auth.unlockSubmit' => 'ロック解除',
+			'auth.unlockError' => 'Vaultのロックを解除できませんでした。パスワードを確認して、もう一度お試しください。',
 			_ => null,
 		};
 	}

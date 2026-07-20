@@ -69,45 +69,47 @@ void main() {
       expect(read.kdfParams, Argon2idParams.portableV1);
     });
 
-    test('a second write overwrites the first (latest keybundle wins)',
-        () async {
-      final store = _FakeKeyStore();
-      final cache = WebKeyBundleCache(store);
-      final dek = Dek.generate();
-      final kek = Uint8List.fromList(List.generate(32, (i) => i));
+    test(
+      'a second write overwrites the first (latest keybundle wins)',
+      () async {
+        final store = _FakeKeyStore();
+        final cache = WebKeyBundleCache(store);
+        final dek = Dek.generate();
+        final kek = Uint8List.fromList(List.generate(32, (i) => i));
 
-      final wrappedA = await wrapKey(
-        plaintext: dek.bytes,
-        wrappingKey: kek,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
-      await cache.write(
-        CachedKeyBundleSaltInfo(
-          wrappedDekPw: wrappedA,
-          saltEnc: _salt16(1),
-          kdfParams: Argon2idParams.portableV1,
-        ),
-      );
+        final wrappedA = await wrapKey(
+          plaintext: dek.bytes,
+          wrappingKey: kek,
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
+        await cache.write(
+          CachedKeyBundleSaltInfo(
+            wrappedDekPw: wrappedA,
+            saltEnc: _salt16(1),
+            kdfParams: Argon2idParams.portableV1,
+          ),
+        );
 
-      final wrappedB = await wrapKey(
-        plaintext: dek.bytes,
-        wrappingKey: kek,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
-      await cache.write(
-        CachedKeyBundleSaltInfo(
-          wrappedDekPw: wrappedB,
-          saltEnc: _salt16(2),
-          kdfParams: Argon2idParams.portableV1,
-        ),
-      );
+        final wrappedB = await wrapKey(
+          plaintext: dek.bytes,
+          wrappingKey: kek,
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
+        await cache.write(
+          CachedKeyBundleSaltInfo(
+            wrappedDekPw: wrappedB,
+            saltEnc: _salt16(2),
+            kdfParams: Argon2idParams.portableV1,
+          ),
+        );
 
-      final read = await cache.read();
-      expect(read!.saltEnc, _salt16(2));
-      expect(read.wrappedDekPw.bytes, wrappedB.bytes);
-    });
+        final read = await cache.read();
+        expect(read!.saltEnc, _salt16(2));
+        expect(read.wrappedDekPw.bytes, wrappedB.bytes);
+      },
+    );
 
     test('clear() makes a subsequent read() return null again', () async {
       final store = _FakeKeyStore();

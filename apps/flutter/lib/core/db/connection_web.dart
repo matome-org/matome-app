@@ -1,11 +1,12 @@
 import 'dart:async';
-
 import 'package:drift/drift.dart';
 import 'package:drift/wasm.dart';
 import 'package:sqlite3/wasm.dart';
 import 'package:typed_data/typed_data.dart' show Uint8Buffer;
+import 'package:matome_vault/matome_vault.dart' show VaultKeyMaterial;
 
-import '../crypto/key_unwrapper.dart' show PasswordKeyUnwrapper;
+import '../crypto/key_material.dart' show Dek, Kek;
+import '../crypto/key_unwrapper.dart' show KeyUnwrapper, PasswordKeyUnwrapper;
 import 'db_encryption.dart';
 import 'encrypted_blob_store.dart';
 import 'web_key_bundle_cache.dart';
@@ -17,14 +18,14 @@ import 'web_store_opener.dart';
 /// ## Two entry points, mirroring `connection_native.dart`'s
 /// `openPlatformConnection` / `openEncryptedNativeConnection` split
 ///
-/// - [openPlatformConnection] — the DEFAULT, always-safe path. Unchanged
+/// - [openPlatformConnection] — the DEFAULT pre-unlock path. Unchanged
 ///   observable behavior from before this task: an **in-memory** sqlite3
 ///   store (`WasmDatabase.inMemory` + `InMemoryFileSystem`), re-hydrated from
 ///   the Core API on each load, nothing touches OPFS. Per the AC ("in-memory
 ///   becomes a FALLBACK, not the default"), this remains the path used when
 ///   no password/DEK is available yet (pre-login) or when OPFS is
-///   unavailable/unsupported in the current browser
-///   ([OpfsUnavailableException] from `web_opfs_blob_store.dart`).
+///   unavailable/unsupported browsers must remain blocked; callers must never
+///   substitute this plaintext/in-memory path after an encrypted open fails.
 /// - [openEncryptedWebConnection] — the NEW real persistence path. Requires a
 ///   password (the cold-start prompt) and either a cached or freshly-fetched
 ///   keybundle; opens (or creates) the OPFS-encrypted store under the DEK.
@@ -121,12 +122,15 @@ const String _kDbPath = '/database';
 /// the exact exception types); this function does not catch those and fall
 /// back to a fresh empty database. Callers (the password-prompt UI) must
 /// surface the error, not retry with a silently-substituted empty store.
-Future<QueryExecutor> openEncryptedWebConnection({
+/// [debugPhase] is reserved for browser test harness diagnostics and should be
+/// omitted by application callers.
+Future<WebEncryptedQueryExecutor> openEncryptedWebConnection({
   required String password,
   required WebKeyBundleCache keyBundleCache,
   EncryptedBlobStore? blobStore,
   Future<CachedKeyBundleSaltInfo> Function()? fetchKeyBundleOnline,
   Duration autoPersistInterval = kWebAutoPersistInterval,
+  void Function(String phase, Duration? elapsed)? debugPhase,
 }) async {
   final store = blobStore ?? OpfsBlobStore();
 
@@ -147,11 +151,14 @@ Future<QueryExecutor> openEncryptedWebConnection({
     await keyBundleCache.write(info);
   }
 
-  final unwrapper = PasswordKeyUnwrapper(
+  KeyUnwrapper unwrapper = PasswordKeyUnwrapper(
     password: password,
     saltEnc: info.saltEnc,
     params: info.kdfParams,
   );
+  if (debugPhase != null) {
+    unwrapper = _DiagnosticKeyUnwrapper(unwrapper, debugPhase);
+  }
 
   final opener = WebStoreOpener(blobStore: store);
   // Fails closed inside `opener.open` (see its doc comment): propagates on a
@@ -160,8 +167,12 @@ Future<QueryExecutor> openEncryptedWebConnection({
     unwrapper: unwrapper,
     wrappedDekPw: info.wrappedDekPw,
   );
+  debugPhase?.call('envelope-unlock:after', null);
 
+  debugPhase?.call('wasm-load:before', null);
+  final wasmStopwatch = Stopwatch()..start();
   final sqlite3 = await WasmSqlite3.loadFromUrl(Uri.parse('sqlite3.wasm'));
+  debugPhase?.call('wasm-load:after', wasmStopwatch.elapsed);
   final vfs = InMemoryFileSystem();
   final plaintextImage = result.plaintextImage;
   if (plaintextImage != null) {
@@ -169,29 +180,208 @@ Future<QueryExecutor> openEncryptedWebConnection({
   }
   sqlite3.registerVirtualFileSystem(vfs, makeDefault: true);
 
+  debugPhase?.call('sqlite-open:before', null);
   final db = WasmDatabase(sqlite3: sqlite3, path: _kDbPath);
+  debugPhase?.call('sqlite-open:after', null);
 
-  // Best-effort periodic persistence (see kWebAutoPersistInterval doc).
-  // KNOWN LIMITATION: this Timer is not canceled when `db` is closed —
-  // `WasmDatabase`/`DelegatedDatabase` doesn't expose an on-close hook
-  // without further subclassing, which is out of scope for this pass. In a
-  // single-page-app session this only matters if the store is opened and
-  // closed repeatedly without a full page reload; flagged here rather than
-  // silently left as an unexplained leak.
-  Uint8List? lastPersisted;
-  Timer.periodic(autoPersistInterval, (_) async {
-    final buffer = vfs.fileData[_kDbPath];
-    if (buffer == null) return;
-    final current = buffer.buffer.asUint8List(0, buffer.length);
-    if (lastPersisted != null && _bytesEqual(current, lastPersisted!)) {
-      return; // unchanged since the last checkpoint -- skip the encrypt+write
+  return WebEncryptedQueryExecutor._(
+    db,
+    vfs,
+    opener,
+    result.dek,
+    autoPersistInterval,
+  );
+}
+
+/// Opens encrypted account-scoped OPFS using the DEK already unlocked by the
+/// Vault session. No password or KEK enters this layer.
+Future<WebEncryptedQueryExecutor> openEncryptedWebConnectionWithKeyMaterial({
+  required VaultKeyMaterial keyMaterial,
+  required EncryptedBlobStore blobStore,
+  Duration autoPersistInterval = kWebAutoPersistInterval,
+}) async {
+  final dek = await keyMaterial.use((bytes) => Dek(Uint8List.fromList(bytes)));
+  final opener = WebStoreOpener(blobStore: blobStore);
+  try {
+    final result = await opener.openWithDek(dek);
+    final sqlite3 = await WasmSqlite3.loadFromUrl(Uri.parse('sqlite3.wasm'));
+    final vfs = InMemoryFileSystem();
+    final plaintextImage = result.plaintextImage;
+    if (plaintextImage != null) {
+      vfs.fileData[_kDbPath] = Uint8Buffer()..addAll(plaintextImage);
     }
-    final snapshot = Uint8List.fromList(current);
-    await opener.persist(plaintextImage: snapshot, dek: result.dek);
-    lastPersisted = snapshot;
-  });
+    sqlite3.registerVirtualFileSystem(vfs, makeDefault: true);
+    final db = WasmDatabase(sqlite3: sqlite3, path: _kDbPath);
+    return WebEncryptedQueryExecutor._(
+      db,
+      vfs,
+      opener,
+      result.dek,
+      autoPersistInterval,
+    );
+  } catch (_) {
+    dek.wipe();
+    rethrow;
+  }
+}
 
-  return db;
+final class _DiagnosticKeyUnwrapper implements KeyUnwrapper {
+  _DiagnosticKeyUnwrapper(this._inner, this._report);
+
+  final KeyUnwrapper _inner;
+  final void Function(String phase, Duration? elapsed) _report;
+
+  @override
+  Future<Kek> deriveKEK() async {
+    _report('argon2-unlock:before', null);
+    final stopwatch = Stopwatch()..start();
+    final kek = await _inner.deriveKEK();
+    _report('argon2-unlock:after', stopwatch.elapsed);
+    _report('envelope-unlock:before', null);
+    return kek;
+  }
+}
+
+/// Owns one decrypted in-memory SQLite session and its encrypted OPFS
+/// checkpoints. Checkpoints are serialized so a slow older write can never
+/// replace a newer snapshot. [close] cancels the timer and performs one final
+/// flush before closing SQLite and wiping the session DEK.
+final class WebEncryptedQueryExecutor implements QueryExecutor {
+  WebEncryptedQueryExecutor._(
+    this._inner,
+    this._vfs,
+    this._opener,
+    this._dek,
+    Duration autoPersistInterval,
+  ) {
+    _timer = Timer.periodic(autoPersistInterval, (_) {
+      unawaited(
+        checkpoint().catchError((Object error, StackTrace stackTrace) {
+          _lastTimerError = (error, stackTrace);
+        }),
+      );
+    });
+  }
+
+  final QueryExecutor _inner;
+  final InMemoryFileSystem _vfs;
+  final WebStoreOpener _opener;
+  final Dek _dek;
+  late final Timer _timer;
+  Future<void> _checkpointTail = Future.value();
+  Uint8List? _lastPersisted;
+  (Object, StackTrace)? _lastTimerError;
+  Future<void>? _closeFuture;
+  bool _closed = false;
+
+  /// Immediately schedules a durable encrypted snapshot after every earlier
+  /// checkpoint. Timer failures are surfaced by the next explicit checkpoint
+  /// or [close], rather than becoming unhandled asynchronous errors.
+  Future<void> checkpoint() {
+    if (_closed) {
+      return Future.error(StateError('Encrypted web store is already closed'));
+    }
+
+    return _enqueueCheckpoint();
+  }
+
+  Future<void> _enqueueCheckpoint() {
+    final previous = _checkpointTail;
+    final next = () async {
+      try {
+        await previous;
+      } catch (_) {
+        // The caller of the failed checkpoint received that error. A later
+        // checkpoint must still be able to persist a newer valid snapshot.
+      }
+
+      final timerError = _lastTimerError;
+      _lastTimerError = null;
+
+      final buffer = _vfs.fileData[_kDbPath];
+      if (buffer != null) {
+        final current = buffer.buffer.asUint8List(0, buffer.length);
+        if (_lastPersisted == null || !_bytesEqual(current, _lastPersisted!)) {
+          final snapshot = Uint8List.fromList(current);
+          await _opener.persist(plaintextImage: snapshot, dek: _dek);
+          _lastPersisted = snapshot;
+        }
+      }
+
+      if (timerError != null) {
+        Error.throwWithStackTrace(timerError.$1, timerError.$2);
+      }
+    }();
+    _checkpointTail = next;
+    return next;
+  }
+
+  @override
+  Future<void> close() {
+    final existing = _closeFuture;
+    if (existing != null) return existing;
+
+    _closed = true;
+    _timer.cancel();
+    return _closeFuture = _close();
+  }
+
+  Future<void> _close() async {
+    Object? checkpointError;
+    StackTrace? checkpointStack;
+    try {
+      await _enqueueCheckpoint();
+    } catch (error, stackTrace) {
+      checkpointError = error;
+      checkpointStack = stackTrace;
+    }
+    try {
+      await _inner.close();
+    } finally {
+      _dek.wipe();
+    }
+    if (checkpointError != null) {
+      Error.throwWithStackTrace(checkpointError, checkpointStack!);
+    }
+  }
+
+  @override
+  QueryExecutor beginExclusive() => _inner.beginExclusive();
+
+  @override
+  TransactionExecutor beginTransaction() => _inner.beginTransaction();
+
+  @override
+  SqlDialect get dialect => _inner.dialect;
+
+  @override
+  Future<bool> ensureOpen(QueryExecutorUser user) => _inner.ensureOpen(user);
+
+  @override
+  Future<void> runBatched(BatchedStatements statements) =>
+      _inner.runBatched(statements);
+
+  @override
+  Future<void> runCustom(String statement, [List<Object?>? args]) =>
+      _inner.runCustom(statement, args);
+
+  @override
+  Future<int> runDelete(String statement, List<Object?> args) =>
+      _inner.runDelete(statement, args);
+
+  @override
+  Future<int> runInsert(String statement, List<Object?> args) =>
+      _inner.runInsert(statement, args);
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(
+    String statement,
+    List<Object?> args,
+  ) => _inner.runSelect(statement, args);
+
+  @override
+  Future<int> runUpdate(String statement, List<Object?> args) =>
+      _inner.runUpdate(statement, args);
 }
 
 bool _bytesEqual(Uint8List a, Uint8List b) {

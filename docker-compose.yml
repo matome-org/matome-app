@@ -121,8 +121,8 @@ services:
 
   web:
     build:
-      context: ./apps/flutter
-      dockerfile: Dockerfile.web
+      context: .
+      dockerfile: apps/flutter/Dockerfile.web
       args:
         API_BASE_URL: ${API_BASE_URL}
     depends_on:

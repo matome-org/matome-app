@@ -69,7 +69,12 @@ void main() {
   testWidgets('rename: dialog → controller → persisted (trimmed) title', (
     tester,
   ) async {
-    await _seed(db, id: 'm_ren', title: 'Old title', happenedAt: DateTime(2026, 6, 8));
+    await _seed(
+      db,
+      id: 'm_ren',
+      title: 'Old title',
+      happenedAt: DateTime(2026, 6, 8),
+    );
 
     await tester.pumpWidget(_app(container(), id: 'm_ren'));
     await tester.pumpAndSettle();
@@ -103,7 +108,12 @@ void main() {
   testWidgets('rename: an empty title is GUARDED — Save disabled, no write', (
     tester,
   ) async {
-    await _seed(db, id: 'm_empty', title: 'Keep me', happenedAt: DateTime(2026, 6, 8));
+    await _seed(
+      db,
+      id: 'm_empty',
+      title: 'Keep me',
+      happenedAt: DateTime(2026, 6, 8),
+    );
 
     await tester.pumpWidget(_app(container(), id: 'm_empty'));
     await tester.pumpAndSettle();
@@ -138,11 +148,7 @@ void main() {
     tester,
   ) async {
     // Seeded on the 8th at 09:00; we re-date to the 20th, keeping the time.
-    await _seed(
-      db,
-      id: 'm_dt',
-      happenedAt: DateTime(2026, 6, 8, 9),
-    );
+    await _seed(db, id: 'm_dt', happenedAt: DateTime(2026, 6, 8, 9));
 
     await tester.pumpWidget(_app(container(), id: 'm_dt'));
     await tester.pumpAndSettle();
@@ -204,8 +210,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Drift carries the new date AND Core was PATCHed by coreId (round-trip).
-    final stored =
-        DateTime.fromMillisecondsSinceEpoch((await db.matomesDao.getById('m_sync'))!.happenedAt);
+    final stored = DateTime.fromMillisecondsSinceEpoch(
+      (await db.matomesDao.getById('m_sync'))!.happenedAt,
+    );
     expect(stored.day, 20);
     expect(repo.updated, hasLength(1));
     expect(repo.updated.single['id'], 77);

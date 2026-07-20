@@ -2,11 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/crypto/media_playback_resolver.dart'
-    show defaultPlaybackScratchDir, evictAllPlaybackScratch;
 import '../../core/http/api_exception.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
+import '../../core/vault/vault_session_controller.dart';
 import 'auth_models.dart';
 
 /// Session state machine exposing `AsyncValue<AuthSession?>`.
@@ -24,10 +23,8 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
   AuthController(
     this._ref, {
     Future<void> Function()? evictPlaybackCache,
-  }) : _evictPlaybackCache =
-           evictPlaybackCache ??
-           (() =>
-               evictAllPlaybackScratch(scratchDirSource: defaultPlaybackScratchDir)),
+    this.vaultSession,
+  }) : _evictPlaybackCache = evictPlaybackCache ?? (() async {}),
        super(const AsyncValue.loading()) {
     restoreSession();
   }
@@ -43,6 +40,7 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
   /// logout IS the account-boundary event. Injectable so this is testable
   /// without touching the real `path_provider` platform channel.
   final Future<void> Function() _evictPlaybackCache;
+  final VaultSessionController Function()? vaultSession;
 
   bool get isAuthenticated => state.valueOrNull != null;
 
@@ -69,6 +67,9 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
       AppLog.event(LogCat.auth, 'restoreSession ok');
       state = AsyncValue.data(
         AuthSession(user: user, accessToken: access, refreshToken: refresh),
+      );
+      await vaultSession?.call().restoreAuthenticated(
+        accountId: vaultAccountIdForOwner(user.id),
       );
     } on ApiException catch (e, st) {
       // Tokens are stale and the refresh interceptor could not recover them.
@@ -97,11 +98,23 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
   Future<void> login({required String email, required String password}) async {
     AppLog.event(LogCat.auth, 'login start (${emailDomainForLog(email)})');
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      return _ref
+    final result = await AsyncValue.guard(
+      () => _ref
           .read(authRepositoryProvider)
-          .login(email: email, password: password);
-    });
+          .login(email: email, password: password),
+    );
+    state = result;
+    final session = result.valueOrNull;
+    if (session != null) {
+      try {
+        await vaultSession?.call().unlockAfterPasswordLogin(
+          accountId: vaultAccountIdForOwner(session.user.id),
+          password: password,
+        );
+      } on VaultUnlockException {
+        // JWT remains valid, but routing stays on the fail-closed Vault gate.
+      }
+    }
     AppLog.event(LogCat.auth, 'login ${state.hasError ? 'fail' : 'ok'}');
   }
 
@@ -111,16 +124,29 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
   }) async {
     AppLog.event(LogCat.auth, 'register start (${emailDomainForLog(email)})');
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      return _ref
+    final result = await AsyncValue.guard(
+      () => _ref
           .read(authRepositoryProvider)
-          .register(email: email, password: password);
-    });
+          .register(email: email, password: password),
+    );
+    state = result;
+    final session = result.valueOrNull;
+    if (session != null) {
+      try {
+        await vaultSession?.call().unlockAfterPasswordLogin(
+          accountId: vaultAccountIdForOwner(session.user.id),
+          password: password,
+        );
+      } on VaultUnlockException {
+        // Enrollment failure does not reset the Core account or mint a new DEK.
+      }
+    }
     AppLog.event(LogCat.auth, 'register ${state.hasError ? 'fail' : 'ok'}');
   }
 
   Future<void> logout() async {
     AppLog.event(LogCat.auth, 'logout start');
+    await _closeVaultSession();
     await _ref.read(authRepositoryProvider).logout();
     await _safeEvictPlaybackCache();
     state = const AsyncValue.data(null);
@@ -130,10 +156,11 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
   /// Invoked by the dio 401-retry interceptor when a token refresh fails: the
   /// session is unrecoverable, so clear tokens and drop to signed-out. The nav
   /// guard then redirects to welcome.
-  void signedOutByInterceptor() {
+  Future<void> signedOutByInterceptor() async {
     if (!mounted) return;
     AppLog.event(LogCat.auth, 'signedOutByInterceptor refresh-failed');
-    _ref.read(tokenStoreProvider).clear();
+    await _closeVaultSession();
+    await _ref.read(tokenStoreProvider).clear();
     // Fire-and-forget: this is a forced sync teardown path, but the leftover
     // plaintext scratch cache is exactly as unacceptable here as on an
     // explicit logout (okt-audit PASS-2 FINDING-1).
@@ -170,11 +197,29 @@ class AuthController extends StateNotifier<AsyncValue<AuthSession?>> {
       );
     }
   }
+
+  Future<void> _closeVaultSession() async {
+    try {
+      await vaultSession?.call().logoutAndWait();
+    } catch (error, stackTrace) {
+      // The Vault controller already revoked access and wipes key material in
+      // finally. A close/checkpoint failure must not preserve the JWT session.
+      AppLog.error(
+        LogCat.auth,
+        'logout: Vault close failed after capability revocation',
+        error,
+        stackTrace,
+      );
+    }
+  }
 }
 
 final authControllerProvider =
     StateNotifierProvider<AuthController, AsyncValue<AuthSession?>>(
-      (ref) => AuthController(ref),
+      (ref) => AuthController(
+        ref,
+        vaultSession: () => ref.read(vaultSessionProvider.notifier),
+      ),
     );
 
 /// Reduces an email to just its domain for non-sensitive auth breadcrumbs.

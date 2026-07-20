@@ -80,17 +80,29 @@ class InMemoryDeviceClientIdStore implements DeviceClientIdStore {
 
 /// Production identity: stable UUID + platform mapping + optional model.
 class SecureDeviceIdentity implements DeviceIdentity {
-  SecureDeviceIdentity({
+  factory SecureDeviceIdentity({
     DeviceClientIdStore? clientIdStore,
     String Function()? idGenerator,
     Future<String?> Function()? modelResolver,
     bool? isWeb,
     TargetPlatform? platform,
-  }) : _clientIdStore = clientIdStore ?? SecureDeviceClientIdStore(),
-       _idGenerator = idGenerator ?? const Uuid().v4,
-       _modelResolver = modelResolver,
-       _isWeb = isWeb ?? kIsWeb,
-       _platform = platform ?? defaultTargetPlatform;
+  }) {
+    return SecureDeviceIdentity._(
+      clientIdStore ?? SecureDeviceClientIdStore(),
+      idGenerator ?? const Uuid().v4,
+      modelResolver,
+      isWeb ?? kIsWeb,
+      platform ?? defaultTargetPlatform,
+    );
+  }
+
+  SecureDeviceIdentity._(
+    this._clientIdStore,
+    this._idGenerator,
+    this._modelResolver,
+    this._isWeb,
+    this._platform,
+  );
 
   final DeviceClientIdStore _clientIdStore;
   final String Function() _idGenerator;
@@ -109,8 +121,7 @@ class SecureDeviceIdentity implements DeviceIdentity {
       model = null;
     }
     final trimmedModel = model?.trim();
-    final displayName =
-        (trimmedModel != null && trimmedModel.isNotEmpty)
+    final displayName = (trimmedModel != null && trimmedModel.isNotEmpty)
         ? trimmedModel
         : mapped.defaultDisplayName;
 

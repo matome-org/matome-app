@@ -12,6 +12,7 @@ import 'core/i18n/locale_controller.dart';
 import 'core/observability/app_log.dart';
 import 'core/logging/log_redaction.dart';
 import 'core/providers.dart';
+import 'core/vault/vault_boot_coordinator.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/recordings/upload_retry_service.dart';
@@ -53,8 +54,7 @@ class _MatomeAppState extends ConsumerState<MatomeApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final policy = ref.read(systemPolicyProvider.notifier);
-      final uploads = ref.read(uploadRetryServiceProvider);
-      unawaited(policy.initialize().then((_) => uploads.start()));
+      unawaited(policy.initialize());
     });
   }
 
@@ -62,6 +62,22 @@ class _MatomeAppState extends ConsumerState<MatomeApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshPolicyAndDrain();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      unawaited(
+        ref
+            .read(vaultBootCoordinatorProvider.notifier)
+            .checkpoint()
+            .catchError(
+              (Object error, StackTrace stackTrace) => AppLog.error(
+                LogCat.db,
+                'lifecycle checkpoint failed (best-effort)',
+                error,
+                stackTrace,
+              ),
+            ),
+      );
     }
   }
 
@@ -76,6 +92,17 @@ class _MatomeAppState extends ConsumerState<MatomeApp>
     ref.listen<AuthState>(authStateProvider, (previous, next) {
       if (next.isAuthenticated && !(previous?.isAuthenticated ?? false)) {
         _refreshPolicyAndDrain();
+      }
+    });
+    ref.listen<VaultBootSnapshot>(vaultBootCoordinatorProvider, (
+      previous,
+      next,
+    ) {
+      final uploads = ref.read(uploadRetryServiceProvider);
+      if (next.phase == VaultBootPhase.ready) {
+        unawaited(uploads.start());
+      } else if (previous?.phase == VaultBootPhase.ready) {
+        uploads.stop();
       }
     });
     ref.listen<String>(endpointConfigProvider, (previous, next) {
@@ -108,8 +135,9 @@ class _MatomeAppState extends ConsumerState<MatomeApp>
 
   void _refreshPolicyAndDrain() {
     final policy = ref.read(systemPolicyProvider.notifier);
-    final uploads = ref.read(uploadRetryServiceProvider);
     unawaited(policy.refresh());
-    unawaited(uploads.drainNow());
+    if (ref.read(vaultBootCoordinatorProvider).phase == VaultBootPhase.ready) {
+      unawaited(ref.read(uploadRetryServiceProvider).drainNow());
+    }
   }
 }

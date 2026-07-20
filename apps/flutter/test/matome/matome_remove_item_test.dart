@@ -59,7 +59,6 @@ void main() {
       id: 'rec_img',
       matomeId: 'm_rm',
       title: 'screenshot',
-      localPath: '',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       mediaType: 'image',
     );

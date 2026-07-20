@@ -11,7 +11,9 @@ Future<void> _pump(WidgetTester tester, MatomeContactRole role) async {
     MaterialApp(
       theme: buildLightTheme(),
       home: Scaffold(
-        body: TranslationProvider(child: Center(child: RoleChip(role: role))),
+        body: TranslationProvider(
+          child: Center(child: RoleChip(role: role)),
+        ),
       ),
     ),
   );

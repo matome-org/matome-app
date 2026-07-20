@@ -6,10 +6,7 @@ void main() {
   group('AppConfig.resolveBaseUrl', () {
     test('web -> localhost', () {
       expect(
-        AppConfig.resolveBaseUrl(
-          isWeb: true,
-          platform: TargetPlatform.android,
-        ),
+        AppConfig.resolveBaseUrl(isWeb: true, platform: TargetPlatform.android),
         'http://localhost:7001',
       );
     });
@@ -26,10 +23,7 @@ void main() {
 
     test('linux desktop -> localhost', () {
       expect(
-        AppConfig.resolveBaseUrl(
-          isWeb: false,
-          platform: TargetPlatform.linux,
-        ),
+        AppConfig.resolveBaseUrl(isWeb: false, platform: TargetPlatform.linux),
         'http://localhost:7001',
       );
     });

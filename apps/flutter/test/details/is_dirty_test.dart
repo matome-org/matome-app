@@ -5,10 +5,13 @@ import 'package:matome_flutter/features/details/markdown_helpers.dart';
 void main() {
   group('isDirty — comparison logic', () {
     // Initial load
-    test('false when transcript equals savedText on initial load (content)', () {
-      const initial = 'Meeting notes from standup';
-      expect(computeIsDirty(initial, initial), isFalse);
-    });
+    test(
+      'false when transcript equals savedText on initial load (content)',
+      () {
+        const initial = 'Meeting notes from standup';
+        expect(computeIsDirty(initial, initial), isFalse);
+      },
+    );
     test('false when both transcript and savedText are empty strings', () {
       expect(computeIsDirty('', ''), isFalse);
     });
@@ -28,10 +31,13 @@ void main() {
     });
 
     // After save
-    test('false immediately after savedText is updated to match transcript', () {
-      const transcript = 'Updated meeting notes';
-      expect(computeIsDirty(transcript, transcript), isFalse);
-    });
+    test(
+      'false immediately after savedText is updated to match transcript',
+      () {
+        const transcript = 'Updated meeting notes';
+        expect(computeIsDirty(transcript, transcript), isFalse);
+      },
+    );
     test('true again if user edits after saving', () {
       expect(
         computeIsDirty('Saved content — added more', 'Saved content'),
@@ -90,13 +96,16 @@ void main() {
       tracker.setTranscript('Initial — more notes');
       expect(tracker.isDirty, isTrue);
     });
-    test('becomes clean after discarding edits and reverting to saved text', () {
-      final tracker = DirtyTracker('Saved text');
-      tracker.setTranscript('Edited text');
-      expect(tracker.isDirty, isTrue);
-      tracker.discard('Saved text');
-      expect(tracker.isDirty, isFalse);
-    });
+    test(
+      'becomes clean after discarding edits and reverting to saved text',
+      () {
+        final tracker = DirtyTracker('Saved text');
+        tracker.setTranscript('Edited text');
+        expect(tracker.isDirty, isTrue);
+        tracker.discard('Saved text');
+        expect(tracker.isDirty, isFalse);
+      },
+    );
     test('reflects dirty state through save → edit → save cycle', () {
       final tracker = DirtyTracker('');
       tracker.setTranscript('First draft');

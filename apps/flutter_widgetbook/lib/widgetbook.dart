@@ -19,6 +19,7 @@ import 'package:matome_flutter/core/db/app_database.dart'
         ItemsCompanion,
         TextContentsCompanion,
         WorkspaceRow;
+import 'package:matome_flutter/core/db/connection.dart' show openConnection;
 import 'package:matome_flutter/core/db/daos/items_dao.dart'
     show ItemWithPayload;
 import 'package:matome_flutter/core/db/matome_card.dart';
@@ -617,6 +618,12 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
     ],
   ),
   _component(
+    name: 'UnlockPage',
+    path: 'Pages/Mobile',
+    docs: 'Canonical authenticated Vault unlock gate in the mobile auth frame.',
+    stories: const [_StorySpec('Locked', unlockPageMobileUseCase)],
+  ),
+  _component(
     name: 'SignupPage',
     path: 'Pages/Mobile',
     docs: 'Canonical app-owned signup route Page in the mobile auth frame.',
@@ -764,6 +771,13 @@ final matomeWidgetbookComponents = <Component<Widget, _StaticStoryArgs>>[
       _StorySpec('Invalid credentials', loginPageInvalidDesktopUseCase),
       _StorySpec('Loading', loginPageLoadingDesktopUseCase),
     ],
+  ),
+  _component(
+    name: 'UnlockPage',
+    path: 'Pages/Desktop',
+    docs:
+        'Canonical authenticated Vault unlock gate in the desktop auth frame.',
+    stories: const [_StorySpec('Locked', unlockPageDesktopUseCase)],
   ),
   _component(
     name: 'SignupPage',
@@ -1532,6 +1546,14 @@ Widget loginPageMobileUseCase(BuildContext context) {
 
 Widget loginPageDesktopUseCase(BuildContext context) {
   return _authPageScene(const LoginPage(), viewport: _AuthViewport.desktop);
+}
+
+Widget unlockPageMobileUseCase(BuildContext context) {
+  return _authPageScene(const UnlockPage(), viewport: _AuthViewport.mobile);
+}
+
+Widget unlockPageDesktopUseCase(BuildContext context) {
+  return _authPageScene(const UnlockPage(), viewport: _AuthViewport.desktop);
 }
 
 Widget signupPageMobileUseCase(BuildContext context) {
@@ -2381,7 +2403,8 @@ Widget _textItemPageScene(String itemId) {
 final Future<AppDatabase> _widgetbookTextItemDb = _seedTextItemDb();
 
 Future<AppDatabase> _seedTextItemDb() async {
-  final db = AppDatabase();
+  // Catalog-only fixture. Production account boot never uses openConnection.
+  final db = AppDatabase.forTesting(openConnection());
   await _seedTextItem(
     db,
     id: 'widgetbook-text-clean',
@@ -3002,7 +3025,10 @@ const _journeyAudioRow = ItemWithPayload(
     uploadGeneration: 1,
     uploadedAt: _journeyTimestamp,
     openPolicy: 'download_only',
-    localPath: '',
+    blobId: 'widgetbook-audio-review-vault-blob',
+    blobState: 'ready',
+    cipherFormat: 'mec1',
+    cipherVersion: 1,
     isDirty: false,
     createdAt: _journeyTimestamp,
     updatedAt: _journeyTimestamp,

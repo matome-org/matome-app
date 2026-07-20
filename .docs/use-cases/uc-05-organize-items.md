@@ -5,7 +5,13 @@
 > [Requirements](../internal/requirements.md).
 
 ## Summary
-Items compose freely: they can be loose, inside a Matome, or filed directly into a Space. The effective-space resolver is the single authority on sync eligibility: `matome.spaceId` wins, else `recording.workspaceId`, else NULL. The Inbox is the derived view of everything whose effective space is NULL — loose items plus draft matomes. Filing organizes content but does not by itself sync; sync happens only when the effective space is a cloud space. When an item joins a Matome its `workspaceId` is shadowed rather than cleared, so leaving the Matome restores it without data loss.
+Behind `FeatureFlags.localFirstSpaces`, Items compose freely: loose, inside a
+Matome, or filed directly into a Space. The effective-space resolver is the
+single sync authority: `matome.spaceId` wins, else `item.workspaceId`, else NULL.
+Inbox derives everything whose effective Space is NULL. Filing organizes but
+does not itself sync; only a cloud effective Space permits egress. The configured
+primary build currently leaves `localFirstSpaces` OFF, so the loose-item lane and
+its direct filing controls are not presented; Inbox remains Matome-centric.
 
 ## Actors
 - **Primary:** User triaging items from the Inbox.
@@ -17,17 +23,28 @@ Items compose freely: they can be loose, inside a Matome, or filed directly into
 - A Space exists to file into (see UC-06).
 
 ## Main flow
-1. User views the Inbox, the view of everything whose effective space is NULL.
-2. User files a Matome into a Space (Inbox to Space), or files or moves a loose item directly into a Space or a Matome.
+1. User views the Matome-centric Inbox, with search and date grouping. When
+   `localFirstSpaces` is enabled, loose Items whose effective Space is NULL also
+   appear.
+2. User files a Matome into a Space. In the enabled loose lane, the User may also
+   file/move a loose Item directly into a Space or Matome.
 3. The resolver recomputes the effective space from the new placement.
 4. If the target is a cloud space the item becomes sync-eligible and the drain pushes it through the single operation-keyed gate; if the target is a local space it stays on-device.
 
 ## Alternate & exception flows
 - Filing into a local space organizes the content without any sync.
 - Leaving a Matome makes the shadowed `workspaceId` authoritative again, with no data loss.
-- **Temporary W0 queue exception:** while uploads still use legacy recording-row statuses, durable child work may reconcile its Inbox Matome parent to Core before filing. This dependency-only path does not make loose items or local-space content sync-eligible and is replaced by the canonical `work_queue` cutover.
-- The whole behaviour sits behind `FeatureFlags.localFirstSpaces`.
-- **Reading pane (master–detail).** On expanded widths, the collection surfaces used to triage — Inbox, Files, Spaces, and now **Contacts** — render through the shared `MasterDetailScaffold` behind `FeatureFlags.masterDetailLayout`: the directory stays as a full-width master beside a reading pane that previews the selected row in place (for Contacts, the real `ContactDetail`), so the user can scan and inspect without leaving the list. Tapping selects in-pane only when the pane is visible (`MasterDetailScaffold.showsPane`); on narrow widths, with the pane off, or with the flag OFF it degrades to navigating to the full-screen detail (`/contacts/:id`), exactly as shipped. The pane selection is reconciled after every list re-read so it never points at a row that has left the list (deleted / out of scope).
+- The loose/effective-Space behavior and direct Item filing controls sit behind
+  `FeatureFlags.localFirstSpaces`; when OFF, controllers deliberately suppress
+  loose rows and retain the Matome-first lane.
+- **Reading panes.** Behind `FeatureFlags.masterDetailLayout`, Inbox, Files,
+  Spaces, and Contacts each use an independently persisted mode: `always`,
+  `onClick` (default), or `off`. At expanded width, `always` reserves a pane,
+  `onClick` selects and opens it on first tap with a close action, and `off`
+  navigates to full-screen detail. Compact/medium widths navigate. Selection is
+  reconciled after list changes so it cannot retain a deleted/out-of-scope row.
+- With `masterDetailLayout` OFF, each collection preserves its legacy responsive
+  behavior; the setting remains persisted but does not drive the new scaffold.
 
 ## Sequence
 ```mermaid
@@ -62,6 +79,7 @@ sequenceDiagram
 | **NFR-SYNC-3** | One resolver computes eligibility, one operation-keyed gate decides sync — no second predicate, no inline `if isCloud`. |
 | **NFR-SYNC-4** | Two axes never collapsed (`is_local` ⟂ `space_type`; `local ⟹ personal`, `org ⟹ cloud`). |
 | **NFR-SYNC-6** | The behaviour is behind `FeatureFlags.localFirstSpaces` (single-flip rollback). |
+| **FR-PRF-6** | Configure `always`, `onClick`, or `off` independently for Inbox, Files, Spaces, and Contacts reading panes. |
 
 ## Code anchors
 - `apps/flutter/lib/features/spaces/effective_space.dart` — `effectiveSpaceId`, `isCloudSynced`: the resolver and eligibility check.
@@ -69,5 +87,8 @@ sequenceDiagram
 - `apps/flutter/lib/core/db/daos/matomes_dao.dart` — `MatomesDao.fileIntoSpace`: sets the space on the row.
 - `apps/flutter/lib/features/home/inbox_controller.dart` — `InboxController.moveToSpace`, `InboxController.fileIntoSpace`: triage from the Inbox.
 - `apps/flutter/lib/features/matome/matome_sync_service.dart` — `MatomeSyncService.pushFiled`: pushes filed items when eligible.
-- `apps/flutter/lib/ui/master_detail_scaffold.dart` — `MasterDetailScaffold`, `MasterDetailScaffold.showsPane`: the shared master–detail shell + the single pane-visibility predicate (behind `FeatureFlags.masterDetailLayout`).
+- `apps/flutter/lib/ui/master_detail_scaffold.dart` — shared master-detail shell
+  and `selectsOnTap` behavior behind `FeatureFlags.masterDetailLayout`.
+- `apps/flutter/lib/core/settings/reading_pane.dart` — independent persisted
+  `ReadingPaneMode` per collection surface.
 - `apps/flutter/lib/features/contacts/contacts_screen.dart` — `contactsSelectionProvider`, `ContactsScreen._open`, `_ContactsPaneDetail`: the Contacts master–detail wiring (tap = select-in-pane vs navigate, real `ContactDetail` pane, post-frame selection reconcile).

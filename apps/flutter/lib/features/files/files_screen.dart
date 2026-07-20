@@ -170,11 +170,25 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
       case FileAction.fileIntoSpace:
         await _fileIntoSpace(ids);
       case FileAction.download:
-        // FLAGGED STUB (#1465): there is no file-download path in the client
-        // yet, so download surfaces a "not available" notice instead of
-        // pretending to download.
+        final ownerId = ref.read(currentOwnerIdProvider);
+        if (ownerId == null) return;
+        final dao = ref.read(itemsDaoProvider);
+        final exporter = ref.read(vaultExportServiceProvider);
+        var exported = 0;
+        for (final id in ids) {
+          final row = await dao.getById(id, ownerId);
+          final blobId = row?.blobId;
+          if (row == null || blobId == null) continue;
+          if (await exporter.export(
+            blobId: blobId,
+            suggestedFilename: row.file?.filename ?? row.title,
+          )) {
+            exported++;
+          }
+        }
+        if (!mounted || exported == 0) return;
         messenger.showSnackBar(
-          SnackBar(content: Text(t.files.downloadUnavailable)),
+          SnackBar(content: Text(t.files.exportedOutsideVault(n: exported))),
         );
       case FileAction.delete:
         // Permanent hard-delete — the widget already gated it behind a confirm
@@ -182,15 +196,16 @@ class _FilesScreenState extends ConsumerState<FilesScreen> {
         // owner-scoped provider so the rows drop out (mirrors the matome table).
         final ownerId = ref.read(currentOwnerIdProvider);
         if (ownerId == null) return;
-        final dao = ref.read(itemsDaoProvider);
+        final container = ProviderScope.containerOf(context, listen: false);
+        final deletion = ref.read(itemDeletionServiceProvider);
         for (final id in ids) {
-          await dao.deleteWithPayload(id, ownerId);
+          await deletion.delete(id, ownerId);
         }
-        ref.invalidate(filesForCurrentOwnerProvider);
+        container.invalidate(filesForCurrentOwnerProvider);
         if (!mounted) return;
         // Never leave the reading pane pointing at a deleted file.
-        if (ids.contains(ref.read(filesSelectionProvider))) {
-          _clearFilesSelection();
+        if (ids.contains(container.read(filesSelectionProvider))) {
+          container.read(filesSelectionProvider.notifier).state = null;
         }
         messenger.showSnackBar(
           SnackBar(content: Text(t.files.deletedMsg(n: ids.length))),

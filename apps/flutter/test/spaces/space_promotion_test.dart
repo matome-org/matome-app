@@ -120,7 +120,6 @@ void main() {
       coreId: coreId,
       title: 'Memo',
       durationSeconds: 34,
-      localPath: audio.path,
       workspaceId: workspaceId,
       matomeId: matomeId,
       createdAt: DateTime.now().millisecondsSinceEpoch,
@@ -561,8 +560,13 @@ class _CountingRecordingsRepo extends RecordingsRepository
   }
 
   @override
-  Future<void> uploadFile(UploadDescriptor upload, File file) async {
-    uploadedIds.add(int.parse(upload.storageKey.substring(1)));
+  Future<String> uploadStreamRange(
+    UploadRequest request,
+    Stream<List<int>> stream,
+    int length,
+  ) async {
+    await stream.drain<void>();
+    return 'etag-test';
   }
 
   @override

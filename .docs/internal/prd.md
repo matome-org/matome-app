@@ -1,6 +1,6 @@
 # Matome — Product Requirements (PRD)
 
-> Status: agreed · Last updated: 2026-06-23
+> Status: agreed · Last updated: 2026-07-20
 > The product framing behind Matome: the problem, the user, the value, and what is
 > in vs out of scope today. Engineering detail lives in
 > [`architecture.md`](architecture.md); the testable requirement list in
@@ -16,17 +16,19 @@
 
 **Matome** (まとめ — "a gathering / summary") turns the scattered audio, photos, and
 notes around a *happening* — a meeting, a call, a conversation, a thought — into one
-organized, AI-summarized page, and lets the user file it where it belongs **on their
-own terms**.
+organized page, enriches supported inputs through backend processing, and lets the
+user file it where it belongs **on their own terms**.
 
 The core loop is **capture → process → organize**:
 
 1. **Capture** raw material with zero friction — record audio, capture a meeting's
    system audio, or drop in a file. No setup, no mandatory naming, works offline.
-2. The backend **processes** it — transcribes, OCRs, summarizes — without the client
-   doing any AI work.
-3. The user **organizes** it later, at their own pace — into a Matome, into a Space,
-   or leaves it loose — and decides what syncs to the cloud and what stays on-device.
+2. The backend **processes** supported inputs without the client doing any AI work.
+   Production currently transcribes supported audio; other typed processors remain
+   capability-gated.
+3. The user **organizes** it later, at their own pace — into a Matome or Space;
+   the feature-gated local-first lane also supports leaving Items loose and
+   deciding what syncs versus stays on-device.
 
 ---
 
@@ -58,8 +60,8 @@ organizes; it does not, by itself, push anything to the cloud.*
 
 - **Today: a single individual** — the Owner of all their own data. Matome is
   single-user; every record is `owner_id`-scoped. *[assumption: the near-term ICP is a
-  knowledge worker / professional who runs many short meetings and calls and wants them
-  captured and summarized without manual note-taking.]*
+  knowledge worker / professional who runs many short meetings and calls and wants
+  them captured and transcribed without manual note-taking.]*
 - **Tomorrow: teams and organizations.** The schema reserves shared/org spaces,
   members, roles, and organizations; the behaviour is deferred (§7).
 
@@ -67,15 +69,18 @@ organizes; it does not, by itself, push anything to the cloud.*
 
 ## 4. Value proposition & principles
 
-- **Local-first, on the user's terms.** Capture and organization work offline and live
-  on-device first. The user explicitly chooses what becomes a **cloud** space and
-  syncs; a new space is **local by default**. *(Trade-off, consciously accepted: an
-  item never filed into a cloud space exists only on the device and is lost on a device
-  wipe — see `architecture.md` D6.)*
+- **Local-first, on the user's terms.** Capture and organization persist locally
+  first. The full loose-Item/effective-Space egress policy is implemented behind
+  `FeatureFlags.localFirstSpaces` and remains OFF in the configured primary build;
+  when enabled, local-only content is lost on device wipe unless promoted/synced.
 - **Zero-friction capture.** A Matome is minted implicitly from the first item — no
   blank-page creation, no mandatory title.
-- **AI does the busywork, not the client.** Transcription and summarization are
-  server-side; the client stays thin and ships independently of model changes.
+- **AI does the busywork, not the client.** Processing is server-side and
+  capability-discovered; the client stays thin and ships independently of model
+  changes.
+- **Encrypted local ownership.** Drift and media are encrypted per account. Item
+  state uses opaque blob identities, while playback, preview, open, upload, and
+  export use bounded Vault leases.
 - **One ingestion path** for every media type — adding video/pdf later is a backend
   change.
 - **Three-state clarity over the cloud.** Every Matome shows exactly one of *On device
@@ -89,18 +94,18 @@ organizes; it does not, by itself, push anything to the cloud.*
 
 | Area | What the user can do |
 |---|---|
-| **Auth** | Register, sign in, stay signed in across reloads, sign out. |
-| **Capture** | Record mic audio (pause/resume); record a meeting via system-audio loopback (Linux desktop); import audio/image/document files; recover an interrupted draft. |
-| **AI processing** | Automatic transcription + summarization per item via the backend, with live status and retry. |
-| **Matome** | View a per-happening page (summary, notes, items, contacts); rename; edit date/time; add/remove items; edit notes; regenerate the aggregated summary; archive + restore. |
-| **Organize** | Leave items loose, group into a Matome, file into a Space; the Inbox is the derived view of everything not yet filed into a space. |
-| **Spaces** | Create local or cloud spaces; list/open/delete; promote a local space to cloud with explicit itemized consent. |
-| **Contacts** | Maintain a personal contact directory; tag contacts in Matomes with roles; view a contact's linked Matomes/Spaces/files. |
-| **Files** | Browse all files across Matomes (grid/table); filter by scope; open by media type; bulk move/file/delete. |
+| **Auth** | Welcome, register, sign in, restore JWT sessions, enroll/unlock the account Vault, request/reset the Core password, and sign out with Vault teardown. Password reset does not currently rewrap the Vault keybundle. |
+| **Capture** | Record mic audio; record a Linux loopback meeting; import photo/video/audio/document where the active picker permits; seal media into Vault; recover an interrupted draft. |
+| **AI processing** | Production audio transcription via the backend, with explicit capability/status and retry. OCR, extraction, description, and summarization remain capability-gated. |
+| **Matome** | Search/sort/browse; view hub; rename/date/notes; add existing/new media or text; contacts/Space; copy/regenerate summary; archive/restore; confirmed table hard delete. |
+| **Organize** | Matome-centric Inbox by default; the `localFirstSpaces` lane additionally exposes loose Items, derived Inbox membership, and direct Item filing. |
+| **Spaces** | Create a named local Space in Drift; list/open/delete; confirm one-way promotion to a Core-backed cloud Space; optionally preview at expanded width. |
+| **Contacts** | Create/edit local display name + notes; delete; tag in Matomes with roles; inspect linked Matomes/Spaces and audio/image/document/video files. |
+| **Files** | Browse grid/table; sort/filter where enabled; route audio/image/document/video; move/unfile with Undo; export/delete; optionally inspect in a read-only pane. |
 | **Calendar** | Month view of activity; open a day's Matomes; filter by Space. |
-| **Item detail** | Play audio, read transcript, view images/documents, edit notes, retry failed transcription, delete. |
-| **Preferences** | Theme (light/dark/system), language (en/ja), default Inbox/Files view. |
-| **Satori** | View the AI roadmap (informational; no live AI features ship yet). |
+| **Item detail** | Play audio, preview images, open documents through Vault leases, view static video detail, edit text/notes, use supported remote fallbacks, retry processing, and delete. |
+| **Preferences** | Theme, language, default views, independent reading-pane mode for four surfaces, and account-local Vault retention (`keep_forever` by default). |
+| **Satori** | Legacy-shell-only static roadmap; the primary new shell redirects `/satori` to Inbox. |
 
 ---
 
@@ -113,11 +118,28 @@ organizes; it does not, by itself, push anything to the cloud.*
 - **SSO** (Google / Outlook) — deferred; `owner_id` is a stable id so identities map
   cleanly later.
 - **Live Satori AI** (search, Q&A over content, email/meeting insights) — roadmap only.
+- **Production OCR, image description, document extraction, summarization, title
+  generation, embeddings, and classification** — typed contract seams exist, but
+  production AI Core currently implements audio transcript only.
 - **Automatic local backup** for the accepted local-data-loss risk — explicitly out of
   scope.
+- **Complete clear-local-copy and all-media rehydrate UI.** The lifecycle defines
+  safe `cloud_only` behavior, but the current product does not expose the complete
+  transition across audio/image/document consumers.
 - **Win/macOS system-audio loopback** — deferred (Linux loopback ships).
-- **Hard-delete UI** — archive (soft-delete + Undo) is the user-facing death path.
+- **Matome hard-delete UI** — archive (soft-delete + Undo) remains the aggregate's
+  user-facing death path; file Items have their own confirmed delete flow.
 - **Cloud → local demotion** — promotion is one-way in v1.
+- **Vault-preserving password-reset journey.** Recovery-code DEK rewrap machinery
+  exists but is not connected to the shipping forgot/reset screens.
+- **Video playback or AI processing.** Video is Vault-backed upload/export with a
+  static detail today, not an in-app player or AI input.
+- **Complete promotion failure/resume UI.** The Space service returns resumable
+  state, but the current screen only reloads after promotion.
+- **Contact merge and full structured-field editing.** Merge is reserved/no-op;
+  the current form edits display name and notes only.
+- **God Mode custom host in end-user builds.** It is a build-time guarded
+  developer surface, dark in the product configuration.
 
 ---
 
@@ -137,7 +159,7 @@ The architecture leaves seams so these add without a rewrite (see `architecture.
 ## 8. Success signals *[assumption]*
 
 - Time-to-capture is effectively zero (no mandatory destination/title before recording).
-- A high share of captures get an AI summary the user keeps without editing.
+- A high share of supported audio captures produce a transcript the user finds useful.
 - Users actively use local-vs-cloud spaces (i.e. the local-first promise is exercised,
   not bypassed by syncing everything).
 - The single Flutter codebase keeps per-platform parity green (see the DS-check gate).

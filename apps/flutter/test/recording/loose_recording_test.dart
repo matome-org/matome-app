@@ -23,6 +23,7 @@ import 'package:matome_flutter/features/recordings/upload_queue.dart';
 import 'audio_recording_service_test.dart' show FakeRecorderBackend;
 import '../support/fake_parent_sync.dart';
 import '../support/verified_upload_repository_fake.dart';
+import '../support/fake_media_blob_store.dart';
 
 /// Local-first-spaces #102 W2 — AUDIO RECORDINGS land LOOSE behind the flag.
 ///
@@ -283,6 +284,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          mediaBlobStoreProvider.overrideWithValue(FakeMediaBlobStore()),
           currentOwnerIdProvider.overrideWithValue('1'),
           testParentSyncOverride(),
           audioRecordingServiceProvider.overrideWithValue(service),
@@ -401,5 +403,12 @@ class _StubUploadRepository extends RecordingsRepository
   _StubUploadRepository({required super.apiClient});
 
   @override
-  Future<void> uploadFile(UploadDescriptor upload, File file) async {}
+  Future<String> uploadStreamRange(
+    UploadRequest request,
+    Stream<List<int>> stream,
+    int length,
+  ) async {
+    await stream.drain<void>();
+    return 'etag-test';
+  }
 }

@@ -44,7 +44,6 @@ Future<void> _seedItem(
     db,
     id: id,
     title: title,
-    localPath: '/tmp/$id.m4a',
     createdAt: createdAt,
     mediaType: mediaType,
     matomeId: matomeId,

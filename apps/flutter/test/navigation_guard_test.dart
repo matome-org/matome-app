@@ -4,6 +4,49 @@ import 'package:matome_flutter/app/navigation_guard.dart';
 /// Mirrors the RN `navigationGuard.test` cases for `decideRedirect`.
 void main() {
   group('decideRedirect', () {
+    test('authenticated JWT without a ready Vault is gated on unlock', () {
+      expect(
+        decideRedirect(
+          isAuthenticated: true,
+          isLoading: false,
+          isVaultReady: false,
+          location: '/inbox',
+        ),
+        GuardTargets.unlock,
+      );
+      expect(
+        decideRedirect(
+          isAuthenticated: true,
+          isLoading: false,
+          isVaultReady: false,
+          location: GuardTargets.unlock,
+        ),
+        isNull,
+      );
+    });
+
+    test(
+      'ready Vault leaves unlock for home and signed-out cannot enter it',
+      () {
+        expect(
+          decideRedirect(
+            isAuthenticated: true,
+            isLoading: false,
+            isVaultReady: true,
+            location: GuardTargets.unlock,
+          ),
+          GuardTargets.home,
+        );
+        expect(
+          decideRedirect(
+            isAuthenticated: false,
+            isLoading: false,
+            location: GuardTargets.unlock,
+          ),
+          GuardTargets.welcome,
+        );
+      },
+    );
     test('returns null while loading (no decision yet)', () {
       expect(
         decideRedirect(isAuthenticated: false, isLoading: true, location: '/'),
@@ -11,15 +54,17 @@ void main() {
       );
       expect(
         decideRedirect(
-            isAuthenticated: true, isLoading: true, location: '/inbox'),
+          isAuthenticated: true,
+          isLoading: true,
+          location: '/inbox',
+        ),
         isNull,
       );
     });
 
     test('authed outside tabs/recording redirects to home (/inbox)', () {
       expect(
-        decideRedirect(
-            isAuthenticated: true, isLoading: false, location: '/'),
+        decideRedirect(isAuthenticated: true, isLoading: false, location: '/'),
         GuardTargets.home,
       );
     });
@@ -34,7 +79,10 @@ void main() {
       ]) {
         expect(
           decideRedirect(
-              isAuthenticated: true, isLoading: false, location: loc),
+            isAuthenticated: true,
+            isLoading: false,
+            location: loc,
+          ),
           isNull,
           reason: loc,
         );
@@ -49,7 +97,10 @@ void main() {
       for (final loc in ['/contacts', '/matome/mat_local_abc', '/matome/42']) {
         expect(
           decideRedirect(
-              isAuthenticated: true, isLoading: false, location: loc),
+            isAuthenticated: true,
+            isLoading: false,
+            location: loc,
+          ),
           isNull,
           reason: loc,
         );
@@ -62,7 +113,10 @@ void main() {
       for (final loc in ['/files', '/files/anything']) {
         expect(
           decideRedirect(
-              isAuthenticated: true, isLoading: false, location: loc),
+            isAuthenticated: true,
+            isLoading: false,
+            location: loc,
+          ),
           isNull,
           reason: loc,
         );
@@ -72,14 +126,18 @@ void main() {
     test('authed in nested tab stack stays put', () {
       expect(
         decideRedirect(
-            isAuthenticated: true,
-            isLoading: false,
-            location: '/inbox/settings'),
+          isAuthenticated: true,
+          isLoading: false,
+          location: '/inbox/settings',
+        ),
         isNull,
       );
       expect(
         decideRedirect(
-            isAuthenticated: true, isLoading: false, location: '/spaces/42'),
+          isAuthenticated: true,
+          isLoading: false,
+          location: '/spaces/42',
+        ),
         isNull,
       );
     });
@@ -87,9 +145,10 @@ void main() {
     test('authed in recording modal stays put', () {
       expect(
         decideRedirect(
-            isAuthenticated: true,
-            isLoading: false,
-            location: '/recording'),
+          isAuthenticated: true,
+          isLoading: false,
+          location: '/recording',
+        ),
         isNull,
       );
     });
@@ -98,7 +157,10 @@ void main() {
       for (final loc in ['/inbox', '/calendar/9', '/spaces', '/recording']) {
         expect(
           decideRedirect(
-              isAuthenticated: false, isLoading: false, location: loc),
+            isAuthenticated: false,
+            isLoading: false,
+            location: loc,
+          ),
           GuardTargets.welcome,
           reason: loc,
         );
@@ -107,8 +169,7 @@ void main() {
 
     test('unauthed on welcome stays put', () {
       expect(
-        decideRedirect(
-            isAuthenticated: false, isLoading: false, location: '/'),
+        decideRedirect(isAuthenticated: false, isLoading: false, location: '/'),
         isNull,
       );
     });
@@ -117,7 +178,10 @@ void main() {
       for (final loc in ['/login', '/signup']) {
         expect(
           decideRedirect(
-              isAuthenticated: false, isLoading: false, location: loc),
+            isAuthenticated: false,
+            isLoading: false,
+            location: loc,
+          ),
           isNull,
           reason: loc,
         );
@@ -128,7 +192,10 @@ void main() {
       for (final loc in ['/login', '/signup']) {
         expect(
           decideRedirect(
-              isAuthenticated: true, isLoading: false, location: loc),
+            isAuthenticated: true,
+            isLoading: false,
+            location: loc,
+          ),
           GuardTargets.home,
           reason: loc,
         );

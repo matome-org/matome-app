@@ -76,10 +76,13 @@ class WebKeyBundleCache {
 
     final json = jsonDecode(raw) as Map<String, dynamic>;
     return CachedKeyBundleSaltInfo(
-      wrappedDekPw: WrappedEnvelope.fromBase64(json['wrapped_dek_pw'] as String),
+      wrappedDekPw: WrappedEnvelope.fromBase64(
+        json['wrapped_dek_pw'] as String,
+      ),
       saltEnc: base64.decode(json['salt_enc'] as String),
-      kdfParams:
-          Argon2idParams.fromJson(json['kdf_params'] as Map<String, dynamic>),
+      kdfParams: Argon2idParams.fromJson(
+        json['kdf_params'] as Map<String, dynamic>,
+      ),
     );
   }
 

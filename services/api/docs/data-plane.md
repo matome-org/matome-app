@@ -93,10 +93,11 @@ Core discovers `GET /v1/capabilities` before creating a logical processing run.
 An input disabled by system policy stays `not_requested`; a policy-enabled input
 missing from, disabled by, or outside the processor's advertised bounds becomes
 `not_available` without an Oban dispatch. The in-repo stub advertises audio,
-image, document, and text fixture simulation. The optional audio adapter
+image, document, and text fixture simulation for deterministic local
+development. Production uses the private in-repo AI Core service, which
 advertises audio transcription only.
 
-Both Node processors persist the accepted v1 envelope before returning `202`,
+Both processors persist the accepted v1 envelope before returning `202`,
 deduplicate by `job_id` + `run_id` + `input_revision`, verify fetched byte count
 and SHA-256, and persist one terminal callback body before delivery. Callback
 transport retries reuse those exact bytes across failures and restarts. The
@@ -169,7 +170,7 @@ Set once per environment (do not rotate casually — invalidates sessions):
 | `ADMIN_OTP_PEPPER` | Independent random secret (minimum 32 bytes) for keyed admin OTP verification |
 | `ADMIN_IP_ALLOWLIST` | Optional soft IP tier for rate limits |
 | `ADMIN_TRUSTED_PROXIES` | CIDRs allowed to supply `X-Forwarded-For` for admin attribution |
-| `AI_ENGINE_ENDPOINT` / `AI_ENGINE_DISPATCH_TOKEN` / `AI_ENGINE_CALLBACK_SIGNING_SECRET` / `AI_ENGINE_CALLBACK_BASE_URL` | AI endpoint, outbound dispatch credential, independent per-run callback signing secret, and Core callback origin. Production URLs must use HTTPS and both credentials must be distinct non-default values of at least 32 bytes. |
+| `AI_ENGINE_ENDPOINT` / `AI_ENGINE_DISPATCH_TOKEN` / `AI_ENGINE_CALLBACK_SIGNING_SECRET` / `AI_ENGINE_CALLBACK_BASE_URL` | Compose uses the private `http://ai-core:8000/v1/jobs` dispatch endpoint. The callback base is the public HTTPS Core origin. Both credentials must be distinct non-default values of at least 32 bytes. |
 | Plus all **data-plane** vars above | Postgres + S3-compatible |
 
 Flutter Web build arg / runtime: `API_BASE_URL` must be the **browser-facing**
@@ -185,13 +186,15 @@ entrypoint (or an equivalent release eval) is configured.
 
 In `:prod`, missing `DATABASE_URL`, `SECRET_KEY_BASE`, `GUARDIAN_SECRET_KEY`,
 `STORAGE_S3_ENDPOINT`, storage keys, AI credentials, or secure AI URLs raises at
-boot (`config/runtime.exs`). Node processors additionally require an explicit
-durable data directory and reject non-HTTPS processor, media, and callback URLs.
+boot (`config/runtime.exs`). AI Core additionally uses an explicit durable data
+path and rejects non-HTTPS media and callback URLs in production. The sole HTTP
+production exception is Core's exact private `http://ai-core:8000/v1/jobs`
+dispatch URL.
 
 ### Deploy smoke checklist
 
-1. Point Dockploy at `services/api/Dockerfile` (prod release).
-2. Attach managed Postgres + S3-compatible store; set the full env matrix.
+1. Deploy `docker-compose.production.yml`, or point Dockploy at each production Dockerfile.
+2. Use its Postgres/MinIO services or attach managed equivalents; set the full env matrix.
 3. Confirm `STORAGE_S3_ENDPOINT` is the **public** URL browsers use for PUT/GET.
 4. Deploy Flutter Web with `API_BASE_URL` = public Core URL; set `CORS_ORIGINS`.
 5. Register → create file item → presign PUT → GET object → optional AI process.

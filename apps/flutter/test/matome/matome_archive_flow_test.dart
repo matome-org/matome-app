@@ -165,57 +165,65 @@ void main() {
   });
 
   testWidgets(
-      'archive stays local when the Core sync fails (offline-first, no rollback)',
-      (tester) async {
-    await _seed(db, id: 'm_fail');
+    'archive stays local when the Core sync fails (offline-first, no rollback)',
+    (tester) async {
+      await _seed(db, id: 'm_fail');
 
-    final c = container(
-      extra: [
-        matomeSyncServiceProvider.overrideWith(
-          (ref) => _FailingArchiveSyncService(ref, db),
-        ),
-      ],
-    );
+      final c = container(
+        extra: [
+          matomeSyncServiceProvider.overrideWith(
+            (ref) => _FailingArchiveSyncService(ref, db),
+          ),
+        ],
+      );
 
-    await tester.pumpWidget(_app(c, id: 'm_fail'));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_app(c, id: 'm_fail'));
+      await tester.pumpAndSettle();
 
-    await _openMenu(tester);
-    await tester.tap(find.byKey(const ValueKey('matome-action-archive')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('matome-archive-confirm')));
-    await tester.pumpAndSettle();
+      await _openMenu(tester);
+      await tester.tap(find.byKey(const ValueKey('matome-action-archive')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('matome-archive-confirm')));
+      await tester.pumpAndSettle();
 
-    // Offline-first (#1431, W-1): the local archive is AUTHORITATIVE and is NOT
-    // rolled back when the best-effort Core POST throws. The row stays archived;
-    // the next pull reconciles.
-    final row = await db.matomesDao.getById('m_fail');
-    expect(row!.archivedAt, isNotNull);
+      // Offline-first (#1431, W-1): the local archive is AUTHORITATIVE and is NOT
+      // rolled back when the best-effort Core POST throws. The row stays archived;
+      // the next pull reconciles.
+      final row = await db.matomesDao.getById('m_fail');
+      expect(row!.archivedAt, isNotNull);
 
-    // The Core failure is NON-FATAL: the normal archived + Undo affordance is
-    // still surfaced (identical to the online happy path — no error path).
-    expect(find.text(t.matome.actions.archived), findsOneWidget);
-    expect(find.text(t.matome.actions.undo), findsOneWidget);
-  });
+      // The Core failure is NON-FATAL: the normal archived + Undo affordance is
+      // still surfaced (identical to the online happy path — no error path).
+      expect(find.text(t.matome.actions.archived), findsOneWidget);
+      expect(find.text(t.matome.actions.undo), findsOneWidget);
+    },
+  );
 
   testWidgets(
-      'archived matome detail shows the archived banner with a Restore action',
-      (tester) async {
-    await _seed(db, id: 'm_banner', archived: true);
+    'archived matome detail shows the archived banner with a Restore action',
+    (tester) async {
+      await _seed(db, id: 'm_banner', archived: true);
 
-    await tester.pumpWidget(_app(container(), id: 'm_banner'));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_app(container(), id: 'm_banner'));
+      await tester.pumpAndSettle();
 
-    // I-1 (#1431): an archived matome is still openable via /matome/:id, so the
-    // detail header surfaces an "archived" banner with a Restore affordance.
-    expect(find.byKey(const ValueKey('matome-archived-banner')), findsOneWidget);
-    expect(find.text(t.matome.actions.archivedBanner), findsOneWidget);
+      // I-1 (#1431): an archived matome is still openable via /matome/:id, so the
+      // detail header surfaces an "archived" banner with a Restore affordance.
+      expect(
+        find.byKey(const ValueKey('matome-archived-banner')),
+        findsOneWidget,
+      );
+      expect(find.text(t.matome.actions.archivedBanner), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('matome-archived-restore')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('matome-archived-restore')));
+      await tester.pumpAndSettle();
 
-    // Restore clears archived_at and the banner is gone.
-    expect((await db.matomesDao.getById('m_banner'))!.archivedAt, isNull);
-    expect(find.byKey(const ValueKey('matome-archived-banner')), findsNothing);
-  });
+      // Restore clears archived_at and the banner is gone.
+      expect((await db.matomesDao.getById('m_banner'))!.archivedAt, isNull);
+      expect(
+        find.byKey(const ValueKey('matome-archived-banner')),
+        findsNothing,
+      );
+    },
+  );
 }
