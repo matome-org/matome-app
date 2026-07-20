@@ -141,7 +141,8 @@ description = "Flutter lab Home on web (Chromium) → local Core API. Run `mise 
 run = """
 set -e
 . ./dev.ports.env
-if ! fuser -s "$MATOME_CORE_PORT/tcp" 2>/dev/null; then
+if ! curl --fail --silent --show-error --connect-timeout 2 \
+  "http://127.0.0.1:$MATOME_CORE_PORT/health" >/dev/null; then
   echo "✗ Core API not on :$MATOME_CORE_PORT. Boot the backend first: mise run backend"
   exit 1
 fi
@@ -159,7 +160,8 @@ description = "Flutter lab Home on Linux desktop → local Core API. Run `mise r
 run = """
 set -e
 . ./dev.ports.env
-if ! fuser -s "$MATOME_CORE_PORT/tcp" 2>/dev/null; then
+if ! curl --fail --silent --show-error --connect-timeout 2 \
+  "http://127.0.0.1:$MATOME_CORE_PORT/health" >/dev/null; then
   echo "✗ Core API not on :$MATOME_CORE_PORT. Boot the backend first: mise run backend"
   exit 1
 fi
@@ -187,7 +189,8 @@ description = "Flutter lab Home on pixel7 emulator → local Core API. Run `mise
 run = """
 set -e
 . ./dev.ports.env
-if ! fuser -s "$MATOME_CORE_PORT/tcp" 2>/dev/null; then
+if ! curl --fail --silent --show-error --connect-timeout 2 \
+  "http://127.0.0.1:$MATOME_CORE_PORT/health" >/dev/null; then
   echo "✗ Core API not on :$MATOME_CORE_PORT. Boot the backend first: mise run backend"
   exit 1
 fi
