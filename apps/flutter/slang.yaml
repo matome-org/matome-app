@@ -1,0 +1,11 @@
+base_locale: en
+fallback_strategy: base_locale
+input_directory: lib/i18n
+input_file_pattern: .i18n.json
+output_directory: lib/i18n
+output_file_name: strings.g.dart
+locale_handling: true
+flutter_integration: true
+# Bundle all locales eagerly (no deferred libraries) so setLocaleSync works in
+# tests and on web without an async load step.
+lazy: false

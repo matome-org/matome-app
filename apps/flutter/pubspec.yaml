@@ -1,0 +1,295 @@
+name: matome_flutter
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  # Floor is 3.12.0 (Flutter 3.44.0) so the containerized web build — pinned to
+  # cirruslabs/flutter:3.44.0, which ships Dart 3.12.0 — passes `pub get`. Host
+  # dev on Dart 3.12.1 still satisfies this. Raise when the web image bumps.
+  sdk: ^3.12.0
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+  # Material/Cupertino localizations for the supported locales (en/ja).
+  flutter_localizations:
+    sdk: flutter
+
+  # Package-neutral meeting-capture facade (contract + platform interface).
+  # Only the FACADE is a real dependency; the Linux implementation is endorsed
+  # transitively and pulled in per-platform, so its ffmpeg/pactl code never
+  # enters Windows/macOS bundles. See packages/meeting_capture.
+  meeting_capture:
+    path: packages/meeting_capture
+  matome_vault:
+    path: ../../packages/matome_vault
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+
+  # HTTP client for the Phoenix Core API (auth + recordings).
+  dio: ^5.7.0
+  # Secure storage for the Guardian JWT access/refresh tokens.
+  # Pinned to v10+: v9's flutter_secure_storage_linux (1.2.2..1.2.x) wrote the
+  # secret blob as INDENTED, multi-line JSON ("Fix json.dump with indentations").
+  # On a Linux desktop whose GNOME keyring has an empty password (autologin +
+  # LUKS), that multi-line value fails the keyring parser, so gnome-keyring
+  # rejects the WHOLE keyring file on next boot — logging the user out of every
+  # stored credential, not just matome's (upstream issue #951). v10 pulls
+  # flutter_secure_storage_linux >=2.0.0, which reverted to single-line JSON and
+  # closes the corruption path. Reads stay backward-compatible (json decode
+  # accepts both forms), so existing secrets survive the upgrade.
+  flutter_secure_storage: ^10.0.0
+  # Device model / hostname for auth session metadata (`device` on login).
+  device_info_plus: ^11.3.0
+  # State management: AsyncValue-based providers for session + recordings.
+  flutter_riverpod: ^2.6.1
+  # Declarative routing: app shell (tabs + FAB modal + per-tab stacks) and the
+  # auth-gated nav guard (ported from apps/mobile decideRedirect).
+  go_router: ^14.6.2
+  # Type-safe i18n (en/ja) — nested keys mirror apps/mobile/locales/*.ts.
+  # Runtime half of slang; codegen lives in slang_flutter / build_runner.
+  slang: ^4.4.0
+  slang_flutter: ^4.4.0
+
+  # Offline-first local persistence (F2). Cross-platform SQLite:
+  #   - native (mobile/desktop) via sqlite3_flutter_libs,
+  #   - web via the drift wasm worker + sqlite3.wasm asset.
+  # The reactive query layer + typed DAOs replicate the apps/mobile expo-sqlite
+  # schema (recordings / recording_drafts / workspaces) and its migration
+  # history (user_version 1..4).
+  drift: ^2.20.0
+  # path_provider resolves the per-platform app-documents dir for the native DB
+  # file. drift_flutter wires native + web connections with one helper.
+  drift_flutter: ^0.2.0
+  # Direct dependency so the web connection can build an in-memory sqlite3 VFS
+  # (WasmSqlite3 + InMemoryFileSystem) for the online-only web client — see
+  # core/db/connection_web.dart (.docs/internal/architecture.md §11 D1).
+  # Already pulled transitively by
+  # drift; pinned here to make the direct import explicit.
+  sqlite3: ^2.4.0
+  # Direct dependency (task #1860, plan #131 web wave): the OPFS-encrypted
+  # web store (core/db/web_opfs_blob_store.dart) talks to the File System
+  # Access API (navigator.storage.getDirectory / createWritable) directly via
+  # package:web's typed JS interop bindings. Already pulled transitively by
+  # sqlite3/drift's own wasm support; pinned here for the same reason sqlite3
+  # is pinned above — to make the direct import explicit rather than relying
+  # on an undeclared transitive dependency.
+  web: ^1.1.0
+  # `Uint8Buffer` used directly to pre-seed/read back the in-memory sqlite3
+  # VFS's file bytes for the OPFS-encrypted web store (task #1860). Already
+  # pulled transitively by sqlite3's own `InMemoryFileSystem`; pinned here for
+  # the same reason sqlite3/web are pinned above.
+  typed_data: ^1.3.0
+  path_provider: ^2.1.4
+  # Bundles native sqlite3 for Android/iOS/desktop. The Linux CMake build
+  # deliberately replaces this plugin target's stock amalgamation with pinned
+  # SQLCipher and emits one libmatome_sqlcipher.so; see linux/CMakeLists.txt.
+  # Android packages SQLCipher separately as a direct, fixed Gradle AAR and the
+  # Matome path explicitly opens its distinct libsqlcipher.so soname.
+  sqlite3_flutter_libs: ^0.5.24
+  # NOTE (#815 at-rest encryption): `sqlcipher_flutter_libs` cannot be co-built
+  # with `drift_flutter` in this version set:
+  #   * Android — it declares the SAME plugin namespace
+  #     (`eu.simonbinder.sqlite3_flutter_libs`) as the `sqlite3_flutter_libs`
+  #     that `drift_flutter` force-pulls → manifest-merger collision.
+  #   * Linux  — its CMake forces `OPENSSL_USE_STATIC_LIBS ON`; distros that
+  #     ship only shared OpenSSL (e.g. Arch) fail `find_package(OpenSSL)`.
+  # Linux therefore reuses the existing plugin target with SQLCipher source;
+  # Android depends directly on net.zetetic:sqlcipher-android:4.10.0 without
+  # registering its conflicting Flutter plugin. Other operating systems remain
+  # out of scope.
+
+  # package:logging — used directly so the log-redaction guard (#815) can
+  # install a root-logger listener that strips `?token=<jwt>` out of any log
+  # record before it reaches a sink. Pinned explicitly (the transitive source,
+  # phoenix_socket, was removed with task #1830 / W4).
+  logging: ^1.2.0
+
+  # Audio capture (F3 de-risk). Single native recorder with a true
+  # pause()/resume() cycle that appends to the SAME underlying file, plus an
+  # amplitude (metering) stream for the waveform. Mirrors the apps/mobile
+  # expo-audio AudioRecorder model (start/stop/pause/resume, one file/session).
+  # Platform note (documented in audio_recording_service.dart): Android/iOS
+  # capture is fully supported; web uses MediaRecorder (mic only over a secure
+  # origin); Linux desktop has NO record backend, so capture degrades to a
+  # documented no-op there.
+  record: ^7.0.0
+  # Duration probe + playback helper for finalized audio files. Used by
+  # getAudioDurationSeconds to read the real (summed) session duration off the
+  # finalized file rather than trusting the live status poll. Also drives the
+  # Details (S2) audio player: play/pause, position/duration, scrubber.
+  just_audio: ^0.9.42
+  # Desktop (Linux/Windows) playback backend (#870, plan #46 W1). just_audio
+  # 0.9.x ships NO Linux/Windows native backend, so `setFilePath`/play AND the
+  # duration probe silently no-op there — the user (Linux desktop) heard no
+  # audio. just_audio_media_kit endorses just_audio on Linux/Windows by bridging
+  # it onto media_kit (libmpv). Selected per-platform behind the AudioPlayback
+  # abstraction (lib/core/audio/) + JustAudioMediaKit.ensureInitialized() in
+  # main.dart. RUNTIME DEP: media_kit needs libmpv on Linux (Arch: `mpv`); the
+  # libs are pulled by media_kit_libs_linux/windows below.
+  just_audio_media_kit: ^2.0.6
+  media_kit_libs_linux: ^1.1.3
+  media_kit_libs_windows_audio: ^1.0.9
+
+  # Markdown rendering for the Details (S2) Summary/Notes/Transcript tabs.
+  # Renders persisted markdown (headings, bold/italic, lists, checkboxes) in
+  # preview mode; the edit-mode toolbar (insertMarkdown helpers) writes the
+  # same markdown back. Mirrors apps/mobile react-native-markdown-display.
+  # flutter_markdown was discontinued; flutter_markdown_plus is the maintained
+  # drop-in fork (same MarkdownBody API).
+  flutter_markdown_plus: ^1.0.3
+
+  # File picker for the Inbox upload flow (S1, #780): pick an audio/image/doc
+  # file → create a Core recording → upload via the F4 pipeline. Cross-platform
+  # (android/web/linux). Mirrors apps/mobile uploadRecordingService's picker.
+  # v10 compiles against a current Android SDK (v8's android-34 module fails the
+  # AAR metadata check against the lifecycle plugin Flutter 3.44 ships).
+  file_picker: ^10.0.0
+  # Launches approved local files on desktop and fresh HTTPS descriptors on
+  # native clients. Web uses a synchronous reserved tab via package:web.
+  url_launcher: ^6.3.2
+
+  # UUID v4 generator for local-first recording ids (`rec_local_<uuid>`),
+  # mirroring the workspace local-id precedent. Used by the id-minter helper
+  # (lib/features/recordings/recording_ids.dart) so a recording persists with a
+  # stable local PK before any Core id is known. Already pulled in transitively;
+  # pinned here to make the direct dependency explicit.
+  uuid: ^4.5.3
+
+  # Envelope-encryption crypto core (#1849, plan #131 W1): pure-Dart Argon2id
+  # KDF (RFC 9106) + AES-256-GCM AEAD, both from `package:cryptography/dart.dart`
+  # (the `Dart*` classes are forced pure-Dart implementations with NO platform
+  # channel / dart:ffi plugin — they run identically under `flutter test` on
+  # any host, which this layer's zero-platform-deps constraint requires). Used
+  # by lib/core/crypto/ only; not yet wired into live storage.
+  cryptography: ^2.9.0
+  # Incremental (streaming) SHA-256 for the re-encrypt migration's
+  # backup/verify checksums (task #1856, plan #131 W4) — `sha256
+  # .startChunkedConversion` hashes a file chunk-by-chunk with O(1) memory,
+  # matching `media_cipher.dart`'s own never-buffer-the-whole-file discipline.
+  # Already pulled in transitively (via other deps); pinned here to make the
+  # direct dependency explicit.
+  crypto: ^3.0.7
+  # `AccumulatorSink` — the `Sink<Digest>` that collects
+  # `sha256.startChunkedConversion`'s output above. Already pulled in
+  # transitively; pinned here to make the direct dependency explicit.
+  convert: ^3.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  test: ^1.26.3
+
+  # Linux meeting-capture implementation — TEST-ONLY. The live meeting e2e
+  # (test/recordings/live_meeting_processing_e2e_test.dart) drives the real
+  # ffmpeg/pactl backend directly. dev_dependencies are stripped from
+  # `flutter build`, so this does NOT put Linux code into release bundles, and
+  # it declares only the linux platform so it contributes no registrant
+  # elsewhere. No shipped app source may import this package (leak-guard grep).
+  meeting_capture_linux:
+    path: packages/meeting_capture_linux
+
+  # On-device integration test harness. Used by the F3 audio de-risk
+  # (integration_test/audio_recording_live_test.dart) to drive a REAL native
+  # recorder on the Android emulator and prove start→pause→resume→finish yields
+  # one continuous file with the summed duration.
+  integration_test:
+    sdk: flutter
+
+  # Mock the dio HTTP adapter so tests don't require a live backend.
+  http_mock_adapter: ^0.6.1
+
+  # Virtual clock for deterministic timer/timeout tests (poll-loop + 10-min
+  # processing timeout in the recording-result waiter).
+  fake_async: ^1.3.1
+
+  # slang i18n codegen: turns lib/i18n/*.i18n.json into strongly-typed Dart.
+  slang_build_runner: ^4.4.0
+  build_runner: ^2.4.13
+
+  # Drift code generator (produces the *.g.dart database/table glue).
+  drift_dev: ^2.20.0
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+  alchemist: ^0.14.0
+
+  # Test-only platform-interface seams. The add-photo e2e test
+  # (test/matome/matome_add_photo_e2e_test.dart) fakes the path_provider and
+  # file_picker plugin channels via MockPlatformInterfaceMixin, so it imports
+  # these interface packages directly. They resolve transitively at runtime, but
+  # a direct test-only import must be a declared dependency
+  # (depend_on_referenced_packages); pinned to the resolved lock versions.
+  path_provider_platform_interface: ^2.1.2
+  plugin_platform_interface: ^2.1.8
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section, like this:
+  # assets:
+  #   - images/a_dot_burr.jpeg
+  #   - images/a_dot_ham.jpeg
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # Matome type system. Latin display/body are variable fonts (Flutter maps
+  # `fontWeight` onto the `wght` axis); Zen Kaku Gothic New is the bundled
+  # Japanese face wired as `fontFamilyFallback` so JA glyphs render in a
+  # deliberate gothic instead of the platform default.
+  fonts:
+    - family: Schibsted Grotesk
+      fonts:
+        - asset: assets/fonts/SchibstedGrotesk.ttf
+    - family: Hanken Grotesk
+      fonts:
+        - asset: assets/fonts/HankenGrotesk.ttf
+    - family: Zen Kaku Gothic New
+      fonts:
+        - asset: assets/fonts/ZenKakuGothicNew-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/ZenKakuGothicNew-Bold.ttf
+          weight: 700
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package

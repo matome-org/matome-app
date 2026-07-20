@@ -1,0 +1,1080 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:matome_flutter/core/db/app_database.dart';
+import 'package:matome_flutter/core/db/recording_card.dart';
+import 'package:matome_flutter/core/http/api_client.dart';
+import 'package:matome_flutter/core/http/token_store.dart';
+import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/details/audio_player_bar.dart';
+import 'package:matome_flutter/features/details/file_detail_screen.dart';
+import 'package:matome_flutter/features/details/file_view.dart';
+import 'package:matome_flutter/features/documents/document_open_policy.dart';
+import 'package:matome_flutter/features/documents/document_open_service.dart';
+import 'package:matome_flutter/features/items/matome_item_type.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
+import 'package:matome_flutter/features/recordings/recordings_repository.dart';
+import 'package:matome_flutter/i18n/strings.g.dart';
+import 'package:matome_flutter/ui/file_type_chip.dart';
+
+import '../../support/item_fixtures.dart';
+
+/// Builds an image [RecordingItem]. The path points at a non-existent file on
+/// purpose: `Image.file` falls back to its `errorBuilder` in the test
+/// environment, which is fine — these tests assert structure/navigation, not
+/// pixel decoding.
+RecordingItem _imageItem({
+  String id = 'rec_img',
+  String title = 'Beach sunset',
+  String? notes,
+  String? workspaceName,
+  String? blobId = 'fixture-image-blob',
+}) {
+  return RecordingItem(
+    id: id,
+    title: title,
+    timestamp: '9:00 AM',
+    duration: '0:00',
+    badge: 'Inbox',
+    isProcessing: false,
+    mediaType: 'image/jpeg',
+    processingStatus: 'done',
+    notes: notes,
+    workspaceName: workspaceName,
+    blobId: blobId,
+  );
+}
+
+class _HostDocumentOpenService extends DocumentOpenService {
+  _HostDocumentOpenService()
+    : super(
+        descriptorSource: (_) => throw UnimplementedError(),
+        launcher: _UnusedDocumentLauncher(),
+        environment: DocumentOpenEnvironment.mobile,
+      );
+
+  Future<DocumentOpenResult> Function(DocumentOpenRequest request) handler =
+      (_) async => DocumentOpenResult.unavailable;
+  final List<DocumentOpenRequest> requests = [];
+
+  @override
+  Future<DocumentOpenResult> open(DocumentOpenRequest request) {
+    requests.add(request);
+    return handler(request);
+  }
+}
+
+class _UnusedDocumentLauncher implements ExternalDocumentLauncher {
+  @override
+  ExternalOpenReservation reserve() => throw UnimplementedError();
+}
+
+Future<void> _pump(WidgetTester tester, RecordingItem item) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: buildLightTheme(),
+      home: TranslationProvider(child: FileDetailScreen(item: item)),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  setUp(() => LocaleSettings.setLocaleSync(AppLocale.en));
+
+  testWidgets(
+    'image host renders FileView with an image media header + Contents + Notes',
+    (tester) async {
+      await _pump(tester, _imageItem(notes: 'My own note.'));
+
+      // The presentational FileView is the body of the host.
+      expect(find.byType(FileView), findsOneWidget);
+      // Image media header (the inline framed preview) is present.
+      expect(
+        find.byKey(const ValueKey('file-detail-image-header')),
+        findsOneWidget,
+      );
+      // Contents section is shown (image -> "Description") and is honestly
+      // empty when this fixture has no typed processing output.
+      // It can sit below the fold under the framed media header — the ListView
+      // builds all children eagerly, so assert structure regardless of offstage.
+      expect(
+        find.byKey(const ValueKey('file-view-contents'), skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(find.text('Description', skipOffstage: false), findsOneWidget);
+      // Notes section is present and seeded.
+      expect(
+        find.byKey(const ValueKey('file-view-notes'), skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(find.text('My own note.', skipOffstage: false), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'image host Contents is honestly empty when no typed output exists',
+    (tester) async {
+      await _pump(tester, _imageItem());
+
+      // The honest terminal empty state, NOT a processing claim.
+      expect(
+        find.byKey(
+          const ValueKey('file-view-contents-empty'),
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('No description yet', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(find.text('Describing…', skipOffstage: false), findsNothing);
+      expect(find.text('Transcribing…', skipOffstage: false), findsNothing);
+      // No active run -> no processing spinner / retry inside Contents.
+      expect(
+        find.byKey(
+          const ValueKey('file-view-contents-processing'),
+          skipOffstage: false,
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('media header has no tap action when the file path is missing', (
+    tester,
+  ) async {
+    await _pump(tester, _imageItem(blobId: null));
+
+    await tester.tap(find.byKey(const ValueKey('file-detail-image-header')));
+    await tester.pumpAndSettle();
+
+    // No viewer is pushed for a path-less Item — it just shows the placeholder.
+    expect(
+      find.byKey(const ValueKey('file-detail-fullscreen-viewer')),
+      findsNothing,
+    );
+  });
+
+  test('mediaKindOf maps media types to the right FileMediaKind', () {
+    expect(FileDetailScreen.mediaKindOf(_imageItem()), FileMediaKind.image);
+
+    final audio = RecordingItem(
+      id: 'rec_a',
+      title: 'Standup',
+      timestamp: '9:00 AM',
+      duration: '0:30',
+      badge: 'Inbox',
+      isProcessing: false,
+      mediaType: 'audio/m4a',
+      processingStatus: 'done',
+    );
+    expect(FileDetailScreen.mediaKindOf(audio), FileMediaKind.audio);
+
+    final video = RecordingItem(
+      id: 'rec_v',
+      title: 'Demo clip',
+      timestamp: '9:00 AM',
+      duration: '0:30',
+      badge: 'Inbox',
+      isProcessing: false,
+      mediaType: 'video/mp4',
+      processingStatus: 'done',
+    );
+    expect(FileDetailScreen.mediaKindOf(video), FileMediaKind.video);
+  });
+
+  test('item-driven file detail dispatch is pinned to MatomeItemType.file', () {
+    final item = RecordingItem(
+      id: 'file-1',
+      title: 'Photo',
+      timestamp: 'Now',
+      duration: '',
+      badge: 'Inbox',
+      isProcessing: false,
+      mediaType: 'image',
+      processingStatus: 'done',
+      itemType: MatomeItemType.file,
+    );
+
+    expect(item.itemType, MatomeItemType.file);
+    expect(FileDetailScreen.mediaKindOf(item), FileMediaKind.image);
+  });
+
+  group('FileDetailScreen.imageById — typed outputs and honest states', () {
+    late AppDatabase db;
+    late ProviderContainer container;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
+      );
+    });
+
+    tearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+
+    Widget app(String id) => UncontrolledProviderScope(
+      container: container,
+      child: TranslationProvider(
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: FileDetailScreen.imageById(id: id),
+        ),
+      ),
+    );
+
+    testWidgets(
+      'ready renders description, OCR, and summary while preserving notes',
+      (tester) async {
+        await insertTestFileItem(
+          db,
+          id: 'image-ready',
+          coreId: 42,
+          mediaType: 'image',
+          description: 'A whiteboard covered in launch plans.',
+          ocrText: 'LAUNCH FRIDAY',
+          summary: 'The team is planning a Friday launch.',
+          notes: 'Ask Morgan about the final checklist.',
+          processingState: ProcessingState.succeeded,
+          processingRunId: 'run-image-ready',
+          processingAttempt: 1,
+        );
+
+        await tester.pumpWidget(app('image-ready'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-ready')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('A whiteboard covered in launch plans.'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('LAUNCH FRIDAY'), findsOneWidget);
+        expect(
+          find.textContaining('The team is planning a Friday launch.'),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('file-view-notes')),
+            matching: find.text('Ask Morgan about the final checklist.'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('file-detail-image-header')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    for (final testCase
+        in <
+          ({ProcessingState state, String key, String label, String? summary})
+        >[
+          (
+            state: ProcessingState.queued,
+            key: 'file-view-contents-processing',
+            label: 'Queued',
+            summary: null,
+          ),
+          (
+            state: ProcessingState.processing,
+            key: 'file-view-contents-processing',
+            label: 'Describing…',
+            summary: null,
+          ),
+          (
+            state: ProcessingState.partial,
+            key: 'file-view-contents-partial',
+            label: 'Partial',
+            summary: 'Only the image summary completed.',
+          ),
+          (
+            state: ProcessingState.failed,
+            key: 'file-view-contents-failed',
+            label: 'Failed',
+            summary: null,
+          ),
+          (
+            state: ProcessingState.notAvailable,
+            key: 'file-view-contents-failed',
+            label: 'Not available',
+            summary: null,
+          ),
+        ]) {
+      testWidgets(
+        '${testCase.state.wireName} projects the Core state truthfully',
+        (tester) async {
+          await insertTestFileItem(
+            db,
+            id: 'image-state',
+            coreId: 42,
+            mediaType: 'image',
+            summary: testCase.summary,
+            notes: 'User note remains separate.',
+            processingState: testCase.state,
+            processingRunId: 'run-image-state',
+            processingAttempt: 1,
+            processingErrorCode: testCase.state == ProcessingState.failed
+                ? 'processor_unavailable'
+                : null,
+          );
+
+          await tester.pumpWidget(app('image-state'));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+
+          expect(find.byKey(ValueKey(testCase.key)), findsOneWidget);
+          expect(find.text(testCase.label), findsWidgets);
+          if (testCase.summary != null) {
+            expect(find.textContaining(testCase.summary!), findsOneWidget);
+          }
+          expect(
+            find.descendant(
+              of: find.byKey(const ValueKey('file-view-notes')),
+              matching: find.text('User note remains separate.'),
+            ),
+            findsOneWidget,
+          );
+        },
+      );
+    }
+  });
+
+  // ── Document host (#1450): row-only load, NEVER the audio host ──────────────
+  group('FileDetailScreen.documentById (document host)', () {
+    late AppDatabase db;
+    late ProviderContainer container;
+    late _HostDocumentOpenService openService;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      openService = _HostDocumentOpenService();
+      container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+          documentOpenServiceProvider.overrideWithValue(openService),
+        ],
+      );
+    });
+
+    tearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+
+    Future<void> seedDoc(String id) => insertTestFileItem(
+      db,
+      id: id,
+      title: 'Quarterly report',
+      filename: 'report.pdf',
+      contentType: 'application/pdf',
+      openPolicy: 'external',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      mediaType: 'document',
+    );
+
+    Widget app(String id) => UncontrolledProviderScope(
+      container: container,
+      child: TranslationProvider(
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: FileDetailScreen.documentById(id: id),
+        ),
+      ),
+    );
+
+    testWidgets(
+      'loads the row and renders the FileView document host (NOT the audio '
+      'host: no AudioPlayerBar, no audio downloadUrl awaited)',
+      (tester) async {
+        await seedDoc('rec_doc');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        // The presentational FileView is the body of the host.
+        expect(find.byType(FileView), findsOneWidget);
+        // It is the DOCUMENT host: the Contents tag is "Document" (the doc
+        // kind's default tag), NOT "Transcript" (audio) or "Description" (image).
+        expect(find.text('Document', skipOffstage: false), findsOneWidget);
+        expect(find.text('Transcript', skipOffstage: false), findsNothing);
+        // The audio host's player bar must NEVER appear for a document.
+        expect(find.byType(AudioPlayerBar), findsNothing);
+        // Title from the loaded row.
+        expect(find.text('Quarterly report'), findsWidgets);
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('file-type-chip')),
+            matching: find.text('report.pdf'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'renders extracted plain text and summary while preserving user notes',
+      (tester) async {
+        await insertTestFileItem(
+          db,
+          id: 'doc-ready',
+          coreId: 43,
+          title: 'Quarterly report',
+          filename: 'report.pdf',
+          mediaType: 'document',
+          extractedText: 'Revenue grew 12% year over year.',
+          summary: 'A concise quarterly performance summary.',
+          notes: 'Ask Finance about the regional split.',
+          processingState: ProcessingState.succeeded,
+          processingRunId: 'run-doc-ready',
+          processingAttempt: 1,
+        );
+
+        await tester.pumpWidget(app('doc-ready'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-ready')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Revenue grew 12% year over year.'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('A concise quarterly performance summary.'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Ask Finance about the regional split.'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'renders not available without fixture claims when document capability is absent',
+      (tester) async {
+        await insertTestFileItem(
+          db,
+          id: 'doc-unavailable',
+          coreId: 44,
+          title: 'Stored report',
+          filename: 'stored.pdf',
+          mediaType: 'document',
+          processingState: ProcessingState.notAvailable,
+          processingRunId: 'run-doc-unavailable',
+          processingAttempt: 1,
+        );
+
+        await tester.pumpWidget(app('doc-unavailable'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-failed')),
+          findsOneWidget,
+        );
+        expect(find.text('Not available'), findsWidgets);
+        expect(find.textContaining('[FIXTURE]'), findsNothing);
+        expect(find.byKey(const ValueKey('file-type-chip')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'renders the FileTypeChip media header: type icon from the persisted '
+      'original_extension (.pdf) + file name + external Open action',
+      (tester) async {
+        await seedDoc('rec_doc');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        // The doc media header is the FileTypeChip (not an image/audio header).
+        expect(
+          find.byKey(const ValueKey('file-type-chip'), skipOffstage: false),
+          findsOneWidget,
+        );
+        // Type icon resolves from the persisted `original_extension` ('pdf').
+        expect(
+          find.byIcon(FileTypeChip.iconForExtension('pdf')),
+          findsOneWidget,
+        );
+        // The chip shows the file name.
+        expect(
+          find.byKey(
+            const ValueKey('file-type-chip-name'),
+            skipOffstage: false,
+          ),
+          findsOneWidget,
+        );
+        // The policy-derived Open affordance is present and actionable.
+        expect(find.text(t.fileView.fileChip.open), findsOneWidget);
+        final open = tester.widget<TextButton>(
+          find.byKey(const ValueKey('file-type-chip-open')),
+        );
+        expect(open.onPressed, isNotNull);
+      },
+    );
+
+    testWidgets('sends row facts and renders pending then success', (
+      tester,
+    ) async {
+      final pending = Completer<DocumentOpenResult>();
+      openService.handler = (_) => pending.future;
+      await seedDoc('doc-open');
+      await tester.pumpWidget(app('doc-open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('file-type-chip-loading')),
+        findsOneWidget,
+      );
+      final request = openService.requests.single;
+      expect(request.coreId, isNull);
+      expect(request.extension, 'pdf');
+      expect(request.mimeType, 'application/pdf');
+      expect(request.openPolicy, DocumentOpenPolicy.external);
+
+      pending.complete(DocumentOpenResult.openedRemote);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('file-type-chip-loading')),
+        findsNothing,
+      );
+      expect(find.text(t.fileView.fileChip.open), findsOneWidget);
+    });
+
+    testWidgets(
+      'transient failure retries and thrown service errors leave loading',
+      (tester) async {
+        var calls = 0;
+        openService.handler = (_) async {
+          calls += 1;
+          if (calls == 1) throw StateError('unexpected provider failure');
+          return DocumentOpenResult.openedRemote;
+        };
+        await seedDoc('doc-retry');
+        await tester.pumpWidget(app('doc-retry'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('file-type-chip-loading')),
+          findsNothing,
+        );
+        expect(find.text(t.common.retry), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('file-type-chip-error')),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+        await tester.pumpAndSettle();
+        expect(calls, 2);
+        expect(find.text(t.common.retry), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'policy labels, warning, blocked, and unavailable stay stable',
+      (tester) async {
+        await insertTestFileItem(
+          db,
+          id: 'doc-warning',
+          filename: 'page.html',
+          originalExtension: 'html',
+          contentType: 'text/html',
+          mediaType: 'document',
+          openPolicy: 'attachment_only',
+        );
+        await tester.pumpWidget(app('doc-warning'));
+        await tester.pumpAndSettle();
+        expect(find.text(t.fileView.fileChip.download), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('file-type-chip-warning')),
+          findsOneWidget,
+        );
+
+        await insertTestFileItem(
+          db,
+          id: 'doc-blocked',
+          filename: 'setup.exe',
+          originalExtension: 'exe',
+          mediaType: 'document',
+          openPolicy: 'blocked',
+        );
+        await tester.pumpWidget(app('doc-blocked'));
+        await tester.pumpAndSettle();
+        expect(find.text(t.fileView.fileChip.unavailable), findsOneWidget);
+        final blocked = tester.widget<TextButton>(
+          find.byKey(const ValueKey('file-type-chip-open')),
+        );
+        expect(blocked.onPressed, isNull);
+
+        openService.handler = (_) async => DocumentOpenResult.unavailable;
+        await seedDoc('doc-unavailable-open');
+        await tester.pumpWidget(app('doc-unavailable-open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('file-type-chip-open')));
+        await tester.pumpAndSettle();
+        expect(find.text(t.fileView.fileChip.unavailable), findsOneWidget);
+        expect(find.text(t.common.retry), findsNothing);
+        expect(
+          find.byKey(const ValueKey('file-type-chip-error')),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'survives a go_router-style rebuild (id is in the constructor, no '
+      '`state.extra!` null-check crash)',
+      (tester) async {
+        await seedDoc('rec_doc');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+        expect(find.byType(FileView), findsOneWidget);
+
+        // Force a full rebuild of the route subtree — the failure mode the image
+        // route already fixed was `state.extra!` throwing after a rebuild drops
+        // `extra`. The id lives in the constructor (from the path param), so the
+        // host re-resolves the row cleanly.
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(FileView), findsOneWidget);
+        expect(find.text('Document', skipOffstage: false), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('missing row renders an honest fallback, not a crash', (
+      tester,
+    ) async {
+      await tester.pumpWidget(app('does_not_exist'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(AudioPlayerBar), findsNothing);
+    });
+  });
+
+  group('FileDetailScreen.videoById (video host)', () {
+    late AppDatabase db;
+    late ProviderContainer container;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
+      );
+    });
+
+    tearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+
+    Future<void> seedVideo(String id) => insertTestFileItem(
+      db,
+      id: id,
+      title: 'Launch clip',
+      filename: 'launch.mp4',
+      durationSeconds: 5,
+      createdAt: DateTime(2026, 7, 2).millisecondsSinceEpoch,
+      mediaType: 'video',
+    );
+
+    Widget app(String id) => UncontrolledProviderScope(
+      container: container,
+      child: TranslationProvider(
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: FileDetailScreen.videoById(id: id),
+        ),
+      ),
+    );
+
+    testWidgets('loads the row and renders video without the audio host', (
+      tester,
+    ) async {
+      await seedVideo('rec_video');
+      await tester.pumpWidget(app('rec_video'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FileView), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('file-detail-video-header')),
+        findsOneWidget,
+      );
+      expect(find.text('Video', skipOffstage: false), findsWidgets);
+      expect(find.byType(AudioPlayerBar), findsNothing);
+      expect(find.text('Launch clip'), findsWidgets);
+    });
+  });
+
+  group('row-only processing retries', () {
+    for (final testCase in <({String mediaType, Widget Function() screen})>[
+      (
+        mediaType: 'image',
+        screen: () => const FileDetailScreen.imageById(id: 'retry-item'),
+      ),
+      (
+        mediaType: 'document',
+        screen: () => const FileDetailScreen.documentById(id: 'retry-item'),
+      ),
+    ]) {
+      testWidgets('${testCase.mediaType} failed state exposes retry', (
+        tester,
+      ) async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            currentOwnerIdProvider.overrideWithValue('1'),
+          ],
+        );
+        addTearDown(container.dispose);
+        await insertTestFileItem(
+          db,
+          id: 'retry-item',
+          coreId: 42,
+          mediaType: testCase.mediaType,
+          processingState: ProcessingState.failed,
+          processingRunId: 'run-failed',
+          processingAttempt: 1,
+          processingErrorCode: 'processor_unavailable',
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: TranslationProvider(
+              child: MaterialApp(
+                theme: buildLightTheme(),
+                home: testCase.screen(),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(
+            const ValueKey('file-view-contents-retry'),
+            skipOffstage: false,
+          ),
+          findsOneWidget,
+        );
+      });
+    }
+
+    testWidgets(
+      'image retry creates a new run while prior output and cloud facts remain',
+      (tester) async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final repository = _RetryRepository();
+        final container = ProviderContainer(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(db),
+            currentOwnerIdProvider.overrideWithValue('1'),
+            recordingsRepositoryProvider.overrideWithValue(repository),
+          ],
+        );
+        addTearDown(container.dispose);
+        await insertTestFileItem(
+          db,
+          id: 'retry-item',
+          coreId: 42,
+          mediaType: 'image',
+          notes: 'User-owned note',
+          description: 'Prior successful description',
+          processingState: ProcessingState.failed,
+          processingRunId: 'run-failed',
+          processingAttempt: 1,
+          processingErrorCode: 'processor_unavailable',
+        );
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: TranslationProvider(
+              child: MaterialApp(
+                theme: buildLightTheme(),
+                home: const FileDetailScreen.imageById(id: 'retry-item'),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final retry = find.byKey(
+          const ValueKey('file-view-contents-retry'),
+          skipOffstage: false,
+        );
+        await tester.ensureVisible(retry);
+        await tester.tap(retry);
+        await tester.pump();
+        await repository.pollStarted.future;
+
+        final queued = await db.itemsDao.getById('retry-item', '1');
+        expect(repository.enqueueCalls, 1);
+        expect(queued?.item.processingRunId, 'run-new');
+        expect(queued?.item.processingAttempt, 2);
+        expect(queued?.item.processingState, 'queued');
+        expect(queued?.description, 'Prior successful description');
+        expect(queued?.notes, 'User-owned note');
+        expect(queued?.file?.uploadState, 'uploaded');
+
+        repository.terminal.complete(
+          repository.item(
+            state: ProcessingState.succeeded,
+            outputs: const {
+              'description': {
+                'type': 'description',
+                'text': 'Fresh description',
+              },
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final succeeded = await db.itemsDao.getById('retry-item', '1');
+        expect(succeeded?.item.processingRunId, 'run-new');
+        expect(succeeded?.item.processingState, 'succeeded');
+        expect(succeeded?.description, 'Fresh description');
+        expect(succeeded?.notes, 'User-owned note');
+        expect(succeeded?.file?.uploadState, 'uploaded');
+      },
+    );
+  });
+
+  // ── Document Contents: the LIVE state machine (#1454) ───────────────────────
+  // The doc host must derive Contents from the row's OWN fields — NOT a hardcoded
+  // empty. Before #1454 it forced `ContentsState.empty`, so the stub summary
+  // never rendered and the doc processing/failed strings were dead. These tests
+  // pin all four live states AND that each surfaces the locale's doc string
+  // (en + ja), proving the `contentsStatus.doc.*` i18n is wired to real states.
+  group('FileDetailScreen.documentById — live Contents state (en + ja)', () {
+    late AppDatabase db;
+    late ProviderContainer container;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
+      );
+      LocaleSettings.setLocaleSync(AppLocale.en);
+    });
+
+    tearDown(() async {
+      LocaleSettings.setLocaleSync(AppLocale.en);
+      container.dispose();
+      await db.close();
+    });
+
+    // Seeds a document row in a given pipeline state. `transcript` is the
+    // machine-owned column the AI-stub summary lands in (the doc Contents reads
+    // it as the READY body).
+    Future<void> seedDocState(
+      String id, {
+      String? transcript,
+      bool isProcessing = false,
+      String processingStatus = 'done',
+    }) => insertTestFileItem(
+      db,
+      id: id,
+      title: 'Quarterly report',
+      filename: 'report.pdf',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
+      mediaType: 'document',
+      extractedText: transcript,
+      processingStatus: isProcessing ? 'processing' : processingStatus,
+    );
+
+    Widget app(String id) => UncontrolledProviderScope(
+      container: container,
+      child: TranslationProvider(
+        child: MaterialApp(
+          locale: LocaleSettings.currentLocale.flutterLocale,
+          supportedLocales: AppLocaleUtils.supportedLocales,
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          theme: buildLightTheme(),
+          home: FileDetailScreen.documentById(id: id),
+        ),
+      ),
+    );
+
+    for (final locale in [AppLocale.en, AppLocale.ja]) {
+      final lc = locale.languageCode;
+      final docStrings = locale.translations.fileView.contentsStatus.doc;
+
+      testWidgets('READY: the stub summary renders as the contents — $lc', (
+        tester,
+      ) async {
+        LocaleSettings.setLocaleSync(locale);
+        await seedDocState(
+          'rec_doc',
+          transcript: 'AI stub summary for the document.',
+        );
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-ready')),
+          findsOneWidget,
+          reason: 'a document with a machine summary is in the READY state',
+        );
+        expect(
+          find.text('AI stub summary for the document.'),
+          findsOneWidget,
+          reason: 'the doc Contents renders the machine summary text',
+        );
+        expect(
+          find.byKey(const ValueKey('file-view-contents-empty')),
+          findsNothing,
+        );
+      });
+
+      testWidgets('PROCESSING: doc.processing string shows — $lc', (
+        tester,
+      ) async {
+        LocaleSettings.setLocaleSync(locale);
+        await seedDocState(
+          'rec_doc',
+          isProcessing: true,
+          processingStatus: 'processing',
+        );
+        await tester.pumpWidget(app('rec_doc'));
+        // The row future resolves on the first microtask; pump fixed frames
+        // (NOT pumpAndSettle — the processing body's LoadingIndicator animates
+        // forever, so the tree never "settles").
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-processing')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(docStrings.processing),
+          findsOneWidget,
+          reason: 'the $lc doc processing string is wired to the live state',
+        );
+      });
+
+      testWidgets('FAILED: doc.failed string shows — $lc', (tester) async {
+        LocaleSettings.setLocaleSync(locale);
+        await seedDocState('rec_doc', processingStatus: 'failed');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-failed')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(docStrings.failed),
+          findsOneWidget,
+          reason: 'the $lc doc failed string is wired to the live state',
+        );
+      });
+
+      testWidgets('EMPTY: doc.empty string shows when no summary yet — $lc', (
+        tester,
+      ) async {
+        LocaleSettings.setLocaleSync(locale);
+        // done, no transcript → honest empty terminal.
+        await seedDocState('rec_doc');
+        await tester.pumpWidget(app('rec_doc'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const ValueKey('file-view-contents-empty')),
+          findsOneWidget,
+        );
+        expect(
+          find.text(docStrings.empty),
+          findsOneWidget,
+          reason: 'the $lc doc empty string is wired to the live state',
+        );
+      });
+    }
+  });
+}
+
+class _RetryRepository extends RecordingsRepository {
+  _RetryRepository()
+    : super(
+        apiClient: ApiClient(
+          tokenStore: InMemoryTokenStore(),
+          dio: Dio(BaseOptions(baseUrl: 'http://localhost:7001')),
+        ),
+      );
+
+  final terminal = Completer<Recording?>();
+  final pollStarted = Completer<void>();
+  int enqueueCalls = 0;
+
+  Recording item({
+    required ProcessingState state,
+    Map<String, dynamic> outputs = const {},
+  }) => Recording.fromItemJson(<String, dynamic>{
+    'id': 42,
+    'owner_id': 1,
+    'item_type': 'file',
+    'title': 'Image',
+    'notes': 'Remote note must not replace local notes',
+    'processing_state': state.wireName,
+    'processing_run_id': 'run-new',
+    'processing_attempt': 2,
+    'processing_requested_outputs': const ['description', 'ocr_text'],
+    'processing_outputs': outputs,
+    'processing_error': null,
+    'file': const <String, dynamic>{
+      'media_type': 'image',
+      'upload_state': 'uploaded',
+    },
+  });
+
+  @override
+  Future<Recording> enqueueProcessing(int id) async {
+    enqueueCalls++;
+    return item(state: ProcessingState.queued);
+  }
+
+  @override
+  Future<Recording?> fetchRecording(int id) {
+    if (!pollStarted.isCompleted) pollStarted.complete();
+    return terminal.future;
+  }
+}

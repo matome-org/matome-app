@@ -1,1 +1,0 @@
-- [matome-app test stack](project_test_stack.md) — Jest/jest-expo setup, test file inventory, known config typo, critical test/format mismatch found 2026-04-14

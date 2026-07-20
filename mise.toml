@@ -2,57 +2,348 @@
 bun = "1.3.8"
 java = "openjdk-17"
 node = "24.13.0"
-"aqua:supabase/cli" = "2.84.2"
+erlang = "27.2"
+elixir = "1.17.3-otp-27"
+flutter = "latest"
 
-[tasks.up]
-description = "Start emulator + Supabase + Metro (idempotent)"
+[tasks.ports]
+description = "Print the local development port map from dev.ports.env"
 run = """
 set -e
+. ./dev.ports.env
+printf '%-24s %s\n' 'Flutter Web' "http://localhost:$MATOME_FLUTTER_WEB_PORT"
+printf '%-24s %s\n' 'Core API' "http://localhost:$MATOME_CORE_PORT"
+printf '%-24s %s\n' 'AI stub' "http://localhost:$MATOME_AI_STUB_PORT"
+printf '%-24s %s\n' 'Core Storybook' "http://localhost:$MATOME_CORE_PORT/storybook"
+printf '%-24s %s\n' 'Widgetbook' "http://localhost:$MATOME_STORYBOOK_PORT"
+printf '%-24s %s\n' 'Postgres (native)' "localhost:${MATOME_PG_PORT:-$MATOME_COMPOSE_DB_PORT}"
+printf '%-24s %s\n' 'MinIO API' "http://localhost:$MATOME_MINIO_PORT"
+printf '%-24s %s\n' 'MinIO Console' "http://localhost:$MATOME_MINIO_CONSOLE_PORT"
+"""
 
-# 1. Emulator: start only if no emulator-* is online
+[tasks."ports:check"]
+description = "Check whether Matome local development ports are already occupied"
+run = """
+set -e
+. ./dev.ports.env
+check_port() {
+  name="$1"
+  port="$2"
+  if fuser -s "$port/tcp" 2>/dev/null; then
+    echo "✗ $name port $port is already in use"
+    fuser -v "$port/tcp" 2>/dev/null || true
+    return 1
+  fi
+  echo "✓ $name port $port is free"
+}
+failed=0
+check_port 'Flutter Web' "$MATOME_FLUTTER_WEB_PORT" || failed=1
+check_port 'Core API' "$MATOME_CORE_PORT" || failed=1
+check_port 'AI stub' "$MATOME_AI_STUB_PORT" || failed=1
+check_port 'Widgetbook' "$MATOME_STORYBOOK_PORT" || failed=1
+check_port 'Postgres (native)' "${MATOME_PG_PORT:-$MATOME_COMPOSE_DB_PORT}" || failed=1
+check_port 'MinIO API' "$MATOME_MINIO_PORT" || failed=1
+check_port 'MinIO Console' "$MATOME_MINIO_CONSOLE_PORT" || failed=1
+exit "$failed"
+"""
+
+# Every runtime dep runs in its own container (docker-compose): Postgres, MinIO,
+# AI stub, Core API, Flutter Web. Config from `.env` (seeded from `.env.example`).
+# Host ports come from dev.ports.env. There is NO native data plane — Docker only.
+
+[tasks.up]
+description = "Bring up the FULL stack in Docker (Postgres + MinIO + AI stub + Core API + Flutter Web) via docker-compose. Configured by .env."
+run = """
+set -e
+ROOT="$(pwd)"
+. "$ROOT/dev.ports.env"
+export WEB_PORT="$MATOME_FLUTTER_WEB_PORT"
+export CORE_PORT="$MATOME_CORE_PORT"
+export AI_STUB_PORT="$MATOME_AI_STUB_PORT"
+export DB_PORT="$MATOME_COMPOSE_DB_PORT"
+export MINIO_PORT="$MATOME_MINIO_PORT"
+export MINIO_CONSOLE_PORT="$MATOME_MINIO_CONSOLE_PORT"
+export API_BASE_URL="http://localhost:$MATOME_CORE_PORT"
+export CORS_ORIGINS="http://localhost:$MATOME_FLUTTER_WEB_PORT,http://127.0.0.1:$MATOME_FLUTTER_WEB_PORT"
+export STORAGE_S3_ENDPOINT="http://localhost:$MATOME_MINIO_PORT"
+if [ ! -f "$ROOT/.env" ]; then
+  echo '→ .env missing — creating it from .env.example'
+  cp "$ROOT/.env.example" "$ROOT/.env"
+fi
+
+echo '→ docker compose up --build -d (Postgres + MinIO + AI stub + Core + Web)'
+docker compose up --build -d
+
+echo ''
+echo '✓ stack up (containerized — every dep in its own container):'
+echo "   Postgres   127.0.0.1:$MATOME_COMPOSE_DB_PORT   (container: db)"
+echo "   MinIO      http://127.0.0.1:$MATOME_MINIO_PORT   (console :$MATOME_MINIO_CONSOLE_PORT, container: minio)"
+echo "   Core API   http://127.0.0.1:$MATOME_CORE_PORT   (container: core — migrates on boot)"
+echo "   AI stub    (container: ai-stub, internal)"
+echo "   Web        http://127.0.0.1:$MATOME_FLUTTER_WEB_PORT   (container: web)"
+echo ''
+echo '   App: register via Flutter Web signup or POST /api/auth/register'
+echo "   Admin: http://127.0.0.1:$MATOME_CORE_PORT/admin  (allowlist default dev@matome.test; OTP → /dev/mailbox)"
+echo '   Data plane: services/api/docs/data-plane.md'
+echo ''
+echo '   Logs: docker compose logs -f   |   Stop: mise run down   |   Reset: mise run nuke'
+echo '   Native Flutter client instead of the web container? mise run backend + mise run flutter-*'
+"""
+
+[tasks.backend]
+description = "Start the SHARED BACKEND in Docker (Postgres + MinIO + AI stub + Core API) — NO web container. Pair with a native `mise run flutter-*` client."
+run = """
+set -e
+ROOT="$(pwd)"
+. "$ROOT/dev.ports.env"
+export CORE_PORT="$MATOME_CORE_PORT"
+export AI_STUB_PORT="$MATOME_AI_STUB_PORT"
+export DB_PORT="$MATOME_COMPOSE_DB_PORT"
+export MINIO_PORT="$MATOME_MINIO_PORT"
+export MINIO_CONSOLE_PORT="$MATOME_MINIO_CONSOLE_PORT"
+export STORAGE_S3_ENDPOINT="http://localhost:$MATOME_MINIO_PORT"
+# WEB_PORT/API_BASE_URL/CORS still interpolated by compose even without the web
+# service — give them values so `docker compose` does not warn on unset vars.
+export WEB_PORT="$MATOME_FLUTTER_WEB_PORT"
+export API_BASE_URL="http://localhost:$MATOME_CORE_PORT"
+export CORS_ORIGINS="http://localhost:$MATOME_FLUTTER_WEB_PORT,http://127.0.0.1:$MATOME_FLUTTER_WEB_PORT"
+if [ ! -f "$ROOT/.env" ]; then
+  echo '→ .env missing — creating it from .env.example'
+  cp "$ROOT/.env.example" "$ROOT/.env"
+fi
+
+echo '→ docker compose up --build -d db minio minio-init ai-stub core (no web)'
+docker compose up --build -d db minio minio-init ai-stub core
+
+echo ''
+echo '✓ backend up (containerized — no web client):'
+echo "   Postgres   127.0.0.1:$MATOME_COMPOSE_DB_PORT   (container: db)"
+echo "   MinIO      http://127.0.0.1:$MATOME_MINIO_PORT   (console :$MATOME_MINIO_CONSOLE_PORT, container: minio)"
+echo "   Core API   http://127.0.0.1:$MATOME_CORE_PORT   (container: core — migrates on boot)"
+echo '   App: register via Flutter signup or POST /api/auth/register'
+echo "   Admin: http://127.0.0.1:$MATOME_CORE_PORT/admin  (allowlist default dev@matome.test; OTP → /dev/mailbox)"
+echo '   Data plane: services/api/docs/data-plane.md'
+echo ''
+echo '   Now start ONE native client against it:'
+echo '     mise run flutter-web      Flutter web (Chromium)'
+echo '     mise run flutter-linux    Flutter Linux desktop'
+echo '     mise run flutter-android  Flutter on pixel7 emulator'
+echo '   Logs: docker compose logs -f core   |   Stop: mise run down'
+"""
+
+# --- Flutter lab (apps/flutter) — Home/Today on each platform vs local Core ---
+# All three require the backend up first: `mise run backend` (containerized
+# Postgres + MinIO + AI stub + Core API) — NOT the full `mise run up` (which also
+# runs the web container). Register an app account via Flutter signup (no seed).
+
+[tasks."flutter-web"]
+description = "Flutter lab Home on web (Chromium) → local Core API. Run `mise run backend` first."
+run = """
+set -e
+. ./dev.ports.env
+if ! fuser -s "$MATOME_CORE_PORT/tcp" 2>/dev/null; then
+  echo "✗ Core API not on :$MATOME_CORE_PORT. Boot the backend first: mise run backend"
+  exit 1
+fi
+export CHROME_EXECUTABLE=/usr/bin/chromium
+cd apps/flutter
+exec flutter run -d chrome --web-port "$MATOME_FLUTTER_WEB_PORT" \
+  --no-web-resources-cdn \
+  --dart-define=API_BASE_URL="http://localhost:$MATOME_CORE_PORT" \
+  --dart-define=ff.godMode=true \
+  --dart-define-from-file=feature_flags.json
+"""
+
+[tasks."flutter-linux"]
+description = "Flutter lab Home on Linux desktop → local Core API. Run `mise run backend` first."
+run = """
+set -e
+. ./dev.ports.env
+if ! fuser -s "$MATOME_CORE_PORT/tcp" 2>/dev/null; then
+  echo "✗ Core API not on :$MATOME_CORE_PORT. Boot the backend first: mise run backend"
+  exit 1
+fi
+cd apps/flutter
+# Kill any still-running instance FIRST — otherwise the old window keeps the
+# build/ binary locked, `flutter clean` fails, `set -e` aborts, and you stay
+# looking at the stale app (the "I rebuilt but nothing changed" trap).
+echo '→ stopping any running matome_flutter...'
+pkill -f 'x64/(debug|release)/bundle/matome_flutter' 2>/dev/null || true
+# Force a from-scratch build every launch so Dart/native changes are never
+# served from a stale incremental cache (flutter run keeps the native runner
+# binary even when Dart changes, which made rebuilds look like no-ops).
+echo '→ flutter clean (forcing a fresh build)...'
+flutter clean
+flutter pub get
+exec flutter run -d linux \
+  --print-dtd \
+  --dart-define=API_BASE_URL="http://localhost:$MATOME_CORE_PORT" \
+  --dart-define=ff.godMode=true \
+  --dart-define-from-file=feature_flags.json
+"""
+
+[tasks."flutter-android"]
+description = "Flutter lab Home on pixel7 emulator → local Core API. Run `mise run backend` first."
+run = """
+set -e
+. ./dev.ports.env
+if ! fuser -s "$MATOME_CORE_PORT/tcp" 2>/dev/null; then
+  echo "✗ Core API not on :$MATOME_CORE_PORT. Boot the backend first: mise run backend"
+  exit 1
+fi
+
+# 1. Emulator: start pixel7 only if none online
 if ! adb devices | grep -qE '^emulator-[0-9]+\\s+device$'; then
   echo '→ starting emulator pixel7...'
   ANDROID_AVD_HOME=$HOME/.config/.android/avd \
     nohup $HOME/Android/Sdk/emulator/emulator -avd pixel7 -no-boot-anim -no-snapshot-load \
-    >/tmp/emulator.log 2>&1 &
+    >/tmp/emulator-flutter.log 2>&1 &
   disown 2>/dev/null || true
-  echo '→ waiting for boot...'
   adb wait-for-device
   until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')" = "1" ]; do
     sleep 2
   done
   echo '→ emulator ready'
-else
-  echo '→ emulator already running'
 fi
 
-# 2. Supabase (idempotent — re-running is a no-op if already up)
-[ -f supabase/config.toml ] || supabase init
-supabase start
+# 2. Make host Core reachable as localhost on the device, then run there.
+adb reverse tcp:"$MATOME_CORE_PORT" tcp:"$MATOME_CORE_PORT" >/dev/null 2>&1 || true
+DEV=$(adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ {print $1; exit}')
+cd apps/flutter
+exec flutter run -d "$DEV" \
+  --dart-define=API_BASE_URL="http://localhost:$MATOME_CORE_PORT" \
+  --dart-define=ff.godMode=true \
+  --dart-define-from-file=feature_flags.json
+"""
 
-# 3. Regenerate .env.local from supabase status
-{
-  echo 'EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321'
-  supabase status -o env | awk -F= '/^ANON_KEY=/ { gsub(/"/, "", $2); print "EXPO_PUBLIC_SUPABASE_ANON_KEY=" $2 }'
-} > .env.local
+[tasks."flutter-e2e-linux"]
+description = "Run the product E2E matrix against the real Linux desktop target"
+run = "apps/flutter/tool/run_e2e_linux.sh"
 
-# 4. Make localhost:54321 reachable from emulator/device
-adb reverse tcp:54321 tcp:54321 >/dev/null 2>&1 || true
+[tasks."flutter-e2e-web"]
+description = "Run the product E2E matrix against Chromium via WebDriver"
+run = "apps/flutter/tool/run_e2e_web.sh"
 
-# 5. Free port 8081 (kills any stale Metro)
-fuser -k 8081/tcp 2>/dev/null || true
-sleep 1
+[tasks.storybook]
+description = "Run the isolated Flutter Widgetbook design catalog on Chromium"
+run = """
+set -e
+export CHROME_EXECUTABLE=/usr/bin/chromium
+. ./dev.ports.env
+cd apps/flutter_widgetbook
+exec flutter run -d chrome --web-port "$MATOME_STORYBOOK_PORT" -t lib/widgetbook.dart
+"""
 
-# 6. Metro (foreground, Ctrl+C to stop)
-exec ./node_modules/.bin/expo start --dev-client
+# DEV-ONLY. The server-side analog of `storybook` (the Flutter Widgetbook): the
+# Core admin design-system catalog (foundations tokens + base + composite HEEx
+# components, Light+Dark), used to eyeball parity vs the Flutter widgetbook.
+# It is phoenix_storybook mounted on the Core API at /storybook — NOT a separate
+# process/port. The route is compile-gated on :dev_routes, so it can never ship
+# to prod (P2 plan #132 / at-rest-key-flow.md §9). This task just points you at
+# it; start the server with `mise run backend`.
+[tasks.phoenix_storybook]
+description = "DEV-ONLY: launch the Core design-system Storybook (phoenix_storybook at /storybook). Starts the backend if needed, then opens the catalog."
+depends = ["backend"]
+run = """
+set -e
+. ./dev.ports.env
+URL="http://localhost:$MATOME_CORE_PORT/storybook"
+echo "→ Core design-system Storybook → $URL"
+echo "   base + composite HEEx components + foundations tokens (Light/Dark toggle)"
+
+# `depends = ["backend"]` already brought Core up and waited for it to answer.
+if ss -ltn "sport = :$MATOME_CORE_PORT" | grep -q LISTEN; then
+  echo "✓ Core API is up — opening $URL"
+  (xdg-open "$URL" >/dev/null 2>&1 &) || true
+else
+  echo "✗ Core API still not on :$MATOME_CORE_PORT — check .dev/core.log"
+  exit 1
+fi
+"""
+
+[tasks."flutter-design-system-check"]
+description = "Run the full Flutter design-system enforcement gate"
+run = """
+set -e
+
+cd apps/flutter
+flutter analyze
+flutter test test/core/theme/design_system_source_guard_test.dart
+flutter test test/core/theme/design_system_docs_test.dart
+flutter test test/core/theme/app_theme_contrast_test.dart
+flutter test test/goldens/shared_widgets_golden_test.dart
+flutter test test/core/theme/ui_component_coverage_guard_test.dart
+flutter test test/app/route_page_contract_guard_test.dart
+
+# Dual-flag navigation grading (DR-002, #1474). `ff.newNavShell` now DEFAULTS
+# ON, so a plain `flutter test` only exercises the NEW shell — the legacy (OFF)
+# path stops being graded, and the ON-specific router/a11y proofs in
+# test/app/new_nav_router_test.dart only run under the real ON const. Grade BOTH
+# realities explicitly so neither rots: run the nav suite once with the flag
+# forced ON and once forced OFF. The flag-state-specific files self-skip under
+# the wrong build (shell_test legacy chrome OFF-only; new_nav_router_test
+# ON-only), so each invocation proves exactly its reality.
+NAV_SUITE="test/app/shell_tabs_test.dart test/app/new_nav_shell_test.dart test/app/new_nav_router_test.dart test/shell_test.dart test/settings_satori_test.dart"
+echo "── nav suite: ff.newNavShell=true (ON / default reality) ──"
+flutter test --dart-define=ff.newNavShell=true $NAV_SUITE
+echo "── nav suite: ff.newNavShell=false (legacy OFF reality) ──"
+flutter test --dart-define=ff.newNavShell=false $NAV_SUITE
+
+# Dual-flag local-first-spaces grading (.docs/internal/architecture.md §11 D6
+# / plan #102 W1). The
+# `localFirstSpaces` const is the single-flip rollback switch for the whole
+# item-organization-decoupled-from-sync behaviour; it ships DARK (default OFF).
+# A plain `flutter test` only exercises the OFF reality, so grade BOTH realities
+# explicitly — forced OFF (shipped) and forced ON (future-wave) — so neither
+# rots as later waves wire effective-space resolution, loose capture, inbox
+# behaviour and sync gating behind this single flag. The lane file self-skips
+# the wrong-build group, so each invocation proves exactly its reality.
+LFS_SUITE="test/core/config/local_first_spaces_flag_test.dart test/home/media_ingest_pipeline_test.dart test/home/inbox_effective_view_test.dart test/home/inbox_hero_collision_test.dart test/spaces/sync_policy_test.dart test/matome/matome_sync_pushfiled_gate_test.dart test/home/file_into_space_test.dart test/features/files/files_scope_partition_test.dart"
+echo "── local-first-spaces lane: ff.localFirstSpaces=false (OFF / shipped reality) ──"
+flutter test --dart-define=ff.localFirstSpaces=false $LFS_SUITE
+echo "── local-first-spaces lane: ff.localFirstSpaces=true (ON / future-wave reality) ──"
+flutter test --dart-define=ff.localFirstSpaces=true $LFS_SUITE
+
+# Dual-flag master-detail grading (plan W2, #1541). `ff.masterDetailLayout` is
+# the single-flip rollback switch for the responsive master-detail surfaces; it
+# ships DARK (default OFF). A plain `flutter test` only exercises the OFF
+# (shipped two-pane) reality, so grade BOTH explicitly — forced OFF (shipped)
+# and forced ON (scaffold-driven reading pane) — so neither rots as later waves
+# (W3–W4) route more surfaces through the scaffold. The lane file self-skips the
+# wrong-build group, so each invocation proves exactly its reality.
+MD_SUITE="test/home/inbox_master_detail_test.dart test/features/files/files_master_detail_test.dart test/features/spaces/spaces_master_detail_test.dart test/features/contacts/contacts_master_detail_test.dart"
+echo "── master-detail lane: ff.masterDetailLayout=false (OFF / shipped two-pane) ──"
+flutter test --dart-define=ff.masterDetailLayout=false $MD_SUITE
+echo "── master-detail lane: ff.masterDetailLayout=true (ON / scaffold-driven) ──"
+flutter test --dart-define=ff.masterDetailLayout=true $MD_SUITE
+
+cd ../flutter_widgetbook
+export CHROME_EXECUTABLE=/usr/bin/chromium
+cleanup_widgetbook_artifacts() {
+  rm -rf .dart_tool/chrome-device build
+}
+cleanup_widgetbook_artifacts
+trap cleanup_widgetbook_artifacts EXIT
+
+dart run build_runner build
+flutter test test/catalog_provenance_test.dart
+flutter test -d chrome test/widgetbook_smoke_test.dart
+flutter build web -t lib/widgetbook.dart
 """
 
 [tasks.down]
-description = "Stop Metro, Supabase, and emulator"
+description = "Stop the containerized stack (docker compose down). Keeps Postgres + MinIO data volumes. Also kills any Android emulator."
 run = """
 set +e
-fuser -k 8081/tcp 2>/dev/null
-supabase stop
+ROOT="$(pwd)"
+. "$ROOT/dev.ports.env"
+# Ports must be set so compose can interpolate the file even on `down`.
+export WEB_PORT="$MATOME_FLUTTER_WEB_PORT" CORE_PORT="$MATOME_CORE_PORT" AI_STUB_PORT="$MATOME_AI_STUB_PORT"
+export DB_PORT="$MATOME_COMPOSE_DB_PORT" MINIO_PORT="$MATOME_MINIO_PORT" MINIO_CONSOLE_PORT="$MATOME_MINIO_CONSOLE_PORT"
+
+echo '→ docker compose down (data volumes kept)'
+docker compose down --remove-orphans
+
 adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ {print $1}' | while read -r d; do
   adb -s "$d" emu kill 2>/dev/null
 done
@@ -60,16 +351,26 @@ true
 """
 
 [tasks.nuke]
-description = "Stop everything + remove all Supabase containers and images"
+description = "Wipe the environment: docker compose down --volumes (drops Postgres + MinIO data), kill emulators, clear caches."
 run = """
 set +e
-fuser -k 8081/tcp 2>/dev/null
-supabase stop --no-backup
+ROOT="$(pwd)"
+RUN_DIR="$ROOT/.dev"
+. "$ROOT/dev.ports.env"
+export WEB_PORT="$MATOME_FLUTTER_WEB_PORT" CORE_PORT="$MATOME_CORE_PORT" AI_STUB_PORT="$MATOME_AI_STUB_PORT"
+export DB_PORT="$MATOME_COMPOSE_DB_PORT" MINIO_PORT="$MATOME_MINIO_PORT" MINIO_CONSOLE_PORT="$MATOME_MINIO_CONSOLE_PORT"
+
+echo '→ docker compose down --volumes (dropping Postgres + MinIO data)'
+docker compose down --volumes --remove-orphans
+
+echo '→ killing emulators...'
 adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ {print $1}' | while read -r d; do
   adb -s "$d" emu kill 2>/dev/null
 done
-docker ps -aq --filter 'name=supabase_' | xargs -r docker rm -f
-docker images -q --filter 'reference=supabase/*' | xargs -r docker rmi -f
-docker images -q --filter 'reference=public.ecr.aws/supabase/*' | xargs -r docker rmi -f
+
+echo '→ clearing local caches...'
+rm -rf "$RUN_DIR"
+
+echo '✓ environment wiped. Next `mise run up` rebuilds the containers from scratch.'
 true
 """

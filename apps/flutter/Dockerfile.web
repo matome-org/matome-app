@@ -1,0 +1,64 @@
+# Flutter Web — build the release bundle, serve it with nginx.
+#
+# API_BASE_URL is baked at BUILD time (compile-time --dart-define, tree-shaken),
+# so it must be the URL the BROWSER uses to reach Core — the host-published
+# address, http://localhost:7001 by default (NOT the compose service name, which
+# the browser cannot resolve). Override via build-arg for a different host.
+# Pin the exact Flutter version — the moving `:stable` tag can lag behind and
+# fail `pub get` with "version solving failed". 3.44.0 ships Dart 3.12.0, which
+# is why pubspec's SDK floor is ^3.12.0. Bump both in lockstep with the toolchain.
+ARG FLUTTER_IMAGE=ghcr.io/cirruslabs/flutter:3.44.0
+FROM ${FLUTTER_IMAGE} AS build
+
+ARG API_BASE_URL=http://localhost:7001
+WORKDIR /app/apps/flutter
+
+# Pub dependencies first (cached). Local path packages must exist before
+# `pub get`; the repository-root build context also makes matome_vault
+# available at the same relative path used by pubspec.yaml.
+COPY apps/flutter/pubspec.yaml apps/flutter/pubspec.lock ./
+COPY apps/flutter/packages ./packages
+COPY packages/matome_vault /app/packages/matome_vault
+RUN flutter pub get
+
+COPY apps/flutter .
+# godMode on so the custom-host switcher is available; feature flags from file.
+RUN flutter build web --release \
+  --no-web-resources-cdn \
+  --dart-define=API_BASE_URL=${API_BASE_URL} \
+  --dart-define=ff.godMode=true \
+  --dart-define-from-file=feature_flags.json
+
+# Build-time Subresource Integrity (SRI) for the one static script reference
+# in index.html — task #1861, plan #131 (web wave). `flutter_bootstrap.js` is
+# the only script loaded via a static `<script src=...>` tag; everything it
+# loads afterward (main.dart.js, the CanvasKit/skwasm engine binary,
+# flutter_service_worker.js) is fetched dynamically by that bootstrap
+# script's own JS loader (`_flutter.loader...`), not via further static
+# <script>/<link> tags — SRI only applies to a resource named in a tag's own
+# `integrity` attribute, so it CANNOT cover those downstream fetches with
+# Flutter's default web build output. This step covers exactly the one thing
+# it can: the top-level bootstrap script, hashed against the file this build
+# actually produced (never hand-committed — the bytes, and therefore the
+# hash, change on every Flutter SDK/app build, so this must run post-build,
+# not be a static value in `web/index.html`). The final `grep` makes the
+# build fail loudly if a future Flutter SDK ever changes the exact script
+# tag text this `sed` matches, instead of silently shipping without SRI.
+#
+# Also strip `'unsafe-inline'` from the meta CSP: `web/index.html` allows it
+# so `flutter run` / DWDS hot-reload can inject its client scripts; the
+# production image must stay script-src without unsafe-inline (nginx header
+# is authoritative and already omits it — this keeps the meta defense-in-
+# depth copy aligned).
+RUN set -eu; \
+  sed -i "s/ script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline';/ script-src 'self' 'wasm-unsafe-eval';/" build/web/index.html; \
+  HASH=$(openssl dgst -sha384 -binary build/web/flutter_bootstrap.js | openssl base64 -A); \
+  sed -i "s#<script src=\"flutter_bootstrap.js\" async></script>#<script src=\"flutter_bootstrap.js\" integrity=\"sha384-${HASH}\" crossorigin=\"anonymous\" async></script>#" build/web/index.html; \
+  grep -q "integrity=\"sha384-${HASH}\"" build/web/index.html; \
+  grep -q "script-src 'self' 'wasm-unsafe-eval';" build/web/index.html; \
+  ! grep -q "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline';" build/web/index.html
+
+FROM nginx:alpine
+COPY --from=build /app/apps/flutter/build/web /usr/share/nginx/html
+COPY apps/flutter/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80

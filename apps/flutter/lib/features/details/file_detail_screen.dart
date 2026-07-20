@@ -1,0 +1,1209 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/db/daos/items_dao.dart';
+import '../../core/db/recording_card.dart';
+import '../../core/observability/app_log.dart';
+import '../../core/providers.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/vault/vault_lease_image.dart';
+import '../../i18n/strings.g.dart';
+import '../../ui/app_button.dart';
+import '../../ui/app_dialog.dart';
+import '../../ui/file_type_chip.dart';
+import '../../ui/loading_indicator.dart';
+import '../documents/document_open_policy.dart';
+import '../documents/document_open_service.dart';
+import '../items/matome_item_type.dart';
+import '../home/inbox_sync.dart';
+import '../recordings/processing_error.dart';
+import '../recordings/recording.dart';
+import '../recordings/recording_result_waiter.dart';
+import 'audio_player_bar.dart';
+import 'details_controller.dart';
+import 'file_actions_menu.dart';
+import 'file_view.dart';
+import 'markdown_helpers.dart';
+
+const double _kVideoHeaderIconSize = 40;
+
+/// Maps a stored `mediaType` string (audio | image | document | video — the buckets
+/// `mediaTypeForPath` writes) to the [FileMediaKind] that drives [FileView]'s
+/// media header and default Contents tag. Anything not image/document is treated
+/// as audio (the original default). Centralised here so the item-driven
+/// ([FileDetailScreen.mediaKindOf]) and row-driven ([_FileDetailById]) paths
+/// agree on a single mapping — an imported document (#1449) routes to
+/// [FileMediaKind.doc], never image or audio.
+FileMediaKind mediaKindForType(String mediaType) {
+  if (mediaType.startsWith('image')) return FileMediaKind.image;
+  if (mediaType.startsWith('document')) return FileMediaKind.doc;
+  if (mediaType.startsWith('video')) return FileMediaKind.video;
+  return FileMediaKind.audio;
+}
+
+String? fileContentsFor(ItemWithPayload row, FileMediaKind kind) {
+  final values = switch (kind) {
+    FileMediaKind.audio => [row.transcript],
+    FileMediaKind.image => [row.description, row.ocrText, row.summary],
+    FileMediaKind.doc => [row.extractedText, row.summary],
+    FileMediaKind.video => const <String?>[],
+  };
+  final present = values
+      .whereType<String>()
+      .where((value) => value.trim().isNotEmpty)
+      .toList(growable: false);
+  return present.isEmpty ? null : present.join('\n\n');
+}
+
+/// Formats a byte count into a compact unit string (e.g. `2.4 MB`). Uses 1024
+/// steps and trims a trailing `.0` so whole numbers read cleanly.
+String _formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  var value = bytes / 1024;
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  final text = value.toStringAsFixed(1);
+  final trimmed = text.endsWith('.0')
+      ? text.substring(0, text.length - 2)
+      : text;
+  return '$trimmed ${units[unit]}';
+}
+
+/// Shared delete flow for a file (audio or image): confirm dialog → delete the
+/// recording via [detailsControllerProvider] → pop the detail. Captures the
+/// navigator up front so it survives the async gap. [onBeforeDelete] lets the
+/// audio host clear its dirty baseline so the leave-guard doesn't block the pop.
+Future<void> _fileDeleteFlow(
+  BuildContext context,
+  WidgetRef ref,
+  String id, {
+  VoidCallback? onBeforeDelete,
+}) async {
+  final navigator = Navigator.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      final colors = context.colors;
+      return AppDialog(
+        title: Text(t.details.deleteConfirmTitle),
+        content: Text(t.details.deleteConfirmBody),
+        actions: [
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(t.common.cancel),
+          ),
+          AppTextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: colors.failed),
+            child: Text(t.details.delete),
+          ),
+        ],
+      );
+    },
+  );
+  if (confirmed != true) return;
+  onBeforeDelete?.call();
+  await ref.read(detailsControllerProvider(id).notifier).delete();
+  if (navigator.canPop()) navigator.pop();
+}
+
+/// FileDetailScreen — the unified file-detail HOST that wires a single file's
+/// data/navigation around the presentational [FileView].
+///
+/// [FileView] is intentionally free of DB rows, providers and navigation; this
+/// host is where those concerns live. There are two entry points onto the same
+/// scaffold:
+///
+///   * [FileDetailScreen.new] (`item:`) — IMAGE path (#1438). The matome hub
+///     already holds the full [RecordingItem] for the tapped tile, so the host
+///     takes it directly. It is read-only (no notes persistence yet) and builds
+///     the inline framed image media header whose tap opens a fullscreen viewer.
+///
+///   * [FileDetailScreen.byId] (`id:`) — AUDIO path (#1439). Routed from
+///     `/items/audio/:id`, it loads via [detailsControllerProvider] and
+///     owns the full edit lifecycle: Notes save (to the user-owned `notes`
+///     column), the unsaved-changes leave guard, retry / delete / move-to-space,
+///     and an [AudioPlayerBar] media header. Audio Contents (read-only) reads the
+///     machine-owned `transcript` column; per-file Summary is gone (it belongs to
+///     the matome). The screen opens focused on Contents — the Notes field is not
+///     auto-opened.
+///
+/// The [FileView] composition and the [RecordingItem]→[FileViewData] mapping are
+/// shared across both paths; only the media header and the persistence wiring
+/// differ.
+///
+/// Reuse seam for the next wave:
+///   * #1440 (Contents state machine): both paths render [FileView]'s honest
+///     empty/contents body; swap [FileViewData.contentsText] for the
+///     state-driven body there.
+class FileDetailScreen extends StatelessWidget {
+  /// Image entry point — the [RecordingItem] is supplied directly.
+  const FileDetailScreen({super.key, required this.item})
+    : id = null,
+      _rowOnlyKind = null;
+
+  /// Audio entry point — the file is loaded by id via [detailsControllerProvider].
+  const FileDetailScreen.byId({super.key, required this.id})
+    : item = null,
+      _rowOnlyKind = null;
+
+  /// Image drill-down by id (`/items/image/:id`). Loads ONLY the row (no
+  /// audio-source resolution / `downloadUrl`) and renders the image host. The id
+  /// lives in the route PATH so it SURVIVES go_router rebuilds — unlike `extra`,
+  /// which go_router drops on rebuild, making `state.extra!` throw a null-check.
+  const FileDetailScreen.imageById({super.key, required this.id})
+    : item = null,
+      _rowOnlyKind = FileMediaKind.image;
+
+  /// Document drill-down by id (`/items/document/:id`, #1450). Mirrors
+  /// [imageById] exactly — loads ONLY the row via `getRecordingById` (NO
+  /// audio-source `downloadUrl`; a document never hits the audio host) and
+  /// renders the generic file host with [FileMediaKind.doc] (the "Document"
+  /// Contents tag, no inline preview in v1). The id rides in the route PATH so
+  /// it SURVIVES go_router rebuilds — `extra` is dropped on rebuild, which would
+  /// make `state.extra!` throw a null-check.
+  const FileDetailScreen.documentById({super.key, required this.id})
+    : item = null,
+      _rowOnlyKind = FileMediaKind.doc;
+
+  /// Video drill-down by id (`/items/video/:id`). Reuses the row-only file host:
+  /// video remains `item_type=file`, with `mediaType=video` selecting this
+  /// lightweight player shell rather than the audio source path.
+  const FileDetailScreen.videoById({super.key, required this.id})
+    : item = null,
+      _rowOnlyKind = FileMediaKind.video;
+
+  /// The Item being shown (item-driven image path). Null on the id paths.
+  final RecordingItem? item;
+
+  /// The recording id to load (audio or image/document-by-id path).
+  final String? id;
+
+  /// Non-null on the row-only id paths ([imageById] / [documentById]): the kind
+  /// to render after loading ONLY the row, bypassing the audio-centric details
+  /// load. Null on the audio ([byId]) and item-driven paths.
+  final FileMediaKind? _rowOnlyKind;
+
+  /// Maps the `mediaType` carried by a [RecordingItem] to the [FileMediaKind]
+  /// that selects [FileView]'s media header and default Contents tag. Mirrors
+  /// the audio/image/document buckets `mediaTypeForPath` writes — an imported
+  /// document (#1449) maps to [FileMediaKind.doc], NOT image/audio.
+  static FileMediaKind mediaKindOf(RecordingItem item) {
+    if (item.itemType == MatomeItemType.file) {
+      return mediaKindForType(item.mediaType);
+    }
+    throw UnsupportedError('Text items do not use FileDetailScreen');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final id = this.id;
+    final rowOnlyKind = _rowOnlyKind;
+    if (rowOnlyKind != null && id != null) {
+      return _RowOnlyDetailById(id: id, mediaKind: rowOnlyKind);
+    }
+    if (id != null) return _FileDetailById(id: id);
+    return _ImageDetailHost.fromItem(item: item!);
+  }
+}
+
+/// Loads ONLY the row by id (no audio-source resolution / `downloadUrl`) and
+/// renders the kind-specific host. Robust to go_router rebuilds — the id comes
+/// from the route path, not `extra`.
+final _imageRowProvider = FutureProvider.autoDispose
+    .family<ItemWithPayload?, String>((ref, id) {
+      final ownerId = ref.watch(currentOwnerIdProvider);
+      if (ownerId == null) return null;
+      return ref.watch(itemsDaoProvider).getById(id, ownerId);
+    });
+
+/// The row-only id host shared by the image (`/items/image/:id`) and
+/// document (`/items/document/:id`, #1450) routes. Both load ONLY the row —
+/// no audio-source `downloadUrl` — and render the generic [_ImageDetailHost]
+/// with the supplied [mediaKind] (image → framed preview; doc → "Document" tag,
+/// no inline preview). Keeping a single host for both keeps the no-audio-load
+/// invariant in ONE place.
+class _RowOnlyDetailById extends ConsumerStatefulWidget {
+  const _RowOnlyDetailById({required this.id, required this.mediaKind});
+
+  final String id;
+  final FileMediaKind mediaKind;
+
+  @override
+  ConsumerState<_RowOnlyDetailById> createState() => _RowOnlyDetailByIdState();
+}
+
+class _RowOnlyDetailByIdState extends ConsumerState<_RowOnlyDetailById> {
+  bool _retrying = false;
+
+  void _onDelete() => _fileDeleteFlow(context, ref, widget.id);
+
+  Future<void> _onRetry(ItemWithPayload row) async {
+    final coreId = row.coreId;
+    if (coreId == null || _retrying) return;
+    final container = ProviderScope.containerOf(context, listen: false);
+    final ownerId = container.read(currentOwnerIdProvider);
+    if (ownerId == null) return;
+    final repository = container.read(recordingsRepositoryProvider);
+    final dao = container.read(itemsDaoProvider);
+    final pollInterval = container.read(systemPolicyProvider).pollInterval;
+
+    setState(() => _retrying = true);
+    try {
+      final accepted = await repository.enqueueProcessing(coreId);
+      await _applyProcessing(dao, ownerId, accepted);
+      container.invalidate(_imageRowProvider(widget.id));
+      final runId = accepted.processing.runId;
+      if (runId != null && accepted.processing.state.isInFlight) {
+        final waiter = RecordingResultWaiter(
+          recordingId: coreId,
+          runId: runId,
+          poll: () => repository.fetchRecording(coreId),
+          initialPollInterval: pollInterval,
+        );
+        final RecordingResult result;
+        try {
+          result = await waiter.wait();
+        } finally {
+          waiter.cancel();
+        }
+        final terminal = result.recording;
+        if (terminal != null) {
+          await _applyProcessing(dao, ownerId, terminal, expectedRunId: runId);
+        }
+      }
+    } catch (error, stack) {
+      AppLog.error(
+        LogCat.action,
+        'retry processing failed item=${widget.id}',
+        error,
+        stack,
+      );
+    } finally {
+      container.invalidate(_imageRowProvider(widget.id));
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
+
+  Future<void> _applyProcessing(
+    ItemsDao dao,
+    String ownerId,
+    Recording remote, {
+    String? expectedRunId,
+  }) async {
+    if (expectedRunId != null && remote.processing.runId != expectedRunId) {
+      return;
+    }
+    final current = await dao.getById(widget.id, ownerId);
+    if (current == null) return;
+    await dao.updateItem(
+      widget.id,
+      ownerId,
+      itemProcessingUpdate(remote, existing: current),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    Widget shell(Widget body) => Scaffold(
+      backgroundColor: colors.background,
+      appBar: AppBar(
+        backgroundColor: colors.background,
+        surfaceTintColor: colors.background,
+      ),
+      body: body,
+    );
+
+    return ref
+        .watch(_imageRowProvider(widget.id))
+        .when(
+          data: (row) => row == null
+              ? shell(Center(child: Text(t.recording.title)))
+              : _ImageDetailHost.fromRow(
+                  row: row,
+                  place: null,
+                  mediaKind: widget.mediaKind,
+                  onRetry: _retrying ? null : () => _onRetry(row),
+                  // Same "…" popup as audio (Delete), so every file detail has
+                  // a consistent overflow.
+                  trailing: FileActionsMenu(onDelete: _onDelete),
+                ),
+          loading: () => shell(const Center(child: LoadingIndicator())),
+          error: (_, _) => shell(Center(child: Text(t.recording.title))),
+        );
+  }
+}
+
+/// Loads the row by id and dispatches to the kind-specific host. Keeps the two
+/// hosts free of the load/dispatch concern: image → [_ImageDetailHost], audio →
+/// [_AudioDetailHost], both fed off the SAME [detailsControllerProvider] load so
+/// the route renders the right screen for any file type.
+class _FileDetailById extends ConsumerWidget {
+  const _FileDetailById({required this.id});
+
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(detailsControllerProvider(id));
+
+    // While the row is loading (or if it is genuinely missing) defer to the
+    // audio host, which already renders the honest loading / not-found bodies —
+    // a single place for those states rather than duplicating them here.
+    final row = state.row;
+    if (state.isLoading || row == null) {
+      return _AudioDetailHost(id: id);
+    }
+    // Route by the row's media kind (NOT a bare `startsWith('image')`):
+    //   * image  → the framed image host,
+    //   * doc    → the generic file host (no inline preview; safe external
+    //              open/download is exposed through the document header),
+    //   * video  → the lightweight video file host,
+    //   * audio  → the audio host (the default).
+    switch (mediaKindForType(row.mediaType)) {
+      case FileMediaKind.image:
+        return _ImageDetailHost.fromRow(
+          row: row,
+          place: state.badge,
+          onRetry: () =>
+              ref.read(detailsControllerProvider(id).notifier).retry(),
+        );
+      case FileMediaKind.doc:
+        return _ImageDetailHost.fromRow(
+          row: row,
+          place: state.badge,
+          mediaKind: FileMediaKind.doc,
+          onRetry: () =>
+              ref.read(detailsControllerProvider(id).notifier).retry(),
+        );
+      case FileMediaKind.video:
+        return _ImageDetailHost.fromRow(
+          row: row,
+          place: state.badge,
+          mediaKind: FileMediaKind.video,
+          onRetry: () =>
+              ref.read(detailsControllerProvider(id).notifier).retry(),
+        );
+      case FileMediaKind.audio:
+        return _AudioDetailHost(id: id);
+    }
+  }
+}
+
+// ─── Image host (read-only) ─────────────────────────────────────────────────
+
+/// The image detail host: maps a [RecordingItem] into a [FileViewData], builds
+/// the inline framed image media header, and owns the fullscreen-viewer
+/// navigation. Read-only Notes for now (image notes persistence is out of scope).
+class _ImageDetailHost extends StatelessWidget {
+  /// Built from the [RecordingItem] the matome hub already holds (the direct
+  /// `FileDetailScreen(item:)` entry — embedded / two-pane hosts).
+  _ImageDetailHost.fromItem({required RecordingItem item})
+    : title = item.title,
+      place = item.workspaceName,
+      coreId = item.coreId,
+      processingStatus = item.processingStatus,
+      processingErrorCode = item.processingErrorCode,
+      blobId = item.blobId,
+      filename = null,
+      contentType = null,
+      byteSize = null,
+      openPolicy = DocumentOpenPolicy.downloadOnly,
+      notes = item.notes,
+      mediaKind = mediaKindForType(item.mediaType),
+      originalExtension = null,
+      // The item-driven path carries no machine text/processing flag, so the
+      // doc Contents falls back to its honest derivation (empty).
+      contentsText = null,
+      processingState = ProcessingState.notRequested,
+      onRetry = null,
+      trailing = null;
+
+  /// Built from a loaded [ItemWithPayload] — the id-driven `/items/audio/:id`
+  /// route, which now dispatches images here (#97 unification) so the image and
+  /// audio tiles drill down through the SAME go_router route. [mediaKind]
+  /// defaults to image but is [FileMediaKind.doc] for an imported document
+  /// (#1449) so the view shows the "Document" tag (and NO inline image preview).
+  _ImageDetailHost.fromRow({
+    required ItemWithPayload row,
+    required this.place,
+    this.trailing,
+    this.mediaKind = FileMediaKind.image,
+    this.onRetry,
+  }) : title = row.title,
+       coreId = row.coreId,
+       processingStatus = row.processingStatus,
+       processingErrorCode = row.processingErrorCode,
+       blobId = row.blobId,
+       filename = row.file?.filename,
+       contentType = row.file?.contentType,
+       byteSize = row.file?.byteSize,
+       openPolicy = DocumentOpenPolicy.fromWire(row.file?.openPolicy),
+       notes = row.notes,
+       contentsText = fileContentsFor(row, mediaKind),
+       processingState = row.processingState,
+       // The persisted source extension (#1449) drives the doc chip's type
+       // icon; null on non-document rows (and on the item-driven path).
+       originalExtension = row.originalExtension;
+
+  final String title;
+  final String? place;
+  final int? coreId;
+  final String? processingStatus;
+  final String? processingErrorCode;
+  final String? blobId;
+  final String? filename;
+  final String? contentType;
+  final int? byteSize;
+  final DocumentOpenPolicy openPolicy;
+  final String? notes;
+
+  /// The machine-produced Contents text projected from the current typed output
+  /// envelope for this media kind.
+  final String? contentsText;
+
+  final ProcessingState processingState;
+
+  /// The persisted lower-case source extension (`original_extension`, #1449)
+  /// used by the doc media header to pick its type icon. Null on image/audio.
+  final String? originalExtension;
+
+  /// The media kind driving the FileView header + Contents tag. image by
+  /// default; doc for an imported document (no inline preview in v1).
+  final FileMediaKind mediaKind;
+
+  /// The "…" overflow menu rendered in the AppBar (Move + Delete). Null on the
+  /// item-driven [fromItem] path.
+  final Widget? trailing;
+  final VoidCallback? onRetry;
+
+  FileViewData _viewData(BuildContext context) {
+    return FileViewData(
+      title: title,
+      mediaKind: mediaKind,
+      place: place,
+      syncCoreId: coreId,
+      processingStatus: processingStatus,
+      // Each kind swaps its own media header:
+      //   * image → the framed inline preview that opens the fullscreen viewer,
+      //   * doc   → the FileTypeChip with a policy-derived external action,
+      //   * video → a minimal file-host player shell (no AI dispatch),
+      //   * audio → handled by the audio host, not here.
+      mediaHeader: switch (mediaKind) {
+        FileMediaKind.image => _ImageMediaHeader(
+          blobId: blobId,
+          onOpenFullscreen: () => _openFullscreen(context),
+        ),
+        FileMediaKind.doc => _DocumentFileHeader(
+          fileName: filename ?? title,
+          extension: originalExtension,
+          mimeType: contentType,
+          sizeLabel: byteSize != null && byteSize! > 0
+              ? _formatBytes(byteSize!)
+              : null,
+          byteSize: byteSize,
+          coreId: coreId,
+          blobId: blobId,
+          openPolicy: openPolicy,
+        ),
+        FileMediaKind.video => _VideoMediaHeader(title: title, blobId: blobId),
+        FileMediaKind.audio => null,
+      },
+      contentsText: contentsText,
+      contentsState: _contentsState(),
+      errorMessage: processingErrorCode == null
+          ? null
+          : processingErrorMessage(processingErrorCode),
+      onContentsRetry: onRetry,
+      notesText: notes,
+    );
+  }
+
+  /// Honest, producer-independent Contents state for a document, derived from
+  /// the row's OWN fields — mirrors the audio host's `_contentsState`:
+  ///   * `processingStatus == 'failed'` → failed ("Processing failed"),
+  ///   * mid-pipeline (`isProcessing`, but not a locally-held pending upload) →
+  ///     processing ("Processing…"),
+  ///   * machine summary present → ready (render it),
+  ///   * otherwise → empty ("No contents yet").
+  /// A `pending_upload` row is held locally (not in the pipeline), so it reads
+  /// as empty rather than a misleading "Processing…".
+  ContentsState _contentsState() {
+    final explicit = switch (processingState) {
+      ProcessingState.queued => ContentsState.queued,
+      ProcessingState.processing => ContentsState.processing,
+      ProcessingState.partial => ContentsState.partial,
+      ProcessingState.failed => ContentsState.failed,
+      ProcessingState.notAvailable => ContentsState.notAvailable,
+      ProcessingState.succeeded ||
+      ProcessingState.notRequested ||
+      ProcessingState.unknown => null,
+    };
+    if (explicit != null) return explicit;
+    final text = contentsText;
+    if (text != null && text.trim().isNotEmpty) return ContentsState.ready;
+    return ContentsState.empty;
+  }
+
+  void _openFullscreen(BuildContext context) {
+    final blobId = this.blobId;
+    if (blobId == null || blobId.isEmpty) return;
+    // Push the fullscreen viewer on the LOCAL navigator (the one that owns this
+    // detail screen), NOT the root navigator: this detail screen is itself a
+    // go_router page, so its enclosing Navigator is the right host for a
+    // child modal — and it keeps the viewer scoped to the detail route.
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => _FullscreenImageViewer(blobId: blobId, title: title),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Scaffold(
+      backgroundColor: colors.background,
+      appBar: AppBar(
+        backgroundColor: colors.background,
+        surfaceTintColor: colors.background,
+        title: Text(
+          title.isEmpty ? t.recording.title : title,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [?trailing],
+      ),
+      body: fileReadingCard(
+        context,
+        child: FileView(
+          key: const ValueKey('file-detail-view'),
+          shrinkWrap: true,
+          data: _viewData(context),
+        ),
+      ),
+    );
+  }
+}
+
+class _DocumentFileHeader extends ConsumerStatefulWidget {
+  const _DocumentFileHeader({
+    required this.fileName,
+    required this.extension,
+    required this.mimeType,
+    required this.sizeLabel,
+    required this.byteSize,
+    required this.coreId,
+    required this.blobId,
+    required this.openPolicy,
+  });
+
+  final String fileName;
+  final String? extension;
+  final String? mimeType;
+  final String? sizeLabel;
+  final int? byteSize;
+  final int? coreId;
+  final String? blobId;
+  final DocumentOpenPolicy openPolicy;
+
+  @override
+  ConsumerState<_DocumentFileHeader> createState() =>
+      _DocumentFileHeaderState();
+}
+
+class _DocumentFileHeaderState extends ConsumerState<_DocumentFileHeader> {
+  FileTypeChipState _state = FileTypeChipState.ready;
+  late final DocumentOpenService _service;
+
+  @override
+  void initState() {
+    super.initState();
+    _service = ref.read(documentOpenServiceProvider);
+  }
+
+  @override
+  void dispose() {
+    _service.releaseLocalLease();
+    super.dispose();
+  }
+
+  FileTypeChipAction get _action => switch (widget.openPolicy) {
+    DocumentOpenPolicy.external => FileTypeChipAction.open,
+    DocumentOpenPolicy.systemApp => FileTypeChipAction.openInApp,
+    DocumentOpenPolicy.attachmentOnly => FileTypeChipAction.downloadWithWarning,
+    DocumentOpenPolicy.downloadOnly => FileTypeChipAction.download,
+    DocumentOpenPolicy.blocked => FileTypeChipAction.unavailable,
+  };
+
+  Future<void> _open() async {
+    setState(() => _state = FileTypeChipState.loading);
+    DocumentOpenResult result;
+    try {
+      if ((widget.openPolicy == DocumentOpenPolicy.attachmentOnly ||
+              widget.openPolicy == DocumentOpenPolicy.downloadOnly) &&
+          widget.blobId != null) {
+        final exported = await ref
+            .read(vaultExportServiceProvider)
+            .export(blobId: widget.blobId!, suggestedFilename: widget.fileName);
+        if (exported && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(t.files.exportedOutsideVault(n: 1))),
+          );
+        }
+        result = exported
+            ? DocumentOpenResult.downloadStarted
+            : DocumentOpenResult.unavailable;
+      } else {
+        result = await _service.open(
+          DocumentOpenRequest(
+            coreId: widget.coreId,
+            blobId: widget.blobId,
+            openPolicy: widget.openPolicy,
+            extension: widget.extension,
+            mimeType: widget.mimeType,
+            byteSize: widget.byteSize,
+          ),
+        );
+      }
+    } catch (_) {
+      result = DocumentOpenResult.failed;
+    }
+    if (!mounted) return;
+    setState(() {
+      _state = switch (result) {
+        DocumentOpenResult.openedLocal ||
+        DocumentOpenResult.openedRemote ||
+        DocumentOpenResult.downloadStarted => FileTypeChipState.ready,
+        DocumentOpenResult.blocked ||
+        DocumentOpenResult.unavailable => FileTypeChipState.disabled,
+        DocumentOpenResult.failed => FileTypeChipState.failed,
+      };
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FileTypeChip(
+      fileName: widget.fileName,
+      extension: widget.extension,
+      sizeLabel: widget.sizeLabel,
+      action: _action,
+      state: _state,
+      onAction: widget.openPolicy == DocumentOpenPolicy.blocked ? null : _open,
+    );
+  }
+}
+
+class _VideoMediaHeader extends StatelessWidget {
+  const _VideoMediaHeader({required this.title, required this.blobId});
+
+  final String title;
+  final String? blobId;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final radius = context.radius;
+    final typography = context.typography;
+    final isAvailable = blobId != null && blobId!.isNotEmpty;
+
+    return Container(
+      key: const ValueKey('file-detail-video-header'),
+      padding: EdgeInsets.all(spacing.lg),
+      decoration: BoxDecoration(
+        color: colors.subtleFill,
+        borderRadius: BorderRadius.circular(radius.md),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.play_circle_outline,
+            color: colors.textSecondary,
+            size: _kVideoHeaderIconSize,
+          ),
+          SizedBox(width: spacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Video',
+                  style: typography.label.copyWith(color: colors.textSecondary),
+                ),
+                SizedBox(height: spacing.xxs),
+                Text(
+                  isAvailable ? title : 'Video file unavailable',
+                  style: typography.body.copyWith(color: colors.textPrimary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Audio host (editable, id-driven) ───────────────────────────────────────
+
+/// The audio detail host: loads the recording via [detailsControllerProvider]
+/// and renders it through the unified [FileView] — audio Contents reads the
+/// machine `transcript` column (read-only), Notes reads/writes the user-owned
+/// `notes` column. Owns the Notes save, the unsaved-changes leave guard, and the
+/// retry / delete / move-to-space actions ported from the retired details
+/// screen. Default focus is Contents; the Notes field is not auto-opened.
+class _AudioDetailHost extends ConsumerStatefulWidget {
+  const _AudioDetailHost({required this.id});
+
+  final String id;
+
+  @override
+  ConsumerState<_AudioDetailHost> createState() => _AudioDetailHostState();
+}
+
+class _AudioDetailHostState extends ConsumerState<_AudioDetailHost> {
+  final TextEditingController _notesController = TextEditingController();
+  // The text last persisted — the isDirty baseline. Wrapped in a DirtyTracker so
+  // the unsaved-changes leave guard matches the retired details-screen semantics.
+  late DirtyTracker _dirty;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _dirty = DirtyTracker('');
+    _notesController.addListener(() {
+      _dirty.setTranscript(_notesController.text);
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  bool get _isDirty => _dirty.isDirty;
+
+  void _syncFromState(DetailsState state) {
+    if (_initialized || state.isLoading || state.row == null) return;
+    _initialized = true;
+    final notes = state.row?.notes ?? '';
+    _dirty = DirtyTracker(notes);
+    _notesController.text = notes;
+  }
+
+  Future<void> _save() async {
+    final controller = ref.read(detailsControllerProvider(widget.id).notifier);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await controller.save(_notesController.text);
+      _dirty.save();
+      if (!mounted) return;
+      setState(() {});
+      messenger.showSnackBar(SnackBar(content: Text(t.details.saved)));
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(t.details.saveFailed)));
+    }
+  }
+
+  Future<bool> _confirmLeave() async {
+    if (!_isDirty) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final colors = context.colors;
+
+        return AppDialog(
+          title: Text(t.details.unsavedTitle),
+          content: Text(t.details.unsavedBody),
+          actions: [
+            AppTextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.details.keepEditing),
+            ),
+            AppTextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: colors.failed),
+              child: Text(t.details.discard),
+            ),
+          ],
+        );
+      },
+    );
+    if (discard == true) {
+      // Reset the baseline so a re-render on the way out doesn't re-trigger the
+      // guard (W-02 avoidance, ported from the retired details screen).
+      _dirty.discard(_notesController.text);
+    }
+    return discard ?? false;
+  }
+
+  Future<void> _onRetry() async {
+    await ref.read(detailsControllerProvider(widget.id).notifier).retry();
+  }
+
+  void _onDelete() => _fileDeleteFlow(
+    context,
+    ref,
+    widget.id,
+    // Clear dirty so the leave-guard doesn't block the post-delete pop.
+    onBeforeDelete: () => _dirty.discard(_notesController.text),
+  );
+
+  FileViewData _viewData(DetailsState state) {
+    final row = state.row;
+    return FileViewData(
+      title: state.title,
+      mediaKind: FileMediaKind.audio,
+      place: state.badge,
+      syncCoreId: state.coreId,
+      processingStatus: row?.processingStatus,
+      mediaHeader: AudioPlayerBar(source: state.audioSource),
+      // Contents (audio → "Transcript") reads the machine-owned transcript
+      // column (#1439) and renders the #1440 state machine driven by the
+      // recording's OWN fields — not a backend producer.
+      contentsText: row?.transcript,
+      contentsState: _contentsState(state),
+      errorMessage: row?.processingErrorCode == null
+          ? null
+          : processingErrorMessage(row?.processingErrorCode),
+      onContentsRetry: _onRetry,
+      // Notes seed is unused here — the host owns [_notesController] so dirty
+      // tracking and save work — but kept for parity with the image path.
+      notesText: row?.notes,
+    );
+  }
+
+  /// Derives the honest Contents state from the recording's existing fields:
+  /// a failed transcription → failed (+retry); in-flight → processing; present
+  /// transcript text → ready; otherwise → empty ("No transcript yet"). This is
+  /// producer-independent — it reads only the loaded row's own status.
+  ContentsState _contentsState(DetailsState state) {
+    final processing = state.row?.processingState;
+    final explicit = switch (processing) {
+      ProcessingState.queued => ContentsState.queued,
+      ProcessingState.processing => ContentsState.processing,
+      ProcessingState.partial => ContentsState.partial,
+      ProcessingState.failed => ContentsState.failed,
+      ProcessingState.notAvailable => ContentsState.notAvailable,
+      ProcessingState.succeeded ||
+      ProcessingState.notRequested ||
+      ProcessingState.unknown ||
+      null => null,
+    };
+    if (explicit != null) return explicit;
+    final transcript = state.row?.transcript;
+    if (transcript != null && transcript.trim().isNotEmpty) {
+      return ContentsState.ready;
+    }
+    return ContentsState.empty;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(detailsControllerProvider(widget.id));
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final dirtyDotOffset = -spacing.xs / spacing.xxs;
+    final dirtyDotSize = spacing.xs + spacing.xs / spacing.xxs;
+    _syncFromState(state);
+
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final navigator = Navigator.of(context);
+        final shouldLeave = await _confirmLeave();
+        if (shouldLeave && mounted) {
+          navigator.maybePop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        appBar: AppBar(
+          backgroundColor: colors.background,
+          surfaceTintColor: colors.background,
+          title: Text(
+            state.title.isEmpty ? t.recording.title : state.title,
+            overflow: TextOverflow.ellipsis,
+          ),
+          actions: [
+            if (!state.isLoading && !state.notFound)
+              FileActionsMenu(onDelete: _onDelete),
+          ],
+        ),
+        floatingActionButton: (state.isLoading || state.notFound)
+            ? null
+            : FloatingActionButton(
+                heroTag: 'file-detail-save',
+                onPressed: _save,
+                backgroundColor: colors.accent,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(Icons.check, color: colors.onAccent),
+                    if (_isDirty)
+                      Positioned(
+                        right: dirtyDotOffset,
+                        top: dirtyDotOffset,
+                        child: Container(
+                          width: dirtyDotSize,
+                          height: dirtyDotSize,
+                          decoration: BoxDecoration(
+                            color: colors.failed,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: colors.accent, width: 2),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+        body: _buildBody(state),
+      ),
+    );
+  }
+
+  Widget _buildBody(DetailsState state) {
+    final colors = context.colors;
+    final typography = context.typography;
+
+    if (state.isLoading) {
+      return Center(child: LoadingIndicator(color: colors.accent));
+    }
+    if (state.notFound) {
+      return Center(
+        child: Text(
+          t.details.notFound,
+          style: typography.bodySmall.copyWith(color: colors.textSecondary),
+        ),
+      );
+    }
+
+    // Failed / pending-upload rows surface the retry CTA inline above the
+    // unified composition rather than the old per-tab Notes affordance.
+    return fileReadingCard(
+      context,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (state.processingFailed || state.pendingUpload)
+            _RetryBanner(
+              label: state.pendingUpload
+                  ? t.cardStatus.pendingUpload
+                  : t.recording.transcriptionFailed,
+              onRetry: _onRetry,
+            ),
+          FileView(
+            key: const ValueKey('file-detail-view'),
+            shrinkWrap: true,
+            data: _viewData(state),
+            notesController: _notesController,
+            onNotesChanged: (_) {},
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Inline retry affordance for a failed / pending-upload audio recording, shown
+/// above the unified [FileView] composition.
+class _RetryBanner extends StatelessWidget {
+  const _RetryBanner({required this.label, required this.onRetry});
+
+  final String label;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+
+    return Container(
+      width: double.infinity,
+      color: colors.subtleFill,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.md,
+        vertical: spacing.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: typography.bodySmall.copyWith(color: colors.textSecondary),
+            ),
+          ),
+          AppTextButton.icon(
+            key: const ValueKey('file-detail-retry'),
+            onPressed: onRetry,
+            icon: Icon(Icons.refresh, size: spacing.md),
+            label: Text(t.common.retry),
+            style: TextButton.styleFrom(
+              foregroundColor: colors.onAccent,
+              backgroundColor: colors.accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Image media header + fullscreen viewer ─────────────────────────────────
+
+/// The inline, framed image preview shown as [FileView]'s media header. Tapping
+/// it opens the fullscreen viewer — the lightbox is now a header *action*, not
+/// the whole screen.
+class _ImageMediaHeader extends StatelessWidget {
+  const _ImageMediaHeader({
+    required this.blobId,
+    required this.onOpenFullscreen,
+  });
+
+  final String? blobId;
+  final VoidCallback onOpenFullscreen;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = context.radius;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    final blobId = this.blobId;
+
+    final Widget frame = blobId == null
+        ? const _UnavailableFrame()
+        : VaultLeaseImage(
+            blobId: blobId,
+            fit: BoxFit.cover,
+            errorBuilder: (_) => const _UnavailableFrame(),
+          );
+
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(radius.lg),
+      child: InkWell(
+        key: const ValueKey('file-detail-image-header'),
+        onTap: blobId == null ? null : onOpenFullscreen,
+        borderRadius: BorderRadius.circular(radius.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(radius.lg),
+              child: AspectRatio(aspectRatio: 16 / 9, child: frame),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.sm,
+                vertical: spacing.xs,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.fullscreen,
+                    size: typography.label.fontSize,
+                    color: colors.textSecondary,
+                  ),
+                  SizedBox(width: spacing.xxs),
+                  Text(
+                    t.fileView.viewFullscreen,
+                    style: typography.label.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Placeholder frame for a missing / unreadable image. Carries an accessible
+/// label without leaking a visual literal past the design-system source guard.
+class _UnavailableFrame extends StatelessWidget {
+  const _UnavailableFrame();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Semantics(
+      label: t.matome.imageUnavailable,
+      child: ColoredBox(
+        color: colors.subtleFill,
+        child: Center(
+          child: Icon(Icons.broken_image_outlined, color: colors.textMuted),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fullscreen pinch-zoom viewer — the relocated lightbox, now a media-header
+/// action rather than the entire image experience.
+class _FullscreenImageViewer extends StatelessWidget {
+  const _FullscreenImageViewer({required this.blobId, required this.title});
+
+  final String blobId;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Scaffold(
+      backgroundColor: colors.background,
+      appBar: AppBar(
+        backgroundColor: colors.background,
+        surfaceTintColor: colors.background,
+        title: Text(title, overflow: TextOverflow.ellipsis),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          key: const ValueKey('file-detail-fullscreen-viewer'),
+          child: VaultLeaseImage(
+            blobId: blobId,
+            fit: BoxFit.contain,
+            errorBuilder: (_) => const _ViewerUnavailable(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewerUnavailable extends StatelessWidget {
+  const _ViewerUnavailable();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final spacing = context.spacing;
+    final typography = context.typography;
+    return Padding(
+      padding: EdgeInsets.all(spacing.xl),
+      child: Text(
+        t.matome.imageUnavailable,
+        style: typography.bodySmall.copyWith(color: colors.textMuted),
+      ),
+    );
+  }
+}

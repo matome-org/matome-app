@@ -1,0 +1,450 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:matome_flutter/core/db/app_database.dart';
+import 'package:matome_flutter/core/providers.dart';
+import 'package:matome_flutter/core/theme/app_theme.dart';
+import 'package:matome_flutter/features/details/audio_player_bar.dart';
+import 'package:matome_flutter/features/details/file_detail_screen.dart';
+import 'package:matome_flutter/features/details/file_view.dart';
+import 'package:matome_flutter/features/matome/matome_detail_screen.dart';
+import 'package:matome_flutter/i18n/strings.g.dart';
+
+import '../support/item_fixtures.dart';
+
+/// Seeds a Matome plus [recordingCount] child Items (recordings).
+Future<void> _seedMatome(
+  AppDatabase db, {
+  required String id,
+  String title = 'Standup notes',
+  String? aggregatedSummary,
+  String? description,
+  String? spaceId,
+  int? coreId,
+  bool summaryStale = false,
+  String? itemSummary,
+  int recordingCount = 2,
+}) async {
+  await db.matomesDao.create(
+    MatomesCompanion(
+      id: Value(id),
+      spaceId: Value(spaceId),
+      title: Value(title),
+      happenedAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+      createdAt: Value(DateTime(2026, 6, 8).millisecondsSinceEpoch),
+      description: Value(description),
+      aggregatedSummary: Value(aggregatedSummary),
+      summaryStale: Value(summaryStale),
+      coreId: Value(coreId),
+    ),
+  );
+
+  for (var i = 0; i < recordingCount; i += 1) {
+    await insertTestFileItem(
+      db,
+      id: 'rec_$i',
+      matomeId: id,
+      title: 'Item $i',
+      summary: itemSummary,
+      durationSeconds: 30,
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + i,
+      mediaType: 'audio',
+    );
+  }
+  await db.matomesDao.markSummaryStale(id, summaryStale);
+}
+
+Widget _app(ProviderContainer container, {required String id}) {
+  return UncontrolledProviderScope(
+    container: container,
+    child: TranslationProvider(
+      child: MaterialApp(
+        theme: buildLightTheme(),
+        home: MatomeDetailScreen(id: id),
+      ),
+    ),
+  );
+}
+
+/// A go_router-backed app mirroring the production routes the file-detail
+/// drill-down uses: `/matome/:id` and the UNIFIED `/items/audio/:id` that
+/// loads the row and dispatches images → the image host (#97). Needed because
+/// the matome image/audio tiles now navigate via `context.push` — a plain
+/// MaterialApp has no Router, so the old imperative-push test gap is closed by
+/// exercising the real declarative route here.
+Widget _routerApp(ProviderContainer container, {required String id}) {
+  final router = GoRouter(
+    initialLocation: '/matome/$id',
+    routes: [
+      GoRoute(
+        path: '/matome/:id',
+        builder: (context, state) =>
+            MatomeDetailScreen(id: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/items/audio/:id',
+        builder: (context, state) =>
+            FileDetailScreen.byId(id: state.pathParameters['id']!),
+      ),
+      // Images drill down by id (row-only load, no audio source).
+      GoRoute(
+        path: '/items/image/:id',
+        builder: (context, state) =>
+            FileDetailScreen.imageById(id: state.pathParameters['id']!),
+      ),
+      // Documents drill down by id (row-only load, no audio source) — #1450.
+      GoRoute(
+        path: '/items/document/:id',
+        builder: (context, state) =>
+            FileDetailScreen.documentById(id: state.pathParameters['id']!),
+      ),
+    ],
+  );
+  return UncontrolledProviderScope(
+    container: container,
+    child: TranslationProvider(
+      child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
+    ),
+  );
+}
+
+/// W7 letter format gathers the detailed sections (child Items, contacts, notes,
+/// Share) behind a "Show more" toggle. Reveal them before reaching those keys.
+Future<void> _revealDetails(WidgetTester tester) async {
+  final toggle = find.byKey(const ValueKey('matome-show-more'));
+  await tester.ensureVisible(toggle);
+  await tester.tap(toggle);
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  late AppDatabase db;
+
+  setUp(() {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+  });
+  tearDown(() => db.close());
+
+  ProviderContainer container() {
+    final c = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        currentOwnerIdProvider.overrideWithValue('1'),
+      ],
+    );
+    addTearDown(c.dispose);
+    return c;
+  }
+
+  testWidgets('renders header title and one card per child Item', (
+    tester,
+  ) async {
+    await _seedMatome(
+      db,
+      id: 'm1',
+      title: 'Standup notes',
+      aggregatedSummary: 'Discussed the roadmap and blockers.',
+      recordingCount: 3,
+    );
+
+    await tester.pumpWidget(_app(container(), id: 'm1'));
+    await tester.pumpAndSettle();
+
+    // Header title (also the AppBar title — appears at least once).
+    expect(find.text('Standup notes'), findsWidgets);
+
+    // The aggregated summary is the read-first hero (W7) — visible up front, no
+    // reveal, no scroll.
+    expect(find.byKey(const ValueKey('matome-summary')), findsOneWidget);
+    expect(find.text('Discussed the roadmap and blockers.'), findsOneWidget);
+
+    // The child-Item tiles live in the "Show more" detail in the letter format.
+    await _revealDetails(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('matome-item-rec_0')),
+      200,
+    );
+    expect(find.byKey(const ValueKey('matome-item-rec_0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('matome-item-rec_1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('matome-item-rec_2')), findsOneWidget);
+  });
+
+  testWidgets('aggregated-summary slot shows the empty state when null', (
+    tester,
+  ) async {
+    await _seedMatome(db, id: 'm2', aggregatedSummary: null);
+
+    await tester.pumpWidget(_app(container(), id: 'm2'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('matome-summary')), findsOneWidget);
+    expect(find.text(t.matome.noSummary), findsOneWidget);
+  });
+
+  testWidgets('shows the sync chip for an Inbox (untriaged) Matome', (
+    tester,
+  ) async {
+    await _seedMatome(db, id: 'm3', spaceId: null, coreId: null);
+
+    await tester.pumpWidget(_app(container(), id: 'm3'));
+    await tester.pumpAndSettle();
+
+    final chip = find.byKey(const ValueKey('matome-on-device'));
+    expect(chip, findsOneWidget);
+    // Normalized vocab (#1407): pure sync state, no "· not filed" suffix. The
+    // same word now also appears on the per-tile badges (one shared vocab), so
+    // scope the assertion to the chip.
+    expect(
+      find.descendant(of: chip, matching: find.text(t.cardStatus.onDevice)),
+      findsOneWidget,
+    );
+    expect(find.textContaining('not filed'), findsNothing);
+  });
+
+  testWidgets(
+    'shows the sync chip for a FILED Matome too (#1407 dropped isInbox guard)',
+    (tester) async {
+      // A filed matome (spaceId set) reconciled to Core reads "Synced" — the
+      // chip is no longer gated behind the inbox state. Seeded count-only so
+      // the rollup falls back to the matome's own coreId.
+      await _seedMatome(
+        db,
+        id: 'm_filed',
+        spaceId: 'space_1',
+        coreId: 7,
+        recordingCount: 0,
+      );
+
+      await tester.pumpWidget(_app(container(), id: 'm_filed'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('matome-on-device')), findsOneWidget);
+      expect(find.text(t.cardStatus.cloud), findsOneWidget);
+    },
+  );
+
+  testWidgets('stale summary shows a Regenerate affordance that recomputes '
+      'from items and clears stale', (tester) async {
+    await _seedMatome(
+      db,
+      id: 'm_stale',
+      // A stored-but-stale summary, with items that DO carry summaries so the
+      // local generator has something to roll up.
+      aggregatedSummary: 'Old summary',
+      summaryStale: true,
+      itemSummary: 'Item insight.',
+      recordingCount: 2,
+    );
+
+    await tester.pumpWidget(_app(container(), id: 'm_stale'));
+    await tester.pumpAndSettle();
+
+    // The summary (and its Regenerate affordance) is the hero — visible up
+    // front, no reveal needed.
+    final regenButton = find.byKey(const ValueKey('matome-regenerate-summary'));
+    expect(regenButton, findsOneWidget);
+    expect(find.text(t.matome.summaryStale), findsOneWidget);
+
+    await tester.tap(regenButton);
+    await tester.pumpAndSettle();
+
+    // The stored summary was recomposed from the items and the stale flag (and
+    // its affordance) cleared.
+    final row = await db.matomesDao.getById('m_stale');
+    expect(row!.summaryStale, isFalse);
+    expect(row.aggregatedSummary, contains('Item insight.'));
+    expect(
+      find.byKey(const ValueKey('matome-regenerate-summary')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('no Regenerate affordance when summary is fresh (not stale)', (
+    tester,
+  ) async {
+    await _seedMatome(
+      db,
+      id: 'm_fresh',
+      aggregatedSummary: 'Fresh summary',
+      itemSummary: 'insight',
+    );
+
+    await tester.pumpWidget(_app(container(), id: 'm_fresh'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('matome-regenerate-summary')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('renders the not-found state for a missing Matome', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(container(), id: 'missing'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(t.matome.notFound), findsOneWidget);
+  });
+
+  testWidgets('image Items render a thumbnail tile with a remove action while '
+      'audio Items keep the recording card', (tester) async {
+    // One audio Item (rec_0) from the seed, plus one image Item.
+    await _seedMatome(db, id: 'm_img', recordingCount: 1);
+
+    // A real 1x1 PNG so Image.file actually decodes and pumpAndSettle settles
+    // (a non-existent path would route through errorBuilder, which we also
+    // tolerate, but a valid file keeps the test deterministic).
+    final tmp =
+        File(
+          '${Directory.systemTemp.path}/matome_tile_${DateTime.now().microsecondsSinceEpoch}.png',
+        )..writeAsBytesSync(
+          base64Decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+            '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+          ),
+        );
+    addTearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync();
+    });
+
+    await insertTestFileItem(
+      db,
+      id: 'rec_img',
+      matomeId: 'm_img',
+      title: 'whiteboard',
+      createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 99,
+      mediaType: 'image',
+      processingStatus: 'pending_upload',
+    );
+
+    await tester.pumpWidget(_app(container(), id: 'm_img'));
+    await tester.pumpAndSettle();
+    await _revealDetails(tester);
+
+    // Image Item → thumbnail tile + a rendered Image. The inline '…' is gone for
+    // the clean approved row (#1475): the overflow sheet is reached by
+    // long-pressing the row, so its key is NOT mounted up front.
+    expect(find.byKey(const ValueKey('matome-image-rec_img')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('matome-item-overflow-rec_img')),
+      findsNothing,
+    );
+    // Long-press surfaces the standardized actions sheet (delete lives inside).
+    await tester.longPress(find.byKey(const ValueKey('matome-item-rec_img')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('matome-item-overflow-rec_img')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('matome-item-delete-rec_img')),
+      findsOneWidget,
+    );
+    // Dismiss the sheet so it doesn't occlude the rest of the assertions.
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.image_outlined), findsWidgets);
+
+    // The audio Item still renders, and NOT as an image tile.
+    expect(find.byKey(const ValueKey('matome-item-rec_0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('matome-image-rec_0')), findsNothing);
+  });
+
+  testWidgets(
+    'tapping an image Item opens the FileDetailScreen host, not a lightbox '
+    'dialog (#1438 dispatch)',
+    (tester) async {
+      await _seedMatome(db, id: 'm_dispatch', recordingCount: 0);
+
+      final tmp =
+          File(
+            '${Directory.systemTemp.path}/matome_dispatch_${DateTime.now().microsecondsSinceEpoch}.png',
+          )..writeAsBytesSync(
+            base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+              '+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+            ),
+          );
+      addTearDown(() {
+        if (tmp.existsSync()) tmp.deleteSync();
+      });
+
+      await insertTestFileItem(
+        db,
+        id: 'rec_img',
+        matomeId: 'm_dispatch',
+        title: 'whiteboard',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 5,
+        mediaType: 'image',
+      );
+
+      // Drive the REAL go_router routes (not a plain MaterialApp): the image
+      // tile now `context.push`es `/items/audio/:id`, which loads the row
+      // and dispatches to the image host by media type (#97).
+      await tester.pumpWidget(_routerApp(container(), id: 'm_dispatch'));
+      await tester.pumpAndSettle();
+      await _revealDetails(tester);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('matome-image-rec_img')),
+        200,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('matome-image-rec_img')));
+      await tester.pumpAndSettle();
+
+      // The unified host is now on screen, NOT a bare lightbox dialog, and it
+      // is the IMAGE host (dispatched by media type after the id-load).
+      expect(find.byType(FileDetailScreen), findsOneWidget);
+      expect(find.byType(FileView), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('file-detail-image-header')),
+        findsOneWidget,
+      );
+      expect(find.byType(Dialog), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'tapping a document Item opens the DOCUMENT host (FileMediaKind.doc), '
+    'NOT the audio host (#1450 dispatch)',
+    (tester) async {
+      await _seedMatome(db, id: 'm_doc', recordingCount: 0);
+
+      await insertTestFileItem(
+        db,
+        id: 'rec_doc',
+        matomeId: 'm_doc',
+        title: 'Quarterly report',
+        filename: 'report.pdf',
+        createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 5,
+        mediaType: 'document',
+      );
+
+      await tester.pumpWidget(_routerApp(container(), id: 'm_doc'));
+      await tester.pumpAndSettle();
+      await _revealDetails(tester);
+
+      final tile = find.byKey(const ValueKey('matome-item-rec_doc'));
+      await tester.scrollUntilVisible(tile, 200);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+
+      // The document host is on screen via the dedicated document route — it is
+      // the unified FileView host, and it is NOT the audio host: no player bar.
+      expect(find.byType(FileDetailScreen), findsOneWidget);
+      expect(find.byType(FileView), findsOneWidget);
+      expect(find.byType(AudioPlayerBar), findsNothing);
+      // Contents tag is "Document" (the doc kind), never "Transcript" (audio).
+      expect(find.text('Document', skipOffstage: false), findsOneWidget);
+      expect(find.text('Transcript', skipOffstage: false), findsNothing);
+    },
+  );
+}
