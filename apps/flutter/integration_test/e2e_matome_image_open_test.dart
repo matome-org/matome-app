@@ -91,6 +91,9 @@ void main() {
             tokenStoreProvider.overrideWithValue(store),
             settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
             authRepositoryProvider.overrideWithValue(authRepo),
+            vaultSessionProvider.overrideWith(
+              (ref) => buildE2EVaultSession(restoreReady: true),
+            ),
           ],
         ),
       );
@@ -164,6 +167,9 @@ void main() {
             settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
             authRepositoryProvider.overrideWithValue(
               FakeE2EAuthRepository(store),
+            ),
+            vaultSessionProvider.overrideWith(
+              (ref) => buildE2EVaultSession(restoreReady: true),
             ),
           ],
         ),

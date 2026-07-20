@@ -46,6 +46,8 @@ Future<void> _seed(AppDatabase db) async {
 }
 
 Future<void> _bootToHubItems(WidgetTester tester, AppDatabase db) async {
+  final seeded = await db.matomesDao.getMatomeWithItems('m1', '1');
+  expect(seeded?.recordings.map((item) => item.id), contains('img1'));
   final store = InMemoryTokenStore();
   await store.saveTokens(accessToken: 'a', refreshToken: 'r');
   await tester.pumpWidget(
@@ -55,6 +57,9 @@ Future<void> _bootToHubItems(WidgetTester tester, AppDatabase db) async {
         tokenStoreProvider.overrideWithValue(store),
         settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
         authRepositoryProvider.overrideWithValue(FakeE2EAuthRepository(store)),
+        vaultSessionProvider.overrideWith(
+          (ref) => buildE2EVaultSession(restoreReady: true),
+        ),
       ],
     ),
   );
@@ -64,8 +69,9 @@ Future<void> _bootToHubItems(WidgetTester tester, AppDatabase db) async {
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('matome-show-more')));
   await tester.pumpAndSettle();
+  expect(find.byKey(const ValueKey('matome-details')), findsOneWidget);
   await tester.scrollUntilVisible(
-    find.byKey(const ValueKey('matome-item-overflow-img1')),
+    find.byKey(const ValueKey('matome-image-img1')),
     200,
   );
   await tester.pumpAndSettle();
@@ -82,7 +88,7 @@ void main() {
       await _seed(db);
       await _bootToHubItems(tester, db);
 
-      await tester.tap(find.byKey(const ValueKey('matome-item-overflow-img1')));
+      await tester.longPress(find.byKey(const ValueKey('matome-image-img1')));
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('matome-item-delete-img1')),
