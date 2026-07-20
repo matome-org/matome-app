@@ -145,13 +145,20 @@ void main() {
 
       final invalidStatuses = rows
           .where(
-            (row) => !{'Required', 'Deferred', 'Exempt'}.contains(row.status),
+            (row) => !{
+              'Required',
+              'Deferred',
+              'Exempt',
+              'Compatibility',
+            }.contains(row.status),
           )
           .toList();
       expect(
         invalidStatuses,
         isEmpty,
-        reason: 'Route contract rows must use Required, Deferred, or Exempt.',
+        reason:
+            'Route contract rows must use Required, Deferred, Exempt, or '
+            'Compatibility.',
       );
 
       final missingEvidence = <String>[];

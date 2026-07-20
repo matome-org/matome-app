@@ -134,9 +134,10 @@ must not claim `synced` before Core acceptance and upload verification.
 
 ## 6. Promoting or choosing a cloud Space
 
-A new Space is local by default. Promotion to cloud is an explicit, one-way v1
-choice with itemized consent because all eligible Items in that Space may leave
-the device.
+A new Space is local. Promotion to cloud is an explicit, one-way v1 choice
+because eligible Items in that Space may leave the device. The service computes
+the affected Matome/Item counts; the current confirmation screen shows the Space
+name plus an aggregate count rather than a complete itemized egress list.
 
 Moving an Item into an existing cloud Space has the same egress consequence.
 Matome membership wins when resolving the effective Space, so moving a child

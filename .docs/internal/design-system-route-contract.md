@@ -93,13 +93,13 @@ not allowed.
 
 | Exemption type | Allowed only when | Required re-review trigger |
 | --- | --- | --- |
-| Redirect-only legacy route | `router.dart` redirects before the fallback builder should render, and the fallback has no independent product surface. | Redirect is removed, redirect can return null in normal operation, or the fallback becomes user-visible. |
+| Legacy compatibility route | `router.dart` first attempts a canonical redirect but retains a documented fallback for unresolved old links. The fallback behavior belongs to a named UC and has route characterization coverage. | The fallback enters primary navigation, gains new behavior, or the compatibility route can be removed. |
 | Flag-compiled or dark route | A const feature flag or shell policy compiles the route out of the active app, or the feature is explicitly dark. | The flag default changes, the route enters primary navigation, or the feature is scheduled for release. |
 | Transition/frame-only wrapper | The route wrapper owns animation, dialog bounds, or modal presentation only, while the visual Page is named elsewhere. | The wrapper starts owning content, feature state, or route-specific business logic. |
 
 ## Route Inventory
 
-Source: `apps/flutter/lib/app/router.dart` as of 2026-07-02.
+Source: `apps/flutter/lib/app/router.dart` as of 2026-07-20.
 
 Status values:
 
@@ -108,6 +108,7 @@ Status values:
 | Required | Should converge to an app-owned canonical Page and be eligible for Widgetbook `[Pages]`. |
 | Deferred | No Page migration until the named flag/feature decision makes the route active again. |
 | Exempt | No canonical Page target while the stated exemption remains true. |
+| Compatibility | Redirect-first legacy entry point with an explicitly documented fallback; not a primary Page surface. |
 
 | Route | Current router target | Target Page status | Target when migrated | Notes |
 | --- | --- | --- | --- | --- |
@@ -128,11 +129,11 @@ Status values:
 | `/items/text/:id` | `TextItemPage(id)` | Required | `TextItemPage` | Plain-text item detail/edit host. File-less means no file copy, hashing, presign, or byte upload; text can still request AI processing and receive a DispatchJob with body-only input. User-authored body, machine summary, AI status, and durable sync status are separate. Create/edit/delete persist through restart-safe queue states (`local_saved`, `pending_sync`/`pending_delete`, `synced`, `failed`, `conflict`) and reconcile through `POST /api/items/text` plus revision-guarded `PATCH`/`DELETE /api/items/:id/text`. |
 | `/inbox` | `InboxPage` inside the shell | Required | `InboxPage` | Fixed home tab. |
 | `/inbox/settings` | `SettingsPage` | Required | `SettingsPage` | Nested under the inbox branch today. |
-| `/inbox/:id` | Legacy redirect to `/matome/:matomeId` with `RecordingDetailScreen` fallback | Exempt | None while redirect-only | Re-review if legacy recording deep links stop redirecting. |
+| `/inbox/:id` | Parent-Matome redirect with `RecordingDetailScreen` fallback when local resolution returns null | Compatibility | None while legacy-only | Covered by UC-04/UC-10; fallback performs no Core relationship lookup. |
 | `/calendar` | `CalendarPage` shell branch | Required | `CalendarPage` | Feature-flagged by `FeatureFlags.calendar`. |
-| `/calendar/:id` | Legacy redirect to `/matome/:matomeId` with `RecordingDetailScreen` fallback | Exempt | None while redirect-only | Re-review if calendar recording deep links stop redirecting. |
+| `/calendar/:id` | Parent-Matome redirect with `RecordingDetailScreen` fallback when local resolution returns null | Compatibility | None while legacy-only | Covered by UC-04/UC-10; route exists only with Calendar branch. |
 | `/spaces` | `SpacesPage` shell branch wrapper | Required | `SpacesPage` | Feature-flagged by `FeatureFlags.spaces`. |
-| `/spaces/recording/:id` | Legacy redirect to `/matome/:matomeId` with `SpaceRecordingScreen` fallback | Exempt | None while redirect-only | Re-review if space recording deep links stop redirecting. |
+| `/spaces/recording/:id` | Parent-Matome redirect with `SpaceRecordingScreen` fallback when local resolution returns null | Compatibility | None while legacy-only | Covered by UC-04/UC-10; route exists only with Spaces branch. |
 | `/spaces/:spaceId` | `SpaceDetailPage(spaceId)` | Required | `SpaceDetailPage` | Space detail route. |
 | `/satori` | `SatoriScreen` shell branch when present | Deferred | `SatoriPage` if route is restored | Under `FeatureFlags.newNavShell` the Satori branch is compiled out and `/satori` safety-redirects home. |
 | `/contacts` | `ContactsPage` shell branch | Required | `ContactsPage` | Feature-flagged by `FeatureFlags.contacts`. |
@@ -149,6 +150,8 @@ sequence is documented in the native docs for the journey component.
 
 - `Journeys/Mobile/Auth` and `Journeys/Desktop/Auth` cover `/`, `/login`, and
   `/signup` with `WelcomePage`, `LoginPage`, and `SignupPage`.
+  `/unlock`, `/forgot-password`, and `/reset-password` remain covered as canonical
+  Widgetbook Pages but are not yet ordered steps in the Auth Journey.
 - `Journeys/Mobile/Capture` and `Journeys/Desktop/Capture` cover `/recording`,
   `/inbox`, and `/matome/:id` with `RecordingPage`, `InboxPage`, and
   `MatomeDetailPage`.
@@ -157,8 +160,9 @@ sequence is documented in the native docs for the journey component.
   and `SpaceDetailPage`.
 - `Journeys/Mobile/Review` and `Journeys/Desktop/Review` cover `/files` and
   `/items/audio/:id` with `FilesPage` and `FileDetailPage.audio`; text item
-  detail coverage is registered under Widgetbook `[Pages]` because its file-less
-  create path is deliberately not part of the file review journey.
+  plus image/document/video detail coverage is registered under Widgetbook
+  `[Pages]` rather than duplicating every media variant in the audio review
+  journey.
 - `Journeys/Mobile/Recovery` and `Journeys/Desktop/Recovery` cover
   `/inbox/settings`, `/inbox`, and `/files` with `SettingsPage`, `InboxPage`,
   and `FilesPage`.
@@ -191,21 +195,18 @@ every route.
   smoke case if the surface introduces new layout risk, then run
   `mise run flutter-design-system-check`.
 
-## Remaining Deferred And Exempt Routes
+## Remaining Deferred And Compatibility Routes
 
 No Required route has pending Page/Journey migration debt. The remaining
-non-Required rows are acceptable because they are either redirect-only legacy
-entry points or a deferred feature route with an explicit re-review trigger.
+non-Required rows are either documented redirect-first compatibility entries or
+a deferred feature route with an explicit re-review trigger.
 
-- `/inbox/:id` is Exempt while legacy recording deep links redirect to the parent
-  Matome before the fallback `RecordingDetailScreen` should render. Re-review if
-  that redirect is removed, can normally return null, or the fallback becomes a
-  user-visible product surface.
-- `/calendar/:id` is Exempt for the same redirect-only legacy recording-link
-  reason. Re-review if the redirect contract changes.
-- `/spaces/recording/:id` is Exempt for the same redirect-only legacy
-  recording-in-space reason. Re-review if the fallback `SpaceRecordingScreen`
-  becomes visible in normal app flow.
+- `/inbox/:id`, `/calendar/:id`, and `/spaces/recording/:id` are Compatibility
+  routes. They perform an owner-scoped local parent-Matome lookup and redirect
+  when possible; missing owner/row/parent returns null and intentionally renders
+  the corresponding legacy detail fallback. UC-04/UC-10 document both outcomes.
+  Re-review when these old links can be removed or a fallback gains new product
+  behavior that warrants a canonical Page.
 - `/satori` is Deferred because `FeatureFlags.newNavShell` compiles the Satori
   branch out of the active app and safety-redirects `/satori` home. Re-review if
   the Satori route is restored, enters primary navigation, or the feature is

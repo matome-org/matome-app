@@ -1,6 +1,6 @@
 # Matome — Architecture
 
-> Status: implemented architecture record · Last updated: 2026-07-19
+> Status: implemented architecture record · Last updated: 2026-07-20
 > One Flutter client, one Elixir Core API, one in-repo Python AI Core, one
 > ingestion contract. This is the single architecture record: the decisions that
 > used to live in separate ADRs are folded into §11 (Decision log) so nothing is
@@ -244,7 +244,12 @@ SYNC(item) ⟺ effectiveSpace(item) is a CLOUD space
 - A Space carries `is_local` (m017, additive, **default local**). A **local** space's items never sync; a **cloud** space's items sync.
 - **Filing organizes; landing in a cloud space syncs.** Filing is no longer the sync trigger.
 - The decision flows through **one operation-keyed gate**: `SyncPolicy.can(caller, Operation.spaceSync, space)` (`apps/flutter/lib/features/spaces/sync_policy.dart`) — never an inline `if isCloud`, never a fixed role enum. Today it returns `isCloudSynced` (owner ⇒ allow).
-- **Promotion** turns a local space cloud — one-way in v1, with itemized consent ("N items will leave this device"), per-item idempotency (keyed on stable/Core id), and a sealed `local → promoting → cloud | failed` state machine with resume (`space_promotion.dart`). State is re-derived from `is_local` + each item's `coreId`, not a new column.
+- **Promotion** turns a local Space cloud — one-way in v1. The service computes
+  Matome/Item counts, creates/rekeys/drains idempotently, and returns
+  `cloud | failed` without a separate state column. The current confirmation UI
+  shows the Space name plus one aggregate count, and the current screen does not
+  expose detailed failed/resume state; do not describe the service seam as a
+  complete itemized recovery UX.
 
 **Current compatibility exception:** the canonical upload queue still allows a
 draft Matome with no Space to reconcile as the required Core parent of durable
@@ -654,7 +659,7 @@ The historical decisions, kept here as the durable record:
 - **D5 — Matome detail = letter + responsive panel.** One route renders a stacked "letter" on narrow viewports and letter + persistent side panel at ≥ 900 px via a `LayoutBuilder` (no nested navigator).
 - **D6 — Item organization decoupled from sync** (plan #102, the §5 model). Supersedes D3's forced-Matome rule; amends D4's "filing ⟹ sync". Effective-space resolver + one operation-keyed sync gate + two-axis (`is_local` ⟂ `space_type`) model + one-way promotion. **Accepted risk:** local-default means an unsynced item lives only on the device; a device wipe loses it (owner-accepted trade-off of the local-first default).
 - **D7 — Master–detail layout (email-style), Settings-controlled** (plan #102, W1). Graduated from the approved Widgetbook proposal `[Proposals]/Master–detail layout`.
-  - **Decision:** every collection surface (Inbox, Files, Spaces, Contacts) renders through **one** reusable `MasterDetailScaffold` (`apps/flutter/lib/ui/master_detail_scaffold.dart`) — a master list plus an optional right-hand **reading pane**. Pane visibility is a single GLOBAL persisted setting, `readingPaneProvider` (`ReadingPanePosition { right, off }`), switchable **only** from Settings (no in-screen toggle). Layout uses unified breakpoints (`apps/flutter/lib/core/layout/breakpoints.dart`: `compact < 600` / `medium 600–1024` / `expanded ≥ 1024`); the pane shows only at `expanded` **and** `right`, while `compact` navigates full-screen. The Files reading-pane content is `FileView` (the shared body), **not** the full `FileDetailScreen`. The whole behaviour is gated behind `FeatureFlags.masterDetailLayout` (default **OFF** — a single flag flip is the rollback).
+  - **Decision:** every collection surface (Inbox, Files, Spaces, Contacts) renders through **one** reusable `MasterDetailScaffold` (`apps/flutter/lib/ui/master_detail_scaffold.dart`) — a master list plus an optional right-hand **reading pane**. Each surface independently persists `ReadingPaneMode { always, onClick, off }` through `readingPaneModeProvider(surface)`; `onClick` is the default. At unified `expanded ≥ 1024` width, `always` reserves the pane, `onClick` opens it on first selection with close behavior, and `off` navigates; compact/medium widths navigate. Files uses the shared read-only `FileView`, not `FileDetailScreen`. The code default for `FeatureFlags.masterDetailLayout` is OFF, while the repository's primary `feature_flags.json` currently enables it.
   - **Rejected alternatives:** a left-hand pane (right-hand chosen, email-style); per-surface pane settings (gold-plating — the global setting widens to per-surface additively later if ever needed); an in-screen pane toggle (Settings-only chosen, so the choice is global and stable); embedding the 33 KB multi-`Scaffold` `FileDetailScreen` in the pane (nested-`Scaffold` breakage — use `FileView`, the shared body).
   - **Accepted note:** unifying the legacy `1000` breakpoint onto `1024` is an intentional behaviour change for viewports in the half-open range `[1000, 1024)` (formerly two-pane, now single-pane until `1024`).
 
@@ -729,7 +734,9 @@ Plan #102 leaves **seams, not features**, so the deferred work plugs in without 
 - **Master–detail** — the email-style layout (D7) where a collection surface is a master list plus an optional reading pane; implemented by `MasterDetailScaffold`.
 - **Reading pane** — the optional right-hand detail pane of a master–detail surface; visible only at `expanded` + `right`. (Code: the `right` arm of `MasterDetailScaffold`.)
 - **`MasterDetailScaffold`** — the one reusable widget every collection surface renders through (`apps/flutter/lib/ui/master_detail_scaffold.dart`).
-- **`readingPaneProvider`** — the single GLOBAL persisted Riverpod provider holding the reading-pane setting (`apps/flutter/lib/core/settings/reading_pane.dart`); Settings-only.
-- **`ReadingPanePosition`** — the pane-position enum, `{ right, off }` (defined in `master_detail_scaffold.dart`).
+- **`readingPaneModeProvider(surface)`** — the per-surface persisted Riverpod
+  family for Inbox, Files, Spaces, and Contacts (`core/settings/reading_pane.dart`).
+- **`ReadingPaneMode`** — `{ always, onClick, off }`, with `onClick` as the
+  persisted/default selection behavior (`master_detail_scaffold.dart`).
 - **DEK / KEK / FEK** (D8) — the envelope-encryption key hierarchy: one **D**ata **E**ncryption **K**ey per user (decrypts the local DB + media); a set of independent **K**ey **E**ncryption **K**eys (password / recovery / device-keystore) that each wrap the same DEK; a per-file **F**ile **E**ncryption **K**ey wrapped by the DEK. Full detail: [ADR-0002](../../services/api/docs/adr/0002-envelope-encryption-key-hierarchy.md), [`at-rest-key-flow.md`](at-rest-key-flow.md).
 - **`/keybundle`** — the Core API endpoint pair storing/returning only opaque `wrapped_dek_*` blobs + salts/KDF params for a user; the server cannot unwrap a DEK from it (D8).
