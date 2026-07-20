@@ -63,7 +63,7 @@ RecordingResultAwaiter _noopAwaiter() =>
     ({required recording, required poll, required ref}) async =>
         const RecordingResult.done(null);
 
-/// The Core list-row JSON for recording id 5. Crucially the Core `/api/recordings`
+/// The Core list-row JSON for Item id 5. Crucially the Core `/api/items`
 /// pull is a FULL-STATE snapshot: every refresh carries the machine `transcript`
 /// again (and Core `notes` is whatever Core last stored). [notes] lets a test
 /// simulate Core echoing the user's pushed note on a later pull.
@@ -71,12 +71,20 @@ Map<String, dynamic> _coreRow({required String transcript, String? notes}) {
   return {
     'id': 5,
     'owner_id': 1,
+    'client_id': '5',
+    'item_type': 'file',
     'title': 'Imported memo',
-    'status': 'done',
-    'summary': 'A memo',
-    'transcript': transcript,
+    'processing_state': 'succeeded',
+    'processing_run_id': 'run-5',
+    'processing_attempt': 1,
+    'processing_requested_outputs': ['transcript', 'summary'],
+    'processing_outputs': {
+      'transcript': {'type': 'transcript', 'text': transcript},
+      'summary': {'type': 'summary', 'markdown': 'A memo'},
+    },
     'notes': notes,
     'workspace_id': null,
+    'file': {'id': 50, 'media_type': 'audio', 'upload_state': 'uploaded'},
     'inserted_at': '2026-06-08T12:00:00Z',
   };
 }
@@ -91,9 +99,9 @@ void main() {
     addTearDown(db.close);
 
     // -- Fake Core -----------------------------------------------------------
-    // The list pull (`GET /api/recordings`) is mutable so the test can change
+    // The list pull (`GET /api/items`) is mutable so the test can change
     // what the SECOND refresh returns — modelling Core having (or not having)
-    // round-tripped the user's note. The save PATCH (`PATCH /api/recordings/5`)
+    // round-tripped the user's note. The save PATCH (`PATCH /api/items/5`)
     // is captured so we can assert the WRITE-AUTHORITY contract on the wire:
     // notes is sent, transcript is NOT.
     final dio = Dio(
@@ -103,18 +111,17 @@ void main() {
       ),
     );
 
-    // The body the next `GET /api/recordings` should serve. Step 1 (import/sync)
+    // The body the next `GET /api/items` should serve. Step 1 (import/sync)
     // serves the machine transcript with NO Core note yet.
     var listBody = <String, dynamic>{
-      'recordings': [_coreRow(transcript: 'MACHINE TRANSCRIPT v1')],
+      'items': [_coreRow(transcript: 'MACHINE TRANSCRIPT v1')],
     };
 
     Map<String, dynamic>? patchBody;
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          if (options.method == 'PATCH' &&
-              options.path == '/api/recordings/5') {
+          if (options.method == 'PATCH' && options.path == '/api/items/5') {
             patchBody = options.data as Map<String, dynamic>;
           }
           handler.next(options);
@@ -124,19 +131,14 @@ void main() {
 
     final adapter = DioAdapter(dio: dio);
     adapter
-      ..onGet('/api/recordings', (s) => s.reply(200, listBody))
+      ..onGet('/api/items', (s) => s.reply(200, listBody))
       ..onPatch(
-        '/api/recordings/5',
+        '/api/items/5',
         (s) => s.reply(200, {
-          'recording': {
-            'id': 5,
-            'owner_id': 1,
-            'title': 'Imported memo',
-            'status': 'done',
-            // Core echoes the saved note back; transcript stays put server-side.
-            'transcript': 'MACHINE TRANSCRIPT v1',
-            'notes': 'USER NOTES v1',
-          },
+          'item': _coreRow(
+            transcript: 'MACHINE TRANSCRIPT v1',
+            notes: 'USER NOTES v1',
+          ),
         }),
         data: Matchers.any,
       );
@@ -226,11 +228,9 @@ void main() {
     // which is the harshest case for the pull-must-not-clobber-notes contract.
     // ------------------------------------------------------------------------
     listBody = <String, dynamic>{
-      'recordings': [
-        _coreRow(transcript: 'MACHINE TRANSCRIPT v1', notes: null),
-      ],
+      'items': [_coreRow(transcript: 'MACHINE TRANSCRIPT v1', notes: null)],
     };
-    adapter.onGet('/api/recordings', (s) => s.reply(200, listBody));
+    adapter.onGet('/api/items', (s) => s.reply(200, listBody));
 
     await inbox.refresh();
 
@@ -258,11 +258,11 @@ void main() {
     // routed (transcript→transcript, notes→notes), never crossed.
     // ------------------------------------------------------------------------
     listBody = <String, dynamic>{
-      'recordings': [
+      'items': [
         _coreRow(transcript: 'MACHINE TRANSCRIPT v2', notes: 'USER NOTES v1'),
       ],
     };
-    adapter.onGet('/api/recordings', (s) => s.reply(200, listBody));
+    adapter.onGet('/api/items', (s) => s.reply(200, listBody));
 
     await inbox.refresh();
 
