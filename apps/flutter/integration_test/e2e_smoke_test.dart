@@ -1,4 +1,3 @@
-import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +13,7 @@ import 'package:matome_flutter/features/home/home_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
 import 'support/e2e_harness.dart';
+import 'support/e2e_database.dart';
 
 // ---------------------------------------------------------------------------
 // E2E smoke — headless (runs under `flutter test integration_test/` on web /
@@ -34,9 +34,9 @@ void main() {
   late AppDatabase db;
   late InMemoryTokenStore store;
 
-  setUp(() {
+  setUp(() async {
     LocaleSettings.setLocaleSync(AppLocale.en);
-    db = AppDatabase.forTesting(NativeDatabase.memory());
+    db = await createE2EDatabase();
     store = InMemoryTokenStore(); // no session -> unauthenticated boot
   });
   tearDown(() => db.close());

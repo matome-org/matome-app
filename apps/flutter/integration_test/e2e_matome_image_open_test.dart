@@ -1,5 +1,4 @@
 import 'package:drift/drift.dart' show Value;
-import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,8 +13,9 @@ import 'package:matome_flutter/core/settings/settings_store.dart';
 import 'package:matome_flutter/features/auth/auth_controller.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 
+import 'support/e2e_database.dart';
 import 'support/e2e_harness.dart';
-import '../test/support/item_fixtures.dart';
+import 'support/item_fixtures.dart';
 
 /// REPRODUCTION against the REAL production [routerProvider] (with its
 /// `refreshListenable: _AuthListenable`), which the plain-MaterialApp /
@@ -66,7 +66,7 @@ void main() {
     'BUG #1 (real router): an auth tick after opening an image Item drops '
     'the imperatively-pushed detail route',
     (tester) async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final db = await createE2EDatabase();
       addTearDown(db.close);
       await _seedMatome(db, id: 'm1');
       await _seedItem(
@@ -146,7 +146,7 @@ void main() {
     'PROBE: back from the image detail returns to the hub (not stranded by '
     "the hub's canPop:false PopScope)",
     (tester) async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final db = await createE2EDatabase();
       addTearDown(db.close);
       await _seedMatome(db, id: 'm1');
       await _seedItem(

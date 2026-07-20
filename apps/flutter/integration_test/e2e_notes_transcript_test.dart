@@ -1,11 +1,9 @@
 import 'package:dio/dio.dart';
-import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
@@ -14,6 +12,8 @@ import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/home/inbox_upload.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/recording_result_waiter.dart';
+
+import 'support/e2e_database.dart';
 
 // ---------------------------------------------------------------------------
 // E2E REGRESSION — task #1443: a notes edit NEVER wipes the machine transcript.
@@ -95,7 +95,7 @@ void main() {
   testWidgets('e2e #1443: import → sync → edit notes → re-sync — the machine '
       'transcript survives and the user note persists (notes edit never '
       'wipes the transcript)', (tester) async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final db = await createE2EDatabase();
     addTearDown(db.close);
 
     // -- Fake Core -----------------------------------------------------------

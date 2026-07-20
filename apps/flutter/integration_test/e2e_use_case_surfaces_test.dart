@@ -1,4 +1,3 @@
-import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,9 +19,10 @@ import 'package:matome_flutter/features/items/text_item_host.dart';
 import 'package:matome_flutter/features/spaces/spaces_screen.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
 
-import '../test/support/fake_media_blob_store.dart';
-import '../test/support/item_fixtures.dart';
+import 'support/e2e_database.dart';
 import 'support/e2e_harness.dart';
+import 'support/fake_media_blob_store.dart';
+import 'support/item_fixtures.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +33,7 @@ void main() {
 
   setUp(() async {
     LocaleSettings.setLocaleSync(AppLocale.en);
-    db = AppDatabase.forTesting(NativeDatabase.memory());
+    db = await createE2EDatabase();
     tokens = InMemoryTokenStore();
     blobs = FakeMediaBlobStore();
     await tokens.saveTokens(
@@ -210,8 +210,17 @@ void main() {
       expect(find.byType(SettingsScreen), findsOneWidget);
 
       final expire = find.text(t.settings.retentionThirtyDays);
-      await tester.scrollUntilVisible(expire, 300);
-      await tester.ensureVisible(expire);
+      final settingsScrollable = find
+          .descendant(
+            of: find.byType(SettingsScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        expire,
+        300,
+        scrollable: settingsScrollable,
+      );
       await tester.pumpAndSettle();
       await tester.tap(expire);
       await tester.pumpAndSettle();

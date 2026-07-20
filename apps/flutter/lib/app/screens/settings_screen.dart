@@ -189,6 +189,7 @@ class SettingsScreen extends ConsumerWidget {
               title: Text(user.email),
             ),
           ListTile(
+            key: const ValueKey('settings-sign-out'),
             leading: const Icon(Icons.logout),
             title: Text(t.settings.signOut),
             onTap: () => ref.read(authControllerProvider.notifier).logout(),

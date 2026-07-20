@@ -216,6 +216,14 @@ exec flutter run -d "$DEV" \
   --dart-define-from-file=feature_flags.json
 """
 
+[tasks."flutter-e2e-linux"]
+description = "Run the product E2E matrix against the real Linux desktop target"
+run = "apps/flutter/tool/run_e2e_linux.sh"
+
+[tasks."flutter-e2e-web"]
+description = "Run the product E2E matrix against Chromium via WebDriver"
+run = "apps/flutter/tool/run_e2e_web.sh"
+
 [tasks.storybook]
 description = "Run the isolated Flutter Widgetbook design catalog on Chromium"
 run = """

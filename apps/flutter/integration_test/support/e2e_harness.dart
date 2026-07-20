@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matome_flutter/app/router.dart';
 import 'package:matome_flutter/core/http/api_exception.dart';
@@ -185,6 +186,18 @@ Widget buildE2EApp({required List<Override> overrides}) {
     overrides: overrides,
     child: TranslationProvider(child: const _E2EApp()),
   );
+}
+
+Future<void> pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 30),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (finder.evaluate().isEmpty && DateTime.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  await tester.pumpAndSettle();
 }
 
 /// The real `MatomeApp` body, rebuilt here so the harness can inject overrides

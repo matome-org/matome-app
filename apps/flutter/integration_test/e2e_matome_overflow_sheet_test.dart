@@ -1,5 +1,4 @@
 import 'package:drift/drift.dart' show Value;
-import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,8 +13,9 @@ import 'package:matome_flutter/features/auth/auth_controller.dart';
 import 'package:matome_flutter/features/details/file_detail_screen.dart';
 import 'package:matome_flutter/features/matome/matome_detail_controller.dart';
 
+import 'support/e2e_database.dart';
 import 'support/e2e_harness.dart';
-import '../test/support/item_fixtures.dart';
+import 'support/item_fixtures.dart';
 
 /// Ground-truth probes against the REAL production [routerProvider]: does a
 /// go_router rebuild (auth tick / matome reload) dismiss an imperatively-opened
@@ -83,7 +83,7 @@ void main() {
   testWidgets(
     'PROBE: overflow sheet survives a matome reload (go_router rebuild)',
     (tester) async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final db = await createE2EDatabase();
       addTearDown(db.close);
       await _seed(db);
       await _bootToHubItems(tester, db);
@@ -119,7 +119,7 @@ void main() {
   testWidgets(
     'PROBE: image detail survives a matome reload (go_router rebuild)',
     (tester) async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final db = await createE2EDatabase();
       addTearDown(db.close);
       await _seed(db);
       await _bootToHubItems(tester, db);
