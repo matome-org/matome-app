@@ -4,7 +4,6 @@ import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:matome_flutter/core/db/app_database.dart';
@@ -15,11 +14,14 @@ import 'package:matome_flutter/features/home/inbox_controller.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
 import 'package:matome_flutter/features/recording/recording_finish.dart';
+import 'package:matome_flutter/features/recordings/recording.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 
 import '../test/recording/audio_recording_service_test.dart'
     show FakeRecorderBackend;
+import '../test/support/fake_media_blob_store.dart';
+import '../test/support/fake_parent_sync.dart';
 
 // ---------------------------------------------------------------------------
 // E2E recording flows — HEADLESS counterpart to integration_test/
@@ -60,66 +62,23 @@ void main() {
   }
 
   Dio stubbedDio() {
-    final dio = Dio(
+    return Dio(
       BaseOptions(
         baseUrl: 'http://localhost:7001',
         validateStatus: (s) => s != null && s < 500,
       ),
     );
-    final adapter = DioAdapter(dio: dio);
-    adapter.onPost(
-      '/api/recordings',
-      (server) => server.reply(201, {
-        'recording': {
-          'id': 555,
-          'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'pending',
-        },
-        'upload': {
-          'method': 'PUT',
-          'url': 'http://127.0.0.1:9/upload',
-          'storage_key': 'k',
-          'expires_in': 900,
-        },
-      }),
-      data: Matchers.any,
-    );
-    adapter.onPost(
-      '/api/recordings/555/process',
-      (server) => server.reply(202, {
-        'recording': {
-          'id': 555,
-          'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'processing',
-        },
-        'processing': {'queued': true},
-      }),
-    );
-    adapter.onGet(
-      '/api/recordings/555',
-      (server) => server.reply(200, {
-        'recording': {
-          'id': 555,
-          'owner_id': 1,
-          'title': 'New Recording',
-          'status': 'done',
-          'summary': 'A memo',
-          'transcript': 'hello world',
-        },
-      }),
-    );
-    return dio;
   }
 
-  testWidgets('record → pause → resume → finish: single file uploads and the '
-      'Inbox row reconciles to done', (tester) async {
+  testWidgets('record → pause → resume → finish: single Vault blob uploads and '
+      'the Inbox row reconciles to queued', (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
     final backend = FakeRecorderBackend();
     final service = svc(db, backend);
+    final blobs = FakeMediaBlobStore();
+    addTearDown(blobs.close);
     final repo = _StubUploadRepository(
       apiClient: ApiClient(tokenStore: InMemoryTokenStore(), dio: stubbedDio()),
     );
@@ -127,7 +86,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        mediaBlobStoreProvider.overrideWithValue(blobs),
         currentOwnerIdProvider.overrideWithValue('1'),
+        testParentSyncOverride(),
         audioRecordingServiceProvider.overrideWithValue(service),
         recordingsRepositoryProvider.overrideWithValue(repo),
       ],
@@ -160,9 +121,9 @@ void main() {
     final row = await db.itemsDao.getById(localId, '1');
     expect(row, isNotNull);
     expect(row!.coreId, 555);
-    expect(row.processingStatus, 'done');
-    expect(row.isProcessing, isFalse);
-    expect(row.summary, 'A memo');
+    expect(row.processingState, ProcessingState.queued);
+    expect(row.isProcessing, isTrue);
+    expect(row.summary, isNull);
 
     // Appears in the Inbox under its local id.
     final items = container.read(inboxControllerProvider).requireValue;
@@ -262,6 +223,55 @@ void main() {
 class _StubUploadRepository extends RecordingsRepository {
   _StubUploadRepository({required super.apiClient});
 
+  int _byteSize = 0;
+
+  @override
+  Future<RecordingCreateResult> createItemRecording({
+    required String title,
+    required int matomeId,
+    required String clientId,
+    int? durationSeconds,
+    String? badge,
+    String mediaType = 'audio',
+    int? workspaceId,
+    int? contentLength,
+    String? checksumSha256,
+    String? filename,
+    String? contentType,
+  }) async => RecordingCreateResult(
+    recording: Recording(
+      id: 555,
+      ownerId: '1',
+      title: title,
+      clientId: clientId,
+      mediaType: mediaType,
+      matomeId: matomeId,
+    ),
+    upload: const UploadDescriptor(
+      method: 'PUT',
+      url: 'https://storage.invalid/initial',
+      storageKey: 'unused',
+      uploadId: 'upload-555',
+    ),
+  );
+
+  @override
+  Future<UploadDescriptor> requestUpload(
+    int itemId, {
+    required int inputRevision,
+    required int byteSize,
+    required String checksumSha256,
+    String? contentType,
+  }) async {
+    _byteSize = byteSize;
+    return const UploadDescriptor(
+      method: 'PUT',
+      url: 'https://storage.invalid/upload',
+      storageKey: 'item-555',
+      uploadId: 'upload-555',
+    );
+  }
+
   @override
   Future<String> uploadStreamRange(
     UploadRequest request,
@@ -271,4 +281,36 @@ class _StubUploadRepository extends RecordingsRepository {
     await stream.drain<void>();
     return 'etag-test';
   }
+
+  @override
+  Future<UploadDescriptor> completeUpload(
+    String uploadId, {
+    required int uploadGeneration,
+    required String checksumSha256,
+    String? etag,
+    List<UploadPart> parts = const [],
+  }) async => UploadDescriptor(
+    method: 'PUT',
+    url: '',
+    storageKey: 'item-555',
+    uploadId: uploadId,
+    uploadGeneration: uploadGeneration,
+    state: UploadState.uploaded,
+    verifiedByteSize: _byteSize,
+    verifiedChecksumSha256: checksumSha256,
+  );
+
+  @override
+  Future<Recording> enqueueProcessing(int id) async => Recording(
+    id: id,
+    ownerId: '1',
+    title: 'Memo',
+    processing: const ItemProcessing(
+      state: ProcessingState.queued,
+      runId: 'run-555',
+      attempt: 1,
+      requestedOutputs: {ProcessingOutputKind.transcript},
+      outputs: ProcessingOutputs.empty(),
+    ),
+  );
 }
