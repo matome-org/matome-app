@@ -8,12 +8,17 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --create-home --shell /usr/sbin/nologin app \
-  && install -d -o app -g app /app /var/lib/matome-ai-core
+  && install -d -o app -g app \
+       /app \
+       /var/lib/matome-ai-core \
+       /home/app/.cache/whisper \
+       /home/app/.local/share/pywhispercpp/models
 
 WORKDIR /app
 COPY --chown=app:app pyproject.toml ./
 COPY --chown=app:app app ./app
-RUN pip install --no-cache-dir '.[whisper-openai]'
+ARG WHISPER_EXTRA=whisper-openai
+RUN pip install --no-cache-dir ".[${WHISPER_EXTRA}]"
 
 USER app
 EXPOSE 8000
