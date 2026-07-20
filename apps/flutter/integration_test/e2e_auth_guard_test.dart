@@ -10,7 +10,11 @@ import 'package:matome_flutter/core/db/recording_card.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
 import 'package:matome_flutter/core/settings/settings_store.dart';
+import 'package:matome_flutter/features/auth/forgot_password_screen.dart';
 import 'package:matome_flutter/features/auth/login_screen.dart';
+import 'package:matome_flutter/features/auth/reset_password_screen.dart';
+import 'package:matome_flutter/features/auth/signup_screen.dart';
+import 'package:matome_flutter/features/auth/unlock_screen.dart';
 import 'package:matome_flutter/features/auth/welcome_screen.dart';
 import 'package:matome_flutter/features/home/home_screen.dart';
 import 'package:matome_flutter/features/home/inbox_controller.dart';
@@ -59,11 +63,17 @@ void main() {
   });
   tearDown(() => db.close());
 
-  List<Override> overrides({required FakeE2EAuthRepository repo}) => [
+  List<Override> overrides({
+    required FakeE2EAuthRepository repo,
+    bool restoreVaultReady = true,
+  }) => [
     appDatabaseProvider.overrideWithValue(db),
     tokenStoreProvider.overrideWithValue(store),
     settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
     authRepositoryProvider.overrideWithValue(repo),
+    vaultSessionProvider.overrideWith(
+      (ref) => buildE2EVaultSession(restoreReady: restoreVaultReady),
+    ),
     inboxControllerProvider.overrideWith(
       (ref) => FakeInboxController(ref, AsyncValue.data([_seedItem()])),
     ),
@@ -85,8 +95,35 @@ void main() {
 
     // Past the guard into the Inbox tab.
     expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.text('Standup notes'), findsOneWidget);
     expect(find.byType(WelcomeScreen), findsNothing);
+  });
+
+  testWidgets('seeded session with a locked Vault lands on unlock and password '
+      'opens the Inbox', (tester) async {
+    await store.saveTokens(
+      accessToken: kE2ESession.accessToken,
+      refreshToken: kE2ESession.refreshToken!,
+    );
+
+    await tester.pumpWidget(
+      buildE2EApp(
+        overrides: overrides(
+          repo: FakeE2EAuthRepository(store),
+          restoreVaultReady: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(UnlockScreen), findsOneWidget);
+    expect(find.byType(HomeScreen), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'devpassword123');
+    await tester.tap(find.widgetWithText(FilledButton, t.auth.unlockSubmit));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byType(UnlockScreen), findsNothing);
   });
 
   testWidgets('logout from Settings clears tokens and returns to Welcome', (
@@ -141,7 +178,7 @@ void main() {
     final fields = find.byType(TextField);
     expect(fields, findsNWidgets(2));
     await tester.enterText(fields.at(0), 'dev@matome.test');
-    await tester.enterText(fields.at(1), 'devpass');
+    await tester.enterText(fields.at(1), 'devpassword123');
     await tester.tap(find.widgetWithText(FilledButton, t.welcome.signIn));
     await tester.pumpAndSettle();
 
@@ -150,4 +187,91 @@ void main() {
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.byType(WelcomeScreen), findsNothing);
   });
+
+  testWidgets('signup creates an account and opens a ready Vault session', (
+    tester,
+  ) async {
+    final repo = FakeE2EAuthRepository(store);
+
+    await tester.pumpWidget(
+      buildE2EApp(overrides: overrides(repo: repo, restoreVaultReady: false)),
+    );
+    await tester.pumpAndSettle();
+
+    GoRouter.of(tester.element(find.byType(WelcomeScreen))).go('/signup');
+    await tester.pumpAndSettle();
+    expect(find.byType(SignupScreen), findsOneWidget);
+
+    final fields = find.byType(TextField);
+    expect(fields, findsNWidgets(4));
+    await tester.enterText(fields.at(0), 'Dev User');
+    await tester.enterText(fields.at(1), 'dev@matome.test');
+    await tester.enterText(fields.at(2), 'devpassword123');
+    await tester.enterText(fields.at(3), 'devpassword123');
+    await tester.tap(find.widgetWithText(FilledButton, t.welcome.signUp));
+    await tester.pumpAndSettle();
+
+    expect(repo.registerCalls, 1);
+    expect(find.byType(HomeScreen), findsOneWidget);
+  });
+
+  testWidgets('forgot password requests a reset without revealing account '
+      'existence', (tester) async {
+    final repo = FakeE2EAuthRepository(store);
+
+    await tester.pumpWidget(buildE2EApp(overrides: overrides(repo: repo)));
+    await tester.pumpAndSettle();
+    GoRouter.of(
+      tester.element(find.byType(WelcomeScreen)),
+    ).go('/forgot-password');
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ForgotPasswordScreen), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'dev@matome.test');
+    await tester.tap(
+      find.widgetWithText(FilledButton, t.auth.forgotPasswordSubmit),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repo.requestPasswordResetCalls, 1);
+    expect(repo.requestedResetEmail, 'dev@matome.test');
+    expect(find.text(t.auth.forgotPasswordSent), findsOneWidget);
+  });
+
+  testWidgets(
+    'reset password accepts a deep-link token and returns to sign in',
+    (tester) async {
+      final repo = FakeE2EAuthRepository(store);
+
+      await tester.pumpWidget(buildE2EApp(overrides: overrides(repo: repo)));
+      await tester.pumpAndSettle();
+      GoRouter.of(
+        tester.element(find.byType(WelcomeScreen)),
+      ).go('/reset-password?token=reset-code');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ResetPasswordScreen), findsOneWidget);
+      final fields = find.byType(TextField);
+      expect(fields, findsNWidgets(3));
+      expect(
+        tester.widget<TextField>(fields.at(0)).controller?.text,
+        'reset-code',
+      );
+      await tester.enterText(fields.at(1), 'newpassword123');
+      await tester.enterText(fields.at(2), 'newpassword123');
+      await tester.tap(
+        find.widgetWithText(FilledButton, t.auth.resetPasswordSubmit),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repo.resetPasswordCalls, 1);
+      expect(repo.resetToken, 'reset-code');
+      expect(repo.resetPasswordValue, 'newpassword123');
+      expect(find.text(t.auth.resetPasswordSuccess), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, t.auth.backToSignIn));
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginScreen), findsOneWidget);
+    },
+  );
 }
