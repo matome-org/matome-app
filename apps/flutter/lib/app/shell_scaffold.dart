@@ -317,14 +317,12 @@ class _DockShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final spacing = context.spacing;
     // The dock + Add FAB FLOAT over the content (edge-to-edge, no notch), so a
-    // scrollable's last item would otherwise sit permanently under the dock —
-    // unlike the legacy `bottomNavigationBar`, which reserved layout space. Add
-    // that space back as bottom padding via MediaQuery so every branch screen's
-    // bottom content stays reachable (e.g. the Settings "Sign out" tile). The
+    // scrollable's last item and a nested Scaffold's FAB would otherwise sit
+    // permanently under the dock. Unlike a MediaQuery padding override, a real
+    // layout inset also moves nested Scaffold chrome above the overlay. The
     // reserve ≈ FAB + gap + dock (a 48dp tap target plus its vertical padding)
     // + the bottom anchor inset, derived from the same spacing tokens the
     // overlay below is laid out with (no magic number).
-    final media = MediaQuery.of(context);
     final dockReserve =
         _kDockFabSize +
         spacing.sm +
@@ -335,12 +333,8 @@ class _DockShell extends ConsumerWidget {
       body: Stack(
         children: [
           Positioned.fill(
-            child: MediaQuery(
-              data: media.copyWith(
-                padding: media.padding.copyWith(
-                  bottom: media.padding.bottom + dockReserve,
-                ),
-              ),
+            child: Padding(
+              padding: EdgeInsets.only(bottom: dockReserve),
               child: navigationShell,
             ),
           ),
