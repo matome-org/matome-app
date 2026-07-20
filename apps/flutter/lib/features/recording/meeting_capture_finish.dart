@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../home/inbox_upload.dart';
+import '../../core/vault/media_inputs.dart';
 import 'package:meeting_capture/meeting_capture.dart';
 import 'meeting_capture_service.dart';
 
@@ -34,10 +35,15 @@ class MeetingCaptureFinisher {
       service: service,
       persist: (artifact, {title}) => uploader.persist(
         PickedUpload(
-          file: File(artifact.path),
+          input: mediaInputFromFile(
+            File(artifact.path),
+            filename: 'meeting.m4a',
+            contentType: 'audio/mp4',
+            knownLength: artifact.facts.byteSize,
+          ),
           title: title ?? 'New Meeting',
           mediaType: 'audio',
-          filename: File(artifact.path).uri.pathSegments.last,
+          filename: 'meeting.m4a',
           mimeType: 'audio/mp4',
           byteSize: artifact.facts.byteSize,
         ),

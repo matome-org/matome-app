@@ -102,18 +102,19 @@ void main() {
     expect(find.byIcon(Icons.image_outlined), findsNothing);
   });
 
-  testWidgets('shows the document token with its count when documentCount > 0', (
-    tester,
-  ) async {
-    // No document Items → no doc token (the strip stays dense).
-    await _pump(tester, _matome(documentCount: 0));
-    expect(find.byIcon(Icons.description_outlined), findsNothing);
+  testWidgets(
+    'shows the document token with its count when documentCount > 0',
+    (tester) async {
+      // No document Items → no doc token (the strip stays dense).
+      await _pump(tester, _matome(documentCount: 0));
+      expect(find.byIcon(Icons.description_outlined), findsNothing);
 
-    // A matome with N document Items → doc icon + the count (#1449/#1453).
-    await _pump(tester, _matome(documentCount: 4));
-    expect(find.byIcon(Icons.description_outlined), findsOneWidget);
-    expect(find.text('4'), findsOneWidget);
-  });
+      // A matome with N document Items → doc icon + the count (#1449/#1453).
+      await _pump(tester, _matome(documentCount: 4));
+      expect(find.byIcon(Icons.description_outlined), findsOneWidget);
+      expect(find.text('4'), findsOneWidget);
+    },
+  );
 
   testWidgets('shows the people token only when peopleCount > 0', (
     tester,

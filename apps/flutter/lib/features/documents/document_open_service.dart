@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:matome_vault/matome_vault.dart';
 
-import 'document_local_file.dart';
 import 'document_open_policy.dart';
 
 enum DocumentOpenEnvironment { desktop, mobile, web }
@@ -15,6 +15,10 @@ enum DocumentOpenResult {
   unavailable,
   failed,
 }
+
+/// External-open materializes plaintext; larger documents require explicit
+/// export, whose destination is outside Vault lifecycle.
+const int kMaxVaultDocumentOpenBytes = 25 * 1024 * 1024;
 
 class DocumentDescriptorUnavailableException implements Exception {
   const DocumentDescriptorUnavailableException();
@@ -54,23 +58,22 @@ class DocumentOpenRequest {
   const DocumentOpenRequest({
     required this.coreId,
     required this.openPolicy,
-    this.localPath,
     this.extension,
     this.mimeType,
+    this.blobId,
+    this.byteSize,
   });
 
   final int? coreId;
-  final String? localPath;
   final DocumentOpenPolicy openPolicy;
   final String? extension;
   final String? mimeType;
+  final String? blobId;
+  final int? byteSize;
 }
 
 typedef DocumentDescriptorSource =
     Future<DocumentOpenDescriptor> Function(int coreId);
-typedef LocalFileExists = Future<bool> Function(String path);
-typedef LocalContentProbe =
-    Future<List<int>> Function(String path, int maxBytes);
 
 abstract interface class ExternalDocumentLauncher {
   ExternalOpenReservation reserve();
@@ -86,19 +89,16 @@ class DocumentOpenService {
     required this.descriptorSource,
     required this.launcher,
     required this.environment,
-    LocalFileExists? localFileExists,
-    LocalContentProbe? localContentProbe,
+    this.blobStore,
     DateTime Function()? clock,
-  }) : _localFileExists = localFileExists ?? documentLocalFileExists,
-       _localContentProbe = localContentProbe ?? readDocumentLocalPrefix,
-       _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now;
 
   final DocumentDescriptorSource descriptorSource;
   final ExternalDocumentLauncher launcher;
   final DocumentOpenEnvironment environment;
-  final LocalFileExists _localFileExists;
-  final LocalContentProbe _localContentProbe;
+  final MediaBlobStore Function()? blobStore;
   final DateTime Function() _clock;
+  VaultPlaintextLease? _localLease;
 
   Future<DocumentOpenResult> open(DocumentOpenRequest request) async {
     if (request.openPolicy == DocumentOpenPolicy.blocked) {
@@ -110,20 +110,11 @@ class DocumentOpenService {
     ExternalOpenReservation? reservation;
     try {
       reservation = launcher.reserve();
-      final localPath = request.localPath;
-      if (environment == DocumentOpenEnvironment.desktop &&
-          request.openPolicy.allowsLocalOpen &&
-          localPath != null &&
-          await _localMatchesRequest(localPath, request)) {
-        try {
-          if (await reservation.launch(Uri.file(localPath))) {
-            return DocumentOpenResult.openedLocal;
-          }
-        } catch (_) {
-          // A stale path or platform launcher failure still gets a fresh URL.
-        }
+      if (request.openPolicy == DocumentOpenPolicy.external ||
+          request.openPolicy == DocumentOpenPolicy.systemApp) {
+        final localResult = await _openLocal(request, reservation);
+        if (localResult != null) return localResult;
       }
-
       final coreId = request.coreId;
       if (coreId == null) {
         return _close(reservation, DocumentOpenResult.unavailable);
@@ -161,6 +152,55 @@ class DocumentOpenService {
     }
   }
 
+  Future<DocumentOpenResult?> _openLocal(
+    DocumentOpenRequest request,
+    ExternalOpenReservation reservation,
+  ) async {
+    final raw = request.blobId;
+    final store = blobStore?.call();
+    if (raw == null || raw.isEmpty || store == null) return null;
+    if (request.byteSize != null &&
+        request.byteSize! > kMaxVaultDocumentOpenBytes) {
+      return null;
+    }
+    final previous = _localLease;
+    _localLease = null;
+    await previous?.dispose();
+    VaultPlaintextLease lease;
+    try {
+      final id = VaultBlobId(raw);
+      final stat = await store.stat(id);
+      if (stat.state != VaultBlobState.ready ||
+          stat.plaintextLength == null ||
+          stat.plaintextLength! > kMaxVaultDocumentOpenBytes) {
+        return null;
+      }
+      lease = await store.createLease(
+        id,
+        purpose: VaultLeasePurpose.externalOpen,
+        ttl: const Duration(minutes: 15),
+      );
+    } on VaultFailure catch (error) {
+      if (error.code == VaultFailureCode.blobMissing ||
+          error.code == VaultFailureCode.blobNotReady) {
+        return null;
+      }
+      rethrow;
+    }
+    if (!await reservation.launch(lease.location)) {
+      await lease.dispose();
+      return _close(reservation, DocumentOpenResult.failed);
+    }
+    _localLease = lease;
+    return DocumentOpenResult.openedLocal;
+  }
+
+  Future<void> releaseLocalLease() async {
+    final lease = _localLease;
+    _localLease = null;
+    await lease?.dispose();
+  }
+
   DocumentOpenResult _close(
     ExternalOpenReservation reservation,
     DocumentOpenResult result,
@@ -194,24 +234,6 @@ class DocumentOpenService {
           descriptor.action == DocumentOpenAction.download,
         DocumentOpenPolicy.blocked => false,
       };
-
-  Future<bool> _localMatchesRequest(
-    String path,
-    DocumentOpenRequest request,
-  ) async {
-    try {
-      if (!await _localFileExists(path)) return false;
-      final bytes = await _localContentProbe(path, documentContentProbeLimit);
-      return probeDocumentOpenPolicy(
-            request.extension,
-            request.mimeType ?? 'application/octet-stream',
-            bytes,
-          ) ==
-          request.openPolicy;
-    } catch (_) {
-      return false;
-    }
-  }
 
   bool _descriptorWithinRequestPolicy(
     DocumentOpenPolicy request,

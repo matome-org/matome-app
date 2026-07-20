@@ -183,13 +183,14 @@ Future<void> _seedCloudWork(AppDatabase db) async {
     coreId: 42,
     title: 'Private title',
     filename: 'private.wav',
-    localPath: '/home/user/private.wav',
     createdAt: 1000,
   );
   await db.workQueueDao.enqueue(
     ownerId: 'owner-1',
     work: fileUploadWork(
       itemId: 'local-cloud-item',
+      blobId: 'blob-local-cloud-item',
+      blobRevision: 1,
       sourceRevision: 1,
       now: 1000,
       stage: kWorkStageUpload,
@@ -225,13 +226,14 @@ Future<void> _seedLocalSpaceWork(AppDatabase db) async {
     workspaceId: 'ws_private',
     title: 'Local private title',
     filename: 'local-private.wav',
-    localPath: '/home/user/local-private.wav',
     createdAt: 1000,
   );
   await db.workQueueDao.enqueue(
     ownerId: 'owner-1',
     work: fileUploadWork(
       itemId: 'local-private-item',
+      blobId: 'blob-local-private-item',
+      blobRevision: 1,
       sourceRevision: 1,
       now: 1000,
       stage: kWorkStageReconcileParent,

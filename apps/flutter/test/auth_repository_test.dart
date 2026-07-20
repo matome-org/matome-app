@@ -70,15 +70,18 @@ void main() {
     expect(await tokenStore.readRefreshToken(), 'refresh-456');
   });
 
-  test('login device payload includes id platform form_factor device_class', () {
-    final json = _testDevice.toJson();
-    expect(json['id'], _testDevice.id);
-    expect(json['platform'], 'linux');
-    expect(json['form_factor'], 'desktop');
-    expect(json['device_class'], 'desktop');
-    expect(json['model'], 'Test Box');
-    expect(json['display_name'], 'Test Box');
-  });
+  test(
+    'login device payload includes id platform form_factor device_class',
+    () {
+      final json = _testDevice.toJson();
+      expect(json['id'], _testDevice.id);
+      expect(json['platform'], 'linux');
+      expect(json['form_factor'], 'desktop');
+      expect(json['device_class'], 'desktop');
+      expect(json['model'], 'Test Box');
+      expect(json['display_name'], 'Test Box');
+    },
+  );
 
   test('login 401 throws invalid_credentials ApiException', () async {
     adapter.onPost(

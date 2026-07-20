@@ -109,7 +109,6 @@ Future<void> _seedFile(
     db,
     id: id,
     title: title,
-    localPath: '/tmp/$id.m4a',
     createdAt: createdAt,
     ownerId: _owner,
     mediaType: mediaType,

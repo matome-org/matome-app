@@ -53,7 +53,6 @@ Future<void> _seedItem(
     id: id,
     title: title,
     durationSeconds: 10,
-    localPath: '/tmp/does-not-exist.bin',
     createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     mediaType: mediaType,
     matomeId: matomeId,

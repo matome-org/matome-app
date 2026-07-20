@@ -109,7 +109,10 @@ defmodule MatomeApiWeb.ItemController do
         upload_result =
           if UploadPolicy.mode_for(item.file_blob.media_type, item.file_blob.byte_size) ==
                :multipart do
-            Content.request_item_upload(conn.assigns.current_user, item.id, %{"mode" => "auto"})
+            Content.request_item_upload(conn.assigns.current_user, item.id, %{
+              "mode" => "auto",
+              "transport" => Map.get(params, "transport")
+            })
           else
             with {:ok, presign} <- Content.presign_item_upload(conn.assigns.current_user, item.id) do
               {:ok, upload_json(item, presign)}
@@ -306,6 +309,7 @@ defmodule MatomeApiWeb.ItemController do
       upload_id: "item-#{item.id}-upload-#{item.file_blob.upload_generation}",
       upload_generation: item.file_blob.upload_generation,
       mode: "single",
+      transport: "direct_signed_length",
       state: item.file_blob.upload_state,
       expires_at: presign.expires_at,
       request: %{

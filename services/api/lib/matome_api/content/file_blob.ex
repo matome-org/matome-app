@@ -18,6 +18,7 @@ defmodule MatomeApi.Content.FileBlob do
     field :duration, :integer
     field :upload_state, :string, default: "pending"
     field :upload_generation, :integer, default: 1
+    field :upload_transport, :string, default: "direct_signed_length"
     field :uploaded_at, :utc_datetime
     field :multipart_context, :map
     field :open_policy, :string, default: "download_only"
@@ -38,6 +39,7 @@ defmodule MatomeApi.Content.FileBlob do
       :duration,
       :upload_state,
       :upload_generation,
+      :upload_transport,
       :uploaded_at,
       :multipart_context,
       :open_policy
@@ -58,6 +60,7 @@ defmodule MatomeApi.Content.FileBlob do
     |> validate_number(:upload_generation, greater_than: 0)
     |> validate_inclusion(:media_type, @media_types)
     |> validate_inclusion(:upload_state, @upload_states)
+    |> validate_inclusion(:upload_transport, ~w(direct_signed_length browser_stream))
     |> validate_inclusion(:open_policy, MatomeApi.Content.DocumentOpenPolicy.policies())
     |> check_constraint(:media_type, name: :file_blobs_media_type_check)
     |> check_constraint(:byte_size, name: :file_blobs_byte_size_check)
@@ -67,6 +70,7 @@ defmodule MatomeApi.Content.FileBlob do
     |> check_constraint(:checksum_sha256, name: :file_blobs_checksum_sha256_check)
     |> check_constraint(:upload_state, name: :file_blobs_upload_state_check)
     |> check_constraint(:upload_generation, name: :file_blobs_upload_generation_check)
+    |> check_constraint(:upload_transport, name: :file_blobs_upload_transport_check)
     |> check_constraint(:uploaded_at, name: :file_blobs_uploaded_at_check)
     |> check_constraint(:multipart_context, name: :file_blobs_multipart_context_check)
     |> check_constraint(:open_policy, name: :file_blobs_open_policy_check)

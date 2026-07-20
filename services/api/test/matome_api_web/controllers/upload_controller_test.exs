@@ -42,6 +42,7 @@ defmodule MatomeApiWeb.UploadControllerTest do
 
     created = create_large_file!(owner_conn, matome)
     item = created["item"]
+
     upload = created["upload"]
 
     assert upload["mode"] == "multipart"
@@ -252,6 +253,181 @@ defmodule MatomeApiWeb.UploadControllerTest do
 
     assert post(owner_conn, "/api/items/#{failed_item["id"]}/process", %{})
            |> json_response(422) == %{"error" => "upload_not_complete"}
+  end
+
+  test "browser single upload omits signed length and abandoned bytes are deleted", %{
+    conn: conn,
+    store: store
+  } do
+    %{conn: owner_conn} = register_conn(conn)
+    matome = create_matome!(owner_conn)
+
+    created =
+      create_small_file!(owner_conn, matome, "browser-single", @whole_checksum, %{
+        "transport" => "browser_stream"
+      })
+
+    upload =
+      post(owner_conn, "/api/v1/items/#{created["item"]["id"]}/uploads", %{
+        "transport" => "browser_stream",
+        "checksum_sha256" => @whole_checksum
+      })
+      |> json_response(200)
+      |> Map.fetch!("upload")
+
+    assert upload["transport"] == "browser_stream"
+    refute Map.has_key?(upload["request"]["headers"], "content-length")
+    assert upload["request"]["headers"]["x-amz-checksum-sha256"]
+
+    blob = Repo.get!(FileBlob, created["item"]["file"]["id"])
+    assert blob.multipart_context["mode"] == "single"
+    assert blob.multipart_context["transport"] == "browser_stream"
+
+    Store.put_object(store, blob.storage_key, %{
+      byte_size: 1024,
+      checksum_sha256: @whole_checksum,
+      etag: "browser-etag"
+    })
+
+    expired_context = Map.put(blob.multipart_context, "expires_at", "2020-01-01T00:00:00Z")
+    blob |> FileBlob.changeset(%{multipart_context: expired_context}) |> Repo.update!()
+
+    assert :ok =
+             UploadCleanupJob.perform(%Oban.Job{
+               args: %{
+                 "file_blob_id" => blob.id,
+                 "upload_generation" => blob.upload_generation
+               }
+             })
+
+    expired = Repo.get!(FileBlob, blob.id)
+    assert expired.upload_state == "failed"
+    assert expired.multipart_context == nil
+    assert Store.object_count(store) == 0
+  end
+
+  test "completed browser single cleanup is a no-op", %{conn: conn, store: store} do
+    %{conn: owner_conn} = register_conn(conn)
+    matome = create_matome!(owner_conn)
+
+    created =
+      create_small_file!(owner_conn, matome, "browser-complete", @whole_checksum, %{
+        "transport" => "browser_stream"
+      })
+
+    upload =
+      post(owner_conn, "/api/v1/items/#{created["item"]["id"]}/uploads", %{
+        "transport" => "browser_stream",
+        "checksum_sha256" => @whole_checksum
+      })
+      |> json_response(200)
+      |> Map.fetch!("upload")
+
+    blob = Repo.get!(FileBlob, created["item"]["file"]["id"])
+
+    Store.put_object(store, blob.storage_key, %{
+      byte_size: 1024,
+      checksum_sha256: @whole_checksum,
+      etag: "browser-etag"
+    })
+
+    completed =
+      post(owner_conn, "/api/v1/uploads/#{upload["upload_id"]}/complete", %{
+        "upload_generation" => upload["upload_generation"],
+        "etag" => "browser-etag",
+        "checksum_sha256" => @whole_checksum
+      })
+      |> json_response(200)
+      |> Map.fetch!("upload")
+
+    assert completed["state"] == "uploaded"
+    assert completed["transport"] == "browser_stream"
+
+    replayed =
+      post(owner_conn, "/api/v1/uploads/#{upload["upload_id"]}/complete", %{
+        "upload_generation" => upload["upload_generation"],
+        "etag" => "browser-etag",
+        "checksum_sha256" => @whole_checksum
+      })
+      |> json_response(200)
+      |> Map.fetch!("upload")
+
+    assert replayed["transport"] == "browser_stream"
+
+    assert :ok =
+             UploadCleanupJob.perform(%Oban.Job{
+               args: %{
+                 "file_blob_id" => blob.id,
+                 "upload_generation" => blob.upload_generation
+               }
+             })
+
+    assert Repo.get!(FileBlob, blob.id).upload_state == "uploaded"
+    assert Store.object_count(store) == 1
+  end
+
+  test "upload transport is validated and cannot change within a generation", %{conn: conn} do
+    %{conn: owner_conn, user: owner} = register_conn(conn)
+    matome = create_matome!(owner_conn)
+    created = create_small_file!(owner_conn, matome, "transport-lock", @whole_checksum)
+    item = created["item"]
+
+    assert post(owner_conn, "/api/v1/items/#{item["id"]}/uploads", %{
+             "transport" => "direct_signed_length"
+           })
+           |> json_response(200)
+           |> get_in(["upload", "transport"]) == "direct_signed_length"
+
+    assert post(owner_conn, "/api/v1/items/#{item["id"]}/uploads", %{
+             "transport" => "unknown"
+           })
+           |> json_response(422) == %{"error" => "invalid_upload_transport"}
+
+    assert post(owner_conn, "/api/v1/items/#{item["id"]}/uploads", %{
+             "transport" => "browser_stream",
+             "checksum_sha256" => @whole_checksum
+           })
+           |> json_response(422) == %{"error" => "upload_transport_mismatch"}
+
+    {:ok, missing_checksum} =
+      Content.create_file_item(owner, matome["id"], %{
+        client_id: "browser-needs-checksum",
+        byte_size: 1024,
+        media_type: "audio"
+      })
+
+    assert post(owner_conn, "/api/v1/items/#{missing_checksum.id}/uploads", %{
+             "transport" => "browser_stream"
+           })
+           |> json_response(422) == %{"error" => "checksum_required"}
+  end
+
+  test "browser multipart persists transport and omits per-part signed length", %{
+    conn: conn
+  } do
+    %{conn: owner_conn} = register_conn(conn)
+    matome = create_matome!(owner_conn)
+
+    created =
+      create_large_file!(owner_conn, matome, "browser-multipart", %{
+        "transport" => "browser_stream"
+      })
+
+    upload = created["upload"]
+    assert upload["transport"] == "browser_stream"
+
+    blob = Repo.get!(FileBlob, created["item"]["file"]["id"])
+    assert blob.multipart_context["transport"] == "browser_stream"
+
+    part =
+      post(owner_conn, "/api/v1/uploads/#{upload["upload_id"]}/parts/1/presign", %{
+        "checksum_sha256" => @part_one_checksum
+      })
+      |> json_response(200)
+      |> Map.fetch!("part")
+
+    refute Map.has_key?(part["request"]["headers"], "content-length")
+    assert part["request"]["headers"]["x-amz-checksum-sha256"]
   end
 
   test "image upload records its declared content type before capability dispatch", %{
@@ -514,14 +690,18 @@ defmodule MatomeApiWeb.UploadControllerTest do
     end
 
     def presign_part(_storage_key, upload_id, part_number, opts, _store) do
+      headers = %{"x-amz-checksum-sha256" => opts[:checksum_sha256]}
+
+      headers =
+        if opts[:content_length],
+          do: Map.put(headers, "content-length", to_string(opts[:content_length])),
+          else: headers
+
       {:ok,
        %{
          method: "PUT",
          url: "https://storage.invalid/#{upload_id}/#{part_number}",
-         headers: %{
-           "content-length" => to_string(opts[:content_length]),
-           "x-amz-checksum-sha256" => opts[:checksum_sha256]
-         },
+         headers: headers,
          expires_in: 900,
          expires_at: DateTime.add(DateTime.utc_now(), 900, :second)
        }}
@@ -622,10 +802,11 @@ defmodule MatomeApiWeb.UploadControllerTest do
     def complete_count(store), do: Agent.get(store, & &1.complete_count)
     def abort_count(store), do: Agent.get(store, & &1.abort_count)
     def active_upload_count(store), do: Agent.get(store, &map_size(&1.uploads))
+    def object_count(store), do: Agent.get(store, &map_size(&1.objects))
   end
 
-  defp create_large_file!(conn, matome, client_id \\ "large-audio") do
-    post(conn, "/api/matomes/#{matome["id"]}/items", %{
+  defp create_large_file!(conn, matome, client_id \\ "large-audio", attrs \\ %{}) do
+    params = %{
       "client_id" => client_id,
       "item_type" => "file",
       "title" => client_id,
@@ -634,18 +815,22 @@ defmodule MatomeApiWeb.UploadControllerTest do
       "checksum_sha256" => @whole_checksum,
       "byte_size" => @large_bytes,
       "media_type" => "audio"
-    })
+    }
+
+    post(conn, "/api/matomes/#{matome["id"]}/items", Map.merge(params, attrs))
     |> json_response(201)
   end
 
-  defp create_small_file!(conn, matome, client_id, checksum) do
-    post(conn, "/api/matomes/#{matome["id"]}/items", %{
+  defp create_small_file!(conn, matome, client_id, checksum, attrs \\ %{}) do
+    params = %{
       "client_id" => client_id,
       "item_type" => "file",
       "checksum_sha256" => checksum,
       "byte_size" => 1024,
       "media_type" => "audio"
-    })
+    }
+
+    post(conn, "/api/matomes/#{matome["id"]}/items", Map.merge(params, attrs))
     |> json_response(201)
   end
 

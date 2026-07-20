@@ -147,9 +147,7 @@ void main() {
   // single control. The header no longer carries the cards↔table segments.
   testWidgets('no on-screen inbox view toggle in the header', (tester) async {
     await tester.pumpWidget(
-      _pumpHome(
-        AsyncValue.data([_matome(id: '1', title: 'Standup notes')]),
-      ),
+      _pumpHome(AsyncValue.data([_matome(id: '1', title: 'Standup notes')])),
     );
     await tester.pumpAndSettle();
 
@@ -188,9 +186,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _pumpHome(
-        AsyncValue.data([_matome(id: '1', title: 'Standup notes')]),
-      ),
+      _pumpHome(AsyncValue.data([_matome(id: '1', title: 'Standup notes')])),
     );
     await tester.pumpAndSettle();
 

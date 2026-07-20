@@ -40,7 +40,6 @@ Future<void> _seedMatome(
       matomeId: id,
       position: i,
       title: 'Item $i',
-      localPath: '',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + i,
     );
   }

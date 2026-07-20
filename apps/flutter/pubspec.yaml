@@ -43,6 +43,8 @@ dependencies:
   # enters Windows/macOS bundles. See packages/meeting_capture.
   meeting_capture:
     path: packages/meeting_capture
+  matome_vault:
+    path: ../../packages/matome_vault
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -103,21 +105,23 @@ dependencies:
   # the same reason sqlite3/web are pinned above.
   typed_data: ^1.3.0
   path_provider: ^2.1.4
-  # Bundles the native sqlite3 shared lib for Android/iOS/desktop.
+  # Bundles native sqlite3 for Android/iOS/desktop. The Linux CMake build
+  # deliberately replaces this plugin target's stock amalgamation with pinned
+  # SQLCipher and emits one libmatome_sqlcipher.so; see linux/CMakeLists.txt.
+  # Android packages SQLCipher separately as a direct, fixed Gradle AAR and the
+  # Matome path explicitly opens its distinct libsqlcipher.so soname.
   sqlite3_flutter_libs: ^0.5.24
-  # NOTE (#815 at-rest encryption): `sqlcipher_flutter_libs` is the intended
-  # production at-rest encryption provider, but it cannot be co-built with
-  # `drift_flutter` in this version set:
+  # NOTE (#815 at-rest encryption): `sqlcipher_flutter_libs` cannot be co-built
+  # with `drift_flutter` in this version set:
   #   * Android — it declares the SAME plugin namespace
   #     (`eu.simonbinder.sqlite3_flutter_libs`) as the `sqlite3_flutter_libs`
   #     that `drift_flutter` force-pulls → manifest-merger collision.
   #   * Linux  — its CMake forces `OPENSSL_USE_STATIC_LIBS ON`; distros that
   #     ship only shared OpenSSL (e.g. Arch) fail `find_package(OpenSSL)`.
-  # Interim decision = OS full-disk encryption (FDE) reliance.
-  # Re-enable by dropping `drift_flutter` for
-  # a hand-rolled native connection (or a sqlcipher build with a distinct
-  # namespace + shared-OpenSSL) and uncommenting:
-  #   sqlcipher_flutter_libs: ^0.6.0
+  # Linux therefore reuses the existing plugin target with SQLCipher source;
+  # Android depends directly on net.zetetic:sqlcipher-android:4.10.0 without
+  # registering its conflicting Flutter plugin. Other operating systems remain
+  # out of scope.
 
   # package:logging — used directly so the log-redaction guard (#815) can
   # install a root-logger listener that strips `?token=<jwt>` out of any log
@@ -198,6 +202,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  test: ^1.26.3
 
   # Linux meeting-capture implementation — TEST-ONLY. The live meeting e2e
   # (test/recordings/live_meeting_processing_e2e_test.dart) drives the real

@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-import 'package:matome_flutter/core/crypto/media_playback_resolver.dart'
-    show evictAllPlaybackScratch;
 import 'package:matome_flutter/core/http/api_exception.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
 import 'package:matome_flutter/core/providers.dart';
@@ -85,7 +83,10 @@ class _FakeAuthRepository implements AuthRepository {
   }) async {}
 }
 
-ProviderContainer _container(InMemoryTokenStore store, _FakeAuthRepository repo) {
+ProviderContainer _container(
+  InMemoryTokenStore store,
+  _FakeAuthRepository repo,
+) {
   return ProviderContainer(
     overrides: [
       tokenStoreProvider.overrideWithValue(store),
@@ -143,31 +144,38 @@ void main() {
     expect(state.valueOrNull, isNull);
   });
 
-  test('bootstrap with valid tokens validates via me() -> authenticated',
-      () async {
-    await store.saveTokens(accessToken: 'access-1', refreshToken: 'refresh-1');
-    repo.meResult = const AuthUser(id: 1, email: 'dev@matome.test');
+  test(
+    'bootstrap with valid tokens validates via me() -> authenticated',
+    () async {
+      await store.saveTokens(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+      );
+      repo.meResult = const AuthUser(id: 1, email: 'dev@matome.test');
 
-    final c = _container(store, repo);
-    addTearDown(c.dispose);
-    await c.read(authControllerProvider.notifier).restoreSession();
+      final c = _container(store, repo);
+      addTearDown(c.dispose);
+      await c.read(authControllerProvider.notifier).restoreSession();
 
-    final state = c.read(authControllerProvider);
-    expect(state.valueOrNull?.user.id, 1);
-  });
+      final state = c.read(authControllerProvider);
+      expect(state.valueOrNull?.user.id, 1);
+    },
+  );
 
-  test('bootstrap with stale tokens (me 401) clears tokens -> signed-out',
-      () async {
-    await store.saveTokens(accessToken: 'old', refreshToken: 'old-r');
-    repo.meError = const ApiException('expired', statusCode: 401);
+  test(
+    'bootstrap with stale tokens (me 401) clears tokens -> signed-out',
+    () async {
+      await store.saveTokens(accessToken: 'old', refreshToken: 'old-r');
+      repo.meError = const ApiException('expired', statusCode: 401);
 
-    final c = _container(store, repo);
-    addTearDown(c.dispose);
-    await c.read(authControllerProvider.notifier).restoreSession();
+      final c = _container(store, repo);
+      addTearDown(c.dispose);
+      await c.read(authControllerProvider.notifier).restoreSession();
 
-    expect(c.read(authControllerProvider).valueOrNull, isNull);
-    expect(await store.readAccessToken(), isNull);
-  });
+      expect(c.read(authControllerProvider).valueOrNull, isNull);
+      expect(await store.readAccessToken(), isNull);
+    },
+  );
 
   test('login success transitions loading -> data(session)', () async {
     repo.loginResult = _session;
@@ -177,7 +185,10 @@ void main() {
     final controller = c.read(authControllerProvider.notifier);
     await controller.restoreSession();
 
-    await controller.login(email: 'dev@matome.test', password: 'devpassword123');
+    await controller.login(
+      email: 'dev@matome.test',
+      password: 'devpassword123',
+    );
 
     final state = c.read(authControllerProvider);
     expect(state.hasError, isFalse);
@@ -232,8 +243,7 @@ void main() {
     expect(c.read(authControllerProvider).valueOrNull, isNull);
   });
 
-  test(
-      'okt-audit PASS-2 FINDING-1: logout() sweeps the playback scratch '
+  test('okt-audit PASS-2 FINDING-1: logout() sweeps the playback scratch '
       'cache (the "logout/account-switch" eviction point named in the '
       'finding) AFTER repo.logout() succeeds', () async {
     repo.loginResult = _session;
@@ -265,11 +275,11 @@ void main() {
     expect(repo.logoutCalls, 1);
   });
 
-  test(
-      'okt-audit PASS-2 FINDING-1: logout() real (non-fake) sweep actually '
+  test('okt-audit PASS-2 FINDING-1: logout() real (non-fake) sweep actually '
       'deletes the on-disk playback scratch cache directory', () async {
-    final tmp =
-        await Directory.systemTemp.createTemp('auth_controller_logout_evict_');
+    final tmp = await Directory.systemTemp.createTemp(
+      'auth_controller_logout_evict_',
+    );
     addTearDown(() async {
       if (await tmp.exists()) await tmp.delete(recursive: true);
     });
@@ -285,8 +295,7 @@ void main() {
         authControllerProvider.overrideWith(
           (ref) => AuthController(
             ref,
-            evictPlaybackCache: () =>
-                evictAllPlaybackScratch(scratchDirSource: () async => scratchDir),
+            evictPlaybackCache: () => scratchDir.delete(recursive: true),
           ),
         ),
       ],
@@ -299,38 +308,43 @@ void main() {
 
     await controller.logout();
 
-    expect(await scratchDir.exists(), isFalse,
-        reason: 'logout must wipe the whole playback scratch cache, not '
-            'just log out of the API session');
+    expect(
+      await scratchDir.exists(),
+      isFalse,
+      reason:
+          'logout must wipe the whole playback scratch cache, not '
+          'just log out of the API session',
+    );
   });
 
   test(
-      'okt-audit PASS-2 FINDING-1: signedOutByInterceptor() also sweeps the '
-      'playback scratch cache (forced-signout is a session boundary too)',
-      () async {
-    final evicted = Completer<void>();
+    'okt-audit PASS-2 FINDING-1: signedOutByInterceptor() also sweeps the '
+    'playback scratch cache (forced-signout is a session boundary too)',
+    () async {
+      final evicted = Completer<void>();
 
-    final container = ProviderContainer(
-      overrides: [
-        tokenStoreProvider.overrideWithValue(store),
-        authRepositoryProvider.overrideWithValue(repo),
-        authControllerProvider.overrideWith(
-          (ref) => AuthController(
-            ref,
-            evictPlaybackCache: () async {
-              if (!evicted.isCompleted) evicted.complete();
-            },
+      final container = ProviderContainer(
+        overrides: [
+          tokenStoreProvider.overrideWithValue(store),
+          authRepositoryProvider.overrideWithValue(repo),
+          authControllerProvider.overrideWith(
+            (ref) => AuthController(
+              ref,
+              evictPlaybackCache: () async {
+                if (!evicted.isCompleted) evicted.complete();
+              },
+            ),
           ),
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final controller = container.read(authControllerProvider.notifier);
-    await controller.restoreSession();
+      final controller = container.read(authControllerProvider.notifier);
+      await controller.restoreSession();
 
-    controller.signedOutByInterceptor();
+      controller.signedOutByInterceptor();
 
-    await evicted.future.timeout(const Duration(seconds: 2));
-  });
+      await evicted.future.timeout(const Duration(seconds: 2));
+    },
+  );
 }

@@ -8,6 +8,7 @@ import '../tables.dart';
 part 'work_queue_dao.g.dart';
 
 const String kWorkKindFileUpload = 'file_upload';
+const String kWorkKindFileDelete = 'file_delete';
 const String kWorkKindTextCreate = 'text_create';
 const String kWorkKindTextUpdate = 'text_update';
 const String kWorkKindTextDelete = 'text_delete';
@@ -31,6 +32,10 @@ const String kWorkStageCompleteUpload = 'complete_upload';
 const String kWorkStageEnqueueProcessing = 'enqueue_processing';
 const String kWorkStageProcessingAccepted = 'processing_accepted';
 const String kWorkStageUploadOnlyComplete = 'upload_only_complete';
+const String kWorkStagePrepareDelete = 'prepare_delete';
+const String kWorkStageDeleteRemote = 'delete_remote';
+const String kWorkStageDeleteCiphertext = 'delete_ciphertext';
+const String kWorkStageDeleteMetadata = 'delete_metadata';
 
 const String kWorkBlockSignedOut = 'signed_out';
 const String kWorkBlockOffline = 'offline';
@@ -54,6 +59,8 @@ WorkQueueCompanion genericWork({
   required String itemId,
   required String dedupeKey,
   required int now,
+  String? blobId,
+  int? blobRevision,
   String stage = kWorkStageReconcileParent,
   String? dependsOn,
   int configRevision = 0,
@@ -62,6 +69,8 @@ WorkQueueCompanion genericWork({
     id: id,
     kind: kind,
     itemId: itemId,
+    blobId: Value(blobId),
+    blobRevision: Value(blobRevision),
     dedupeKey: dedupeKey,
     state: kWorkStateQueued,
     stage: stage,
@@ -75,6 +84,8 @@ WorkQueueCompanion genericWork({
 
 WorkQueueCompanion fileUploadWork({
   required String itemId,
+  required String blobId,
+  required int blobRevision,
   required int sourceRevision,
   required int now,
   int configRevision = 0,
@@ -87,6 +98,8 @@ WorkQueueCompanion fileUploadWork({
     id: 'work:$key',
     kind: kWorkKindFileUpload,
     itemId: itemId,
+    blobId: blobId,
+    blobRevision: blobRevision,
     dedupeKey: key,
     now: now,
     stage: stage,
@@ -94,6 +107,20 @@ WorkQueueCompanion fileUploadWork({
     configRevision: configRevision,
   );
 }
+
+WorkQueueCompanion fileDeleteWork({
+  required String itemId,
+  required String blobId,
+  required int now,
+}) => genericWork(
+  id: 'work:$itemId:$kWorkKindFileDelete',
+  kind: kWorkKindFileDelete,
+  itemId: itemId,
+  blobId: blobId,
+  dedupeKey: '$itemId:$kWorkKindFileDelete',
+  now: now,
+  stage: kWorkStagePrepareDelete,
+);
 
 WorkQueueCompanion textWork({
   required String kind,

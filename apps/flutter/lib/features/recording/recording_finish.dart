@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/observability/app_log.dart';
+import '../../core/vault/media_inputs.dart';
 import '../home/inbox_upload.dart';
 import 'audio_recording_service.dart';
 import 'recording_controller.dart';
@@ -13,10 +14,9 @@ import 'recording_controller.dart';
 ///
 /// Finish sequence — LOCAL-FIRST (plan #43, W2):
 ///  1. F3 [RecordingController.finish] stops the live recorder and resolves the
-///     single continuous session file (a durable copy already living in the app
-///     documents dir — see [AudioRecordingService.stopRecording]).
+///     single continuous recorder staging file.
 ///  2. [InboxUploader.upload] inserts the local Drift row FIRST
-///     (`rec_local_<uuid>`, `pending_upload`, audio path on disk) so the Inbox
+///     (`rec_local_<uuid>`, `pending_upload`, opaque Vault blob id) so the Inbox
 ///     card shows immediately regardless of Core, THEN best-effort uploads to
 ///     Core and reconciles `coreId` / the accepted processing run into the row.
 ///
@@ -24,9 +24,8 @@ import 'recording_controller.dart';
 /// root of #828 (orphan-WAV — a Core failure wiped the only on-disk copy with no
 /// local row). The audio must outlive a Core failure so it can be retried.
 ///
-/// W2 (#46 / #871): the upload queue never deletes the local audio after Core
-/// accepts processing. The durable `audioFilePath` remains the canonical
-/// local-first copy until the user explicitly deletes it.
+/// The encrypted Vault object remains local after Core accepts processing; the
+/// configured retention policy or an explicit user delete owns later removal.
 ///
 /// finish() instead clears ONLY the crash-recovery DRAFT row (via
 /// [AudioRecordingService.clearDraft]) once the session is finalized and persisted
@@ -77,7 +76,7 @@ class RecordingFinisher {
   /// Core — the row + audio survive in `pending_upload` for W4's retry queue.
   Future<String> finish({String? title}) async {
     AppLog.event(LogCat.action, 'finish: finalizing recording session');
-    // 1. F3 finalizes the single session file into a durable documents-dir copy.
+    // 1. F3 finalizes the recorder staging file.
     final path = await _controller.finish();
     final durationSeconds = _ref.read(_controllerProvider).durationSeconds;
 
@@ -91,10 +90,9 @@ class RecordingFinisher {
     // its own draft during a slow upload keeps its crash-recovery draft.
     final sessionPaths = await audioService.snapshotSessionCleanupPaths();
 
-    // 2. Local-first persist + queued upload. The local row + on-disk audio
+    // 2. Local-first persist + queued upload. The local row + encrypted blob
     //    survive even if Core never answers; the queue retries a failed upload
-    //    and RETAINS the local audio after Core acceptance (#46 W2 / #871 — the
-    //    durable `audioFilePath` is the canonical copy until the user deletes it).
+    //    and retains the Vault blob after Core acceptance.
     //
     //    LOOSE CAPTURE (#102 W2, .docs/internal/architecture.md §5):
     //    [InboxUploader.upload] persists through [InboxController.insertLocalUpload],
@@ -118,7 +116,10 @@ class RecordingFinisher {
     //    Core-first semantics hold on both flag lanes.
     final localId = await _uploader.upload(
       PickedUpload(
-        file: File(path),
+        input: mediaInputFromFile(
+          File(path),
+          filename: File(path).uri.pathSegments.last,
+        ),
         title: title ?? AudioRecordingService.generateTitle(null),
         mediaType: 'audio',
         filename: File(path).uri.pathSegments.last,
@@ -129,10 +130,10 @@ class RecordingFinisher {
     // 3. The session is finalized + persisted local-first → clear the crash-
     //    recovery DRAFT row so a future launch does NOT prompt to "recover" this
     //    already-saved recording. This is split from file-deletion: the segment
-    //    files (one of which IS the durable `audioFilePath`) STAY on disk (W2
-    //    retention). Scoped to this session's snapshot so a back-to-back B's
+    //    recorder staging cleanup remains scoped to this session's snapshot so
+    //    a back-to-back B's
     //    draft survives. Best-effort inside — never regresses the finish.
-    await audioService.clearDraftForSession(sessionPaths);
+    await audioService.discardSegmentPaths(sessionPaths);
 
     AppLog.event(LogCat.action, 'finish: persisted local-first ($localId)');
     return localId;

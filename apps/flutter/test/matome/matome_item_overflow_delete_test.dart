@@ -55,7 +55,6 @@ void main() {
       matomeId: 'm_ov',
       title: 'Audio note',
       durationSeconds: 30,
-      localPath: '',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       mediaType: 'audio',
     );
@@ -65,7 +64,6 @@ void main() {
       id: 'rec_image',
       matomeId: 'm_ov',
       title: 'whiteboard',
-      localPath: '',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 1,
       mediaType: 'image',
     );

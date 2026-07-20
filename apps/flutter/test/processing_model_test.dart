@@ -82,10 +82,7 @@ void main() {
         state: 'partial',
         mediaType: 'image',
         outputs: const {
-          'description': {
-            'type': 'description',
-            'text': 'A whiteboard',
-          },
+          'description': {'type': 'description', 'text': 'A whiteboard'},
           'ocr_text': {'type': 'ocr_text', 'text': 'Launch Friday'},
         },
       ),
@@ -95,10 +92,7 @@ void main() {
         state: 'succeeded',
         mediaType: 'document',
         outputs: const {
-          'extracted_text': {
-            'type': 'extracted_text',
-            'text': 'Document body',
-          },
+          'extracted_text': {'type': 'extracted_text', 'text': 'Document body'},
           'summary': {'type': 'summary', 'markdown': 'Document summary'},
         },
       ),

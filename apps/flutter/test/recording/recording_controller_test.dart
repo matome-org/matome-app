@@ -36,32 +36,34 @@ void main() {
     );
   }
 
-  test('phase machine: idle → recording → paused → recording → finished',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    final controller = RecordingController(svc(db));
+  test(
+    'phase machine: idle → recording → paused → recording → finished',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final controller = RecordingController(svc(db));
 
-    expect(controller.state.phase, RecordingPhase.idle);
+      expect(controller.state.phase, RecordingPhase.idle);
 
-    await controller.start();
-    expect(controller.state.phase, RecordingPhase.recording);
+      await controller.start();
+      expect(controller.state.phase, RecordingPhase.recording);
 
-    await controller.pause();
-    expect(controller.state.phase, RecordingPhase.paused);
-    // Pause autosaved a draft.
-    expect(await db.recordingDraftsDao.loadDraft(), isNotNull);
+      await controller.pause();
+      expect(controller.state.phase, RecordingPhase.paused);
+      // Pause autosaved a draft.
+      expect(await db.recordingDraftsDao.loadDraft(), isNotNull);
 
-    await controller.resume();
-    expect(controller.state.phase, RecordingPhase.recording);
+      await controller.resume();
+      expect(controller.state.phase, RecordingPhase.recording);
 
-    final path = await controller.finish();
-    expect(controller.state.phase, RecordingPhase.finished);
-    expect(await File(path).exists(), isTrue);
-    expect(controller.state.durationSeconds, greaterThan(0));
+      final path = await controller.finish();
+      expect(controller.state.phase, RecordingPhase.finished);
+      expect(await File(path).exists(), isTrue);
+      expect(controller.state.durationSeconds, greaterThan(0));
 
-    controller.dispose();
-    await db.close();
-  });
+      controller.dispose();
+      await db.close();
+    },
+  );
 
   test('detectDraft flags hasRecoverableDraft when a draft exists', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());

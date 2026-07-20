@@ -68,10 +68,12 @@ void main() {
 
     // The stored "table" choices flow into the Settings radio groups: each
     // RadioGroup's active selection is the Table option.
-    final inboxGroup =
-        tester.widget<RadioGroup<InboxView>>(find.byType(RadioGroup<InboxView>));
-    final filesGroup =
-        tester.widget<RadioGroup<FilesView>>(find.byType(RadioGroup<FilesView>));
+    final inboxGroup = tester.widget<RadioGroup<InboxView>>(
+      find.byType(RadioGroup<InboxView>),
+    );
+    final filesGroup = tester.widget<RadioGroup<FilesView>>(
+      find.byType(RadioGroup<FilesView>),
+    );
     expect(inboxGroup.groupValue, InboxView.table);
     expect(filesGroup.groupValue, FilesView.table);
   });

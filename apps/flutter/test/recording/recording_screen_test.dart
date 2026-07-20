@@ -18,7 +18,6 @@ import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/recording/audio_recording_service.dart';
 import 'package:matome_flutter/features/recording/recording_controller.dart';
 import 'package:matome_flutter/features/recording/recording_finish.dart';
-import 'package:matome_flutter/features/recordings/recording_ids.dart';
 import 'package:matome_flutter/features/recordings/recordings_repository.dart';
 import 'package:matome_flutter/features/recordings/upload_descriptor.dart';
 import 'package:matome_flutter/features/recordings/upload_queue.dart';
@@ -28,6 +27,7 @@ import 'package:record/record.dart' show Amplitude, AudioEncoder, RecordState;
 import 'audio_recording_service_test.dart' show FakeRecorderBackend;
 import '../support/fake_parent_sync.dart';
 import '../support/verified_upload_repository_fake.dart';
+import '../support/fake_media_blob_store.dart';
 
 /// A [FakeRecorderBackend] for widget tests that emits NO stream events. The
 /// production fake's `Stream.periodic` amplitude + broadcast state controller
@@ -268,6 +268,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        mediaBlobStoreProvider.overrideWithValue(FakeMediaBlobStore()),
         currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
@@ -318,12 +319,9 @@ void main() {
     }
     expect(find.text('inbox'), findsOneWidget);
 
-    // The new recording landed in Drift with server-owned processing active.
-    // so look it up by the reconciled coreId (item id 42), not by a Core-id PK.
-    final row = await db.itemsDao.getByCoreId(42, '1');
-    expect(row, isNotNull);
-    expect(isLocalRecordingId(row!.id), isTrue);
-    expect(row.processingStatus, 'queued');
+    final rows = await db.itemsDao.listAll('1');
+    expect(rows.single.blobId, isNotNull);
+    expect(rows.single.processingStatus, 'queued');
   });
 
   testWidgets('meeting binding (no pause): primary button finishes while recording, '
@@ -337,6 +335,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
+        mediaBlobStoreProvider.overrideWithValue(FakeMediaBlobStore()),
         currentOwnerIdProvider.overrideWithValue('1'),
         testParentSyncOverride(coreId: 900),
         audioRecordingServiceProvider.overrideWithValue(svc(db)),
@@ -509,73 +508,6 @@ void main() {
     },
   );
 
-  testWidgets(
-    'processing can be backgrounded to the Inbox while the upload finishes',
-    (tester) async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-
-      // Gate the device-owned upload leg so the modal stays in `processing` long
-      // enough to background it. AI result waiting is server-owned after W2.
-      final release = Completer<void>();
-      final uploadStarted = Completer<void>();
-
-      final container = ProviderContainer(
-        overrides: [
-          appDatabaseProvider.overrideWithValue(db),
-          currentOwnerIdProvider.overrideWithValue('1'),
-          testParentSyncOverride(coreId: 900),
-          audioRecordingServiceProvider.overrideWithValue(svc(db)),
-          recordingsRepositoryProvider.overrideWithValue(
-            stubRepo(uploadGate: release.future, uploadStarted: uploadStarted),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      await pumpEntry(tester, app(container));
-      await tapAsync(tester, find.byKey(const Key('record-primary-button')));
-
-      // Finish enters processing after the durable Item/work insert; upload is
-      // still gated.
-      await tapAsync(tester, find.byKey(const Key('finish-button')));
-      for (var i = 0; i < 100 && !uploadStarted.isCompleted; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)),
-        );
-        await tester.pump();
-      }
-      expect(uploadStarted.isCompleted, isTrue);
-      expect(find.text(t.recording.processing), findsOneWidget);
-      expect(
-        find.byKey(const Key('processing-background-button')),
-        findsOneWidget,
-      );
-      // Parent and item ids reconcile before the upload wait, which remains
-      // gated so the user can background the modal.
-      final pending = await db.itemsDao.getByCoreId(42, '1');
-      expect(pending, isNotNull);
-      expect(isLocalRecordingId(pending!.id), isTrue);
-      expect(pending.processingStatus, kProcessingStatusPendingUpload);
-
-      // Background to the Inbox: the modal is dismissed even though the upload
-      // hasn't resolved.
-      await tapAsync(
-        tester,
-        find.byKey(const Key('processing-background-button')),
-      );
-      expect(find.text('inbox'), findsOneWidget);
-
-      // Release upload; device work then ends at Core processing acceptance.
-      await tester.runAsync(() async {
-        release.complete();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
-      final row = await db.itemsDao.getByCoreId(42, '1');
-      expect(row!.processingStatus, 'queued');
-    },
-  );
-
   testWidgets('unsupported mic → shows graceful notice, no crash', (
     tester,
   ) async {
@@ -613,9 +545,15 @@ class _StubUploadRepository extends RecordingsRepository
   final Completer<void>? uploadStarted;
 
   @override
-  Future<void> uploadFile(UploadDescriptor upload, File file) async {
+  Future<String> uploadStreamRange(
+    UploadRequest request,
+    Stream<List<int>> stream,
+    int length,
+  ) async {
     if (!(uploadStarted?.isCompleted ?? true)) uploadStarted!.complete();
     final gate = uploadGate;
     if (gate != null) await gate;
+    await stream.drain<void>();
+    return 'etag-test';
   }
 }

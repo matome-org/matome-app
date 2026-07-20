@@ -53,29 +53,36 @@ void main() {
       expect(c.isOverridden, isTrue);
     });
 
-    test('setBaseUrl applies + persists a valid host, rejects a bad one',
-        () async {
-      final store = InMemorySettingsStore();
-      final c = EndpointController(store);
+    test(
+      'setBaseUrl applies + persists a valid host, rejects a bad one',
+      () async {
+        final store = InMemorySettingsStore();
+        final c = EndpointController(store);
 
-      expect(await c.setBaseUrl('http://192.168.1.9:7001/'), isTrue);
-      expect(c.state, 'http://192.168.1.9:7001');
-      expect(await store.read(kApiBaseUrlOverrideKey), 'http://192.168.1.9:7001');
-      expect(c.isOverridden, isTrue);
+        expect(await c.setBaseUrl('http://192.168.1.9:7001/'), isTrue);
+        expect(c.state, 'http://192.168.1.9:7001');
+        expect(
+          await store.read(kApiBaseUrlOverrideKey),
+          'http://192.168.1.9:7001',
+        );
+        expect(c.isOverridden, isTrue);
 
-      final before = c.state;
-      expect(await c.setBaseUrl('garbage'), isFalse);
-      expect(c.state, before, reason: 'invalid input must be a no-op');
-    });
+        final before = c.state;
+        expect(await c.setBaseUrl('garbage'), isFalse);
+        expect(c.state, before, reason: 'invalid input must be a no-op');
+      },
+    );
 
-    test('tolerates a throwing store on hydrate (keeps default, no crash)',
-        () async {
-      final c = EndpointController(_ThrowingSettingsStore());
-      // The eager hydrate must swallow the storage error.
-      await Future<void>.delayed(Duration.zero);
-      expect(c.state, c.defaultBaseUrl);
-      expect(c.isOverridden, isFalse);
-    });
+    test(
+      'tolerates a throwing store on hydrate (keeps default, no crash)',
+      () async {
+        final c = EndpointController(_ThrowingSettingsStore());
+        // The eager hydrate must swallow the storage error.
+        await Future<void>.delayed(Duration.zero);
+        expect(c.state, c.defaultBaseUrl);
+        expect(c.isOverridden, isFalse);
+      },
+    );
 
     test('reset falls back to the default and clears the override', () async {
       final store = InMemorySettingsStore();

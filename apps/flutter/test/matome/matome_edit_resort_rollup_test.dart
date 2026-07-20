@@ -46,7 +46,6 @@ Future<void> _seedCloudChild(
     db,
     id: id,
     title: 'Child $id',
-    localPath: '/tmp/$id.m4a',
     createdAt: DateTime(2026, 6, 1).millisecondsSinceEpoch,
     coreId: coreId,
     matomeId: matomeId,

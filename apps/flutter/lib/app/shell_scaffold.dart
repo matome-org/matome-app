@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../core/config/feature_flags.dart';
 import '../core/observability/app_log.dart';
 import '../core/theme/app_theme.dart';
+import '../core/vault/media_inputs.dart';
 import '../features/home/inbox_upload.dart';
 import '../features/recording/meeting_recorder.dart';
 import '../features/shell/widgets/matome_nav.dart';
@@ -254,21 +255,24 @@ Future<void> _pickAndUpload(
   // (cancel, or a Linux picker backend that yields no path) is never silent.
   AppLog.event(LogCat.action, 'nav add: picker opening (type=$type)');
   try {
-    final result = await FilePicker.platform.pickFiles(type: type);
+    final result = await FilePicker.platform.pickFiles(
+      type: type,
+      withReadStream: true,
+      readSequential: true,
+    );
     final platformFile = result?.files.single;
-    final path = platformFile?.path;
-    if (path == null) {
-      AppLog.event(LogCat.action, 'nav add: cancelled (no path)');
+    if (platformFile == null) {
+      AppLog.event(LogCat.action, 'nav add: cancelled');
       return;
     }
     if (!context.mounted) return;
 
-    final name = platformFile!.name;
+    final name = platformFile.name;
     final dot = name.lastIndexOf('.');
     final base = (dot > 0 ? name.substring(0, dot) : name).trim();
     final mediaType = mediaTypeForPath(name);
     final picked = PickedUpload(
-      file: File(path),
+      input: mediaInputFromPlatformFile(platformFile),
       title: base.isEmpty ? 'Untitled' : base,
       mediaType: mediaType,
       filename: name,
@@ -277,7 +281,7 @@ Future<void> _pickAndUpload(
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Uploading "${picked.title}"…')));
-    AppLog.event(LogCat.action, 'nav add: uploading "${picked.title}"');
+    AppLog.event(LogCat.action, 'nav add: sealing picker input');
     await ref
         .read(inboxUploaderProvider)
         .upload(picked, importFromExternalSource: true);

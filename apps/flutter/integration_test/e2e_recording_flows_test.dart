@@ -263,5 +263,12 @@ class _StubUploadRepository extends RecordingsRepository {
   _StubUploadRepository({required super.apiClient});
 
   @override
-  Future<void> uploadFile(UploadDescriptor upload, File file) async {}
+  Future<String> uploadStreamRange(
+    UploadRequest request,
+    Stream<List<int>> stream,
+    int length,
+  ) async {
+    await stream.drain<void>();
+    return 'etag-test';
+  }
 }

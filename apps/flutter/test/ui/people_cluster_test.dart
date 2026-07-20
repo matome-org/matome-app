@@ -8,7 +8,9 @@ Future<void> _pump(WidgetTester tester, List<String> names) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: buildLightTheme(),
-      home: Scaffold(body: Center(child: PeopleCluster(names: names))),
+      home: Scaffold(
+        body: Center(child: PeopleCluster(names: names)),
+      ),
     ),
   );
 }

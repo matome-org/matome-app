@@ -4,7 +4,9 @@ import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matome_flutter/core/db/app_database.dart';
+import 'package:matome_flutter/core/db/daos/work_queue_dao.dart';
 import 'package:matome_flutter/features/items/matome_item_type.dart';
+import 'package:matome_flutter/features/items/item_deletion_service.dart';
 
 const _ownerA = 'owner-a';
 const _ownerB = 'owner-b';
@@ -42,13 +44,13 @@ ItemsCompanion _item({
 
 FileBlobsCompanion _file({
   required String id,
-  String localPath = '/tmp/item.m4a',
+  String blobId = 'opaque-item-blob',
   String mediaType = 'audio',
   int createdAt = 100,
 }) {
   return FileBlobsCompanion.insert(
     id: id,
-    localPath: Value(localPath),
+    blobId: Value(blobId),
     byteSize: const Value(42),
     mediaType: mediaType,
     createdAt: createdAt,
@@ -137,12 +139,92 @@ void main() {
         'upload_generation',
         'uploaded_at',
         'multipart_context',
-        'local_path',
-        'wrapped_fek',
-        'file_nonce_prefix',
+        'blob_id',
+        'blob_state',
+        'cipher_format',
+        'cipher_version',
         'is_dirty',
       ]),
     );
+    expect(fileColumns, isNot(contains('local_path')));
+    expect(fileColumns, isNot(contains('wrapped_fek')));
+    expect(fileColumns, isNot(contains('file_nonce_prefix')));
+
+    final retention = await db.select(db.vaultRetentionPolicies).getSingle();
+    expect(retention.mode, 'keep_forever');
+    expect(retention.expiryDays, isNull);
+  });
+
+  test('file delete tombstones and replaces upload work atomically', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final dao = db.itemsDao;
+
+    await dao.createFileItem(
+      item: _item(
+        id: 'delete-me',
+        ownerId: _ownerA,
+        type: MatomeItemType.file,
+        payloadId: 'file-delete-me',
+      ),
+      file: _file(id: 'file-delete-me', blobId: 'vault-delete-me'),
+      initialWork: fileUploadWork(
+        itemId: 'delete-me',
+        blobId: 'vault-delete-me',
+        blobRevision: 1,
+        sourceRevision: 1,
+        now: 100,
+      ),
+    );
+
+    expect(
+      await dao.tombstoneFileDelete(
+        itemId: 'delete-me',
+        ownerId: _ownerB,
+        now: 200,
+      ),
+      isFalse,
+    );
+    expect(
+      await dao.tombstoneFileDelete(
+        itemId: 'delete-me',
+        ownerId: _ownerA,
+        now: 200,
+      ),
+      isTrue,
+    );
+
+    expect(await dao.listAll(_ownerA), isEmpty);
+    final tombstone = await dao.getByIdIncludingDeleted('delete-me', _ownerA);
+    expect(tombstone?.item.isDeleted, isTrue);
+    expect(tombstone?.item.syncState, 'pending_delete');
+    final work = await db.workQueueDao.listAll();
+    expect(work, hasLength(1));
+    expect(work.single.kind, kWorkKindFileDelete);
+    expect(work.single.blobId, 'vault-delete-me');
+    expect(work.single.stage, kWorkStagePrepareDelete);
+  });
+
+  test('central deletion removes a local-only text Item', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db.itemsDao.createTextItem(
+      item: _item(
+        id: 'local-text',
+        ownerId: _ownerA,
+        type: MatomeItemType.text,
+        payloadId: 'text-local',
+      ),
+      text: _text(id: 'text-local', body: 'Local only'),
+    );
+    var drains = 0;
+    final service = ItemDeletionService(db.itemsDao, () async {
+      drains++;
+    });
+
+    expect(await service.delete('local-text', _ownerA), isTrue);
+    expect(await db.itemsDao.getById('local-text', _ownerA), isNull);
+    expect(drains, 1);
   });
 
   test('every item read is owner-scoped across all placement modes', () async {
@@ -229,7 +311,7 @@ void main() {
         payloadId: 'blob-local',
         title: 'Original file',
       ),
-      file: _file(id: 'blob-local', localPath: '/durable/capture.m4a'),
+      file: _file(id: 'blob-local', blobId: 'opaque-capture-blob'),
     );
     await db.itemsDao.createTextItem(
       item: _item(
@@ -246,7 +328,7 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase(file));
     var fileItem = await db.itemsDao.getById('file-local', _ownerA);
     var textItem = await db.itemsDao.getById('text-local', _ownerA);
-    expect(fileItem?.file?.localPath, '/durable/capture.m4a');
+    expect(fileItem?.file?.blobId, 'opaque-capture-blob');
     expect(textItem?.text?.body, 'First body');
 
     await db.itemsDao.updateItem(

@@ -54,7 +54,6 @@ Future<void> _seedMatome(
       title: 'Item $i',
       summary: itemSummary,
       durationSeconds: 30,
-      localPath: '',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + i,
       mediaType: 'audio',
     );
@@ -321,7 +320,6 @@ void main() {
       id: 'rec_img',
       matomeId: 'm_img',
       title: 'whiteboard',
-      localPath: tmp.path,
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 99,
       mediaType: 'image',
       processingStatus: 'pending_upload',
@@ -353,7 +351,7 @@ void main() {
     // Dismiss the sheet so it doesn't occlude the rest of the assertions.
     await tester.tapAt(const Offset(10, 10));
     await tester.pumpAndSettle();
-    expect(find.byType(Image), findsWidgets);
+    expect(find.byIcon(Icons.image_outlined), findsWidgets);
 
     // The audio Item still renders, and NOT as an image tile.
     expect(find.byKey(const ValueKey('matome-item-rec_0')), findsOneWidget);
@@ -384,7 +382,6 @@ void main() {
         id: 'rec_img',
         matomeId: 'm_dispatch',
         title: 'whiteboard',
-        localPath: tmp.path,
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 5,
         mediaType: 'image',
       );
@@ -426,7 +423,6 @@ void main() {
         id: 'rec_doc',
         matomeId: 'm_doc',
         title: 'Quarterly report',
-        localPath: '/tmp/report.pdf',
         filename: 'report.pdf',
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + 5,
         mediaType: 'document',

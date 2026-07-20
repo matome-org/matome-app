@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/providers.dart';
+import '../../core/vault/vault_session_controller.dart';
 import '../../features/recording/audio_recording_service.dart';
 import 'package:meeting_capture/meeting_capture.dart';
 import '../../features/recording/meeting_capture_finish.dart';
@@ -62,6 +64,7 @@ class _MeetingRecordingScreenState
   double _microphoneLevel = -160;
   Timer? _clock;
   StreamSubscription<MeetingCaptureEvent>? _events;
+  VaultLockDeferral? _vaultLockDeferral;
 
   @override
   void initState() {
@@ -73,7 +76,20 @@ class _MeetingRecordingScreenState
   void dispose() {
     _clock?.cancel();
     _events?.cancel();
+    _releaseVaultLockDeferral();
     super.dispose();
+  }
+
+  void _deferVaultLock() {
+    if (_vaultLockDeferral?.isActive ?? false) return;
+    if (ref.read(vaultSessionProvider).phase == VaultSessionPhase.ready) {
+      _vaultLockDeferral = ref.read(vaultSessionProvider.notifier).deferLock();
+    }
+  }
+
+  void _releaseVaultLockDeferral() {
+    _vaultLockDeferral?.release();
+    _vaultLockDeferral = null;
   }
 
   Future<void> _bootstrap() async {
@@ -124,6 +140,7 @@ class _MeetingRecordingScreenState
   Future<void> _start() async {
     try {
       await ref.read(widget.binding.serviceProvider).start();
+      _deferVaultLock();
       if (!mounted) return;
       _startedAt = DateTime.now();
       _clock = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -141,6 +158,7 @@ class _MeetingRecordingScreenState
     setState(() => _phase = _MeetingPhase.saving);
     try {
       await ref.read(widget.binding.finisherProvider).finish();
+      _releaseVaultLockDeferral();
       if (mounted) _close();
     } catch (_) {
       if (!mounted) return;
@@ -191,6 +209,7 @@ class _MeetingRecordingScreenState
       } else if (_phase == _MeetingPhase.recording) {
         await service.cancel();
       }
+      _releaseVaultLockDeferral();
       if (mounted) _close();
     } catch (_) {
       if (mounted) _snack(t.meetingRecording.saveFailed);
@@ -353,10 +372,14 @@ class _LevelRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final normalized = ((level + 60) / 60).clamp(0.0, 1.0);
     return Row(
       children: [
-        SizedBox(width: 112, child: Text(label)),
+        SizedBox(
+          width: spacing.xxl + spacing.xl + spacing.xl,
+          child: Text(label),
+        ),
         Expanded(child: LinearProgressIndicator(value: normalized)),
       ],
     );
@@ -384,7 +407,7 @@ class _Message extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 56, color: colors.accent),
+          Icon(icon, size: spacing.xxl + spacing.xs, color: colors.accent),
           SizedBox(height: spacing.lg),
           Text(
             title,

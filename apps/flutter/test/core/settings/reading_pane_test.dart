@@ -30,21 +30,23 @@ void main() {
       }
     });
 
-    test('setMode writes the choice under the surface key and updates state',
-        () async {
-      final store = InMemorySettingsStore();
-      final c = containerWith(store);
+    test(
+      'setMode writes the choice under the surface key and updates state',
+      () async {
+        final store = InMemorySettingsStore();
+        final c = containerWith(store);
 
-      await c
-          .read(readingPaneModeProvider(ReadingPaneSurface.files).notifier)
-          .setMode(ReadingPaneMode.always);
+        await c
+            .read(readingPaneModeProvider(ReadingPaneSurface.files).notifier)
+            .setMode(ReadingPaneMode.always);
 
-      expect(
-        c.read(readingPaneModeProvider(ReadingPaneSurface.files)),
-        ReadingPaneMode.always,
-      );
-      expect(await store.read('matome.reading_pane.files'), 'always');
-    });
+        expect(
+          c.read(readingPaneModeProvider(ReadingPaneSurface.files)),
+          ReadingPaneMode.always,
+        );
+        expect(await store.read('matome.reading_pane.files'), 'always');
+      },
+    );
 
     test('round-trips: a stored choice rehydrates a fresh container', () async {
       final store = InMemorySettingsStore();
@@ -70,9 +72,9 @@ void main() {
     });
 
     test('an unknown / stale stored value hydrates to onClick', () async {
-      final store = InMemorySettingsStore(
-        {'matome.reading_pane.spaces': 'bottom'},
-      );
+      final store = InMemorySettingsStore({
+        'matome.reading_pane.spaces': 'bottom',
+      });
       final c = containerWith(store);
 
       // Instantiate + pump _hydrate; the unknown value must be ignored.
@@ -88,36 +90,38 @@ void main() {
       );
     });
 
-    test('surfaces are independent — setting one leaves the others default',
-        () async {
-      final store = InMemorySettingsStore();
-      final c = containerWith(store);
+    test(
+      'surfaces are independent — setting one leaves the others default',
+      () async {
+        final store = InMemorySettingsStore();
+        final c = containerWith(store);
 
-      await c
-          .read(readingPaneModeProvider(ReadingPaneSurface.contacts).notifier)
-          .setMode(ReadingPaneMode.always);
+        await c
+            .read(readingPaneModeProvider(ReadingPaneSurface.contacts).notifier)
+            .setMode(ReadingPaneMode.always);
 
-      expect(
-        c.read(readingPaneModeProvider(ReadingPaneSurface.contacts)),
-        ReadingPaneMode.always,
-      );
-      // The other three surfaces keep their default.
-      expect(
-        c.read(readingPaneModeProvider(ReadingPaneSurface.inbox)),
-        ReadingPaneMode.onClick,
-      );
-      expect(
-        c.read(readingPaneModeProvider(ReadingPaneSurface.files)),
-        ReadingPaneMode.onClick,
-      );
-      expect(
-        c.read(readingPaneModeProvider(ReadingPaneSurface.spaces)),
-        ReadingPaneMode.onClick,
-      );
-      // Only the contacts key was written.
-      expect(await store.read('matome.reading_pane.contacts'), 'always');
-      expect(await store.read('matome.reading_pane.inbox'), isNull);
-    });
+        expect(
+          c.read(readingPaneModeProvider(ReadingPaneSurface.contacts)),
+          ReadingPaneMode.always,
+        );
+        // The other three surfaces keep their default.
+        expect(
+          c.read(readingPaneModeProvider(ReadingPaneSurface.inbox)),
+          ReadingPaneMode.onClick,
+        );
+        expect(
+          c.read(readingPaneModeProvider(ReadingPaneSurface.files)),
+          ReadingPaneMode.onClick,
+        );
+        expect(
+          c.read(readingPaneModeProvider(ReadingPaneSurface.spaces)),
+          ReadingPaneMode.onClick,
+        );
+        // Only the contacts key was written.
+        expect(await store.read('matome.reading_pane.contacts'), 'always');
+        expect(await store.read('matome.reading_pane.inbox'), isNull);
+      },
+    );
 
     test('two surfaces round-trip independently from the same store', () async {
       final store = InMemorySettingsStore();

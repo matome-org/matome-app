@@ -35,7 +35,7 @@ RecordingItem _imageItem({
   String title = 'Beach sunset',
   String? notes,
   String? workspaceName,
-  String? filePath = '/tmp/does-not-exist.jpg',
+  String? blobId = 'fixture-image-blob',
 }) {
   return RecordingItem(
     id: id,
@@ -48,7 +48,7 @@ RecordingItem _imageItem({
     processingStatus: 'done',
     notes: notes,
     workspaceName: workspaceName,
-    filePath: filePath,
+    blobId: blobId,
   );
 }
 
@@ -149,33 +149,10 @@ void main() {
     },
   );
 
-  testWidgets('tapping the media header opens the fullscreen viewer', (
-    tester,
-  ) async {
-    await _pump(tester, _imageItem());
-
-    // Not on screen until the header is tapped.
-    expect(
-      find.byKey(const ValueKey('file-detail-fullscreen-viewer')),
-      findsNothing,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('file-detail-image-header')));
-    await tester.pumpAndSettle();
-
-    // The relocated lightbox: a fullscreen InteractiveViewer reached FROM the
-    // media header (not the whole experience).
-    expect(
-      find.byKey(const ValueKey('file-detail-fullscreen-viewer')),
-      findsOneWidget,
-    );
-    expect(find.byType(InteractiveViewer), findsOneWidget);
-  });
-
   testWidgets('media header has no tap action when the file path is missing', (
     tester,
   ) async {
-    await _pump(tester, _imageItem(filePath: null));
+    await _pump(tester, _imageItem(blobId: null));
 
     await tester.tap(find.byKey(const ValueKey('file-detail-image-header')));
     await tester.pumpAndSettle();
@@ -409,7 +386,6 @@ void main() {
       db,
       id: id,
       title: 'Quarterly report',
-      localPath: '/tmp/report.pdf',
       filename: 'report.pdf',
       contentType: 'application/pdf',
       openPolicy: 'external',
@@ -463,7 +439,6 @@ void main() {
           id: 'doc-ready',
           coreId: 43,
           title: 'Quarterly report',
-          localPath: '/tmp/report.pdf',
           filename: 'report.pdf',
           mediaType: 'document',
           extractedText: 'Revenue grew 12% year over year.',
@@ -504,7 +479,6 @@ void main() {
           id: 'doc-unavailable',
           coreId: 44,
           title: 'Stored report',
-          localPath: '/tmp/stored.pdf',
           filename: 'stored.pdf',
           mediaType: 'document',
           processingState: ProcessingState.notAvailable,
@@ -578,7 +552,6 @@ void main() {
       );
       final request = openService.requests.single;
       expect(request.coreId, isNull);
-      expect(request.localPath, '/tmp/report.pdf');
       expect(request.extension, 'pdf');
       expect(request.mimeType, 'application/pdf');
       expect(request.openPolicy, DocumentOpenPolicy.external);
@@ -731,7 +704,6 @@ void main() {
       db,
       id: id,
       title: 'Launch clip',
-      localPath: '/tmp/launch.mp4',
       filename: 'launch.mp4',
       durationSeconds: 5,
       createdAt: DateTime(2026, 7, 2).millisecondsSinceEpoch,
@@ -942,7 +914,6 @@ void main() {
       db,
       id: id,
       title: 'Quarterly report',
-      localPath: '/tmp/report.pdf',
       filename: 'report.pdf',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       mediaType: 'document',

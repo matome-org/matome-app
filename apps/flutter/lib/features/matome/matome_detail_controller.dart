@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:drift/drift.dart' show Value;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:matome_vault/matome_vault.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/db/app_database.dart';
@@ -17,18 +15,10 @@ import '../../core/db/matome_card.dart';
 import '../../core/observability/app_log.dart';
 import '../../core/providers.dart';
 import '../contacts/contacts_controller.dart' show kPlaceholderContactOwnerId;
-import '../home/inbox_upload.dart'
-    show
-        DurableImportCopy,
-        PickedUpload,
-        contentTypeForPath,
-        durableImportCopy,
-        mediaTypeForPath;
-import '../documents/document_open_policy.dart';
+import '../home/inbox_upload.dart';
 import '../home/matome_inbox_controller.dart'
     show matomeInboxControllerProvider;
 import '../items/matome_item_type.dart';
-import '../recordings/recording_ids.dart';
 import '../recordings/upload_queue.dart' show uploadQueueProvider;
 import 'matome_sync_service.dart';
 
@@ -88,17 +78,12 @@ class MatomeDetailState {
 /// domain; [saveNotes] edits the description; [addPhoto] imports an image as an
 /// Item of this Matome.
 class MatomeDetailController extends StateNotifier<MatomeDetailState> {
-  MatomeDetailController(this._ref, String id, {DurableImportCopy? durableCopy})
-    : _durableCopy = durableCopy ?? durableImportCopy,
-      super(MatomeDetailState(id: id)) {
+  MatomeDetailController(this._ref, String id)
+    : super(MatomeDetailState(id: id)) {
     load();
   }
 
   final Ref _ref;
-
-  /// Copies a file-picker import into durable app storage before the local-first
-  /// insert (plan #45 W1). Injectable for tests; defaults to [durableImportCopy].
-  final DurableImportCopy _durableCopy;
 
   MatomesDao get _dao => _ref.read(matomesDaoProvider);
   SpacesDao get _spacesDao => _ref.read(spacesDaoProvider);
@@ -307,8 +292,8 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// resolved from the extension exactly as for any other import (an image
   /// extension yields `mediaType: 'image'`), so this stays a labelled entry
   /// point without a hardcoded type.
-  Future<void> addPhoto({required File file, required String name}) =>
-      addFile(file: file, name: name);
+  Future<void> addPhoto({required MediaInput input, required String name}) =>
+      addFile(input: input, name: name);
 
   /// Import an arbitrary [file] as an Item of this Matome — the generic
   /// document/photo import (#1449). Reuses the local-first upload insert path:
@@ -327,7 +312,7 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
   /// write, throwing [FileTooLargeException] so the caller can surface a
   /// message.
   Future<void> addFile({
-    required File file,
+    required MediaInput input,
     required String name,
     String? mimeType,
     int? byteSize,
@@ -335,87 +320,23 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     // Capture the matome id up front: the durable-copy / DAO awaits can outlive
     // an autoDispose of this notifier, and reading `state` afterwards throws.
     final matomeId = state.id;
-    final knownByteSize = byteSize != null && byteSize > 0 ? byteSize : null;
-
-    // Size guard FIRST — before the durable copy / insert. A file over the cap
-    // would only be rejected by Core after the upload starts (or OOM on copy),
-    // so fail fast with a typed error the UI turns into a message. Native only:
-    // on web the import is cloud-direct with no on-disk `File` to stat (the cap
-    // is enforced server-side, #1448). `lengthSync` (not the async `length`)
-    // keeps this a single synchronous step so it does not introduce a real-I/O
-    // await into the local-first insert path.
-    if (!kIsWeb) {
-      final sizeBytes = knownByteSize ?? file.lengthSync();
-      if (sizeBytes > kMaxImportFileBytes) {
-        throw FileTooLargeException(sizeBytes: sizeBytes, name: name);
-      }
+    final knownByteSize = byteSize ?? input.knownLength;
+    if (knownByteSize != null && knownByteSize > kMaxImportFileBytes) {
+      throw FileTooLargeException(sizeBytes: knownByteSize, name: name);
     }
 
     final mediaType = mediaTypeForPath(name);
-    final probeBytes = mediaType == 'document'
-        ? await _readDocumentPrefix(file)
-        : const <int>[];
-    final fileMetadata = DocumentMetadata.fromImport(
-      filename: name,
-      mimeType: mimeType ?? contentTypeForPath(name),
-      probeBytes: probeBytes,
-    );
     final picked = PickedUpload(
-      file: file,
+      input: input,
       title: _titleFromName(name),
       mediaType: mediaType,
-      filename: fileMetadata.filename,
+      filename: name,
       mimeType: mimeType,
       byteSize: knownByteSize,
     );
-    final stored = kIsWeb ? picked : await _durableCopy(picked);
-
-    // Mint the local id up front so we can hand THIS row to the upload queue
-    // after the insert (the drain below targets it directly).
-    final recordingId = mintLocalRecordingId();
-    final fileId = 'file_$recordingId';
-    final now = DateTime.now();
-    final timestamp = now.millisecondsSinceEpoch;
-    await _itemsDao.createFileItem(
-      item: ItemsCompanion.insert(
-        id: recordingId,
-        ownerId: _itemOwnerId,
-        clientId: recordingId,
-        matomeId: Value(matomeId),
-        itemType: MatomeItemType.file.wireName,
-        title: Value(stored.title),
-        fileBlobId: Value(fileId),
-        syncState: const Value(kProcessingStatusPendingUpload),
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      ),
-      file: FileBlobsCompanion.insert(
-        id: fileId,
-        filename: Value(fileMetadata.filename),
-        originalExtension: Value(fileMetadata.extension),
-        contentType: Value(fileMetadata.mimeType),
-        byteSize: Value(
-          knownByteSize ?? (kIsWeb ? 0 : stored.file.lengthSync()),
-        ),
-        mediaType: picked.mediaType,
-        openPolicy: Value(
-          mediaType == 'document'
-              ? fileMetadata.openPolicy.wireName
-              : 'download_only',
-        ),
-        localPath: Value(stored.file.path),
-        wrappedFek: Value(stored.wrappedFekBase64),
-        fileNoncePrefix: Value(stored.fileNoncePrefixBase64),
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      ),
-      initialWork: fileUploadWork(
-        itemId: recordingId,
-        sourceRevision: 1,
-        now: timestamp,
-        configRevision: _ref.read(systemPolicyProvider).revision,
-      ),
-    );
+    final recordingId = await _ref
+        .read(inboxUploaderProvider)
+        .persist(picked, importFromExternalSource: true, matomeId: matomeId);
     // KICK THE UPLOAD QUEUE for the just-inserted durable work row (#1457).
     // Without this drain the doc/photo would
     // sit "Saved on device · waiting to upload" until an unrelated trigger
@@ -560,21 +481,13 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
     await _ref.read(matomeSyncServiceProvider).restoreMatome(matomeId);
   }
 
-  /// Remove an Item (recording) from this Matome: delete the row, its on-device
-  /// file (best-effort), mark the aggregated summary stale (the item set
-  /// changed), and reload so the hub drops it.
-  Future<void> removeItem(String recordingId, {String? filePath}) async {
+  /// Remove an Item through the shared durable remote/Vault delete pipeline.
+  Future<void> removeItem(String recordingId) async {
     final matomeId = state.id;
     AppLog.event(LogCat.action, 'removeItem $recordingId from $matomeId');
-    await _itemsDao.deleteWithPayload(recordingId, _itemOwnerId);
-    if (filePath != null && filePath.isNotEmpty) {
-      try {
-        final f = File(filePath);
-        if (await f.exists()) await f.delete();
-      } catch (_) {
-        // Best-effort: a missing/locked file must not block removal.
-      }
-    }
+    await _ref
+        .read(itemDeletionServiceProvider)
+        .delete(recordingId, _itemOwnerId);
     await _dao.markSummaryStale(matomeId, true);
     if (!mounted) return;
     await load();
@@ -586,19 +499,6 @@ class MatomeDetailController extends StateNotifier<MatomeDetailState> {
 /// oversize pick never reaches the upload queue (where Core would 413) nor OOMs
 /// the durable copy. 25 MB.
 const int kMaxImportFileBytes = 25 * 1024 * 1024;
-
-Future<List<int>> _readDocumentPrefix(File file) async {
-  try {
-    final handle = await file.open();
-    try {
-      return handle.read(documentContentProbeLimit);
-    } finally {
-      await handle.close();
-    }
-  } catch (_) {
-    return const [];
-  }
-}
 
 /// Thrown by [MatomeDetailController.addFile] when the picked file exceeds
 /// [kMaxImportFileBytes]. Carries the offending size + name so the UI can build

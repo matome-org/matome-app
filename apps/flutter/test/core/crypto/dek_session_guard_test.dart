@@ -29,8 +29,7 @@ void main() {
       guard.dispose();
     });
 
-    test(
-        'wipes the PREVIOUSLY-live DEK before swapping in a new one when '
+    test('wipes the PREVIOUSLY-live DEK before swapping in a new one when '
         'adopt() is called again without an intervening lock/logout '
         '(okt-audit B3 info follow-up)', () {
       final guard = DekSessionGuard();
@@ -61,8 +60,7 @@ void main() {
       guard.dispose();
     });
 
-    test('adopting the SAME instance again is a harmless no-op wipe-wise',
-        () {
+    test('adopting the SAME instance again is a harmless no-op wipe-wise', () {
       final guard = DekSessionGuard();
       final dek = Dek.generate();
       guard.adopt(dek);
@@ -84,7 +82,10 @@ void main() {
     test('wipes the DEK bytes to zero (same instance) and clears current', () {
       final guard = DekSessionGuard();
       final dek = Dek.generate();
-      expect(dek.bytes.any((b) => b != 0), isTrue); // sanity: CSPRNG, not all-zero
+      expect(
+        dek.bytes.any((b) => b != 0),
+        isTrue,
+      ); // sanity: CSPRNG, not all-zero
       guard.adopt(dek);
 
       guard.lock();
@@ -184,8 +185,7 @@ void main() {
       });
     });
 
-    test('dispose() cancels the pending idle timer without wiping the key',
-        () {
+    test('dispose() cancels the pending idle timer without wiping the key', () {
       fakeAsync((async) {
         final guard = DekSessionGuard(idleTimeout: const Duration(minutes: 5));
         final dek = Dek.generate();

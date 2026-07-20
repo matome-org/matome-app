@@ -233,7 +233,9 @@ void main() {
     LocaleSettings.setLocaleSync(AppLocale.en);
     db = AppDatabase.forTesting(NativeDatabase.memory());
     store = InMemoryTokenStore();
-    fakeTempRoot = Directory.systemTemp.createTempSync('settings_satori_fake_temp_');
+    fakeTempRoot = Directory.systemTemp.createTempSync(
+      'settings_satori_fake_temp_',
+    );
     PathProviderPlatform.instance = _FakeTempPathProvider(fakeTempRoot.path);
     // Seed a valid persisted session so startup restoreSession() lands authed.
     store.saveTokens(
@@ -287,40 +289,42 @@ void main() {
     expect(find.byType(WelcomeScreen), findsOneWidget);
   });
 
-  testWidgets('Satori tab renders the medallion + roadmap cards', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_pumpApp(db: db, store: store));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'Satori tab renders the medallion + roadmap cards',
+    (tester) async {
+      await tester.pumpWidget(_pumpApp(db: db, store: store));
+      await tester.pumpAndSettle();
 
-    // Navigate to the Satori tab via the bottom bar.
-    await tester.tap(find.byIcon(Icons.auto_awesome_outlined));
-    await tester.pumpAndSettle();
+      // Navigate to the Satori tab via the bottom bar.
+      await tester.tap(find.byIcon(Icons.auto_awesome_outlined));
+      await tester.pumpAndSettle();
 
-    expect(find.byType(satori.SatoriScreen), findsOneWidget);
+      expect(find.byType(satori.SatoriScreen), findsOneWidget);
 
-    final s = t.satori;
-    // Under-construction medallion chrome.
-    expect(find.text(s.soon), findsOneWidget);
-    expect(find.text(s.underConstruction), findsOneWidget);
-    expect(find.byIcon(Icons.auto_awesome), findsWidgets);
+      final s = t.satori;
+      // Under-construction medallion chrome.
+      expect(find.text(s.soon), findsOneWidget);
+      expect(find.text(s.underConstruction), findsOneWidget);
+      expect(find.byIcon(Icons.auto_awesome), findsWidgets);
 
-    // All four roadmap cards render their titles + statuses.
-    expect(find.text(s.roadmapLabel), findsOneWidget);
-    for (final title in [
-      s.roadmapSearchTitle,
-      s.roadmapQuestionsTitle,
-      s.roadmapEmailsTitle,
-      s.roadmapInsightsTitle,
-    ]) {
-      expect(find.text(title), findsOneWidget);
-    }
-    // Shipped status detail + the "done" check mark.
-    expect(find.text(s.roadmapSearchDetail), findsOneWidget);
-    expect(find.byIcon(Icons.check), findsOneWidget);
-    // Satori is a bottom-bar destination only under the LEGACY shell; under
-    // ff.newNavShell the destination (and its route) is gone, so this nav-via-
-    // dock-glyph test is meaningful only OFF. The ON build proves Satori is
-    // unreachable (redirected) in test/app/new_nav_router_test.dart.
-  }, skip: FeatureFlags.newNavShell);
+      // All four roadmap cards render their titles + statuses.
+      expect(find.text(s.roadmapLabel), findsOneWidget);
+      for (final title in [
+        s.roadmapSearchTitle,
+        s.roadmapQuestionsTitle,
+        s.roadmapEmailsTitle,
+        s.roadmapInsightsTitle,
+      ]) {
+        expect(find.text(title), findsOneWidget);
+      }
+      // Shipped status detail + the "done" check mark.
+      expect(find.text(s.roadmapSearchDetail), findsOneWidget);
+      expect(find.byIcon(Icons.check), findsOneWidget);
+      // Satori is a bottom-bar destination only under the LEGACY shell; under
+      // ff.newNavShell the destination (and its route) is gone, so this nav-via-
+      // dock-glyph test is meaningful only OFF. The ON build proves Satori is
+      // unreachable (redirected) in test/app/new_nav_router_test.dart.
+    },
+    skip: FeatureFlags.newNavShell,
+  );
 }

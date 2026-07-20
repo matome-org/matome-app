@@ -15,35 +15,37 @@ void main() {
   setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  test('family is autoDispose: notifier disposes when no longer watched',
-      () async {
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        currentOwnerIdProvider.overrideWithValue('1'),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'family is autoDispose: notifier disposes when no longer watched',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          currentOwnerIdProvider.overrideWithValue('1'),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final work = await db.workspacesDao.createWorkspace('Work');
-    final provider = spaceDetailControllerProvider(work.id);
+      final work = await db.workspacesDao.createWorkspace('Work');
+      final provider = spaceDetailControllerProvider(work.id);
 
-    // Subscribe (so the autoDispose provider is created + kept alive) and grab
-    // the concrete notifier instance.
-    final sub = container.listen(provider, (_, _) {});
-    final notifier = container.read(provider.notifier);
-    expect(notifier.mounted, isTrue);
+      // Subscribe (so the autoDispose provider is created + kept alive) and grab
+      // the concrete notifier instance.
+      final sub = container.listen(provider, (_, _) {});
+      final notifier = container.read(provider.notifier);
+      expect(notifier.mounted, isTrue);
 
-    // Drop the only listener: an autoDispose family must tear the notifier
-    // down. A plain `.family` (the pre-fix bug) would keep it mounted for the
-    // container's lifetime, leaking one notifier per visited workspaceId.
-    sub.close();
-    await Future<void>.delayed(Duration.zero);
+      // Drop the only listener: an autoDispose family must tear the notifier
+      // down. A plain `.family` (the pre-fix bug) would keep it mounted for the
+      // container's lifetime, leaking one notifier per visited workspaceId.
+      sub.close();
+      await Future<void>.delayed(Duration.zero);
 
-    expect(
-      notifier.mounted,
-      isFalse,
-      reason: 'autoDispose family should dispose the notifier when unwatched',
-    );
-  });
+      expect(
+        notifier.mounted,
+        isFalse,
+        reason: 'autoDispose family should dispose the notifier when unwatched',
+      );
+    },
+  );
 }

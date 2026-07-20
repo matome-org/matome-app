@@ -38,7 +38,12 @@
     "readingPaneInbox": "受信トレイ",
     "readingPaneFiles": "ファイル",
     "readingPaneSpaces": "スペース",
-    "readingPaneContacts": "連絡先"
+    "readingPaneContacts": "連絡先",
+    "storage": "ローカルストレージ",
+    "retentionKeepForever": "ローカルファイルを保持",
+    "retentionKeepForeverHint": "デフォルト。Vault のローカルファイルは自動削除されません。",
+    "retentionThirtyDays": "対象ファイルを30日後に削除",
+    "retentionThirtyDaysHint": "任意設定。クラウドで検証済みかつ未参照のファイルのみ削除できます。"
   },
   "nav": {
     "createNew": "新規",
@@ -389,6 +394,7 @@
     "deleteBody": "$n 件のファイルを削除します。元に戻せます。",
     "deletedMsg": "$n 件を削除しました",
     "downloadUnavailable": "ダウンロードはまだ利用できません",
+    "exportedOutsideVault": "$n 件をエクスポートしました。コピーは Matome Vault の管理外です。",
     "moveSheetTitle": "まとめに移動",
     "moveUnfiled": "未整理",
     "moveUnfiledHint": "まとめなし",
@@ -541,6 +547,10 @@
     "errorPasswordMismatch": "パスワードが一致しません。",
     "errorEmailTaken": "そのメールアドレスは既に登録されています。",
     "errorResetTokenInvalid": "そのリセットコードは無効か、有効期限が切れています。",
-    "errorGeneric": "問題が発生しました。もう一度お試しください。"
+    "errorGeneric": "問題が発生しました。もう一度お試しください。",
+    "unlockTitle": "Vaultのロックを解除",
+    "unlockSubtitle": "非公開データを開くには、アカウントのパスワードを入力してください。",
+    "unlockSubmit": "ロック解除",
+    "unlockError": "Vaultのロックを解除できませんでした。パスワードを確認して、もう一度お試しください。"
   }
 }

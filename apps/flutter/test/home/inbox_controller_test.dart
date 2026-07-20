@@ -164,7 +164,6 @@ void main() {
       id: '100',
       title: 'Cached',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     );
     final container = _container(db, recordings: null); // endpoint 500s
@@ -186,7 +185,6 @@ void main() {
         id: '5',
         title: 'Move me',
         durationSeconds: 30,
-        localPath: '/tmp/a.m4a',
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       );
       final container = _container(db, recordings: const []);
@@ -215,7 +213,6 @@ void main() {
       id: '5',
       title: 'Move me',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     );
 
@@ -257,7 +254,6 @@ void main() {
       id: '5',
       title: 'Has a Matome',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       coreId: 5,
       matomeId: 'mat_local_5',
@@ -300,7 +296,6 @@ void main() {
       coreId: 5,
       title: 'Move me',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     );
 
@@ -348,7 +343,6 @@ void main() {
       id: '8',
       title: 'Has notes',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       notes: 'local notes',
     );
@@ -375,7 +369,6 @@ void main() {
         id: '11',
         title: 'Imported',
         durationSeconds: 205,
-        localPath: '/tmp/a.m4a',
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       );
       final container = _container(
@@ -405,7 +398,6 @@ void main() {
       id: '200',
       title: 'Cached',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     );
 
@@ -472,7 +464,8 @@ void main() {
       file: FileBlobsCompanion.insert(
         id: 'file_77',
         mediaType: 'audio',
-        localPath: const Value('/tmp/x.m4a'),
+        blobId: const Value('fixture-processing-blob'),
+        blobState: const Value('ready'),
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
         updatedAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       ),
@@ -503,7 +496,6 @@ void main() {
       id: '88',
       title: 'Done already',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       summary: 'good summary',
       notes: 'good notes',
@@ -533,7 +525,6 @@ void main() {
         id: '89',
         title: 'Reprocessing',
         durationSeconds: 30,
-        localPath: '/tmp/a.m4a',
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
         summary: 'old summary',
         notes: 'user note',
@@ -570,7 +561,6 @@ void main() {
       id: localId,
       title: 'Captured offline',
       durationSeconds: 30,
-      localPath: '/tmp/cap.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       processingStatus: 'pending_upload',
     );
@@ -614,26 +604,22 @@ void main() {
   });
 
   test(
-    'BLOCKER: refresh after coreId reconcile keeps the durable LOCAL '
-    'audioFilePath when Core storage_key is null/empty (no wipe to "")',
+    'refresh after coreId reconcile keeps the opaque local blob identity',
     () async {
-      // A local-first import: rec_local_<uuid> PK, coreId NULL, with a durable
-      // on-device audio path persisted (#45 W1 / #46 W2).
+      // A local-first import has a local PK and opaque Vault blob identity.
       const localId = 'rec_local_import-keep-audio';
-      const localPath = '/data/user/0/app/files/import_x.mp3';
       await insertTestFileItem(
         db,
         id: localId,
         title: 'Imported clip',
         durationSeconds: 30,
-        localPath: localPath,
         createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
         processingStatus: 'pending_upload',
       );
 
       // Core list returns the same recording under Core int id 555 with NO
-      // storage_key (fresh recording — null/empty). Pre-fix the first refresh
-      // upsert WIPED audioFilePath to '' (the headline "audio disappeared" bug).
+      // storage_key (fresh recording — null/empty). Refresh must not replace the
+      // local Vault identity with remote transport metadata.
       final container = _container(
         db,
         recordings: [_remote(id: 555, title: 'Imported clip', status: 'done')],
@@ -648,7 +634,7 @@ void main() {
 
       final row = await db.itemsDao.getById(localId, '1');
       expect(row!.coreId, 555);
-      expect(row.localPath, localPath); // STILL the local path — NOT wiped
+      expect(row.blobId, isNotNull);
     },
   );
 
@@ -660,7 +646,6 @@ void main() {
       id: localId,
       title: 'Local only',
       durationSeconds: 30,
-      localPath: '/tmp/x.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       processingStatus: 'pending_upload',
     );
@@ -695,7 +680,6 @@ void main() {
       id: '12',
       title: 'User edited',
       durationSeconds: 30,
-      localPath: '/tmp/a.m4a',
       createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
       notes: 'my hand-written note',
     );
@@ -801,7 +785,6 @@ void main() {
           ownerId: '1',
           title: 'Local memo',
           durationSeconds: 30,
-          localPath: '/tmp/y.m4a',
           createdAt: 1000,
         );
         expect(await db.itemsDao.filesForOwner('1'), hasLength(1));

@@ -118,7 +118,6 @@ Future<String> _seedLoose(
     id: id,
     coreId: coreId,
     title: 'Memo',
-    localPath: '/tmp/a',
     ownerId: ownerId,
     createdAt: DateTime.now().millisecondsSinceEpoch,
   );

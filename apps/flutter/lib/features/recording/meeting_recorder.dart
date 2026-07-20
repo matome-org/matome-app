@@ -24,8 +24,8 @@ final meetingCaptureCapabilityProvider =
     );
 
 final meetingCaptureServiceProvider = Provider<MeetingCaptureService>((ref) {
-  final inspectArtifact =
-      MeetingCapturePlatform.instance.createArtifactInspector();
+  final inspectArtifact = MeetingCapturePlatform.instance
+      .createArtifactInspector();
   final service = MeetingCaptureService(
     draftsDao: ref.watch(recordingDraftsDaoProvider),
     backend: ref.watch(meetingCaptureBackendProvider),
@@ -48,7 +48,7 @@ final meetingCaptureFinisherProvider = Provider<MeetingCaptureFinisher>(
 );
 
 Future<Directory> _secureMeetingStorage() async {
-  final directory = await matomeStorageDir();
+  final directory = await matomeRecorderStagingDir();
   final chmod = await runBoundedCommand('chmod', ['700', directory.path]);
   if (chmod.exitCode != 0) {
     throw MeetingStorageUnsafeError(

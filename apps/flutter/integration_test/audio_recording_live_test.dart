@@ -24,8 +24,9 @@ import 'package:matome_flutter/features/recording/audio_recording_service.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('live: record → pause → resume → finish = one continuous file',
-      (tester) async {
+  testWidgets('live: record → pause → resume → finish = one continuous file', (
+    tester,
+  ) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     // Default backend = real RecordRecorderBackend; default durationProbe =
     // just_audio probe off the finalized file.
@@ -56,8 +57,11 @@ void main() {
     final finalPath = await svc.stopRecording();
 
     // Exactly ONE resolved segment (continuous session collapsed to one file).
-    expect(svc.getSegments().length, 1,
-        reason: 'pause/resume must keep a single file');
+    expect(
+      svc.getSegments().length,
+      1,
+      reason: 'pause/resume must keep a single file',
+    );
     final merged = await svc.mergeSegments();
     expect(merged, finalPath);
     expect(await File(merged).exists(), isTrue);
@@ -68,13 +72,21 @@ void main() {
     // resume appended to the SAME file rather than restarting it.
     final totalSeconds = await svc.getAudioDurationSeconds(merged);
     // ignore: avoid_print
-    print('[F3-LIVE] pausedSeconds=$pausedSeconds '
-        'totalSeconds=$totalSeconds file=$merged '
-        'bytes=${await File(merged).length()}');
-    expect(totalSeconds, greaterThan(2.0),
-        reason: 'summed duration of both spans should exceed ~2s');
-    expect(totalSeconds, greaterThan(pausedSeconds),
-        reason: 'resume must extend the same file, not restart it');
+    print(
+      '[F3-LIVE] pausedSeconds=$pausedSeconds '
+      'totalSeconds=$totalSeconds file=$merged '
+      'bytes=${await File(merged).length()}',
+    );
+    expect(
+      totalSeconds,
+      greaterThan(2.0),
+      reason: 'summed duration of both spans should exceed ~2s',
+    );
+    expect(
+      totalSeconds,
+      greaterThan(pausedSeconds),
+      reason: 'resume must extend the same file, not restart it',
+    );
 
     // Cleanup (privacy): discard deletes file + draft.
     await svc.discardSegments();
@@ -85,8 +97,9 @@ void main() {
     await db.close();
   });
 
-  testWidgets('live: crash recovery — paused draft survives a service restart',
-      (tester) async {
+  testWidgets('live: crash recovery — paused draft survives a service restart', (
+    tester,
+  ) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     final svc = AudioRecordingService(draftsDao: db.recordingDraftsDao);
 
@@ -101,7 +114,7 @@ void main() {
     final svc2 = AudioRecordingService(draftsDao: db.recordingDraftsDao);
     final detected = await svc2.detectRecoverableDraft();
     expect(detected, isNotNull, reason: 'draft must be recoverable after kill');
-    expect(detected!.segments, contains(snapshot));
+    expect(detected!.segmentHandles, contains(snapshot.split('/').last));
 
     await svc2.resumeFromDraft(detected);
     expect(svc2.getSegments(), contains(snapshot));

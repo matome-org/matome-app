@@ -14,9 +14,3 @@ tags:
   linux_host:
     # Requires the Linux ffmpeg/ffprobe runtime used by meeting capture.
     skip: "Linux host gate — run with --run-skipped --tags linux_host"
-  native_spike:
-    # Spike #815 (task #1847): requires a hand-built SQLCipher .so (see
-    # tool/spike_815_sqlcipher/build_libsqlcipher.sh) — not buildable in
-    # ordinary CI without a C toolchain. Skipped by default; opt in with
-    # `--tags native_spike` and `MATOME_SQLCIPHER_POC_LIB=<path>`.
-    skip: "native spike — run with --tags native_spike and MATOME_SQLCIPHER_POC_LIB set"

@@ -73,8 +73,9 @@ void main() {
     );
   }
 
-  testWidgets('push from spaces list leaves canPop true; back pops to origin',
-      (tester) async {
+  testWidgets('push from spaces list leaves canPop true; back pops to origin', (
+    tester,
+  ) async {
     final router = buildRouter(initialLocation: '/spaces');
     await tester.pumpWidget(buildApp(container(), router));
     await tester.pumpAndSettle();
@@ -96,8 +97,9 @@ void main() {
     expect(find.byKey(const ValueKey('open-space')), findsOneWidget);
   });
 
-  testWidgets('deep-link entry (empty stack) falls back to /spaces',
-      (tester) async {
+  testWidgets('deep-link entry (empty stack) falls back to /spaces', (
+    tester,
+  ) async {
     final router = buildRouter(initialLocation: '/spaces/$spaceId');
     await tester.pumpWidget(buildApp(container(), router));
     await tester.pumpAndSettle();

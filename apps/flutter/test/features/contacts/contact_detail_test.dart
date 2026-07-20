@@ -38,8 +38,16 @@ const _full = ContactDetailData(
   ],
   spaces: ['Marketing', 'Sales'],
   files: [
-    ContactFileRef(id: 'f1', name: 'Q3 roadmap.pdf', kind: ContactFileKind.document),
-    ContactFileRef(id: 'f2', name: 'Design sync.m4a', kind: ContactFileKind.audio),
+    ContactFileRef(
+      id: 'f1',
+      name: 'Q3 roadmap.pdf',
+      kind: ContactFileKind.document,
+    ),
+    ContactFileRef(
+      id: 'f2',
+      name: 'Design sync.m4a',
+      kind: ContactFileKind.audio,
+    ),
   ],
 );
 
@@ -94,8 +102,9 @@ void main() {
   setUp(() => LocaleSettings.setLocaleSync(AppLocale.en));
 
   group('ContactDetail structure', () {
-    testWidgets('renders the header: name, subtitle, ⋯ actions',
-        (tester) async {
+    testWidgets('renders the header: name, subtitle, ⋯ actions', (
+      tester,
+    ) async {
       await _pump(tester);
       expect(find.byKey(const ValueKey('contact-detail-name')), findsOneWidget);
       expect(find.text('Ana Ribeiro'), findsOneWidget);
@@ -132,8 +141,9 @@ void main() {
       );
     });
 
-    testWidgets('renders a RoleChip per matome with the right role',
-        (tester) async {
+    testWidgets('renders a RoleChip per matome with the right role', (
+      tester,
+    ) async {
       await _pump(tester);
       expect(find.byType(RoleChip), findsNWidgets(3));
       expect(find.byKey(const ValueKey('role-chip-organizer')), findsOneWidget);
@@ -148,12 +158,14 @@ void main() {
       expect(find.text('Sales'), findsOneWidget);
     });
 
-    testWidgets('renders the linked files (direct edge ∪ matome-mediated, #1472)',
-        (tester) async {
-      await _pump(tester);
-      expect(find.text('Q3 roadmap.pdf'), findsOneWidget);
-      expect(find.text('Design sync.m4a'), findsOneWidget);
-    });
+    testWidgets(
+      'renders the linked files (direct edge ∪ matome-mediated, #1472)',
+      (tester) async {
+        await _pump(tester);
+        expect(find.text('Q3 roadmap.pdf'), findsOneWidget);
+        expect(find.text('Design sync.m4a'), findsOneWidget);
+      },
+    );
   });
 
   group('ContactDetail callbacks', () {
@@ -167,8 +179,9 @@ void main() {
       expect(edited, 1);
     });
 
-    testWidgets('tapping a matome fires onOpenMatome with its id',
-        (tester) async {
+    testWidgets('tapping a matome fires onOpenMatome with its id', (
+      tester,
+    ) async {
       String? opened;
       await _pump(tester, onOpenMatome: (id) => opened = id);
       await tester.tap(find.byKey(const ValueKey('contact-detail-matome-m2')));
@@ -225,10 +238,14 @@ void main() {
     testWidgets('stacks into one column below the breakpoint', (tester) async {
       await _pump(tester, width: 380);
       // Both columns' sections still render when stacked.
-      expect(find.byKey(const ValueKey('contact-detail-info-section')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('contact-detail-files-section')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('contact-detail-info-section')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('contact-detail-files-section')),
+        findsOneWidget,
+      );
     });
   });
 }

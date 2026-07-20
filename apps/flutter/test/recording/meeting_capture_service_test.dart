@@ -126,7 +126,7 @@ void main() {
         expect(draft.backend, 'fake');
         expect(draft.codec, 'aac_lc');
         expect(draft.state, RecordingDraftState.starting);
-        expect(draft.stagingPath, request.stagingPath);
+        expect(draft.stagingHandle, request.stagingPath.split('/').last);
         expect(request.mix.microphoneGainDb, -6);
         expect(request.mix.systemGainDb, -6);
         expect(request.mix.limiterCeilingDb, -1);
@@ -166,7 +166,7 @@ void main() {
         captureKind: RecordingCaptureKind.meeting,
       );
       expect(draft?.state, RecordingDraftState.completed);
-      expect(draft?.segments, [artifact.path]);
+      expect(draft?.segmentHandles, [artifact.path.split('/').last]);
 
       await service.acknowledgePersisted(artifact.sessionId);
       expect(
@@ -199,7 +199,7 @@ void main() {
       captureKind: RecordingCaptureKind.meeting,
     );
     expect(draft?.state, RecordingDraftState.failed);
-    expect(draft?.segments, [staging]);
+    expect(draft?.segmentHandles, [staging.split('/').last]);
     await service.dispose();
   });
 
@@ -416,13 +416,12 @@ void main() {
       await staging.writeAsBytes(List<int>.filled(4096, 3));
       await db.recordingDraftsDao.saveTypedDraft(
         RecordingDraft(
-          segments: [staging.path],
+          segmentHandles: ['meeting_recovery.partial.m4a'],
           durationMs: 5000,
           sessionId: 'meeting_recovery',
           captureKind: RecordingCaptureKind.meeting,
           backend: 'fake',
-          stagingPath: staging.path,
-          finalPath: '${temp.path}/meeting_recovery.m4a',
+          stagingHandle: 'meeting_recovery.partial.m4a',
           codec: 'aac_lc',
           state: RecordingDraftState.recording,
           heartbeatAt: DateTime.now().toUtc(),
@@ -446,13 +445,12 @@ void main() {
     await staging.writeAsBytes(List<int>.filled(32, 3));
     await db.recordingDraftsDao.saveTypedDraft(
       RecordingDraft(
-        segments: [staging.path],
+        segmentHandles: ['meeting_invalid.partial.m4a'],
         durationMs: 100,
         sessionId: 'meeting_invalid',
         captureKind: RecordingCaptureKind.meeting,
         backend: 'fake',
-        stagingPath: staging.path,
-        finalPath: '${temp.path}/meeting_invalid.m4a',
+        stagingHandle: 'meeting_invalid.partial.m4a',
         codec: 'aac_lc',
         state: RecordingDraftState.failed,
       ),
@@ -483,13 +481,15 @@ void main() {
       await finalFile.writeAsBytes(List<int>.filled(32, 9));
       await db.recordingDraftsDao.saveTypedDraft(
         RecordingDraft(
-          segments: [staging.path, finalFile.path],
+          segmentHandles: [
+            'meeting_fallback.partial.m4a',
+            'meeting_fallback.m4a',
+          ],
           durationMs: 1000,
           sessionId: 'meeting_fallback',
           captureKind: RecordingCaptureKind.meeting,
           backend: 'fake',
-          stagingPath: staging.path,
-          finalPath: finalFile.path,
+          stagingHandle: 'meeting_fallback.partial.m4a',
           codec: 'aac_lc',
           state: RecordingDraftState.failed,
         ),
@@ -524,13 +524,12 @@ void main() {
     await staging.writeAsBytes(List<int>.filled(4096, 1));
     await db.recordingDraftsDao.saveTypedDraft(
       RecordingDraft(
-        segments: [staging.path],
+        segmentHandles: ['meeting_idle.partial.m4a'],
         durationMs: 1000,
         sessionId: 'meeting_idle',
         captureKind: RecordingCaptureKind.meeting,
         backend: 'fake',
-        stagingPath: staging.path,
-        finalPath: '${temp.path}/meeting_idle.m4a',
+        stagingHandle: 'meeting_idle.partial.m4a',
         codec: 'aac_lc',
         state: RecordingDraftState.failed,
       ),
@@ -560,13 +559,12 @@ void main() {
       );
       await db.recordingDraftsDao.saveTypedDraft(
         RecordingDraft(
-          segments: [outside.path],
+          segmentHandles: ['meeting_outside.m4a'],
           durationMs: 1000,
           sessionId: '../meeting_outside',
           captureKind: RecordingCaptureKind.meeting,
           backend: 'fake',
-          stagingPath: outside.path,
-          finalPath: outside.path,
+          stagingHandle: 'meeting_outside.m4a',
           codec: 'aac_lc',
           state: RecordingDraftState.failed,
         ),
@@ -737,7 +735,10 @@ void main() {
         captureKind: RecordingCaptureKind.meeting,
       );
       expect(draft?.state, RecordingDraftState.completed);
-      expect(await File(draft!.finalPath!).exists(), isTrue);
+      expect(
+        await File('${temp.path}/${draft!.sessionId}.m4a').exists(),
+        isTrue,
+      );
       await service.dispose();
     },
   );
@@ -772,13 +773,12 @@ void main() {
       );
       await db.recordingDraftsDao.saveTypedDraft(
         RecordingDraft(
-          segments: [staging.path],
+          segmentHandles: ['meeting_safe.partial.m4a'],
           durationMs: 1000,
           sessionId: 'meeting_safe',
           captureKind: RecordingCaptureKind.meeting,
           backend: 'fake',
-          stagingPath: staging.path,
-          finalPath: outside.path,
+          stagingHandle: 'meeting_safe.partial.m4a',
           codec: 'aac_lc',
           state: RecordingDraftState.failed,
         ),
@@ -800,13 +800,12 @@ void main() {
       await staging.writeAsBytes(List<int>.filled(4096, 1));
       await db.recordingDraftsDao.saveTypedDraft(
         RecordingDraft(
-          segments: [staging.path],
+          segmentHandles: ['meeting_retry.partial.m4a'],
           durationMs: 1000,
           sessionId: 'meeting_retry',
           captureKind: RecordingCaptureKind.meeting,
           backend: 'fake',
-          stagingPath: staging.path,
-          finalPath: '${temp.path}/meeting_retry.m4a',
+          stagingHandle: 'meeting_retry.partial.m4a',
           codec: 'aac_lc',
           state: RecordingDraftState.failed,
         ),

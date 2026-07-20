@@ -63,7 +63,6 @@ Future<void> _seedItem(
     title: title,
     mediaType: mediaType,
     filename: originalExtension == null ? title : '$title.$originalExtension',
-    localPath: '/tmp/does-not-exist.bin',
     createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch + order,
   );
 }

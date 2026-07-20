@@ -209,6 +209,50 @@ defmodule MatomeApi.Contracts.PlatformV1ContractTest do
     assert output =~ "AI_ENGINE_ENDPOINT must be an absolute HTTPS URL in production"
   end
 
+  test "production runtime permits only the private Compose AI Core HTTP endpoint" do
+    expression = "Config.Reader.read!(#{inspect(@runtime_config_path)}, env: :prod)"
+
+    {output, status} =
+      System.cmd("elixir", ["-e", expression],
+        env: [
+          {"AI_ENGINE_DISPATCH_TOKEN", String.duplicate("d", 32)},
+          {"AI_ENGINE_CALLBACK_SIGNING_SECRET", String.duplicate("c", 32)},
+          {"AI_ENGINE_ENDPOINT", "http://ai-core:8000/v1/jobs"},
+          {"AI_ENGINE_CALLBACK_BASE_URL", "https://core.example.test"},
+          {"DATABASE_URL", "postgres://matome:secret@db:5432/matome"},
+          {"DATABASE_SSL", "false"},
+          {"SECRET_KEY_BASE", String.duplicate("s", 64)},
+          {"GUARDIAN_SECRET_KEY", String.duplicate("g", 64)},
+          {"ADMIN_OTP_PEPPER", String.duplicate("a", 32)},
+          {"MAILER_ADAPTER", "smtp"},
+          {"SMTP_RELAY", "smtp.example.test"},
+          {"STORAGE_S3_ENDPOINT", "https://media.example.test"},
+          {"STORAGE_S3_ACCESS_KEY_ID", "test-access-key"},
+          {"STORAGE_S3_SECRET_ACCESS_KEY", "test-secret-key"}
+        ],
+        stderr_to_stdout: true
+      )
+
+    assert status == 0, output
+  end
+
+  test "production runtime rejects deployment scaffold credential placeholders" do
+    expression = "Config.Reader.read!(#{inspect(@runtime_config_path)}, env: :prod)"
+
+    {output, status} =
+      System.cmd("elixir", ["-e", expression],
+        env: [
+          {"AI_ENGINE_DISPATCH_TOKEN",
+           "CHANGE_ME_GENERATE_RANDOM_DISPATCH_TOKEN_AT_LEAST_32_BYTES"},
+          {"AI_ENGINE_CALLBACK_SIGNING_SECRET", String.duplicate("c", 32)}
+        ],
+        stderr_to_stdout: true
+      )
+
+    assert status != 0
+    assert output =~ "AI credentials must not use deployment scaffold placeholders"
+  end
+
   test "the remaining cross-runtime mismatches are executable failing proofs" do
     mismatches = read_json!(@mismatches_path)["mismatches"]
 

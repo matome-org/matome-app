@@ -45,8 +45,8 @@ import 'encrypted_blob_store.dart' show EncryptedBlobStore;
 external Navigator get _navigator;
 
 /// Thrown when `navigator.storage` (and therefore OPFS) isn't available at
-/// all in the current browsing context — the trigger for the in-memory
-/// FALLBACK path (AC: "in-memory becomes a fallback, not the default").
+/// all in the current browsing context. Encrypted startup must surface this as
+/// a blocking state; it must not fall back to an in-memory/plaintext store.
 class OpfsUnavailableException implements Exception {
   final String reason;
   const OpfsUnavailableException(this.reason);

@@ -48,8 +48,9 @@ void main() {
           appDatabaseProvider.overrideWithValue(db),
           tokenStoreProvider.overrideWithValue(store),
           settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
-          authRepositoryProvider
-              .overrideWithValue(FakeE2EAuthRepository(store)),
+          authRepositoryProvider.overrideWithValue(
+            FakeE2EAuthRepository(store),
+          ),
         ],
       ),
     );
@@ -62,15 +63,18 @@ void main() {
     expect(find.byType(HomeScreen), findsNothing);
   });
 
-  testWidgets('Welcome → Sign in navigates to the Login screen', (tester) async {
+  testWidgets('Welcome → Sign in navigates to the Login screen', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       buildE2EApp(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
           tokenStoreProvider.overrideWithValue(store),
           settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
-          authRepositoryProvider
-              .overrideWithValue(FakeE2EAuthRepository(store)),
+          authRepositoryProvider.overrideWithValue(
+            FakeE2EAuthRepository(store),
+          ),
         ],
       ),
     );
@@ -97,8 +101,9 @@ void main() {
           appDatabaseProvider.overrideWithValue(db),
           tokenStoreProvider.overrideWithValue(store),
           settingsStoreProvider.overrideWithValue(InMemorySettingsStore()),
-          authRepositoryProvider
-              .overrideWithValue(FakeE2EAuthRepository(store)),
+          authRepositoryProvider.overrideWithValue(
+            FakeE2EAuthRepository(store),
+          ),
         ],
       ),
     );

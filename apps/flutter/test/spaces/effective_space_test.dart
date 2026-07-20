@@ -32,11 +32,7 @@ void main() {
   // R1 — effectiveSpaceId: the precedence rule (matome WINS), table-driven.
   // -------------------------------------------------------------------------
   group('effectiveSpaceId — membership precedence (R1)', () {
-    final cases = <({
-      String name,
-      ItemMembership item,
-      String? expected,
-    })>[
+    final cases = <({String name, ItemMembership item, String? expected})>[
       (
         name: 'loose item (no matome, no workspace) → NULL (Inbox)',
         item: const ItemMembership(),
@@ -88,85 +84,91 @@ void main() {
     };
     final resolve = registry(spaces);
 
-    final cases = <({
-      String name,
-      ItemMembership item,
-      Type expectedStatus,
-      bool expectedCloudSynced,
-      String? expectedSpaceId,
-    })>[
-      // loose / draft → Inbox, never synced.
-      (
-        name: 'loose item → SyncInbox, not cloud-synced',
-        item: const ItemMembership(),
-        expectedStatus: SyncInbox,
-        expectedCloudSynced: false,
-        expectedSpaceId: null,
-      ),
-      (
-        name: 'draft-matome → SyncInbox, not cloud-synced',
-        item: const ItemMembership(matomeSpaceId: null),
-        expectedStatus: SyncInbox,
-        expectedCloudSynced: false,
-        expectedSpaceId: null,
-      ),
-      // in-matome → matome's space drives the status.
-      (
-        name: 'in-matome (LOCAL space) → SyncLocalOnly, not cloud-synced',
-        item: const ItemMembership(matomeSpaceId: 'space_M_local'),
-        expectedStatus: SyncLocalOnly,
-        expectedCloudSynced: false,
-        expectedSpaceId: 'space_M_local',
-      ),
-      (
-        name: 'in-matome (CLOUD space) → SyncCloud, cloud-synced',
-        item: const ItemMembership(matomeSpaceId: 'space_M_cloud'),
-        expectedStatus: SyncCloud,
-        expectedCloudSynced: true,
-        expectedSpaceId: 'space_M_cloud',
-      ),
-      // filed-direct → workspace_id drives the status.
-      (
-        name: 'filed-direct (LOCAL space) → SyncLocalOnly, not cloud-synced',
-        item: const ItemMembership(workspaceId: 'space_W_local'),
-        expectedStatus: SyncLocalOnly,
-        expectedCloudSynced: false,
-        expectedSpaceId: 'space_W_local',
-      ),
-      (
-        name: 'filed-direct (CLOUD space) → SyncCloud, cloud-synced',
-        item: const ItemMembership(workspaceId: 'space_W_cloud'),
-        expectedStatus: SyncCloud,
-        expectedCloudSynced: true,
-        expectedSpaceId: 'space_W_cloud',
-      ),
-      // CONFLICT — matome WINS, so the matome's space drives sync, NOT the
-      // shadowed workspace_id. Matome cloud + workspace local → SYNCED.
-      (
-        name: 'CONFLICT (matome CLOUD, workspace LOCAL) → matome wins → '
-            'SyncCloud, cloud-synced',
-        item: const ItemMembership(
-          matomeSpaceId: 'space_M_cloud',
-          workspaceId: 'space_W_local',
-        ),
-        expectedStatus: SyncCloud,
-        expectedCloudSynced: true,
-        expectedSpaceId: 'space_M_cloud',
-      ),
-      // CONFLICT — matome local + workspace cloud → NOT synced (matome wins;
-      // the shadowed cloud workspace must NOT leak the item to Core).
-      (
-        name: 'CONFLICT (matome LOCAL, workspace CLOUD) → matome wins → '
-            'SyncLocalOnly, NOT cloud-synced (shadowed cloud must not leak)',
-        item: const ItemMembership(
-          matomeSpaceId: 'space_M_local',
-          workspaceId: 'space_W_cloud',
-        ),
-        expectedStatus: SyncLocalOnly,
-        expectedCloudSynced: false,
-        expectedSpaceId: 'space_M_local',
-      ),
-    ];
+    final cases =
+        <
+          ({
+            String name,
+            ItemMembership item,
+            Type expectedStatus,
+            bool expectedCloudSynced,
+            String? expectedSpaceId,
+          })
+        >[
+          // loose / draft → Inbox, never synced.
+          (
+            name: 'loose item → SyncInbox, not cloud-synced',
+            item: const ItemMembership(),
+            expectedStatus: SyncInbox,
+            expectedCloudSynced: false,
+            expectedSpaceId: null,
+          ),
+          (
+            name: 'draft-matome → SyncInbox, not cloud-synced',
+            item: const ItemMembership(matomeSpaceId: null),
+            expectedStatus: SyncInbox,
+            expectedCloudSynced: false,
+            expectedSpaceId: null,
+          ),
+          // in-matome → matome's space drives the status.
+          (
+            name: 'in-matome (LOCAL space) → SyncLocalOnly, not cloud-synced',
+            item: const ItemMembership(matomeSpaceId: 'space_M_local'),
+            expectedStatus: SyncLocalOnly,
+            expectedCloudSynced: false,
+            expectedSpaceId: 'space_M_local',
+          ),
+          (
+            name: 'in-matome (CLOUD space) → SyncCloud, cloud-synced',
+            item: const ItemMembership(matomeSpaceId: 'space_M_cloud'),
+            expectedStatus: SyncCloud,
+            expectedCloudSynced: true,
+            expectedSpaceId: 'space_M_cloud',
+          ),
+          // filed-direct → workspace_id drives the status.
+          (
+            name:
+                'filed-direct (LOCAL space) → SyncLocalOnly, not cloud-synced',
+            item: const ItemMembership(workspaceId: 'space_W_local'),
+            expectedStatus: SyncLocalOnly,
+            expectedCloudSynced: false,
+            expectedSpaceId: 'space_W_local',
+          ),
+          (
+            name: 'filed-direct (CLOUD space) → SyncCloud, cloud-synced',
+            item: const ItemMembership(workspaceId: 'space_W_cloud'),
+            expectedStatus: SyncCloud,
+            expectedCloudSynced: true,
+            expectedSpaceId: 'space_W_cloud',
+          ),
+          // CONFLICT — matome WINS, so the matome's space drives sync, NOT the
+          // shadowed workspace_id. Matome cloud + workspace local → SYNCED.
+          (
+            name:
+                'CONFLICT (matome CLOUD, workspace LOCAL) → matome wins → '
+                'SyncCloud, cloud-synced',
+            item: const ItemMembership(
+              matomeSpaceId: 'space_M_cloud',
+              workspaceId: 'space_W_local',
+            ),
+            expectedStatus: SyncCloud,
+            expectedCloudSynced: true,
+            expectedSpaceId: 'space_M_cloud',
+          ),
+          // CONFLICT — matome local + workspace cloud → NOT synced (matome wins;
+          // the shadowed cloud workspace must NOT leak the item to Core).
+          (
+            name:
+                'CONFLICT (matome LOCAL, workspace CLOUD) → matome wins → '
+                'SyncLocalOnly, NOT cloud-synced (shadowed cloud must not leak)',
+            item: const ItemMembership(
+              matomeSpaceId: 'space_M_local',
+              workspaceId: 'space_W_cloud',
+            ),
+            expectedStatus: SyncLocalOnly,
+            expectedCloudSynced: false,
+            expectedSpaceId: 'space_M_local',
+          ),
+        ];
 
     for (final c in cases) {
       test(c.name, () {
@@ -192,19 +194,21 @@ void main() {
   // never sync (it falls to Inbox, not silently to Core).
   // -------------------------------------------------------------------------
   group('fail-closed — unresolvable / missing space', () {
-    test('effective space id unknown to the registry → SyncInbox, not synced',
-        () {
-      final resolve = registry(const {});
-      const item = ItemMembership(workspaceId: 'space_ghost');
-      expect(
-        EffectiveSpace.statusOf(item, resolveSpace: resolve),
-        isA<SyncInbox>(),
-      );
-      expect(
-        EffectiveSpace.isCloudSynced(item, resolveSpace: resolve),
-        isFalse,
-      );
-    });
+    test(
+      'effective space id unknown to the registry → SyncInbox, not synced',
+      () {
+        final resolve = registry(const {});
+        const item = ItemMembership(workspaceId: 'space_ghost');
+        expect(
+          EffectiveSpace.statusOf(item, resolveSpace: resolve),
+          isA<SyncInbox>(),
+        );
+        expect(
+          EffectiveSpace.isCloudSynced(item, resolveSpace: resolve),
+          isFalse,
+        );
+      },
+    );
 
     test('spaceIsCloud(null) is false (no space ⇒ never synced)', () {
       expect(EffectiveSpace.spaceIsCloud(null), isFalse);
@@ -222,15 +226,16 @@ void main() {
   // NOT consulted by the sync gate (Axis A only — R2.2).
   // -------------------------------------------------------------------------
   group('forward-compat — Space VALUE OBJECT seam (H4 / R1.4 / R2.2)', () {
-    test('SpaceRef carries tenancy + ownerId; defaults are personal / null',
-        () {
-      const s = SpaceRef(id: 's', syncMode: SpaceSyncMode.cloud);
-      expect(s.tenancy, SpaceTenancy.personal);
-      expect(s.ownerId, isNull);
-    });
+    test(
+      'SpaceRef carries tenancy + ownerId; defaults are personal / null',
+      () {
+        const s = SpaceRef(id: 's', syncMode: SpaceSyncMode.cloud);
+        expect(s.tenancy, SpaceTenancy.personal);
+        expect(s.ownerId, isNull);
+      },
+    );
 
-    test('tenancy/ownerId do NOT affect the sync gate (Axis A only — R2.2)',
-        () {
+    test('tenancy/ownerId do NOT affect the sync gate (Axis A only — R2.2)', () {
       // Two cloud spaces identical on Axis A but differing on Axis B both sync.
       final personal = SpaceRef(
         id: 's',
@@ -266,16 +271,15 @@ void main() {
       );
     });
 
-    test('SpaceRef hashCode is consistent with equality; toString is debuggable',
-        () {
-      const a = SpaceRef(id: 'a', syncMode: SpaceSyncMode.cloud);
-      const b = SpaceRef(id: 'a', syncMode: SpaceSyncMode.cloud);
-      expect(a.hashCode, b.hashCode);
-      expect(
-        a.toString(),
-        contains('SpaceRef(id: a'),
-      );
-    });
+    test(
+      'SpaceRef hashCode is consistent with equality; toString is debuggable',
+      () {
+        const a = SpaceRef(id: 'a', syncMode: SpaceSyncMode.cloud);
+        const b = SpaceRef(id: 'a', syncMode: SpaceSyncMode.cloud);
+        expect(a.hashCode, b.hashCode);
+        expect(a.toString(), contains('SpaceRef(id: a'));
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -286,10 +290,10 @@ void main() {
   // -------------------------------------------------------------------------
   group('sealed exhaustiveness (R2.1)', () {
     String label(SyncStatus s) => switch (s) {
-          SyncInbox() => 'inbox',
-          SyncLocalOnly() => 'local',
-          SyncCloud() => 'cloud',
-        };
+      SyncInbox() => 'inbox',
+      SyncLocalOnly() => 'local',
+      SyncCloud() => 'cloud',
+    };
 
     test('every status maps via a default-less switch', () {
       expect(label(const SyncInbox()), 'inbox');

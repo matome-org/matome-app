@@ -40,10 +40,7 @@ void main() {
     expect(find.byKey(const ValueKey('matome-action-move')), findsOneWidget);
     expect(find.byKey(const ValueKey('matome-action-share')), findsOneWidget);
     expect(find.byKey(const ValueKey('matome-action-copy')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('matome-action-archive')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('matome-action-archive')), findsOneWidget);
   });
 
   testWidgets('archive item uses the neutral "Archive" label (not delete)', (

@@ -40,9 +40,8 @@ class ItemWithPayload {
   int get createdAt => item.createdAt;
   String get mediaType => file?.mediaType ?? 'text';
   int? get durationSeconds => file?.duration;
-  String? get localPath => file?.localPath;
-  String? get wrappedFek => file?.wrappedFek;
-  String? get fileNoncePrefix => file?.fileNoncePrefix;
+  String? get blobId => file?.blobId;
+  String get blobState => file?.blobState ?? 'missing';
   int? get byteSize => file?.byteSize;
   String? get originalExtension => file?.originalExtension;
 
@@ -493,6 +492,96 @@ class ItemsDao extends DatabaseAccessor<AppDatabase> with _$ItemsDaoMixin {
       return deleted;
     });
   }
+
+  Future<bool> deleteLocalText(String itemId, String ownerId) {
+    return transaction(() async {
+      final row = await getByIdIncludingDeleted(itemId, ownerId);
+      if (row == null) return true;
+      if (row.text == null || row.coreId != null) return false;
+      await (delete(
+        itemContacts,
+      )..where((edge) => edge.itemId.equals(itemId))).go();
+      await (delete(items)..where(
+            (item) => item.id.equals(itemId) & item.ownerId.equals(ownerId),
+          ))
+          .go();
+      await (delete(
+        textContents,
+      )..where((text) => text.id.equals(row.text!.id))).go();
+      await (delete(
+        workQueue,
+      )..where((work) => work.itemId.equals(itemId))).go();
+      if (row.item.matomeId != null) {
+        await _markMatomeSummaryStale(row.item.matomeId!);
+      }
+      return true;
+    });
+  }
+
+  Future<ItemWithPayload?> getByIdIncludingDeleted(
+    String itemId,
+    String ownerId,
+  ) => getById(itemId, ownerId);
+
+  /// Creates the durable file-delete intent before any remote or Vault side
+  /// effect. Existing upload work is cancelled in the same transaction.
+  Future<bool> tombstoneFileDelete({
+    required String itemId,
+    required String ownerId,
+    required int now,
+  }) => transaction(() async {
+    final current = await getByIdIncludingDeleted(itemId, ownerId);
+    final blobId = current?.file?.blobId;
+    if (current == null || current.file == null || blobId == null) return false;
+    if (!current.item.isDeleted) {
+      await (update(items)..where(
+            (row) => row.id.equals(itemId) & row.ownerId.equals(ownerId),
+          ))
+          .write(
+            ItemsCompanion(
+              isDeleted: const Value(true),
+              syncState: const Value('pending_delete'),
+              isDirty: const Value(true),
+              updatedAt: Value(now),
+            ),
+          );
+    }
+    await (delete(workQueue)..where(
+          (work) =>
+              work.itemId.equals(itemId) &
+              work.kind.isNotValue(kWorkKindFileDelete),
+        ))
+        .go();
+    await into(workQueue).insert(
+      fileDeleteWork(itemId: itemId, blobId: blobId, now: now),
+      mode: InsertMode.insertOrIgnore,
+    );
+    return true;
+  });
+
+  /// Final local convergence after remote deletion and Vault ciphertext unlink.
+  Future<bool> completeFileDelete({
+    required String itemId,
+    required String ownerId,
+  }) => transaction(() async {
+    final current = await getByIdIncludingDeleted(itemId, ownerId);
+    if (current == null) return true;
+    if (!current.item.isDeleted || current.file == null) return false;
+    await (delete(
+      itemContacts,
+    )..where((edge) => edge.itemId.equals(itemId))).go();
+    await (delete(items)
+          ..where((row) => row.id.equals(itemId) & row.ownerId.equals(ownerId)))
+        .go();
+    await (delete(
+      fileBlobs,
+    )..where((file) => file.id.equals(current.file!.id))).go();
+    await (delete(workQueue)..where((work) => work.itemId.equals(itemId))).go();
+    if (current.item.matomeId != null) {
+      await _markMatomeSummaryStale(current.item.matomeId!);
+    }
+    return true;
+  });
 
   Future<int> pruneMissingCleanText(String ownerId, Set<int> remoteCoreIds) {
     return transaction(() async {

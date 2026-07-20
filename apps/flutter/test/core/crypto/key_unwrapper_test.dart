@@ -100,64 +100,67 @@ class _ShadowingUnwrapper implements KeyUnwrapper {
 
 void main() {
   group('KeyUnwrapper interface + unwrapDek shared core', () {
-    test('PasswordKeyUnwrapper derives KEK via Argon2id and unwraps the DEK',
-        () async {
-      const password = 'correct horse battery staple';
-      final saltEnc = _salt16(1);
-      final dek = Dek.generate();
+    test(
+      'PasswordKeyUnwrapper derives KEK via Argon2id and unwraps the DEK',
+      () async {
+        const password = 'correct horse battery staple';
+        final saltEnc = _salt16(1);
+        final dek = Dek.generate();
 
-      final kekBytes = await deriveArgon2id(
-        password: password,
-        salt: saltEnc,
-        params: Argon2idParams.portableV1,
-      );
-      final wrappedDekPw = await wrapKey(
-        plaintext: dek.bytes,
-        wrappingKey: kekBytes,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
+        final kekBytes = await deriveArgon2id(
+          password: password,
+          salt: saltEnc,
+          params: Argon2idParams.portableV1,
+        );
+        final wrappedDekPw = await wrapKey(
+          plaintext: dek.bytes,
+          wrappingKey: kekBytes,
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
 
-      final unwrapper = PasswordKeyUnwrapper(
-        password: password,
-        saltEnc: saltEnc,
-      );
+        final unwrapper = PasswordKeyUnwrapper(
+          password: password,
+          saltEnc: saltEnc,
+        );
 
-      final recovered = await unwrapper.unwrapDek(wrappedDekPw);
+        final recovered = await unwrapper.unwrapDek(wrappedDekPw);
 
-      expect(recovered.bytes, dek.bytes);
-    });
-
-    test('PasswordKeyUnwrapper with the wrong password fails explicitly',
-        () async {
-      final saltEnc = _salt16(2);
-      final dek = Dek.generate();
-
-      final kekBytes = await deriveArgon2id(
-        password: 'right password',
-        salt: saltEnc,
-        params: Argon2idParams.portableV1,
-      );
-      final wrappedDekPw = await wrapKey(
-        plaintext: dek.bytes,
-        wrappingKey: kekBytes,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
-
-      final unwrapper = PasswordKeyUnwrapper(
-        password: 'wrong password',
-        saltEnc: saltEnc,
-      );
-
-      expect(
-        () => unwrapper.unwrapDek(wrappedDekPw),
-        throwsA(isA<EnvelopeTamperException>()),
-      );
-    });
+        expect(recovered.bytes, dek.bytes);
+      },
+    );
 
     test(
-        'invariant: the SAME unwrap core (unwrapDek) drives both the '
+      'PasswordKeyUnwrapper with the wrong password fails explicitly',
+      () async {
+        final saltEnc = _salt16(2);
+        final dek = Dek.generate();
+
+        final kekBytes = await deriveArgon2id(
+          password: 'right password',
+          salt: saltEnc,
+          params: Argon2idParams.portableV1,
+        );
+        final wrappedDekPw = await wrapKey(
+          plaintext: dek.bytes,
+          wrappingKey: kekBytes,
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
+
+        final unwrapper = PasswordKeyUnwrapper(
+          password: 'wrong password',
+          saltEnc: saltEnc,
+        );
+
+        expect(
+          () => unwrapper.unwrapDek(wrappedDekPw),
+          throwsA(isA<EnvelopeTamperException>()),
+        );
+      },
+    );
+
+    test('invariant: the SAME unwrap core (unwrapDek) drives both the '
         'password backend and an independent KEK-source backend', () async {
       final dek = Dek.generate();
 
@@ -175,8 +178,10 @@ void main() {
         payloadType: PayloadType.dek,
         wrapperType: WrapperType.passwordKek,
       );
-      final KeyUnwrapper passwordBackend =
-          PasswordKeyUnwrapper(password: password, saltEnc: saltEnc);
+      final KeyUnwrapper passwordBackend = PasswordKeyUnwrapper(
+        password: password,
+        saltEnc: saltEnc,
+      );
 
       // Backend B: an entirely different KEK source (stands in for
       // device-keystore) — different key material, different class.
@@ -205,11 +210,9 @@ void main() {
       expect(recoveredViaPassword.bytes, recoveredViaDevice.bytes);
     });
 
-    test(
-        'unwrapDek wipes the derived KEK after use — the KEK bytes are '
+    test('unwrapDek wipes the derived KEK after use — the KEK bytes are '
         'actually zeroed, not just "didn\'t crash" (okt-audit B3: this must '
-        'go RED if the wipe in key_unwrapper.dart is ever removed)',
-        () async {
+        'go RED if the wipe in key_unwrapper.dart is ever removed)', () async {
       final dek = Dek.generate();
       final kekBytes = await deriveArgon2id(
         password: 'ephemeral kek check',
@@ -255,11 +258,9 @@ void main() {
   });
 
   group('extension invariant (okt-audit B3 warning)', () {
-    test(
-        'a backend that declares its own unwrapDek member CAN shadow the '
+    test('a backend that declares its own unwrapDek member CAN shadow the '
         'shared core when called through a concrete-typed reference — the '
-        'old "mechanically impossible to fork" doc claim was false',
-        () async {
+        'old "mechanically impossible to fork" doc claim was false', () async {
       final dek = Dek.generate();
       final kekBytes = await deriveArgon2id(
         password: 'shadow demo password',
@@ -304,11 +305,9 @@ void main() {
       );
     });
 
-    test(
-        'regression: none of the real backends (Password, DeviceKeystore, '
+    test('regression: none of the real backends (Password, DeviceKeystore, '
         'Recovery) shadow unwrapDek — calling each through its own concrete '
-        'type still matches the shared core',
-        () async {
+        'type still matches the shared core', () async {
       final dek = Dek.generate();
 
       // Password backend.
@@ -345,10 +344,7 @@ void main() {
       );
       final DeviceKeystoreKeyUnwrapper deviceConcrete =
           DeviceKeystoreKeyUnwrapper(store);
-      expect(
-        (await deviceConcrete.unwrapDek(wrappedDevice)).bytes,
-        dek.bytes,
-      );
+      expect((await deviceConcrete.unwrapDek(wrappedDevice)).bytes, dek.bytes);
 
       // Recovery backend.
       final saltRec = _salt16(7);

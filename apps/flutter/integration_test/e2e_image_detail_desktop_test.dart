@@ -51,7 +51,6 @@ Future<void> _seedImage(
     db,
     id: id,
     title: 'screenshot-2026-06-20',
-    localPath: 'owners/2/recordings/1/media',
     coreId: 1,
     createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     mediaType: 'image',

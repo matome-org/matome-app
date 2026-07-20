@@ -34,22 +34,22 @@ const _flagOn = bool.fromEnvironment(
 /// set synchronously so the pumped tree sees it on the first frame).
 class _StubReadingPane extends ReadingPaneModeController {
   _StubReadingPane(ReadingPaneMode mode)
-      : super(InMemorySettingsStore(), ReadingPaneSurface.spaces) {
+    : super(InMemorySettingsStore(), ReadingPaneSurface.spaces) {
     state = mode;
   }
 }
 
-ProviderContainer _container(
-  AppDatabase db, {
-  ReadingPaneMode? mode,
-}) {
-  final c = ProviderContainer(overrides: [
-    appDatabaseProvider.overrideWithValue(db),
-    currentOwnerIdProvider.overrideWithValue('1'),
-    if (mode != null)
-      readingPaneModeProvider(ReadingPaneSurface.spaces)
-          .overrideWith((ref) => _StubReadingPane(mode)),
-  ]);
+ProviderContainer _container(AppDatabase db, {ReadingPaneMode? mode}) {
+  final c = ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue('1'),
+      if (mode != null)
+        readingPaneModeProvider(
+          ReadingPaneSurface.spaces,
+        ).overrideWith((ref) => _StubReadingPane(mode)),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -81,10 +81,7 @@ Widget _app(ProviderContainer container, _RouteSpy spy) {
   return UncontrolledProviderScope(
     container: container,
     child: TranslationProvider(
-      child: MaterialApp.router(
-        theme: buildLightTheme(),
-        routerConfig: router,
-      ),
+      child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
   );
 }
@@ -120,24 +117,22 @@ void main() {
 
   // ── OFF lane (characterization): shipped list + route-on-tap ───────────────
   group('lane: ff.masterDetailLayout=false (OFF / shipped list)', () {
-    testWidgets(
-      'at width 1280 the list renders with no MasterDetailScaffold',
-      (tester) async {
-        final db = AppDatabase.forTesting(NativeDatabase.memory());
-        addTearDown(db.close);
-        final work = await db.workspacesDao.createWorkspace('Work');
-        await _seedMatome(db, id: 'm1', title: 'Alpha', spaceId: work.id);
+    testWidgets('at width 1280 the list renders with no MasterDetailScaffold', (
+      tester,
+    ) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final work = await db.workspacesDao.createWorkspace('Work');
+      await _seedMatome(db, id: 'm1', title: 'Alpha', spaceId: work.id);
 
-        _setSize(tester, const Size(1280, 900));
-        final spy = _RouteSpy();
-        await tester.pumpWidget(_app(_container(db), spy));
-        await tester.pumpAndSettle();
+      _setSize(tester, const Size(1280, 900));
+      final spy = _RouteSpy();
+      await tester.pumpWidget(_app(_container(db), spy));
+      await tester.pumpAndSettle();
 
-        expect(find.byType(MasterDetailScaffold), findsNothing);
-        expect(find.text('Work'), findsOneWidget);
-      },
-      skip: _flagOn,
-    );
+      expect(find.byType(MasterDetailScaffold), findsNothing);
+      expect(find.text('Work'), findsOneWidget);
+    }, skip: _flagOn);
 
     testWidgets(
       'tapping a space routes to /spaces/:id (no in-pane selection)',

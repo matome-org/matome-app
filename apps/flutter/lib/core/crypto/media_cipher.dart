@@ -103,7 +103,8 @@ const int kMediaFormatVersion = 0x01;
 const int kMediaMagicLength = 4;
 const int kMediaNoncePrefixLength = 4;
 const int kMediaCounterLength = 8;
-const int kMediaNonceLength = kMediaNoncePrefixLength + kMediaCounterLength; // 12
+const int kMediaNonceLength =
+    kMediaNoncePrefixLength + kMediaCounterLength; // 12
 const int kMediaHeaderLength =
     kMediaMagicLength + 1 /*version*/ + kMediaNoncePrefixLength; // 9
 

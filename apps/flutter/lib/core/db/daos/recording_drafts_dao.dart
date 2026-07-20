@@ -41,52 +41,48 @@ enum RecordingDraftState {
 /// `RecordingDraft` (apps/mobile/services/draftRecordingService.ts).
 class RecordingDraft {
   const RecordingDraft({
-    required this.segments,
+    required this.segmentHandles,
     required this.durationMs,
     this.sessionId = 'legacy',
     this.captureKind = RecordingCaptureKind.microphone,
     this.backend = 'record',
-    this.stagingPath,
-    this.finalPath,
+    this.stagingHandle,
     this.codec = 'aac_lc',
     this.state = RecordingDraftState.paused,
     this.heartbeatAt,
   });
 
-  /// Ordered list of segment file paths.
-  final List<String> segments;
+  /// Ordered opaque handles resolved only inside recorder staging.
+  final List<String> segmentHandles;
 
   /// Accumulated recording duration in milliseconds.
   final int durationMs;
   final String sessionId;
   final RecordingCaptureKind captureKind;
   final String backend;
-  final String? stagingPath;
-  final String? finalPath;
+  final String? stagingHandle;
   final String codec;
   final RecordingDraftState state;
   final DateTime? heartbeatAt;
 
   RecordingDraft copyWith({
-    List<String>? segments,
+    List<String>? segmentHandles,
     int? durationMs,
     String? sessionId,
     RecordingCaptureKind? captureKind,
     String? backend,
-    String? stagingPath,
-    String? finalPath,
+    String? stagingHandle,
     String? codec,
     RecordingDraftState? state,
     DateTime? heartbeatAt,
   }) {
     return RecordingDraft(
-      segments: segments ?? this.segments,
+      segmentHandles: segmentHandles ?? this.segmentHandles,
       durationMs: durationMs ?? this.durationMs,
       sessionId: sessionId ?? this.sessionId,
       captureKind: captureKind ?? this.captureKind,
       backend: backend ?? this.backend,
-      stagingPath: stagingPath ?? this.stagingPath,
-      finalPath: finalPath ?? this.finalPath,
+      stagingHandle: stagingHandle ?? this.stagingHandle,
       codec: codec ?? this.codec,
       state: state ?? this.state,
       heartbeatAt: heartbeatAt ?? this.heartbeatAt,
@@ -105,7 +101,7 @@ class RecordingDraftsDao extends DatabaseAccessor<AppDatabase>
     final now = DateTime.now().toUtc();
     return saveTypedDraft(
       RecordingDraft(
-        segments: segments,
+        segmentHandles: segments,
         durationMs: durationMs,
         sessionId: 'mic_${now.microsecondsSinceEpoch}',
         heartbeatAt: now,
@@ -123,13 +119,12 @@ class RecordingDraftsDao extends DatabaseAccessor<AppDatabase>
       await into(recordingDrafts).insert(
         RecordingDraftsCompanion.insert(
           createdAt: DateTime.now().toUtc().toIso8601String(),
-          segmentsJson: jsonEncode(draft.segments),
+          segmentHandlesJson: jsonEncode(draft.segmentHandles),
           durationMs: Value(draft.durationMs),
           sessionId: Value(draft.sessionId),
           captureKind: Value(draft.captureKind.wireName),
           backend: Value(draft.backend),
-          stagingPath: Value(draft.stagingPath),
-          finalPath: Value(draft.finalPath),
+          stagingHandle: Value(draft.stagingHandle),
           codec: Value(draft.codec),
           state: Value(draft.state.wireName),
           heartbeatAt: Value(draft.heartbeatAt?.toUtc().toIso8601String()),
@@ -152,24 +147,22 @@ class RecordingDraftsDao extends DatabaseAccessor<AppDatabase>
 
     List<String> segments = const [];
     try {
-      final parsed = jsonDecode(row.segmentsJson);
+      final parsed = jsonDecode(row.segmentHandlesJson);
       if (parsed is List) {
         segments = parsed.whereType<String>().toList(growable: false);
       }
     } catch (_) {
-      // Typed meeting drafts can still recover from stagingPath/finalPath. Mic
-      // recovery sees an empty list and sweeps the unusable row.
+      // Invalid handle lists are unusable and swept by capture recovery.
       segments = const [];
     }
 
     return RecordingDraft(
-      segments: segments,
+      segmentHandles: segments,
       durationMs: row.durationMs,
       sessionId: row.sessionId,
       captureKind: RecordingCaptureKind.fromWire(row.captureKind),
       backend: row.backend,
-      stagingPath: row.stagingPath,
-      finalPath: row.finalPath,
+      stagingHandle: row.stagingHandle,
       codec: row.codec,
       state: RecordingDraftState.fromWire(row.state),
       heartbeatAt: DateTime.tryParse(row.heartbeatAt ?? ''),

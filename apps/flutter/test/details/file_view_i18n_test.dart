@@ -38,7 +38,8 @@ void main() {
     String docProcessing,
     String docFailed,
     String docEmpty,
-  }) spine(AppLocale locale) {
+  })
+  spine(AppLocale locale) {
     final fv = locale.translations.fileView;
     return (
       contents: fv.contents,
@@ -94,16 +95,18 @@ void main() {
     }
   });
 
-  test('en and ja translate the spine differently (no untranslated fallthrough)',
-      () {
-    final en = spine(AppLocale.en);
-    final ja = spine(AppLocale.ja);
-    // Sanity that ja is a real translation, not the base locale leaking through.
-    expect(ja.contents, isNot(equals(en.contents)));
-    expect(ja.notes, isNot(equals(en.notes)));
-    expect(ja.audioProcessing, isNot(equals(en.audioProcessing)));
-    expect(ja.imageEmpty, isNot(equals(en.imageEmpty)));
-  });
+  test(
+    'en and ja translate the spine differently (no untranslated fallthrough)',
+    () {
+      final en = spine(AppLocale.en);
+      final ja = spine(AppLocale.ja);
+      // Sanity that ja is a real translation, not the base locale leaking through.
+      expect(ja.contents, isNot(equals(en.contents)));
+      expect(ja.notes, isNot(equals(en.notes)));
+      expect(ja.audioProcessing, isNot(equals(en.audioProcessing)));
+      expect(ja.imageEmpty, isNot(equals(en.imageEmpty)));
+    },
+  );
 
   group('FileView renders the active locale strings', () {
     Widget host(FileMediaKind kind) {

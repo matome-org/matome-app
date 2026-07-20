@@ -191,6 +191,21 @@ class Translations$settings$en {
 
 	/// en: 'Contacts'
 	String get readingPaneContacts => 'Contacts';
+
+	/// en: 'Local storage'
+	String get storage => 'Local storage';
+
+	/// en: 'Keep local files'
+	String get retentionKeepForever => 'Keep local files';
+
+	/// en: 'Default. Matome never removes local Vault files automatically.'
+	String get retentionKeepForeverHint => 'Default. Matome never removes local Vault files automatically.';
+
+	/// en: 'Remove eligible local files after 30 days'
+	String get retentionThirtyDays => 'Remove eligible local files after 30 days';
+
+	/// en: 'Opt in. Only unreferenced files verified in the cloud can be removed.'
+	String get retentionThirtyDaysHint => 'Opt in. Only unreferenced files verified in the cloud can be removed.';
 }
 
 // Path: nav
@@ -915,6 +930,9 @@ class Translations$files$en {
 	/// en: 'Download isn't available yet'
 	String get downloadUnavailable => 'Download isn\'t available yet';
 
+	/// en: '$n file(s) exported. The copy is outside Matome Vault control.'
+	String exportedOutsideVault({required Object n}) => '${n} file(s) exported. The copy is outside Matome Vault control.';
+
 	/// en: 'Move to matome'
 	String get moveSheetTitle => 'Move to matome';
 
@@ -1336,6 +1354,18 @@ class Translations$auth$en {
 
 	/// en: 'Something went wrong. Please try again.'
 	String get errorGeneric => 'Something went wrong. Please try again.';
+
+	/// en: 'Unlock your Vault'
+	String get unlockTitle => 'Unlock your Vault';
+
+	/// en: 'Enter your account password to open your private data.'
+	String get unlockSubtitle => 'Enter your account password to open your private data.';
+
+	/// en: 'Unlock'
+	String get unlockSubmit => 'Unlock';
+
+	/// en: 'The Vault could not be unlocked. Check your password and try again.'
+	String get unlockError => 'The Vault could not be unlocked. Check your password and try again.';
 }
 
 // Path: fileView.fileChip
@@ -1840,6 +1870,11 @@ extension on Translations {
 			'settings.readingPaneFiles' => 'Files',
 			'settings.readingPaneSpaces' => 'Spaces',
 			'settings.readingPaneContacts' => 'Contacts',
+			'settings.storage' => 'Local storage',
+			'settings.retentionKeepForever' => 'Keep local files',
+			'settings.retentionKeepForeverHint' => 'Default. Matome never removes local Vault files automatically.',
+			'settings.retentionThirtyDays' => 'Remove eligible local files after 30 days',
+			'settings.retentionThirtyDaysHint' => 'Opt in. Only unreferenced files verified in the cloud can be removed.',
 			'nav.createNew' => 'New',
 			'nav.add' => 'Add',
 			'nav.recordAudio' => 'Record audio',
@@ -2152,6 +2187,7 @@ extension on Translations {
 			'files.deleteBody' => ({required Object n}) => 'Delete ${n} file(s)? You can undo this.',
 			'files.deletedMsg' => ({required Object n}) => 'Deleted ${n}',
 			'files.downloadUnavailable' => 'Download isn\'t available yet',
+			'files.exportedOutsideVault' => ({required Object n}) => '${n} file(s) exported. The copy is outside Matome Vault control.',
 			'files.moveSheetTitle' => 'Move to matome',
 			'files.moveUnfiled' => 'Unfiled',
 			'files.moveUnfiledHint' => 'No matome',
@@ -2289,6 +2325,10 @@ extension on Translations {
 			'auth.errorEmailTaken' => 'That email is already registered.',
 			'auth.errorResetTokenInvalid' => 'That reset code is invalid or has expired.',
 			'auth.errorGeneric' => 'Something went wrong. Please try again.',
+			'auth.unlockTitle' => 'Unlock your Vault',
+			'auth.unlockSubtitle' => 'Enter your account password to open your private data.',
+			'auth.unlockSubmit' => 'Unlock',
+			'auth.unlockError' => 'The Vault could not be unlocked. Check your password and try again.',
 			_ => null,
 		};
 	}

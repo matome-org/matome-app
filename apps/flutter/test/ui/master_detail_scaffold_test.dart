@@ -39,10 +39,10 @@ void main() {
   const closeKey = ValueKey('master-detail-close-pane');
 
   Widget detailWidget() => const ColoredBox(
-        key: detailKey,
-        color: Color(0xFF778899),
-        child: SizedBox.expand(),
-      );
+    key: detailKey,
+    color: Color(0xFF778899),
+    child: SizedBox.expand(),
+  );
 
   /// Drives the logical width by setting the physical size at dpr 1.
   void setWidth(WidgetTester tester, double width, [double height = 800]) {
@@ -97,20 +97,19 @@ void main() {
     },
   );
 
-  testWidgets(
-    'onClick + expanded + a selection → split (master + detail)',
-    (tester) async {
-      addTearDown(tester.view.reset);
-      setWidth(tester, 1280);
-      await tester.pumpWidget(
-        harness(detail: detailWidget(), mode: ReadingPaneMode.onClick),
-      );
+  testWidgets('onClick + expanded + a selection → split (master + detail)', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    setWidth(tester, 1280);
+    await tester.pumpWidget(
+      harness(detail: detailWidget(), mode: ReadingPaneMode.onClick),
+    );
 
-      expect(find.byKey(masterKey), findsOneWidget);
-      expect(find.byKey(detailKey), findsOneWidget);
-      expect(find.byKey(emptyKey), findsNothing);
-    },
-  );
+    expect(find.byKey(masterKey), findsOneWidget);
+    expect(find.byKey(detailKey), findsOneWidget);
+    expect(find.byKey(emptyKey), findsNothing);
+  });
 
   testWidgets(
     'onClick + selection + onClosePane → close button present, tap clears it',
@@ -132,54 +131,51 @@ void main() {
     },
   );
 
-  testWidgets(
-    'always + selection → NO close button (the pane is persistent)',
-    (tester) async {
-      addTearDown(tester.view.reset);
-      setWidth(tester, 1280);
-      await tester.pumpWidget(
-        harness(
-          detail: detailWidget(),
-          mode: ReadingPaneMode.always,
-          onClose: () {},
-        ),
-      );
+  testWidgets('always + selection → NO close button (the pane is persistent)', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    setWidth(tester, 1280);
+    await tester.pumpWidget(
+      harness(
+        detail: detailWidget(),
+        mode: ReadingPaneMode.always,
+        onClose: () {},
+      ),
+    );
 
-      expect(find.byKey(closeKey), findsNothing);
-    },
-  );
+    expect(find.byKey(closeKey), findsNothing);
+  });
 
   // ── off ─────────────────────────────────────────────────────────────────--
-  testWidgets(
-    'off + expanded → master only; pane/detail not in tree',
-    (tester) async {
-      addTearDown(tester.view.reset);
-      setWidth(tester, 1280);
-      await tester.pumpWidget(
-        harness(detail: detailWidget(), mode: ReadingPaneMode.off),
-      );
+  testWidgets('off + expanded → master only; pane/detail not in tree', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    setWidth(tester, 1280);
+    await tester.pumpWidget(
+      harness(detail: detailWidget(), mode: ReadingPaneMode.off),
+    );
 
-      expect(find.byKey(masterKey), findsOneWidget);
-      expect(find.byKey(detailKey), findsNothing);
-      expect(find.byKey(emptyKey), findsNothing);
-    },
-  );
+    expect(find.byKey(masterKey), findsOneWidget);
+    expect(find.byKey(detailKey), findsNothing);
+    expect(find.byKey(emptyKey), findsNothing);
+  });
 
   // ── width degradation ─────────────────────────────────────────────────────
-  testWidgets(
-    'compact width + always → master only; pane not in tree',
-    (tester) async {
-      addTearDown(tester.view.reset);
-      setWidth(tester, 400);
-      await tester.pumpWidget(
-        harness(detail: detailWidget(), mode: ReadingPaneMode.always),
-      );
+  testWidgets('compact width + always → master only; pane not in tree', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    setWidth(tester, 400);
+    await tester.pumpWidget(
+      harness(detail: detailWidget(), mode: ReadingPaneMode.always),
+    );
 
-      expect(find.byKey(masterKey), findsOneWidget);
-      expect(find.byKey(detailKey), findsNothing);
-      expect(find.byKey(emptyKey), findsNothing);
-    },
-  );
+    expect(find.byKey(masterKey), findsOneWidget);
+    expect(find.byKey(detailKey), findsNothing);
+    expect(find.byKey(emptyKey), findsNothing);
+  });
 
   // ── selectsOnTap matrix ───────────────────────────────────────────────────
   testWidgets(

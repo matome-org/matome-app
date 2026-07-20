@@ -36,22 +36,22 @@ const _ownerId = '1';
 /// set synchronously so the pumped tree sees it on the first frame).
 class _StubReadingPane extends ReadingPaneModeController {
   _StubReadingPane(ReadingPaneMode mode)
-      : super(InMemorySettingsStore(), ReadingPaneSurface.contacts) {
+    : super(InMemorySettingsStore(), ReadingPaneSurface.contacts) {
     state = mode;
   }
 }
 
-ProviderContainer _container(
-  AppDatabase db, {
-  ReadingPaneMode? mode,
-}) {
-  final c = ProviderContainer(overrides: [
-    appDatabaseProvider.overrideWithValue(db),
-    currentOwnerIdProvider.overrideWithValue(_ownerId),
-    if (mode != null)
-      readingPaneModeProvider(ReadingPaneSurface.contacts)
-          .overrideWith((ref) => _StubReadingPane(mode)),
-  ]);
+ProviderContainer _container(AppDatabase db, {ReadingPaneMode? mode}) {
+  final c = ProviderContainer(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      currentOwnerIdProvider.overrideWithValue(_ownerId),
+      if (mode != null)
+        readingPaneModeProvider(
+          ReadingPaneSurface.contacts,
+        ).overrideWith((ref) => _StubReadingPane(mode)),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -83,10 +83,7 @@ Widget _app(ProviderContainer container, _RouteSpy spy) {
   return UncontrolledProviderScope(
     container: container,
     child: TranslationProvider(
-      child: MaterialApp.router(
-        theme: buildLightTheme(),
-        routerConfig: router,
-      ),
+      child: MaterialApp.router(theme: buildLightTheme(), routerConfig: router),
     ),
   );
 }
@@ -154,28 +151,26 @@ void main() {
       skip: _flagOn,
     );
 
-    testWidgets(
-      'long-press + confirm deletes the contact (preserved OFF)',
-      (tester) async {
-        final db = AppDatabase.forTesting(NativeDatabase.memory());
-        addTearDown(db.close);
-        await db.contactsDao.create(_contact(id: 'c1', name: 'Doomed'));
+    testWidgets('long-press + confirm deletes the contact (preserved OFF)', (
+      tester,
+    ) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db.contactsDao.create(_contact(id: 'c1', name: 'Doomed'));
 
-        _setSize(tester, const Size(1280, 900));
-        final spy = _RouteSpy();
-        await tester.pumpWidget(_app(_container(db), spy));
-        await tester.pumpAndSettle();
+      _setSize(tester, const Size(1280, 900));
+      final spy = _RouteSpy();
+      await tester.pumpWidget(_app(_container(db), spy));
+      await tester.pumpAndSettle();
 
-        await tester.longPress(find.byKey(const ValueKey('contact-tile-c1')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('delete-contact-confirm')));
-        await tester.pumpAndSettle();
+      await tester.longPress(find.byKey(const ValueKey('contact-tile-c1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-contact-confirm')));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Doomed'), findsNothing);
-        expect(await db.contactsDao.getById('c1'), isNull);
-      },
-      skip: _flagOn,
-    );
+      expect(find.text('Doomed'), findsNothing);
+      expect(await db.contactsDao.getById('c1'), isNull);
+    }, skip: _flagOn);
   });
 
   // ── ON lane: scaffold-driven reading pane ─────────────────────────────────
@@ -225,10 +220,7 @@ void main() {
 
         // onClick + nothing selected → no pane, so neither the detail nor the
         // teaching hint is rendered.
-        expect(
-          find.byKey(const ValueKey('contact-detail-name')),
-          findsNothing,
-        );
+        expect(find.byKey(const ValueKey('contact-detail-name')), findsNothing);
         expect(find.text(t.contacts.selectHint), findsNothing);
 
         await tester.tap(find.byKey(const ValueKey('contact-tile-c1')));
@@ -261,10 +253,7 @@ void main() {
 
         expect(find.byType(MasterDetailScaffold), findsOneWidget);
         // No pane → the contact detail is not rendered.
-        expect(
-          find.byKey(const ValueKey('contact-detail-name')),
-          findsNothing,
-        );
+        expect(find.byKey(const ValueKey('contact-detail-name')), findsNothing);
         expect(find.text(t.contacts.selectHint), findsNothing);
       },
       skip: !_flagOn,
@@ -293,29 +282,27 @@ void main() {
       skip: !_flagOn,
     );
 
-    testWidgets(
-      'long-press + confirm deletes the contact (preserved ON)',
-      (tester) async {
-        final db = AppDatabase.forTesting(NativeDatabase.memory());
-        addTearDown(db.close);
-        await db.contactsDao.create(_contact(id: 'c1', name: 'Doomed'));
+    testWidgets('long-press + confirm deletes the contact (preserved ON)', (
+      tester,
+    ) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db.contactsDao.create(_contact(id: 'c1', name: 'Doomed'));
 
-        _setSize(tester, const Size(1280, 900));
-        final container = _container(db, mode: ReadingPaneMode.always);
-        final spy = _RouteSpy();
-        await tester.pumpWidget(_app(container, spy));
-        await tester.pumpAndSettle();
+      _setSize(tester, const Size(1280, 900));
+      final container = _container(db, mode: ReadingPaneMode.always);
+      final spy = _RouteSpy();
+      await tester.pumpWidget(_app(container, spy));
+      await tester.pumpAndSettle();
 
-        await tester.longPress(find.byKey(const ValueKey('contact-tile-c1')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('delete-contact-confirm')));
-        await tester.pumpAndSettle();
+      await tester.longPress(find.byKey(const ValueKey('contact-tile-c1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-contact-confirm')));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Doomed'), findsNothing);
-        expect(await db.contactsDao.getById('c1'), isNull);
-      },
-      skip: !_flagOn,
-    );
+      expect(find.text('Doomed'), findsNothing);
+      expect(await db.contactsDao.getById('c1'), isNull);
+    }, skip: !_flagOn);
 
     testWidgets(
       'selection clears when the selected contact leaves the loaded list',
@@ -343,10 +330,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(container.read(contactsSelectionProvider), isNull);
-        expect(
-          find.byKey(const ValueKey('contact-detail-name')),
-          findsNothing,
-        );
+        expect(find.byKey(const ValueKey('contact-detail-name')), findsNothing);
         expect(find.text(t.contacts.selectHint), findsOneWidget);
       },
       skip: !_flagOn,

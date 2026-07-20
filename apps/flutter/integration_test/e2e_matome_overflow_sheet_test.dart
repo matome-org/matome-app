@@ -39,7 +39,6 @@ Future<void> _seed(AppDatabase db) async {
     id: 'img1',
     title: 'A photo',
     durationSeconds: 10,
-    localPath: '/tmp/does-not-exist.bin',
     createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     mediaType: 'image',
     matomeId: 'm1',

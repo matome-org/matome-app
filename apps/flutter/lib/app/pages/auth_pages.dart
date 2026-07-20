@@ -5,6 +5,7 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/reset_password_screen.dart';
 import '../../features/auth/signup_screen.dart';
 import '../../features/auth/welcome_screen.dart';
+import '../../features/auth/unlock_screen.dart';
 
 /// Canonical route target for `/`.
 class WelcomePage extends StatelessWidget {
@@ -20,6 +21,14 @@ class LoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const LoginScreen();
+}
+
+/// Canonical route target for `/unlock`.
+class UnlockPage extends StatelessWidget {
+  const UnlockPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => const UnlockScreen();
 }
 
 /// Canonical route target for `/signup`.

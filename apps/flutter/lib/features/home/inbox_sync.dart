@@ -59,13 +59,6 @@ String formatClock(DateTime when) {
                 ? existing?.file?.uploadedAt
                 : null)
       : null;
-  final existingLocalPath = existing?.localPath;
-  final localPath =
-      existingLocalPath != null &&
-          (existingLocalPath.startsWith('/') ||
-              existingLocalPath.startsWith('file:'))
-      ? existingLocalPath
-      : null;
   final incomingFilename = recording.filename == null
       ? null
       : sanitizeDocumentFilename(recording.filename!);
@@ -132,9 +125,10 @@ String formatClock(DateTime when) {
       openPolicy: Value(
         incomingOpenPolicy ?? existing?.file?.openPolicy ?? 'download_only',
       ),
-      localPath: Value(localPath),
-      wrappedFek: Value(existing?.wrappedFek),
-      fileNoncePrefix: Value(existing?.fileNoncePrefix),
+      blobId: Value(existing?.blobId),
+      blobState: Value(existing?.file?.blobState ?? 'missing'),
+      cipherFormat: Value(existing?.file?.cipherFormat ?? 'mec1'),
+      cipherVersion: Value(existing?.file?.cipherVersion ?? 1),
       isDirty: const Value(false),
       createdAt: existing?.file?.createdAt ?? createdAt,
       updatedAt: now,

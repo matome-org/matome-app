@@ -16,6 +16,7 @@ const _pendingRoutePageMigrations = <String, String>{};
 const _routerPathLiterals = <String>{
   '/',
   '/login',
+  '/unlock',
   '/signup',
   '/forgot-password',
   '/reset-password',
@@ -42,6 +43,7 @@ const _routerPathLiterals = <String>{
 const _routerEvidence = <String, List<String>>{
   '/': ["path: '/'", 'WelcomePage()'],
   '/login': ["path: '/login'", 'LoginPage()'],
+  '/unlock': ["path: '/unlock'", 'UnlockPage()'],
   '/signup': ["path: '/signup'", 'SignupPage()'],
   '/forgot-password': ["path: '/forgot-password'", 'ForgotPasswordPage()'],
   '/reset-password': ["path: '/reset-password'", 'ResetPasswordPage('],

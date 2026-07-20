@@ -90,41 +90,48 @@ void main() {
     );
   }
 
-  testWidgets('non-embedded hub renders an always-visible back affordance',
-      (tester) async {
+  testWidgets('non-embedded hub renders an always-visible back affordance', (
+    tester,
+  ) async {
     await _seedMatome(db, id: 'm1');
-    await tester.pumpWidget(buildApp(container(), buildRouter(initialLocation: '/matome/m1')));
+    await tester.pumpWidget(
+      buildApp(container(), buildRouter(initialLocation: '/matome/m1')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('matome-detail-back')), findsOneWidget);
   });
 
-  testWidgets('opening the hub from a list (push) leaves canPop true; back pops',
-      (tester) async {
-    await _seedMatome(db, id: 'm1');
-    final router = buildRouter(initialLocation: '/list');
-    await tester.pumpWidget(buildApp(container(), router));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'opening the hub from a list (push) leaves canPop true; back pops',
+    (tester) async {
+      await _seedMatome(db, id: 'm1');
+      final router = buildRouter(initialLocation: '/list');
+      await tester.pumpWidget(buildApp(container(), router));
+      await tester.pumpAndSettle();
 
-    // Push the detail from the list.
-    await tester.tap(find.byKey(const ValueKey('open-matome')));
-    await tester.pumpAndSettle();
+      // Push the detail from the list.
+      await tester.tap(find.byKey(const ValueKey('open-matome')));
+      await tester.pumpAndSettle();
 
-    // We are on the hub and it can pop (proves push, not go/replace).
-    expect(find.byType(MatomeDetailScreen), findsOneWidget);
-    expect(find.byKey(const ValueKey('matome-detail-back')), findsOneWidget);
-    final context = tester.element(find.byType(MatomeDetailScreen));
-    expect(context.canPop(), isTrue);
+      // We are on the hub and it can pop (proves push, not go/replace).
+      expect(find.byType(MatomeDetailScreen), findsOneWidget);
+      expect(find.byKey(const ValueKey('matome-detail-back')), findsOneWidget);
+      final context = tester.element(find.byType(MatomeDetailScreen));
+      expect(context.canPop(), isTrue);
 
-    // Tapping back returns to the list (the hub is gone, the list button is
-    // back on screen).
-    await tester.tap(find.byKey(const ValueKey('matome-detail-back')));
-    await tester.pumpAndSettle();
-    expect(find.byType(MatomeDetailScreen), findsNothing);
-    expect(find.byKey(const ValueKey('open-matome')), findsOneWidget);
-  });
+      // Tapping back returns to the list (the hub is gone, the list button is
+      // back on screen).
+      await tester.tap(find.byKey(const ValueKey('matome-detail-back')));
+      await tester.pumpAndSettle();
+      expect(find.byType(MatomeDetailScreen), findsNothing);
+      expect(find.byKey(const ValueKey('open-matome')), findsOneWidget);
+    },
+  );
 
-  testWidgets('deep-link entry (empty stack) falls back to /inbox', (tester) async {
+  testWidgets('deep-link entry (empty stack) falls back to /inbox', (
+    tester,
+  ) async {
     await _seedMatome(db, id: 'm1');
     final router = buildRouter(initialLocation: '/matome/m1');
     await tester.pumpWidget(buildApp(container(), router));
@@ -140,7 +147,9 @@ void main() {
     expect(find.text('inbox-stub'), findsOneWidget);
   });
 
-  testWidgets('embedded two-pane path renders NO back affordance', (tester) async {
+  testWidgets('embedded two-pane path renders NO back affordance', (
+    tester,
+  ) async {
     await _seedMatome(db, id: 'm1');
     await tester.pumpWidget(
       UncontrolledProviderScope(

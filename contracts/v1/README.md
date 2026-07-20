@@ -66,6 +66,9 @@ an idempotency key. Core selects single or multipart for `mode=auto` using the
 desired upload policy and declared byte size.
 
 - `request` creates or resumes one active upload generation.
+- `transport` is explicit: native clients use `direct_signed_length`; browser
+  streams use `browser_stream`, which keeps the checksum signed but omits the
+  forbidden `content-length` request header. A generation cannot switch transport.
 - The request may establish the file's bounded content type when item creation
   did not know it; later requests may omit it or repeat the same value, but a
   different non-null value cannot relabel the input.
@@ -84,8 +87,8 @@ desired upload policy and declared byte size.
   Core accepts processing and never waits for AI output.
 
 `upload_id` is a logical envelope handle, not a requirement for an
-`upload_sessions` domain table. The active bounded multipart context belongs on
-the `file_blobs` row. S3 ETags and per-part provider checksums are matched before
+`upload_sessions` domain table. The active bounded upload context belongs on the
+`file_blobs` row. S3 ETags and per-part provider checksums are matched before
 completion; HEAD size and checksum facts are matched before `uploaded`. S3
 ETags are transport evidence, not content integrity.
 
@@ -207,6 +210,10 @@ Keep `items` and exactly one 1:1 payload row in `file_blobs` or
 domain tables. Device attempts live on Drift `work_queue`, physical Core
 attempts live in Oban, current run fields live on `items`, and one active
 multipart context lives on `file_blobs`.
+
+Drift `file_blobs` references local media only by opaque Vault `blob_id` and
+logical plaintext facts. Physical paths and MEC1 FEK/nonce metadata are Vault
+implementation details and are not duplicated in the domain database.
 
 There are no users and no deployment. The W2 schema work may therefore reset
 Postgres and Drift cleanly instead of adding backfills, dual writes, or legacy

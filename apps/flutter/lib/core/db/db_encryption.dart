@@ -21,8 +21,7 @@ import '../crypto/envelope.dart'
     show PayloadType, WrappedEnvelope, WrapperType, wrapKey;
 import '../crypto/key_material.dart'
     show Dek, Kek, kSymmetricKeyLength, secureRandomBytes;
-import '../crypto/key_unwrapper.dart'
-    show KeyUnwrapper, KeyUnwrapperUnwrap;
+import '../crypto/key_unwrapper.dart' show KeyUnwrapper, KeyUnwrapperUnwrap;
 
 /// Minimal key/value contract [FlutterSecureKeyStore], [NativeDekProvisioner],
 /// and [DeviceKeystoreKeyUnwrapper] need from a secure store. Abstracted so
@@ -112,9 +111,7 @@ class DbEncryptionKeyManager {
 /// package uses have no equivalent "wipe on decrypt error" behavior to begin
 /// with, so there is nothing to disable on those platforms.
 FlutterSecureStorage buildDeviceKekSecureStorage() =>
-    const FlutterSecureStorage(
-      aOptions: AndroidOptions(resetOnError: false),
-    );
+    const FlutterSecureStorage(aOptions: AndroidOptions(resetOnError: false));
 
 /// [KeyUnwrapper] backend — device-keystore (task #1850, plan #131 W1).
 ///
@@ -157,10 +154,7 @@ class DeviceKeystoreKeyUnwrapper implements KeyUnwrapper {
 
 Uint8List _hexDecode(String hexString) {
   if (hexString.length.isOdd) {
-    throw FormatException(
-      'hex string must have an even length',
-      hexString,
-    );
+    throw FormatException('hex string must have an even length', hexString);
   }
   final bytes = Uint8List(hexString.length ~/ 2);
   for (var i = 0; i < bytes.length; i++) {
@@ -256,8 +250,9 @@ class NativeDekProvisioner {
   }
 
   Future<Uint8List> _obtainOrCreateDeviceKek() async {
-    final existingHex =
-        await _store.read(DeviceKeystoreKeyUnwrapper.storageKey);
+    final existingHex = await _store.read(
+      DeviceKeystoreKeyUnwrapper.storageKey,
+    );
     if (existingHex != null && existingHex.isNotEmpty) {
       return _hexDecode(existingHex);
     }

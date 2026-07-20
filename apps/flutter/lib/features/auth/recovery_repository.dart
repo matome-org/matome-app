@@ -88,7 +88,21 @@ class RecoveryBundleFormatException implements Exception {
 /// interceptor injects the cached session access token on every request,
 /// which would silently overwrite the reset-token header here if the device
 /// happened to still have one cached. The two auth channels must never mix.
-class RecoveryRepository {
+abstract interface class RecoveryKeyBundleGateway {
+  Future<RecoveryKeyBundle> fetchRecoveryBundle({required String resetToken});
+
+  Future<void> uploadRotatedBundle({
+    required String resetToken,
+    required String wrappedDekPw,
+    required String wrappedDekRecovery,
+    required String saltEnc,
+    required String saltRec,
+    required String saltAuth,
+    required Map<String, dynamic> kdfParams,
+  });
+}
+
+class RecoveryRepository implements RecoveryKeyBundleGateway {
   RecoveryRepository({Dio? dio, String? baseUrl})
     : _dio =
           dio ??
@@ -105,6 +119,7 @@ class RecoveryRepository {
   final Dio _dio;
 
   /// `GET /api/keybundle/recovery`, authenticated with [resetToken].
+  @override
   Future<RecoveryKeyBundle> fetchRecoveryBundle({
     required String resetToken,
   }) async {
@@ -164,6 +179,7 @@ class RecoveryRepository {
   /// AND a brand-new `wrapped_dek_recovery`/`salt_rec` pair (the just-used
   /// recovery code is invalidated the moment this call succeeds — see
   /// `recovery_flow.dart`'s `resetPasswordWithRecoveryCode`).
+  @override
   Future<void> uploadRotatedBundle({
     required String resetToken,
     required String wrappedDekPw,

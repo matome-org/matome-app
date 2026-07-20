@@ -24,7 +24,7 @@ class RecordingItem {
     this.notes,
     this.workspaceName,
     this.coreId,
-    this.filePath,
+    this.blobId,
     this.processingErrorCode,
   });
 
@@ -55,17 +55,15 @@ class RecordingItem {
   /// NULL means Inbox.
   final String? workspaceName;
 
-  /// On-device path to the item's media (audio file or imported photo). Drives
-  /// the image thumbnail/preview in the matome hub.
-  final String? filePath;
+  /// Opaque encrypted Vault identity. Preview leases are implemented in #2150.
+  final String? blobId;
 
   /// Reconciled to Core AND not mid-upload — the single rule behind both the
   /// per-tile sync badge (StatusBadge.syncState) and the Matome-level sync
   /// rollup (MatomeItem.syncRollup), so a Matome pill can never contradict the
   /// "Cloud"/"On device" state of its own child tiles.
   bool get isOnCloud =>
-      coreId != null &&
-      !isUploadQueuePendingStatus(processingStatus);
+      coreId != null && !isUploadQueuePendingStatus(processingStatus);
 
   /// Maps a persisted DB row to the UI card, mirroring `recordToCard`:
   ///   * `isProcessing` int → bool,
@@ -91,7 +89,7 @@ class RecordingItem {
       processingErrorCode: row.processingErrorCode,
       workspaceName: workspaceName,
       coreId: row.coreId,
-      filePath: row.localPath,
+      blobId: row.blobId,
     );
   }
 

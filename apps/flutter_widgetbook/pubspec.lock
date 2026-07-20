@@ -588,6 +588,13 @@ packages:
       relative: true
     source: path
     version: "1.0.0+1"
+  matome_vault:
+    dependency: transitive
+    description:
+      path: "../../packages/matome_vault"
+      relative: true
+    source: path
+    version: "0.1.0"
   media_kit:
     dependency: transitive
     description:
@@ -612,6 +619,34 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.9"
+  meeting_capture:
+    dependency: "direct main"
+    description:
+      path: "../flutter/packages/meeting_capture"
+      relative: true
+    source: path
+    version: "0.1.0"
+  meeting_capture_linux:
+    dependency: transitive
+    description:
+      path: "../flutter/packages/meeting_capture_linux"
+      relative: true
+    source: path
+    version: "0.1.0"
+  meeting_capture_macos:
+    dependency: transitive
+    description:
+      path: "../flutter/packages/meeting_capture_macos"
+      relative: true
+    source: path
+    version: "0.1.0"
+  meeting_capture_windows:
+    dependency: transitive
+    description:
+      path: "../flutter/packages/meeting_capture_windows"
+      relative: true
+    source: path
+    version: "0.1.0"
   meta:
     dependency: transitive
     description:

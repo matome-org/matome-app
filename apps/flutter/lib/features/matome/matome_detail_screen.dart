@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -16,6 +14,8 @@ import '../../core/db/daos/spaces_dao.dart';
 import '../../core/db/matome_card.dart';
 import '../../core/db/recording_card.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/vault/media_inputs.dart';
+import '../../core/vault/vault_lease_image.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/app_bottom_sheet.dart';
 import '../../ui/app_button.dart';
@@ -1534,17 +1534,22 @@ Future<void> _importFileIntoMatome(
     final result = await FilePicker.platform.pickFiles(
       type: type,
       allowedExtensions: allowedExtensions,
+      withReadStream: true,
+      readSequential: true,
     );
     final picked = result?.files.single;
-    final path = picked?.path;
-    if (path == null) {
-      AppLog.event(LogCat.action, '$label: cancelled (no path)');
+    if (picked == null) {
+      AppLog.event(LogCat.action, '$label: cancelled');
       return;
     }
     await container
         .read(matomeDetailControllerProvider(matomeId).notifier)
-        .addFile(file: File(path), name: picked!.name, byteSize: picked.size);
-    AppLog.event(LogCat.action, '$label: imported ${path.split('/').last}');
+        .addFile(
+          input: mediaInputFromPlatformFile(picked),
+          name: picked.name,
+          byteSize: picked.size,
+        );
+    AppLog.event(LogCat.action, '$label: import sealed');
   } on FileTooLargeException catch (e) {
     AppLog.event(LogCat.action, '$label: rejected oversize ${e.name}');
     if (!context.mounted) return;
@@ -1719,7 +1724,7 @@ class _RecordingTile extends ConsumerWidget {
       AppLog.event(LogCat.action, 'removeItem: confirmed ${item.id}');
       await container
           .read(matomeDetailControllerProvider(matomeId).notifier)
-          .removeItem(item.id, filePath: item.filePath);
+          .removeItem(item.id);
       AppLog.event(LogCat.action, 'removeItem: done ${item.id}');
     } catch (e, st) {
       AppLog.error(LogCat.action, 'removeItem failed ${item.id}', e, st);
@@ -1838,14 +1843,14 @@ class _ImageThumb extends StatelessWidget {
     final spacing = context.spacing;
     final radius = context.radius;
     final accent = colors.badgeColor(item.badge);
-    final path = item.filePath;
+    final blobId = item.blobId;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius.sm),
       child: SizedBox(
         width: spacing.lg,
         height: spacing.lg,
-        child: path == null || path.isEmpty
+        child: blobId == null || blobId.isEmpty
             ? ColoredBox(
                 color: accent.withValues(alpha: 0.13),
                 child: Icon(
@@ -1854,13 +1859,13 @@ class _ImageThumb extends StatelessWidget {
                   color: accent,
                 ),
               )
-            : Image.file(
-                File(path),
+            : VaultLeaseImage(
+                blobId: blobId,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => ColoredBox(
+                errorBuilder: (_) => ColoredBox(
                   color: accent.withValues(alpha: 0.13),
                   child: Icon(
-                    Icons.broken_image_outlined,
+                    Icons.image_outlined,
                     size: spacing.md,
                     color: accent,
                   ),

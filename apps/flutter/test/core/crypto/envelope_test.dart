@@ -42,99 +42,106 @@ void main() {
       expect(unwrapped, plaintext);
     });
 
-    test('round trip works for every documented payload/wrapper combination',
-        () async {
-      final wrappingKey = _key32(9);
-      final plaintext = _payload32(3);
+    test(
+      'round trip works for every documented payload/wrapper combination',
+      () async {
+        final wrappingKey = _key32(9);
+        final plaintext = _payload32(3);
 
-      final cases = [
-        (PayloadType.dek, WrapperType.passwordKek),
-        (PayloadType.dek, WrapperType.recoveryKek),
-        (PayloadType.dek, WrapperType.deviceKek),
-        (PayloadType.fek, WrapperType.dekAsWrappingKey),
-      ];
+        final cases = [
+          (PayloadType.dek, WrapperType.passwordKek),
+          (PayloadType.dek, WrapperType.recoveryKek),
+          (PayloadType.dek, WrapperType.deviceKek),
+          (PayloadType.fek, WrapperType.dekAsWrappingKey),
+        ];
 
-      for (final (payloadType, wrapperType) in cases) {
+        for (final (payloadType, wrapperType) in cases) {
+          final wrapped = await wrapKey(
+            plaintext: plaintext,
+            wrappingKey: wrappingKey,
+            payloadType: payloadType,
+            wrapperType: wrapperType,
+          );
+          final unwrapped = await unwrapKey(
+            wrapped: wrapped,
+            wrappingKey: wrappingKey,
+          );
+          expect(unwrapped, plaintext);
+        }
+      },
+    );
+
+    test(
+      'two wraps of the same plaintext use distinct random nonces',
+      () async {
+        final wrappingKey = _key32(4);
+        final plaintext = _payload32(5);
+
+        final wrapped1 = await wrapKey(
+          plaintext: plaintext,
+          wrappingKey: wrappingKey,
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
+        final wrapped2 = await wrapKey(
+          plaintext: plaintext,
+          wrappingKey: wrappingKey,
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
+
+        final nonce1 = wrapped1.bytes.sublist(4, 16);
+        final nonce2 = wrapped2.bytes.sublist(4, 16);
+        expect(nonce1, isNot(equals(nonce2)));
+        // Ciphertext also differs because GCM keystream depends on the nonce.
+        expect(wrapped1.bytes, isNot(equals(wrapped2.bytes)));
+      },
+    );
+
+    test(
+      'base64 transport encoding round-trips (88 chars for 64 bytes)',
+      () async {
+        final wrappingKey = _key32(6);
+        final plaintext = _payload32(7);
         final wrapped = await wrapKey(
           plaintext: plaintext,
           wrappingKey: wrappingKey,
-          payloadType: payloadType,
-          wrapperType: wrapperType,
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
         );
+
+        final b64 = wrapped.toBase64();
+        expect(b64.length, 88);
+        expect(base64.decode(b64).length, 64);
+
+        final restored = WrappedEnvelope.fromBase64(b64);
         final unwrapped = await unwrapKey(
-          wrapped: wrapped,
+          wrapped: restored,
           wrappingKey: wrappingKey,
         );
         expect(unwrapped, plaintext);
-      }
-    });
-
-    test('two wraps of the same plaintext use distinct random nonces',
-        () async {
-      final wrappingKey = _key32(4);
-      final plaintext = _payload32(5);
-
-      final wrapped1 = await wrapKey(
-        plaintext: plaintext,
-        wrappingKey: wrappingKey,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
-      final wrapped2 = await wrapKey(
-        plaintext: plaintext,
-        wrappingKey: wrappingKey,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
-
-      final nonce1 = wrapped1.bytes.sublist(4, 16);
-      final nonce2 = wrapped2.bytes.sublist(4, 16);
-      expect(nonce1, isNot(equals(nonce2)));
-      // Ciphertext also differs because GCM keystream depends on the nonce.
-      expect(wrapped1.bytes, isNot(equals(wrapped2.bytes)));
-    });
-
-    test('base64 transport encoding round-trips (88 chars for 64 bytes)',
-        () async {
-      final wrappingKey = _key32(6);
-      final plaintext = _payload32(7);
-      final wrapped = await wrapKey(
-        plaintext: plaintext,
-        wrappingKey: wrappingKey,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
-
-      final b64 = wrapped.toBase64();
-      expect(b64.length, 88);
-      expect(base64.decode(b64).length, 64);
-
-      final restored = WrappedEnvelope.fromBase64(b64);
-      final unwrapped = await unwrapKey(
-        wrapped: restored,
-        wrappingKey: wrappingKey,
-      );
-      expect(unwrapped, plaintext);
-    });
+      },
+    );
   });
 
   group('wrappingKey length validation (symmetric wrap/unwrap, okt-audit '
       'info follow-up #1866)', () {
-    test('wrapKey rejects a wrappingKey that is not exactly 32 bytes',
-        () async {
-      expect(
-        () => wrapKey(
-          plaintext: _payload32(1),
-          wrappingKey: Uint8List(16),
-          payloadType: PayloadType.dek,
-          wrapperType: WrapperType.passwordKek,
-        ),
-        throwsA(isA<ArgumentError>()),
-      );
-    });
-
     test(
-        'unwrapKey rejects a wrappingKey that is not exactly 32 bytes — '
+      'wrapKey rejects a wrappingKey that is not exactly 32 bytes',
+      () async {
+        expect(
+          () => wrapKey(
+            plaintext: _payload32(1),
+            wrappingKey: Uint8List(16),
+            payloadType: PayloadType.dek,
+            wrapperType: WrapperType.passwordKek,
+          ),
+          throwsA(isA<ArgumentError>()),
+        );
+      },
+    );
+
+    test('unwrapKey rejects a wrappingKey that is not exactly 32 bytes — '
         'symmetric with wrapKey, instead of falling through to whatever the '
         'underlying AEAD call does with a malformed key length', () async {
       final wrapped = await wrapKey(
@@ -236,22 +243,24 @@ void main() {
       await expectTamperDetected(tampered);
     });
 
-    test('cross-slot substitution (relabeled wrapper_type) fails via AAD',
-        () async {
-      // Wrap the SAME plaintext under recovery-KEK, then splice its
-      // ciphertext+tag onto a header claiming password-KEK. Because the
-      // header is bound as AAD, this must fail authentication even though
-      // the underlying key and plaintext are identical.
-      final recoveryWrapped = await wrapKey(
-        plaintext: plaintext,
-        wrappingKey: wrappingKey,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.recoveryKek,
-      );
-      final relabeled = Uint8List.fromList(recoveryWrapped.bytes);
-      relabeled[2] = WrapperType.passwordKek.byteValue; // relabel header only
-      await expectTamperDetected(relabeled);
-    });
+    test(
+      'cross-slot substitution (relabeled wrapper_type) fails via AAD',
+      () async {
+        // Wrap the SAME plaintext under recovery-KEK, then splice its
+        // ciphertext+tag onto a header claiming password-KEK. Because the
+        // header is bound as AAD, this must fail authentication even though
+        // the underlying key and plaintext are identical.
+        final recoveryWrapped = await wrapKey(
+          plaintext: plaintext,
+          wrappingKey: wrappingKey,
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.recoveryKek,
+        );
+        final relabeled = Uint8List.fromList(recoveryWrapped.bytes);
+        relabeled[2] = WrapperType.passwordKek.byteValue; // relabel header only
+        await expectTamperDetected(relabeled);
+      },
+    );
 
     test('unwrapping with the wrong key fails authentication', () async {
       final wrongKey = _key32(99);
@@ -279,31 +288,33 @@ void main() {
   });
 
   group('unwrapKey — format_version mismatch (legacy-blob fixture)', () {
-    test('rejects a blob whose format_version is not the supported 0x01',
-        () async {
-      final wrappingKey = _key32(20);
-      final plaintext = _payload32(21);
-      final wrapped = await wrapKey(
-        plaintext: plaintext,
-        wrappingKey: wrappingKey,
-        payloadType: PayloadType.dek,
-        wrapperType: WrapperType.passwordKek,
-      );
-
-      // Fixture: simulate a legacy/future blob with an unsupported
-      // format_version byte (e.g. a pre-freeze draft, or a future breaking
-      // format change). Must fail loudly, not silently reinterpret bytes.
-      final legacyBytes = Uint8List.fromList(wrapped.bytes);
-      legacyBytes[0] = 0x00;
-
-      await expectLater(
-        unwrapKey(
-          wrapped: WrappedEnvelope(legacyBytes),
+    test(
+      'rejects a blob whose format_version is not the supported 0x01',
+      () async {
+        final wrappingKey = _key32(20);
+        final plaintext = _payload32(21);
+        final wrapped = await wrapKey(
+          plaintext: plaintext,
           wrappingKey: wrappingKey,
-        ),
-        throwsA(isA<UnsupportedFormatVersionException>()),
-      );
-    });
+          payloadType: PayloadType.dek,
+          wrapperType: WrapperType.passwordKek,
+        );
+
+        // Fixture: simulate a legacy/future blob with an unsupported
+        // format_version byte (e.g. a pre-freeze draft, or a future breaking
+        // format change). Must fail loudly, not silently reinterpret bytes.
+        final legacyBytes = Uint8List.fromList(wrapped.bytes);
+        legacyBytes[0] = 0x00;
+
+        await expectLater(
+          unwrapKey(
+            wrapped: WrappedEnvelope(legacyBytes),
+            wrappingKey: wrappingKey,
+          ),
+          throwsA(isA<UnsupportedFormatVersionException>()),
+        );
+      },
+    );
 
     test('rejects a blob with an unrecognized alg_id', () async {
       final wrappingKey = _key32(22);

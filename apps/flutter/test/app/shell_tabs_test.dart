@@ -37,9 +37,7 @@ void main() {
   test('enabledTabs is the canonical order filtered by the flags', () {
     expect(
       enabledTabs,
-      ShellTab.values
-          .where((t) => t.enabled && t != ShellTab.files)
-          .toList(),
+      ShellTab.values.where((t) => t.enabled && t != ShellTab.files).toList(),
     );
   });
 

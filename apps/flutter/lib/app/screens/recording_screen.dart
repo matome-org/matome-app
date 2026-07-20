@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/providers.dart';
+import '../../core/vault/vault_session_controller.dart';
 import '../../features/recording/audio_recording_service.dart';
 import '../../features/recording/recording_controller.dart';
 import '../../features/recording/recording_finish.dart';
@@ -110,6 +112,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   final List<double> _bars = List<double>.filled(_waveformBars, 5);
   double _lastHeight = 5;
   ProviderSubscription<RecordingState>? _ampListener;
+  VaultLockDeferral? _vaultLockDeferral;
 
   @override
   void initState() {
@@ -121,7 +124,21 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   @override
   void dispose() {
     _ampListener?.close();
+    _releaseVaultLockDeferral();
     super.dispose();
+  }
+
+  void _deferVaultLock() {
+    if (_vaultLockDeferral?.isActive ?? false) return;
+    final vault = ref.read(vaultSessionProvider);
+    if (vault.phase == VaultSessionPhase.ready) {
+      _vaultLockDeferral = ref.read(vaultSessionProvider.notifier).deferLock();
+    }
+  }
+
+  void _releaseVaultLockDeferral() {
+    _vaultLockDeferral?.release();
+    _vaultLockDeferral = null;
   }
 
   /// Entry: probe mic support, then detect a crash-recovery draft (F3).
@@ -203,6 +220,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
   Future<void> _start() async {
     try {
       await ref.read(_controllerProvider.notifier).start();
+      _deferVaultLock();
       if (mounted) setState(() => _phase = _ModalPhase.recording);
     } catch (_) {
       _snack(t.recording.startFailed);
@@ -235,6 +253,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     }
     try {
       await ref.read(_controllerProvider.notifier).resumeFromDraft(detection);
+      _deferVaultLock();
       if (mounted) setState(() => _phase = _ModalPhase.recording);
     } catch (_) {
       _snack(t.recording.resumeFailed);
@@ -253,6 +272,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
       if (!confirmed || !mounted) return;
     }
     await ref.read(_controllerProvider.notifier).discard();
+    _releaseVaultLockDeferral();
     _resetBars();
     if (mounted) _close();
   }
@@ -296,6 +316,7 @@ class _RecordingScreenState extends ConsumerState<RecordingScreen> {
     final finishing = ref.read(_finisherProvider).finish();
     try {
       await finishing;
+      _releaseVaultLockDeferral();
       if (mounted) _close();
     } catch (_) {
       // If the modal was backgrounded the failure surfaces on the Inbox card

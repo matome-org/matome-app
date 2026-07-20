@@ -25,11 +25,10 @@ abstract class EncryptedBlobStore {
   Future<void> delete();
 }
 
-/// In-memory [EncryptedBlobStore] — the OPFS-unavailable/unsupported
-/// **fallback** (AC: "in-memory becomes a fallback, not the default") and the
-/// test double for [EncryptedBlobStore]-consuming logic. Data does not
-/// survive a page reload; this is exactly the pre-#1860 online-only behavior,
-/// kept as the safety net rather than the default.
+/// In-memory [EncryptedBlobStore] test double. It must never be selected as a
+/// runtime fallback after OPFS, password unwrap, or ciphertext validation
+/// fails: those failures block encrypted startup instead of creating a fresh
+/// plaintext/non-durable store.
 class InMemoryBlobStore implements EncryptedBlobStore {
   Uint8List? _bytes;
 

@@ -97,8 +97,9 @@ void main() {
   setUp(() => LocaleSettings.setLocaleSync(AppLocale.en));
 
   group('MatomeTable structure', () {
-    testWidgets('renders a sortable header with all column labels',
-        (tester) async {
+    testWidgets('renders a sortable header with all column labels', (
+      tester,
+    ) async {
       await _pump(tester);
       expect(find.text(t.matome.table.colTitle.toUpperCase()), findsOneWidget);
       expect(find.text(t.matome.table.colWhen.toUpperCase()), findsOneWidget);
@@ -114,14 +115,17 @@ void main() {
       expect(find.text(t.matome.table.emptyBody), findsOneWidget);
     });
 
-    testWidgets('renders the muted no-summary placeholder for empty summaries',
-        (tester) async {
-      await _pump(tester);
-      expect(find.text(t.matome.table.noSummary), findsOneWidget);
-    });
+    testWidgets(
+      'renders the muted no-summary placeholder for empty summaries',
+      (tester) async {
+        await _pump(tester);
+        expect(find.text(t.matome.table.noSummary), findsOneWidget);
+      },
+    );
 
-    testWidgets('compact layout below the breakpoint shows the sort selector',
-        (tester) async {
+    testWidgets('compact layout below the breakpoint shows the sort selector', (
+      tester,
+    ) async {
       await _pump(tester, width: 380);
       // The compact sort bar carries the "Sort" caption; the desktop header
       // does not.
@@ -135,8 +139,9 @@ void main() {
   });
 
   group('Sorting', () {
-    testWidgets('tapping a column header sorts and emits onSort',
-        (tester) async {
+    testWidgets('tapping a column header sorts and emits onSort', (
+      tester,
+    ) async {
       MatomeTableSort? sortKey;
       bool? ascending;
       await _pump(
@@ -156,37 +161,46 @@ void main() {
   });
 
   group('Selection → bulk bar', () {
-    testWidgets('selecting a row reveals the bulk bar and emits the selection',
-        (tester) async {
-      Set<String>? selection;
-      await _pump(tester, onSelectionChanged: (s) => selection = s);
+    testWidgets(
+      'selecting a row reveals the bulk bar and emits the selection',
+      (tester) async {
+        Set<String>? selection;
+        await _pump(tester, onSelectionChanged: (s) => selection = s);
 
-      expect(find.byKey(const ValueKey('matome-table-bulk-bar')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('matome-table-bulk-bar')),
+          findsNothing,
+        );
 
-      await tester.tap(find.byType(Checkbox).at(1)); // first data row checkbox
-      await tester.pumpAndSettle();
+        await tester.tap(
+          find.byType(Checkbox).at(1),
+        ); // first data row checkbox
+        await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('matome-table-bulk-bar')),
-        findsOneWidget,
-      );
-      expect(selection, isNotNull);
-      expect(selection!.length, 1);
-    });
+        expect(
+          find.byKey(const ValueKey('matome-table-bulk-bar')),
+          findsOneWidget,
+        );
+        expect(selection, isNotNull);
+        expect(selection!.length, 1);
+      },
+    );
 
-    testWidgets('select-all header checkbox selects every row',
-        (tester) async {
+    testWidgets('select-all header checkbox selects every row', (tester) async {
       await _pump(tester);
       await tester.tap(find.byType(Checkbox).first); // header tristate
       await tester.pumpAndSettle();
-      expect(find.text(t.matome.table.selected(n: _rows.length)),
-          findsOneWidget);
+      expect(
+        find.text(t.matome.table.selected(n: _rows.length)),
+        findsOneWidget,
+      );
     });
   });
 
   group('Destructive ops: confirm + undo', () {
-    testWidgets('bulk delete confirms, removes rows, then offers undo',
-        (tester) async {
+    testWidgets('bulk delete confirms, removes rows, then offers undo', (
+      tester,
+    ) async {
       MatomeTableAction? bulkAction;
       Set<String>? bulkIds;
       await _pump(
@@ -210,8 +224,9 @@ void main() {
       expect(find.text(t.matome.table.deleteTitle), findsOneWidget);
 
       // Confirm.
-      await tester
-          .tap(find.byKey(const ValueKey('matome-table-delete-confirm')));
+      await tester.tap(
+        find.byKey(const ValueKey('matome-table-delete-confirm')),
+      );
       await tester.pumpAndSettle();
 
       // Row removed from the table and the bulk callback fired.
@@ -229,21 +244,23 @@ void main() {
       expect(find.text('Client X — weekly sync'), findsOneWidget);
     });
 
-    testWidgets('bulk archive removes immediately (no confirm) and offers undo',
-        (tester) async {
-      await _pump(tester, initialSelection: const {'r2'});
+    testWidgets(
+      'bulk archive removes immediately (no confirm) and offers undo',
+      (tester) async {
+        await _pump(tester, initialSelection: const {'r2'});
 
-      await tester.tap(find.text(t.matome.table.archive).first);
-      await tester.pumpAndSettle();
+        await tester.tap(find.text(t.matome.table.archive).first);
+        await tester.pumpAndSettle();
 
-      // No confirm dialog for archive; the row is gone and undo is offered.
-      expect(find.text(t.matome.table.deleteTitle), findsNothing);
-      expect(find.text('Apple design review'), findsNothing);
-      expect(
-        find.byKey(const ValueKey('matome-table-undo-bar')),
-        findsOneWidget,
-      );
-    });
+        // No confirm dialog for archive; the row is gone and undo is offered.
+        expect(find.text(t.matome.table.deleteTitle), findsNothing);
+        expect(find.text('Apple design review'), findsNothing);
+        expect(
+          find.byKey(const ValueKey('matome-table-undo-bar')),
+          findsOneWidget,
+        );
+      },
+    );
   });
 
   group('Open', () {

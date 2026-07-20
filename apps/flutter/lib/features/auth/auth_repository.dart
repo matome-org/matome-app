@@ -67,11 +67,7 @@ class AuthRepository {
     required String password,
   }) async {
     final device = await _deviceIdentity.current();
-    return {
-      'email': email,
-      'password': password,
-      'device': device.toJson(),
-    };
+    return {'email': email, 'password': password, 'device': device.toJson()};
   }
 
   /// `POST /api/auth/forgot-password`. Starts the reset flow. The backend always

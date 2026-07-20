@@ -1,13 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:matome_flutter/core/providers.dart';
 
 import 'package:matome_flutter/core/audio/audio_playback.dart';
 import 'package:matome_flutter/core/theme/app_theme.dart';
 import 'package:matome_flutter/features/details/audio_player_bar.dart';
 import 'package:matome_flutter/features/details/details_controller.dart';
 import 'package:matome_flutter/i18n/strings.g.dart';
+import 'package:matome_vault/matome_vault.dart';
+
+import '../support/fake_media_blob_store.dart';
 
 /// In-memory [AudioPlayback] fake (#870). Proves the platform-swappable
 /// abstraction stays trivially fakeable — the bar drives THIS instead of a real
@@ -88,65 +93,104 @@ class FakeAudioPlayback implements AudioPlayback {
 /// ([AudioSourceKind.none]), the player must surface a graceful "audio
 /// unavailable" state instead of a dead, silent play button.
 void main() {
-  Widget host(AudioSource source, {AudioPlayback? player}) {
-    return TranslationProvider(
-      child: MaterialApp(
-        theme: buildLightTheme(),
-        home: Scaffold(
-          body: AudioPlayerBar(source: source, player: player),
+  Widget host(
+    AudioSource source, {
+    AudioPlayback? player,
+    FakeMediaBlobStore? store,
+  }) {
+    return ProviderScope(
+      overrides: [
+        if (store != null) mediaBlobStoreProvider.overrideWithValue(store),
+      ],
+      child: TranslationProvider(
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: Scaffold(
+            body: AudioPlayerBar(source: source, player: player),
+          ),
         ),
       ),
     );
   }
 
   testWidgets(
-      'AudioSourceKind.none renders the "audio unavailable" state, not a play '
-      'button', (tester) async {
-    await tester.pumpWidget(host(const AudioSource.none()));
-    await tester.pump();
+    'AudioSourceKind.none renders the "audio unavailable" state, not a play '
+    'button',
+    (tester) async {
+      await tester.pumpWidget(host(const AudioSource.none()));
+      await tester.pump();
 
-    // The graceful unavailable surface is shown…
-    expect(find.byKey(const ValueKey('audio-unavailable')), findsOneWidget);
-    expect(find.text(t.details.audioUnavailable), findsOneWidget);
-    expect(find.byIcon(Icons.music_off), findsOneWidget);
+      // The graceful unavailable surface is shown…
+      expect(find.byKey(const ValueKey('audio-unavailable')), findsOneWidget);
+      expect(find.text(t.details.audioUnavailable), findsOneWidget);
+      expect(find.byIcon(Icons.music_off), findsOneWidget);
 
-    // …and there is NO active play affordance to tap to no effect.
-    expect(find.byIcon(Icons.play_arrow), findsNothing);
-    expect(find.byType(Slider), findsNothing);
-  });
+      // …and there is NO active play affordance to tap to no effect.
+      expect(find.byIcon(Icons.play_arrow), findsNothing);
+      expect(find.byType(Slider), findsNothing);
+    },
+  );
 
   testWidgets(
-      'local file routes load + play/pause through the injected AudioPlayback '
-      'backend (fakeable abstraction)', (tester) async {
-    final fake = FakeAudioPlayback();
-    await tester.pumpWidget(
-      host(const AudioSource(AudioSourceKind.localFile, '/tmp/clip.m4a'),
-          player: fake),
-    );
-    await tester.pump();
+    'Vault Blob URL routes load + play/pause and revokes on dispose',
+    (tester) async {
+      final fake = FakeAudioPlayback();
+      final store = FakeMediaBlobStore();
+      final stat = await store.ingest(const _Input([1, 2, 3]));
+      await tester.pumpWidget(
+        host(
+          AudioSource(AudioSourceKind.vaultBlob, stat.id.value),
+          player: fake,
+          store: store,
+        ),
+      );
+      await tester.pump();
 
-    // The bar loaded the local file through the abstraction (not a real engine).
-    expect(fake.calls, contains('setFilePath:/tmp/clip.m4a'));
+      expect(
+        fake.calls,
+        contains('setUrl:blob:https://test.invalid/${stat.id.value}'),
+      );
+      expect(store.activeLeaseCount, 1);
 
-    // Tapping play routes through the backend…
-    await tester.tap(find.byIcon(Icons.play_arrow));
-    await tester.pump();
-    expect(fake.calls, contains('play'));
+      // Tapping play routes through the backend…
+      await tester.tap(find.byIcon(Icons.play_arrow));
+      await tester.pump();
+      expect(fake.calls, contains('play'));
 
-    // …and the play/pause stream flips the control to pause.
-    expect(find.byIcon(Icons.pause), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.pause));
-    await tester.pump();
-    expect(fake.calls, contains('pause'));
-  });
+      // …and the play/pause stream flips the control to pause.
+      expect(find.byIcon(Icons.pause), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.pause));
+      await tester.pump();
+      expect(fake.calls, contains('pause'));
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(store.activeLeaseCount, 0);
+    },
+  );
 
   testWidgets('remote url is loaded via the backend', (tester) async {
     final fake = FakeAudioPlayback();
     await tester.pumpWidget(
-      host(const AudioSource(AudioSourceKind.remoteUrl, 'https://x/a.mp3'),
-          player: fake),
+      host(
+        const AudioSource(AudioSourceKind.remoteUrl, 'https://x/a.mp3'),
+        player: fake,
+      ),
     );
     await tester.pump();
     expect(fake.calls, contains('setUrl:https://x/a.mp3'));
   });
+}
+
+final class _Input implements MediaInput {
+  const _Input(this.value);
+  final List<int> value;
+  @override
+  String get filename => 'audio.m4a';
+  @override
+  String? get contentType => 'audio/mp4';
+  @override
+  int get knownLength => value.length;
+  @override
+  Stream<List<int>> openRead() => Stream.value(value);
 }

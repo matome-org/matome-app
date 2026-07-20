@@ -47,8 +47,7 @@ class DekSessionGuard {
   DekSessionGuard({
     this.idleTimeout = const Duration(minutes: 15),
     this.onWipe,
-    Timer Function(Duration duration, void Function() callback)?
-    timerFactory,
+    Timer Function(Duration duration, void Function() callback)? timerFactory,
   }) : _timerFactory = timerFactory ?? Timer.new;
 
   /// How long the DEK may sit idle (no [noteActivity] call) before it is

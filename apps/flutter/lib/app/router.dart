@@ -116,12 +116,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       return decideRedirect(
         isAuthenticated: auth.isAuthenticated,
         isLoading: auth.isLoading,
+        isVaultReady: auth.isVaultReady,
+        isVaultLoading: auth.isVaultLoading,
         location: state.matchedLocation,
       );
     },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const WelcomePage()),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(path: '/unlock', builder: (context, state) => const UnlockPage()),
       GoRoute(path: '/signup', builder: (context, state) => const SignupPage()),
       GoRoute(
         path: '/forgot-password',

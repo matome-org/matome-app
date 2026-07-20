@@ -22,7 +22,6 @@ Future<void> _seedItem(
     db,
     id: id,
     title: 'rec $id',
-    localPath: '',
     createdAt: DateTime(2026, 6, 8).millisecondsSinceEpoch,
     workspaceId: workspaceId,
   );

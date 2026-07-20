@@ -1,14 +1,10 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
-import 'package:matome_flutter/core/crypto/key_material.dart' show Dek;
-import 'package:matome_flutter/core/crypto/media_cipher.dart'
-    show encryptFileToFile;
 import 'package:matome_flutter/core/db/app_database.dart';
 import 'package:matome_flutter/core/http/api_client.dart';
 import 'package:matome_flutter/core/http/token_store.dart';
@@ -49,8 +45,6 @@ Recording _processedItem(
 ProviderContainer _container(
   AppDatabase db, {
   RecordingResultAwaiter? awaitResult,
-  Future<Dek> Function()? mediaDekSource,
-  Future<Directory> Function()? playbackScratchDirSource,
   void Function(Map<String, dynamic>)? onPatch,
 }) {
   final dio = Dio(BaseOptions(baseUrl: 'http://localhost:7001'));
@@ -117,9 +111,6 @@ ProviderContainer _container(
           ref,
           id,
           awaitResult: awaitResult ?? liveRecordingResultAwaiter,
-          mediaDekSource: mediaDekSource,
-          playbackScratchDirSource:
-              playbackScratchDirSource ?? () async => Directory.systemTemp,
         ),
       ),
     ],
@@ -149,16 +140,12 @@ void main() {
   });
 
   test(
-    'loads canonical file Item and resolves its durable local path',
+    'loads canonical file Item through an opaque Vault playback source',
     () async {
-      final dir = await Directory.systemTemp.createTemp('details_item_');
-      addTearDown(() => dir.delete(recursive: true));
-      final media = File('${dir.path}/capture.m4a')..writeAsBytesSync([1, 2]);
       await insertTestFileItem(
         db,
         id: '5',
         coreId: 5,
-        localPath: media.path,
         notes: 'Personal note',
         transcript: 'Machine transcript',
       );
@@ -169,7 +156,8 @@ void main() {
       expect(controller.state.notFound, isFalse);
       expect(controller.state.initialText, 'Personal note');
       expect(controller.state.row?.transcript, 'Machine transcript');
-      expect(controller.state.audioSource.kind, AudioSourceKind.localFile);
+      expect(controller.state.audioSource.kind, AudioSourceKind.vaultBlob);
+      expect(controller.state.audioSource.value, 'fixture-blob');
     },
   );
 
@@ -212,10 +200,7 @@ void main() {
         RecordingResult.terminal(
           _processedItem(
             ProcessingState.failed,
-            error: const {
-              'code': 'processor_unavailable',
-              'retryable': true,
-            },
+            error: const {'code': 'processor_unavailable', 'retryable': true},
           ),
         ),
       ),
@@ -250,14 +235,8 @@ void main() {
           _processedItem(
             ProcessingState.succeeded,
             outputs: const {
-              'summary': {
-                'type': 'summary',
-                'markdown': 'Fresh summary',
-              },
-              'transcript': {
-                'type': 'transcript',
-                'text': 'Fresh transcript',
-              },
+              'summary': {'type': 'summary', 'markdown': 'Fresh summary'},
+              'transcript': {'type': 'transcript', 'text': 'Fresh transcript'},
             },
           ),
         ),
@@ -301,137 +280,33 @@ void main() {
     expect(row?.processingErrorCode, isNull);
   });
 
-  test('delete removes the payload row and durable media', () async {
-    final dir = await Directory.systemTemp.createTemp('details_delete_');
-    addTearDown(() => dir.delete(recursive: true));
-    final media = File('${dir.path}/capture.m4a')..writeAsBytesSync([1]);
-    await insertTestFileItem(db, id: '5', coreId: 5, localPath: media.path);
-    final controller = _controller(container, '5');
-    await controller.load();
+  test(
+    'delete creates a hidden durable tombstone without touching external files',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('details_delete_');
+      addTearDown(() => dir.delete(recursive: true));
+      final media = File('${dir.path}/capture.m4a')..writeAsBytesSync([1]);
+      await insertTestFileItem(db, id: '5', coreId: 5);
+      final controller = _controller(container, '5');
+      await controller.load();
 
-    await controller.delete();
+      await controller.delete();
 
-    expect(media.existsSync(), isFalse);
-    expect(await db.itemsDao.getById('5', '1'), isNull);
-  });
+      expect(media.existsSync(), isTrue);
+      final tombstone = await db.itemsDao.getByIdIncludingDeleted('5', '1');
+      expect(tombstone?.item.isDeleted, isTrue);
+      expect(tombstone?.item.syncState, 'pending_delete');
+      expect(
+        (await db.workQueueDao.getForItem('5', 'file_delete'))?.state,
+        anyOf('queued', 'retry', 'blocked'),
+      );
+    },
+  );
 
   test('a different owner cannot load the Item by id', () async {
     await insertTestFileItem(db, id: '5', ownerId: '2');
     final controller = _controller(container, '5');
     await controller.load();
     expect(controller.state.notFound, isTrue);
-  });
-
-  test('encrypted Item resolves plaintext and evicts it on dispose', () async {
-    final dir = await Directory.systemTemp.createTemp('details_encrypted_');
-    addTearDown(() => dir.delete(recursive: true));
-    final dek = Dek.generate();
-    final plaintext = Uint8List.fromList(List.generate(512, (i) => i & 0xff));
-    final encrypted = File('${dir.path}/capture.enc');
-    final encryptedResult = await encryptFileToFile(
-      source: File('${dir.path}/capture.raw')..writeAsBytesSync(plaintext),
-      destination: encrypted,
-      dek: dek,
-    );
-    await insertTestFileItem(
-      db,
-      id: 'encrypted',
-      localPath: encrypted.path,
-      wrappedFek: encryptedResult.wrappedFek.toBase64(),
-    );
-
-    final scratch = Directory('${dir.path}/scratch');
-    container.dispose();
-    container = _container(
-      db,
-      mediaDekSource: () async => Dek(Uint8List.fromList(dek.bytes)),
-      playbackScratchDirSource: () async => scratch,
-    );
-    final subscription = container.listen(
-      detailsControllerProvider('encrypted'),
-      (_, _) {},
-    );
-    final controller = container.read(
-      detailsControllerProvider('encrypted').notifier,
-    );
-    await controller.load();
-
-    final resolved = File(controller.state.audioSource.value!);
-    expect(resolved.path, isNot(encrypted.path));
-    expect(resolved.readAsBytesSync(), plaintext);
-
-    subscription.close();
-    await Future<void>.delayed(Duration.zero);
-    expect(resolved.existsSync(), isFalse);
-  });
-
-  test('encrypted Item decrypt failure settles with no scratch file', () async {
-    final dir = await Directory.systemTemp.createTemp('details_bad_key_');
-    addTearDown(() => dir.delete(recursive: true));
-    final dek = Dek.generate();
-    final encrypted = File('${dir.path}/capture.enc');
-    final encryptedResult = await encryptFileToFile(
-      source: File('${dir.path}/capture.raw')..writeAsBytesSync([1, 2, 3]),
-      destination: encrypted,
-      dek: dek,
-    );
-    await insertTestFileItem(
-      db,
-      id: 'bad-key',
-      localPath: encrypted.path,
-      wrappedFek: encryptedResult.wrappedFek.toBase64(),
-    );
-
-    final scratch = Directory('${dir.path}/scratch');
-    final wrongDek = Dek.generate();
-    container.dispose();
-    container = _container(
-      db,
-      mediaDekSource: () async => Dek(Uint8List.fromList(wrongDek.bytes)),
-      playbackScratchDirSource: () async => scratch,
-    );
-    final controller = _controller(container, 'bad-key');
-    await controller.load();
-
-    expect(controller.state.isLoading, isFalse);
-    expect(controller.state.notFound, isFalse);
-    expect(controller.state.audioSource.kind, AudioSourceKind.none);
-    expect(File('${scratch.path}/bad-key.playback').existsSync(), isFalse);
-  });
-
-  test('delete evicts encrypted playback scratch and payload', () async {
-    final dir = await Directory.systemTemp.createTemp('details_delete_enc_');
-    addTearDown(() => dir.delete(recursive: true));
-    final dek = Dek.generate();
-    final encrypted = File('${dir.path}/capture.enc');
-    final encryptedResult = await encryptFileToFile(
-      source: File('${dir.path}/capture.raw')..writeAsBytesSync([1, 2, 3]),
-      destination: encrypted,
-      dek: dek,
-    );
-    await insertTestFileItem(
-      db,
-      id: 'delete-encrypted',
-      localPath: encrypted.path,
-      wrappedFek: encryptedResult.wrappedFek.toBase64(),
-    );
-
-    final scratch = Directory('${dir.path}/scratch');
-    container.dispose();
-    container = _container(
-      db,
-      mediaDekSource: () async => Dek(Uint8List.fromList(dek.bytes)),
-      playbackScratchDirSource: () async => scratch,
-    );
-    final controller = _controller(container, 'delete-encrypted');
-    await controller.load();
-    final resolved = File(controller.state.audioSource.value!);
-    expect(resolved.existsSync(), isTrue);
-
-    await controller.delete();
-
-    expect(resolved.existsSync(), isFalse);
-    expect(encrypted.existsSync(), isFalse);
-    expect(await db.itemsDao.getById('delete-encrypted', '1'), isNull);
   });
 }

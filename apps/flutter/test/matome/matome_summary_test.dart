@@ -95,10 +95,7 @@ void main() {
         _item(id: 'a', title: 'One', summary: 'Alpha.'),
         _item(id: 'b', title: 'Two', summary: 'Beta.'),
       ];
-      expect(
-        composeAggregatedSummary(items),
-        composeAggregatedSummary(items),
-      );
+      expect(composeAggregatedSummary(items), composeAggregatedSummary(items));
     });
   });
 

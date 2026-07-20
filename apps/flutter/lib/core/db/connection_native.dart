@@ -1,6 +1,10 @@
+import 'dart:ffi';
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:sqlite3/open.dart' as sqlite3_open;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../storage/app_storage.dart';
@@ -27,18 +31,12 @@ Future<String> _matomeDbDirectory() async {
 /// value) is unclear — this doc comment only covers what is or isn't wired
 /// on the native platform specifically.
 ///
-/// **Currently `false`** by default. The KEYING MECHANISM below
-/// ([openEncryptedNativeConnection]) is real and tested (task #1853, plan
-/// #131 W3) — it is not a stub. What is still missing is the PRODUCTION
-/// PACKAGING of a real per-platform SQLCipher shared library
-/// (`.so`/`.aar`/framework) built by this repo's own build pipeline;
-/// `sqlcipher_flutter_libs` cannot be co-built with `drift_flutter` in the
-/// current version set (Android plugin namespace collision; Linux
-/// static-OpenSSL requirement — see `tool/spike_815_sqlcipher/DECISION.md`),
-/// and no replacement build step (Gradle/CMake) has landed yet. Until it
-/// does, flipping this flag to `true` in a shipped build has no library to
-/// point `package:sqlite3`'s `open.overrideFor` at, so the lab build keeps
-/// relying on OS full-disk encryption (FDE) as the at-rest interim.
+/// **Currently `false`** by default. The keying mechanism below and the Linux
+/// production-shaped package are real and tested. Linux CMake replaces the
+/// stock sqlite3_flutter_libs target with a pinned SQLCipher amalgamation and
+/// installs it beside the app. Other native platforms remain unpackaged and
+/// are deliberately unsupported by the encrypted branch in this task; see
+/// `tool/spike_815_sqlcipher/DECISION.md`.
 ///
 /// Spike #815 (task #1847, plan #131 Wave 0) proved the mechanism end-to-end
 /// on Linux desktop: `package:sqlite3` + `open.overrideFor` + a SQLCipher
@@ -48,19 +46,85 @@ Future<String> _matomeDbDirectory() async {
 /// [KeyUnwrapper] key chain, and adds a real decrypt probe so a wrong key is
 /// caught at open time (`cipher_version` alone does NOT prove key
 /// correctness — it is a build-time constant SQLCipher reports regardless of
-/// the key). Tests exercise this directly with a lib built by
-/// `build_libsqlcipher.sh`; see `test/db/sqlcipher_encrypted_open_test.dart`.
+/// the key). Linux packaging and the real-process acceptance gate live in
+/// `linux/CMakeLists.txt` and `integration_test/sqlcipher_linux_bundle_test.dart`.
 ///
-/// Android round-trip remains UNVERIFIED (no device/emulator available) —
-/// the Dart-level mechanism is platform-agnostic (same `open.overrideFor`
-/// call, parameterized by `OperatingSystem`), which lowers but does not
-/// eliminate that risk. This flag stays `false` by default until (1) a real
-/// per-platform library is packaged and (2) the Android round-trip is
-/// actually run on a device/emulator.
+/// Android packages the fixed sqlcipher-android AAR and explicitly opens its
+/// libsqlcipher.so. Task #2153 proves encrypted Drift persistence across an
+/// actual force-stopped process, wrong-key and tamper rejection, and ciphertext
+/// scanning on the pixel7 emulator. The flag remains `false` by default until
+/// product rollout and plaintext migration are separately approved.
 const bool kSqlCipherEnabled = bool.fromEnvironment(
   'MATOME_SQLCIPHER',
   defaultValue: false,
 );
+
+bool _bundledSqlCipherLoaded = false;
+
+/// Points package:sqlite3 at the SQLCipher DSO installed beside the Linux app.
+///
+/// The library is resolved only from [Platform.resolvedExecutable]. There is
+/// deliberately no injectable path, system-library lookup, or stock fallback.
+void loadBundledLinuxSqlCipher() {
+  if (_bundledSqlCipherLoaded) return;
+  if (!Platform.isLinux) {
+    throw UnsupportedError(
+      'Bundled SQLCipher is currently implemented on Linux only.',
+    );
+  }
+
+  final executable = File(Platform.resolvedExecutable);
+  final library = File('${executable.parent.path}/lib/libmatome_sqlcipher.so');
+  if (!library.existsSync()) {
+    throw StateError(
+      'Bundled SQLCipher library missing at ${library.path}; refusing a stock '
+      'SQLite fallback.',
+    );
+  }
+
+  sqlite3_open.open.overrideFor(
+    sqlite3_open.OperatingSystem.linux,
+    () => DynamicLibrary.open(library.path),
+  );
+  _bundledSqlCipherLoaded = true;
+}
+
+/// Points package:sqlite3 at the SQLCipher DSO packaged by sqlcipher-android.
+///
+/// The fixed Android AAR is an app dependency rather than a Flutter plugin, so
+/// it cannot collide with sqlite3_flutter_libs' plugin namespace. Opening the
+/// distinct DSO by its exact soname isolates Matome from libsqlite3.so even
+/// when Android framework or plugin code has loaded stock SQLite for itself.
+/// DynamicLibrary.open throws when the DSO is absent; no process or stock
+/// SQLite lookup is attempted as a fallback.
+void loadBundledAndroidSqlCipher() {
+  if (_bundledSqlCipherLoaded) return;
+  if (!Platform.isAndroid) {
+    throw UnsupportedError(
+      'Bundled Android SQLCipher can only be loaded on Android.',
+    );
+  }
+
+  sqlite3_open.open.overrideFor(
+    sqlite3_open.OperatingSystem.android,
+    () => DynamicLibrary.open('libsqlcipher.so'),
+  );
+  _bundledSqlCipherLoaded = true;
+}
+
+void _loadBundledNativeSqlCipher() {
+  if (Platform.isLinux) {
+    loadBundledLinuxSqlCipher();
+    return;
+  }
+  if (Platform.isAndroid) {
+    loadBundledAndroidSqlCipher();
+    return;
+  }
+  throw UnsupportedError(
+    'Bundled SQLCipher is currently implemented on Linux and Android only.',
+  );
+}
 
 /// Native (Android/iOS/macOS/Linux/Windows) connection.
 ///
@@ -137,16 +201,27 @@ Future<QueryExecutor> openEncryptedNativeConnection({
   required Future<String> Function() databaseDirectory,
 }) async {
   final dek = await NativeDekProvisioner(keyStore).obtainDek();
-  final String hexKey;
   try {
-    hexKey = hexEncodeKeyBytes(dek.bytes);
+    return await openEncryptedNativeConnectionWithKey(
+      databaseKey: dek.bytes,
+      databaseDirectory: databaseDirectory,
+    );
   } finally {
-    // Best-effort: the live DEK reference is wiped the moment the (still
-    // secret-equivalent) hex form has been captured for the PRAGMA below.
     dek.wipe();
   }
+}
+
+/// Production Vault-ready SQLCipher open. The caller supplies a versioned
+/// account-DEK-derived key and retains ownership of wiping those bytes.
+Future<QueryExecutor> openEncryptedNativeConnectionWithKey({
+  required Uint8List databaseKey,
+  required Future<String> Function() databaseDirectory,
+}) async {
+  _loadBundledNativeSqlCipher();
+  final hexKey = hexEncodeKeyBytes(databaseKey);
 
   final dirPath = await databaseDirectory();
+  await Directory(dirPath).create(recursive: true);
   final path = '$dirPath/matome.sqlite';
   final db = sqlite3.open(path);
   var keyed = false;
