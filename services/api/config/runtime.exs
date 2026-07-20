@@ -52,6 +52,12 @@ ai_callback_signing_secret =
       else: "dev-ai-callback-signing-secret"
     )
 
+if config_env() == :prod and
+     (String.starts_with?(ai_dispatch_token, "CHANGE_ME") or
+        String.starts_with?(ai_callback_signing_secret, "CHANGE_ME")) do
+  raise "AI credentials must not use deployment scaffold placeholders"
+end
+
 if ai_dispatch_token == ai_callback_signing_secret do
   raise "AI dispatch and callback credentials must be different"
 end
@@ -68,15 +74,23 @@ ai_callback_base_url =
   System.get_env("AI_ENGINE_CALLBACK_BASE_URL") || "http://127.0.0.1:7001"
 
 if config_env() == :prod do
-  for {name, value} <- [
-        {"AI_ENGINE_ENDPOINT", ai_engine_endpoint},
-        {"AI_ENGINE_CALLBACK_BASE_URL", ai_callback_base_url}
-      ] do
-    uri = URI.parse(value)
+  endpoint_uri = URI.parse(ai_engine_endpoint)
 
-    if uri.scheme != "https" or not is_binary(uri.host) do
-      raise "#{name} must be an absolute HTTPS URL in production"
-    end
+  private_compose_endpoint =
+    endpoint_uri.scheme == "http" and endpoint_uri.host == "ai-core" and
+      endpoint_uri.port == 8000 and endpoint_uri.path == "/v1/jobs" and
+      is_nil(endpoint_uri.userinfo) and is_nil(endpoint_uri.query) and
+      is_nil(endpoint_uri.fragment)
+
+  if (endpoint_uri.scheme != "https" or not is_binary(endpoint_uri.host)) and
+       not private_compose_endpoint do
+    raise "AI_ENGINE_ENDPOINT must be an absolute HTTPS URL in production"
+  end
+
+  callback_uri = URI.parse(ai_callback_base_url)
+
+  if callback_uri.scheme != "https" or not is_binary(callback_uri.host) do
+    raise "AI_ENGINE_CALLBACK_BASE_URL must be an absolute HTTPS URL in production"
   end
 end
 

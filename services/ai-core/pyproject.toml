@@ -1,0 +1,27 @@
+[project]
+name = "matome-ai-core"
+version = "0.1.0"
+description = "Matome internal AI processing service"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+whisper-openai = [
+  "openai-whisper",
+]
+whispercpp = [
+  "pywhispercpp",
+]
+test = [
+  "pytest>=8.4,<9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "live_ai: opt-in tests against a real OpenAI-compatible model server",
+]
