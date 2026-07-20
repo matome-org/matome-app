@@ -113,6 +113,7 @@ Status values:
 | --- | --- | --- | --- | --- |
 | `/` | `WelcomePage` | Required | `WelcomePage` | Unauthenticated landing; Widgetbook `[Pages]` covered. |
 | `/login` | `LoginPage` | Required | `LoginPage` | Auth form route; Widgetbook `[Pages]` covered. |
+| `/unlock` | `UnlockPage` | Required | `UnlockPage` | Authenticated Vault gate; Widgetbook `[Pages]` covered. |
 | `/signup` | `SignupPage` | Required | `SignupPage` | Auth form route; Widgetbook `[Pages]` covered. |
 | `/forgot-password` | `ForgotPasswordPage` | Required | `ForgotPasswordPage` | Password-reset request; Widgetbook `[Pages]` covered. |
 | `/reset-password` | `ResetPasswordPage(token)` | Required | `ResetPasswordPage` | Reset code + new password; Widgetbook `[Pages]` covered. |
