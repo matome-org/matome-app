@@ -49,9 +49,9 @@ class UploadQueue {
        _shouldProcess = shouldProcess ?? _defaultProcessingEligibility,
        _configRevision =
            configRevision ?? (() => _ref.read(systemPolicyProvider).revision),
-       _leaseOwner =
-           'device-${DateTime.now().microsecondsSinceEpoch}-'
-           '${Random().nextInt(1 << 32)}';
+        _leaseOwner =
+            'device-${DateTime.now().microsecondsSinceEpoch}-'
+            '${Random().nextInt(0x100000000)}';
 
   final Ref _ref;
   final DateTime Function() _clock;
