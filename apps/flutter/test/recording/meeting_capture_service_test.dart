@@ -74,7 +74,10 @@ void main() {
   late AppDatabase db;
 
   setUp(() async {
-    temp = await Directory.systemTemp.createTemp('meeting_capture_service_');
+    final rawTemp = await Directory.systemTemp.createTemp(
+      'meeting_capture_service_',
+    );
+    temp = Directory(await rawTemp.resolveSymbolicLinks());
     db = AppDatabase.forTesting(NativeDatabase.memory());
   });
 

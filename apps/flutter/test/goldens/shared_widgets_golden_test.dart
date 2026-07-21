@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:alchemist/alchemist.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -35,6 +37,15 @@ import 'package:matome_flutter/ui/space_chip.dart';
 import 'package:matome_flutter/ui/status_badge.dart';
 
 void main() {
+  if (!Platform.isLinux) {
+    test(
+      'shared widget goldens are Linux-only',
+      () {},
+      skip: 'Golden baselines are generated and compared on Linux only.',
+    );
+    return;
+  }
+
   group('shared widget goldens', () {
     for (final variant in _variants) {
       goldenTest(
