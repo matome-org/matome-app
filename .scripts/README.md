@@ -1,33 +1,44 @@
 # Scripts
 
-- `gen-localserver-env.sh` — fills `.env.localserver` for the Dokploy
-  local-server stack (see below).
+- `gen-deploy-env.sh` — fills `.env.localserver` or `.env.production` (see below).
 - `push-dokploy-env.sh` — pushes that environment into Dokploy (see below).
 - `test-linux.sh` / `test-macos.sh` / `test-windows.ps1` — per-machine
   meeting-capture package tests (see below).
 
-## Local-server deploy environment
+## Deploy environments
 
-`docker-compose.localserver.yml` derives every browser-reachable URL from
-`HOST_IP`, which leaves the LAN address plus six secrets as the only manual
-input. The script generates them and never touches a value that is already
-set, so it is safe to re-run:
+Both Compose stacks derive their URLs from a single value, which leaves that
+one plus the secrets as the only manual input:
+
+| Stack | File | Derived from | Reaches |
+|---|---|---|---|
+| `localserver` | `.env.localserver` | `HOST_IP` | `http://HOST_IP:<port>` |
+| `production` | `.env.production` | `BASE_DOMAIN` | `https://api\|app\|media.<domain>` |
+
+The generator seeds anything missing from the matching `*.example`, fills the
+secrets with `openssl rand`, and never touches a value that is already set, so
+it is safe to re-run:
 
 ```bash
-mise run localserver:env               # writes/completes .env.localserver
-./.scripts/gen-localserver-env.sh --print   # same, then dump it for Dokploy
+mise run localserver:env                      # HOST_IP detected from this host
+BASE_DOMAIN=example.com mise run production:env
+./.scripts/gen-deploy-env.sh --print           # same, then dump it for Dokploy
 ```
 
-`--print` sends progress to stderr and the file to stdout, so the dump pipes
-cleanly. The generated file holds real secrets: it is `chmod 600`, gitignored,
-and belongs in the Dokploy environment panel, not in a commit.
-
-Detection uses `ip route get`, which resolves to this machine's LAN address —
+`HOST_IP` detection uses `ip route get`, which resolves to *this* machine —
 override it when generating for a different host:
 
 ```bash
-HOST_IP=192.168.1.50 ./.scripts/gen-localserver-env.sh
+HOST_IP=192.168.1.50 ./.scripts/gen-deploy-env.sh
 ```
+
+`BASE_DOMAIN` has nothing to detect, so the first run needs it in the
+environment. Whatever the generator cannot decide — the SMTP relay, the chat
+model — stays `CHANGE_ME` and is listed at the end.
+
+`--print` sends progress to stderr and the file to stdout, so the dump pipes
+cleanly. The generated files hold real secrets: `chmod 600`, gitignored, and
+they belong in the Dokploy environment panel, not in a commit.
 
 ## Pushing the environment to Dokploy
 
@@ -61,9 +72,23 @@ the old address. `--no-deploy` defers that, and `--deploy-only` triggers the
 rebuild on its own — which is how a run that stopped after storing the
 environment is resumed.
 
+It also refuses to ship a `CHANGE_ME` placeholder, since one reaching a
+deployment only fails much later and far from here.
+
 Note that a LAN-only Dokploy cannot receive GitHub webhooks, so `autoDeploy`
 never fires there: pushing to `development` updates the branch, and the deploy
-that picks it up is the one this script triggers.
+that picks it up is the one this script triggers. A public VPS does receive
+them, so there the push script is only needed when the environment changes.
+
+### A second target
+
+Both file paths are parameters, so a VPS is the same workflow against another
+connection file:
+
+```bash
+CONN_FILE=.env.dokploy.vps.local \
+  ./.scripts/push-dokploy-env.sh --file=.env.production --dry-run
+```
 
 ## Per-machine meeting-capture package tests
 

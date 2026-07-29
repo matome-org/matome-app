@@ -199,6 +199,20 @@ if [ "$changes" -eq 0 ]; then
   exit 0
 fi
 
+# The generator leaves CHANGE_ME on anything a human still has to decide, and a
+# placeholder shipped to a deployment fails somewhere far from here.
+placeholders=()
+for key in "${LOCAL_ORDER[@]}"; do
+  [ -n "${PRUNED[$key]+x}" ] && continue
+  [ "${LOCAL_VAL[$key]#CHANGE_ME}" != "${LOCAL_VAL[$key]}" ] && placeholders+=("$key")
+done
+if [ "${#placeholders[@]}" -gt 0 ]; then
+  echo "" >&2
+  echo "refusing to push ${#placeholders[@]} unfilled placeholder(s) from $ENV_FILE:" >&2
+  printf '  %s\n' "${placeholders[@]}" >&2
+  exit 1
+fi
+
 # Rotating a secret against a live stack is destructive: Postgres keeps the
 # password baked into its initialized data volume, and MinIO keeps its root
 # credentials, so a new value locks the running services out of their data.

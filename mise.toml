@@ -380,4 +380,8 @@ true
 
 [tasks."localserver:env"]
 description = "Generate/complete .env.localserver (HOST_IP + secrets) for the Dokploy local-server stack. Idempotent."
-run = "./.scripts/gen-localserver-env.sh"
+run = "./.scripts/gen-deploy-env.sh --stack=localserver"
+
+[tasks."production:env"]
+description = "Generate/complete .env.production (secrets) for the production stack. Needs BASE_DOMAIN=<domain> on the first run. Idempotent."
+run = "./.scripts/gen-deploy-env.sh --stack=production"

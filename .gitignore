@@ -21,8 +21,11 @@ _build/
 # Secrets / signing material — never commit
 .env
 .env*.local
-# Written by .scripts/gen-localserver-env.sh (the *.example scaffold stays tracked).
+# Filled from the *.example scaffolds, which stay tracked. Only .env*.local was
+# covered before, so a plain .env.production carried real secrets uncommitted
+# by luck alone.
 .env.localserver
+.env.production
 .env.development.local
 .env.test.local
 .env.production.local
