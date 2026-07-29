@@ -5,6 +5,11 @@
 # real local Whisper. LM Studio is reachable from ai-core for the existing
 # OpenAI-compatible seam, but chat models are not yet registered as job
 # processors for summaries or titles.
+#
+# Every browser-reachable URL is derived from HOST_IP and the port variables,
+# so the LAN address is declared once. Each derived value still accepts a
+# direct override (API_BASE_URL, CORS_ORIGINS, STORAGE_S3_ENDPOINT,
+# DATABASE_URL) when the default shape does not fit.
 name: matome-localserver
 
 services:
@@ -12,9 +17,9 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_USER: ${POSTGRES_USER:-matome}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB:-matome}
     volumes:
       - matome_localserver_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +33,7 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${STORAGE_S3_ACCESS_KEY_ID:?set STORAGE_S3_ACCESS_KEY_ID}
+      MINIO_ROOT_USER: ${STORAGE_S3_ACCESS_KEY_ID:-matome}
       MINIO_ROOT_PASSWORD: ${STORAGE_S3_SECRET_ACCESS_KEY:?set STORAGE_S3_SECRET_ACCESS_KEY}
     volumes:
       - matome_localserver_minio:/data
@@ -41,7 +46,7 @@ services:
     depends_on:
       - minio
     environment:
-      STORAGE_S3_ACCESS_KEY_ID: ${STORAGE_S3_ACCESS_KEY_ID:?set STORAGE_S3_ACCESS_KEY_ID}
+      STORAGE_S3_ACCESS_KEY_ID: ${STORAGE_S3_ACCESS_KEY_ID:-matome}
       STORAGE_S3_SECRET_ACCESS_KEY: ${STORAGE_S3_SECRET_ACCESS_KEY:?set STORAGE_S3_SECRET_ACCESS_KEY}
       STORAGE_MEDIA_BUCKET: ${STORAGE_MEDIA_BUCKET:-media}
     restart: "no"
@@ -103,10 +108,12 @@ services:
     environment:
       PHX_HTTP_IP: 0.0.0.0
       PORT: 7001
-      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      # Derived from the POSTGRES_* pair so the password is declared once.
+      # Generated secrets are hex, so no URL escaping is required.
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-matome}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-matome}}
       DATABASE_SSL: ${DATABASE_SSL:-false}
       GUARDIAN_SECRET_KEY: ${GUARDIAN_SECRET_KEY:?set GUARDIAN_SECRET_KEY}
-      CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://${HOST_IP:?set HOST_IP}:${WEB_PORT:-7000}}
       ADMIN_EMAIL_ALLOWLIST: ${ADMIN_EMAIL_ALLOWLIST:-dev@matome.test}
       ADMIN_OTP_PEPPER: ${ADMIN_OTP_PEPPER:?set ADMIN_OTP_PEPPER}
       AI_ENGINE_ENDPOINT: http://ai-core:8000/v1/jobs
@@ -114,9 +121,9 @@ services:
       AI_ENGINE_CALLBACK_SIGNING_SECRET: ${AI_ENGINE_CALLBACK_SIGNING_SECRET:?set AI_ENGINE_CALLBACK_SIGNING_SECRET}
       # The callback stays on the private Compose network.
       AI_ENGINE_CALLBACK_BASE_URL: http://core:7001
-      STORAGE_S3_ENDPOINT: ${STORAGE_S3_ENDPOINT:?set browser-reachable STORAGE_S3_ENDPOINT}
+      STORAGE_S3_ENDPOINT: ${STORAGE_S3_ENDPOINT:-http://${HOST_IP:?set HOST_IP}:${MINIO_PORT:-7021}}
       STORAGE_S3_INTERNAL_ENDPOINT: http://minio:9000
-      STORAGE_S3_ACCESS_KEY_ID: ${STORAGE_S3_ACCESS_KEY_ID:?set STORAGE_S3_ACCESS_KEY_ID}
+      STORAGE_S3_ACCESS_KEY_ID: ${STORAGE_S3_ACCESS_KEY_ID:-matome}
       STORAGE_S3_SECRET_ACCESS_KEY: ${STORAGE_S3_SECRET_ACCESS_KEY:?set STORAGE_S3_SECRET_ACCESS_KEY}
       STORAGE_S3_REGION: ${STORAGE_S3_REGION:-local}
       STORAGE_MEDIA_BUCKET: ${STORAGE_MEDIA_BUCKET:-media}
@@ -133,7 +140,7 @@ services:
       context: .
       dockerfile: apps/flutter/Dockerfile.web
       args:
-        API_BASE_URL: ${API_BASE_URL:?set browser-reachable API_BASE_URL}
+        API_BASE_URL: ${API_BASE_URL:-http://${HOST_IP:?set HOST_IP}:${CORE_PORT:-7001}}
     restart: unless-stopped
     depends_on:
       core:
