@@ -377,3 +377,7 @@ rm -rf "$RUN_DIR"
 echo '✓ environment wiped. Next `mise run up` rebuilds the containers from scratch.'
 true
 """
+
+[tasks."localserver:env"]
+description = "Generate/complete .env.localserver (HOST_IP + secrets) for the Dokploy local-server stack. Idempotent."
+run = "./.scripts/gen-localserver-env.sh"

@@ -1,4 +1,34 @@
-# Per-machine meeting-capture package tests
+# Scripts
+
+- `gen-localserver-env.sh` — fills `.env.localserver` for the Dokploy
+  local-server stack (see below).
+- `test-linux.sh` / `test-macos.sh` / `test-windows.ps1` — per-machine
+  meeting-capture package tests (see below).
+
+## Local-server deploy environment
+
+`docker-compose.localserver.yml` derives every browser-reachable URL from
+`HOST_IP`, which leaves the LAN address plus six secrets as the only manual
+input. The script generates them and never touches a value that is already
+set, so it is safe to re-run:
+
+```bash
+mise run localserver:env               # writes/completes .env.localserver
+./.scripts/gen-localserver-env.sh --print   # same, then dump it for Dokploy
+```
+
+`--print` sends progress to stderr and the file to stdout, so the dump pipes
+cleanly. The generated file holds real secrets: it is `chmod 600`, gitignored,
+and belongs in the Dokploy environment panel, not in a commit.
+
+Detection uses `ip route get`, which resolves to this machine's LAN address —
+override it when generating for a different host:
+
+```bash
+HOST_IP=192.168.1.50 ./.scripts/gen-localserver-env.sh
+```
+
+## Per-machine meeting-capture package tests
 
 The meeting-capture feature is a federated Flutter plugin split by OS so per-OS
 native code never enters foreign bundles:
