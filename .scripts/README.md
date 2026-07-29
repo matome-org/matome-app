@@ -57,7 +57,13 @@ ones. Run it only when the environment changes — code still ships by pushing t
 
 It ends with `compose.deploy` rather than a redeploy because `API_BASE_URL` is
 a build arg for the Flutter web bundle: reusing the image would keep serving
-the old address. `--no-deploy` defers that.
+the old address. `--no-deploy` defers that, and `--deploy-only` triggers the
+rebuild on its own — which is how a run that stopped after storing the
+environment is resumed.
+
+Note that a LAN-only Dokploy cannot receive GitHub webhooks, so `autoDeploy`
+never fires there: pushing to `development` updates the branch, and the deploy
+that picks it up is the one this script triggers.
 
 ## Per-machine meeting-capture package tests
 

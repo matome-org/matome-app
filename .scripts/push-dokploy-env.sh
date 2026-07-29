@@ -17,6 +17,7 @@ ENV_FILE="${ENV_FILE:-$ROOT/.env.localserver}"
 DRY_RUN=0
 PULL=0
 DEPLOY=1
+DEPLOY_ONLY=0
 ROTATE=0
 PRUNE_LIST=""
 
@@ -32,6 +33,7 @@ for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --pull) PULL=1 ;;
+    --deploy-only) DEPLOY_ONLY=1 ;;
     --no-deploy) DEPLOY=0 ;;
     --rotate-secrets) ROTATE=1 ;;
     --prune-derived) PRUNE_LIST="${PRUNE_LIST:+$PRUNE_LIST,}$DERIVED_KEYS" ;;
@@ -70,6 +72,14 @@ remote_env() {
   api_get "compose.one?composeId=$DOKPLOY_COMPOSE_ID" | jq -r '.env // ""'
 }
 
+# Dokploy stores the field with its own trailing whitespace, so the readback
+# check compares content rather than bytes.
+normalize() {
+  awk '{ sub(/[ \t]+$/, ""); lines[NR] = $0 }
+       END { last = NR; while (last > 0 && lines[last] == "") last--
+             for (i = 1; i <= last; i++) print lines[i] }'
+}
+
 # Anything credential-shaped is never printed and never overwritten silently.
 is_secret() {
   case "$1" in
@@ -77,6 +87,22 @@ is_secret() {
     *) return 1 ;;
   esac
 }
+
+# API_BASE_URL is a build arg for the Flutter web bundle, so a redeploy of the
+# existing image would keep serving the old address. Always rebuild.
+deploy() {
+  echo "→ compose.deploy (rebuild)"
+  jq -n --arg id "$DOKPLOY_COMPOSE_ID" '{composeId: $id}' |
+    api_post compose.deploy > /dev/null
+  echo "✓ deploy triggered — follow it in the Dokploy dashboard"
+}
+
+# Useful when the environment is already in place and only the rebuild is
+# pending, which is also how a failed run is resumed.
+if [ "$DEPLOY_ONLY" -eq 1 ]; then
+  deploy
+  exit 0
+fi
 
 REMOTE="$(remote_env)"
 
@@ -197,7 +223,7 @@ echo "→ compose.update"
 jq -n --arg id "$DOKPLOY_COMPOSE_ID" --arg env "$MERGED" '{composeId: $id, env: $env}' |
   api_post compose.update > /dev/null
 
-if [ "$(remote_env)" != "$MERGED" ]; then
+if [ "$(remote_env | normalize)" != "$(printf '%s' "$MERGED" | normalize)" ]; then
   echo "compose.update did not persist the expected environment" >&2
   exit 1
 fi
@@ -208,9 +234,4 @@ if [ "$DEPLOY" -eq 0 ]; then
   exit 0
 fi
 
-# API_BASE_URL is a build arg for the Flutter web bundle, so a redeploy of the
-# existing image would keep serving the old address. Always rebuild.
-echo "→ compose.deploy (rebuild)"
-jq -n --arg id "$DOKPLOY_COMPOSE_ID" '{composeId: $id}' |
-  api_post compose.deploy > /dev/null
-echo "✓ deploy triggered — follow it in the Dokploy dashboard"
+deploy
