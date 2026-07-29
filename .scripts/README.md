@@ -2,6 +2,7 @@
 
 - `gen-localserver-env.sh` — fills `.env.localserver` for the Dokploy
   local-server stack (see below).
+- `push-dokploy-env.sh` — pushes that environment into Dokploy (see below).
 - `test-linux.sh` / `test-macos.sh` / `test-windows.ps1` — per-machine
   meeting-capture package tests (see below).
 
@@ -27,6 +28,36 @@ override it when generating for a different host:
 ```bash
 HOST_IP=192.168.1.50 ./.scripts/gen-localserver-env.sh
 ```
+
+## Pushing the environment to Dokploy
+
+Dokploy stores the environment in its own database, so `git push` rebuilds the
+code and leaves the variables untouched. `push-dokploy-env.sh` closes that gap.
+Copy `.env.dokploy.example` to `.env.dokploy.local` and fill in the URL, API
+token and compose id first.
+
+```bash
+./.scripts/push-dokploy-env.sh --pull      # seed .env.localserver from Dokploy
+mise run localserver:env                   # fill whatever is still missing
+./.scripts/push-dokploy-env.sh --dry-run   # review the diff
+./.scripts/push-dokploy-env.sh             # update, then rebuild
+```
+
+`--pull` first is what keeps an already-running stack safe: Postgres and MinIO
+were initialized with the secrets currently in Dokploy, so generating fresh
+ones locally and pushing them would lock the services out of their own volumes.
+The script refuses to change a secret that is already set unless
+`--rotate-secrets` says so explicitly.
+
+`compose.update` replaces the whole environment field, so the script merges:
+remote-only keys are carried over, local keys win, and `--prune=KEY` (or
+`--prune-derived` for the four values `HOST_IP` now derives) removes stale
+ones. Run it only when the environment changes — code still ships by pushing to
+`development`.
+
+It ends with `compose.deploy` rather than a redeploy because `API_BASE_URL` is
+a build arg for the Flutter web bundle: reusing the image would keep serving
+the old address. `--no-deploy` defers that.
 
 ## Per-machine meeting-capture package tests
 
