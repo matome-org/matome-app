@@ -1,86 +1,15 @@
-# Dependencies
-node_modules/
-npm-debug.log*
-
-# Testing / coverage
-coverage/
-*.lcov
-.nyc_output
-
-# Build output (Flutter build/, Elixir _build/, bundles)
 build/
-dist/
-_build/
-*.tsbuildinfo
+build-wasm/
+build-android/
+build-tests/
+*.o
+*.a
+*.gcda
+*.gcno
+*.gcov
+moc_*.cpp
+Makefile
+.qmake.stash
 
-# Misc
-.DS_Store
-*.log
-*.orig.*
-
-# Secrets / signing material — never commit
-.env
-.env*.local
-# Filled from the *.example scaffolds, which stay tracked. Only .env*.local was
-# covered before, so a plain .env.production carried real secrets uncommitted
-# by luck alone.
-.env.localserver
-.env.production
-.env.development.local
-.env.test.local
-.env.production.local
-*.pem
-*.key
-*.p12
-*.jks
-*.keystore
-*.p8
-*.mobileprovision
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.project
-.classpath
-.settings/
-*.sublime-workspace
-*.sublime-project
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Desktop.ini
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
-
-# Workflow artifacts
-workflow/requirements/*
-!workflow/requirements/.gitkeep
-workflow/plans/*
-!workflow/plans/.gitkeep
-workflow/summaries/*
-!workflow/summaries/.gitkeep
-
-# Claude Code runtime/cache
-.claude/worktrees/
-.claude/.cache/
-.claude/settings.local.json
-
-figma-mcp.config.local.json
-
-# Local dev stack runtime (pidfiles + logs from `mise run up`)
-.dev/
-
-
-.temp/
+aqtinstall.log
+__pycache__/

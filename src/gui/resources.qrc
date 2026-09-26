@@ -1,0 +1,47 @@
+<RCC>
+    <qresource prefix="/">
+        <file>fonts/CormorantGaramond-Light.ttf</file>
+        <file>fonts/Inter-Medium.ttf</file>
+        <file>fonts/Inter-Regular.ttf</file>
+        <file>fonts/Newsreader-Light.ttf</file>
+        <file>fonts/Newsreader-LightItalic.ttf</file>
+        <file>fonts/Newsreader-Regular.ttf</file>
+        <file>fonts/NotoSansJP-Regular.ttf</file>
+        <file>fonts/NotoSerifJP-Light.ttf</file>
+        <file>icons/matome.svg</file>
+        <file>qml/Main.qml</file>
+        <file>qml/chrome/ActionButton.qml</file>
+        <file>qml/chrome/Caption.qml</file>
+        <file>qml/chrome/CommandButton.qml</file>
+        <file>qml/chrome/CommandRow.qml</file>
+        <file>qml/chrome/Commands.js</file>
+        <file>qml/chrome/Confirm.qml</file>
+        <file>qml/chrome/CommandSheet.qml</file>
+        <file>qml/chrome/ContextMenu.qml</file>
+        <file>qml/chrome/CursorList.qml</file>
+        <file>qml/chrome/Ease.qml</file>
+        <file>qml/chrome/EmptyState.qml</file>
+        <file>qml/chrome/EntryRow.qml</file>
+        <file>qml/chrome/Field.qml</file>
+        <file>qml/chrome/FocusableControl.qml</file>
+        <file>qml/chrome/Icon.qml</file>
+        <file>qml/chrome/KeyChip.qml</file>
+        <file>qml/chrome/Keymap.qml</file>
+        <file>qml/chrome/Logo.qml</file>
+        <file>qml/chrome/Messages.js</file>
+        <file>qml/chrome/Overlay.qml</file>
+        <file>qml/chrome/RowDropArea.qml</file>
+        <file>qml/chrome/Tap.qml</file>
+        <file>qml/chrome/TextLink.qml</file>
+        <file>qml/chrome/ThinScrollBar.qml</file>
+        <file>qml/explorer/EntryList.qml</file>
+        <file>qml/explorer/Explorer.qml</file>
+        <file>qml/explorer/LocationHeader.qml</file>
+        <file>qml/explorer/Sidebar.qml</file>
+        <file>qml/explorer/SidebarSection.qml</file>
+        <file>qml/explorer/StatusBar.qml</file>
+        <file>qml/explorer/Toolbar.qml</file>
+        <file>qml/explorer/TopBar.qml</file>
+        <file>qml/screens/Auth.qml</file>
+    </qresource>
+</RCC>
