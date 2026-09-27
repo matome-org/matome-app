@@ -7,4 +7,5 @@ automation_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [[ "$tag" == v0.1.0 ]]; then
   cp "$automation_dir/src/gui/gui.pro" "$source_dir/src/gui/gui.pro"
+  cp "$automation_dir/src/gui/i18n/i18n.pri" "$source_dir/src/gui/i18n/i18n.pri"
 fi
