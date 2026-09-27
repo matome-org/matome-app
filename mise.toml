@@ -1,7 +1,6 @@
 [tools]
 usage = "6.6.0"
 "npm:playwright" = "1.63.0"
-"npm:release-please" = "17.11.1"
 "github:NixOS/patchelf" = "0.19.1"
 
 [tasks.deps]
@@ -67,14 +66,6 @@ run = "scripts/install-hooks.sh"
 [tasks."release:publish"]
 description = "Dispatches GitHub package builds for an existing release tag"
 run = "scripts/release-publish.sh"
-
-[tasks."release:pr"]
-description = "Creates or updates the Release Please pull request locally"
-run = "scripts/release-pr.sh"
-
-[tasks."release:finalize"]
-description = "Creates the GitHub tag and release after merging the release PR"
-run = "scripts/release-finalize.sh"
 
 [tasks.wasm]
 description = "Builds the WebAssembly studio"

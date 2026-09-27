@@ -1,8 +1,10 @@
 # Releasing matome-app
 
-Commits use Conventional Commits. Release Please runs locally and opens a
-release PR that updates `version.txt` and `CHANGELOG.md`. The local check runs
-on a developer machine. GitHub Actions builds release packages only.
+Commits use Conventional Commits. A push to `master` runs Release Please on
+GitHub and opens or updates the release PR with `version.txt` and
+`CHANGELOG.md`. Merging that PR creates the tag and GitHub Release, then
+dispatches the package workflow. The local check still runs on a developer
+machine.
 
 Install the versioned pre-push hook once per checkout:
 
@@ -17,22 +19,16 @@ its branch and run `mise run local-check` before merging it.
 The public repository requires the `local-check` status on `master`. Run the
 versioned pre-push hook for every commit, including release PR branches.
 
-Create or update the release PR from a clean, current `master`:
+Release Please uses the repository's GitHub Actions token. In Settings →
+Actions → General, enable **Allow GitHub Actions to create and approve pull
+requests**. The workflow grants write access only to the GitHub permissions
+needed to open release PRs, create releases, and dispatch package builds.
+The release PR must pass `local-check` before it can be merged.
 
-```bash
-mise run release:pr
-```
+The workflow can also be started manually from the Actions tab to catch up
+after installation or an interrupted run.
 
-After checking and merging that PR, update `master` and create the tag and
-GitHub Release. Publishing the release starts the GitHub package workflow:
-
-```bash
-git pull --ff-only
-mise run release:finalize
-```
-
-To rebuild packages for a release tagged after the package workflow was added,
-dispatch the same workflow:
+To rebuild packages for an existing release, dispatch the same workflow:
 
 ```bash
 mise run release:publish -- vX.Y.Z
