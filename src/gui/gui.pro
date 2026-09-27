@@ -4,6 +4,7 @@ include($$PWD/../../qmake/layout.pri)
 
 QT       += core gui qml quick network
 CONFIG   += c++17 qmltypes
+win32: CONFIG -= debug_and_release build_all
 !macx: CONFIG -= app_bundle
 
 QML_IMPORT_NAME = matome
