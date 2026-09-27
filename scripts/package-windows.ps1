@@ -17,8 +17,12 @@ Push-Location $buildDir
 try {
     & qmake (Join-Path $SourceDir 'matome.pro') 'CONFIG+=release'
     if ($LASTEXITCODE -ne 0) { throw 'qmake failed' }
+    New-Item -ItemType Directory -Force (Join-Path $buildDir 'src/gui/.qm') | Out-Null
     & nmake
-    if ($LASTEXITCODE -ne 0) { throw 'nmake failed' }
+    if ($LASTEXITCODE -ne 0) {
+        Get-ChildItem (Join-Path $buildDir 'src/gui/.qm') | Select-Object -ExpandProperty Name
+        throw 'nmake failed'
+    }
 } finally {
     Pop-Location
 }
