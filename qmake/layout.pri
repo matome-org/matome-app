@@ -14,3 +14,10 @@ OBJECTS_DIR = $$OUT_PWD/.qmake/obj
 MOC_DIR = $$OUT_PWD/.qmake/moc
 RCC_DIR = $$OUT_PWD/.qmake/rcc
 UI_DIR = $$OUT_PWD/.qmake/ui
+
+win32 {
+    OBJECTS_DIR = .qmake/obj
+    MOC_DIR = .qmake/moc
+    RCC_DIR = .qmake/rcc
+    UI_DIR = .qmake/ui
+}
