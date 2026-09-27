@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, user-scalable=0">
+    <title>Matome</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-12 -12 124 124'%3E %3Crect x='-12' y='-12' width='124' height='124' rx='22' fill='%231A1714'/%3E %3Cpath d='M2.5,94 V2.5 H97.5 V97.5 H35' fill='none' stroke='%23F4F1E9' stroke-width='7'/%3E %3Cpath d='M35,37.8 H64 L50.5,53 M41.5,47.8 L57,62.5' fill='none' stroke='%23F4F1E9' stroke-width='5'/%3E %3Cpath d='M0,94 L11.5,86 C19,90 27,93.5 35,95 L35,100 L0,100 Z' fill='%23E1B346'/%3E %3C/svg%3E">
+    <style>
+      /* The studio's own Cormorant Garamond (src/gui/fonts, OFL), served next
+         to this page: the splash names the brand without another host. */
+      @font-face {
+        font-family: "Cormorant Garamond";
+        font-weight: 300;
+        font-display: swap;
+        src: url("CormorantGaramond-Light.ttf") format("truetype");
+      }
+      :root {
+        --gold: #e1b346;
+        --gold-deep: #b98a1f;
+        --ease: cubic-bezier(0.2, 0.7, 0.1, 1);
+      }
+      html, body {
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        height: 100%;
+        background: #F6F4EF;
+        color: #221E16;
+      }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #1A1714; color: #F4F1E9; }
+      }
+      /* Qt reads this box at startup. display:none makes a 0x0 screen, then a
+         black canvas until a pointer event. Keep it laid out; cover it. */
+      #screen {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      #qtspinner {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #F6F4EF;
+      }
+      @media (prefers-color-scheme: dark) {
+        #qtspinner { background: #1A1714; }
+      }
+      .hero {
+        text-align: center;
+        padding: 1.5rem;
+      }
+      .brand {
+        width: clamp(120px, 24vmin, 240px);
+        aspect-ratio: 1;
+        margin: 0 auto clamp(2rem, 5vh, 3.25rem);
+      }
+      .brand svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .brand__frame,
+      .brand__ma {
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: butt;
+        stroke-linejoin: miter;
+        stroke-dasharray: 1 1;
+        stroke-dashoffset: 1;
+      }
+      .brand__frame {
+        stroke-width: 5;
+        animation: write 0.9s cubic-bezier(0.65, 0, 0.35, 1) 0.2s forwards;
+      }
+      .brand__ma { stroke-width: 3.2; }
+      .brand__ma--1 {
+        animation: write 0.5s cubic-bezier(0.5, 0, 0.3, 1) 1.1s forwards;
+      }
+      .brand__ma--2 {
+        animation: write 0.3s cubic-bezier(0.5, 0, 0.3, 1) 1.7s forwards;
+      }
+      .brand__fold {
+        fill: var(--gold);
+        transform-box: view-box;
+        transform-origin: 0 100px;
+        transform: scale(0);
+        animation: fold 0.55s cubic-bezier(0.3, 1.4, 0.5, 1) 2.05s forwards;
+      }
+      @media (prefers-color-scheme: light) {
+        .brand__fold { fill: var(--gold-deep); }
+      }
+      .name {
+        margin: 0;
+        opacity: 0;
+        font: 300 clamp(3rem, 9vw, 5.5rem) / 1 "Cormorant Garamond", Georgia, serif;
+        letter-spacing: 0.02em;
+        animation: name-in 0.6s var(--ease) 1.6s forwards;
+      }
+      .load {
+        width: min(240px, 56vw);
+        height: 2px;
+        margin: 2rem auto 0;
+        background: color-mix(in srgb, currentColor 12%, transparent);
+        opacity: 0;
+        overflow: hidden;
+        transition: opacity 0.4s var(--ease);
+      }
+      .load.is-on { opacity: 1; }
+      .load i {
+        display: block;
+        height: 100%;
+        width: 40%;
+        background: var(--gold);
+        animation: load-slide 1.1s var(--ease) infinite;
+      }
+      @media (prefers-color-scheme: light) {
+        .load i { background: var(--gold-deep); }
+      }
+      @keyframes write {
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes fold {
+        to { transform: none; }
+      }
+      @keyframes name-in {
+        to { opacity: 1; }
+      }
+      @keyframes load-slide {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(350%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .brand__frame, .brand__ma, .brand__fold, .name, .load i { animation: none; }
+        .brand__frame, .brand__ma { stroke-dashoffset: 0; }
+        .brand__fold { transform: none; }
+        .name { opacity: 1; }
+        .load i { width: 100%; }
+      }
+    </style>
+  </head>
+  <body onload="init()">
+    <div id="qtspinner">
+      <div class="hero">
+        <div class="brand" aria-hidden="true">
+          <svg viewBox="0 0 100 100">
+            <path class="brand__frame" d="M2.5,94 V2.5 H97.5 V97.5 H35" pathLength="1" />
+            <path class="brand__ma brand__ma--1" d="M35,37.8 H64 L50.5,53" pathLength="1" />
+            <path class="brand__ma brand__ma--2" d="M41.5,47.8 L57,62.5" pathLength="1" />
+            <path class="brand__fold" d="M0,94 L11.5,86 C19,90 27,93.5 35,95 L35,100 L0,100 Z" />
+          </svg>
+        </div>
+        <p class="name">Matome</p>
+        <div class="load" id="load"><i></i></div>
+        <noscript>JavaScript is required.</noscript>
+      </div>
+    </div>
+    <div id="screen"></div>
+    <script>
+      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const fold = document.querySelector(".brand__fold");
+      const load = document.querySelector("#load");
+      const spinner = document.querySelector("#qtspinner");
+      const screen = document.querySelector("#screen");
+      // A press would move the page's focus off Qt's input to <body>, and Qt
+      // puts it back only when its own focus item changes: a click on the
+      // item that already has focus would leave the keyboard nowhere. Qt
+      // manages focus inside the canvas itself.
+      screen.addEventListener("mousedown", (event) => event.preventDefault());
+      const animationDone = reduceMotion
+        ? Promise.resolve()
+        : new Promise((resolve) => {
+            const done = () => resolve();
+            fold.addEventListener("animationend", done, { once: true });
+            setTimeout(done, 2700);
+          });
+      animationDone.then(() => load.classList.add("is-on"));
+
+      function revealStudio() {
+        spinner.style.display = "none";
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new Event("resize"));
+        });
+      }
+
+      async function init() {
+        try {
+          await qtLoad({
+            qt: {
+              onLoaded: () => animationDone.then(revealStudio),
+              onExit: () => { spinner.style.display = "flex"; },
+              entryFunction: window.matome_studio_entry,
+              containerElements: [screen],
+            }
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    </script>
+    <script src="matome-studio.js"></script>
+    <script src="qtloader.js"></script>
+  </body>
+</html>

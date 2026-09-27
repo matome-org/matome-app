@@ -1,0 +1,100 @@
+[tools]
+usage = "6.6.0"
+"npm:playwright" = "1.63.0"
+"npm:release-please" = "17.11.1"
+
+[tasks.deps]
+description = "Checks the system Qt/qmake toolchain"
+run = ".scripts/deps.sh"
+
+[tasks.build]
+description = "Builds matome-studio"
+run = ".scripts/build.sh"
+
+[tasks.studio]
+description = "Builds and opens the studio window"
+run = ".scripts/studio.sh"
+
+[tasks.lint]
+description = "Lints the QML with every warning fatal"
+run = ".scripts/qml-check.sh"
+
+[tasks."first-login"]
+description = "Ensures the local Core bootstrap user and the matome organization"
+run = ".scripts/first-login.sh"
+
+[tasks.i18n]
+description = "Refreshes the pt-BR and ja translation sources from C++ and QML"
+run = ".scripts/i18n.sh"
+
+[tasks.test]
+description = "Runs unit tests, desktop studio e2e, and the coverage gate"
+run = ".scripts/test.sh"
+
+[tasks."test:desktop"]
+description = "Offscreen QML window against FakeCore, then the real binary smoke"
+run = ".scripts/e2e-desktop.sh"
+
+[tasks.fakecore]
+description = "Runs FakeCore, the e2e backend, on :7011 (control API under /__e2e/)"
+run = ".scripts/fakecore.sh"
+
+[tasks."test:web"]
+description = "Chromium desktop 1280×800 and Pixel 7 touch against the e2e WASM studio and FakeCore"
+run = ".scripts/e2e.sh"
+
+[tasks."test:mobile"]
+description = "Native APK on Pixel_7_API_34: every Android scenario against its own FakeCore"
+run = ".scripts/e2e-android.sh"
+
+[tasks."test:e2e"]
+description = "Desktop, web WASM, and Android APK e2e"
+run = ".scripts/e2e-desktop.sh && .scripts/e2e.sh && .scripts/e2e-android.sh"
+
+[tasks.verify]
+description = "Lints QML, checks every string is translated, then runs the tests"
+run = "scripts/verify.sh"
+
+[tasks."local-check"]
+description = "Runs the local gate on HEAD and posts the local-check status"
+run = "scripts/local-check.sh"
+
+[tasks."hooks:install"]
+description = "Installs the versioned pre-push hook that runs the local gate"
+run = "scripts/install-hooks.sh"
+
+[tasks."release:publish"]
+description = "Builds web, Linux desktop, and emulator APK assets from a release tag"
+run = "scripts/release-publish.sh"
+
+[tasks."release:pr"]
+description = "Creates or updates the Release Please pull request locally"
+run = "scripts/release-pr.sh"
+
+[tasks."release:finalize"]
+description = "Creates the GitHub tag and release after merging the release PR"
+run = "scripts/release-finalize.sh"
+
+[tasks.wasm]
+description = "Builds the WebAssembly studio"
+run = ".scripts/wasm-build.sh"
+
+[tasks."wasm:serve"]
+description = "Serves the WASM studio on :7002 and proxies Core on :7001"
+run = ".scripts/wasm-serve.sh"
+
+[tasks."android:deps"]
+description = "Checks the Android APK toolchain"
+run = ".scripts/android-deps.sh"
+
+[tasks.android]
+description = "Builds the native x86_64 APK for the emulator"
+run = ".scripts/android-build.sh"
+
+[tasks."android:install"]
+description = "Installs the APK on a running emulator and launches it"
+run = ".scripts/android-install.sh"
+
+[tasks."android:emulator"]
+description = "Boots Pixel_7_API_34 with host GPU (needed for Qt Quick fills)"
+run = ".scripts/android-emulator.sh"
