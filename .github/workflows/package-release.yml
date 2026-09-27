@@ -1,0 +1,236 @@
+name: Package release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to package
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          path: automation
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          path: source
+      - name: Prepare tagged source
+        run: bash automation/scripts/prepare-release-source.sh "$GITHUB_WORKSPACE/source" "$TAG"
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.2
+          arch: clang_64
+          modules: qtshadertools qtimageformats
+      - name: Package macOS
+        shell: bash
+        run: bash automation/scripts/package-macos.sh "$GITHUB_WORKSPACE/source" "$TAG" "$GITHUB_WORKSPACE/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-macos
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          path: automation
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          path: source
+      - name: Prepare tagged source
+        shell: bash
+        run: bash automation/scripts/prepare-release-source.sh "$GITHUB_WORKSPACE/source" "$TAG"
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.2
+          arch: win64_msvc2022_64
+          modules: qtshadertools qtimageformats
+      - name: Package Windows
+        shell: pwsh
+        run: ./automation/scripts/package-windows.ps1 -SourceDir "$env:GITHUB_WORKSPACE/source" -Tag "$env:TAG" -DistDir "$env:GITHUB_WORKSPACE/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-windows
+          path: dist/*
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          path: automation
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          path: source
+      - name: Prepare tagged source
+        run: bash automation/scripts/prepare-release-source.sh "$GITHUB_WORKSPACE/source" "$TAG"
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.2
+          arch: linux_gcc_64
+          modules: qtshadertools qtimageformats
+      - name: Install package tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin libfuse2 libgl1-mesa-dev
+          mkdir -p "$RUNNER_TEMP/tools"
+          gh release download 1-alpha-20251107-1 --repo linuxdeploy/linuxdeploy --pattern linuxdeploy-x86_64.AppImage --dir "$RUNNER_TEMP/tools"
+          gh release download 1-alpha-20250213-1 --repo linuxdeploy/linuxdeploy-plugin-qt --pattern linuxdeploy-plugin-qt-x86_64.AppImage --dir "$RUNNER_TEMP/tools"
+          chmod +x "$RUNNER_TEMP/tools/"*.AppImage
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Package Linux
+        env:
+          LINUXDEPLOY: ${{ runner.temp }}/tools/linuxdeploy-x86_64.AppImage
+        run: bash automation/scripts/package-linux.sh "$GITHUB_WORKSPACE/source" "$TAG" "$GITHUB_WORKSPACE/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-linux
+          path: dist/*
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          path: automation
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          path: source
+      - name: Prepare tagged source
+        run: bash automation/scripts/prepare-release-source.sh "$GITHUB_WORKSPACE/source" "$TAG"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
+        run: |
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" >> "$GITHUB_ENV"
+          sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
+          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.2
+          arch: linux_gcc_64
+          modules: qtshadertools qtimageformats
+      - name: Remember host Qt
+        run: echo "MATOME_QT_HOST=$QT_ROOT_DIR" >> "$GITHUB_ENV"
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.2
+          target: android
+          arch: android_arm64_v8a
+          modules: qtshadertools qtimageformats
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.MATOME_ANDROID_KEYSTORE_B64 }}
+        run: |
+          test -n "$KEYSTORE_B64"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/matome-upload.jks"
+          chmod 600 "$RUNNER_TEMP/matome-upload.jks"
+          echo "QT_ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/matome-upload.jks" >> "$GITHUB_ENV"
+      - name: Package signed Android APK
+        env:
+          QT_ANDROID_KEYSTORE_ALIAS: matome-upload
+          QT_ANDROID_KEYSTORE_STORE_PASS: ${{ secrets.MATOME_ANDROID_KEYSTORE_PASSWORD }}
+          QT_ANDROID_KEYSTORE_KEY_PASS: ${{ secrets.MATOME_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          export QT_ANDROID="$QT_ROOT_DIR"
+          export QT_HOST="$MATOME_QT_HOST"
+          bash automation/scripts/package-android.sh "$GITHUB_WORKSPACE/source" "$TAG" "$GITHUB_WORKSPACE/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-android
+          path: dist/*
+          if-no-files-found: error
+
+  web:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          path: automation
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          path: source
+      - uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: 4.0.7
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.2
+          host: all_os
+          target: wasm
+          arch: wasm_singlethread
+          modules: qtshadertools qtimageformats
+      - name: Package web
+        run: |
+          export QT_WASM="$QT_ROOT_DIR"
+          export QT_HOST="${QT_HOST_PATH:-$(dirname "$QT_ROOT_DIR")/gcc_64}"
+          export EMSDK="$(cd "$(dirname "$(command -v emcc)")/../.." && pwd)"
+          if test -f "$QT_WASM/bin/target_qt.conf"; then
+            sed -i 's/^HostSpec=.*/HostSpec=linux-g++/' "$QT_WASM/bin/target_qt.conf"
+          fi
+          bash source/.scripts/wasm-build.sh "$RUNNER_TEMP/matome-web-build"
+          mkdir -p dist
+          tar --dereference -czf "dist/matome-web-$TAG.tar.gz" \
+            -C "$RUNNER_TEMP/matome-web-build/bin" . \
+            -C "$GITHUB_WORKSPACE/source" LICENSE src/gui/fonts/OFL-*.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-web
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, windows, linux, android, web]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          path: automation
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+      - name: Upload packages and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash automation/scripts/upload-release-assets.sh "$TAG" "$GITHUB_WORKSPACE/dist"
