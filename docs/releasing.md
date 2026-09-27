@@ -31,7 +31,8 @@ git pull --ff-only
 mise run release:finalize
 ```
 
-To rebuild packages for an existing release, dispatch the same workflow:
+To rebuild packages for a release tagged after the package workflow was added,
+dispatch the same workflow:
 
 ```bash
 mise run release:publish -- vX.Y.Z
@@ -45,4 +46,6 @@ Base64 encoding of the PKCS12 keystore; the second is its store and key
 password. The key alias is `matome-upload`. Keep an offline backup of both:
 future Android versions must use the same signing key. The macOS and Windows
 packages are currently unsigned. Add Developer ID notarization and Windows
-code signing after MATOME obtains those credentials.
+code signing after MATOME obtains those credentials. The Windows runner uses
+Qt 6.10.3 because the current `aqtinstall` cannot resolve Qt 6.11.2's changed
+Windows repository layout.
