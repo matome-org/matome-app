@@ -40,10 +40,13 @@ mise run release:publish -- vX.Y.Z
 
 The workflow checks out the release tag and attaches a web tarball, a macOS
 DMG, a Windows installer EXE, a Linux AppImage, a signed Android arm64 APK,
-and `SHA256SUMS`. It needs the `MATOME_ANDROID_KEYSTORE_B64` and
-`MATOME_ANDROID_KEYSTORE_PASSWORD` repository secrets. The first contains the
-Base64 encoding of the PKCS12 keystore; the second is its store and key
-password. The key alias is `matome-upload`. Keep an offline backup of both:
+and `SHA256SUMS`. Each package is uploaded with its versioned name and an
+unversioned name for stable `/releases/latest/download/` links in the README.
+The checksums file includes both names. It needs the
+`MATOME_ANDROID_KEYSTORE_B64` and `MATOME_ANDROID_KEYSTORE_PASSWORD` repository
+secrets. The first contains the Base64 encoding of the PKCS12 keystore; the
+second is its store and key password. The key alias is `matome-upload`. Keep an
+offline backup of both:
 future Android versions must use the same signing key. The macOS and Windows
 packages are currently unsigned. Add Developer ID notarization and Windows
 code signing after MATOME obtains those credentials. The Windows runner uses

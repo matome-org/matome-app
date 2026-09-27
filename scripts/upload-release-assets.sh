@@ -6,13 +6,17 @@ dist_dir="${2:?package directory required}"
 repo="${GITHUB_REPOSITORY:?GitHub repository required}"
 cd "$dist_dir"
 
-for pattern in \
-  "matome-web-$tag.tar.gz" \
-  "matome-macos-universal-$tag.dmg" \
-  "matome-windows-x86_64-$tag.exe" \
-  "matome-linux-x86_64-$tag.AppImage" \
-  "matome-android-arm64-$tag.apk"; do
-  test -s "$pattern" || { echo "upload-release-assets: missing $pattern" >&2; exit 1; }
+for asset in \
+  "matome-web-$tag.tar.gz:matome-web.tar.gz" \
+  "matome-macos-universal-$tag.dmg:matome-macos-universal.dmg" \
+  "matome-windows-x86_64-$tag.exe:matome-windows-x86_64.exe" \
+  "matome-linux-x86_64-$tag.AppImage:matome-linux-x86_64.AppImage" \
+  "matome-android-arm64-$tag.apk:matome-android-arm64.apk"; do
+  versioned="${asset%%:*}"
+  stable="${asset#*:}"
+  test -s "$versioned" || { echo "upload-release-assets: missing $versioned" >&2; exit 1; }
+  rm -f "$stable"
+  ln "$versioned" "$stable"
 done
 
 sha256sum matome-* > SHA256SUMS
