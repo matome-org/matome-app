@@ -153,7 +153,7 @@ Good: `feat(filter): add priority option` then
 - The local gate is `mise run verify`: QML lint, translation completeness,
   core and studio tests, and the coverage threshold. Web and Android e2e
   have separate mise tasks.
-- Release Please runs locally through mise. GitHub Actions packages web,
-  macOS, Windows, Linux, and signed Android assets for GitHub Releases.
+- GitHub Actions runs Release Please on master, then packages web, macOS,
+  Windows, Linux, and signed Android assets for GitHub Releases.
 - `README.md` presents the client and its downloads. Build, test, and
   release instructions live in `docs/`.
