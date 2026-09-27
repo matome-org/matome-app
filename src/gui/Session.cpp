@@ -1,4 +1,5 @@
 #include "Session.h"
+#include "MatomeBuildConfig.h"
 
 #include "JsonList.h"
 
@@ -556,13 +557,7 @@ void Session::listPage(const QString &path, const QString &cursor, const QString
 
 QString Session::defaultApiBaseUrl()
 {
-#ifdef Q_OS_ANDROID
-    return QStringLiteral("http://10.0.2.2:7001");
-#elif defined(Q_OS_WASM)
-    return QStringLiteral("http://localhost:7002");
-#else
-    return QStringLiteral("http://localhost:7001");
-#endif
+    return QStringLiteral(MATOME_DEFAULT_SERVER);
 }
 
 bool Session::bindOrigin(const QString &apiBaseUrl)

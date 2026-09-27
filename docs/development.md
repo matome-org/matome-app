@@ -11,6 +11,14 @@ mise run studio
 
 The desktop binary is `build/bin/matome-studio`.
 
+The sign-in server default comes from `default_server` in the root
+`app.toml`. Change that file before building a new package; the value is
+compiled into desktop, web, and Android artifacts. A saved server choice in
+the client takes precedence over the compiled default. Add a
+`[platform.android]`, `[platform.web]`, `[platform.linux]`,
+`[platform.macos]`, or `[platform.windows]` table with its own
+`default_server` to override the root value for one target.
+
 ## Local account
 
 Core does not seed a user. With its API on `http://localhost:7001`, run:
@@ -62,9 +70,8 @@ included in the APK under `assets/licenses/openssl.txt`.
 
 `android:install` needs a running `Pixel_7_API_34` AVD. Start it with
 `mise run android:emulator`, which uses `-gpu host`; SwiftShader paints
-Qt Quick rectangles as one triangle. The sign-in URL defaults to
-`http://10.0.2.2:7001`, the host's Core as seen from the emulator. Core
-must be running on the host.
+Qt Quick rectangles as one triangle. The sign-in URL defaults to the value
+in `app.toml`; the server field can be changed for a local Core.
 
 See [testing](testing.md) for the local checks and [releasing](releasing.md)
 for the publication process.

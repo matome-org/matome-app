@@ -457,8 +457,8 @@ void TestCore::rejectsEmptyCredentials()
     session.requestPasswordReset(QStringLiteral(""), QStringLiteral("http://127.0.0.1:1"));
     QCOMPARE(session.errorCode(), QStringLiteral("invalid_request"));
     session.setApiBaseUrl(QString());
-    QCOMPARE(session.apiBaseUrl(), QStringLiteral("http://localhost:7001"));
-    session.setApiBaseUrl(QStringLiteral("http://localhost:7001"));
+    QCOMPARE(session.apiBaseUrl(), QString::fromUtf8(qgetenv("MATOME_TEST_DEFAULT_SERVER")));
+    session.setApiBaseUrl(QString::fromUtf8(qgetenv("MATOME_TEST_DEFAULT_SERVER")));
 }
 
 void TestCore::listsOrganizationsAfterLogin()

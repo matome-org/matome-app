@@ -140,7 +140,7 @@ module.exports = (scenario) => {
 
   scenario("1.8", "the Server disclosure changes the Core address", DESKTOP, async ({ studio, stack, core }) => {
     assert.equal(await studio.shown("apiField"), false);
-    assert.equal(await studio.prop("apiField", "text"), "http://localhost:7002");
+    assert.equal(await studio.prop("apiField", "text"), process.env.MATOME_TEST_DEFAULT_SERVER);
     await studio.click("serverToggle");
     await studio.untilShown("apiField");
     await studio.press("Tab");

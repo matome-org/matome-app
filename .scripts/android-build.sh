@@ -9,6 +9,13 @@ source "$(dirname "$0")/lib.sh"
 android_env
 
 build_dir="$root/build-android"
+qmake_config=()
+if [ "${1:-}" = --test ]; then
+  test_env
+  export MATOME_TEST_BUILD=1
+  build_dir="$root/build-tests/android-app"
+  qmake_config=(CONFIG+=matome_test)
+fi
 mkdir -p "$build_dir"
 export MATOME_ANDROID_OPENSSL_DIR="$build_dir/openssl/x86_64"
 "$root/scripts/build-android-openssl.sh"
@@ -20,7 +27,7 @@ if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
 fi
 version_code=$((6 + 1000000 * 10#${BASH_REMATCH[1]} + 1000 * 10#${BASH_REMATCH[2]} + 10#${BASH_REMATCH[3]}))
 "$qt_android/bin/qmake" "$root/matome.pro" -spec android-clang CONFIG+=qtquickcompiler \
-  MATOME_ANDROID_VERSION_CODE="$version_code"
+  MATOME_ANDROID_VERSION_CODE="$version_code" "${qmake_config[@]}"
 make qmake_all
 make -j"$jobs"
 

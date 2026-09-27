@@ -5,6 +5,7 @@ set -euo pipefail
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
+test_env
 desktop_env
 run_suite core.pro tst_core core
 run_suite studio.pro tst_studio studio
