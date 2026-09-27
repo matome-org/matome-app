@@ -49,7 +49,12 @@ Window {
     // table decides what it means. Esc first closes what floats.
     FocusScope {
         id: root
+        objectName: "safeContent"
         anchors.fill: parent
+        anchors.topMargin: win.SafeArea.margins.top
+        anchors.leftMargin: win.SafeArea.margins.left
+        anchors.rightMargin: win.SafeArea.margins.right
+        anchors.bottomMargin: win.SafeArea.margins.bottom
         focus: true
 
         Keys.onPressed: function (event) {

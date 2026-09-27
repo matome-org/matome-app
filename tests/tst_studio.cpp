@@ -13,6 +13,7 @@
 #include <QMimeData>
 #include <QPointingDevice>
 #include <QQmlApplicationEngine>
+#include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSettings>
@@ -93,6 +94,7 @@ private slots:
     void folderCycleIsRefused();
     void touchOpensAndLongPressesForAMenu();
     void narrowWidthUsesADrawer();
+    void safeAreaKeepsControlsBelowSystemBars();
     void logoLinksHome();
     void locationHeaderNamesThePlace();
     void emptyStateShowsLoadingAndErrors();
@@ -1887,6 +1889,26 @@ void TestStudio::narrowWidthUsesADrawer()
     key(Qt::Key_Escape);
     QTRY_VERIFY(shown(QStringLiteral("breadcrumb")));
     QVERIFY(!m_session->currentFolderId().isEmpty());
+}
+
+void TestStudio::safeAreaKeepsControlsBelowSystemBars()
+{
+    QQmlExpression addTop(qmlContext(window()), window(),
+                          QStringLiteral("SafeArea.additionalMargins.top = 64"));
+    addTop.evaluate();
+    QVERIFY2(!addTop.hasError(), qPrintable(addTop.error().toString()));
+    QQuickItem *content = waitItem(QStringLiteral("safeContent"));
+    QVERIFY(content);
+    QTRY_COMPARE(content->y(), 64.0);
+    QTRY_COMPARE(content->height(), qreal(window()->height() - 64));
+    QQuickItem *language = waitItem(QStringLiteral("languageSwitcher"));
+    QVERIFY(language);
+    QVERIFY(language->mapToScene(QPointF()).y() >= 64);
+    QQmlExpression clearTop(qmlContext(window()), window(),
+                            QStringLiteral("SafeArea.additionalMargins.top = 0"));
+    clearTop.evaluate();
+    QVERIFY2(!clearTop.hasError(), qPrintable(clearTop.error().toString()));
+    QTRY_COMPARE(content->y(), 0.0);
 }
 
 // The マ mark is the way home: a button by key, pointer, or touch, named for
