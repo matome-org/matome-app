@@ -4,14 +4,9 @@
 <context>
     <name>Auth</name>
     <message>
-        <location filename="../qml/screens/Auth.qml" line="+27"/>
+        <location filename="../qml/screens/Auth.qml" line="+26"/>
         <source>Sending reset…</source>
         <translation>送信しています…</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Updating password…</source>
-        <translation>パスワードを更新しています…</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -25,28 +20,23 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>Confirming email…</source>
-        <translation>メールアドレスを確認しています…</translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Signing in…</source>
         <translation>サインインしています…</translation>
     </message>
     <message>
         <location line="+5"/>
-        <source>If that account exists, Core sent a reset token.</source>
-        <translation>アカウントが存在すれば、Core がリセット用のトークンを送信しました。</translation>
+        <source>If that account exists, a password reset link was sent. Open it in your browser, then sign in with your new password.</source>
+        <translation>該当するアカウントがある場合、パスワード再設定用のリンクを送信しました。ブラウザーで開き、新しいパスワードでサインインしてください。</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>A new confirmation token was sent to %1.</source>
-        <translation>新しい確認トークンを %1 に送信しました。</translation>
+        <source>A new confirmation link was sent to %1. Open it in your browser, then return to sign in.</source>
+        <translation>新しい確認リンクを%1に送信しました。ブラウザーで開き、戻ってサインインしてください。</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Enter the confirmation token sent to %1 to activate your account.</source>
-        <translation>アカウントを有効にするには、%1 に送信された確認トークンを入力してください。</translation>
+        <source>Open the confirmation link sent to %1 in your browser, then return to sign in.</source>
+        <translation>%1に送信された確認リンクをブラウザーで開き、戻ってサインインしてください。</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -64,7 +54,7 @@
         <translation>システム</translation>
     </message>
     <message>
-        <location line="+140"/>
+        <location line="+120"/>
         <source>Matome</source>
         <translation>Matome</translation>
     </message>
@@ -75,47 +65,42 @@
     </message>
     <message>
         <location line="+11"/>
-        <location line="+64"/>
-        <location line="+30"/>
+        <location line="+40"/>
+        <location line="+28"/>
         <source>Create account</source>
         <translation>アカウントを作成</translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-67"/>
         <source>Confirm your email</source>
         <translation>メールアドレスを確認</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+97"/>
+        <location line="+71"/>
         <source>Forgot password</source>
         <translation>パスワードをお忘れの場合</translation>
     </message>
     <message>
-        <location line="-96"/>
-        <source>Set a new password</source>
-        <translation>新しいパスワードを設定</translation>
+        <location line="+13"/>
+        <source>Send a new link</source>
+        <translation>新しいリンクを送信</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <location line="+64"/>
+        <location line="+8"/>
+        <source>I confirmed my email</source>
+        <translation>メールアドレスを確認しました</translation>
+    </message>
+    <message>
+        <location line="-91"/>
+        <location line="+39"/>
         <source>Sign in</source>
         <translation>サインイン</translation>
     </message>
     <message>
-        <location line="-53"/>
+        <location line="-28"/>
         <source>Email</source>
         <translation>メールアドレス</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Reset link or token</source>
-        <translation>リセット用のリンクまたはトークン</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Confirmation token</source>
-        <translation>確認トークン</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -123,32 +108,12 @@
         <translation>パスワード</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Confirm email</source>
-        <translation>メールアドレスを確認する</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+16"/>
         <source>Send reset</source>
         <translation>トークンを送信</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Set password</source>
-        <translation>パスワードを設定</translation>
-    </message>
-    <message>
-        <location line="+45"/>
-        <source>Send a new token</source>
-        <translation>新しいトークンを送信</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>I have a reset link</source>
-        <translation>リンクをお持ちの場合</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+54"/>
         <source>Back to sign in</source>
         <translation>サインインに戻る</translation>
     </message>
@@ -320,7 +285,7 @@
         <translation>Matome</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+50"/>
         <source>Delete folder “%1”?</source>
         <translation>フォルダー「%1」を削除しますか？</translation>
     </message>
@@ -461,16 +426,6 @@
         <location line="+2"/>
         <source>Your session ended. Sign in again.</source>
         <translation>セッションが終了しました。もう一度サインインしてください。</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>That reset token is wrong or has expired.</source>
-        <translation>そのリセットトークンは正しくないか、有効期限が切れています。</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>That confirmation token is wrong or has expired.</source>
-        <translation>確認トークンが正しくないか、有効期限が切れています。</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -644,7 +599,7 @@
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+113"/>
+        <location filename="../Session.cpp" line="+110"/>
         <source>New organization</source>
         <translation>新しい組織</translation>
     </message>

@@ -21,7 +21,7 @@ from device import Image, Node, expect
 
 MISSING = "Fill every required field."
 TAKEN = "Use a valid email address with no account yet."
-SENT = "If that account exists, Core sent a reset token."
+SENT = "If that account exists, a password reset link was sent. Open it in your browser, then sign in with your new password."
 
 
 def closed_port() -> int:
@@ -110,8 +110,7 @@ def empty_fields(app: App) -> None:
     d.label("statusMessage", MISSING)
     fields_marked(app)
 
-    for link, submit in (("registerLink", "Create account"), ("forgotLink", "Send reset"),
-                         ("resetLink", "Set password")):
+    for link, submit in (("registerLink", "Create account"), ("forgotLink", "Send reset")):
         app.pane(link)
         d.tap(d.label("submitButton", submit))
         d.label("statusMessage", MISSING)
@@ -131,17 +130,19 @@ def create_account(app: App) -> None:
 
     app.form({"emailField": "new@localhost", "passwordField": "secret99"})
     d.enter()
-    d.node("confirmationField")
+    d.label("statusMessage", "Open the confirmation link sent to new@localhost in your browser, then return to sign in.")
     d.gone("homeLink")
-    app.form({"confirmationField": "confirm-1"})
-    d.tap("submitButton")
+    app.core.confirm_email("new@localhost")
+    d.tap("backToSignIn")
+    app.form({"passwordField": "secret99"})
+    d.enter()
     app.wait_rows(["new organization"])
     state = app.core.state()
     expect("new@localhost" in state["users"] and state["user"] == "new@localhost",
            "the account was not created")
 
 
-@scenario("1.6", title="forgot password, then a reset token sets a new one")
+@scenario("1.6", title="forgot password, then browser reset allows sign-in")
 def forgot_and_reset(app: App) -> None:
     d = app.device
     app.start(signed_in=False)
@@ -152,13 +153,10 @@ def forgot_and_reset(app: App) -> None:
     d.enter()
     d.label("statusMessage", SENT)
 
-    d.tap("resetLink")
-    d.wait(lambda s: s if "tokenField" in s and "emailField" not in s else None, "the reset pane")
-    app.form({"tokenField": "bad-token", "passwordField": "secret34"})
-    d.tap("submitButton")
-    d.label("statusMessage", "That reset token is wrong or has expired.")
-    app.form({"tokenField": "good-token"})
-    d.tap("submitButton")
+    app.core.reset_password(EMAIL, "secret34")
+    d.tap("backToSignIn")
+    app.form({"passwordField": "secret34"})
+    d.enter()
     app.wait_rows([OWN_ORG])
 
 
@@ -166,15 +164,14 @@ def forgot_and_reset(app: App) -> None:
 def back_from_panes(app: App) -> None:
     d = app.device
     app.start(signed_in=False)
-    for link, field in (("registerLink", "emailField"), ("forgotLink", "emailField"),
-                        ("resetLink", "tokenField")):
+    for link, field in (("registerLink", "emailField"), ("forgotLink", "emailField")):
         d.tap(link)
         d.node(field)
         d.tap("backToSignIn")
         d.label("submitButton", "Sign in")
         d.gone("backToSignIn")
 
-    for link in ("registerLink", "forgotLink", "resetLink"):
+    for link in ("registerLink", "forgotLink"):
         d.tap(link)
         d.node("backToSignIn")
         d.back()
@@ -225,3 +222,12 @@ def relaunch_remembers(app: App) -> None:
     screen = app.open_server(screen)
     expect(screen.get("apiField").text == app.core.emulator_url, "the server was not kept")
     back_in_acme(app)
+
+
+@scenario("1.12", title="an invitation accepted in the browser appears after refresh")
+def accepted_invitation(app: App) -> None:
+    app.start()
+    app.wait_rows([OWN_ORG])
+    app.core.accept_invitation(EMAIL, "Invited")
+    app.device.tap("refreshButton")
+    app.wait_rows([OWN_ORG, "Invited"])

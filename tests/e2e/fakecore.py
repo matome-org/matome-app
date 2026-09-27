@@ -55,6 +55,15 @@ class Core:
     def seed(self, spec: dict) -> dict:
         return self._call("POST", "seed", spec)
 
+    def confirm_email(self, email: str) -> dict:
+        return self._call("POST", "confirm-email", {"email": email})
+
+    def reset_password(self, email: str, password: str) -> dict:
+        return self._call("POST", "reset-password", {"email": email, "password": password})
+
+    def accept_invitation(self, email: str, name: str) -> dict:
+        return self._call("POST", "accept-invitation", {"email": email, "name": name})
+
     def fail(self, path: str, method: str = "", count: int = 1, mode: str = "status",
              status: int = 500, error: str = "server_error") -> dict:
         """The next `count` matching requests fail as `mode` says (status,

@@ -236,8 +236,6 @@ public:
         m_user.clear();
         m_passwords = {{defaultUser(), QStringLiteral("secret12")}};
         m_pendingEmails.clear();
-        m_confirmationTokens.clear();
-        m_confirmationSerial = 0;
         m_sessionEpoch = 1;
         m_orgsByUser.clear();
         m_spaces.clear();
@@ -260,6 +258,31 @@ public:
         m_uploads.clear();
         m_blobs.clear();
         m_trashed.clear();
+    }
+
+    bool confirmEmailInBrowser(const QString &email)
+    {
+        if (!m_pendingEmails.remove(email))
+            return false;
+        ++m_sessionEpoch;
+        return true;
+    }
+
+    bool resetPasswordInBrowser(const QString &email, const QString &password)
+    {
+        if (!m_passwords.contains(email) || !passwordDetails(password).isEmpty())
+            return false;
+        m_passwords.insert(email, password);
+        ++m_sessionEpoch;
+        return true;
+    }
+
+    bool acceptInvitationInBrowser(const QString &email, const QString &name)
+    {
+        if (!m_passwords.contains(email) || m_pendingEmails.contains(email) || name.isEmpty())
+            return false;
+        addOrg(name, QStringLiteral("member"), email);
+        return true;
     }
 
     static QString sha256(const QByteArray &bytes)
@@ -513,6 +536,20 @@ private:
         }
         if (route == QLatin1String("seed"))
             return jsonReply(200, seed(json));
+        if (route == QLatin1String("confirm-email"))
+            return confirmEmailInBrowser(json.value(QStringLiteral("email")).toString())
+                    ? jsonReply(200, state())
+                    : errorReply(422, QStringLiteral("invalid_confirmation_token"));
+        if (route == QLatin1String("reset-password"))
+            return resetPasswordInBrowser(json.value(QStringLiteral("email")).toString(),
+                                          json.value(QStringLiteral("password")).toString())
+                    ? jsonReply(200, state())
+                    : errorReply(422, QStringLiteral("invalid_reset_token"));
+        if (route == QLatin1String("accept-invitation"))
+            return acceptInvitationInBrowser(json.value(QStringLiteral("email")).toString(),
+                                             json.value(QStringLiteral("name")).toString())
+                    ? jsonReply(200, state())
+                    : errorReply(422, QStringLiteral("invalid_invitation"));
         if (route == QLatin1String("release")) {
             release();
             return jsonReply(200, state());
@@ -777,7 +814,6 @@ private:
                     return errorReply(422, QStringLiteral("invalid_request"), details);
                 m_passwords.insert(email, password);
                 m_pendingEmails.insert(email);
-                m_confirmationTokens.insert(email, QStringLiteral("confirm-%1").arg(++m_confirmationSerial));
             }
             ensureOrg(email);
             return session(email, registering ? 201 : 200);
@@ -785,42 +821,18 @@ private:
         if (m_lastPath == QLatin1String("/api/auth/forgot-password")) {
             return jsonReply(200, QJsonObject{{QStringLiteral("status"), QStringLiteral("ok")}});
         }
-        if (m_lastPath == QLatin1String("/api/auth/reset-password")) {
-            if (json.value(QStringLiteral("token")).toString() != QLatin1String("good-token"))
-                return errorReply(422, QStringLiteral("invalid_reset_token"));
-            const QString password = json.value(QStringLiteral("password")).toString();
-            const QJsonObject details = passwordDetails(password);
-            if (!details.isEmpty())
-                return errorReply(422, QStringLiteral("invalid_request"), details);
-            // good-token is the default user's: the new password is theirs from now on.
-            m_passwords.insert(defaultUser(), password);
-            ensureOrg(defaultUser());
-            return session(defaultUser(), 200);
-        }
         if (m_lastPath == QLatin1String("/api/auth/refresh")) {
             if (json.value(QStringLiteral("refresh_token")).toString()
                     != QStringLiteral("refresh-%1").arg(m_sessionEpoch))
                 return errorReply(401, QStringLiteral("invalid_refresh_token"));
             return session(m_user.isEmpty() ? defaultUser() : m_user, 200);
         }
-        if (m_lastPath == QLatin1String("/api/auth/confirm-email")
-            || m_lastPath == QLatin1String("/api/auth/resend-confirmation")) {
+        if (m_lastPath == QLatin1String("/api/auth/resend-confirmation")) {
             if (m_lastAuth != QStringLiteral("Bearer access-%1").arg(m_sessionEpoch))
                 return errorReply(401, QStringLiteral("unauthenticated"));
-            if (m_lastPath.endsWith(QLatin1String("resend-confirmation"))) {
-                if (!m_pendingEmails.contains(m_user))
-                    return errorReply(422, QStringLiteral("email_already_confirmed"));
-                m_confirmationTokens.insert(m_user,
-                                            QStringLiteral("confirm-%1").arg(++m_confirmationSerial));
-                return jsonReply(200, QJsonObject{{QStringLiteral("status"), QStringLiteral("ok")}});
-            }
-            if (!m_pendingEmails.contains(m_user)
-                || json.value(QStringLiteral("token")).toString() != m_confirmationTokens.value(m_user))
-                return errorReply(422, QStringLiteral("invalid_confirmation_token"));
-            m_pendingEmails.remove(m_user);
-            m_confirmationTokens.remove(m_user);
-            ++m_sessionEpoch;
-            return session(m_user, 200);
+            if (!m_pendingEmails.contains(m_user))
+                return errorReply(422, QStringLiteral("email_already_confirmed"));
+            return jsonReply(200, QJsonObject{{QStringLiteral("status"), QStringLiteral("ok")}});
         }
         if (m_lastPath == QLatin1String("/api/auth/logout"))
             return http(204, {});
@@ -1286,8 +1298,6 @@ private:
     QString m_user;
     QHash<QString, QString> m_passwords;
     QSet<QString> m_pendingEmails;
-    QHash<QString, QString> m_confirmationTokens;
-    int m_confirmationSerial = 0;
     int m_sessionEpoch = 1;
     QHash<QString, QJsonArray> m_orgsByUser;
     QHash<QString, QJsonArray> m_spaces;

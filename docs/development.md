@@ -21,19 +21,19 @@ mise run first-login
 
 The task is idempotent. It registers `matome-admin@localhost` /
 `Matome67!` when the email is new, logs in when it already exists, and
-leaves an organization named `matome` on that identity. A new account must
-confirm its email first: the task prompts for the emailed token, or accepts
-it in `MATOME_CONFIRMATION_TOKEN`. Core's default local mailer does not
-deliver email externally; configure a local SMTP relay to receive the
-token. Override the API URL with `MATOME_URL`.
+leaves an organization named `matome` on that identity. For a new account,
+open the emailed confirmation link in a browser, confirm the address, then
+run the task again. Core's default local mailer does not deliver email
+externally; configure a local SMTP relay to receive the link. Override the
+API URL with `MATOME_URL`.
 
 ## Client behavior
 
-The client signs in, registers accounts, confirms new accounts with an
-emailed token, resends that token, requests password resets, and accepts a
-new password. An account waiting for email confirmation stays on the
-confirmation form until Core returns a new session. A reset form accepts a
-token or extracts one from a full reset link.
+The client signs in, registers accounts, resends confirmation links, and
+requests password resets. Confirmation and password changes finish in the
+browser; the user then signs in to the client. A pending account remains on
+the confirmation screen until the user returns to sign-in. Invitation links
+are accepted in the browser; the client reloads organizations when active.
 
 After sign-in, the client lists organizations, spaces, folders, and
 documents. Downloads write signed files to disk. Dragging, clicking, or

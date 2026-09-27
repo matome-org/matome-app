@@ -22,6 +22,9 @@ class Core {
 
   reset() { return this.call("POST", "reset"); }
   seed(spec) { return this.call("POST", "seed", spec); }
+  confirmEmail(email) { return this.call("POST", "confirm-email", { email }); }
+  resetPassword(email, password) { return this.call("POST", "reset-password", { email, password }); }
+  acceptInvitation(email, name) { return this.call("POST", "accept-invitation", { email, name }); }
   // {path (regex), method?, count?, mode?: status|drop|expire|hold, status?, error?}
   // A hold answers as usual but parks the answer until release().
   fail(rule) { return this.call("POST", "fail", rule); }

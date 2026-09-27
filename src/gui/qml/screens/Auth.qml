@@ -15,33 +15,28 @@ FocusScope {
 
     property string pane: "signIn"
     property bool serverOpen: false
-    property bool resendingConfirmation: false
 
     readonly property bool confirmationPending: Session.confirmationPending
-    readonly property bool confirmationResent: Session.confirmationResent
     readonly property bool done: (Session.resetSent || (auth.pane === "confirm" && Session.errorCode === ""))
                                  && !Session.busy
     readonly property string statusMessage: {
         if (Session.busy) {
             if (auth.pane === "forgot")
                 return qsTr("Sending reset…")
-            if (auth.pane === "reset")
-                return qsTr("Updating password…")
             if (auth.pane === "register")
                 return qsTr("Creating account…")
             if (auth.pane === "confirm")
-                return auth.resendingConfirmation ? qsTr("Sending confirmation…")
-                                                   : qsTr("Confirming email…")
+                return qsTr("Sending confirmation…")
             return qsTr("Signing in…")
         }
         if (Session.errorCode !== "")
             return Messages.rejected(Session.errorFields) || Messages.failure(Session.errorCode, "auth")
         if (Session.resetSent)
-            return qsTr("If that account exists, Core sent a reset token.")
+            return qsTr("If that account exists, a password reset link was sent. Open it in your browser, then sign in with your new password.")
         if (auth.pane === "confirm")
             return Session.confirmationResent
-                    ? qsTr("A new confirmation token was sent to %1.").arg(Session.email)
-                    : qsTr("Enter the confirmation token sent to %1 to activate your account.").arg(Session.email)
+                    ? qsTr("A new confirmation link was sent to %1. Open it in your browser, then return to sign in.").arg(Session.email)
+                    : qsTr("Open the confirmation link sent to %1 in your browser, then return to sign in.").arg(Session.email)
         return ""
     }
     readonly property string modeName: Theme.mode === "light" ? qsTr("Light")
@@ -49,43 +44,27 @@ FocusScope {
     readonly property Item focused: auth.Window.activeFocusItem
     readonly property string errorCode: Session.errorCode
 
-    // The remembered email and server, written once when the form shows: a
-    // binding would put them back over what was typed on every change. The
-    // password and a reset token never outlive the session they opened. The
-    // form opens on sign-in, or on reset with the token of the reset link the
-    // web page was opened at.
+    // The remembered email and server are written once when the form shows;
+    // a binding would put them back over what was typed on every change.
     function prefill() {
         emailField.text = Session.email
         apiField.text = Session.apiBaseUrl
         passwordField.clear()
-        tokenField.text = Session.takeResetLink()
-        confirmationField.clear()
-        auth.pane = Session.confirmationPending ? "confirm"
-                  : tokenField.text !== "" ? "reset" : "signIn"
+        auth.pane = Session.confirmationPending ? "confirm" : "signIn"
     }
 
     function focusDefault() {
         if (auth.pane === "confirm")
-            confirmationField.forceActiveFocus()
-        else if (auth.pane !== "reset")
-            emailField.forceActiveFocus()
-        else if (tokenField.text !== "")
-            passwordField.forceActiveFocus()
+            backToSignIn.forceActiveFocus()
         else
-            tokenField.forceActiveFocus()
+            emailField.forceActiveFocus()
     }
 
     function submit() {
         if (auth.pane === "register")
             Session.registerAccount(emailField.text, passwordField.text, apiField.text)
-        else if (auth.pane === "confirm") {
-            auth.resendingConfirmation = false
-            Session.confirmEmail(confirmationField.text)
-        }
         else if (auth.pane === "forgot")
             Session.requestPasswordReset(emailField.text, apiField.text)
-        else if (auth.pane === "reset")
-            Session.resetPassword(tokenField.text, passwordField.text, apiField.text)
         else
             Session.signIn(emailField.text, passwordField.text, apiField.text)
     }
@@ -145,10 +124,6 @@ FocusScope {
     onFocusedChanged: auth.reveal(auth.focused)
     onConfirmationPendingChanged: if (auth.confirmationPending)
         auth.showPane("confirm")
-    onConfirmationResentChanged: if (auth.confirmationResent) {
-        confirmationField.clear()
-        confirmationField.forceActiveFocus()
-    }
     onErrorCodeChanged: if (auth.errorCode === "network")
         auth.serverOpen = true
     Component.onCompleted: {
@@ -211,7 +186,6 @@ FocusScope {
                 text: auth.pane === "register" ? qsTr("Create account")
                     : auth.pane === "confirm" ? qsTr("Confirm your email")
                     : auth.pane === "forgot" ? qsTr("Forgot password")
-                    : auth.pane === "reset" ? qsTr("Set a new password")
                     : qsTr("Sign in")
             }
 
@@ -220,34 +194,10 @@ FocusScope {
                 objectName: "emailField"
                 Layout.topMargin: Theme.gapS
                 line: true
-                focus: auth.pane !== "reset" && auth.pane !== "confirm"
-                visible: auth.pane !== "reset" && auth.pane !== "confirm"
+                focus: auth.pane !== "confirm"
+                visible: auth.pane !== "confirm"
                 invalid: auth.invalid(emailField, "email")
                 placeholderText: qsTr("Email")
-                Keys.onReturnPressed: auth.submit()
-                Keys.onEnterPressed: auth.submit()
-            }
-
-            Field {
-                id: tokenField
-                objectName: "tokenField"
-                line: true
-                focus: auth.pane === "reset"
-                visible: auth.pane === "reset"
-                invalid: auth.invalid(tokenField, "token")
-                placeholderText: qsTr("Reset link or token")
-                Keys.onReturnPressed: auth.submit()
-                Keys.onEnterPressed: auth.submit()
-            }
-
-            Field {
-                id: confirmationField
-                objectName: "confirmationField"
-                line: true
-                focus: auth.pane === "confirm"
-                visible: auth.pane === "confirm"
-                invalid: auth.invalid(confirmationField, "token")
-                placeholderText: qsTr("Confirmation token")
                 Keys.onReturnPressed: auth.submit()
                 Keys.onEnterPressed: auth.submit()
             }
@@ -256,7 +206,7 @@ FocusScope {
                 id: passwordField
                 objectName: "passwordField"
                 line: true
-                visible: auth.pane !== "forgot" && auth.pane !== "confirm"
+                visible: auth.pane === "signIn" || auth.pane === "register"
                 invalid: auth.invalid(passwordField, "password")
                 placeholderText: qsTr("Password")
                 echoMode: TextInput.Password
@@ -266,6 +216,7 @@ FocusScope {
 
             ActionButton {
                 objectName: "submitButton"
+                visible: auth.pane !== "confirm"
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: Theme.gapXl
                 implicitHeight: Theme.controlXl
@@ -273,9 +224,7 @@ FocusScope {
                 primary: true
                 usable: !Session.busy
                 text: auth.pane === "register" ? qsTr("Create account")
-                    : auth.pane === "confirm" ? qsTr("Confirm email")
                     : auth.pane === "forgot" ? qsTr("Send reset")
-                    : auth.pane === "reset" ? qsTr("Set password")
                     : qsTr("Sign in")
                 onActivated: auth.submit()
             }
@@ -320,22 +269,17 @@ FocusScope {
                     objectName: "resendConfirmation"
                     visible: auth.pane === "confirm"
                     enabled: !Session.busy
-                    text: qsTr("Send a new token")
+                    text: qsTr("Send a new link")
                     onActivated: {
-                        auth.resendingConfirmation = true
                         Session.resendConfirmation()
                     }
                 }
                 TextLink {
-                    objectName: "resetLink"
-                    visible: auth.pane === "forgot" || auth.pane === "signIn"
-                    text: qsTr("I have a reset link")
-                    onActivated: auth.showPane("reset")
-                }
-                TextLink {
+                    id: backToSignIn
                     objectName: "backToSignIn"
                     visible: auth.pane !== "signIn"
-                    text: qsTr("Back to sign in")
+                    text: auth.pane === "confirm" ? qsTr("I confirmed my email")
+                                                  : qsTr("Back to sign in")
                     onActivated: {
                         if (auth.pane === "confirm")
                             Session.signOut()

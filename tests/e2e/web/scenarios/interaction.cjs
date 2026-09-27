@@ -215,7 +215,7 @@ module.exports = (scenario) => {
       await enableScreenReader(page);
       await studio.until(async () => (await labels(page)).has("Sign in"), "the sign-in names");
       const signIn = await labels(page);
-      for (const name of ["Sign in", "Create account", "Forgot password", "I have a reset link",
+      for (const name of ["Sign in", "Create account", "Forgot password",
         "Show the Core server address", "Português", "English", "日本語", "Theme: System. Switch theme"])
         assert.ok(signIn.has(name), `${name} in ${[...signIn]}`);
       const email = await studio.item("emailField");

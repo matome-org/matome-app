@@ -8,14 +8,11 @@
 #include <QStringList>
 #include <QSettings>
 #include <QUrl>
-#include <QUrlQuery>
 #include <QVariantMap>
 
 #ifdef Q_OS_WASM
 #include <QClipboard>
 #include <QGuiApplication>
-
-#include <emscripten/val.h>
 #endif
 
 namespace matome {
@@ -428,30 +425,6 @@ void Session::registerAccount(const QString &email, const QString &password,
     postAuth(QStringLiteral("/api/auth/register"), body);
 }
 
-void Session::confirmEmail(const QString &token)
-{
-    if (m_busy || !m_confirmationPending)
-        return;
-    const QString trimmed = token.trimmed();
-    if (trimmed.isEmpty()) {
-        m_errorCode = QStringLiteral("invalid_request");
-        m_errorFields = {QStringLiteral("token")};
-        notify();
-        return;
-    }
-    m_confirmationResent = false;
-    setBusy();
-    authedPost(QStringLiteral("/api/auth/confirm-email"),
-               QJsonObject{{QStringLiteral("token"), trimmed}}, {},
-               [this](const Client::Reply &reply) {
-                   if (!reply.ok) {
-                       failConfirmation(reply);
-                       return;
-                   }
-                   applyAuth(reply);
-               });
-}
-
 void Session::resendConfirmation()
 {
     if (m_busy || !m_confirmationPending)
@@ -500,49 +473,10 @@ void Session::requestPasswordReset(const QString &email, const QString &apiBaseU
                   });
 }
 
-void Session::resetPassword(const QString &token, const QString &password,
-                            const QString &apiBaseUrl)
+void Session::refreshOrganizations()
 {
-    if (m_busy)
-        return;
-    const QString bareToken = resetToken(token);
-    if (bareToken.isEmpty() || password.isEmpty() || !bindOrigin(apiBaseUrl)) {
-        fail(QStringLiteral("invalid_request"));
-        return;
-    }
-    QJsonObject body;
-    body.insert(QStringLiteral("token"), bareToken);
-    body.insert(QStringLiteral("password"), password);
-    postAuth(QStringLiteral("/api/auth/reset-password"), body);
-}
-
-QString Session::takeResetLink()
-{
-#ifdef Q_OS_WASM
-    using emscripten::val;
-    const val location = val::global("location");
-    const QString token = resetToken(QString::fromStdString(location["href"].as<std::string>()));
-    if (!token.isEmpty()) {
-        const std::string address = location["pathname"].as<std::string>() + location["search"].as<std::string>();
-        val::global("history").call<void>("replaceState", val::null(), std::string(), address);
-    }
-    return token;
-#else
-    return QString();
-#endif
-}
-
-QString Session::resetToken(const QString &pasted)
-{
-    const QString text = pasted.trimmed();
-    const QUrl link(text);
-    if (link.scheme().isEmpty())
-        return text;
-    const QString fragment = link.fragment(QUrl::FullyEncoded);
-    if (fragment.section(QLatin1Char('?'), 0, 0) != QLatin1String("/reset"))
-        return QString();
-    return QUrlQuery(fragment.section(QLatin1Char('?'), 1))
-            .queryItemValue(QStringLiteral("token"), QUrl::FullyDecoded);
+    if (m_signedIn && !m_orgs.busy())
+        m_orgs.reload();
 }
 
 void Session::signOut()
@@ -805,8 +739,7 @@ void Session::applyAuth(const Client::Reply &reply)
 void Session::authed(const QByteArray &method, const QString &path, const QJsonObject &body,
                      const Client::Headers &headers, Client::Done done, bool retried)
 {
-    const bool confirmationRoute = path == QLatin1String("/api/auth/confirm-email")
-            || path == QLatin1String("/api/auth/resend-confirmation");
+    const bool confirmationRoute = path == QLatin1String("/api/auth/resend-confirmation");
     if (!m_signedIn && !(m_confirmationPending && confirmationRoute)) {
         Client::Reply reply;
         reply.code = QStringLiteral("unauthenticated");

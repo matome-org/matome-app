@@ -4,7 +4,6 @@
 #include "Wiring.h"
 
 #include <QAccessible>
-#include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
@@ -69,7 +68,6 @@ private slots:
     void touchSignsIn();
     void keyboardCreatesAnAccount();
     void keyboardForgotAndReset();
-    void pastedResetLinkSetsThePassword();
     void escapeReturnsToSignIn();
     void wrongPasswordSaysSo();
     void refusedRegistrationNamesTheField();
@@ -750,7 +748,6 @@ void TestStudio::tabsEveryControlOnSignIn()
     QVERIFY(names.contains(QStringLiteral("submitButton")));
     QVERIFY(names.contains(QStringLiteral("registerLink")));
     QVERIFY(names.contains(QStringLiteral("forgotLink")));
-    QVERIFY(names.contains(QStringLiteral("resetLink")));
     QVERIFY(names.contains(QStringLiteral("serverToggle")));
     QVERIFY(names.contains(QStringLiteral("themeToggle")));
     QVERIFY(!names.contains(QStringLiteral("apiField")));
@@ -809,17 +806,17 @@ void TestStudio::keyboardCreatesAnAccount()
     QTRY_COMPARE(propertyOf(QStringLiteral("authScreen"), "pane").toString(),
                  QStringLiteral("confirm"));
     QVERIFY(!m_session->signedIn());
-    QCOMPARE(focusName(), QStringLiteral("confirmationField"));
-    clicks(itemNamed(QStringLiteral("confirmationField")), QStringLiteral("wrong"));
-    key(Qt::Key_Return);
+    QCOMPARE(focusName(), QStringLiteral("backToSignIn"));
     QTRY_COMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(),
-                 QStringLiteral("That confirmation token is wrong or has expired."));
+                 QStringLiteral("Open the confirmation link sent to new@localhost in your browser, then return to sign in."));
     QVERIFY(m_session->confirmationPending());
     clickItem(waitItem(QStringLiteral("resendConfirmation")));
     QTRY_VERIFY(m_session->confirmationResent());
-    QCOMPARE(propertyOf(QStringLiteral("confirmationField"), "text").toString(), QString());
-    QCOMPARE(focusName(), QStringLiteral("confirmationField"));
-    clicks(itemNamed(QStringLiteral("confirmationField")), QStringLiteral("confirm-2"));
+    QVERIFY(m_core.confirmEmailInBrowser(QStringLiteral("new@localhost")));
+    focusOn(waitItem(QStringLiteral("backToSignIn")));
+    key(Qt::Key_Return);
+    QCOMPARE(propertyOf(QStringLiteral("authScreen"), "pane").toString(), QStringLiteral("signIn"));
+    clicks(itemNamed(QStringLiteral("passwordField")), QStringLiteral("secret12"));
     key(Qt::Key_Return);
     QVERIFY(waitSignedIn(true));
 }
@@ -834,13 +831,14 @@ void TestStudio::keyboardForgotAndReset()
     focusOn(waitItem(QStringLiteral("submitButton")));
     key(Qt::Key_Return);
     QTRY_VERIFY(m_session->resetSent());
-    focusOn(waitItem(QStringLiteral("resetLink")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(),
+                 QStringLiteral("If that account exists, a password reset link was sent. Open it in your browser, then sign in with your new password."));
+    QVERIFY(m_core.resetPasswordInBrowser(QStringLiteral("ok@localhost"), QStringLiteral("fresh-pass1")));
+    focusOn(waitItem(QStringLiteral("backToSignIn")));
     key(Qt::Key_Return);
     QCOMPARE(propertyOf(QStringLiteral("authScreen"), "pane").toString(),
-             QStringLiteral("reset"));
-    clicks(itemNamed(QStringLiteral("tokenField")), QStringLiteral("good-token"));
-    clicks(itemNamed(QStringLiteral("passwordField")), QStringLiteral("secret12"));
-    focusOn(waitItem(QStringLiteral("submitButton")));
+             QStringLiteral("signIn"));
+    clicks(itemNamed(QStringLiteral("passwordField")), QStringLiteral("fresh-pass1"));
     key(Qt::Key_Return);
     QVERIFY(waitSignedIn(true));
 
@@ -849,22 +847,7 @@ void TestStudio::keyboardForgotAndReset()
     QVERIFY(waitSignedIn(false));
     QTRY_COMPARE(propertyOf(QStringLiteral("authScreen"), "pane").toString(), QStringLiteral("signIn"));
     QCOMPARE(focusName(), QStringLiteral("emailField"));
-    QCOMPARE(propertyOf(QStringLiteral("tokenField"), "text").toString(), QString());
     QCOMPARE(propertyOf(QStringLiteral("passwordField"), "text").toString(), QString());
-}
-
-// A reset link pasted whole sets the password: FakeCore takes good-token only.
-void TestStudio::pastedResetLinkSetsThePassword()
-{
-    clickItem(waitItem(QStringLiteral("resetLink")));
-    QCOMPARE(focusName(), QStringLiteral("tokenField"));
-    QGuiApplication::clipboard()->setText(QStringLiteral("https://app.example/#/reset?token=good-token"));
-    key(Qt::Key_V, Qt::ControlModifier);
-    QTRY_COMPARE(propertyOf(QStringLiteral("tokenField"), "text").toString(),
-                 QStringLiteral("https://app.example/#/reset?token=good-token"));
-    clicks(itemNamed(QStringLiteral("passwordField")), QStringLiteral("secret12"));
-    key(Qt::Key_Return);
-    QVERIFY(waitSignedIn(true));
 }
 
 void TestStudio::escapeReturnsToSignIn()
@@ -2384,12 +2367,6 @@ void TestStudio::emptyFieldsSayWhatIsMissing()
     QTRY_COMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(), missing);
     QVERIFY(propertyOf(QStringLiteral("emailField"), "invalid").toBool());
 
-    clickItem(waitItem(QStringLiteral("resetLink")));
-    clicks(itemNamed(QStringLiteral("tokenField")), QString());
-    focusOn(waitItem(QStringLiteral("submitButton")));
-    key(Qt::Key_Return);
-    QTRY_VERIFY(propertyOf(QStringLiteral("tokenField"), "invalid").toBool());
-    QCOMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(), missing);
     QCOMPARE(m_core.hits(), 0);
 }
 
