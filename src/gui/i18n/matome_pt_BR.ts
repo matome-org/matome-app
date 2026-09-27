@@ -4,14 +4,9 @@
 <context>
     <name>Auth</name>
     <message>
-        <location filename="../qml/screens/Auth.qml" line="+27"/>
+        <location filename="../qml/screens/Auth.qml" line="+26"/>
         <source>Sending reset…</source>
         <translation>Enviando o código…</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Updating password…</source>
-        <translation>Atualizando a senha…</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -25,28 +20,23 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>Confirming email…</source>
-        <translation>Confirmando o e-mail…</translation>
-    </message>
-    <message>
-        <location line="+1"/>
         <source>Signing in…</source>
         <translation>Entrando…</translation>
     </message>
     <message>
         <location line="+5"/>
-        <source>If that account exists, Core sent a reset token.</source>
-        <translation>Se a conta existir, o Core enviou um código de redefinição.</translation>
+        <source>If that account exists, a password reset link was sent. Open it in your browser, then sign in with your new password.</source>
+        <translation>Se essa conta existir, enviamos um link para redefinir a senha. Abra-o no navegador e depois entre com a nova senha.</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>A new confirmation token was sent to %1.</source>
-        <translation>Um novo código de confirmação foi enviado para %1.</translation>
+        <source>A new confirmation link was sent to %1. Open it in your browser, then return to sign in.</source>
+        <translation>Enviamos um novo link de confirmação para %1. Abra-o no navegador e depois volte para entrar.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Enter the confirmation token sent to %1 to activate your account.</source>
-        <translation>Digite o código de confirmação enviado para %1 para ativar sua conta.</translation>
+        <source>Open the confirmation link sent to %1 in your browser, then return to sign in.</source>
+        <translation>Abra no navegador o link de confirmação enviado para %1 e depois volte para entrar.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -64,7 +54,7 @@
         <translation>Sistema</translation>
     </message>
     <message>
-        <location line="+140"/>
+        <location line="+120"/>
         <source>Matome</source>
         <translation>Matome</translation>
     </message>
@@ -75,47 +65,42 @@
     </message>
     <message>
         <location line="+11"/>
-        <location line="+64"/>
-        <location line="+30"/>
+        <location line="+40"/>
+        <location line="+28"/>
         <source>Create account</source>
         <translation>Criar conta</translation>
     </message>
     <message>
-        <location line="-93"/>
+        <location line="-67"/>
         <source>Confirm your email</source>
         <translation>Confirme seu e-mail</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+97"/>
+        <location line="+71"/>
         <source>Forgot password</source>
         <translation>Esqueci a senha</translation>
     </message>
     <message>
-        <location line="-96"/>
-        <source>Set a new password</source>
-        <translation>Defina uma nova senha</translation>
+        <location line="+13"/>
+        <source>Send a new link</source>
+        <translation>Enviar outro link</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <location line="+64"/>
+        <location line="+8"/>
+        <source>I confirmed my email</source>
+        <translation>Confirmei meu e-mail</translation>
+    </message>
+    <message>
+        <location line="-91"/>
+        <location line="+39"/>
         <source>Sign in</source>
         <translation>Entrar</translation>
     </message>
     <message>
-        <location line="-53"/>
+        <location line="-28"/>
         <source>Email</source>
         <translation>E-mail</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Reset link or token</source>
-        <translation>Link ou código de redefinição</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Confirmation token</source>
-        <translation>Código de confirmação</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -123,32 +108,12 @@
         <translation>Senha</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Confirm email</source>
-        <translation>Confirmar e-mail</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+16"/>
         <source>Send reset</source>
         <translation>Enviar código</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Set password</source>
-        <translation>Definir senha</translation>
-    </message>
-    <message>
-        <location line="+45"/>
-        <source>Send a new token</source>
-        <translation>Enviar novo código</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>I have a reset link</source>
-        <translation>Já tenho um link</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+54"/>
         <source>Back to sign in</source>
         <translation>Voltar para entrar</translation>
     </message>
@@ -320,7 +285,7 @@
         <translation>Matome</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+50"/>
         <source>Delete folder “%1”?</source>
         <translation>Excluir a pasta “%1”?</translation>
     </message>
@@ -460,16 +425,6 @@
         <location line="+2"/>
         <source>Your session ended. Sign in again.</source>
         <translation>Sua sessão terminou. Entre novamente.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>That reset token is wrong or has expired.</source>
-        <translation>Esse código de redefinição está errado ou expirou.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>That confirmation token is wrong or has expired.</source>
-        <translation>Esse código de confirmação está incorreto ou expirou.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -643,7 +598,7 @@
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+113"/>
+        <location filename="../Session.cpp" line="+110"/>
         <source>New organization</source>
         <translation>Nova organização</translation>
     </message>

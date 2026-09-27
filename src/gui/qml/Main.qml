@@ -17,6 +17,9 @@ Window {
     title: qsTr("Matome")
     color: Theme.background
 
+    onActiveChanged: if (win.active)
+        Session.refreshOrganizations()
+
     readonly property bool inField: {
         const item = win.activeFocusItem
         return item !== null && (item instanceof TextInput || item instanceof TextEdit)

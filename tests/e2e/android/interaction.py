@@ -80,7 +80,7 @@ def accessible_names(app: App) -> None:
     seen: dict[str, Screen] = {}
     screen = app.start(ACME, signed_in=False)
     seen["sign in"] = screen
-    for link in ("registerLink", "forgotLink", "resetLink"):
+    for link in ("registerLink", "forgotLink"):
         screen = seen[link] = app.pane(link)
     d.tap(screen.get("backToSignIn"))
     d.gone("backToSignIn")

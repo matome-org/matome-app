@@ -32,7 +32,6 @@ export MATOME_BOOTSTRAP_PASSWORD="$password"
 export MATOME_BOOTSTRAP_ORG="$org_name"
 
 python3 - <<'PY'
-import getpass
 import json
 import os
 import sys
@@ -78,7 +77,6 @@ status, auth = request(
     {"email": email, "password": password},
     expected=(201, 422),
 )
-created_user = status == 201
 if status == 422:
     status, auth = request(
         "POST",
@@ -94,22 +92,12 @@ if status == 422:
         sys.exit(1)
 
 if auth.get("user", {}).get("email_confirmed") is False:
-    confirmation = os.environ.get("MATOME_CONFIRMATION_TOKEN", "").strip()
-    if not confirmation and sys.stdin.isatty():
-        confirmation = getpass.getpass("Email confirmation token: ").strip()
-    if not confirmation:
-        print(
-            "first-login: confirm this email, then rerun with the emailed "
-            "MATOME_CONFIRMATION_TOKEN (or use an interactive terminal).",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    _, auth = request(
-        "POST",
-        "/api/auth/confirm-email",
-        {"token": confirmation},
-        headers={"authorization": f"Bearer {auth['access_token']}"},
+    print(
+        "first-login: open the confirmation link in the email, confirm "
+        "in your browser, then rerun this task.",
+        file=sys.stderr,
     )
+    sys.exit(1)
 
 token = auth["access_token"]
 bearer = {"authorization": f"Bearer {token}"}
@@ -126,7 +114,7 @@ wanted = next((org for org in orgs if name_of(org) == org_name), None)
 if wanted is None:
     default_name = f"{email.split('@', 1)[0]} organization"
     auto = next((org for org in orgs if name_of(org) == default_name), None)
-    if created_user and auto is not None:
+    if auto is not None:
         headers = {
             **bearer,
             "if-match": str(auto.get("revision") or 1),

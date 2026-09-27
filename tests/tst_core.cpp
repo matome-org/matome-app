@@ -41,8 +41,8 @@ private slots:
     void registersAnAccount();
     void logsInWithUnconfirmedEmail();
     void carriesTheFieldsCoreRefused();
-    void sendsAResetAndSetsAPassword();
-    void readsTheTokenOfAResetLink();
+    void sendsAResetAndSignsInWithNewPassword();
+    void showsAnAcceptedInvitationAfterRefresh();
     void logsOut();
     void abortsAnInFlightCall();
     void mapsNotFound();
@@ -226,20 +226,14 @@ void TestCore::registersAnAccount()
     QVERIFY(!session.signedIn());
     QCOMPARE(session.organizations()->rowCount(), 0);
 
-    session.confirmEmail(QStringLiteral("wrong"));
-    QVERIFY(waitFor(&session));
-    QCOMPARE(session.errorCode(), QStringLiteral("invalid_confirmation_token"));
-    QVERIFY(session.confirmationPending());
-
     session.resendConfirmation();
     QVERIFY(waitFor(&session));
     QVERIFY(session.confirmationResent());
-    session.confirmEmail(QStringLiteral("confirm-1"));
-    QVERIFY(waitFor(&session));
-    QCOMPARE(session.errorCode(), QStringLiteral("invalid_confirmation_token"));
-    QVERIFY(session.confirmationPending());
 
-    session.confirmEmail(QStringLiteral("confirm-2"));
+    QVERIFY(core.confirmEmailInBrowser(QStringLiteral("new@localhost")));
+    QVERIFY(session.confirmationPending());
+    session.signOut();
+    session.signIn(QStringLiteral("new@localhost"), QStringLiteral("secret12"), core.url());
     QVERIFY(waitFor(&session));
     QVERIFY(!session.confirmationPending());
     QVERIFY(!session.confirmationResent());
@@ -263,7 +257,9 @@ void TestCore::logsInWithUnconfirmedEmail()
     QVERIFY(session.confirmationPending());
     QVERIFY(!session.signedIn());
 
-    session.confirmEmail(QStringLiteral("confirm-1"));
+    QVERIFY(core.confirmEmailInBrowser(QStringLiteral("new@localhost")));
+    session.signOut();
+    session.signIn(QStringLiteral("new@localhost"), QStringLiteral("secret12"), core.url());
     QVERIFY(waitFor(&session));
     QVERIFY(session.signedIn());
     QCOMPARE(session.organizations()->rowCount(), 1);
@@ -280,17 +276,9 @@ void TestCore::carriesTheFieldsCoreRefused()
     QCOMPARE(session.errorCode(), QStringLiteral("invalid_request"));
     QCOMPARE(session.errorFields(), (QStringList{QStringLiteral("email"), QStringLiteral("password")}));
 
-    session.resetPassword(QStringLiteral("good-token"), QStringLiteral("short"), core.url());
-    QVERIFY(waitFor(&session));
-    QCOMPARE(session.errorFields(), QStringList{QStringLiteral("password")});
-
-    session.resetPassword(QStringLiteral("bad-token"), QStringLiteral("secret12"), core.url());
-    QVERIFY(waitFor(&session));
-    QCOMPARE(session.errorCode(), QStringLiteral("invalid_reset_token"));
-    QVERIFY(session.errorFields().isEmpty());
 }
 
-void TestCore::sendsAResetAndSetsAPassword()
+void TestCore::sendsAResetAndSignsInWithNewPassword()
 {
     FakeCore core;
     QVERIFY(core.listen());
@@ -298,29 +286,27 @@ void TestCore::sendsAResetAndSetsAPassword()
     session.requestPasswordReset(QStringLiteral("ok@localhost"), core.url());
     QVERIFY(waitFor(&session));
     QVERIFY(session.resetSent());
-    session.resetPassword(QStringLiteral("good-token"), QStringLiteral("secret12"), core.url());
+    QVERIFY(core.resetPasswordInBrowser(QStringLiteral("ok@localhost"), QStringLiteral("fresh-pass1")));
+    session.signIn(QStringLiteral("ok@localhost"), QStringLiteral("secret12"), core.url());
+    QVERIFY(waitFor(&session));
+    QVERIFY(!session.signedIn());
+    session.signIn(QStringLiteral("ok@localhost"), QStringLiteral("fresh-pass1"), core.url());
     QVERIFY(waitFor(&session));
     QVERIFY(session.signedIn());
 }
 
-void TestCore::readsTheTokenOfAResetLink()
+void TestCore::showsAnAcceptedInvitationAfterRefresh()
 {
-    const struct {
-        const char *pasted;
-        const char *token;
-    } cases[] = {
-        {"good-token", "good-token"},
-        {"https://app.example/#/reset?token=good-token", "good-token"},
-        {"https://app.example/studio/?v=2#/reset?lang=ja&token=a%2Db_c&next=files", "a-b_c"},
-        {"https://app.example/#/files?token=good-token", ""},
-        {"https://app.example/?token=good-token", ""},
-        {"https://app.example/#/reset", ""},
-        {"  good-token\n", "good-token"},
-        {"\t https://app.example/#/reset?token=good-token  ", "good-token"},
-        {"   ", ""},
-    };
-    for (const auto &row : cases)
-        QCOMPARE(Session::resetToken(QString::fromUtf8(row.pasted)), QString::fromUtf8(row.token));
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    session.signIn(QStringLiteral("ok@localhost"), QStringLiteral("secret12"), core.url());
+    QVERIFY(waitFor(&session));
+    QCOMPARE(session.organizations()->rowCount(), 1);
+    QVERIFY(core.acceptInvitationInBrowser(QStringLiteral("ok@localhost"), QStringLiteral("Invited")));
+    session.refreshOrganizations();
+    QVERIFY(waitFor(&session));
+    QCOMPARE(session.organizations()->rowCount(), 2);
 }
 
 void TestCore::logsOut()
@@ -469,9 +455,6 @@ void TestCore::rejectsEmptyCredentials()
                    QStringLiteral("not-a-url"));
     QCOMPARE(session.errorCode(), QStringLiteral("network"));
     session.requestPasswordReset(QStringLiteral(""), QStringLiteral("http://127.0.0.1:1"));
-    QCOMPARE(session.errorCode(), QStringLiteral("invalid_request"));
-    session.resetPassword(QStringLiteral(""), QStringLiteral("secret12"),
-                          QStringLiteral("http://127.0.0.1:1"));
     QCOMPARE(session.errorCode(), QStringLiteral("invalid_request"));
     session.setApiBaseUrl(QString());
     QCOMPARE(session.apiBaseUrl(), QStringLiteral("http://localhost:7001"));

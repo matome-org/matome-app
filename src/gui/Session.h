@@ -131,21 +131,10 @@ public:
                             const QString &apiBaseUrl);
     Q_INVOKABLE void registerAccount(const QString &email, const QString &password,
                                      const QString &apiBaseUrl);
-    Q_INVOKABLE void confirmEmail(const QString &token);
     Q_INVOKABLE void resendConfirmation();
     Q_INVOKABLE void signOut();
     Q_INVOKABLE void requestPasswordReset(const QString &email, const QString &apiBaseUrl);
-    /// Sets a new password with the token in `token`, a bare token or a
-    /// reset link (`resetToken`).
-    Q_INVOKABLE void resetPassword(const QString &token, const QString &password,
-                                   const QString &apiBaseUrl);
-    /// The token of the reset link the web page's address holds, removed from
-    /// the address so a reload does not reuse it; empty off the web or when
-    /// the address holds no reset link.
-    Q_INVOKABLE QString takeResetLink();
-    /// The token in `pasted`: a bare token, or the one a reset link
-    /// (`<web app URL>#/reset?token=<token>`) carries; empty for any other link.
-    static QString resetToken(const QString &pasted);
+    Q_INVOKABLE void refreshOrganizations();
     Q_INVOKABLE bool acceptsDrop(const QString &folderId, const QString &payload) const;
     Q_INVOKABLE void dropPayload(const QString &folderId, const QString &payload);
     Q_INVOKABLE void setFocusPayload(const QString &payload);

@@ -71,10 +71,6 @@ module.exports = (scenario) => {
     await studio.press("Enter");
     await studio.untilProp("emailField", "invalid", true);
 
-    await studio.click("resetLink");
-    await studio.untilFocus("tokenField");
-    await studio.press("Enter");
-    await studio.untilProp("tokenField", "invalid", true);
     assert.equal(await studio.prop("statusMessage", "text"), MISSING);
     assert.equal((await core.state()).hits, 0);
   });
@@ -98,25 +94,29 @@ module.exports = (scenario) => {
     await studio.untilProp("authScreen", "pane", "signIn");
     await studio.submit({ email: "new@localhost" });
     await studio.untilProp("authScreen", "pane", "confirm");
-    await studio.fill("confirmationField", "confirm-1");
-    await studio.activate("submitButton");
+    await studio.click("resendConfirmation");
+    await studio.untilProp("statusMessage", "text",
+      "A new confirmation link was sent to new@localhost. Open it in your browser, then return to sign in.");
+    await core.confirmEmail("new@localhost");
+    await studio.click("backToSignIn");
+    await studio.submit({ email: "new@localhost" });
     await studio.untilSignedIn();
     assert.ok((await core.state()).users.includes("new@localhost"));
     assert.equal(await studio.prop("accountButton", "text"), "new@localhost");
   });
 
-  scenario("1.6", "forgot, reset token, then the new password signs in", DESKTOP, async ({ studio }) => {
+  scenario("1.6", "forgot, browser reset, then sign in with the new password", DESKTOP, async ({ studio, core }) => {
     await studio.useServer();
     await studio.click("forgotLink");
     await studio.untilProp("paneTitle", "text", "Forgot password");
     assert.equal(await studio.shown("passwordField"), false);
     await studio.fill("emailField", EMAIL);
     await studio.press("Enter");
-    await studio.untilProp("statusMessage", "text", "If that account exists, Core sent a reset token.");
+    await studio.untilProp("statusMessage", "text",
+      "If that account exists, a password reset link was sent. Open it in your browser, then sign in with your new password.");
 
-    await studio.click("resetLink");
-    await studio.untilFocus("tokenField");
-    await studio.fill("tokenField", "good-token");
+    await core.resetPassword(EMAIL, "fresh-pass1");
+    await studio.click("backToSignIn");
     await studio.signInAgain("fresh-pass1");
 
     await studio.signOut();
@@ -124,8 +124,7 @@ module.exports = (scenario) => {
   });
 
   scenario("1.7", "Esc and Back return to sign in from every pane", DESKTOP, async ({ studio }) => {
-    for (const [link, title] of [["registerLink", "Create account"], ["forgotLink", "Forgot password"],
-      ["resetLink", "Set a new password"]]) {
+    for (const [link, title] of [["registerLink", "Create account"], ["forgotLink", "Forgot password"]]) {
       await studio.click(link);
       await studio.untilProp("paneTitle", "text", title);
       await studio.press("Escape");
@@ -235,21 +234,12 @@ module.exports = (scenario) => {
       await studio.untilHere("Acme");
     });
 
-  scenario("1.12", "a reset link opens the reset pane with its token and leaves the address", BOTH,
-    async ({ studio, stack, page }) => {
-      await studio.load(`${stack.webUrl}/#/reset?token=good-token`);
-      await studio.untilProp("authScreen", "pane", "reset");
-      assert.equal(await studio.prop("tokenField", "text"), "good-token");
-      await studio.untilFocus("passwordField");
-      assert.equal(page.url(), `${stack.webUrl}/`);
-
-      await studio.useServer();
-      await studio.fill("passwordField", "fresh-pass1");
-      await studio.press("Enter");
-      await studio.untilSignedIn();
-      await studio.signOut();
-      await studio.untilProp("authScreen", "pane", "signIn");
-      assert.equal(await studio.prop("tokenField", "text"), "");
-      await studio.signInAgain("fresh-pass1");
-    }, { load: false });
+  scenario("1.12", "an accepted browser invitation appears after refreshing organizations", BOTH,
+    async ({ studio, core }) => {
+      await studio.signIn();
+      assert.deepEqual(await studio.names(), [OWN_ORG]);
+      await core.acceptInvitation(EMAIL, "Invited");
+      await studio.press("F5");
+      await studio.until(async () => (await studio.names()).includes("Invited"), "the accepted invitation");
+    });
 };

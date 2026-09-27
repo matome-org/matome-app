@@ -127,8 +127,7 @@ class App:
         return self.device.wait(landed, f"fields {values}")
 
     def pane(self, link: str) -> Screen:
-        """Opens the pane #link leads to (registerLink, forgotLink,
-        resetLink), back on the sign-in pane first if another is open."""
+        """Opens the pane named by link, returning to sign-in first if needed."""
         d = self.device
         if "backToSignIn" in d.dump():
             d.tap("backToSignIn")
