@@ -4,13 +4,14 @@ include($$PWD/../../qmake/layout.pri)
 
 QT       += core gui qml quick network
 CONFIG   += c++17 qmltypes
-CONFIG   -= app_bundle
+!macx: CONFIG -= app_bundle
 
 QML_IMPORT_NAME = matome
 QML_IMPORT_MAJOR_VERSION = 1
 
 TEMPLATE  = app
 TARGET    = matome-studio
+macx: TARGET = Matome
 DESTDIR   = $$OUT_PWD/../../bin
 MATOME_APP_VERSION = $$cat($$MATOME_SOURCE_ROOT/version.txt, lines)
 VERSION = $$MATOME_APP_VERSION
@@ -34,14 +35,15 @@ PRE_TARGETDEPS += $$OUT_PWD/../core/libmatomecore.a
 android {
     DESTDIR =
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/../../packaging/android
-    ANDROID_ABIS = x86_64
+    isEmpty(MATOME_ANDROID_ABI): MATOME_ANDROID_ABI = x86_64
+    ANDROID_ABIS = $$MATOME_ANDROID_ABI
     ANDROID_MIN_SDK_VERSION = 28
     ANDROID_TARGET_SDK_VERSION = 36
     ANDROID_VERSION_NAME = $$MATOME_APP_VERSION
     ANDROID_VERSION_CODE = $$MATOME_ANDROID_VERSION_CODE
     isEmpty(ANDROID_VERSION_CODE): error("MATOME_ANDROID_VERSION_CODE is required")
     LIBS -= -lmatomecore
-    LIBS += -lmatomecore_x86_64
+    LIBS += -lmatomecore_$$MATOME_ANDROID_ABI
     PRE_TARGETDEPS -= $$OUT_PWD/../core/libmatomecore.a
-    PRE_TARGETDEPS += $$OUT_PWD/../core/libmatomecore_x86_64.a
+    PRE_TARGETDEPS += $$OUT_PWD/../core/libmatomecore_$$MATOME_ANDROID_ABI.a
 }
