@@ -13,6 +13,20 @@ mise run studio
 
 The studio binary is `build/bin/matome-studio`.
 
+## Install
+
+Download the latest Matome app for your device:
+
+| Platform | Download |
+| --- | --- |
+| Windows (x86_64) | [Installer](https://github.com/matome-org/matome-app/releases/latest/download/matome-windows-x86_64.exe) |
+| macOS (Intel and Apple silicon) | [DMG](https://github.com/matome-org/matome-app/releases/latest/download/matome-macos-universal.dmg) |
+| Linux (x86_64) | [AppImage](https://github.com/matome-org/matome-app/releases/latest/download/matome-linux-x86_64.AppImage) |
+| Android (arm64) | [APK](https://github.com/matome-org/matome-app/releases/latest/download/matome-android-arm64.apk) |
+
+See [installation and removal instructions](docs/installation.md) for each
+platform. All versions and checksums are on the [releases page](https://github.com/matome-org/matome-app/releases).
+
 ## Releases
 
 See [the local release process](docs/releasing.md).
