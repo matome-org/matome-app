@@ -55,6 +55,11 @@ mise run android
 mise run android:install
 ```
 
+The Android build compiles pinned OpenSSL 3.5.8 libraries and bundles them
+with the APK so HTTPS works on devices without system OpenSSL libraries.
+The source archive is checked against its SHA-256 digest. The license is
+included in the APK under `assets/licenses/openssl.txt`.
+
 `android:install` needs a running `Pixel_7_API_34` AVD. Start it with
 `mise run android:emulator`, which uses `-gpu host`; SwiftShader paints
 Qt Quick rectangles as one triangle. The sign-in URL defaults to

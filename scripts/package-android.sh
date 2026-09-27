@@ -19,6 +19,9 @@ mkdir -p "$dist_dir"
 dist_dir="$(cd "$dist_dir" && pwd)"
 build_dir="${RUNNER_TEMP:-/tmp}/matome-android-arm64-build"
 mkdir -p "$build_dir"
+export MATOME_ANDROID_ABI=arm64-v8a
+export MATOME_ANDROID_OPENSSL_DIR="$build_dir/openssl/arm64-v8a"
+"$source_dir/scripts/build-android-openssl.sh"
 cd "$build_dir"
 if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
   echo 'package-android: version must be numeric SemVer' >&2

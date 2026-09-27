@@ -40,6 +40,7 @@ int main(int argc, char **argv)
     // Rectangle geometry. Paint each fill separately.
     qputenv("QSG_NO_BATCHING", "1");
     qputenv("QSG_RENDER_LOOP", "basic");
+    qputenv("ANDROID_OPENSSL_SUFFIX", "_3");
 #endif
 
     QGuiApplication app(argc, argv);

@@ -42,6 +42,7 @@ The workflow checks out the release tag and attaches a web tarball, a macOS
 DMG, a Windows installer EXE, a Linux AppImage, a signed Android arm64 APK,
 and `SHA256SUMS`. Each package is uploaded with its versioned name and an
 unversioned name for stable `/releases/latest/download/` links in the README.
+The Android job compiles and bundles pinned OpenSSL libraries for HTTPS.
 The checksums file includes both names. It needs the
 `MATOME_ANDROID_KEYSTORE_B64` and `MATOME_ANDROID_KEYSTORE_PASSWORD` repository
 secrets. The first contains the Base64 encoding of the PKCS12 keystore; the
