@@ -14,3 +14,4 @@ Makefile
 
 aqtinstall.log
 __pycache__/
+tests/.env

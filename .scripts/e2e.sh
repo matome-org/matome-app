@@ -13,6 +13,8 @@ set -euo pipefail
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
+test_env
+export MATOME_TEST_BUILD=1
 product="$root/build-wasm/bin"
 if [ ! -f "$product/matome-studio.wasm" ]; then
   echo "e2e: missing $product/matome-studio.wasm — run mise run wasm first" >&2
@@ -33,6 +35,7 @@ mkdir -p "$e2e"
   wasm_env
   qmake_build "$e2e/probe" "$root/tests/e2e/web/probe/probe.pro"
   "$root/.scripts/wasm-build.sh" "$e2e/app" \
+    CONFIG+=matome_test \
     "LIBS+=-Wl,--whole-archive,$e2e/probe/libwebprobe.a,--no-whole-archive" \
     "PRE_TARGETDEPS+=$e2e/probe/libwebprobe.a"
 ) >"$e2e/build.log" 2>&1 || {

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import socket
+import os
+from urllib.parse import urlsplit
 
 from app import (
     ACME,
@@ -87,9 +89,10 @@ def wrong_password(app: App) -> None:
 def unreachable_core(app: App) -> None:
     d = app.device
     screen = app.open_server(app.fresh())
-    expect(screen.get("apiField").text == "http://10.0.2.2:7001", "the default Core URL changed")
+    expect(screen.get("apiField").text == os.environ["MATOME_TEST_DEFAULT_SERVER"], "the default Core URL changed")
     app.core.reset()
-    screen = app.form({"apiField": f"http://10.0.2.2:{closed_port()}", "passwordField": PASSWORD,
+    test_host = urlsplit(app.core.emulator_url).hostname
+    screen = app.form({"apiField": f"http://{test_host}:{closed_port()}", "passwordField": PASSWORD,
                        "emailField": EMAIL})
     d.tap(screen.get("serverToggle"))
     d.gone("apiField")

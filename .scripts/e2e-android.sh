@@ -10,10 +10,11 @@ set -euo pipefail
 # shellcheck source=lib.sh
 source "$(dirname "$0")/lib.sh"
 
+test_env
 android_env
 
 # First, so its toolchain check runs before anything needs adb.
-"$root/.scripts/android-build.sh"
+"$root/.scripts/android-build.sh" --test
 
 emulator_pid=""
 cleanup() {
@@ -38,7 +39,7 @@ if ! timeout 180 bash -c \
   exit 1
 fi
 
-"$root/.scripts/android-install.sh"
+"$root/.scripts/android-install.sh" "$root/build-tests/android-app/bin/matome-studio.apk"
 
 # The runner imports FakeCore's driver from tests/e2e (fakecore.py).
 PYTHONPATH="$root/tests/e2e${PYTHONPATH:+:$PYTHONPATH}" \

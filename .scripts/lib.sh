@@ -56,3 +56,16 @@ android_env() {
   export ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-$HOME/.config/.android/avd}"
   export PATH="$java_home/bin:$sdk/platform-tools:$PATH"
 }
+
+test_env() {
+  local file="$root/tests/.env"
+  [ -f "$file" ] || file="$root/tests/.env.example"
+  set -a
+  # shellcheck disable=SC1090
+  source "$file"
+  set +a
+  case "${MATOME_TEST_DEFAULT_SERVER:-}" in
+    http://localhost:*|http://127.0.0.1:*|http://10.0.2.2:*) ;;
+    *) echo "test_env: MATOME_TEST_DEFAULT_SERVER must use a local test host" >&2; return 1 ;;
+  esac
+}

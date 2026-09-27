@@ -1,6 +1,7 @@
 MATOME_PROJECT_DIR = $$PWD
 MATOME_SOURCE_ROOT = $$clean_path($$PWD/../..)
 include($$PWD/../../qmake/layout.pri)
+include($$PWD/../../qmake/build-config.pri)
 
 QT       += core gui qml quick network
 CONFIG   += c++17 qmltypes

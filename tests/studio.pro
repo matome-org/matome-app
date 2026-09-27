@@ -4,6 +4,8 @@ include($$PWD/../qmake/layout.pri)
 
 QT       += core gui qml quick network testlib qmltest
 CONFIG   += testcase c++17 console qmltypes
+CONFIG   += matome_test
+include($$PWD/../qmake/build-config.pri)
 CONFIG   -= app_bundle
 TEMPLATE  = app
 TARGET    = tst_studio
