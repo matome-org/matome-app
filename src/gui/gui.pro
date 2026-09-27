@@ -43,7 +43,7 @@ android {
     ANDROID_VERSION_CODE = $$MATOME_ANDROID_VERSION_CODE
     isEmpty(ANDROID_VERSION_CODE): error("MATOME_ANDROID_VERSION_CODE is required")
     LIBS -= -lmatomecore
-    LIBS += -lmatomecore_$$MATOME_ANDROID_ABI
+    LIBS += -lmatomecore_$${MATOME_ANDROID_ABI}
     PRE_TARGETDEPS -= $$OUT_PWD/../core/libmatomecore.a
-    PRE_TARGETDEPS += $$OUT_PWD/../core/libmatomecore_$$MATOME_ANDROID_ABI.a
+    PRE_TARGETDEPS += $$OUT_PWD/../core/libmatomecore_$${MATOME_ANDROID_ABI}.a
 }

@@ -6,7 +6,10 @@ CONFIG += lrelease embed_translations
 
 # The scripts export MATOME_LRELEASE (.scripts/linguist.sh finds it).
 MATOME_LRELEASE = $$(MATOME_LRELEASE)
-isEmpty(MATOME_LRELEASE): MATOME_LRELEASE = $$[QT_HOST_BINS]/lrelease
+isEmpty(MATOME_LRELEASE) {
+    MATOME_LRELEASE = $$[QT_HOST_BINS]/lrelease
+    win32: MATOME_LRELEASE = $$[QT_HOST_BINS]/lrelease.exe
+}
 !exists($$MATOME_LRELEASE): \
     error("lrelease is missing at $$MATOME_LRELEASE; mise run deps says how to install it.")
 QT_TOOL.lrelease.binary = $$MATOME_LRELEASE
