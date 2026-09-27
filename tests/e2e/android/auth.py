@@ -229,5 +229,5 @@ def accepted_invitation(app: App) -> None:
     app.start()
     app.wait_rows([OWN_ORG])
     app.core.accept_invitation(EMAIL, "Invited")
-    app.device.tap("refreshButton")
+    app.menu(None, "refresh")
     app.wait_rows([OWN_ORG, "Invited"])
