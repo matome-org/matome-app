@@ -32,6 +32,15 @@ wasm: QT += gui-private
 LIBS           += -L$$OUT_PWD/../core -lmatomecore
 PRE_TARGETDEPS += $$OUT_PWD/../core/libmatomecore.a
 
+win32 {
+    LIBS -= -L$$OUT_PWD/../core -lmatomecore
+    PRE_TARGETDEPS -= $$OUT_PWD/../core/libmatomecore.a
+    CONFIG(release, debug|release): MATOME_CORE_LIB = $$OUT_PWD/../core/release/matomecore.lib
+    CONFIG(debug, debug|release): MATOME_CORE_LIB = $$OUT_PWD/../core/debug/matomecore.lib
+    LIBS += $$MATOME_CORE_LIB
+    PRE_TARGETDEPS += $$MATOME_CORE_LIB
+}
+
 android {
     DESTDIR =
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/../../packaging/android
