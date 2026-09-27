@@ -145,9 +145,9 @@ Good: `feat(filter): add priority option` then
 
 ## This project
 
-- Matome is a Qt 6 Quick client for Matome Core. `matome.pro` builds the
-  desktop app, WebAssembly app, and Android emulator APK from `src/core/`
-  and `src/gui/`.
+- Matome is a Qt 6 Quick client. `matome.pro` builds desktop, WebAssembly,
+  and Android targets from `src/core/` and `src/gui/`. The local Android
+  build targets an x86_64 emulator; releases include a signed arm64 APK.
 - `mise.toml` is the command entry point. Existing platform build and test
   implementations are in `.scripts/`; new automation lives in `scripts/`.
 - The local gate is `mise run verify`: QML lint, translation completeness,
@@ -155,3 +155,5 @@ Good: `feat(filter): add priority option` then
   have separate mise tasks.
 - Release Please runs locally through mise. GitHub Actions packages web,
   macOS, Windows, Linux, and signed Android assets for GitHub Releases.
+- `README.md` presents the client and its downloads. Build, test, and
+  release instructions live in `docs/`.
