@@ -48,7 +48,7 @@ cp "$so" "$android_out/libs/arm64-v8a/"
   --sign "$QT_ANDROID_KEYSTORE_PATH" "$QT_ANDROID_KEYSTORE_ALIAS" \
   --storetype PKCS12
 
-apk="$(find "$android_out" -name '*-release.apk' -print -quit)"
+apk="$(find "$android_out" -name '*-release-signed.apk' -print -quit)"
 test -n "$apk"
 "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose "$apk"
 cp "$apk" "$dist_dir/matome-android-arm64-$tag.apk"
