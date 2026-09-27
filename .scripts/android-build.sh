@@ -10,6 +10,8 @@ android_env
 
 build_dir="$root/build-android"
 mkdir -p "$build_dir"
+export MATOME_ANDROID_OPENSSL_DIR="$build_dir/openssl/x86_64"
+"$root/scripts/build-android-openssl.sh"
 cd "$build_dir"
 version="$(cat "$root/version.txt")"
 if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then

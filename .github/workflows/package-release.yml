@@ -120,6 +120,13 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           path: source
+      - uses: jdx/mise-action@v4.2.3
+        with:
+          install: false
+          working_directory: source
+      - name: Install Android package tool
+        working-directory: source
+        run: mise install github:NixOS/patchelf
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
