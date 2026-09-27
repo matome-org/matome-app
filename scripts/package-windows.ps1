@@ -17,7 +17,14 @@ Push-Location $buildDir
 try {
     & qmake (Join-Path $SourceDir 'matome.pro') 'CONFIG+=release'
     if ($LASTEXITCODE -ne 0) { throw 'qmake failed' }
-    New-Item -ItemType Directory -Force (Join-Path $buildDir 'src/gui/.qm') | Out-Null
+    $qmDir = Join-Path $buildDir 'src/gui/.qm'
+    New-Item -ItemType Directory -Force $qmDir | Out-Null
+    $lrelease = Join-Path $env:QT_ROOT_DIR 'bin/lrelease.exe'
+    foreach ($translation in Get-ChildItem (Join-Path $SourceDir 'src/gui/i18n') -Filter 'matome_*.ts') {
+        $qm = Join-Path $qmDir ($translation.BaseName + '.qm')
+        & $lrelease $translation.FullName -qm $qm
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $qm)) { throw "lrelease failed for $($translation.Name)" }
+    }
     & nmake
     if ($LASTEXITCODE -ne 0) {
         Get-ChildItem (Join-Path $buildDir 'src/gui/.qm') | Select-Object -ExpandProperty Name
