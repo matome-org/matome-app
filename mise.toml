@@ -64,7 +64,7 @@ description = "Installs the versioned pre-push hook that runs the local gate"
 run = "scripts/install-hooks.sh"
 
 [tasks."release:publish"]
-description = "Builds web, Linux desktop, and emulator APK assets from a release tag"
+description = "Dispatches GitHub package builds for an existing release tag"
 run = "scripts/release-publish.sh"
 
 [tasks."release:pr"]

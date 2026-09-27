@@ -1,8 +1,8 @@
 # Releasing matome-app
 
-Commits use Conventional Commits. Release Please reads commits on `master` and
-opens a release PR that updates `version.txt` and `CHANGELOG.md`. The process
-runs locally; GitHub Actions does not build or test releases.
+Commits use Conventional Commits. Release Please runs locally and opens a
+release PR that updates `version.txt` and `CHANGELOG.md`. The local check runs
+on a developer machine. GitHub Actions builds release packages only.
 
 Install the versioned pre-push hook once per checkout:
 
@@ -24,27 +24,25 @@ mise run release:pr
 ```
 
 After checking and merging that PR, update `master` and create the tag and
-GitHub Release:
+GitHub Release. Publishing the release starts the GitHub package workflow:
 
 ```bash
 git pull --ff-only
 mise run release:finalize
 ```
 
-Build and upload the web, Linux desktop, and Android emulator assets from the
-release tag:
+To rebuild packages for an existing release, dispatch the same workflow:
 
 ```bash
-git fetch --all --tags
-git switch --detach vX.Y.Z
 mise run release:publish -- vX.Y.Z
-git switch master
 ```
 
-The upload attaches `matome-web-vX.Y.Z.tar.gz`,
-`matome-desktop-linux-x86_64-vX.Y.Z.tar.gz`,
-`matome-android-emulator-x86_64-vX.Y.Z.apk`, and `SHA256SUMS` to the GitHub
-Release. The web archive contains `build-wasm/bin` for a static web server.
-The Linux archive contains a dynamically linked Qt executable and needs Qt
-6.11.2 on the host. The APK is a debug build for an x86_64 emulator; it is
-not a signed production APK. No container image is included.
+The workflow checks out the release tag and attaches a web tarball, a macOS
+DMG, a Windows installer EXE, a Linux AppImage, a signed Android arm64 APK,
+and `SHA256SUMS`. It needs the `MATOME_ANDROID_KEYSTORE_B64` and
+`MATOME_ANDROID_KEYSTORE_PASSWORD` repository secrets. The first contains the
+Base64 encoding of the PKCS12 keystore; the second is its store and key
+password. The key alias is `matome-upload`. Keep an offline backup of both:
+future Android versions must use the same signing key. The macOS and Windows
+packages are currently unsigned. Add Developer ID notarization and Windows
+code signing after MATOME obtains those credentials.

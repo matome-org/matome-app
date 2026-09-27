@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Matome
+Exec=matome-studio
+Icon=matome
+Categories=Office;Utility;
+Terminal=false
