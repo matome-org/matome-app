@@ -32,8 +32,6 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           path: source
-      - name: Prepare tagged source
-        run: bash automation/scripts/prepare-release-source.sh "$GITHUB_WORKSPACE/source" "$TAG"
       - uses: jurplel/install-qt-action@v4
         with:
           version: 6.11.2
@@ -59,9 +57,6 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           path: source
-      - name: Prepare tagged source
-        shell: bash
-        run: bash automation/scripts/prepare-release-source.sh "$GITHUB_WORKSPACE/source" "$TAG"
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: jurplel/install-qt-action@v4
         with:
@@ -88,8 +83,6 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           path: source
-      - name: Prepare tagged source
-        run: bash automation/scripts/prepare-release-source.sh "$GITHUB_WORKSPACE/source" "$TAG"
       - uses: jurplel/install-qt-action@v4
         with:
           version: 6.11.2
@@ -127,8 +120,6 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           path: source
-      - name: Prepare tagged source
-        run: bash automation/scripts/prepare-release-source.sh "$GITHUB_WORKSPACE/source" "$TAG"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
