@@ -58,8 +58,8 @@ android_env() {
 }
 
 test_env() {
-  local file="$root/tests/.env"
-  [ -f "$file" ] || file="$root/tests/.env.example"
+  local file="$root/.env"
+  [ -f "$file" ] || file="$root/.env.example"
   set -a
   # shellcheck disable=SC1090
   source "$file"
