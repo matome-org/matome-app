@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/matome-org/matome-app/compare/v0.3.0...v0.4.0) (2026-09-28)
+
+
+### Features
+
+* **web:** add release container deployment ([43c2fa6](https://github.com/matome-org/matome-app/commit/43c2fa6148743fa2c3a379f74791dba8df245528))
+
 ## [0.3.0](https://github.com/matome-org/matome-app/compare/v0.2.0...v0.3.0) (2026-09-28)
 
 
