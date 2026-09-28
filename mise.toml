@@ -1,4 +1,5 @@
 [tools]
+docker-cli = "29.7.2"
 python = "3.12.10"
 usage = "6.6.0"
 "npm:playwright" = "1.63.0"
@@ -75,6 +76,23 @@ run = ".scripts/wasm-build.sh"
 [tasks."wasm:serve"]
 description = "Serves the WASM studio on :7002 and proxies Core on :7001"
 run = ".scripts/wasm-serve.sh"
+
+[tasks."web:container:build"]
+description = "Builds the web container from a published release"
+usage = '''
+flag "--release <tag>" help="Published release tag; defaults to the Dockerfile version"
+flag "--no-cache" help="Download the package again and rebuild without cached layers"
+'''
+run = "scripts/web-container-build.sh"
+
+[tasks."web:container:run"]
+description = "Starts the web container on localhost"
+usage = 'flag "--port <port>" default="8080" help="Local HTTP port"'
+run = "scripts/web-container-run.sh"
+
+[tasks."web:container:stop"]
+description = "Stops and removes the local web container"
+run = "scripts/web-container-stop.sh"
 
 [tasks."android:deps"]
 description = "Checks the Android APK toolchain"

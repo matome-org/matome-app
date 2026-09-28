@@ -74,4 +74,5 @@ Qt Quick rectangles as one triangle. The sign-in URL defaults to the value
 in `app.toml`; the server field can be changed for a local Core.
 
 See [testing](testing.md) for the local checks and [releasing](releasing.md)
-for the publication process.
+for the publication process. See [web deployment](web-deployment.md) to run
+the published web app in a local container or deploy it with Dokploy.
