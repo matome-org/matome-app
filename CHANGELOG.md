@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/matome-org/matome-app/compare/v0.2.0...v0.3.0) (2026-09-28)
+
+
+### Features
+
+* **config:** compile default server from app.toml ([a819aa9](https://github.com/matome-org/matome-app/commit/a819aa904967f7243b66d65df59f7c1da9d0b337))
+
 ## [0.2.0](https://github.com/matome-org/matome-app/compare/v0.1.0...v0.2.0) (2026-09-27)
 
 
