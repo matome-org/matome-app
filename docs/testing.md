@@ -1,8 +1,8 @@
 # Test Matome
 
-Test builds read `MATOME_TEST_DEFAULT_SERVER` from `tests/.env`. When that
-file is absent, they use the local value in `tests/.env.example`. Copy the
-example to `tests/.env` to change the test URL or port. Only localhost,
+Test builds read `MATOME_TEST_DEFAULT_SERVER` from the root `.env`. When that
+file is absent, they use the local value in the root `.env.example`. Copy the
+example to `.env` to change the test URL or port. Only localhost,
 127.0.0.1, and the Android emulator host 10.0.2.2 are accepted; test builds
 cannot use the public server from `app.toml`.
 
