@@ -37,7 +37,7 @@ jobs:
           path: source
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12.14'
+          python-version: '3.12.10'
       - uses: jurplel/install-qt-action@v4
         with:
           version: 6.11.2
@@ -65,7 +65,7 @@ jobs:
           path: source
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12.14'
+          python-version: '3.12.10'
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: jurplel/install-qt-action@v4
         with:
@@ -94,7 +94,7 @@ jobs:
           path: source
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12.14'
+          python-version: '3.12.10'
       - uses: jurplel/install-qt-action@v4
         with:
           version: 6.11.2
@@ -134,7 +134,7 @@ jobs:
           path: source
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12.14'
+          python-version: '3.12.10'
       - uses: jdx/mise-action@v4.2.3
         with:
           install: false
@@ -201,7 +201,7 @@ jobs:
           path: source
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12.14'
+          python-version: '3.12.10'
       - uses: emscripten-core/setup-emsdk@v15
         with:
           version: 4.0.7
