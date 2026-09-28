@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!scripts/
+!scripts/fetch-web-release.sh
+!packaging/
+!packaging/web/
+!packaging/web/nginx.conf
