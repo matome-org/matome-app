@@ -265,15 +265,24 @@ class Device:
     def key(self, *codes: str) -> None:
         self.shell("input", "keyevent", *codes)
 
-    def back(self) -> None:
-        """Android's Back, with the soft keyboard out of the way: while the
-        input method counts as shown (it does after focusing a field, even
-        with the hardware keyboard standing in), Back only closes it."""
+    def keyboard_top(self) -> int | None:
+        """The top edge of the visible soft keyboard, else None."""
+        out = self.shell("dumpsys", "window")
+        match = re.search(r"InsetsSource id=\S+ type=ime frame=\[\d+,(\d+)\]\[\d+,\d+\] "
+                          r"visibleFrame=\S+ visible=true", out)
+        return int(match.group(1)) if match else None
+
+    def hide_keyboard(self) -> None:
+        """Closes the input method before touching controls behind it."""
         deadline = time.monotonic() + TIMEOUT
         while "mInputShown=true" in self.shell("dumpsys", "input_method"):
             if time.monotonic() > deadline:
                 raise Failure("the soft keyboard would not close")
             self.key("KEYCODE_BACK")
+
+    def back(self) -> None:
+        """Closes the input method before sending Back to Qt."""
+        self.hide_keyboard()
         self.key("KEYCODE_BACK")
 
     def enter(self) -> None:
@@ -299,4 +308,8 @@ class Device:
         if isinstance(target, tuple):
             return target
         node = self.node(target) if isinstance(target, str) else target
+        top = self.keyboard_top()
+        if top is not None and node.center[1] >= top and node.cls != "android.widget.EditText":
+            self.hide_keyboard()
+            node = self.still(node.name)
         return node.center

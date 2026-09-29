@@ -106,7 +106,7 @@ class App:
     def open_server(self, screen: Screen) -> Screen:
         """Shows the Core address field if it is hidden."""
         if "apiField" not in screen:
-            self.device.tap(screen.get("serverToggle") or self.device.node("serverToggle"))
+            self.device.tap(self.device.still("serverToggle"))
             screen = self.device.showing("apiField")
         return screen
 
