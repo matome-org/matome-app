@@ -33,6 +33,10 @@ run = ".scripts/i18n.sh"
 description = "Runs unit tests, desktop studio e2e, and the coverage gate"
 run = ".scripts/test.sh"
 
+[tasks."test:core"]
+description = "Runs the core unit tests without studio or platform e2e"
+run = "scripts/test-core.sh"
+
 [tasks."test:desktop"]
 description = "Offscreen QML window against FakeCore, then the real binary smoke"
 run = ".scripts/e2e-desktop.sh"

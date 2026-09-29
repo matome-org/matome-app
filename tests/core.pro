@@ -18,6 +18,7 @@ SOURCES += \
     ../src/core/Client.cpp \
     ../src/gui/Session.cpp \
     ../src/gui/SessionActions.cpp \
+    ../src/gui/OrgAdmin.cpp \
     ../src/gui/OrgModel.cpp \
     ../src/gui/SpaceModel.cpp \
     ../src/gui/FolderModel.cpp \
@@ -30,6 +31,7 @@ HEADERS += \
     FakeCore.h \
     ../src/core/Client.h \
     ../src/gui/Session.h \
+    ../src/gui/OrgAdmin.h \
     ../src/gui/OrgModel.h \
     ../src/gui/SpaceModel.h \
     ../src/gui/FolderModel.h \

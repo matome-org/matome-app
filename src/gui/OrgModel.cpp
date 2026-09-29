@@ -28,6 +28,12 @@ QString OrgModel::nameOf(const QString &orgId) const
     return row ? row->name : QString();
 }
 
+QString OrgModel::roleOf(const QString &orgId) const
+{
+    const OrgRow *row = find(orgId);
+    return row ? row->role : QString();
+}
+
 int OrgModel::rowCount(const QModelIndex &parent) const
 {
     return parent.isValid() ? 0 : m_rows.size();

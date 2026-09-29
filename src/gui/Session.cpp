@@ -21,6 +21,7 @@ namespace matome {
 Session::Session(QObject *parent)
     : QObject(parent)
     , m_orgs(*this)
+    , m_orgAdmin(*this)
     , m_spaces(*this)
     , m_folders(*this)
     , m_documents(*this)

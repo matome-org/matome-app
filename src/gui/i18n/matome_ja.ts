@@ -4,7 +4,7 @@
 <context>
     <name>Auth</name>
     <message>
-        <location filename="../qml/screens/Auth.qml" line="+26"/>
+        <location filename="../qml/screens/Auth.qml" line="+25"/>
         <source>Sending reset…</source>
         <translation>送信しています…</translation>
     </message>
@@ -87,12 +87,12 @@
         <translation>新しいリンクを送信</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>I confirmed my email</source>
         <translation>メールアドレスを確認しました</translation>
     </message>
     <message>
-        <location line="-91"/>
+        <location line="-92"/>
         <location line="+39"/>
         <source>Sign in</source>
         <translation>サインイン</translation>
@@ -113,7 +113,7 @@
         <translation>トークンを送信</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+55"/>
         <source>Back to sign in</source>
         <translation>サインインに戻る</translation>
     </message>
@@ -285,12 +285,12 @@
         <translation>Matome</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+62"/>
         <source>Delete folder “%1”?</source>
         <translation>フォルダー「%1」を削除しますか？</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+52"/>
         <source>This cannot be undone.</source>
         <translation>この操作は元に戻せません。</translation>
     </message>
@@ -482,6 +482,331 @@
         <source>Could not upload “%1”: Core refused it.</source>
         <translation>「%1」をアップロードできませんでした。Core に拒否されました。</translation>
     </message>
+    <message>
+        <location line="+8"/>
+        <source>You do not have permission for this action.</source>
+        <translation>この操作を行う権限がありません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enter a valid email address.</source>
+        <translation>有効なメールアドレスを入力してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check the required fields.</source>
+        <translation>必須項目を確認してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The organization must keep at least one owner.</source>
+        <translation>組織には少なくとも1人の所有者が必要です。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your account must keep at least one organization membership.</source>
+        <translation>アカウントは少なくとも1つの組織に所属する必要があります。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This person already belongs to the organization.</source>
+        <translation>このユーザーはすでに組織に所属しています。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>There is already a pending invitation for this email.</source>
+        <translation>このメールアドレスにはすでに保留中の招待があります。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The invitation email could not be sent. Try again.</source>
+        <translation>招待メールを送信できませんでした。もう一度お試しください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This invitation has expired. Send a new invitation.</source>
+        <translation>この招待は期限切れです。新しい招待を送信してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The organization has reached its plan limit.</source>
+        <translation>組織がプランの上限に達しました。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This feature is not available on the current plan.</source>
+        <translation>この機能は現在のプランでは利用できません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The organization changed. Review the updated details and try again.</source>
+        <translation>組織が変更されました。最新の情報を確認して、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not complete the organization request.</source>
+        <translation>組織へのリクエストを完了できませんでした。</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Organization updated.</source>
+        <translation>組織を更新しました。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Invitation sent by email.</source>
+        <translation>招待をメールで送信しました。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Member role updated.</source>
+        <translation>メンバーの役割を更新しました。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Member removed.</source>
+        <translation>メンバーを削除しました。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Invitation canceled.</source>
+        <translation>招待を取り消しました。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Pending</source>
+        <translation>保留中</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accepted</source>
+        <translation>承諾済み</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Canceled</source>
+        <translation>取消済み</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expired</source>
+        <translation>期限切れ</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Storage</source>
+        <translation>ストレージ</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Members</source>
+        <translation>メンバー</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Guests</source>
+        <translation>ゲスト</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Spaces</source>
+        <translation>スペース</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>B</source>
+        <translation>B</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>KiB</source>
+        <translation>KiB</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>MiB</source>
+        <translation>MiB</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>GiB</source>
+        <translation>GiB</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>TiB</source>
+        <translation>TiB</translation>
+    </message>
+</context>
+<context>
+    <name>OrgAdmin</name>
+    <message>
+        <location filename="../qml/screens/OrgAdmin.qml" line="+23"/>
+        <source>General</source>
+        <translation>一般</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Members</source>
+        <translation>メンバー</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Invitations</source>
+        <translation>招待</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Usage</source>
+        <translation>使用状況</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Remove %1?</source>
+        <translation>%1を削除しますか？</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancel invitation for %1?</source>
+        <translation>%1への招待を取り消しますか？</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change the role of %1?</source>
+        <translation>%1の役割を変更しますか？</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This person will lose access to the organization.</source>
+        <translation>このユーザーは組織にアクセスできなくなります。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The invitation link will stop working.</source>
+        <translation>招待リンクは無効になります。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Their organization permissions will change.</source>
+        <translation>このユーザーの組織での権限が変更されます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancel invitation</source>
+        <translation>招待を取り消す</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Change role</source>
+        <translation>役割を変更</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Back to files</source>
+        <translation>ファイルに戻る</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Organization administration</source>
+        <translation>組織の管理</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Organization</source>
+        <translation>組織</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Refresh</source>
+        <translation>更新</translation>
+    </message>
+    <message>
+        <location line="+92"/>
+        <source>Working…</source>
+        <translation>処理中…</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <location line="+5"/>
+        <source>Organization name</source>
+        <translation>組織名</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Save changes</source>
+        <translation>変更を保存</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Email address</source>
+        <translation>メールアドレス</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Invite</source>
+        <translation>招待</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>No members to display.</source>
+        <translation>表示するメンバーがいません。</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>No invitations yet.</source>
+        <translation>招待はまだありません。</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Plan: %1</source>
+        <translation>プラン：%1</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Unlimited</source>
+        <translation>無制限</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Reserved: %1</source>
+        <translation>予約済み：%1</translation>
+    </message>
+</context>
+<context>
+    <name>OrgAdminPeople</name>
+    <message>
+        <location filename="../qml/screens/OrgAdminPeople.qml" line="+57"/>
+        <source>Expires %1</source>
+        <translation>有効期限：%1</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Apply</source>
+        <translation>適用</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Remove</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cancel invitation</source>
+        <translation>招待を取り消す</translation>
+    </message>
+</context>
+<context>
+    <name>RolePicker</name>
+    <message>
+        <location filename="../qml/chrome/RolePicker.qml" line="+31"/>
+        <source>Organization role</source>
+        <translation>組織での役割</translation>
+    </message>
 </context>
 <context>
     <name>Sidebar</name>
@@ -491,7 +816,12 @@
         <translation>組織</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
+        <source>Administration</source>
+        <translation>管理</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Spaces</source>
         <translation>スペース</translation>
     </message>
@@ -599,7 +929,7 @@
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+110"/>
+        <location filename="../Session.cpp" line="+112"/>
         <source>New organization</source>
         <translation>新しい組織</translation>
     </message>
@@ -630,6 +960,11 @@
     </message>
     <message>
         <location line="+2"/>
+        <source>Organization administration</source>
+        <translation>組織の管理</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Next region</source>
         <translation>次の領域</translation>
     </message>

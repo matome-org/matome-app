@@ -26,7 +26,9 @@ Window {
     }
 
     function restoreFocus() {
-        if (explorer.visible)
+        if (orgAdmin.visible)
+            orgAdmin.focusDefault()
+        else if (explorer.visible)
             explorer.focusDefault()
         else
             auth.focusDefault()
@@ -58,7 +60,12 @@ Window {
         focus: true
 
         Keys.onPressed: function (event) {
-            if (event.key === Qt.Key_Escape && explorer.visible && explorer.dismiss())
+            if (orgAdmin.visible && event.key === Qt.Key_Escape) {
+                orgAdmin.dismiss()
+                event.accepted = true
+            } else if (orgAdmin.visible && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
+                event.accepted = true
+            } else if (event.key === Qt.Key_Escape && explorer.visible && explorer.dismiss())
                 event.accepted = true
             else if (Session.handleKey(event.key, event.modifiers, win.inField))
                 event.accepted = true
@@ -86,9 +93,18 @@ Window {
             id: explorer
             objectName: "explorer"
             anchors.fill: parent
-            visible: Session.signedIn
+            visible: Session.signedIn && !Session.orgAdmin.active
             enabled: explorer.visible
             onCommandChosen: function (id) { win.perform(id) }
+        }
+
+        OrgAdmin {
+            id: orgAdmin
+            objectName: "orgAdminScreen"
+            anchors.fill: parent
+            visible: Session.signedIn && Session.orgAdmin.active
+            enabled: visible
+            onVisibleChanged: if (!orgAdmin.visible && explorer.visible) explorer.focusDefault()
         }
 
         CommandSheet {

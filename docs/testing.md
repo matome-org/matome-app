@@ -20,12 +20,16 @@ The test suites are also available individually:
 
 ```bash
 mise run lint
+mise run test:core
 mise run test
 mise run test:desktop
 mise run test:web
 mise run test:mobile
 mise run test:e2e
 ```
+
+`test:core` runs the C++ unit suite, including organization administration,
+without the studio, platform e2e suites, or the combined coverage gate.
 
 `test:desktop` exercises keyboard, mouse, touch, drag and drop, uploads,
 errors, and the narrow drawer against FakeCore by QML `objectName`. It then

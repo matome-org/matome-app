@@ -6,6 +6,7 @@
 #include "FolderModel.h"
 #include "FolderTreeModel.h"
 #include "OrgModel.h"
+#include "OrgAdmin.h"
 #include "SpaceModel.h"
 
 #include <QAbstractListModel>
@@ -37,6 +38,7 @@ class Session : public QObject
     Q_PROPERTY(QString email READ email NOTIFY changed)
     Q_PROPERTY(QString apiBaseUrl READ apiBaseUrl WRITE setApiBaseUrl NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *organizations READ orgList CONSTANT)
+    Q_PROPERTY(matome::OrgAdmin *orgAdmin READ orgAdmin CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
     Q_PROPERTY(QString currentSpaceId READ currentSpaceId NOTIFY changed)
@@ -80,6 +82,7 @@ public:
     void setLastOrgId(const QString &id);
 
     OrgModel *organizations() { return &m_orgs; }
+    OrgAdmin *orgAdmin() { return &m_orgAdmin; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }
 
@@ -299,6 +302,7 @@ private:
 
     Client m_client;
     OrgModel m_orgs;
+    OrgAdmin m_orgAdmin;
     SpaceModel m_spaces;
     FolderModel m_folders;
     DocumentModel m_documents;

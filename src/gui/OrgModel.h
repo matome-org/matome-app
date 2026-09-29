@@ -38,6 +38,7 @@ public:
     QString errorCode() const { return m_errorCode; }
     QString currentOrgId() const { return m_currentOrgId; }
     QString nameOf(const QString &orgId) const;
+    QString roleOf(const QString &orgId) const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role) const override;
