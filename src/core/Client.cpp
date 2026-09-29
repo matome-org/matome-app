@@ -13,6 +13,7 @@ namespace {
 
 constexpr qint64 kMaxJsonBytes = 1024 * 1024;
 constexpr qint64 kMaxFileBytes = 32 * 1024 * 1024;
+constexpr qint64 kMaxDiffJsonBytes = 12 * 1024 * 1024 + 4096;
 
 QString mapStatus(int status, const QString &server)
 {
@@ -145,7 +146,9 @@ void Client::sendRaw(const QByteArray &method, const QUrl &url, const QByteArray
 
     const int generation = m_generation;
     QNetworkReply *reply = m_network->sendCustomRequest(request, method, bytes);
-    const qint64 cap = json ? kMaxJsonBytes : kMaxFileBytes;
+    const bool reviewDiff = json && method == "GET" && url.path().contains(QLatin1String("/reviews/"))
+            && url.path().endsWith(QLatin1String("/diff"));
+    const qint64 cap = json ? (reviewDiff ? kMaxDiffJsonBytes : kMaxJsonBytes) : kMaxFileBytes;
     reply->setReadBufferSize(cap + 1);
     QTimer::singleShot(m_timeoutMs, reply, [reply] {
         if (!reply->isFinished())

@@ -13,6 +13,7 @@ namespace matome {
 OrgBilling::OrgBilling(Session &session)
     : QObject(&session), m_session(session), m_paymentExpiry(this)
 {
+    connect(session.addOns(), &AddOnManager::changed, this, &OrgBilling::changed);
     m_paymentExpiry.setSingleShot(true);
     m_paymentExpiry.setTimerType(Qt::PreciseTimer);
     connect(&m_paymentExpiry, &QTimer::timeout, this, [this] {
@@ -40,11 +41,6 @@ bool OrgBilling::canManage() const
     return available() && m_session.organizations()->canManageBilling(m_session.currentOrgId());
 }
 
-bool OrgBilling::canInstall() const
-{
-    return available() && m_session.organizations()->canAdminister(m_session.currentOrgId());
-}
-
 QString OrgBilling::name() const
 {
     return m_session.organizations()->nameOf(m_session.currentOrgId());
@@ -52,7 +48,7 @@ QString OrgBilling::name() const
 
 QString OrgBilling::plan() const
 {
-    return m_entitlements.value(QStringLiteral("plan")).toObject().value(QStringLiteral("key")).toString();
+    return m_session.addOns()->entitlements().value(QStringLiteral("plan")).toObject().value(QStringLiteral("key")).toString();
 }
 
 QString OrgBilling::paymentUrl() const
@@ -66,6 +62,7 @@ void OrgBilling::open()
     if (m_active || !available()) return;
     m_active = true;
     m_orgId = m_session.currentOrgId();
+    m_session.addOns()->refresh();
     load();
 }
 
@@ -79,13 +76,9 @@ void OrgBilling::close()
     m_pending = 0;
     m_orgId.clear();
     m_subscription = {};
-    m_entitlements = {};
     m_usage = {};
-    m_catalog = {};
     m_packages = {};
-    m_products = {};
-    m_spaces = {};
-    m_billingError.clear(); m_productsError.clear(); m_usageError.clear();
+    m_billingError.clear(); m_usageError.clear();
     m_errorCode.clear(); m_notice.clear(); m_paymentUrl.clear();
     m_packagesError.clear();
     emit changed();
@@ -97,6 +90,8 @@ bool OrgBilling::live(int generation) const
             && m_orgId == m_session.currentOrgId();
 }
 
+bool OrgBilling::busy() const { return m_pending > 0 || m_saving || m_session.addOns()->busy(); }
+
 bool OrgBilling::canSave() const { return live(m_generation) && !busy(); }
 
 void OrgBilling::refresh()
@@ -105,14 +100,15 @@ void OrgBilling::refresh()
     m_paymentExpiry.stop();
     m_checkoutExpiresAt = {};
     m_errorCode.clear(); m_notice.clear(); m_paymentUrl.clear();
+    m_session.addOns()->refresh();
     load();
 }
 
 void OrgBilling::load()
 {
     const int generation = ++m_generation;
-    m_pending = canInstall() ? 7 : 6;
-    m_billingError.clear(); m_productsError.clear(); m_usageError.clear();
+    m_pending = 3;
+    m_billingError.clear(); m_usageError.clear();
     m_packagesError.clear();
     emit changed();
     const auto get = [this, generation](const QString &path, const QString &key,
@@ -126,7 +122,6 @@ void OrgBilling::load()
         });
     };
     get(orgPath(m_orgId, QStringLiteral("billing/subscription")), QStringLiteral("subscription"), m_subscription, m_billingError);
-    get(orgPath(m_orgId, QStringLiteral("entitlements")), QStringLiteral("entitlements"), m_entitlements, m_usageError);
     get(orgPath(m_orgId, QStringLiteral("usage")), QStringLiteral("usage"), m_usage, m_usageError);
     const auto list = [this, generation](const QString &path, const QString &key, QJsonArray &data, QString &error) {
         m_session.authedList(path, key, [this, generation] { return live(generation); },
@@ -139,41 +134,14 @@ void OrgBilling::load()
         });
     };
     list(orgPath(m_orgId, QStringLiteral("billing/packages")), QStringLiteral("packages"), m_packages, m_packagesError);
-    list(QStringLiteral("/api/v1/add-ons"), QStringLiteral("products"), m_catalog, m_productsError);
-    list(orgPath(m_orgId, QStringLiteral("add-ons")), QStringLiteral("products"), m_products, m_productsError);
-    if (canInstall())
-        list(orgPath(m_orgId, QStringLiteral("spaces")), QStringLiteral("spaces"), m_spaces, m_productsError);
-    else
-        m_spaces = {};
-}
-
-QJsonObject OrgBilling::productRow(const QString &key) const
-{
-    for (const QJsonValue &value : m_products)
-        if (value.toObject().value(QStringLiteral("key")).toString() == key) return value.toObject();
-    return {};
 }
 
 QVariantList OrgBilling::products() const
 {
     QVariantList result;
-    QJsonArray catalog = m_catalog;
-    for (const QJsonValue &value : m_products) {
-        const QJsonObject owned = value.toObject();
-        bool listed = false;
-        for (const QJsonValue &entry : m_catalog)
-            listed |= entry.toObject().value(QStringLiteral("key")) == owned.value(QStringLiteral("key"));
-        if (!listed) {
-            QJsonObject product = owned;
-            product.insert(QStringLiteral("name"), owned.value(QStringLiteral("key")));
-            product.insert(QStringLiteral("skus"), QJsonArray());
-            catalog.append(product);
-        }
-    }
-    for (const QJsonValue &value : catalog) {
+    for (const QJsonValue &value : m_session.addOns()->products()) {
         QJsonObject product = value.toObject();
-        const QJsonObject owned = productRow(product.value(QStringLiteral("key")).toString());
-        for (auto it = owned.begin(); it != owned.end(); ++it) product.insert(it.key(), it.value());
+        const QJsonObject owned = m_session.addOns()->product(product.value(QStringLiteral("key")).toString());
         QJsonArray skus;
         for (const QJsonValue &entry : product.value(QStringLiteral("skus")).toArray()) {
             QJsonObject sku = entry.toObject();
@@ -310,13 +278,13 @@ void OrgBilling::selectPackage(const QString &key, int version)
 
 void OrgBilling::setQuantity(const QString &key, int quantity)
 {
-    if (!canSave() || !canManage() || !m_billingError.isEmpty() || !m_productsError.isEmpty()
+    if (!canSave() || !canManage() || !m_billingError.isEmpty() || !m_session.addOns()->errorCode().isEmpty() || m_session.addOns()->busy()
             || quantity < 0 || m_subscription.value(QStringLiteral("plan")).toObject().isEmpty()
             || m_subscription.value(QStringLiteral("status")).toString() == QLatin1String("canceled")
             || m_subscription.value(QStringLiteral("status")).toString() == QLatin1String("incomplete_expired")
             || m_subscription.value(QStringLiteral("pending_update")).toBool()) return;
     QJsonObject selected;
-    for (const QJsonValue &value : m_catalog)
+    for (const QJsonValue &value : m_session.addOns()->products())
         for (const QJsonValue &sku : value.toObject().value(QStringLiteral("skus")).toArray())
             if (sku.toObject().value(QStringLiteral("key")).toString() == key
                     && (selected.isEmpty() || sku.toObject().value(QStringLiteral("version")).toInt()
@@ -335,33 +303,4 @@ void OrgBilling::setQuantity(const QString &key, int quantity)
              {QStringLiteral("add_ons"), desired}}, idempotencyHeader(), saved(QStringLiteral("billing_requested")));
 }
 
-void OrgBilling::install(const QString &key, const QVariantList &spaceIds)
-{
-    if (!canSave() || !canInstall() || !m_productsError.isEmpty()) return;
-    const QJsonObject product = productRow(key);
-    if (product.value(QStringLiteral("assignments")).toArray().isEmpty()) return;
-    for (const QVariant &id : spaceIds) {
-        bool found = false;
-        for (const QJsonValue &space : m_spaces)
-            found |= jsonId(space.toObject().value(QStringLiteral("id"))) == id.toString();
-        if (!found) {
-            m_errorCode = QStringLiteral("invalid_space");
-            emit changed();
-            return;
-        }
-    }
-    const QJsonObject installation = product.value(QStringLiteral("installation")).toObject();
-    m_session.authedPut(orgPath(m_orgId, QStringLiteral("add-ons/%1/installation").arg(key)),
-            {{QStringLiteral("settings"), installation.value(QStringLiteral("settings")).toObject()},
-             {QStringLiteral("space_ids"), QJsonArray::fromVariantList(spaceIds)}},
-            idempotencyHeader(), saved(QStringLiteral("installation_saved")));
-}
-
-void OrgBilling::pause(const QString &key)
-{
-    if (!canSave() || !canInstall() || !m_productsError.isEmpty()) return;
-    if (productRow(key).value(QStringLiteral("installation")).toObject().value(QStringLiteral("status")).toString() != QLatin1String("active")) return;
-    m_session.authedPost(orgPath(m_orgId, QStringLiteral("add-ons/%1/installation/pause").arg(key)),
-            {}, idempotencyHeader(), saved(QStringLiteral("installation_paused")));
-}
 }

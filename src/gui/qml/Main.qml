@@ -17,8 +17,11 @@ Window {
     title: qsTr("Matome")
     color: Theme.background
 
-    onActiveChanged: if (win.active)
+    onActiveChanged: if (win.active) {
         Session.refreshOrganizations()
+        Session.addOns.refresh()
+        if (Session.controlledDocs.active) Session.controlledDocs.refresh()
+    }
 
     readonly property bool inField: {
         const item = win.activeFocusItem
@@ -26,7 +29,9 @@ Window {
     }
 
     function restoreFocus() {
-        if (settingsScreen.visible)
+        if (controlledScreen.visible)
+            controlledScreen.focusDefault()
+        else if (settingsScreen.visible)
             settingsScreen.focusDefault()
         else if (explorer.visible)
             explorer.focusDefault()
@@ -60,7 +65,12 @@ Window {
         focus: true
 
         Keys.onPressed: function (event) {
-            if (settingsScreen.visible && event.key === Qt.Key_Escape) {
+            if (controlledScreen.visible && event.key === Qt.Key_Escape) {
+                controlledScreen.dismiss()
+                event.accepted = true
+            } else if (controlledScreen.visible && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
+                event.accepted = true
+            } else if (settingsScreen.visible && event.key === Qt.Key_Escape) {
                 settingsScreen.dismiss()
                 event.accepted = true
             } else if (settingsScreen.visible && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
@@ -93,7 +103,7 @@ Window {
             id: explorer
             objectName: "explorer"
             anchors.fill: parent
-            visible: Session.signedIn && !Session.settingsActive
+            visible: Session.signedIn && !Session.settingsActive && !Session.controlledDocs.active
             enabled: explorer.visible
             onCommandChosen: function (id) { win.perform(id) }
         }
@@ -106,6 +116,15 @@ Window {
             enabled: visible
             onCommandChosen: function (id) { win.perform(id) }
             onVisibleChanged: if (!settingsScreen.visible && explorer.visible) explorer.focusDefault()
+        }
+
+        ControlledDocuments {
+            id: controlledScreen
+            objectName: "controlledDocumentsScreen"
+            anchors.fill: parent
+            visible: Session.signedIn && Session.controlledDocs.active
+            enabled: visible
+            onVisibleChanged: if (!visible && explorer.visible) explorer.focusDefault()
         }
 
         CommandSheet {

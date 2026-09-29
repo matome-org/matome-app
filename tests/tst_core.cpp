@@ -2,7 +2,9 @@
 #include "FakeCore.h"
 #include "JsonList.h"
 #include "Session.h"
+#include "MockAddOnBackend.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QJsonObject>
@@ -102,6 +104,9 @@ private slots:
     void wordsFollowTheTranslator();
     void settingsAvailableWithoutAdminOrganization();
     void settingsSelectsOrganizationsAndDiscardsReplies();
+    void addOnsUseMockBackend();
+    void addOnsDiscardStaleMockReplies();
+    void controlledDocsUseMockBackend();
     void orgBillingPermissionsAndStaleReplies();
     void orgBillingPreservesPurchasesAndGrants();
     void orgBillingConfiguresInstallation();
@@ -2892,6 +2897,245 @@ void TestCore::orgAdminRestrictsEntryAndPaginates()
     QCOMPARE(core.hits(), hits);
 }
 
+void TestCore::addOnsUseMockBackend()
+{
+    matome::test::MockAddOnBackend backend;
+    matome::AddOnManager manager(backend);
+    const QString org = QStringLiteral("org-mock");
+    const QString path = matome::orgPath(org, QStringLiteral("add-ons"));
+    QJsonObject installation{{QStringLiteral("status"), QStringLiteral("active")},
+        {QStringLiteral("revision"), 7}, {QStringLiteral("space_ids"), QJsonArray{QStringLiteral("space-a")}},
+        {QStringLiteral("settings"), QJsonObject{{QStringLiteral("keep"), true}}}};
+    const auto product = [&installation] {
+        return QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+            {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
+            {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+            {QStringLiteral("installation"), installation}};
+    };
+    backend.respond("GET", QStringLiteral("/api/v1/add-ons"),
+                    {{QStringLiteral("products"), QJsonArray{product()}}});
+    backend.respond("GET", path, {{QStringLiteral("products"), QJsonArray{product()}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")),
+                    {{QStringLiteral("spaces"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("space-a")}}}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
+        {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject{{QStringLiteral("addon.controlled_docs"), true}}}}}});
+    manager.setContext(org, true, true);
+    manager.refresh();
+    QTRY_VERIFY(!manager.busy());
+    QVERIFY(manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space-a")).value(QStringLiteral("available")).toBool());
+    QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space-b")).value(QStringLiteral("available")).toBool());
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
+        {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject{{QStringLiteral("addon.controlled_docs"), false}}}}}});
+    manager.refresh();
+    QTRY_VERIFY(!manager.busy());
+    QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space-a")).value(QStringLiteral("entitled")).toBool());
+    const int forbiddenCalls = backend.calls.size();
+    manager.install(QStringLiteral("controlled_docs"), {});
+    QCOMPARE(backend.calls.size(), forbiddenCalls);
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
+        {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject{{QStringLiteral("addon.controlled_docs"), true}}}}}});
+    manager.refresh();
+    QTRY_VERIFY(!manager.busy());
+    const int calls = backend.calls.size();
+    manager.install(QStringLiteral("controlled_docs"), {QStringLiteral("unknown-space")});
+    QCOMPARE(backend.calls.size(), calls);
+    backend.respond("POST", path + QStringLiteral("/controlled_docs/installation/pause"), {});
+    installation.insert(QStringLiteral("status"), QStringLiteral("paused"));
+    backend.respond("GET", path, {{QStringLiteral("products"), QJsonArray{product()}}});
+    manager.pause(QStringLiteral("controlled_docs"));
+    QTRY_VERIFY(!manager.busy());
+    QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space-a")).value(QStringLiteral("available")).toBool());
+    QCOMPARE(manager.notice(), QStringLiteral("installation_paused"));
+    backend.respond("PUT", path + QStringLiteral("/controlled_docs/installation"), {});
+    manager.install(QStringLiteral("controlled_docs"), {});
+    const auto resume = backend.calls.constLast();
+    QCOMPARE(resume.method, QByteArray("PUT"));
+    QVERIFY(resume.body.value(QStringLiteral("settings")).toObject().value(QStringLiteral("keep")).toBool());
+    QVERIFY(resume.body.value(QStringLiteral("space_ids")).toArray().isEmpty());
+    QVERIFY(!resume.headers.isEmpty());
+    QTRY_VERIFY(!manager.busy());
+    manager.setContext(org, true, false);
+    manager.refresh();
+    QTRY_VERIFY(!manager.busy());
+    const int readonlyCalls = backend.calls.size();
+    manager.install(QStringLiteral("controlled_docs"), {});
+    manager.pause(QStringLiteral("controlled_docs"));
+    QCOMPARE(backend.calls.size(), readonlyCalls);
+}
+
+void TestCore::addOnsDiscardStaleMockReplies()
+{
+    matome::test::MockAddOnBackend backend;
+    backend.delayMs = 25;
+    matome::AddOnManager manager(backend);
+    backend.respond("GET", QStringLiteral("/api/v1/add-ons"), {{QStringLiteral("products"), QJsonArray()}});
+    manager.setContext(QStringLiteral("old-org"), true, true);
+    manager.refresh();
+    QVERIFY(manager.busy());
+    manager.setContext(QStringLiteral("new-org"), false, false);
+    QTest::qWait(60);
+    QVERIFY(!manager.busy());
+    QVERIFY(manager.products().isEmpty());
+    QVERIFY(manager.errorCode().isEmpty());
+    QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space")).value(QStringLiteral("known")).toBool());
+}
+
+void TestCore::controlledDocsUseMockBackend()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString doc = matome::contentPath(org, space, QStringLiteral("documents/41"));
+    const QString reviewPath = matome::orgPath(org, QStringLiteral("reviews/review-one"));
+    QJsonObject document{{QStringLiteral("id"), 41}, {QStringLiteral("title"), QStringLiteral("procedure.md")},
+        {QStringLiteral("revision"), 3}, {QStringLiteral("controlled_docs_enabled"), true},
+        {QStringLiteral("current_version"), QJsonObject{{QStringLiteral("id"), QStringLiteral("base")},
+            {QStringLiteral("filename"), QStringLiteral("procedure.md")}, {QStringLiteral("content_type"), QStringLiteral("text/markdown")}}}};
+    QJsonObject review{{QStringLiteral("id"), QStringLiteral("review-one")}, {QStringLiteral("revision"), 5},
+        {QStringLiteral("status"), QStringLiteral("open")}, {QStringLiteral("author_membership_id"), QStringLiteral("author")},
+        {QStringLiteral("candidate_version_id"), QStringLiteral("candidate")}};
+    backend.respond("GET", QStringLiteral("/api/v1/add-ons"), {{QStringLiteral("products"), QJsonArray()}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("add-ons")), {}, 403, QStringLiteral("forbidden"));
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
+        {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject{{QStringLiteral("addon.controlled_docs"), true}}}}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")), {{QStringLiteral("spaces"), QJsonArray()}});
+    backend.respond("GET", doc, {{QStringLiteral("document"), document}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("controlled-docs-rule")),
+                    {{QStringLiteral("data"), QJsonObject{{QStringLiteral("active"), true}, {QStringLiteral("revision"), 2}}}});
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{review}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
+                    {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("author")},
+                        {QStringLiteral("email"), session.email()}}}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray()}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray()}});
+    auto *control = session.controlledDocs();
+    control->open(QStringLiteral("41"));
+    QTRY_VERIFY(!control->busy());
+    control->selectReview(QStringLiteral("review-one"));
+    QVERIFY(!control->canDecide());
+    const int hits = backend.calls.size();
+    control->decide(QStringLiteral("approve"), {});
+    QCOMPARE(backend.calls.size(), hits);
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
+                    {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("reviewer")},
+                        {QStringLiteral("email"), session.email()}}}}});
+    control->refresh();
+    QTRY_VERIFY(!control->busy());
+    control->selectReview(QStringLiteral("review-one"));
+    QVERIFY(control->canDecide());
+    backend.respond("GET", reviewPath + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QStringLiteral("-old\n+new")}}}});
+    control->loadDiff();
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->diff(), QStringLiteral("-old\n+new"));
+    backend.respond("POST", reviewPath + QStringLiteral("/approve"), {}, 409, QStringLiteral("review_closed"));
+    control->decide(QStringLiteral("approve"), QStringLiteral("checked"));
+    const auto decision = backend.calls.constLast();
+    QCOMPARE(decision.body.value(QStringLiteral("candidate_version_id")).toString(), QStringLiteral("candidate"));
+    QCOMPARE(decision.headers.first().second, QByteArray("5"));
+    QVERIFY(decision.headers.size() == 2);
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->errorCode(), QStringLiteral("review_closed"));
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray()}});
+    control->refresh();
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(control->canSubmit());
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("upload_id"), QStringLiteral("upload-one")},
+            {QStringLiteral("generation"), 1}, {QStringLiteral("request"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/file")}}}}}});
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/upload-one/complete")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("review"), review}}}});
+    control->submit(QStringLiteral("# Updated\n"), QStringLiteral("Update procedure"));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->notice(), QStringLiteral("review_requested"));
+    bool uploaded = false;
+    for (const auto &call : backend.calls) if (call.method == "POST" && call.path.endsWith(QLatin1String("/uploads"))) {
+        QCOMPARE(call.body.value(QStringLiteral("document_id")).toString(), QStringLiteral("41"));
+        QCOMPARE(call.body.value(QStringLiteral("content_type")).toString(), QStringLiteral("text/markdown"));
+        QCOMPARE(call.body.value(QStringLiteral("reason")).toString(), QStringLiteral("Update procedure"));
+        QCOMPARE(call.body.value(QStringLiteral("checksum_sha256")).toString().size(), 64);
+        uploaded = true;
+    }
+    QVERIFY(uploaded);
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/upload-one/complete")), {}, 409, QStringLiteral("controlled_docs_unavailable"));
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/upload-one/abort")), {});
+    control->submit(QStringLiteral("# Retry\n"), QStringLiteral("Retry proposal"));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->errorCode(), QStringLiteral("controlled_docs_unavailable"));
+    bool aborted = false;
+    for (const auto &call : backend.calls) aborted |= call.path.endsWith(QLatin1String("/upload-one/abort"));
+    QVERIFY(aborted);
+    const QByteArray published("# Published\n");
+    auto version = document.value(QStringLiteral("current_version")).toObject();
+    version.insert(QStringLiteral("checksum_sha256"), QString::fromLatin1(QCryptographicHash::hash(published, QCryptographicHash::Sha256).toHex()));
+    version.insert(QStringLiteral("byte_size"), published.size());
+    document.insert(QStringLiteral("current_version"), version);
+    backend.respond("GET", doc, {{QStringLiteral("document"), document}});
+    backend.respond("GET", doc + QStringLiteral("/download"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/published")}}}});
+    backend.file(QUrl(QStringLiteral("https://storage.invalid/published")), published);
+    control->refresh();
+    QTRY_VERIFY(!control->busy());
+    control->loadPublished();
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->source(), QString::fromUtf8(published));
+    QVERIFY(!control->draftStale());
+    version.insert(QStringLiteral("id"), QStringLiteral("new-base"));
+    document.insert(QStringLiteral("current_version"), version);
+    backend.respond("GET", doc, {{QStringLiteral("document"), document}});
+    control->refresh();
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(control->draftStale());
+    QVERIFY(!control->canSubmit());
+    QCOMPARE(control->source(), QString::fromUtf8(published));
+    control->loadPublished();
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(!control->draftStale());
+    QJsonObject role{{QStringLiteral("id"), QStringLiteral("management-role")},
+        {QStringLiteral("name"), QStringLiteral("Document control managers")},
+        {QStringLiteral("actions"), QJsonArray{QStringLiteral("document.review_read"),
+            QStringLiteral("document.controlled_docs_manage"), QStringLiteral("space.controlled_docs_manage")}}};
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("role"), role}}, 201);
+    backend.respond("POST", matome::contentPath(org, space, QStringLiteral("grants")), {}, 201);
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray{role}}});
+    QJsonObject grant{{QStringLiteral("id"), QStringLiteral("grant-one")},
+        {QStringLiteral("role_id"), QStringLiteral("management-role")},
+        {QStringLiteral("organization_membership_id"), QStringLiteral("reviewer")}};
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray{grant}}});
+    QVERIFY(control->canAssign());
+    control->grantAccess(QStringLiteral("reviewer"), true);
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->notice(), QStringLiteral("access_saved"));
+    QCOMPARE(control->grants().size(), 1);
+    bool granted = false;
+    for (const auto &call : backend.calls) if (call.method == "POST" && call.path.endsWith(QLatin1String("/grants"))) {
+        QCOMPARE(call.body.value(QStringLiteral("role_id")).toString(), QStringLiteral("management-role"));
+        QCOMPARE(call.body.value(QStringLiteral("organization_membership_id")).toString(), QStringLiteral("reviewer"));
+        granted = true;
+    }
+    QVERIFY(granted);
+    backend.respond("DELETE", matome::contentPath(org, space, QStringLiteral("grants/grant-one")), {});
+    control->revokeAccess(QStringLiteral("grant-one"));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->notice(), QStringLiteral("access_removed"));
+    QJsonObject paused{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("paused")}, {QStringLiteral("space_ids"), QJsonArray()}}}};
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("add-ons")), {{QStringLiteral("products"), QJsonArray{paused}}});
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+    QVERIFY(!control->canSubmit());
+    backend.delayMs = 25;
+    control->refresh();
+    control->close();
+    QTest::qWait(60);
+    QVERIFY(!control->active());
+    QVERIFY(control->reviews().isEmpty());
+    QVERIFY(control->diff().isEmpty());
+}
+
 void TestCore::orgBillingPermissionsAndStaleReplies()
 {
     FakeCore core;
@@ -2914,7 +3158,7 @@ void TestCore::orgBillingPermissionsAndStaleReplies()
     QTRY_VERIFY(!billing->busy());
     QVERIFY(billing->active());
     QVERIFY(billing->canManage());
-    QVERIFY(!billing->canInstall());
+    QVERIFY(!session.addOns()->canInstall());
     QVERIFY(!session.orgAdmin()->active());
     QVERIFY(billing->billingError().isEmpty());
     QVERIFY(billing->usageError().isEmpty());
@@ -2928,7 +3172,7 @@ void TestCore::orgBillingPermissionsAndStaleReplies()
     QTRY_VERIFY(!billing->busy());
     QVERIFY(billing->paymentUrl().isEmpty());
     QVERIFY(!billing->canManage());
-    QVERIFY(billing->canInstall());
+    QVERIFY(session.addOns()->canInstall());
     const int hits = core.hits();
     billing->createPortal();
     billing->setQuantity(QStringLiteral("classifier-1000"), 2);
@@ -2956,7 +3200,7 @@ void TestCore::orgBillingPreservesPurchasesAndGrants()
     session.openSettings();
     auto *billing = session.orgBilling();
     QTRY_VERIFY(!billing->busy());
-    QVERIFY(billing->productsError().isEmpty());
+    QVERIFY(session.addOns()->errorCode().isEmpty());
     const QVariantMap sku = billing->products().first().toMap().value(QStringLiteral("skus")).toList().first().toMap();
     QCOMPARE(sku.value(QStringLiteral("assigned")).toInt(), 5);
     QCOMPARE(sku.value(QStringLiteral("purchased")).toInt(), 1);
@@ -2997,16 +3241,16 @@ void TestCore::orgBillingConfiguresInstallation()
     auto *billing = session.orgBilling();
     QTRY_VERIFY(!billing->busy());
     const int hits = core.hits();
-    billing->install(QStringLiteral("classifier"), {QStringLiteral("unrelated-space")});
+    session.addOns()->install(QStringLiteral("classifier"), {QStringLiteral("unrelated-space")});
     QTest::qWait(20);
     QCOMPARE(core.hits(), hits);
-    billing->install(QStringLiteral("classifier"), {spaceId});
+    session.addOns()->install(QStringLiteral("classifier"), {spaceId});
     QTRY_VERIFY(!billing->busy());
     const QVariantMap installation = billing->products().first().toMap().value(QStringLiteral("installation")).toMap();
     QCOMPARE(installation.value(QStringLiteral("status")).toString(), QStringLiteral("active"));
     QCOMPARE(installation.value(QStringLiteral("space_ids")).toList(), QVariantList{spaceId});
     QVERIFY(installation.value(QStringLiteral("settings")).toMap().value(QStringLiteral("rerun")).toBool());
-    billing->pause(QStringLiteral("classifier"));
+    session.addOns()->pause(QStringLiteral("classifier"));
     QTRY_VERIFY(!billing->busy());
     QCOMPARE(billing->products().first().toMap().value(QStringLiteral("installation")).toMap()
                 .value(QStringLiteral("status")).toString(), QStringLiteral("paused"));

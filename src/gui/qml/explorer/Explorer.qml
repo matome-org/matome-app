@@ -216,7 +216,7 @@ FocusScope {
                 icon: "new"
                 text: qsTr("New or upload")
                 showLabel: false
-                onActivated: menu.show(["new", "upload", "paste"], fab, 0, 0, list.listView)
+                onActivated: menu.show(["new", "upload", "controlled-docs", "paste"], fab, 0, 0, list.listView)
             }
 
             Rectangle {

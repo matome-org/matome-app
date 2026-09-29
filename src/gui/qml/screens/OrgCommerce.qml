@@ -15,10 +15,11 @@ FocusScope {
     property int targetQuantity
     property var targetSpaces: []
     property string targetAction
+    property string targetReason
     readonly property var subscription: Session.orgBilling.subscription
     readonly property bool liveSubscription: ["active", "trialing", "past_due", "unpaid", "incomplete", "paused"].includes(subscription.status)
     readonly property string loadError: billing ? Session.orgBilling.billingError || Session.orgBilling.usageError
-                                               : Session.orgBilling.productsError
+                                               : Session.addOns.errorCode
 
     function date(value) {
         if (!value) return ""
@@ -33,11 +34,14 @@ FocusScope {
         commerce.targetSpaces = spaces.slice()
         confirmation.title = action === "package" ? qsTr("Select %1?").arg(product)
                            : action === "quantity" ? qsTr("Change purchased quantity to %1?").arg(quantity)
+                           : action === "uninstall" ? qsTr("Uninstall document control?")
                            : action === "pause" ? qsTr("Pause this installation?") : qsTr("Save this installation?")
         confirmation.detail = action === "package"
                 ? qsTr("This package replaces the subscription plan and purchased add-ons with the items shown. Independent grants are preserved. Stripe handles charges; paid changes require payment confirmation.")
                 : action === "quantity"
                 ? qsTr("This changes your subscription. Stripe handles charges and proration. Paid changes take effect after payment confirmation; removing a purchased add-on can reduce its allowance immediately.")
+                : action === "uninstall" ? qsTr("All open reviews will be cancelled and document control will be removed throughout this organization. Published versions and purchased allowances remain. Resuming does not restore document control.")
+                : action === "pause" && product === "controlled_docs" ? qsTr("New proposals and approvals will stop. Published documents, reviews, and control rules remain. Billing is unchanged.")
                 : action === "pause" ? qsTr("Processing will stop. This does not cancel the purchased add-on or its billing.")
                 : qsTr("The add-on will be enabled for the selected spaces. No selection applies to all spaces. Existing add-on settings are preserved.")
         confirmation.action = action === "pause" ? qsTr("Pause") : qsTr("Confirm")
@@ -80,18 +84,22 @@ FocusScope {
             width: scroll.width
             spacing: Theme.gapM
             Label {
-                visible: commerce.loadError !== "" || Session.orgBilling.errorCode !== ""
-                text: Messages.billingFailure(Session.orgBilling.errorCode || commerce.loadError)
+                visible: commerce.loadError !== "" || Session.orgBilling.errorCode !== "" || Session.addOns.errorCode !== ""
+                text: Messages.billingFailure(Session.orgBilling.errorCode || Session.addOns.errorCode || commerce.loadError)
                 color: Theme.failed
                 Accessible.role: Accessible.AlertMessage
             }
-            Label { visible: Session.orgBilling.busy; text: qsTr("Working…") }
+            Label { visible: (Session.orgBilling.busy || Session.addOns.busy); text: qsTr("Working…") }
             Label {
-                visible: Session.orgBilling.notice !== "" && Session.orgBilling.notice !== "portal" && Session.orgBilling.notice !== "checkout"
-                text: Session.orgBilling.notice === "billing_requested"
-                      ? qsTr("Change requested. Refresh after payment confirmation to see the effective subscription and allowances.")
-                      : Session.orgBilling.notice === "installation_paused" ? qsTr("Installation paused. Billing is unchanged.")
-                      : qsTr("Installation saved.")
+                visible: Session.orgBilling.notice === "billing_requested"
+                text: qsTr("Change requested. Refresh after payment confirmation to see the effective subscription and allowances.")
+                color: Theme.accentText
+            }
+            Label {
+                visible: !commerce.billing && Session.addOns.notice !== ""
+                text: Session.addOns.notice === "installation_paused" ? qsTr("Installation paused. Billing is unchanged.")
+                    : Session.addOns.notice === "installation_removed" ? qsTr("Document control uninstalled. Billing is unchanged.")
+                    : qsTr("Installation saved.")
                 color: Theme.accentText
             }
             ColumnLayout {
@@ -133,14 +141,14 @@ FocusScope {
                     text: qsTr("Manage billing")
                     primary: true
                     visible: Session.orgBilling.canManage
-                    usable: !Session.orgBilling.busy
+                    usable: !(Session.orgBilling.busy || Session.addOns.busy)
                     onActivated: Session.orgBilling.createPortal()
                 }
                 ActionButton {
                     objectName: "openBillingPortalButton"
                     text: Session.orgBilling.notice === "checkout" ? qsTr("Continue to checkout") : qsTr("Open Stripe portal")
                     visible: Session.orgBilling.paymentUrl !== ""
-                    usable: !Session.orgBilling.busy && Session.orgBilling.canManage
+                    usable: !(Session.orgBilling.busy || Session.addOns.busy) && Session.orgBilling.canManage
                     onActivated: Qt.openUrlExternally(Session.orgBilling.paymentUrl)
                 }
                 Label {
@@ -153,7 +161,7 @@ FocusScope {
                     color: Theme.failed
                 }
                 Label {
-                    visible: !Session.orgBilling.busy && Session.orgBilling.packagesError === ""
+                    visible: !(Session.orgBilling.busy || Session.addOns.busy) && Session.orgBilling.packagesError === ""
                              && Session.orgBilling.packages.length === 0
                     text: qsTr("No paid packages are available yet. Your current plan remains active.")
                 }
@@ -193,7 +201,7 @@ FocusScope {
                                 text: commerce.liveSubscription ? qsTr("Switch package") : qsTr("Subscribe")
                                 visible: Session.orgBilling.canManage
                                 primary: true
-                                usable: !Session.orgBilling.busy && commerce.subscription.pending_update !== true
+                                usable: !(Session.orgBilling.busy || Session.addOns.busy) && commerce.subscription.pending_update !== true
                                 onActivated: commerce.request("package", qsTr("%1 · version %2")
                                         .arg(offer.modelData.name).arg(offer.modelData.version),
                                         offer.modelData.key, offer.modelData.version, [])
@@ -214,7 +222,7 @@ FocusScope {
                     text: qsTr("Purchasing add-ons requires an active paid subscription. Included add-ons can still be installed.")
                 }
                 Label {
-                    visible: !Session.orgBilling.busy && Session.orgBilling.products.length === 0
+                    visible: !(Session.orgBilling.busy || Session.addOns.busy) && Session.orgBilling.products.length === 0
                     text: qsTr("No add-ons available.")
                 }
                 Repeater {
@@ -276,11 +284,11 @@ FocusScope {
                                             text: String(sku.modelData.purchased)
                                             validator: IntValidator { bottom: 0; top: sku.modelData.stackable ? 2147483647 : 1 }
                                             inputMethodHints: Qt.ImhDigitsOnly
-                                            enabled: !Session.orgBilling.busy && commerce.subscription.pending_update !== true
+                                            enabled: !(Session.orgBilling.busy || Session.addOns.busy) && commerce.subscription.pending_update !== true
                                         }
                                         ActionButton {
                                             text: qsTr("Apply")
-                                            usable: !Session.orgBilling.busy && commerce.subscription.pending_update !== true
+                                            usable: !(Session.orgBilling.busy || Session.addOns.busy) && commerce.subscription.pending_update !== true
                                                     && quantity.acceptableInput && Number(quantity.text) !== sku.modelData.purchased
                                             onActivated: commerce.request("quantity", product.modelData.key, sku.modelData.key, Number(quantity.text), [])
                                         }
@@ -292,17 +300,32 @@ FocusScope {
                                     : product.installation.status === "paused" ? qsTr("Installation paused") : qsTr("Not installed")
                             }
                             ColumnLayout {
-                                visible: Session.orgBilling.canInstall && (product.modelData.assignments?.length ?? 0) > 0
+                                visible: Session.addOns.canInstall && product.modelData.key === "controlled_docs"
+                                         && product.installation.status !== undefined
+                                Layout.fillWidth: true
+                                Label { text: qsTr("Uninstalling removes document control. Use pause to disable the add-on temporarily.") }
+                                Field { id: uninstallReason; placeholderText: qsTr("Reason for uninstalling document control"); maximumLength: 500; enabled: !Session.addOns.busy }
+                                ActionButton {
+                                    text: qsTr("Uninstall document control")
+                                    usable: !Session.addOns.busy && uninstallReason.text.trim() !== ""
+                                    onActivated: {
+                                        commerce.targetReason = uninstallReason.text
+                                        commerce.request("uninstall", product.modelData.key, "", 0, [])
+                                    }
+                                }
+                            }
+                            ColumnLayout {
+                                visible: Session.addOns.canInstall && (product.modelData.entitled === true || product.installation.status !== undefined)
                                 Layout.fillWidth: true
                                 spacing: Theme.gapS
                                 Label { text: qsTr("Spaces · no selection means all spaces") }
                                 Repeater {
-                                    model: Session.orgBilling.spaces
+                                    model: Session.addOns.spaces
                                     delegate: C.CheckBox {
                                         required property var modelData
                                         text: modelData.name
                                         checked: product.selectedSpaces.includes(modelData.id)
-                                        enabled: !Session.orgBilling.busy
+                                        enabled: !(Session.orgBilling.busy || Session.addOns.busy)
                                         font: Theme.body
                                         palette.windowText: Theme.textPrimary
                                         palette.highlight: Theme.accent
@@ -315,13 +338,13 @@ FocusScope {
                                     ActionButton {
                                         text: product.installation.status === "active" ? qsTr("Save spaces") : qsTr("Install / resume")
                                         primary: true
-                                        usable: !Session.orgBilling.busy
+                                        usable: !(Session.orgBilling.busy || Session.addOns.busy) && product.modelData.entitled === true && product.modelData.catalogued === true
                                         onActivated: commerce.request("install", product.modelData.key, "", 0, product.selectedSpaces)
                                     }
                                     ActionButton {
                                         visible: product.installation.status === "active"
                                         text: qsTr("Pause installation")
-                                        usable: !Session.orgBilling.busy
+                                        usable: !(Session.orgBilling.busy || Session.addOns.busy)
                                         onActivated: commerce.request("pause", product.modelData.key, "", 0, [])
                                     }
                                 }
@@ -337,10 +360,11 @@ FocusScope {
         objectName: "orgCommerceConfirm"
         anchors.fill: parent
         onAccepted: {
-            if (commerce.targetAction === "package") Session.orgBilling.selectPackage(commerce.targetSku, commerce.targetQuantity)
+            if (commerce.targetAction === "uninstall") Session.addOns.uninstallControlledDocs(commerce.targetReason)
+            else if (commerce.targetAction === "package") Session.orgBilling.selectPackage(commerce.targetSku, commerce.targetQuantity)
             else if (commerce.targetAction === "quantity") Session.orgBilling.setQuantity(commerce.targetSku, commerce.targetQuantity)
-            else if (commerce.targetAction === "pause") Session.orgBilling.pause(commerce.targetProduct)
-            else Session.orgBilling.install(commerce.targetProduct, commerce.targetSpaces)
+            else if (commerce.targetAction === "pause") Session.addOns.pause(commerce.targetProduct)
+            else Session.addOns.install(commerce.targetProduct, commerce.targetSpaces)
         }
     }
 }

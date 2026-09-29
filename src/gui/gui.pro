@@ -62,3 +62,5 @@ android {
     PRE_TARGETDEPS -= $$OUT_PWD/../core/libmatomecore.a
     PRE_TARGETDEPS += $$OUT_PWD/../core/libmatomecore_$${MATOME_ANDROID_ABI}.a
 }
+
+include($$PWD/addons.pri)

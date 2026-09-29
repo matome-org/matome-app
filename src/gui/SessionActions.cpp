@@ -3,7 +3,6 @@
 #include "JsonList.h"
 #include "Languages.h"
 
-#include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonObject>
@@ -183,54 +182,13 @@ void Session::startUpload()
     const QString spaceId = next.to.spaceId;
     const QString name = next.name;
     const QByteArray bytes = next.bytes;
-    const QString checksum = QString::fromLatin1(
-            QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
     QJsonObject document;
     document.insert(QStringLiteral("title"), name);
     if (!next.to.folderId.isEmpty())
         document.insert(QStringLiteral("folder_id"), next.to.folderId);
-    const auto store = live([this, live, orgId, bytes, run](const Client::Reply &created) {
-        if (!created.ok) {
-            finishUpload(failCode(created));
-            return;
-        }
-        const QJsonObject data = created.json.value(QStringLiteral("data")).toObject();
-        const QString uploadId = data.value(QStringLiteral("upload_id")).toString();
-        QJsonObject body;
-        body.insert(QStringLiteral("generation"), data.value(QStringLiteral("generation")).toInt());
-        const QJsonObject request = data.value(QStringLiteral("request")).toObject();
-        Client::Headers headers;
-        const QJsonObject headerMap = request.value(QStringLiteral("headers")).toObject();
-        for (auto it = headerMap.begin(); it != headerMap.end(); ++it)
-            headers.append({it.key().toUtf8(), it.value().toString().toUtf8()});
-        const QString completePath =
-                orgPath(orgId, QStringLiteral("uploads/%1/complete").arg(uploadId));
-        m_client.putRaw(
-                QUrl(request.value(QStringLiteral("url")).toString()), bytes, headers,
-                live([this, live, completePath, body](const Client::Reply &put) {
-                    if (!put.ok) {
-                        finishUpload(failCode(put));
-                        return;
-                    }
-                    // The bytes are all there, whether or not the backend
-                    // reported progress on the way (the browser's fetch never does).
-                    m_uploadProgress = 1;
-                    notify();
-                    authedPost(completePath, body, idempotencyHeader(),
-                               live([this](const Client::Reply &done) {
-                                   finishUpload(done.ok ? QString() : failCode(done));
-                               }));
-                }),
-                [this, run](qint64 sent, qint64 total) {
-                    if (run == m_uploadRun && total > 0) {
-                        m_uploadProgress = double(sent) / double(total);
-                        notify();
-                    }
-                });
-    });
     authedPost(contentPath(orgId, spaceId, QStringLiteral("documents")), document,
                idempotencyHeader(),
-               live([this, store, orgId, spaceId, name, bytes, checksum](const Client::Reply &reply) {
+               live([this, orgId, spaceId, name, bytes, run](const Client::Reply &reply) {
                    const QString documentId =
                            jsonId(reply.json.value(QStringLiteral("document"))
                                           .toObject()
@@ -243,12 +201,13 @@ void Session::startUpload()
                    upload.insert(QStringLiteral("space_id"), spaceId);
                    upload.insert(QStringLiteral("document_id"), documentId);
                    upload.insert(QStringLiteral("filename"), name);
-                   upload.insert(QStringLiteral("content_type"),
-                                 QStringLiteral("application/octet-stream"));
-                   upload.insert(QStringLiteral("byte_size"), bytes.size());
-                   upload.insert(QStringLiteral("checksum_sha256"), checksum);
-                   authedPost(orgPath(orgId, QStringLiteral("uploads")), upload,
-                              idempotencyHeader(), store);
+                   upload.insert(QStringLiteral("content_type"), name.endsWith(QLatin1String(".md"), Qt::CaseInsensitive)
+                                 ? QStringLiteral("text/markdown") : QStringLiteral("application/octet-stream"));
+                   m_coreAddOnBackend.upload(orgId, upload, bytes, [this, run] { return run == m_uploadRun; },
+                           [this](const Client::Reply &done) { finishUpload(done.ok ? QString() : failCode(done)); },
+                           [this](qint64 sent, qint64 total) {
+                               if (total > 0) { m_uploadProgress = double(sent) / double(total); notify(); }
+                           });
                }));
 }
 
@@ -324,6 +283,10 @@ const QList<Session::Command> &Session::commands()
                      if (entry.kind == QLatin1String("document"))
                          s.m_documents.download(entry.id);
                  }},
+                {"controlled-docs", QT_TR_NOOP("Document reviews"), inFiles, [](Session &s) {
+                    const Entry entry = s.focusedEntry();
+                    s.m_controlledDocs.open(entry.kind == QLatin1String("document") ? entry.id : QString());
+                }},
                 {"rename", QT_TR_NOOP("Rename"),
                  focused, [](Session &s) { s.promptRenameFocused(); }},
                 {"trash", nullptr,

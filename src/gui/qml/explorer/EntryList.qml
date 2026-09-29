@@ -47,7 +47,7 @@ FocusScope {
     }
 
     function rowMenu(row, x, y) {
-        pane.menuRequested(["download", "rename", "cut", "paste", "trash", "restore", "new", "upload", "refresh"],
+        pane.menuRequested(["download", "controlled-docs", "rename", "cut", "paste", "trash", "restore", "new", "upload", "refresh"],
                            row, x, y)
     }
 

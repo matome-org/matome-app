@@ -65,19 +65,19 @@
     </message>
     <message>
         <location line="+11"/>
-        <location line="+40"/>
+        <location line="+43"/>
         <location line="+28"/>
         <source>Create account</source>
         <translation>Criar conta</translation>
     </message>
     <message>
-        <location line="-67"/>
+        <location line="-70"/>
         <source>Confirm your email</source>
         <translation>Confirme seu e-mail</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+71"/>
+        <location line="+74"/>
         <source>Forgot password</source>
         <translation>Esqueci a senha</translation>
     </message>
@@ -92,23 +92,23 @@
         <translation>Confirmei meu e-mail</translation>
     </message>
     <message>
-        <location line="-92"/>
-        <location line="+39"/>
+        <location line="-95"/>
+        <location line="+42"/>
         <source>Sign in</source>
         <translation>Entrar</translation>
     </message>
     <message>
-        <location line="-28"/>
+        <location line="-31"/>
         <source>Email</source>
         <translation>E-mail</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+13"/>
         <source>Password</source>
         <translation>Senha</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Send reset</source>
         <translation>Enviar código</translation>
     </message>
@@ -143,7 +143,7 @@
         <translation>Endereço do servidor Core</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+19"/>
         <source>Language</source>
         <translation>Idioma</translation>
     </message>
@@ -180,6 +180,304 @@
         <location filename="../qml/chrome/ContextMenu.qml" line="+79"/>
         <source>Actions</source>
         <translation>Ações</translation>
+    </message>
+</context>
+<context>
+    <name>ControlledDocuments</name>
+    <message>
+        <location filename="../qml/screens/ControlledDocuments.qml" line="+29"/>
+        <source>Publish this proposal?</source>
+        <translation>Publicar esta proposta?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reject this proposal?</source>
+        <translation>Rejeitar esta proposta?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancel this review?</source>
+        <translation>Cancelar esta revisão?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove document control?</source>
+        <translation>Remover o controle do documento?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove this space rule?</source>
+        <translation>Remover esta regra do espaço?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Revoke this access grant?</source>
+        <translation>Revogar esta concessão de acesso?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Discard your draft?</source>
+        <translation>Descartar seu rascunho?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The exact candidate shown in this review will become the published version.</source>
+        <translation>A versão candidata desta revisão será publicada.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Open reviews will be cancelled. Future versions will publish immediately.</source>
+        <translation>As revisões abertas serão canceladas. As próximas versões serão publicadas imediatamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Existing controlled documents will remain blocked until the rule is reactivated or their control is removed.</source>
+        <translation>Os documentos controlados permanecerão bloqueados até a regra ser reativada ou o controle ser removido.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This removes the selected space role grant. Access from other grants is preserved.</source>
+        <translation>A concessão de papel selecionada será removida deste espaço. Os acessos de outras concessões serão preservados.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your unsent Markdown changes will be discarded.</source>
+        <translation>Suas alterações Markdown não enviadas serão descartadas.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The published version will remain unchanged.</source>
+        <translation>A versão publicada permanecerá inalterada.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Publish</source>
+        <translation>Publicar</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Back</source>
+        <translation>Voltar</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Controlled documents</source>
+        <translation>Documentos controlados</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Refresh</source>
+        <translation>Atualizar</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>This add-on is paused, unavailable, or outside this space. Published documents remain readable; proposals and approvals are blocked.</source>
+        <translation>Este add-on está pausado, indisponível ou não abrange este espaço. Os documentos publicados continuam acessíveis; propostas e aprovações estão bloqueadas.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Availability and permissions are verified by the server when you perform an action.</source>
+        <translation>O servidor verifica a disponibilidade e as permissões ao executar uma ação.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Loading…</source>
+        <translation>Carregando…</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Reviews</source>
+        <translation>Revisões</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Propose changes</source>
+        <translation>Propor alterações</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Control</source>
+        <translation>Controle</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>No reviews available. Select a document to inspect its history.</source>
+        <translation>Nenhuma revisão disponível. Selecione um documento para consultar o histórico.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Reason: %1</source>
+        <translation>Motivo: %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Submitted: %1</source>
+        <translation>Enviada em: %1</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>The published version changed since this draft was loaded. Copy your edits before reloading the published Markdown.</source>
+        <translation>A versão publicada mudou desde o carregamento deste rascunho. Copie suas alterações antes de recarregar o Markdown publicado.</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Review access for this space</source>
+        <translation>Acesso de revisão deste espaço</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Organization administrators need explicit control grants too. Grant management access to configure rules and documents, or reviewer access to read and decide proposals. Authors cannot approve their own proposals.</source>
+        <translation>Os administradores da organização também precisam de concessões explícitas de controle. Conceda acesso de gerenciamento para configurar regras e documentos, ou acesso de revisão para ler e decidir propostas. Os autores não podem aprovar suas próprias propostas.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Member receiving access</source>
+        <translation>Membro que receberá o acesso</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Grant management access</source>
+        <translation>Conceder acesso de gerenciamento</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Grant reviewer access</source>
+        <translation>Conceder acesso de revisão</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Group or role grant</source>
+        <translation>Concessão de grupo ou papel</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Revoke</source>
+        <translation>Revogar</translation>
+    </message>
+    <message>
+        <location line="-135"/>
+        <source>Decision comment: %1</source>
+        <translation>Comentário da decisão: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Show diff</source>
+        <translation>Mostrar diferenças</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Download candidate</source>
+        <translation>Baixar candidata</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Decision comment (optional)</source>
+        <translation>Comentário da decisão (opcional)</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Approval requires explicit review permissions and a reviewer other than the author. The server authorizes every decision.</source>
+        <translation>A aprovação exige permissões específicas de revisão e um revisor diferente do autor. O servidor autoriza cada decisão.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Approve</source>
+        <translation>Aprovar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reject</source>
+        <translation>Rejeitar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancel review</source>
+        <translation>Cancelar revisão</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Edit Markdown up to 1 MiB. Submitting creates a proposal; the published document stays available until approval.</source>
+        <translation>Edite Markdown de até 1 MiB. O envio cria uma proposta; o documento publicado continua acessível até a aprovação.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Load published Markdown</source>
+        <translation>Carregar Markdown publicado</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Markdown proposal</source>
+        <translation>Proposta Markdown</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Reason for this change</source>
+        <translation>Motivo desta alteração</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Submit proposal</source>
+        <translation>Enviar proposta</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Control requires an active installation, a space rule, and explicit permissions. Documents must already have a published Markdown version.</source>
+        <translation>O controle exige instalação ativa, uma regra do espaço e permissões específicas. O documento já deve ter uma versão Markdown publicada.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Space rule active</source>
+        <translation>Regra do espaço ativa</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Space rule inactive or absent</source>
+        <translation>Regra do espaço inativa ou ausente</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Activate space rule</source>
+        <translation>Ativar regra do espaço</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pause space rule</source>
+        <translation>Pausar regra do espaço</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enable document control</source>
+        <translation>Ativar controle do documento</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Document control enabled</source>
+        <translation>Controle do documento ativado</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Document control disabled</source>
+        <translation>Controle do documento desativado</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reason for removing control or the rule</source>
+        <translation>Motivo para remover o controle ou a regra</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Remove document control</source>
+        <translation>Remover controle do documento</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove space rule</source>
+        <translation>Remover regra do espaço</translation>
     </message>
 </context>
 <context>
@@ -285,12 +583,12 @@
         <translation>Matome</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+72"/>
         <source>Delete folder “%1”?</source>
         <translation>Excluir a pasta “%1”?</translation>
     </message>
     <message>
-        <location line="+53"/>
+        <location line="+62"/>
         <source>This cannot be undone.</source>
         <translation>Isso não pode ser desfeito.</translation>
     </message>
@@ -756,6 +1054,161 @@
         <source>The payment provider is unavailable. Try again later.</source>
         <translation>O provedor de pagamento está indisponível. Tente novamente mais tarde.</translation>
     </message>
+    <message>
+        <location line="+7"/>
+        <source>You do not have permission for this document, review, or space operation.</source>
+        <translation>Você não tem permissão para esta operação no documento, na revisão ou no espaço.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This document, review, or rule is no longer available to you. Refresh the current space.</source>
+        <translation>Este documento, revisão ou regra não está mais disponível para você. Atualize o espaço atual.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Document control is unavailable. Refresh after the administrator resumes the add-on or restores access.</source>
+        <translation>O controle de documentos está indisponível. Atualize após o administrador retomar o add-on ou restaurar o acesso.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>An open review blocks this operation. Resolve or cancel it first.</source>
+        <translation>Uma revisão aberta bloqueia esta operação. Conclua ou cancele a revisão primeiro.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This review was already decided. Refresh to see the result.</source>
+        <translation>Esta revisão já foi decidida. Atualize para ver o resultado.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The published version changed. Refresh before proposing or deciding again.</source>
+        <translation>A versão publicada mudou. Atualize antes de propor ou decidir novamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The space rule changed. Refresh before deciding again.</source>
+        <translation>A regra do espaço mudou. Atualize antes de decidir novamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The document, rule, or review changed. Refresh and inspect the current state before trying again.</source>
+        <translation>O documento, a regra ou a revisão mudou. Atualize e confira o estado atual antes de tentar novamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Refresh to obtain the current revision before saving.</source>
+        <translation>Atualize para obter a revisão atual antes de salvar.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Enter a reason of up to 500 characters.</source>
+        <translation>Informe um motivo de até 500 caracteres.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Use a published .md file with valid UTF-8 Markdown, no NUL characters, and at most 1 MiB.</source>
+        <translation>Use um arquivo .md publicado com Markdown UTF-8 válido, sem caracteres NUL e de até 1 MiB.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Upload and publish a Markdown version before enabling document control.</source>
+        <translation>Envie e publique uma versão Markdown antes de ativar o controle do documento.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This diff exceeds the server limit. Download the candidate to inspect it.</source>
+        <translation>Estas diferenças excedem o limite do servidor. Baixe a candidata para analisá-la.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The candidate is unavailable. Refresh this review.</source>
+        <translation>A candidata está indisponível. Atualize esta revisão.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Use a decision comment of at most 2,000 characters without NUL characters.</source>
+        <translation>Use um comentário de decisão de até 2.000 caracteres, sem caracteres NUL.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pause incompatible readiness automations or processing subscriptions before enabling control.</source>
+        <translation>Pause as automações ou assinaturas de processamento incompatíveis com a publicação antes de ativar o controle.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Space rule saved.</source>
+        <translation>Regra do espaço salva.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Space rule removed. Existing document gates remain.</source>
+        <translation>Regra do espaço removida. Os controles dos documentos existentes permanecem.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Document control enabled.</source>
+        <translation>Controle do documento ativado.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Document control removed. Open reviews were cancelled.</source>
+        <translation>Controle do documento removido. As revisões abertas foram canceladas.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Proposal submitted for review. The published version remains available.</source>
+        <translation>Proposta enviada para revisão. A versão publicada continua acessível.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server published this version.</source>
+        <translation>O servidor publicou esta versão.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Proposal approved and published.</source>
+        <translation>Proposta aprovada e publicada.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Proposal rejected. The published version remains available.</source>
+        <translation>Proposta rejeitada. A versão publicada continua acessível.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review cancelled. The published version remains available.</source>
+        <translation>Revisão cancelada. A versão publicada continua acessível.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Space access granted.</source>
+        <translation>Acesso ao espaço concedido.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Space access grant revoked.</source>
+        <translation>Concessão de acesso ao espaço revogada.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Open</source>
+        <translation>Aberta</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Approved</source>
+        <translation>Aprovada</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Rejected</source>
+        <translation>Rejeitada</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancelled</source>
+        <translation>Cancelada</translation>
+    </message>
 </context>
 <context>
     <name>OrgAdminPeople</name>
@@ -783,7 +1236,7 @@
 <context>
     <name>OrgCommerce</name>
     <message>
-        <location filename="../qml/screens/OrgCommerce.qml" line="+34"/>
+        <location filename="../qml/screens/OrgCommerce.qml" line="+35"/>
         <source>Select %1?</source>
         <translation>Selecionar %1?</translation>
     </message>
@@ -791,6 +1244,11 @@
         <location line="+1"/>
         <source>Change purchased quantity to %1?</source>
         <translation>Alterar a quantidade contratada para %1?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uninstall document control?</source>
+        <translation>Desinstalar o controle de documentos?</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -811,6 +1269,16 @@
         <location line="+2"/>
         <source>This changes your subscription. Stripe handles charges and proration. Paid changes take effect after payment confirmation; removing a purchased add-on can reduce its allowance immediately.</source>
         <translation>Isso altera sua assinatura. O Stripe calcula as cobranças e os valores proporcionais. Alterações pagas entram em vigor após a confirmação do pagamento; remover um add-on contratado pode reduzir sua cota imediatamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>All open reviews will be cancelled and document control will be removed throughout this organization. Published versions and purchased allowances remain. Resuming does not restore document control.</source>
+        <translation>Todas as revisões abertas serão canceladas e o controle de documentos será removido de toda a organização. As versões publicadas e as cotas contratadas permanecem. Retomar não restaura o controle de documentos.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New proposals and approvals will stop. Published documents, reviews, and control rules remain. Billing is unchanged.</source>
+        <translation>Novas propostas e aprovações serão bloqueadas. Os documentos publicados, as revisões e as regras de controle permanecem. A cobrança não muda.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -838,14 +1306,19 @@
         <translation>Processando…</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Change requested. Refresh after payment confirmation to see the effective subscription and allowances.</source>
         <translation>Alteração solicitada. Atualize após a confirmação do pagamento para ver a assinatura e as cotas efetivas.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Installation paused. Billing is unchanged.</source>
         <translation>Instalação pausada. A cobrança não foi alterada.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Document control uninstalled. Billing is unchanged.</source>
+        <translation>Controle de documentos desinstalado. A cobrança não muda.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -908,7 +1381,7 @@
         <translation>Ainda não há pacotes pagos disponíveis. Seu plano atual continua ativo.</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>Plan: %1</source>
         <translation>Plano: %1</translation>
     </message>
@@ -918,7 +1391,7 @@
         <translation>%1 × %2</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Switch package</source>
         <translation>Trocar pacote</translation>
     </message>
@@ -963,10 +1436,10 @@
         <translation>Ilimitado</translation>
     </message>
     <message>
-        <location line="-75"/>
+        <location line="-76"/>
         <location line="+6"/>
         <location line="+7"/>
-        <location line="+9"/>
+        <location line="+10"/>
         <location line="+62"/>
         <source>%1 · version %2</source>
         <translation>%1 · versão %2</translation>
@@ -1003,6 +1476,21 @@
     </message>
     <message>
         <location line="+6"/>
+        <source>Uninstalling removes document control. Use pause to disable the add-on temporarily.</source>
+        <translation>A desinstalação remove o controle de documentos. Use a pausa para desativar o add-on temporariamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reason for uninstalling document control</source>
+        <translation>Motivo para desinstalar o controle de documentos</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Uninstall document control</source>
+        <translation>Desinstalar controle de documentos</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Spaces · no selection means all spaces</source>
         <translation>Espaços · sem seleção, todos os espaços</translation>
     </message>
@@ -1338,11 +1826,21 @@
         <source>archived</source>
         <translation>arquivado</translation>
     </message>
+    <message>
+        <location line="+80"/>
+        <source>Controlled</source>
+        <translation>Controlado</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Controlled · %1</source>
+        <translation>Controlado · %1</translation>
+    </message>
 </context>
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+143"/>
+        <location filename="../Session.cpp" line="+151"/>
         <source>New organization</source>
         <translation>Nova organização</translation>
     </message>
@@ -1362,7 +1860,7 @@
         <translation>Matome</translation>
     </message>
     <message>
-        <location filename="../SessionActions.cpp" line="+292"/>
+        <location filename="../SessionActions.cpp" line="+251"/>
         <source>Keyboard map</source>
         <translation>Mapa do teclado</translation>
     </message>
@@ -1418,6 +1916,11 @@
     </message>
     <message>
         <location line="+9"/>
+        <source>Document reviews</source>
+        <translation>Revisões de documentos</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>Rename</source>
         <translation>Renomear</translation>
     </message>
@@ -1437,12 +1940,12 @@
         <translation>Restaurar da lixeira</translation>
     </message>
     <message>
-        <location line="-36"/>
+        <location line="-40"/>
         <source>Settings</source>
         <translation>Configurações</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+42"/>
         <source>Purge last trash</source>
         <translation>Excluir de vez</translation>
     </message>

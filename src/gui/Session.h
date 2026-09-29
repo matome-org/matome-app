@@ -9,6 +9,8 @@
 #include "OrgAdmin.h"
 #include "OrgBilling.h"
 #include "SpaceModel.h"
+#include "addons/AddOnManager.h"
+#include "controlled_docs/ControlledDocs.h"
 
 #include <QAbstractListModel>
 #include <QJsonArray>
@@ -44,6 +46,8 @@ class Session : public QObject
     Q_PROPERTY(QString organizationsError READ organizationsError NOTIFY changed)
     Q_PROPERTY(matome::OrgAdmin *orgAdmin READ orgAdmin CONSTANT)
     Q_PROPERTY(matome::OrgBilling *orgBilling READ orgBilling CONSTANT)
+    Q_PROPERTY(matome::AddOnManager *addOns READ addOns CONSTANT)
+    Q_PROPERTY(matome::ControlledDocs *controlledDocs READ controlledDocs CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
     Q_PROPERTY(QString currentSpaceId READ currentSpaceId NOTIFY changed)
@@ -70,7 +74,7 @@ public:
     /// How deep the explorer stands: what its entries list.
     enum class Level { Orgs, Spaces, Files };
 
-    explicit Session(QObject *parent = nullptr);
+    explicit Session(QObject *parent = nullptr, AddOnBackend *backend = nullptr);
 
     bool signedIn() const { return m_signedIn; }
     bool settingsActive() const { return m_settingsActive; }
@@ -92,6 +96,8 @@ public:
     QString organizationsError() const { return m_orgs.errorCode(); }
     OrgAdmin *orgAdmin() { return &m_orgAdmin; }
     OrgBilling *orgBilling() { return &m_orgBilling; }
+    AddOnManager *addOns() { return &m_addOns; }
+    ControlledDocs *controlledDocs() { return &m_controlledDocs; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }
 
@@ -297,10 +303,6 @@ private:
     void authed(const QByteArray &method, const QString &path, const QJsonObject &body,
                 const Client::Headers &headers, Client::Done done, bool retried);
     void refreshQuiet(const std::function<void(bool)> &done);
-    /// The page of `path` after `cursor` (the first when empty), with the
-    /// entries of the pages before it.
-    void listPage(const QString &path, const QString &cursor, const QString &key, const QJsonArray &entries,
-                  const Live &live, const ListDone &done);
     void syncSpaces();
     void syncFiles();
     void syncDocuments();
@@ -315,6 +317,9 @@ private:
     void enter(const Location &to);
 
     Client m_client;
+    CoreAddOnBackend m_coreAddOnBackend;
+    AddOnManager m_addOns;
+    ControlledDocs m_controlledDocs;
     OrgModel m_orgs;
     OrgAdmin m_orgAdmin;
     OrgBilling m_orgBilling;

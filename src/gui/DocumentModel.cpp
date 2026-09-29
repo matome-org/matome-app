@@ -44,6 +44,12 @@ QString DocumentModel::titleOf(const QString &documentId) const
     return row ? row->title : QString();
 }
 
+bool DocumentModel::controlledOf(const QString &documentId) const
+{
+    const DocumentRow *row = find(documentId);
+    return row && row->controlled;
+}
+
 int DocumentModel::rowCount(const QModelIndex &parent) const
 {
     return parent.isValid() ? 0 : m_rows.size();
@@ -65,6 +71,8 @@ QVariant DocumentModel::data(const QModelIndex &index, int role) const
         return row.byteSize;
     case RevisionRole:
         return row.revision;
+    case ControlledRole:
+        return row.controlled;
     default:
         return {};
     }
@@ -76,7 +84,8 @@ QHash<int, QByteArray> DocumentModel::roleNames() const
             {FolderIdRole, "folderId"},
             {TitleRole, "documentTitle"},
             {ByteSizeRole, "byteSize"},
-            {RevisionRole, "revision"}};
+            {RevisionRole, "revision"},
+            {ControlledRole, "controlled"}};
 }
 
 void DocumentModel::reload(const QString &settled)
@@ -312,6 +321,7 @@ DocumentRow DocumentModel::parseRow(const QJsonObject &json)
     row.id = jsonId(json.value(QStringLiteral("id")));
     row.folderId = jsonId(json.value(QStringLiteral("folder_id")));
     row.title = json.value(QStringLiteral("title")).toString();
+    row.controlled = json.value(QStringLiteral("controlled_docs_enabled")).toBool();
     const QJsonValue version = json.value(QStringLiteral("current_version"));
     if (version.isObject())
         row.byteSize = QString::number(version.toObject().value(QStringLiteral("byte_size")).toInteger());

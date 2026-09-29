@@ -56,9 +56,15 @@ Pause installation stops processing without canceling a purchased SKU.
 It uses Core's pause endpoint rather than destructive uninstall, which can
 require additional product-specific lifecycle decisions.
 
-Controllers discard replies after switching organizations, signing out,
-closing Settings, or losing the applicable membership role. Loading errors
-are shown per section and prevent mutations that depend on missing data.
+Installation state and operations live in the shared [add-on module](add-ons.md).
+Controlled documents also supports explicit destructive uninstall; see the
+[configuration and review workflow](controlled-documents.md).
+
+Billing controllers discard replies after switching organizations, signing
+out, closing Settings, or losing the applicable membership role. The shared
+add-on manager retains state while the organization context remains valid.
+Loading errors are shown per section and prevent mutations that depend on
+missing data.
 
 Run `mise run lint`, `mise run i18n`, and `mise run test:core` for the
 development checks. Run the full `mise run verify` and platform e2e tasks

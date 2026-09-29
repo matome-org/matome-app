@@ -18,6 +18,7 @@ struct DocumentRow {
     QString title;
     QString byteSize;
     int revision = 1;
+    bool controlled = false;
 };
 
 /// Documents in the current folder; the entry list reads it.
@@ -31,7 +32,8 @@ public:
         FolderIdRole,
         TitleRole,
         ByteSizeRole,
-        RevisionRole
+        RevisionRole,
+        ControlledRole
     };
 
     explicit DocumentModel(Session &session);
@@ -41,6 +43,7 @@ public:
     QString currentDocumentId() const { return m_currentDocumentId; }
     int revisionOf(const QString &documentId) const;
     QString titleOf(const QString &documentId) const;
+    bool controlledOf(const QString &documentId) const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role) const override;
