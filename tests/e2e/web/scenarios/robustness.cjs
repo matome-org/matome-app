@@ -203,13 +203,24 @@ module.exports = (scenario) => {
       await studio.load();
       const submit = await studio.locate("submitButton");
       const shipped = new Studio(await context.newPage(), stack, studio.profile);
-      await shipped.goto(productUrl + "/");
-      assert.equal(await shipped.page.title(), "Matome");
-      const icon = await shipped.page.locator("link[rel=icon]").getAttribute("href");
-      assert.ok(icon.startsWith("data:image/svg+xml"), icon);
-      assert.equal(await shipped.page.locator("#qtspinner").isVisible(), true);
-      const screen = await shipped.page.locator("#screen").boundingBox();
-      assert.ok(screen.width >= 300 && screen.height >= 400, JSON.stringify(screen));
+      let resumeWasm;
+      const wasmGate = new Promise((resolve) => { resumeWasm = resolve; });
+      await shipped.page.route(/\/matome-studio\.wasm(?:\?|$)/, async (route) => {
+        await wasmGate;
+        await route.continue();
+      });
+      let screen;
+      try {
+        await shipped.goto(productUrl + "/");
+        assert.equal(await shipped.page.title(), "Matome");
+        const icon = await shipped.page.locator("link[rel=icon]").getAttribute("href");
+        assert.ok(icon.startsWith("data:image/svg+xml"), icon);
+        assert.equal(await shipped.page.locator("#qtspinner").isVisible(), true);
+        screen = await shipped.page.locator("#screen").boundingBox();
+        assert.ok(screen.width >= 300 && screen.height >= 400, JSON.stringify(screen));
+      } finally {
+        resumeWasm();
+      }
       await shipped.untilBooted(() => shipped.page.evaluate(() => {
         const splash = getComputedStyle(document.querySelector("#qtspinner")).display === "none";
         const host = document.querySelector("#qt-shadow-container");
