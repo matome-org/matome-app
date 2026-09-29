@@ -26,8 +26,8 @@ Window {
     }
 
     function restoreFocus() {
-        if (orgAdmin.visible)
-            orgAdmin.focusDefault()
+        if (settingsScreen.visible)
+            settingsScreen.focusDefault()
         else if (explorer.visible)
             explorer.focusDefault()
         else
@@ -60,10 +60,10 @@ Window {
         focus: true
 
         Keys.onPressed: function (event) {
-            if (orgAdmin.visible && event.key === Qt.Key_Escape) {
-                orgAdmin.dismiss()
+            if (settingsScreen.visible && event.key === Qt.Key_Escape) {
+                settingsScreen.dismiss()
                 event.accepted = true
-            } else if (orgAdmin.visible && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
+            } else if (settingsScreen.visible && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
                 event.accepted = true
             } else if (event.key === Qt.Key_Escape && explorer.visible && explorer.dismiss())
                 event.accepted = true
@@ -93,18 +93,19 @@ Window {
             id: explorer
             objectName: "explorer"
             anchors.fill: parent
-            visible: Session.signedIn && !Session.orgAdmin.active
+            visible: Session.signedIn && !Session.settingsActive
             enabled: explorer.visible
             onCommandChosen: function (id) { win.perform(id) }
         }
 
-        OrgAdmin {
-            id: orgAdmin
-            objectName: "orgAdminScreen"
+        Settings {
+            id: settingsScreen
+            objectName: "settingsScreen"
             anchors.fill: parent
-            visible: Session.signedIn && Session.orgAdmin.active
+            visible: Session.signedIn && Session.settingsActive
             enabled: visible
-            onVisibleChanged: if (!orgAdmin.visible && explorer.visible) explorer.focusDefault()
+            onCommandChosen: function (id) { win.perform(id) }
+            onVisibleChanged: if (!settingsScreen.visible && explorer.visible) explorer.focusDefault()
         }
 
         CommandSheet {

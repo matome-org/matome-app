@@ -6,37 +6,42 @@ import QtQuick.Layouts
 import matome
 import "../chrome"
 import "../chrome/Messages.js" as Messages
+import "../chrome/Commands.js" as Commands
 
 FocusScope {
-    id: admin
+    id: settings
 
-    readonly property bool narrow: admin.width < 600
-    property string section: "general"
+    readonly property bool narrow: settings.width < 600
+    signal commandChosen(string id)
+
+    property string section: "appearance"
     property string targetId
     property string targetRole
     property string targetAction
-    readonly property string sectionError: admin.section === "general" ? Session.orgAdmin.generalError
-                                          : admin.section === "members" ? Session.orgAdmin.membersError
-                                          : admin.section === "invitations" ? Session.orgAdmin.invitationsError
-                                          : Session.orgAdmin.usageError
+    readonly property string sectionError: settings.section === "general" ? Session.orgAdmin.generalError
+                                          : settings.section === "members" ? Session.orgAdmin.membersError
+                                          : settings.section === "invitations" ? Session.orgAdmin.invitationsError
+                                          : settings.section === "usage" ? Session.orgAdmin.usageError : ""
     readonly property var sections: [
-        { value: "general", label: qsTr("General"), icon: "org" },
+        { value: "appearance", label: qsTr("Appearance"), icon: "settings" }
+    ].concat(Session.orgAdmin.available ? [
+        { value: "general", label: qsTr("Organization"), icon: "org" },
         { value: "members", label: qsTr("Members"), icon: "user" },
         { value: "invitations", label: qsTr("Invitations"), icon: "new" },
         { value: "usage", label: qsTr("Usage"), icon: "space" }
-    ]
+    ] : [])
 
     function focusDefault() { back.forceActiveFocus() }
     function dismiss() {
         if (confirm.visible)
             confirm.close()
         else
-            Session.orgAdmin.close()
+            Session.closeSettings()
     }
     function ask(action, id, email, role) {
-        admin.targetId = id
-        admin.targetRole = role
-        admin.targetAction = action
+        settings.targetId = id
+        settings.targetRole = role
+        settings.targetAction = action
         confirm.title = action === "remove" ? qsTr("Remove %1?").arg(email)
                       : action === "cancel" ? qsTr("Cancel invitation for %1?").arg(email)
                       : qsTr("Change the role of %1?").arg(email)
@@ -48,9 +53,9 @@ FocusScope {
         confirm.open()
     }
 
-    onVisibleChanged: if (admin.visible) {
-        admin.section = "general"
-        admin.focusDefault()
+    onVisibleChanged: if (settings.visible) {
+        settings.section = "appearance"
+        settings.focusDefault()
     } else {
         confirm.close()
         invitationEmail.clear()
@@ -58,6 +63,13 @@ FocusScope {
 
     Connections {
         target: Session.orgAdmin
+        function onChanged() {
+            if (!Session.orgAdmin.active && settings.section !== "appearance") {
+                settings.section = "appearance"
+                confirm.close()
+                invitationEmail.clear()
+            }
+        }
         function onInvitationSent() { invitationEmail.clear() }
     }
 
@@ -83,25 +95,25 @@ FocusScope {
                 spacing: Theme.gapM
                 ActionButton {
                     id: back
-                    objectName: "closeOrgAdminButton"
+                    objectName: "closeSettingsButton"
                     text: qsTr("Back to files")
                     icon: "back"
-                    showLabel: !admin.narrow
+                    showLabel: !settings.narrow
                     tip: text
-                    onActivated: Session.orgAdmin.close()
+                    onActivated: Session.closeSettings()
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Theme.gapXs
                     Caption {
                         Layout.fillWidth: true
-                        text: qsTr("Organization administration")
+                        text: settings.section === "appearance" ? Session.email : Session.orgAdmin.name
                         color: Theme.accentText
                         elide: Text.ElideRight
                     }
                     Text {
                         Layout.fillWidth: true
-                        text: Session.orgAdmin.name !== "" ? Session.orgAdmin.name : qsTr("Organization")
+                        text: qsTr("Settings")
                         color: Theme.textPrimary
                         font: Theme.title
                         elide: Text.ElideRight
@@ -110,6 +122,7 @@ FocusScope {
                 }
                 ActionButton {
                     objectName: "refreshOrgAdminButton"
+                    visible: settings.section !== "appearance"
                     text: qsTr("Refresh")
                     icon: "refresh"
                     showLabel: false
@@ -122,7 +135,7 @@ FocusScope {
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
 
         Flickable {
-            visible: admin.narrow
+            visible: settings.narrow
             Layout.fillWidth: true
             implicitHeight: tabs.implicitHeight + 2 * Theme.gapS
             contentWidth: tabs.implicitWidth + 2 * Theme.gapS
@@ -134,12 +147,12 @@ FocusScope {
                 y: Theme.gapS
                 spacing: Theme.gapXs
                 Repeater {
-                    model: admin.sections
+                    model: settings.sections
                     delegate: ActionButton {
                         required property var modelData
                         text: modelData.label
-                        primary: admin.section === modelData.value
-                        onActivated: admin.section = modelData.value
+                        primary: settings.section === modelData.value
+                        onActivated: settings.section = modelData.value
                     }
                 }
             }
@@ -150,7 +163,7 @@ FocusScope {
             Layout.fillHeight: true
             spacing: 0
             Rectangle {
-                visible: !admin.narrow
+                visible: !settings.narrow
                 Layout.preferredWidth: Theme.column
                 Layout.fillHeight: true
                 color: Theme.surface
@@ -161,14 +174,14 @@ FocusScope {
                     anchors.margins: Theme.gapM
                     spacing: Theme.gapS
                     Repeater {
-                        model: admin.sections
+                        model: settings.sections
                         delegate: ActionButton {
                             required property var modelData
                             Layout.fillWidth: true
                             text: modelData.label
                             icon: modelData.icon
-                            color: admin.section === modelData.value ? Theme.accentSoft : "transparent"
-                            onActivated: admin.section = modelData.value
+                            color: settings.section === modelData.value ? Theme.accentSoft : "transparent"
+                            onActivated: settings.section = modelData.value
                         }
                     }
                 }
@@ -177,36 +190,75 @@ FocusScope {
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: admin.narrow ? Theme.gapM : Theme.gapXl
+                Layout.margins: settings.narrow ? Theme.gapM : Theme.gapXl
                 spacing: Theme.gapM
 
                 Text {
                     Layout.fillWidth: true
-                    text: admin.sections.find(function (s) { return s.value === admin.section }).label
+                    text: settings.sections.find(function (s) { return s.value === settings.section })?.label ?? ""
                     font: Theme.heading
                     color: Theme.textPrimary
                     Accessible.role: Accessible.Heading
                 }
                 Label {
                     objectName: "orgAdminError"
-                    visible: Session.orgAdmin.errorCode !== "" || admin.sectionError !== ""
-                    text: Messages.adminFailure(Session.orgAdmin.errorCode || admin.sectionError)
+                    visible: settings.section !== "appearance" && (Session.orgAdmin.errorCode !== "" || settings.sectionError !== "")
+                    text: Messages.adminFailure(Session.orgAdmin.errorCode || settings.sectionError)
                     color: Theme.failed
                     Accessible.role: Accessible.AlertMessage
                 }
                 Label {
                     objectName: "orgAdminNotice"
-                    visible: Session.orgAdmin.notice !== ""
+                    visible: settings.section !== "appearance" && Session.orgAdmin.notice !== ""
                     text: Messages.adminNotice(Session.orgAdmin.notice)
                     color: Theme.accentText
                 }
                 Label {
-                    visible: Session.orgAdmin.busy
+                    visible: settings.section !== "appearance" && Session.orgAdmin.busy
                     text: qsTr("Working…")
                 }
 
                 Flickable {
-                    visible: admin.section === "general" && admin.sectionError === ""
+                    visible: settings.section === "appearance"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    contentHeight: appearance.implicitHeight
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    C.ScrollBar.vertical: ThinScrollBar {}
+                    ColumnLayout {
+                        id: appearance
+                        width: Math.min(parent.width, Theme.measure)
+                        spacing: Theme.gapM
+                        Label { text: qsTr("Theme") }
+                        Repeater {
+                            model: ["theme-light", "theme-dark", "theme-system"]
+                            delegate: ActionButton {
+                                required property string modelData
+                                Layout.fillWidth: true
+                                objectName: "settings_" + modelData
+                                text: Commands.find(Session.commandList, modelData).title
+                                primary: Theme.mode === Commands.themeMode(modelData)
+                                onActivated: settings.commandChosen(modelData)
+                            }
+                        }
+                        Label { text: qsTr("Language") }
+                        Repeater {
+                            model: Theme.languages
+                            delegate: ActionButton {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                objectName: "settings_lang-" + modelData.code
+                                text: modelData.name
+                                primary: Theme.language === modelData.code
+                                onActivated: settings.commandChosen("lang-" + modelData.code)
+                            }
+                        }
+                    }
+                }
+
+                Flickable {
+                    visible: settings.section === "general" && settings.sectionError === ""
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     contentHeight: general.implicitHeight
@@ -239,7 +291,7 @@ FocusScope {
                 }
 
                 ColumnLayout {
-                    visible: admin.section === "invitations" && admin.sectionError === ""
+                    visible: settings.section === "invitations" && settings.sectionError === ""
                     Layout.fillWidth: true
                     spacing: Theme.gapS
                     Field {
@@ -264,31 +316,31 @@ FocusScope {
                 }
                 OrgAdminPeople {
                     id: members
-                    visible: admin.section === "members" && admin.sectionError === ""
+                    visible: settings.section === "members" && settings.sectionError === ""
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    narrow: admin.narrow
-                    onRoleRequested: function (id, email, role) { admin.ask("role", id, email, role) }
-                    onRemovalRequested: function (id, email) { admin.ask("remove", id, email, "") }
+                    narrow: settings.narrow
+                    onRoleRequested: function (id, email, role) { settings.ask("role", id, email, role) }
+                    onRemovalRequested: function (id, email) { settings.ask("remove", id, email, "") }
                 }
                 OrgAdminPeople {
                     id: invitations
-                    visible: admin.section === "invitations" && admin.sectionError === ""
+                    visible: settings.section === "invitations" && settings.sectionError === ""
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     invitations: true
-                    narrow: admin.narrow
-                    onCancellationRequested: function (id, email) { admin.ask("cancel", id, email, "") }
+                    narrow: settings.narrow
+                    onCancellationRequested: function (id, email) { settings.ask("cancel", id, email, "") }
                 }
                 Label {
-                    visible: !Session.orgAdmin.busy && admin.sectionError === ""
-                             && ((admin.section === "members" && members.count === 0)
-                                 || (admin.section === "invitations" && invitations.count === 0))
-                    text: admin.section === "members" ? qsTr("No members to display.") : qsTr("No invitations yet.")
+                    visible: !Session.orgAdmin.busy && settings.sectionError === ""
+                             && ((settings.section === "members" && members.count === 0)
+                                 || (settings.section === "invitations" && invitations.count === 0))
+                    text: settings.section === "members" ? qsTr("No members to display.") : qsTr("No invitations yet.")
                 }
 
                 Flickable {
-                    visible: admin.section === "usage" && admin.sectionError === ""
+                    visible: settings.section === "usage" && settings.sectionError === ""
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     contentHeight: usage.implicitHeight
@@ -348,7 +400,7 @@ FocusScope {
                         }
                     }
                 }
-                Item { Layout.fillHeight: true; visible: admin.sectionError !== "" }
+                Item { Layout.fillHeight: true; visible: settings.sectionError !== "" }
             }
         }
     }
@@ -358,13 +410,13 @@ FocusScope {
         objectName: "orgAdminConfirm"
         anchors.fill: parent
         onAccepted: {
-            if (admin.targetAction === "remove")
-                Session.orgAdmin.removeMember(admin.targetId)
-            else if (admin.targetAction === "cancel")
-                Session.orgAdmin.cancelInvitation(admin.targetId)
+            if (settings.targetAction === "remove")
+                Session.orgAdmin.removeMember(settings.targetId)
+            else if (settings.targetAction === "cancel")
+                Session.orgAdmin.cancelInvitation(settings.targetId)
             else
-                Session.orgAdmin.changeRole(admin.targetId, admin.targetRole)
+                Session.orgAdmin.changeRole(settings.targetId, settings.targetRole)
         }
-        onVisibleChanged: if (!confirm.visible && admin.visible) admin.focusDefault()
+        onVisibleChanged: if (!confirm.visible && settings.visible) settings.focusDefault()
     }
 }

@@ -2346,7 +2346,9 @@ void TestStudio::accountMenuChoosesALanguage()
     focusOn(itemNamed(QStringLiteral("accountButton")));
     key(Qt::Key_Return);
     QTRY_VERIFY(menuOpen());
-    for (int i = 0; i < 3; ++i)
+    QQuickItem *portuguese = waitItem(QStringLiteral("menu_lang-pt-BR"));
+    QVERIFY(portuguese);
+    for (int i = 0; i < portuguese->property("index").toInt(); ++i)
         key(Qt::Key_Down);
     key(Qt::Key_Return);
     QTRY_VERIFY(!menuOpen());

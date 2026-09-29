@@ -100,6 +100,7 @@ private slots:
     void fakeCoreKeepsNamesAndRevisions();
     void modelsReportFailures();
     void wordsFollowTheTranslator();
+    void settingsAvailableWithoutAdminOrganization();
     void orgAdminLoadsAndPreservesLocation();
     void orgAdminMutatesMembersAndInvitations();
     void orgAdminGuardsLastOwnerAndReportsErrors();
@@ -2620,6 +2621,43 @@ void TestCore::wordsFollowTheTranslator()
 }
 
 
+void TestCore::settingsAvailableWithoutAdminOrganization()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(!usable(session, QStringLiteral("settings")));
+    session.openSettings();
+    QVERIFY(!session.settingsActive());
+    session.signIn(QStringLiteral("ok@localhost"), QStringLiteral("secret12"), core.url());
+    QVERIFY(waitFor(&session));
+    QVERIFY(session.currentOrgId().isEmpty());
+    QVERIFY(usable(session, QStringLiteral("settings")));
+    int hits = core.hits();
+    session.runCommand(QStringLiteral("settings"));
+    QVERIFY(session.settingsActive());
+    QVERIFY(!session.orgAdmin()->active());
+    QCOMPARE(core.hits(), hits);
+    session.closeSettings();
+    QVERIFY(!session.settingsActive());
+
+    core.seedOrganization(QStringLiteral("Guest team"), QStringLiteral("guest"));
+    session.refreshOrganizations();
+    QVERIFY(waitFor(&session));
+    session.navigate(QStringLiteral("org"), session.organizations()->index(session.organizations()->rowCount() - 1).data(OrgModel::OrgIdRole).toString());
+    QVERIFY(waitFor(&session));
+    QVERIFY(!session.orgAdmin()->available());
+    QVERIFY(usable(session, QStringLiteral("settings")));
+    hits = core.hits();
+    session.runCommand(QStringLiteral("settings"));
+    QVERIFY(session.settingsActive());
+    QVERIFY(!session.orgAdmin()->active());
+    QCOMPARE(core.hits(), hits);
+    session.signOut();
+    QVERIFY(!session.settingsActive());
+    QVERIFY(!usable(session, QStringLiteral("settings")));
+}
+
 void TestCore::orgAdminLoadsAndPreservesLocation()
 {
     FakeCore core;
@@ -2629,6 +2667,7 @@ void TestCore::orgAdminLoadsAndPreservesLocation()
     const QString spaceId = session.currentSpaceId();
     session.runCommand(QStringLiteral("settings"));
     auto *admin = session.orgAdmin();
+    QVERIFY(session.settingsActive());
     QVERIFY(admin->active());
     QTRY_VERIFY(!admin->busy());
     QVERIFY(admin->generalError().isEmpty());
@@ -2644,7 +2683,8 @@ void TestCore::orgAdminLoadsAndPreservesLocation()
     QVERIFY(waitFor(&session));
     QCOMPARE(admin->name(), QStringLiteral("Team"));
     QCOMPARE(session.organizations()->nameOf(session.currentOrgId()), QStringLiteral("Team"));
-    admin->close();
+    session.closeSettings();
+    QVERIFY(!session.settingsActive());
     QCOMPARE(session.currentSpaceId(), spaceId);
     QCOMPARE(admin->members()->rowCount(), 0);
     QVERIFY(admin->name().isEmpty());
@@ -2759,13 +2799,14 @@ void TestCore::orgAdminClosesWhenAdminAccessIsLost()
     QVERIFY(openInbox(core, session));
     core.seedMember(session.currentOrgId(), QStringLiteral("other-owner@example.com"), QStringLiteral("owner"));
     auto *admin = session.orgAdmin();
-    admin->open();
+    session.openSettings();
     QTRY_VERIFY(!admin->busy());
     const QString id = admin->members()->index(0).data(matome::OrgPeopleModel::PersonIdRole).toString();
     admin->changeRole(id, QStringLiteral("member"));
     QTRY_VERIFY(!admin->active());
     QVERIFY(!admin->available());
-    QVERIFY(!usable(session, QStringLiteral("settings")));
+    QVERIFY(usable(session, QStringLiteral("settings")));
+    QVERIFY(session.settingsActive());
     QCOMPARE(admin->members()->rowCount(), 0);
     admin->open();
     QVERIFY(!admin->active());

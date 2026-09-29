@@ -1,13 +1,18 @@
 # Organization administration
 
-Open an organization as an owner or admin, click the account at the bottom
-right of the explorer, and choose **Settings**. The command sheet also
-offers **Settings**. **Back to files** or Escape
-returns to the explorer at the same space and folder.
+After signing in, click the account at the bottom right of the explorer and
+choose **Settings**. The command sheet also offers **Settings**, including
+when no organization is open or the current membership is not an admin.
+**Appearance** contains theme and language preferences, which apply to the
+app and persist independently of an organization. **Back to files** or
+Escape returns to the explorer at the same space and folder.
+
+Opening an organization as an owner or admin adds its administration sections
+to Settings.
 
 The panel includes:
 
-- General: edit the organization name using its current revision.
+- Organization: edit the organization name using its current revision.
 - Members: list active members, change their system role, and remove access.
 - Invitations: send an email invitation, inspect its status and expiry, and
   cancel a pending invitation. Owner is available for existing members but
@@ -22,14 +27,17 @@ Refresh reloads the panel; a name revision conflict also reloads the current
 organization before another save.
 
 The current API lists a membership's system role but does not expose the
-caller's effective action set. This version limits panel entry to `owner`
-and `admin`; it does not grant panel entry through custom roles or groups.
+caller's effective action set. This version limits organization sections
+to `owner` and `admin`; custom roles or groups do not unlock these sections.
 Every operation still uses the authenticated Core endpoint, which checks
 effective permissions. Read failures clear the affected collection and
 disable its mutations. A refreshed loss of admin membership, organization
-switch, or sign-out closes the panel and invalidates pending responses.
+switch, or sign-out clears organization data and invalidates pending
+responses. Losing admin membership returns Settings to Appearance; signing
+out closes Settings.
 
 For local validation, run `mise run studio` and sign in to a local Core as
-an organization owner or admin. Verify all four sections, confirmations,
-return navigation, and a narrow window. The unit checks are available with
+an organization owner or admin. Verify Appearance without an open
+organization, all four administration sections, confirmations, return
+navigation, and a narrow window. The unit checks are available with
 `mise run test:core`; QML lint is `mise run lint`.

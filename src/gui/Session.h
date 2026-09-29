@@ -29,6 +29,7 @@ class Session : public QObject
     QML_ELEMENT
     QML_SINGLETON
     Q_PROPERTY(bool signedIn READ signedIn NOTIFY changed)
+    Q_PROPERTY(bool settingsActive READ settingsActive NOTIFY settingsChanged)
     Q_PROPERTY(bool confirmationPending READ confirmationPending NOTIFY changed)
     Q_PROPERTY(bool confirmationResent READ confirmationResent NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
@@ -68,6 +69,7 @@ public:
     explicit Session(QObject *parent = nullptr);
 
     bool signedIn() const { return m_signedIn; }
+    bool settingsActive() const { return m_settingsActive; }
     bool confirmationPending() const { return m_confirmationPending; }
     bool confirmationResent() const { return m_confirmationResent; }
     bool busy() const { return m_busy; }
@@ -153,6 +155,8 @@ public:
     Q_INVOKABLE void navigate(const QString &kind, const QString &id);
     Q_INVOKABLE void createHere(const QString &name);
     Q_INVOKABLE void toggleFolder(const QString &folderId);
+    Q_INVOKABLE void openSettings();
+    Q_INVOKABLE void closeSettings();
     Q_INVOKABLE void runCommand(const QString &id);
     Q_INVOKABLE bool handleKey(int key, int modifiers, bool inField);
 
@@ -180,6 +184,7 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 signals:
+    void settingsChanged();
     void changed();
     void trailChanged();
     void downloadReady(const QUrl &file);
@@ -312,6 +317,7 @@ private:
     QVariantList m_trail;
     int m_historyIndex = -1;
     bool m_signedIn = false;
+    bool m_settingsActive = false;
     bool m_confirmationPending = false;
     bool m_confirmationResent = false;
     bool m_busy = false;

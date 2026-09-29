@@ -290,7 +290,7 @@
         <translation>Excluir a pasta “%1”?</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+53"/>
         <source>This cannot be undone.</source>
         <translation>Isso não pode ser desfeito.</translation>
     </message>
@@ -638,14 +638,45 @@
     </message>
 </context>
 <context>
-    <name>OrgAdmin</name>
+    <name>OrgAdminPeople</name>
     <message>
-        <location filename="../qml/screens/OrgAdmin.qml" line="+23"/>
-        <source>General</source>
-        <translation>Geral</translation>
+        <location filename="../qml/screens/OrgAdminPeople.qml" line="+57"/>
+        <source>Expires %1</source>
+        <translation>Expira em %1</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+18"/>
+        <source>Apply</source>
+        <translation>Aplicar</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Remove</source>
+        <translation>Remover</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cancel invitation</source>
+        <translation>Cancelar convite</translation>
+    </message>
+</context>
+<context>
+    <name>RolePicker</name>
+    <message>
+        <location filename="../qml/chrome/RolePicker.qml" line="+31"/>
+        <source>Organization role</source>
+        <translation>Papel na organização</translation>
+    </message>
+</context>
+<context>
+    <name>Settings</name>
+    <message>
+        <location filename="../qml/screens/Settings.qml" line="+26"/>
+        <source>Appearance</source>
+        <translation>Aparência</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Members</source>
         <translation>Membros</translation>
     </message>
@@ -705,22 +736,22 @@
         <translation>Alterar papel</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+47"/>
         <source>Back to files</source>
         <translation>Voltar aos arquivos</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>Organization administration</source>
-        <translation>Administração da organização</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-71"/>
         <source>Organization</source>
         <translation>Organização</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+88"/>
+        <source>Settings</source>
+        <translation>Configurações</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Refresh</source>
         <translation>Atualizar</translation>
     </message>
@@ -731,6 +762,16 @@
     </message>
     <message>
         <location line="+15"/>
+        <source>Theme</source>
+        <translation>Tema</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Language</source>
+        <translation>Idioma</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <location line="+5"/>
         <source>Organization name</source>
         <translation>Nome da organização</translation>
@@ -774,37 +815,6 @@
         <location line="+8"/>
         <source>Reserved: %1</source>
         <translation>Reservado: %1</translation>
-    </message>
-</context>
-<context>
-    <name>OrgAdminPeople</name>
-    <message>
-        <location filename="../qml/screens/OrgAdminPeople.qml" line="+57"/>
-        <source>Expires %1</source>
-        <translation>Expira em %1</translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>Apply</source>
-        <translation>Aplicar</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Remove</source>
-        <translation>Remover</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Cancel invitation</source>
-        <translation>Cancelar convite</translation>
-    </message>
-</context>
-<context>
-    <name>RolePicker</name>
-    <message>
-        <location filename="../qml/chrome/RolePicker.qml" line="+31"/>
-        <source>Organization role</source>
-        <translation>Papel na organização</translation>
     </message>
 </context>
 <context>
@@ -923,7 +933,7 @@
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+112"/>
+        <location filename="../Session.cpp" line="+138"/>
         <source>New organization</source>
         <translation>Nova organização</translation>
     </message>

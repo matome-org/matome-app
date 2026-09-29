@@ -290,7 +290,7 @@
         <translation>フォルダー「%1」を削除しますか？</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+53"/>
         <source>This cannot be undone.</source>
         <translation>この操作は元に戻せません。</translation>
     </message>
@@ -639,14 +639,45 @@
     </message>
 </context>
 <context>
-    <name>OrgAdmin</name>
+    <name>OrgAdminPeople</name>
     <message>
-        <location filename="../qml/screens/OrgAdmin.qml" line="+23"/>
-        <source>General</source>
-        <translation>一般</translation>
+        <location filename="../qml/screens/OrgAdminPeople.qml" line="+57"/>
+        <source>Expires %1</source>
+        <translation>有効期限：%1</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+18"/>
+        <source>Apply</source>
+        <translation>適用</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Remove</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cancel invitation</source>
+        <translation>招待を取り消す</translation>
+    </message>
+</context>
+<context>
+    <name>RolePicker</name>
+    <message>
+        <location filename="../qml/chrome/RolePicker.qml" line="+31"/>
+        <source>Organization role</source>
+        <translation>組織での役割</translation>
+    </message>
+</context>
+<context>
+    <name>Settings</name>
+    <message>
+        <location filename="../qml/screens/Settings.qml" line="+26"/>
+        <source>Appearance</source>
+        <translation>外観</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Members</source>
         <translation>メンバー</translation>
     </message>
@@ -706,22 +737,22 @@
         <translation>役割を変更</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+47"/>
         <source>Back to files</source>
         <translation>ファイルに戻る</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>Organization administration</source>
-        <translation>組織の管理</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-71"/>
         <source>Organization</source>
         <translation>組織</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+88"/>
+        <source>Settings</source>
+        <translation>設定</translation>
+    </message>
+    <message>
+        <location line="+10"/>
         <source>Refresh</source>
         <translation>更新</translation>
     </message>
@@ -732,6 +763,16 @@
     </message>
     <message>
         <location line="+15"/>
+        <source>Theme</source>
+        <translation>テーマ</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Language</source>
+        <translation>言語</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <location line="+5"/>
         <source>Organization name</source>
         <translation>組織名</translation>
@@ -775,37 +816,6 @@
         <location line="+8"/>
         <source>Reserved: %1</source>
         <translation>予約済み：%1</translation>
-    </message>
-</context>
-<context>
-    <name>OrgAdminPeople</name>
-    <message>
-        <location filename="../qml/screens/OrgAdminPeople.qml" line="+57"/>
-        <source>Expires %1</source>
-        <translation>有効期限：%1</translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <source>Apply</source>
-        <translation>適用</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Remove</source>
-        <translation>削除</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Cancel invitation</source>
-        <translation>招待を取り消す</translation>
-    </message>
-</context>
-<context>
-    <name>RolePicker</name>
-    <message>
-        <location filename="../qml/chrome/RolePicker.qml" line="+31"/>
-        <source>Organization role</source>
-        <translation>組織での役割</translation>
     </message>
 </context>
 <context>
@@ -924,7 +934,7 @@
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+112"/>
+        <location filename="../Session.cpp" line="+138"/>
         <source>New organization</source>
         <translation>新しい組織</translation>
     </message>
