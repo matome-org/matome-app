@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/matome-org/matome-app/compare/v0.5.0...v0.6.0) (2026-09-29)
+
+
+### Features
+
+* **org-billing:** add plan and add-on management ([#56](https://github.com/matome-org/matome-app/issues/56)) ([bddb55d](https://github.com/matome-org/matome-app/commit/bddb55dbd6251f7f34f85846a648f217a498e89d))
+
 ## [0.5.0](https://github.com/matome-org/matome-app/compare/v0.4.0...v0.5.0) (2026-09-29)
 
 
