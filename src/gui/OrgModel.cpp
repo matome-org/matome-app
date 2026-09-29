@@ -28,10 +28,10 @@ QString OrgModel::nameOf(const QString &orgId) const
     return row ? row->name : QString();
 }
 
-QString OrgModel::roleOf(const QString &orgId) const
+bool OrgModel::canAdminister(const QString &orgId) const
 {
     const OrgRow *row = find(orgId);
-    return row ? row->role : QString();
+    return row && row->canAdminister();
 }
 
 int OrgModel::rowCount(const QModelIndex &parent) const
@@ -53,6 +53,8 @@ QVariant OrgModel::data(const QModelIndex &index, int role) const
         return row.role;
     case RevisionRole:
         return row.revision;
+    case CanAdministerRole:
+        return row.canAdminister();
     default:
         return {};
     }
@@ -63,7 +65,8 @@ QHash<int, QByteArray> OrgModel::roleNames() const
     return {{OrgIdRole, "orgId"},
             {NameRole, "name"},
             {RoleNameRole, "role"},
-            {RevisionRole, "revision"}};
+            {RevisionRole, "revision"},
+            {CanAdministerRole, "canAdminister"}};
 }
 
 void OrgModel::reload()

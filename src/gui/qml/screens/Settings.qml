@@ -15,15 +15,18 @@ FocusScope {
     signal commandChosen(string id)
 
     property string section: "appearance"
+    readonly property bool organizationSection: section !== "appearance" && section !== "organizations"
     property string targetId
     property string targetRole
     property string targetAction
     readonly property string sectionError: settings.section === "general" ? Session.orgAdmin.generalError
                                           : settings.section === "members" ? Session.orgAdmin.membersError
                                           : settings.section === "invitations" ? Session.orgAdmin.invitationsError
-                                          : settings.section === "usage" ? Session.orgAdmin.usageError : ""
+                                          : settings.section === "usage" ? Session.orgAdmin.usageError
+                                          : settings.section === "organizations" ? Session.organizationsError : ""
     readonly property var sections: [
-        { value: "appearance", label: qsTr("Appearance"), icon: "settings" }
+        { value: "appearance", label: qsTr("Appearance"), icon: "settings" },
+        { value: "organizations", label: qsTr("Organizations"), icon: "org" }
     ].concat(Session.orgAdmin.available ? [
         { value: "general", label: qsTr("Organization"), icon: "org" },
         { value: "members", label: qsTr("Members"), icon: "user" },
@@ -31,6 +34,17 @@ FocusScope {
         { value: "usage", label: qsTr("Usage"), icon: "space" }
     ] : [])
 
+    function configureOrganization(id) {
+        Session.navigate("org", id)
+        if (Session.orgAdmin.available) {
+            settings.section = "general"
+            settings.focusDefault()
+        }
+    }
+    function openOrganizations(id) {
+        Session.closeSettings()
+        Session.navigate(id === "" ? "root" : "org", id)
+    }
     function focusDefault() { back.forceActiveFocus() }
     function dismiss() {
         if (confirm.visible)
@@ -64,8 +78,8 @@ FocusScope {
     Connections {
         target: Session.orgAdmin
         function onChanged() {
-            if (!Session.orgAdmin.active && settings.section !== "appearance") {
-                settings.section = "appearance"
+            if (!Session.orgAdmin.active && settings.organizationSection) {
+                settings.section = "organizations"
                 confirm.close()
                 invitationEmail.clear()
             }
@@ -107,7 +121,7 @@ FocusScope {
                     spacing: Theme.gapXs
                     Caption {
                         Layout.fillWidth: true
-                        text: settings.section === "appearance" ? Session.email : Session.orgAdmin.name
+                        text: settings.organizationSection ? Session.orgAdmin.name : Session.email
                         color: Theme.accentText
                         elide: Text.ElideRight
                     }
@@ -127,8 +141,9 @@ FocusScope {
                     icon: "refresh"
                     showLabel: false
                     tip: text
-                    usable: !Session.orgAdmin.busy
-                    onActivated: Session.orgAdmin.refresh()
+                    usable: settings.section === "organizations" ? !Session.organizationsBusy : !Session.orgAdmin.busy
+                    onActivated: if (settings.section === "organizations") Session.refreshOrganizations()
+                                 else Session.orgAdmin.refresh()
                 }
             }
         }
@@ -202,20 +217,101 @@ FocusScope {
                 }
                 Label {
                     objectName: "orgAdminError"
-                    visible: settings.section !== "appearance" && (Session.orgAdmin.errorCode !== "" || settings.sectionError !== "")
-                    text: Messages.adminFailure(Session.orgAdmin.errorCode || settings.sectionError)
+                    visible: (settings.organizationSection && Session.orgAdmin.errorCode !== "") || settings.sectionError !== ""
+                    text: Messages.adminFailure((settings.organizationSection ? Session.orgAdmin.errorCode : "") || settings.sectionError)
                     color: Theme.failed
                     Accessible.role: Accessible.AlertMessage
                 }
                 Label {
                     objectName: "orgAdminNotice"
-                    visible: settings.section !== "appearance" && Session.orgAdmin.notice !== ""
+                    visible: settings.organizationSection && Session.orgAdmin.notice !== ""
                     text: Messages.adminNotice(Session.orgAdmin.notice)
                     color: Theme.accentText
                 }
                 Label {
-                    visible: settings.section !== "appearance" && Session.orgAdmin.busy
+                    visible: settings.section === "organizations" ? Session.organizationsBusy
+                             : settings.organizationSection && Session.orgAdmin.busy
                     text: qsTr("Working…")
+                }
+
+                RowLayout {
+                    visible: settings.section === "organizations"
+                    Layout.fillWidth: true
+                    spacing: Theme.gapM
+                    Label { text: qsTr("Choose an organization to manage.") }
+                    ActionButton {
+                        objectName: "openOrganizationsButton"
+                        text: qsTr("Open organizations")
+                        icon: "org"
+                        showLabel: !settings.narrow
+                        tip: text
+                        onActivated: settings.openOrganizations("")
+                    }
+                }
+                ListView {
+                    id: organizations
+                    objectName: "settingsOrganizationsList"
+                    visible: settings.section === "organizations"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    model: Session.organizations
+                    clip: true
+                    spacing: Theme.gapS
+                    boundsBehavior: Flickable.StopAtBounds
+                    C.ScrollBar.vertical: ThinScrollBar {}
+                    delegate: Rectangle {
+                        id: organization
+                        required property string orgId
+                        required property string name
+                        required property string role
+                        required property bool canAdminister
+                        width: organizations.width
+                        implicitHeight: organizationContent.implicitHeight + 2 * Theme.gapM
+                        color: Theme.surface
+                        radius: Theme.rounding
+                        border.color: Theme.border
+                        ColumnLayout {
+                            id: organizationContent
+                            anchors.fill: parent
+                            anchors.margins: Theme.gapM
+                            spacing: Theme.gapS
+                            Text {
+                                Layout.fillWidth: true
+                                text: organization.name
+                                font: Theme.strong(Theme.body)
+                                color: Theme.textPrimary
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                text: Session.orgAdmin.roles.find(function (choice) {
+                                    return choice.value === organization.role
+                                })?.label ?? organization.role
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.gapS
+                                ActionButton {
+                                    objectName: "configureOrganization_" + organization.orgId
+                                    visible: organization.canAdminister
+                                    text: qsTr("Configure")
+                                    icon: "settings"
+                                    primary: true
+                                    onActivated: settings.configureOrganization(organization.orgId)
+                                }
+                                ActionButton {
+                                    objectName: "openOrganization_" + organization.orgId
+                                    text: qsTr("Open organization")
+                                    icon: "forward"
+                                    onActivated: settings.openOrganizations(organization.orgId)
+                                }
+                            }
+                        }
+                    }
+                }
+                Label {
+                    visible: settings.section === "organizations" && organizations.count === 0
+                             && !Session.organizationsBusy && settings.sectionError === ""
+                    text: qsTr("No organizations yet.")
                 }
 
                 Flickable {

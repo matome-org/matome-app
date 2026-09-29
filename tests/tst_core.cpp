@@ -101,6 +101,7 @@ private slots:
     void modelsReportFailures();
     void wordsFollowTheTranslator();
     void settingsAvailableWithoutAdminOrganization();
+    void settingsSelectsOrganizationsAndDiscardsReplies();
     void orgAdminLoadsAndPreservesLocation();
     void orgAdminMutatesMembersAndInvitations();
     void orgAdminGuardsLastOwnerAndReportsErrors();
@@ -2656,6 +2657,51 @@ void TestCore::settingsAvailableWithoutAdminOrganization()
     session.signOut();
     QVERIFY(!session.settingsActive());
     QVERIFY(!usable(session, QStringLiteral("settings")));
+}
+
+void TestCore::settingsSelectsOrganizationsAndDiscardsReplies()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    session.signIn(QStringLiteral("ok@localhost"), QStringLiteral("secret12"), core.url());
+    QVERIFY(waitFor(&session));
+    core.seedOrganization(QStringLiteral("Other"), QStringLiteral("admin"));
+    core.seedOrganization(QStringLiteral("Guest team"), QStringLiteral("guest"));
+    session.refreshOrganizations();
+    QVERIFY(waitFor(&session));
+    auto *orgs = session.organizations();
+    const QString first = orgs->index(0).data(OrgModel::OrgIdRole).toString();
+    const QString second = orgs->index(1).data(OrgModel::OrgIdRole).toString();
+    const QString guest = orgs->index(2).data(OrgModel::OrgIdRole).toString();
+    QVERIFY(orgs->index(0).data(OrgModel::CanAdministerRole).toBool());
+    QVERIFY(orgs->index(1).data(OrgModel::CanAdministerRole).toBool());
+    QVERIFY(!orgs->index(2).data(OrgModel::CanAdministerRole).toBool());
+    session.openSettings();
+    QVERIFY(session.settingsActive());
+    auto *admin = session.orgAdmin();
+    QVERIFY(!admin->active());
+    QVERIFY(core.failNext(QStringLiteral("GET"), matome::orgPath(first, QStringLiteral("members")),
+                          1, FakeCore::FaultMode::Hold));
+    session.navigate(QStringLiteral("org"), first);
+    QTRY_COMPARE(core.held(), 1);
+    QVERIFY(admin->active());
+    session.navigate(QStringLiteral("org"), second);
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->name(), QStringLiteral("Other"));
+    QVERIFY(session.settingsActive());
+    core.release();
+    QTest::qWait(20);
+    QCOMPARE(admin->name(), QStringLiteral("Other"));
+    QCOMPARE(admin->members()->rowCount(), 1);
+    session.navigate(QStringLiteral("org"), guest);
+    QVERIFY(!admin->active());
+    QVERIFY(session.settingsActive());
+    QCOMPARE(admin->members()->rowCount(), 0);
+    session.closeSettings();
+    session.navigate(QStringLiteral("root"), QString());
+    QVERIFY(session.currentOrgId().isEmpty());
+    QVERIFY(!session.settingsActive());
 }
 
 void TestCore::orgAdminLoadsAndPreservesLocation()

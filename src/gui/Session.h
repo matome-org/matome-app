@@ -39,6 +39,8 @@ class Session : public QObject
     Q_PROPERTY(QString email READ email NOTIFY changed)
     Q_PROPERTY(QString apiBaseUrl READ apiBaseUrl WRITE setApiBaseUrl NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *organizations READ orgList CONSTANT)
+    Q_PROPERTY(bool organizationsBusy READ organizationsBusy NOTIFY changed)
+    Q_PROPERTY(QString organizationsError READ organizationsError NOTIFY changed)
     Q_PROPERTY(matome::OrgAdmin *orgAdmin READ orgAdmin CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
@@ -84,6 +86,8 @@ public:
     void setLastOrgId(const QString &id);
 
     OrgModel *organizations() { return &m_orgs; }
+    bool organizationsBusy() const { return m_orgs.busy(); }
+    QString organizationsError() const { return m_orgs.errorCode(); }
     OrgAdmin *orgAdmin() { return &m_orgAdmin; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }

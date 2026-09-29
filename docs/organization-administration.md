@@ -7,8 +7,16 @@ when no organization is open or the current membership is not an admin.
 app and persist independently of an organization. **Back to files** or
 Escape returns to the explorer at the same space and folder.
 
-Opening an organization as an owner or admin adds its administration sections
-to Settings.
+**Organizations** is always available in Settings and lists the signed-in
+account's memberships. **Configure** opens the administration sections for
+an organization where the account is an owner or admin. Selecting a different
+organization clears pending confirmations and responses from the previous
+one. **Open organization** returns to that organization's explorer, while
+**Open organizations** returns to the explorer's organization list.
+
+Selecting an organization as an owner or admin adds its administration
+sections to Settings. This also changes the explorer's selected organization;
+closing Settings returns to that selection.
 
 The panel includes:
 
@@ -33,11 +41,11 @@ Every operation still uses the authenticated Core endpoint, which checks
 effective permissions. Read failures clear the affected collection and
 disable its mutations. A refreshed loss of admin membership, organization
 switch, or sign-out clears organization data and invalidates pending
-responses. Losing admin membership returns Settings to Appearance; signing
+responses. Losing admin membership returns Settings to Organizations; signing
 out closes Settings.
 
 For local validation, run `mise run studio` and sign in to a local Core as
 an organization owner or admin. Verify Appearance without an open
-organization, all four administration sections, confirmations, return
-navigation, and a narrow window. The unit checks are available with
+organization, selection through Organizations, all four administration
+sections, confirmations, return navigation, and a narrow window. The unit checks are available with
 `mise run test:core`; QML lint is `mise run lint`.

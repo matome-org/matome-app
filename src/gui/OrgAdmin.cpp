@@ -50,8 +50,8 @@ OrgAdmin::OrgAdmin(Session &session)
 
 bool OrgAdmin::available() const
 {
-    const QString role = m_session.organizations()->roleOf(m_session.currentOrgId());
-    return m_session.signedIn() && (role == QLatin1String("owner") || role == QLatin1String("admin"));
+    return m_session.signedIn()
+            && m_session.organizations()->canAdminister(m_session.currentOrgId());
 }
 
 void OrgAdmin::sync()
