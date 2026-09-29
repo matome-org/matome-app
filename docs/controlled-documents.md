@@ -19,8 +19,11 @@ document under control.
 4. Activate the space rule. Existing incompatible readiness automations and
    trusted processing subscriptions must be paused or configured for publication
    before Core accepts the rule.
-5. Upload a `.md` document. The app labels it `text/markdown`. Open Document
-   reviews for that document and enable its control. Core requires a published
+5. Upload a `.md` document. The app labels it `text/markdown`. The explorer
+   shows "Not managed" beside it. Choose "Manage document" in that document's
+   menu, then use the Control tab to opt it in. The row changes to "Managed".
+   "Unmanage document" in the same menu opens the Control tab to request a
+   reason and confirm opt-out. Core requires a published
    Markdown version, valid UTF-8 without NUL characters, of at most 1 MiB.
 6. Grant reviewer access to another member of the organization. This profile
    grants `document.review_read` and `document.approve` for the space. Use normal

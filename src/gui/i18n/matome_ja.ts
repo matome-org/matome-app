@@ -260,7 +260,7 @@
         <translation>確認</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+60"/>
         <source>Back</source>
         <translation>戻る</translation>
     </message>
@@ -325,7 +325,17 @@
         <translation>下書きの読み込み後に公開版が変更されました。公開済みMarkdownを再読み込みする前に編集内容をコピーしてください。</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+39"/>
+        <source>Manage document</source>
+        <translation>文書を管理対象にする</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Unmanage document</source>
+        <translation>文書を管理対象から外す</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Review access for this space</source>
         <translation>このスペースのレビュー権限</translation>
     </message>
@@ -450,12 +460,7 @@
         <translation>スペースのルールを一時停止</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Enable document control</source>
-        <translation>文書の管理を有効化</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Document control enabled</source>
         <translation>文書の管理は有効です</translation>
     </message>
@@ -470,12 +475,7 @@
         <translation>管理またはルールを削除する理由</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Remove document control</source>
-        <translation>文書の管理を解除</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Remove space rule</source>
         <translation>スペースのルールを削除</translation>
     </message>
@@ -488,7 +488,7 @@
         <translation>項目</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+79"/>
         <source>Loading…</source>
         <translation>読み込み中…</translation>
     </message>
@@ -502,6 +502,18 @@
     <name>EntryRow</name>
     <message>
         <location filename="../qml/chrome/EntryRow.qml" line="+72"/>
+        <location line="+93"/>
+        <source>Managed</source>
+        <translation>管理対象</translation>
+    </message>
+    <message>
+        <location line="-93"/>
+        <location line="+93"/>
+        <source>Not managed</source>
+        <translation>管理対象外</translation>
+    </message>
+    <message>
+        <location line="-91"/>
         <source>%1, expanded</source>
         <translation>%1、展開</translation>
     </message>
@@ -511,7 +523,7 @@
         <translation>%1、折りたたみ</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+104"/>
         <source>Name</source>
         <translation>名前</translation>
     </message>
@@ -1827,16 +1839,6 @@
         <source>archived</source>
         <translation>アーカイブ済み</translation>
     </message>
-    <message>
-        <location line="+80"/>
-        <source>Controlled</source>
-        <translation>管理対象</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Controlled · %1</source>
-        <translation>管理対象 · %1</translation>
-    </message>
 </context>
 <context>
     <name>matome::Session</name>
@@ -1916,17 +1918,27 @@
         <translation>ダウンロード</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+12"/>
         <source>Document reviews</source>
         <translation>文書レビュー</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>Rename</source>
         <translation>名前を変更</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+106"/>
+        <source>Unmanage document</source>
+        <translation>文書を管理対象から外す</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Manage document</source>
+        <translation>文書を管理対象にする</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Delete folder</source>
         <translation>フォルダーを削除</translation>
     </message>
@@ -1936,17 +1948,17 @@
         <translation>ゴミ箱へ移動</translation>
     </message>
     <message>
-        <location line="-104"/>
+        <location line="-109"/>
         <source>Restore last trash</source>
         <translation>元に戻す</translation>
     </message>
     <message>
-        <location line="-40"/>
+        <location line="-48"/>
         <source>Settings</source>
         <translation>設定</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+50"/>
         <source>Purge last trash</source>
         <translation>完全に削除</translation>
     </message>

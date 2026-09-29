@@ -1095,9 +1095,11 @@ void TestCore::entriesFollowTheLocation()
     QCOMPARE(entry(session, 0, EntryModel::KindRole), QStringLiteral("folder"));
     QCOMPARE(entry(session, 0, EntryModel::DetailRole), QString());
     QCOMPARE(entry(session, 0, EntryModel::PayloadRole), QStringLiteral("folder:%1:1").arg(folderId));
+    QVERIFY(!session.entries()->index(0).data(EntryModel::ControlledRole).toBool());
     QCOMPARE(entry(session, 1, EntryModel::KindRole), QStringLiteral("document"));
     QCOMPARE(entry(session, 1, EntryModel::NameRole), QStringLiteral("Notes"));
     QCOMPARE(entry(session, 1, EntryModel::DetailRole), QLocale().formattedDataSize(12));
+    QVERIFY(!session.entries()->index(1).data(EntryModel::ControlledRole).toBool());
     QCOMPARE(entry(session, 1, EntryModel::PayloadRole),
              QStringLiteral("document:%1:1").arg(documentId));
     QVERIFY(!session.entries()->index(1).data(EntryModel::CurrentRole).toBool());
@@ -1108,10 +1110,11 @@ void TestCore::entriesFollowTheLocation()
     QCOMPARE(session.currentDocumentId(), documentId);
 
     QCOMPARE(session.entries()->index(0).data(Qt::DisplayRole), QVariant());
-    QCOMPARE(session.entries()->index(0).data(EntryModel::CurrentRole + 1), QVariant());
+    QCOMPARE(session.entries()->index(0).data(EntryModel::ControlledRole + 1), QVariant());
     QCOMPARE(session.entries()->index(7).data(EntryModel::NameRole), QVariant());
     QCOMPARE(session.entries()->rowCount(session.entries()->index(0)), 0);
     QCOMPARE(session.entries()->roleNames().value(EntryModel::PayloadRole), QByteArray("payload"));
+    QCOMPARE(session.entries()->roleNames().value(EntryModel::ControlledRole), QByteArray("controlled"));
 }
 
 void TestCore::entryFilterMatchesNamesAndClearsOnMove()
@@ -1850,7 +1853,7 @@ void TestCore::commandsFollowTheLevel()
 
     session.createHere(QStringLiteral("Inbox"));
     QVERIFY(waitFor(&session));
-    core.seedDocument(session.currentSpaceId(), QStringLiteral("Notes"));
+    core.seedDocument(session.currentSpaceId(), QStringLiteral("Notes.md"));
     session.setFocusPayload(QString());
     session.runCommand(QStringLiteral("refresh"));
     QVERIFY(waitFor(&session));
@@ -1861,6 +1864,9 @@ void TestCore::commandsFollowTheLevel()
         QVERIFY(!usable(session, QString::fromLatin1(id)));
     session.openEntry(QStringLiteral("document"), entry(session, 0, EntryModel::EntryIdRole));
     QVERIFY(usable(session, QStringLiteral("download")));
+    QVERIFY(usable(session, QStringLiteral("toggle-document-control")));
+    QCOMPARE(command(session, QStringLiteral("toggle-document-control")).value(QStringLiteral("title")).toString(),
+             QStringLiteral("Manage document"));
     QVERIFY(usable(session, QStringLiteral("trash")));
     QCOMPARE(command(session, QStringLiteral("trash")).value(QStringLiteral("title")).toString(),
              QStringLiteral("Move to trash"));
@@ -1871,6 +1877,7 @@ void TestCore::commandsFollowTheLevel()
     // and no trash: it is deleted for good.
     session.setFocusPayload(QStringLiteral("folder:1:1"));
     QVERIFY(!usable(session, QStringLiteral("download")));
+    QVERIFY(!usable(session, QStringLiteral("toggle-document-control")));
     QVERIFY(usable(session, QStringLiteral("trash")));
     QCOMPARE(command(session, QStringLiteral("trash")).value(QStringLiteral("title")).toString(),
              QStringLiteral("Delete folder"));

@@ -40,11 +40,11 @@ QString EntryModel::detailWord(const QString &value)
 
 void EntryModel::add(QList<QVariantList> &rows, const QString &kind, const QString &id,
                      const QString &name, const QString &detail, int colorIndex,
-                     const QString &payload, bool current) const
+                     const QString &payload, bool current, bool controlled) const
 {
     if (!name.contains(m_filter, Qt::CaseInsensitive))
         return;
-    rows.append({kind, id, name, detail, colorIndex, payload, current});
+    rows.append({kind, id, name, detail, colorIndex, payload, current, controlled});
 }
 
 void EntryModel::refresh()
@@ -96,15 +96,14 @@ void EntryModel::refresh()
             const QModelIndex at = documents->index(i);
             const QString id = at.data(DocumentModel::DocumentIdRole).toString();
             const QString bytes = at.data(DocumentModel::ByteSizeRole).toString();
-            QString detail = bytes.isEmpty() ? QString() : locale.formattedDataSize(bytes.toLongLong());
-            if (at.data(DocumentModel::ControlledRole).toBool())
-                detail = detail.isEmpty() ? tr("Controlled") : tr("Controlled · %1").arg(detail);
+            const QString detail = bytes.isEmpty() ? QString() : locale.formattedDataSize(bytes.toLongLong());
+            const bool controlled = at.data(DocumentModel::ControlledRole).toBool();
             add(rows, QStringLiteral("document"), id, at.data(DocumentModel::TitleRole).toString(),
                 detail, -1,
                 QStringLiteral("document:%1:%2")
                         .arg(id)
                         .arg(at.data(DocumentModel::RevisionRole).toInt()),
-                id == m_session.currentDocumentId());
+                id == m_session.currentDocumentId(), controlled);
         }
         break;
     }

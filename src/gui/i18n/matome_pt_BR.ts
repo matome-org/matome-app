@@ -260,7 +260,7 @@
         <translation>Confirmar</translation>
     </message>
     <message>
-        <location line="+57"/>
+        <location line="+60"/>
         <source>Back</source>
         <translation>Voltar</translation>
     </message>
@@ -325,7 +325,17 @@
         <translation>A versão publicada mudou desde o carregamento deste rascunho. Copie suas alterações antes de recarregar o Markdown publicado.</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+39"/>
+        <source>Manage document</source>
+        <translation>Gerenciar documento</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Unmanage document</source>
+        <translation>Deixar de gerenciar documento</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Review access for this space</source>
         <translation>Acesso de revisão deste espaço</translation>
     </message>
@@ -450,12 +460,7 @@
         <translation>Pausar regra do espaço</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Enable document control</source>
-        <translation>Ativar controle do documento</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Document control enabled</source>
         <translation>Controle do documento ativado</translation>
     </message>
@@ -470,12 +475,7 @@
         <translation>Motivo para remover o controle ou a regra</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Remove document control</source>
-        <translation>Remover controle do documento</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Remove space rule</source>
         <translation>Remover regra do espaço</translation>
     </message>
@@ -488,7 +488,7 @@
         <translation>Itens</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+79"/>
         <source>Loading…</source>
         <translation>Carregando…</translation>
     </message>
@@ -502,6 +502,18 @@
     <name>EntryRow</name>
     <message>
         <location filename="../qml/chrome/EntryRow.qml" line="+72"/>
+        <location line="+93"/>
+        <source>Managed</source>
+        <translation>Gerenciado</translation>
+    </message>
+    <message>
+        <location line="-93"/>
+        <location line="+93"/>
+        <source>Not managed</source>
+        <translation>Não gerenciado</translation>
+    </message>
+    <message>
+        <location line="-91"/>
         <source>%1, expanded</source>
         <translation>%1, expandida</translation>
     </message>
@@ -511,7 +523,7 @@
         <translation>%1, recolhida</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+104"/>
         <source>Name</source>
         <translation>Nome</translation>
     </message>
@@ -1826,16 +1838,6 @@
         <source>archived</source>
         <translation>arquivado</translation>
     </message>
-    <message>
-        <location line="+80"/>
-        <source>Controlled</source>
-        <translation>Controlado</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Controlled · %1</source>
-        <translation>Controlado · %1</translation>
-    </message>
 </context>
 <context>
     <name>matome::Session</name>
@@ -1915,17 +1917,27 @@
         <translation>Baixar</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+12"/>
         <source>Document reviews</source>
         <translation>Revisões de documentos</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+9"/>
         <source>Rename</source>
         <translation>Renomear</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+106"/>
+        <source>Unmanage document</source>
+        <translation>Deixar de gerenciar documento</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Manage document</source>
+        <translation>Gerenciar documento</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Delete folder</source>
         <translation>Excluir pasta</translation>
     </message>
@@ -1935,17 +1947,17 @@
         <translation>Mover para a lixeira</translation>
     </message>
     <message>
-        <location line="-104"/>
+        <location line="-109"/>
         <source>Restore last trash</source>
         <translation>Restaurar da lixeira</translation>
     </message>
     <message>
-        <location line="-40"/>
+        <location line="-48"/>
         <source>Settings</source>
         <translation>Configurações</translation>
     </message>
     <message>
-        <location line="+42"/>
+        <location line="+50"/>
         <source>Purge last trash</source>
         <translation>Excluir de vez</translation>
     </message>

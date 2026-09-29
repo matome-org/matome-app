@@ -11,8 +11,10 @@ class ControlledDocs : public QObject
     Q_OBJECT
     QML_ANONYMOUS
     Q_PROPERTY(bool active READ active NOTIFY changed)
+    Q_PROPERTY(bool controlTab READ controlTab NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(bool controlled READ controlled NOTIFY changed)
+    Q_PROPERTY(bool hasDocument READ hasDocument NOTIFY changed)
     Q_PROPERTY(bool canManageRule READ canManageRule NOTIFY changed)
     Q_PROPERTY(bool canSubmit READ canSubmit NOTIFY changed)
     Q_PROPERTY(bool canDecide READ canDecide NOTIFY changed)
@@ -37,8 +39,10 @@ class ControlledDocs : public QObject
 public:
     explicit ControlledDocs(Session &session);
     bool active() const { return m_active; }
+    bool controlTab() const { return m_controlTab; }
     bool busy() const { return m_pending > 0 || m_saving; }
     bool controlled() const { return m_document.value(QStringLiteral("controlled_docs_enabled")).toBool(); }
+    bool hasDocument() const { return !m_documentId.isEmpty(); }
     bool canManageRule() const { return m_ruleError.isEmpty() && m_ruleRead; }
     bool canSubmit() const;
     bool canDecide() const;
@@ -59,7 +63,7 @@ public:
     QString source() const { return m_source; }
     bool sourceLoaded() const { return m_sourceLoaded; }
     bool draftStale() const;
-    void open(const QString &documentId = {});
+    void open(const QString &documentId = {}, bool controlTab = false);
     Q_INVOKABLE void close();
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void saveRule(bool active);
@@ -95,7 +99,7 @@ private:
     AddOnManager &m_addOns;
     AddOnBackend &m_backend;
     QString m_orgId, m_spaceId, m_documentId, m_membershipId;
-    bool m_active = false, m_saving = false, m_ruleRead = false, m_sourceLoaded = false;
+    bool m_active = false, m_controlTab = false, m_saving = false, m_ruleRead = false, m_sourceLoaded = false;
     int m_generation = 0, m_pending = 0, m_reviewGeneration = 0;
     QJsonObject m_document, m_rule, m_review;
     QJsonArray m_reviews;

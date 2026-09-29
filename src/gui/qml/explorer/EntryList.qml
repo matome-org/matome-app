@@ -47,7 +47,7 @@ FocusScope {
     }
 
     function rowMenu(row, x, y) {
-        pane.menuRequested(["download", "controlled-docs", "rename", "cut", "paste", "trash", "restore", "new", "upload", "refresh"],
+        pane.menuRequested(["download", "toggle-document-control", "controlled-docs", "rename", "cut", "paste", "trash", "restore", "new", "upload", "refresh"],
                            row, x, y)
     }
 
@@ -189,6 +189,7 @@ FocusScope {
                 required colorIndex
                 required property string name
                 required property bool current
+                required controlled
                 required property int index
 
                 objectName: "entryRow" + entry.index

@@ -43,7 +43,10 @@ FocusScope {
         confirmation.open()
     }
     function focusDefault() { back.forceActiveFocus() }
-    onVisibleChanged: if (visible) focusDefault()
+    onVisibleChanged: if (visible) {
+        screen.tab = screen.control.controlTab ? "control" : "reviews"
+        focusDefault()
+    }
 
     Connections {
         target: Session.controlledDocs
@@ -254,15 +257,15 @@ FocusScope {
                         spacing: Theme.gapS
                         ActionButton { text: qsTr("Activate space rule"); usable: !screen.control.busy && screen.control.canManageRule && !screen.unavailable; onActivated: screen.control.saveRule(true) }
                         ActionButton { text: qsTr("Pause space rule"); usable: !screen.control.busy && screen.control.canManageRule && screen.control.rule.active === true && !screen.unavailable; onActivated: screen.control.saveRule(false) }
-                        ActionButton { text: qsTr("Enable document control"); usable: !screen.control.busy && !screen.control.controlled && !screen.unavailable && screen.control.rule.active === true; onActivated: screen.control.setControlled(true) }
+                        ActionButton { text: qsTr("Manage document"); usable: screen.control.hasDocument && !screen.control.busy && !screen.control.controlled && !screen.unavailable && screen.control.rule.active === true; onActivated: screen.control.setControlled(true) }
                     }
-                    Label { text: screen.control.controlled ? qsTr("Document control enabled") : qsTr("Document control disabled") }
+                    Label { visible: screen.control.hasDocument; text: screen.control.controlled ? qsTr("Document control enabled") : qsTr("Document control disabled") }
                     Field { id: removalReason; placeholderText: qsTr("Reason for removing control or the rule"); maximumLength: 500; enabled: !screen.control.busy }
                     Flow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: implicitHeight
                         spacing: Theme.gapS
-                        ActionButton { text: qsTr("Remove document control"); usable: !screen.control.busy && screen.control.controlled && removalReason.text.trim() !== ""; onActivated: screen.ask("remove-control") }
+                        ActionButton { text: qsTr("Unmanage document"); usable: screen.control.hasDocument && !screen.control.busy && screen.control.controlled && removalReason.text.trim() !== ""; onActivated: screen.ask("remove-control") }
                         ActionButton { text: qsTr("Remove space rule"); usable: !screen.control.busy && screen.control.canManageRule && screen.control.rule.id !== undefined && removalReason.text.trim() !== ""; onActivated: screen.ask("remove-rule") }
                     }
                     ColumnLayout {

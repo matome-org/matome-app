@@ -287,6 +287,14 @@ const QList<Session::Command> &Session::commands()
                     const Entry entry = s.focusedEntry();
                     s.m_controlledDocs.open(entry.kind == QLatin1String("document") ? entry.id : QString());
                 }},
+                {"toggle-document-control", nullptr,
+                 [](const Session &s) {
+                     if (!inFiles(s) || s.focusedEntry().kind != QLatin1String("document")) return false;
+                     const QString id = s.focusedEntry().id;
+                     return s.m_documents.controlledOf(id)
+                             || s.m_documents.titleOf(id).endsWith(QLatin1String(".md"), Qt::CaseInsensitive);
+                 },
+                 [](Session &s) { s.m_controlledDocs.open(s.focusedEntry().id, true); }},
                 {"rename", QT_TR_NOOP("Rename"),
                  focused, [](Session &s) { s.promptRenameFocused(); }},
                 {"trash", nullptr,
@@ -391,6 +399,11 @@ QVariantList Session::commandList() const
 
 Session::Face Session::faceOf(const Command &row) const
 {
+    if (row.id == "toggle-document-control") {
+        const bool controlled = m_documents.controlledOf(focusedEntry().id);
+        return {controlled ? QT_TR_NOOP("Unmanage document") : QT_TR_NOOP("Manage document"),
+                "controlled-docs"};
+    }
     if (row.title)
         return {row.title, row.id.constData()};
     if (row.id == "trash") {

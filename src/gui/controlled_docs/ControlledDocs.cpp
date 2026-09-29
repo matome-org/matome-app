@@ -65,10 +65,11 @@ QString ControlledDocs::reviewPath(const QString &suffix) const
     return orgPath(m_orgId, QStringLiteral("reviews/%1%2").arg(m_review.value(QStringLiteral("id")).toString(), suffix));
 }
 
-void ControlledDocs::open(const QString &documentId)
+void ControlledDocs::open(const QString &documentId, bool controlTab)
 {
     if (!m_session.inSpace()) return;
     close();
+    m_controlTab = controlTab;
     m_active = true;
     m_orgId = m_session.currentOrgId();
     m_spaceId = m_session.currentSpaceId();
@@ -81,7 +82,7 @@ void ControlledDocs::close()
 {
     ++m_generation;
     ++m_reviewGeneration;
-    m_active = m_saving = m_ruleRead = m_sourceLoaded = false;
+    m_active = m_controlTab = m_saving = m_ruleRead = m_sourceLoaded = false;
     m_pending = 0;
     m_orgId.clear(); m_spaceId.clear(); m_documentId.clear(); m_membershipId.clear();
     m_document = m_rule = m_review = {};

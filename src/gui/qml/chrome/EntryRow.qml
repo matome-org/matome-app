@@ -17,6 +17,7 @@ FocusableControl {
     property int colorIndex: -1
     property string title
     property string detail
+    property bool controlled: false
     property real detailWidth: 0
     property bool selected: false
     property bool along: false
@@ -68,7 +69,8 @@ FocusableControl {
     borderColor: drop.containsDrag ? Theme.accentLine : "transparent"
 
     Accessible.role: Accessible.ListItem
-    Accessible.name: !row.expandable ? row.title
+    Accessible.name: row.kind === "document" ? row.title + ", " + (row.controlled ? qsTr("Managed") : qsTr("Not managed"))
+                   : !row.expandable ? row.title
                    : row.expanded ? qsTr("%1, expanded").arg(row.title)
                    : qsTr("%1, collapsed").arg(row.title)
     Accessible.selectable: true
@@ -155,6 +157,14 @@ FocusableControl {
             color: Theme.textPrimary
             font: row.along ? Theme.strong(row.titleFont) : row.titleFont
             elide: Text.ElideRight
+        }
+
+        Text {
+            objectName: "documentControlState"
+            visible: row.kind === "document" && !row.editing
+            text: row.controlled ? qsTr("Managed") : qsTr("Not managed")
+            color: row.controlled ? Theme.accentText : Theme.textMuted
+            font: Theme.caption
         }
 
         Field {
