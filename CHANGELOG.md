@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/matome-org/matome-app/compare/v0.4.0...v0.5.0) (2026-09-29)
+
+
+### Features
+
+* **settings:** add organization administration ([#54](https://github.com/matome-org/matome-app/issues/54)) ([de0e24f](https://github.com/matome-org/matome-app/commit/de0e24f6d3ff868ae12ea66c2c10bf1ea11b1b7a))
+
 ## [0.4.0](https://github.com/matome-org/matome-app/compare/v0.3.0...v0.4.0) (2026-09-28)
 
 
