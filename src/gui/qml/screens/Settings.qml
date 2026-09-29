@@ -15,31 +15,27 @@ FocusScope {
     signal commandChosen(string id)
 
     property string section: "appearance"
-    readonly property bool organizationSection: section !== "appearance" && section !== "organizations"
+    readonly property bool organizationSection: section !== "appearance"
     property string targetId
     property string targetRole
     property string targetAction
     readonly property string sectionError: settings.section === "general" ? Session.orgAdmin.generalError
                                           : settings.section === "members" ? Session.orgAdmin.membersError
                                           : settings.section === "invitations" ? Session.orgAdmin.invitationsError
-                                          : settings.section === "usage" ? Session.orgAdmin.usageError
-                                          : settings.section === "organizations" ? Session.organizationsError : ""
+                                          : settings.section === "usage" ? Session.orgAdmin.usageError : ""
     readonly property var sections: [
-        { value: "appearance", label: qsTr("Appearance"), icon: "settings" },
-        { value: "organizations", label: qsTr("Organizations"), icon: "org" }
-    ].concat(Session.orgAdmin.available ? [
-        { value: "general", label: qsTr("Organization"), icon: "org" },
+        { value: "general", label: qsTr("General"), icon: "settings" },
         { value: "members", label: qsTr("Members"), icon: "user" },
         { value: "invitations", label: qsTr("Invitations"), icon: "new" },
         { value: "usage", label: qsTr("Usage"), icon: "space" }
-    ] : [])
+    ]
 
-    function configureOrganization(id) {
-        Session.navigate("org", id)
-        if (Session.orgAdmin.available) {
-            settings.section = "general"
-            settings.focusDefault()
-        }
+    function chooseSection(id, value) {
+        if (id !== "" && id !== Session.currentOrgId)
+            Session.navigate("org", id)
+        if (id === "" || (Session.currentOrgId === id && Session.orgAdmin.available))
+            settings.section = value
+        navigationDrawer.close()
     }
     function openOrganizations(id) {
         Session.closeSettings()
@@ -47,7 +43,9 @@ FocusScope {
     }
     function focusDefault() { back.forceActiveFocus() }
     function dismiss() {
-        if (confirm.visible)
+        if (navigationDrawer.visible)
+            navigationDrawer.close()
+        else if (confirm.visible)
             confirm.close()
         else
             Session.closeSettings()
@@ -71,15 +69,18 @@ FocusScope {
         settings.section = "appearance"
         settings.focusDefault()
     } else {
+        navigationDrawer.close()
         confirm.close()
         invitationEmail.clear()
     }
+
+    onNarrowChanged: if (!settings.narrow) navigationDrawer.close()
 
     Connections {
         target: Session.orgAdmin
         function onChanged() {
             if (!Session.orgAdmin.active && settings.organizationSection) {
-                settings.section = "organizations"
+                settings.section = "appearance"
                 confirm.close()
                 invitationEmail.clear()
             }
@@ -92,6 +93,143 @@ FocusScope {
         font: Theme.body
         color: Theme.textSecondary
         wrapMode: Text.Wrap
+    }
+
+    component NavigationRow: FocusableControl {
+        id: row
+        property string text
+        property string icon
+        property bool selected: false
+        property bool checkable: false
+        property bool indented: false
+        property bool strong: false
+        Layout.fillWidth: true
+        implicitHeight: settings.narrow ? Theme.rowTouch : Theme.controlM
+        color: row.selected ? Theme.accentSoft : "transparent"
+        radius: Theme.rounding
+        Accessible.role: Accessible.Button
+        Accessible.name: row.text
+        Accessible.checkable: row.checkable
+        Accessible.checked: row.selected
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: row.indented ? 2 * Theme.gapM : Theme.gapM
+            anchors.rightMargin: Theme.gapM
+            spacing: Theme.gapS
+            Icon { name: row.icon; color: row.selected ? Theme.accentText : Theme.textSecondary }
+            Text {
+                Layout.fillWidth: true
+                text: row.text
+                font: row.strong ? Theme.strong(Theme.body) : Theme.body
+                color: row.selected ? Theme.accentText : Theme.textPrimary
+                elide: Text.ElideRight
+            }
+        }
+    }
+
+    component Navigation: Flickable {
+        id: navigation
+        clip: true
+        contentHeight: navigationColumn.implicitHeight + 2 * Theme.gapM
+        boundsBehavior: Flickable.StopAtBounds
+        C.ScrollBar.vertical: ThinScrollBar {}
+        Component.onCompleted: if (settings.narrow) appearanceNavigation.forceActiveFocus()
+
+        function reveal(item) {
+            const top = item.mapToItem(navigationColumn, 0, 0).y + Theme.gapM
+            if (top < contentY)
+                contentY = top
+            else if (top + item.height > contentY + height)
+                contentY = top + item.height - height
+        }
+
+        ColumnLayout {
+            id: navigationColumn
+            x: Theme.gapS
+            y: Theme.gapM
+            width: navigation.width - 2 * Theme.gapS
+            spacing: Theme.gapXs
+            NavigationRow {
+                id: appearanceNavigation
+                objectName: "settingsAppearanceNavigation"
+                checkable: true
+                text: qsTr("Appearance")
+                icon: "settings"
+                selected: settings.section === "appearance"
+                onActivated: settings.chooseSection("", "appearance")
+                onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
+            }
+            Caption {
+                Layout.fillWidth: true
+                Layout.topMargin: Theme.gapM
+                Layout.leftMargin: Theme.gapM
+                text: qsTr("Organizations")
+            }
+            Label {
+                Layout.margins: Theme.gapS
+                visible: Session.organizationsBusy || Session.organizationsError !== ""
+                text: Session.organizationsError !== "" ? Messages.adminFailure(Session.organizationsError)
+                                                       : qsTr("Working…")
+                color: Session.organizationsError !== "" ? Theme.failed : Theme.textSecondary
+            }
+            Repeater {
+                id: organizationGroups
+                model: Session.organizations
+                delegate: ColumnLayout {
+                    id: organization
+                    required property string orgId
+                    required property string name
+                    required property bool canAdminister
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.gapS
+                    spacing: Theme.gapXs
+                    NavigationRow {
+                        objectName: "settingsOrganization_" + organization.orgId
+                        text: organization.name
+                        icon: "org"
+                        strong: true
+                        onActivated: if (organization.canAdminister)
+                                         settings.chooseSection(organization.orgId, "general")
+                                     else settings.openOrganizations(organization.orgId)
+                        onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
+                    }
+                    Repeater {
+                        model: organization.canAdminister ? settings.sections : []
+                        delegate: NavigationRow {
+                            required property var modelData
+                            checkable: true
+                            objectName: "settingsOrganization_" + organization.orgId + "_" + modelData.value
+                            text: modelData.label
+                            icon: modelData.icon
+                            indented: true
+                            selected: Session.currentOrgId === organization.orgId && settings.section === modelData.value
+                            onActivated: settings.chooseSection(organization.orgId, modelData.value)
+                            onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
+                        }
+                    }
+                    NavigationRow {
+                        text: qsTr("Open organization")
+                        icon: "forward"
+                        indented: true
+                        onActivated: settings.openOrganizations(organization.orgId)
+                        onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
+                    }
+                }
+            }
+            Label {
+                Layout.margins: Theme.gapM
+                visible: organizationGroups.count === 0 && !Session.organizationsBusy
+                         && Session.organizationsError === ""
+                text: qsTr("No organizations yet.")
+            }
+            NavigationRow {
+                Layout.topMargin: Theme.gapM
+                text: qsTr("Open organizations")
+                icon: "org"
+                onActivated: settings.openOrganizations("")
+                onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
+            }
+        }
     }
 
     ColumnLayout {
@@ -107,6 +245,16 @@ FocusScope {
                 anchors.fill: parent
                 anchors.margins: Theme.gapM
                 spacing: Theme.gapM
+                ActionButton {
+                    id: navigationToggle
+                    objectName: "settingsNavigationButton"
+                    visible: settings.narrow
+                    text: qsTr("Navigation")
+                    icon: "menu"
+                    showLabel: false
+                    tip: text
+                    onActivated: navigationDrawer.open()
+                }
                 ActionButton {
                     id: back
                     objectName: "closeSettingsButton"
@@ -136,42 +284,17 @@ FocusScope {
                 }
                 ActionButton {
                     objectName: "refreshOrgAdminButton"
-                    visible: settings.section !== "appearance"
                     text: qsTr("Refresh")
                     icon: "refresh"
                     showLabel: false
                     tip: text
-                    usable: settings.section === "organizations" ? !Session.organizationsBusy : !Session.orgAdmin.busy
-                    onActivated: if (settings.section === "organizations") Session.refreshOrganizations()
-                                 else Session.orgAdmin.refresh()
+                    usable: settings.organizationSection ? !Session.orgAdmin.busy : !Session.organizationsBusy
+                    onActivated: if (settings.organizationSection) Session.orgAdmin.refresh()
+                                 else Session.refreshOrganizations()
                 }
             }
         }
         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
-
-        Flickable {
-            visible: settings.narrow
-            Layout.fillWidth: true
-            implicitHeight: tabs.implicitHeight + 2 * Theme.gapS
-            contentWidth: tabs.implicitWidth + 2 * Theme.gapS
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            Row {
-                id: tabs
-                x: Theme.gapS
-                y: Theme.gapS
-                spacing: Theme.gapXs
-                Repeater {
-                    model: settings.sections
-                    delegate: ActionButton {
-                        required property var modelData
-                        text: modelData.label
-                        primary: settings.section === modelData.value
-                        onActivated: settings.section = modelData.value
-                    }
-                }
-            }
-        }
 
         RowLayout {
             Layout.fillWidth: true
@@ -182,23 +305,10 @@ FocusScope {
                 Layout.preferredWidth: Theme.column
                 Layout.fillHeight: true
                 color: Theme.surface
-                ColumnLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.margins: Theme.gapM
-                    spacing: Theme.gapS
-                    Repeater {
-                        model: settings.sections
-                        delegate: ActionButton {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            text: modelData.label
-                            icon: modelData.icon
-                            color: settings.section === modelData.value ? Theme.accentSoft : "transparent"
-                            onActivated: settings.section = modelData.value
-                        }
-                    }
+                Loader {
+                    anchors.fill: parent
+                    active: settings.visible && !settings.narrow
+                    sourceComponent: Navigation {}
                 }
             }
 
@@ -210,7 +320,8 @@ FocusScope {
 
                 Text {
                     Layout.fillWidth: true
-                    text: settings.sections.find(function (s) { return s.value === settings.section })?.label ?? ""
+                    text: settings.section === "appearance" ? qsTr("Appearance")
+                          : settings.sections.find(function (s) { return s.value === settings.section })?.label ?? ""
                     font: Theme.heading
                     color: Theme.textPrimary
                     Accessible.role: Accessible.Heading
@@ -229,89 +340,8 @@ FocusScope {
                     color: Theme.accentText
                 }
                 Label {
-                    visible: settings.section === "organizations" ? Session.organizationsBusy
-                             : settings.organizationSection && Session.orgAdmin.busy
+                    visible: settings.organizationSection && Session.orgAdmin.busy
                     text: qsTr("Working…")
-                }
-
-                RowLayout {
-                    visible: settings.section === "organizations"
-                    Layout.fillWidth: true
-                    spacing: Theme.gapM
-                    Label { text: qsTr("Choose an organization to manage.") }
-                    ActionButton {
-                        objectName: "openOrganizationsButton"
-                        text: qsTr("Open organizations")
-                        icon: "org"
-                        showLabel: !settings.narrow
-                        tip: text
-                        onActivated: settings.openOrganizations("")
-                    }
-                }
-                ListView {
-                    id: organizations
-                    objectName: "settingsOrganizationsList"
-                    visible: settings.section === "organizations"
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: Session.organizations
-                    clip: true
-                    spacing: Theme.gapS
-                    boundsBehavior: Flickable.StopAtBounds
-                    C.ScrollBar.vertical: ThinScrollBar {}
-                    delegate: Rectangle {
-                        id: organization
-                        required property string orgId
-                        required property string name
-                        required property string role
-                        required property bool canAdminister
-                        width: organizations.width
-                        implicitHeight: organizationContent.implicitHeight + 2 * Theme.gapM
-                        color: Theme.surface
-                        radius: Theme.rounding
-                        border.color: Theme.border
-                        ColumnLayout {
-                            id: organizationContent
-                            anchors.fill: parent
-                            anchors.margins: Theme.gapM
-                            spacing: Theme.gapS
-                            Text {
-                                Layout.fillWidth: true
-                                text: organization.name
-                                font: Theme.strong(Theme.body)
-                                color: Theme.textPrimary
-                                elide: Text.ElideRight
-                            }
-                            Label {
-                                text: Session.orgAdmin.roles.find(function (choice) {
-                                    return choice.value === organization.role
-                                })?.label ?? organization.role
-                            }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: Theme.gapS
-                                ActionButton {
-                                    objectName: "configureOrganization_" + organization.orgId
-                                    visible: organization.canAdminister
-                                    text: qsTr("Configure")
-                                    icon: "settings"
-                                    primary: true
-                                    onActivated: settings.configureOrganization(organization.orgId)
-                                }
-                                ActionButton {
-                                    objectName: "openOrganization_" + organization.orgId
-                                    text: qsTr("Open organization")
-                                    icon: "forward"
-                                    onActivated: settings.openOrganizations(organization.orgId)
-                                }
-                            }
-                        }
-                    }
-                }
-                Label {
-                    visible: settings.section === "organizations" && organizations.count === 0
-                             && !Session.organizationsBusy && settings.sectionError === ""
-                    text: qsTr("No organizations yet.")
                 }
 
                 Flickable {
@@ -499,6 +529,26 @@ FocusScope {
                 Item { Layout.fillHeight: true; visible: settings.sectionError !== "" }
             }
         }
+    }
+
+    C.Drawer {
+        id: navigationDrawer
+        objectName: "settingsNavigationDrawer"
+        width: Math.min(Theme.column + 2 * Theme.gapM, settings.width - Theme.gapXl)
+        height: settings.height
+        edge: Qt.LeftEdge
+        modal: true
+        focus: true
+        padding: 0
+        background: Rectangle { color: Theme.surface }
+        C.Overlay.modal: Rectangle {
+            color: Theme.dark ? Theme.fill(Theme.background, 0.66) : Theme.fill(Theme.textPrimary, 0.32)
+        }
+        contentItem: Loader {
+            active: navigationDrawer.visible
+            sourceComponent: Navigation {}
+        }
+        onClosed: if (settings.visible && settings.narrow) navigationToggle.forceActiveFocus()
     }
 
     Confirm {

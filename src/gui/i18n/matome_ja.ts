@@ -672,17 +672,23 @@
 <context>
     <name>Settings</name>
     <message>
-        <location filename="../qml/screens/Settings.qml" line="+28"/>
+        <location filename="../qml/screens/Settings.qml" line="+156"/>
+        <location line="+167"/>
         <source>Appearance</source>
         <translation>外観</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-295"/>
         <source>Members</source>
         <translation>メンバー</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
+        <source>General</source>
+        <translation>一般</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Invitations</source>
         <translation>招待</translation>
     </message>
@@ -692,7 +698,7 @@
         <translation>使用状況</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Remove %1?</source>
         <translation>%1を削除しますか？</translation>
     </message>
@@ -737,62 +743,53 @@
         <translation>役割を変更</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+188"/>
+        <source>Navigation</source>
+        <translation>ナビゲーション</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Back to files</source>
         <translation>ファイルに戻る</translation>
     </message>
     <message>
-        <location line="-82"/>
-        <source>Organization</source>
-        <translation>組織</translation>
-    </message>
-    <message>
-        <location line="-2"/>
+        <location line="-95"/>
         <source>Organizations</source>
         <translation>組織</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+112"/>
         <source>Settings</source>
         <translation>設定</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>Refresh</source>
         <translation>更新</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="-115"/>
+        <location line="+172"/>
         <source>Working…</source>
         <translation>処理中…</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Choose an organization to manage.</source>
-        <translation>管理する組織を選択してください。</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-117"/>
         <source>Open organizations</source>
         <translation>組織一覧を開く</translation>
     </message>
     <message>
-        <location line="+52"/>
-        <source>Configure</source>
-        <translation>設定</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="-16"/>
         <source>Open organization</source>
         <translation>組織を開く</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>No organizations yet.</source>
         <translation>まだ組織はありません。</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+136"/>
         <source>Theme</source>
         <translation>テーマ</translation>
     </message>

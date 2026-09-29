@@ -671,17 +671,23 @@
 <context>
     <name>Settings</name>
     <message>
-        <location filename="../qml/screens/Settings.qml" line="+28"/>
+        <location filename="../qml/screens/Settings.qml" line="+156"/>
+        <location line="+167"/>
         <source>Appearance</source>
         <translation>Aparência</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-295"/>
         <source>Members</source>
         <translation>Membros</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
+        <source>General</source>
+        <translation>Geral</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Invitations</source>
         <translation>Convites</translation>
     </message>
@@ -691,7 +697,7 @@
         <translation>Uso</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+27"/>
         <source>Remove %1?</source>
         <translation>Remover %1?</translation>
     </message>
@@ -736,62 +742,53 @@
         <translation>Alterar papel</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+188"/>
+        <source>Navigation</source>
+        <translation>Navegação</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Back to files</source>
         <translation>Voltar aos arquivos</translation>
     </message>
     <message>
-        <location line="-82"/>
-        <source>Organization</source>
-        <translation>Organização</translation>
-    </message>
-    <message>
-        <location line="-2"/>
+        <location line="-95"/>
         <source>Organizations</source>
         <translation>Organizações</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+112"/>
         <source>Settings</source>
         <translation>Configurações</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>Refresh</source>
         <translation>Atualizar</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="-115"/>
+        <location line="+172"/>
         <source>Working…</source>
         <translation>Processando…</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>Choose an organization to manage.</source>
-        <translation>Escolha uma organização para administrar.</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="-117"/>
         <source>Open organizations</source>
         <translation>Abrir organizações</translation>
     </message>
     <message>
-        <location line="+52"/>
-        <source>Configure</source>
-        <translation>Configurar</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="-16"/>
         <source>Open organization</source>
         <translation>Abrir organização</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>No organizations yet.</source>
         <translation>Nenhuma organização ainda.</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+136"/>
         <source>Theme</source>
         <translation>Tema</translation>
     </message>

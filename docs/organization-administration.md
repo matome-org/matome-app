@@ -7,20 +7,21 @@ when no organization is open or the current membership is not an admin.
 app and persist independently of an organization. **Back to files** or
 Escape returns to the explorer at the same space and folder.
 
-**Organizations** is always available in Settings and lists the signed-in
-account's memberships. **Configure** opens the administration sections for
-an organization where the account is an owner or admin. Selecting a different
-organization clears pending confirmations and responses from the previous
-one. **Open organization** returns to that organization's explorer, while
-**Open organizations** returns to the explorer's organization list.
+The sidebar lists every organization with its name and nested administration
+sections for owners and admins. Choose a section under an organization to
+select it and open that page directly. The active page is highlighted under
+its organization. A narrow window exposes the same navigation in a drawer.
+**Appearance** remains a global entry above the organizations.
 
-Selecting an organization as an owner or admin adds its administration
-sections to Settings. This also changes the explorer's selected organization;
-closing Settings returns to that selection.
+Selecting a different organization clears pending confirmations and
+responses from the previous one. **Open organization** returns to that
+organization's explorer, while **Open organizations** returns to the
+explorer's organization list. Selecting an organization also changes the
+explorer's selection; closing Settings returns to that selection.
 
 The panel includes:
 
-- Organization: edit the organization name using its current revision.
+- General: edit the organization name using its current revision.
 - Members: list active members, change their system role, and remove access.
 - Invitations: send an email invitation, inspect its status and expiry, and
   cancel a pending invitation. Owner is available for existing members but
@@ -41,11 +42,11 @@ Every operation still uses the authenticated Core endpoint, which checks
 effective permissions. Read failures clear the affected collection and
 disable its mutations. A refreshed loss of admin membership, organization
 switch, or sign-out clears organization data and invalidates pending
-responses. Losing admin membership returns Settings to Organizations; signing
+responses. Losing admin membership returns Settings to Appearance; signing
 out closes Settings.
 
 For local validation, run `mise run studio` and sign in to a local Core as
 an organization owner or admin. Verify Appearance without an open
-organization, selection through Organizations, all four administration
+organization, selection through the organization sidebar, all four administration
 sections, confirmations, return navigation, and a narrow window. The unit checks are available with
 `mise run test:core`; QML lint is `mise run lint`.
