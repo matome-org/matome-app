@@ -15,6 +15,7 @@ FocusScope {
     signal commandChosen(string id)
 
     property string section: "appearance"
+    property var expandedOrganizations: ({})
     readonly property bool organizationSection: section !== "appearance"
     property string targetId
     property string targetRole
@@ -30,11 +31,18 @@ FocusScope {
         { value: "usage", label: qsTr("Usage"), icon: "space" }
     ]
 
+    function setOrganizationExpanded(id, expanded) {
+        const groups = Object.assign({}, settings.expandedOrganizations)
+        groups[id] = expanded
+        settings.expandedOrganizations = groups
+    }
     function chooseSection(id, value) {
         if (id !== "" && id !== Session.currentOrgId)
             Session.navigate("org", id)
-        if (id === "" || (Session.currentOrgId === id && Session.orgAdmin.available))
+        if (id === "" || (Session.currentOrgId === id && Session.orgAdmin.available)) {
             settings.section = value
+            if (id !== "") settings.setOrganizationExpanded(id, true)
+        }
         navigationDrawer.close()
     }
     function openOrganizations(id) {
@@ -67,6 +75,8 @@ FocusScope {
 
     onVisibleChanged: if (settings.visible) {
         settings.section = "appearance"
+        settings.expandedOrganizations = ({})
+        if (Session.currentOrgId !== "") settings.setOrganizationExpanded(Session.currentOrgId, true)
         settings.focusDefault()
     } else {
         navigationDrawer.close()
@@ -103,14 +113,17 @@ FocusScope {
         property bool checkable: false
         property bool indented: false
         property bool strong: false
+        property bool expandable: false
+        property bool expanded: false
         Layout.fillWidth: true
         implicitHeight: settings.narrow ? Theme.rowTouch : Theme.controlM
         color: row.selected ? Theme.accentSoft : "transparent"
         radius: Theme.rounding
         Accessible.role: Accessible.Button
-        Accessible.name: row.text
-        Accessible.checkable: row.checkable
-        Accessible.checked: row.selected
+        Accessible.name: row.expandable ? (row.expanded ? qsTr("Collapse %1") : qsTr("Expand %1")).arg(row.text)
+                                        : row.text
+        Accessible.checkable: row.checkable || row.expandable
+        Accessible.checked: row.expandable ? row.expanded : row.selected
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: row.indented ? 2 * Theme.gapM : Theme.gapM
@@ -123,6 +136,14 @@ FocusScope {
                 font: row.strong ? Theme.strong(Theme.body) : Theme.body
                 color: row.selected ? Theme.accentText : Theme.textPrimary
                 elide: Text.ElideRight
+            }
+            Icon {
+                objectName: "organizationExpansionArrow"
+                visible: row.expandable
+                name: "chevron"
+                color: Theme.textSecondary
+                rotation: row.expanded ? 90 : 0
+                Behavior on rotation { Ease {} }
             }
         }
     }
@@ -180,6 +201,7 @@ FocusScope {
                     required property string orgId
                     required property string name
                     required property bool canAdminister
+                    readonly property bool expanded: settings.expandedOrganizations[orgId] === true
                     Layout.fillWidth: true
                     Layout.topMargin: Theme.gapS
                     spacing: Theme.gapXs
@@ -188,13 +210,17 @@ FocusScope {
                         text: organization.name
                         icon: "org"
                         strong: true
-                        onActivated: if (organization.canAdminister)
-                                         settings.chooseSection(organization.orgId, "general")
-                                     else settings.openOrganizations(organization.orgId)
+                        expandable: true
+                        expanded: organization.expanded
+                        selected: Session.currentOrgId === organization.orgId && settings.organizationSection
+                                  && !organization.expanded
+                        onActivated: settings.setOrganizationExpanded(organization.orgId, !organization.expanded)
+                        Keys.onRightPressed: settings.setOrganizationExpanded(organization.orgId, true)
+                        Keys.onLeftPressed: settings.setOrganizationExpanded(organization.orgId, false)
                         onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
                     }
                     Repeater {
-                        model: organization.canAdminister ? settings.sections : []
+                        model: organization.canAdminister && organization.expanded ? settings.sections : []
                         delegate: NavigationRow {
                             required property var modelData
                             checkable: true
@@ -208,6 +234,7 @@ FocusScope {
                         }
                     }
                     NavigationRow {
+                        visible: organization.expanded
                         text: qsTr("Open organization")
                         icon: "forward"
                         indented: true

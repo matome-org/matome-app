@@ -672,13 +672,13 @@
 <context>
     <name>Settings</name>
     <message>
-        <location filename="../qml/screens/Settings.qml" line="+156"/>
-        <location line="+167"/>
+        <location filename="../qml/screens/Settings.qml" line="+177"/>
+        <location line="+173"/>
         <source>Appearance</source>
         <translation>外観</translation>
     </message>
     <message>
-        <location line="-295"/>
+        <location line="-321"/>
         <source>Members</source>
         <translation>メンバー</translation>
     </message>
@@ -698,7 +698,7 @@
         <translation>使用状況</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+34"/>
         <source>Remove %1?</source>
         <translation>%1を削除しますか？</translation>
     </message>
@@ -743,7 +743,17 @@
         <translation>役割を変更</translation>
     </message>
     <message>
-        <location line="+188"/>
+        <location line="+51"/>
+        <source>Collapse %1</source>
+        <translation>%1を折りたたむ</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Expand %1</source>
+        <translation>%1を展開する</translation>
+    </message>
+    <message>
+        <location line="+156"/>
         <source>Navigation</source>
         <translation>ナビゲーション</translation>
     </message>
@@ -753,12 +763,12 @@
         <translation>ファイルに戻る</translation>
     </message>
     <message>
-        <location line="-95"/>
+        <location line="-101"/>
         <source>Organizations</source>
         <translation>組織</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+118"/>
         <source>Settings</source>
         <translation>設定</translation>
     </message>
@@ -768,8 +778,8 @@
         <translation>更新</translation>
     </message>
     <message>
-        <location line="-115"/>
-        <location line="+172"/>
+        <location line="-121"/>
+        <location line="+178"/>
         <source>Working…</source>
         <translation>処理中…</translation>
     </message>

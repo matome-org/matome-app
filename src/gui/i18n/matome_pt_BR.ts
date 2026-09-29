@@ -671,13 +671,13 @@
 <context>
     <name>Settings</name>
     <message>
-        <location filename="../qml/screens/Settings.qml" line="+156"/>
-        <location line="+167"/>
+        <location filename="../qml/screens/Settings.qml" line="+177"/>
+        <location line="+173"/>
         <source>Appearance</source>
         <translation>Aparência</translation>
     </message>
     <message>
-        <location line="-295"/>
+        <location line="-321"/>
         <source>Members</source>
         <translation>Membros</translation>
     </message>
@@ -697,7 +697,7 @@
         <translation>Uso</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+34"/>
         <source>Remove %1?</source>
         <translation>Remover %1?</translation>
     </message>
@@ -742,7 +742,17 @@
         <translation>Alterar papel</translation>
     </message>
     <message>
-        <location line="+188"/>
+        <location line="+51"/>
+        <source>Collapse %1</source>
+        <translation>Recolher %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Expand %1</source>
+        <translation>Expandir %1</translation>
+    </message>
+    <message>
+        <location line="+156"/>
         <source>Navigation</source>
         <translation>Navegação</translation>
     </message>
@@ -752,12 +762,12 @@
         <translation>Voltar aos arquivos</translation>
     </message>
     <message>
-        <location line="-95"/>
+        <location line="-101"/>
         <source>Organizations</source>
         <translation>Organizações</translation>
     </message>
     <message>
-        <location line="+112"/>
+        <location line="+118"/>
         <source>Settings</source>
         <translation>Configurações</translation>
     </message>
@@ -767,8 +777,8 @@
         <translation>Atualizar</translation>
     </message>
     <message>
-        <location line="-115"/>
-        <location line="+172"/>
+        <location line="-121"/>
+        <location line="+178"/>
         <source>Working…</source>
         <translation>Processando…</translation>
     </message>

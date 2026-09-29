@@ -11,7 +11,12 @@ The sidebar lists every organization with its name and nested administration
 sections for owners and admins. Choose a section under an organization to
 select it and open that page directly. The active page is highlighted under
 its organization. A narrow window exposes the same navigation in a drawer.
-**Appearance** remains a global entry above the organizations.
+**Appearance** remains a global entry above the organizations. Click an
+organization's name or arrow to expand or collapse its submenus. Enter or
+Space toggles the group; Right expands it and Left collapses it. The current
+organization starts expanded when Settings opens. Expansion state survives
+list refreshes and switching between the sidebar and the narrow drawer
+while Settings stays open. Collapsing a group keeps the current page open.
 
 Selecting a different organization clears pending confirmations and
 responses from the previous one. **Open organization** returns to that
