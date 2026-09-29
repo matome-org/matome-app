@@ -33,7 +33,8 @@ mise run test:e2e
 without the studio, platform e2e suites, or the combined coverage gate.
 
 `test:proxy` checks that the local web preview forwards compressed Core
-responses with their encoding headers, including API errors.
+responses with their encoding headers, including API errors, and requires
+cache revalidation for JavaScript and WebAssembly assets.
 
 `test:desktop` exercises keyboard, mouse, touch, drag and drop, uploads,
 errors, and the narrow drawer against FakeCore by QML `objectName`. It then

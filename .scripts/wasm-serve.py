@@ -29,7 +29,7 @@ STATIC_EXT = {
     ".woff",
     ".woff2",
 }
-CACHEABLE = {".css", ".js", ".wasm", ".svg", ".png", ".ttf", ".woff", ".woff2", ".map"}
+CACHEABLE = {".css", ".svg", ".png", ".ttf", ".woff", ".woff2", ".map"}
 # Hop-by-hop headers: they describe one connection and never pass through.
 HOP = {"connection", "transfer-encoding"}
 mimetypes.add_type("application/wasm", ".wasm")
@@ -101,9 +101,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Vary", "Accept-Encoding")
         if use_gzip:
             self.send_header("Content-Encoding", "gzip")
-        if ext == ".wasm":
-            # Never reused unasked: a rebuild replaces the module under the
-            # same name, and a stale copy would not load the new studio.
+        if ext in {".js", ".wasm"}:
+            # Revalidate the loader and module together after a rebuild.
             self.send_header("Cache-Control", "no-cache")
         elif ext in CACHEABLE:
             self.send_header("Cache-Control", "public, max-age=86400")
