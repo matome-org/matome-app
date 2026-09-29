@@ -7,6 +7,7 @@
 #include "FolderTreeModel.h"
 #include "OrgModel.h"
 #include "OrgAdmin.h"
+#include "OrgBilling.h"
 #include "SpaceModel.h"
 
 #include <QAbstractListModel>
@@ -42,6 +43,7 @@ class Session : public QObject
     Q_PROPERTY(bool organizationsBusy READ organizationsBusy NOTIFY changed)
     Q_PROPERTY(QString organizationsError READ organizationsError NOTIFY changed)
     Q_PROPERTY(matome::OrgAdmin *orgAdmin READ orgAdmin CONSTANT)
+    Q_PROPERTY(matome::OrgBilling *orgBilling READ orgBilling CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
     Q_PROPERTY(QString currentSpaceId READ currentSpaceId NOTIFY changed)
@@ -89,6 +91,7 @@ public:
     bool organizationsBusy() const { return m_orgs.busy(); }
     QString organizationsError() const { return m_orgs.errorCode(); }
     OrgAdmin *orgAdmin() { return &m_orgAdmin; }
+    OrgBilling *orgBilling() { return &m_orgBilling; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }
 
@@ -169,6 +172,8 @@ public:
     void authedGet(const QString &path, Client::Done done);
     void authedPost(const QString &path, const QJsonObject &body, const Client::Headers &headers,
                     Client::Done done);
+    void authedPut(const QString &path, const QJsonObject &body, const Client::Headers &headers,
+                   Client::Done done);
     void authedPatch(const QString &path, const QJsonObject &body, const Client::Headers &headers,
                      Client::Done done);
     void authedDelete(const QString &path, const Client::Headers &headers, Client::Done done);
@@ -312,6 +317,7 @@ private:
     Client m_client;
     OrgModel m_orgs;
     OrgAdmin m_orgAdmin;
+    OrgBilling m_orgBilling;
     SpaceModel m_spaces;
     FolderModel m_folders;
     DocumentModel m_documents;

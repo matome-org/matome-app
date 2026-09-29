@@ -150,10 +150,45 @@ function usageName(value) {
 }
 
 function usageAmount(value, dimension) {
+    if (value === null || value === undefined)
+        return qsTr("Unlimited")
     if (dimension !== "storage_bytes")
         return Number(value).toLocaleString(Qt.locale(), 'f', 0)
     const units = [qsTr("B"), qsTr("KiB"), qsTr("MiB"), qsTr("GiB"), qsTr("TiB")]
     const index = value > 0 ? Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024))) : 0
     return Number(value / Math.pow(1024, index)).toLocaleString(Qt.locale(), 'f', index === 0 ? 0 : 1)
            + " " + units[index]
+}
+
+function subscriptionStatus(value) {
+    switch (value) {
+    case "active": return qsTr("Active subscription")
+    case "trialing": return qsTr("Trial subscription")
+    case "past_due": return qsTr("Payment overdue")
+    case "unpaid": return qsTr("Payment required")
+    case "incomplete": return qsTr("Payment incomplete")
+    case "incomplete_expired": return qsTr("Payment expired")
+    case "canceled": return qsTr("Subscription canceled")
+    case "paused": return qsTr("Subscription paused")
+    default: return qsTr("Unknown subscription status")
+    }
+}
+
+function billingFailure(code) {
+    switch (code) {
+    case "billing_disabled": return qsTr("Billing is disabled on this server. Your current plan and allowances remain available.")
+    case "no_customer": return qsTr("This organization has no billing account yet.")
+    case "no_subscription": return qsTr("This organization has no active paid subscription.")
+    case "invalid_return_url": return qsTr("The server does not allow this app address as a billing return destination.")
+    case "unknown_package": return qsTr("This package is no longer available. Refresh and choose another package.")
+    case "package_unavailable": return qsTr("One of this package’s components is unavailable. Choose another package.")
+    case "subscription_exists": return qsTr("The organization already has a subscription. Refresh before changing its package.")
+    case "unknown_plan": return qsTr("This plan is not available for purchase.")
+    case "unknown_add_on": return qsTr("This add-on is not available for purchase.")
+    case "invalid_quantity": return qsTr("Enter a valid quantity for this add-on.")
+    case "invalid_space": return qsTr("One of the selected spaces is no longer available. Refresh and try again.")
+    case "invalid_settings": return qsTr("The server refused these add-on settings.")
+    case "billing_provider_error": return qsTr("The payment provider is unavailable. Try again later.")
+    default: return adminFailure(code)
+    }
 }

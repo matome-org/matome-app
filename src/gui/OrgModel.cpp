@@ -39,6 +39,18 @@ int OrgModel::rowCount(const QModelIndex &parent) const
     return parent.isValid() ? 0 : m_rows.size();
 }
 
+bool OrgModel::canReadBilling(const QString &orgId) const
+{
+    const OrgRow *row = find(orgId);
+    return row && row->canReadBilling();
+}
+
+bool OrgModel::canManageBilling(const QString &orgId) const
+{
+    const OrgRow *row = find(orgId);
+    return row && row->canManageBilling();
+}
+
 QVariant OrgModel::data(const QModelIndex &index, int role) const
 {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_rows.size())
@@ -55,6 +67,8 @@ QVariant OrgModel::data(const QModelIndex &index, int role) const
         return row.revision;
     case CanAdministerRole:
         return row.canAdminister();
+    case CanReadBillingRole:
+        return row.canReadBilling();
     default:
         return {};
     }
@@ -66,7 +80,8 @@ QHash<int, QByteArray> OrgModel::roleNames() const
             {NameRole, "name"},
             {RoleNameRole, "role"},
             {RevisionRole, "revision"},
-            {CanAdministerRole, "canAdminister"}};
+            {CanAdministerRole, "canAdminister"},
+            {CanReadBillingRole, "canReadBilling"}};
 }
 
 void OrgModel::reload()

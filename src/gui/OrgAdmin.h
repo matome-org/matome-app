@@ -38,12 +38,9 @@ class OrgAdmin : public QObject
     Q_PROPERTY(QString generalError READ generalError NOTIFY changed)
     Q_PROPERTY(QString membersError READ membersError NOTIFY changed)
     Q_PROPERTY(QString invitationsError READ invitationsError NOTIFY changed)
-    Q_PROPERTY(QString usageError READ usageError NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *members READ members CONSTANT)
     Q_PROPERTY(QAbstractListModel *invitations READ invitations CONSTANT)
     Q_PROPERTY(QVariantList roles READ roles NOTIFY rolesChanged)
-    Q_PROPERTY(QVariantList usage READ usage NOTIFY changed)
-    Q_PROPERTY(QString plan READ plan NOTIFY changed)
 
 public:
     explicit OrgAdmin(Session &session);
@@ -56,12 +53,9 @@ public:
     QString generalError() const { return m_generalError; }
     QString membersError() const { return m_membersError; }
     QString invitationsError() const { return m_invitationsError; }
-    QString usageError() const { return m_usageError; }
-    QString plan() const;
     QAbstractListModel *members() { return &m_members; }
     QAbstractListModel *invitations() { return &m_invitations; }
     QVariantList roles() const;
-    QVariantList usage() const;
 
     Q_INVOKABLE void open();
     Q_INVOKABLE void close();
@@ -92,8 +86,6 @@ private:
     QJsonArray m_memberRows;
     QJsonArray m_invitationRows;
     QJsonObject m_organization;
-    QJsonObject m_usage;
-    QJsonObject m_entitlements;
     QVariantList m_lastRoles;
     QString m_orgId;
     QString m_errorCode;
@@ -101,7 +93,6 @@ private:
     QString m_generalError;
     QString m_membersError;
     QString m_invitationsError;
-    QString m_usageError;
     bool m_active = false;
     bool m_saving = false;
     int m_generation = 0;

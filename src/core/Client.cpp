@@ -24,6 +24,8 @@ QString mapStatus(int status, const QString &server)
         return QStringLiteral("not_found");
     if (status >= 200 && status < 300)
         return {};
+    if (server == QLatin1String("billing_disabled") || server == QLatin1String("billing_provider_error"))
+        return server;
     if (status >= 500)
         return QStringLiteral("server");
     return server.isEmpty() ? QStringLiteral("invalid_request") : server;
@@ -80,6 +82,11 @@ void Client::patch(const QString &path, const QJsonObject &body, Done done, cons
 void Client::del(const QString &path, Done done, const Headers &headers)
 {
     send("DELETE", path, {}, headers, std::move(done));
+}
+
+void Client::put(const QString &path, const QJsonObject &body, Done done, const Headers &headers)
+{
+    send("PUT", path, body, headers, std::move(done));
 }
 
 void Client::putRaw(const QUrl &url, const QByteArray &bytes, const Headers &headers, Done done,
