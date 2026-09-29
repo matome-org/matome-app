@@ -41,9 +41,10 @@ Run `mise run wasm:serve` to build the browser app and serve it on port
 7002. It proxies Core on port 7001. Use the preview's own origin as the
 server address to avoid cross-origin API requests.
 
-Web builds version JavaScript URLs by content so an existing browser cache
-cannot pair an older loader with a rebuilt WebAssembly module. The preview
-server requires JavaScript and WebAssembly cache revalidation.
+Web builds version JavaScript and WebAssembly URLs by content. The HTML
+passes the module version through Emscripten's `locateFile`, so a browser
+with an older cached module fetches the rebuilt application after a reload.
+The preview server also requires these assets to revalidate their cache.
 
 ## Client behavior
 

@@ -26,6 +26,8 @@ output = Path(sys.argv[2])
 for name in ("matome-studio.js", "qtloader.js"):
     version = sha256((output / name).read_bytes()).hexdigest()[:16]
     template = template.replace(f'src="{name}"', f'src="{name}?v={version}"')
+wasm_version = sha256((output / "matome-studio.wasm").read_bytes()).hexdigest()[:16]
+template = template.replace("__MATOME_WASM_VERSION__", wasm_version)
 (output / "matome-studio.html").write_text(template)
 PY
 # The splash's face, from the studio's own fonts.

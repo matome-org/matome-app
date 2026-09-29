@@ -191,6 +191,8 @@
       async function init() {
         try {
           await qtLoad({
+            locateFile: (filename) => filename === "matome-studio.wasm"
+              ? "matome-studio.wasm?v=__MATOME_WASM_VERSION__" : filename,
             qt: {
               onLoaded: () => animationDone.then(revealStudio),
               onExit: () => { spinner.style.display = "flex"; },

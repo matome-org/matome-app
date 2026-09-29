@@ -80,7 +80,7 @@ class ProxyTests(unittest.TestCase):
             files = {
                 "matome-studio.js?v=new-build": "no-cache",
                 "qtloader.js?v=new-build": "no-cache",
-                "matome-studio.wasm": "no-cache",
+                "matome-studio.wasm?v=new-build": "no-cache",
                 "font.ttf": "public, max-age=86400",
             }
             for name in files:
