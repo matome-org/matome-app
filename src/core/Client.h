@@ -44,6 +44,8 @@ public:
               const Headers &headers = {});
     void patch(const QString &path, const QJsonObject &body, Done done,
                const Headers &headers = {});
+    void put(const QString &path, const QJsonObject &body, Done done,
+             const Headers &headers = {});
     void del(const QString &path, Done done, const Headers &headers = {});
 
     /// Signed storage PUT/GET: the URL is used as given, without the access

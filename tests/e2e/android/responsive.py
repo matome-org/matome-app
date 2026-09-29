@@ -3,21 +3,11 @@ and the soft keyboard."""
 
 from __future__ import annotations
 
-import re
-
 from app import ACME, App, scenario
-from device import Device, Screen, expect
+from device import Screen, expect
 
 LONG = {"organizations": [{"name": "Acme", "spaces": [{"name": "Inbox", "documents": [
     {"title": "Row", "repeat": 30}]}]}]}
-
-
-def ime_top(device: Device) -> int | None:
-    """The top edge of the soft keyboard while it shows, else None."""
-    out = device.shell("dumpsys", "window")
-    m = re.search(r"InsetsSource id=\S+ type=ime frame=\[\d+,(\d+)\]\[\d+,\d+\] "
-                  r"visibleFrame=\S+ visible=true", out)
-    return int(m.group(1)) if m else None
 
 
 @scenario("5.1", title="the drawer opens from its button and closes on the scrim and on Back")
@@ -133,7 +123,7 @@ def soft_keyboard(app: App) -> None:
         """Qt pans the window to the cursor, so the text line (the field's
         upper three quarters; the rest is padding) sits above the keyboard."""
         def above(s: Screen) -> Screen | None:
-            top = ime_top(d)
+            top = d.keyboard_top()
             node = s.get(name)
             return s if top and node and node.focused and node.box[1] + node.height * 3 // 4 <= top else None
         d.wait(above, f"#{name} above the soft keyboard")

@@ -171,6 +171,6 @@ def launcher(app: App) -> None:
     d.tap(icon)
     screen = app.launch("submitButton")
     expect(screen.get("submitButton").label == "サインイン", "it did not boot in Japanese")
-    expect(near(d.screenshot().pixel(4, screen.get("submitButton").center[1]), DARK["background"]),
-           "it did not boot dark")
-    japanese(d, screen)
+    d.hide_keyboard()
+    app.background(DARK)
+    japanese(d, d.dump())

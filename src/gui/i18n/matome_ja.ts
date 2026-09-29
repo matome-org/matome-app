@@ -613,7 +613,12 @@
         <translation>スペース</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
+        <source>Unlimited</source>
+        <translation>無制限</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>B</source>
         <translation>B</translation>
     </message>
@@ -636,6 +641,121 @@
         <location line="+0"/>
         <source>TiB</source>
         <translation>TiB</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Active subscription</source>
+        <translation>有効なサブスクリプション</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Trial subscription</source>
+        <translation>試用中のサブスクリプション</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Payment overdue</source>
+        <translation>支払期限超過</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Payment required</source>
+        <translation>支払いが必要です</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Payment incomplete</source>
+        <translation>支払い未完了</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Payment expired</source>
+        <translation>支払い期限切れ</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Subscription canceled</source>
+        <translation>サブスクリプション解約済み</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Subscription paused</source>
+        <translation>サブスクリプション一時停止中</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unknown subscription status</source>
+        <translation>サブスクリプションの状態が不明です</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>This checkout session has expired. Select the package again to continue.</source>
+        <translation>この決済セッションは期限切れです。続行するにはパッケージを再度選択してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Billing is disabled on this server. Your current plan and allowances remain available.</source>
+        <translation>このサーバーでは請求が無効です。現在のプランと利用枠は引き続き利用できます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This organization has no billing account yet.</source>
+        <translation>この組織にはまだ請求アカウントがありません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This organization has no active paid subscription.</source>
+        <translation>この組織には有効な有料サブスクリプションがありません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server does not allow this app address as a billing return destination.</source>
+        <translation>このアプリのアドレスは請求後の戻り先としてサーバーに許可されていません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This package is no longer available. Refresh and choose another package.</source>
+        <translation>このパッケージは利用できなくなりました。更新して別のパッケージを選択してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>One of this package’s components is unavailable. Choose another package.</source>
+        <translation>このパッケージの構成要素が利用できません。別のパッケージを選択してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The organization already has a subscription. Refresh before changing its package.</source>
+        <translation>この組織にはすでにサブスクリプションがあります。パッケージを変更する前に更新してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This plan is not available for purchase.</source>
+        <translation>このプランは購入できません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This add-on is not available for purchase.</source>
+        <translation>このアドオンは購入できません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enter a valid quantity for this add-on.</source>
+        <translation>このアドオンの有効な数量を入力してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>One of the selected spaces is no longer available. Refresh and try again.</source>
+        <translation>選択したスペースの一つが利用できなくなりました。更新して再試行してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server refused these add-on settings.</source>
+        <translation>サーバーがこのアドオン設定を拒否しました。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The payment provider is unavailable. Try again later.</source>
+        <translation>決済サービスを利用できません。後でもう一度お試しください。</translation>
     </message>
 </context>
 <context>
@@ -662,6 +782,248 @@
     </message>
 </context>
 <context>
+    <name>OrgCommerce</name>
+    <message>
+        <location filename="../qml/screens/OrgCommerce.qml" line="+34"/>
+        <source>Select %1?</source>
+        <translation>%1を選択しますか？</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change purchased quantity to %1?</source>
+        <translation>購入数量を%1に変更しますか？</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pause this installation?</source>
+        <translation>このインストールを一時停止しますか？</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Save this installation?</source>
+        <translation>このインストールを保存しますか？</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This package replaces the subscription plan and purchased add-ons with the items shown. Independent grants are preserved. Stripe handles charges; paid changes require payment confirmation.</source>
+        <translation>このパッケージはサブスクリプションのプランと購入済みアドオンを表示された項目に置き換えます。独立した付与は保持されます。請求はStripeが処理し、有料の変更には支払い確認が必要です。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This changes your subscription. Stripe handles charges and proration. Paid changes take effect after payment confirmation; removing a purchased add-on can reduce its allowance immediately.</source>
+        <translation>サブスクリプションが変更されます。請求と日割り計算はStripeが処理します。有料の変更は支払い確認後に適用され、購入済みアドオンの削除は利用枠を直ちに減らす場合があります。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Processing will stop. This does not cancel the purchased add-on or its billing.</source>
+        <translation>処理が停止します。購入済みアドオンやその請求は解約されません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The add-on will be enabled for the selected spaces. No selection applies to all spaces. Existing add-on settings are preserved.</source>
+        <translation>選択したスペースでアドオンが有効になります。未選択の場合はすべてのスペースに適用されます。既存の設定は保持されます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pause</source>
+        <translation>一時停止</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Confirm</source>
+        <translation>確認</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Working…</source>
+        <translation>処理中…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Change requested. Refresh after payment confirmation to see the effective subscription and allowances.</source>
+        <translation>変更をリクエストしました。支払い確認後に更新すると、適用済みのサブスクリプションと利用枠が表示されます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation paused. Billing is unchanged.</source>
+        <translation>インストールを一時停止しました。請求は変更されていません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation saved.</source>
+        <translation>インストールを保存しました。</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Loading plan…</source>
+        <translation>プランを読み込み中…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>No paid subscription.</source>
+        <translation>有料サブスクリプションはありません。</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Current period ends: %1</source>
+        <translation>現在の期間の終了日：%1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Cancellation scheduled for: %1</source>
+        <translation>解約予定日：%1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>A subscription change is awaiting payment confirmation.</source>
+        <translation>サブスクリプションの変更は支払い確認待ちです。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Payment methods, invoices, billing details and subscription cancellation are managed securely in Stripe.</source>
+        <translation>支払い方法、請求書、請求情報、サブスクリプションの解約はStripeで安全に管理されます。</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Manage billing</source>
+        <translation>請求を管理</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Open Stripe portal</source>
+        <translation>Stripeポータルを開く</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue to checkout</source>
+        <translation>決済に進む</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Only organization owners and billing members can change billing.</source>
+        <translation>組織の所有者と請求担当メンバーのみが請求を変更できます。</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>No paid packages are available yet. Your current plan remains active.</source>
+        <translation>有料パッケージはまだありません。現在のプランは引き続き有効です。</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Plan: %1</source>
+        <translation>プラン：%1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 × %2</source>
+        <translation>%1 × %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Switch package</source>
+        <translation>パッケージを変更</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Subscribe</source>
+        <translation>申し込む</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Use the Usage section to view your effective limits and reservations.</source>
+        <translation>有効な利用上限と予約済み使用量は「使用状況」で確認できます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>After returning from Stripe, refresh this page. Allowances are updated only after the server confirms the payment.</source>
+        <translation>Stripeから戻ったらこのページを更新してください。利用枠はサーバーによる支払い確認後に更新されます。</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Purchased quantities and included allowances are shown separately. Installation controls where an add-on runs; it does not control billing.</source>
+        <translation>購入数量と付与された利用枠は別々に表示されます。インストールはアドオンの実行場所を設定し、請求には影響しません。</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Purchasing add-ons requires an active paid subscription. Included add-ons can still be installed.</source>
+        <translation>アドオンの購入には有効な有料サブスクリプションが必要です。付与済みアドオンは引き続きインストールできます。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No add-ons available.</source>
+        <translation>利用可能なアドオンはありません。</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Used: %1 · Reserved: %2 · Allowance: %3</source>
+        <translation>使用済み：%1 · 予約済み：%2 · 利用枠：%3</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unlimited</source>
+        <translation>無制限</translation>
+    </message>
+    <message>
+        <location line="-75"/>
+        <location line="+6"/>
+        <location line="+7"/>
+        <location line="+9"/>
+        <location line="+62"/>
+        <source>%1 · version %2</source>
+        <translation>%1 · バージョン%2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Purchased: %1 · Total assigned: %2</source>
+        <translation>購入数：%1 · 付与合計：%2</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Purchased quantity</source>
+        <translation>購入数量</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Apply</source>
+        <translation>適用</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Installation active</source>
+        <translation>インストール有効</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation paused</source>
+        <translation>インストール一時停止中</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not installed</source>
+        <translation>未インストール</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Spaces · no selection means all spaces</source>
+        <translation>スペース · 未選択の場合はすべてのスペース</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Save spaces</source>
+        <translation>スペースを保存</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Install / resume</source>
+        <translation>インストール／再開</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Pause installation</source>
+        <translation>インストールを一時停止</translation>
+    </message>
+</context>
+<context>
     <name>RolePicker</name>
     <message>
         <location filename="../qml/chrome/RolePicker.qml" line="+31"/>
@@ -672,13 +1034,13 @@
 <context>
     <name>Settings</name>
     <message>
-        <location filename="../qml/screens/Settings.qml" line="+177"/>
-        <location line="+173"/>
+        <location filename="../qml/screens/Settings.qml" line="+191"/>
+        <location line="+178"/>
         <source>Appearance</source>
         <translation>外観</translation>
     </message>
     <message>
-        <location line="-321"/>
+        <location line="-339"/>
         <source>Members</source>
         <translation>メンバー</translation>
     </message>
@@ -698,7 +1060,17 @@
         <translation>使用状況</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+1"/>
+        <source>Plan and billing</source>
+        <translation>プランと請求</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add-ons</source>
+        <translation>アドオン</translation>
+    </message>
+    <message>
+        <location line="+37"/>
         <source>Remove %1?</source>
         <translation>%1を削除しますか？</translation>
     </message>
@@ -743,7 +1115,7 @@
         <translation>役割を変更</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+59"/>
         <source>Collapse %1</source>
         <translation>%1を折りたたむ</translation>
     </message>
@@ -753,7 +1125,7 @@
         <translation>%1を展開する</translation>
     </message>
     <message>
-        <location line="+156"/>
+        <location line="+159"/>
         <source>Navigation</source>
         <translation>ナビゲーション</translation>
     </message>
@@ -763,12 +1135,12 @@
         <translation>ファイルに戻る</translation>
     </message>
     <message>
-        <location line="-101"/>
+        <location line="-104"/>
         <source>Organizations</source>
         <translation>組織</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+121"/>
         <source>Settings</source>
         <translation>設定</translation>
     </message>
@@ -778,13 +1150,13 @@
         <translation>更新</translation>
     </message>
     <message>
-        <location line="-121"/>
-        <location line="+178"/>
+        <location line="-124"/>
+        <location line="+184"/>
         <source>Working…</source>
         <translation>処理中…</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-120"/>
         <source>Open organizations</source>
         <translation>組織一覧を開く</translation>
     </message>
@@ -799,7 +1171,7 @@
         <translation>まだ組織はありません。</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+147"/>
         <source>Theme</source>
         <translation>テーマ</translation>
     </message>
@@ -971,7 +1343,7 @@
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+138"/>
+        <location filename="../Session.cpp" line="+143"/>
         <source>New organization</source>
         <translation>新しい組織</translation>
     </message>

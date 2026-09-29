@@ -21,6 +21,11 @@ struct OrgRow {
     {
         return role == QLatin1String("owner") || role == QLatin1String("admin");
     }
+    bool canReadBilling() const { return canAdminister() || role == QLatin1String("billing"); }
+    bool canManageBilling() const
+    {
+        return role == QLatin1String("owner") || role == QLatin1String("billing");
+    }
 };
 
 /// Organizations of the signed-in identity. QML binds roles; it does not
@@ -35,7 +40,8 @@ public:
         NameRole,
         RoleNameRole,
         RevisionRole,
-        CanAdministerRole
+        CanAdministerRole,
+        CanReadBillingRole
     };
 
     explicit OrgModel(Session &session);
@@ -45,6 +51,8 @@ public:
     QString currentOrgId() const { return m_currentOrgId; }
     QString nameOf(const QString &orgId) const;
     bool canAdminister(const QString &orgId) const;
+    bool canReadBilling(const QString &orgId) const;
+    bool canManageBilling(const QString &orgId) const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role) const override;

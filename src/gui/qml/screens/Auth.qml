@@ -198,6 +198,8 @@ FocusScope {
                 visible: auth.pane !== "confirm"
                 invalid: auth.invalid(emailField, "email")
                 placeholderText: qsTr("Email")
+                inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                EnterKey.type: Qt.EnterKeyGo
                 Keys.onReturnPressed: auth.submit()
                 Keys.onEnterPressed: auth.submit()
             }
@@ -210,6 +212,7 @@ FocusScope {
                 invalid: auth.invalid(passwordField, "password")
                 placeholderText: qsTr("Password")
                 echoMode: TextInput.Password
+                EnterKey.type: Qt.EnterKeyGo
                 Keys.onReturnPressed: auth.submit()
                 Keys.onEnterPressed: auth.submit()
             }
@@ -304,6 +307,8 @@ FocusScope {
                 visible: auth.serverOpen
                 line: true
                 placeholderText: qsTr("Core server address")
+                inputMethodHints: Qt.ImhUrlCharactersOnly | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                EnterKey.type: Qt.EnterKeyGo
                 Keys.onReturnPressed: auth.submit()
                 Keys.onEnterPressed: auth.submit()
             }

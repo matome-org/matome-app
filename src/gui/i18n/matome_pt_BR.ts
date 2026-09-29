@@ -612,7 +612,12 @@
         <translation>Espaços</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
+        <source>Unlimited</source>
+        <translation>Ilimitado</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>B</source>
         <translation>B</translation>
     </message>
@@ -635,6 +640,121 @@
         <location line="+0"/>
         <source>TiB</source>
         <translation>TiB</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Active subscription</source>
+        <translation>Assinatura ativa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Trial subscription</source>
+        <translation>Assinatura em período de avaliação</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Payment overdue</source>
+        <translation>Pagamento em atraso</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Payment required</source>
+        <translation>Pagamento necessário</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Payment incomplete</source>
+        <translation>Pagamento incompleto</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Payment expired</source>
+        <translation>Pagamento expirado</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Subscription canceled</source>
+        <translation>Assinatura cancelada</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Subscription paused</source>
+        <translation>Assinatura pausada</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unknown subscription status</source>
+        <translation>Status da assinatura desconhecido</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>This checkout session has expired. Select the package again to continue.</source>
+        <translation>Esta sessão de pagamento expirou. Selecione o pacote novamente para continuar.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Billing is disabled on this server. Your current plan and allowances remain available.</source>
+        <translation>A cobrança está desativada neste servidor. Seu plano e suas cotas atuais continuam disponíveis.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This organization has no billing account yet.</source>
+        <translation>Esta organização ainda não tem uma conta de cobrança.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This organization has no active paid subscription.</source>
+        <translation>Esta organização não tem uma assinatura paga ativa.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server does not allow this app address as a billing return destination.</source>
+        <translation>O servidor não permite este endereço do app como destino de retorno da cobrança.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This package is no longer available. Refresh and choose another package.</source>
+        <translation>Este pacote não está mais disponível. Atualize e escolha outro pacote.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>One of this package’s components is unavailable. Choose another package.</source>
+        <translation>Um dos componentes deste pacote está indisponível. Escolha outro pacote.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The organization already has a subscription. Refresh before changing its package.</source>
+        <translation>A organização já tem uma assinatura. Atualize antes de alterar o pacote.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This plan is not available for purchase.</source>
+        <translation>Este plano não está disponível para contratação.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This add-on is not available for purchase.</source>
+        <translation>Este add-on não está disponível para contratação.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enter a valid quantity for this add-on.</source>
+        <translation>Informe uma quantidade válida para este add-on.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>One of the selected spaces is no longer available. Refresh and try again.</source>
+        <translation>Um dos espaços selecionados não está mais disponível. Atualize e tente novamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The server refused these add-on settings.</source>
+        <translation>O servidor recusou estas configurações do add-on.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The payment provider is unavailable. Try again later.</source>
+        <translation>O provedor de pagamento está indisponível. Tente novamente mais tarde.</translation>
     </message>
 </context>
 <context>
@@ -661,6 +781,248 @@
     </message>
 </context>
 <context>
+    <name>OrgCommerce</name>
+    <message>
+        <location filename="../qml/screens/OrgCommerce.qml" line="+34"/>
+        <source>Select %1?</source>
+        <translation>Selecionar %1?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change purchased quantity to %1?</source>
+        <translation>Alterar a quantidade contratada para %1?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pause this installation?</source>
+        <translation>Pausar esta instalação?</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Save this installation?</source>
+        <translation>Salvar esta instalação?</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This package replaces the subscription plan and purchased add-ons with the items shown. Independent grants are preserved. Stripe handles charges; paid changes require payment confirmation.</source>
+        <translation>Este pacote substitui o plano da assinatura e os add-ons contratados pelos itens exibidos. As concessões independentes são preservadas. O Stripe processa as cobranças; alterações pagas exigem confirmação do pagamento.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This changes your subscription. Stripe handles charges and proration. Paid changes take effect after payment confirmation; removing a purchased add-on can reduce its allowance immediately.</source>
+        <translation>Isso altera sua assinatura. O Stripe calcula as cobranças e os valores proporcionais. Alterações pagas entram em vigor após a confirmação do pagamento; remover um add-on contratado pode reduzir sua cota imediatamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Processing will stop. This does not cancel the purchased add-on or its billing.</source>
+        <translation>O processamento será interrompido. Isso não cancela o add-on contratado nem sua cobrança.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The add-on will be enabled for the selected spaces. No selection applies to all spaces. Existing add-on settings are preserved.</source>
+        <translation>O add-on será ativado nos espaços selecionados. Sem seleção, será aplicado a todos os espaços. As configurações existentes serão preservadas.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pause</source>
+        <translation>Pausar</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <location line="+45"/>
+        <source>Working…</source>
+        <translation>Processando…</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Change requested. Refresh after payment confirmation to see the effective subscription and allowances.</source>
+        <translation>Alteração solicitada. Atualize após a confirmação do pagamento para ver a assinatura e as cotas efetivas.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation paused. Billing is unchanged.</source>
+        <translation>Instalação pausada. A cobrança não foi alterada.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation saved.</source>
+        <translation>Instalação salva.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Loading plan…</source>
+        <translation>Carregando plano…</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>No paid subscription.</source>
+        <translation>Sem assinatura paga.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Current period ends: %1</source>
+        <translation>O período atual termina em: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Cancellation scheduled for: %1</source>
+        <translation>Cancelamento agendado para: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>A subscription change is awaiting payment confirmation.</source>
+        <translation>Uma alteração na assinatura aguarda confirmação do pagamento.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Payment methods, invoices, billing details and subscription cancellation are managed securely in Stripe.</source>
+        <translation>Formas de pagamento, faturas, dados de cobrança e cancelamento da assinatura são gerenciados com segurança no Stripe.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Manage billing</source>
+        <translation>Gerenciar cobrança</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Open Stripe portal</source>
+        <translation>Abrir portal do Stripe</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Continue to checkout</source>
+        <translation>Continuar para pagamento</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Only organization owners and billing members can change billing.</source>
+        <translation>Somente owners e membros de cobrança podem alterar a cobrança.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>No paid packages are available yet. Your current plan remains active.</source>
+        <translation>Ainda não há pacotes pagos disponíveis. Seu plano atual continua ativo.</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Plan: %1</source>
+        <translation>Plano: %1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>%1 × %2</source>
+        <translation>%1 × %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Switch package</source>
+        <translation>Trocar pacote</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Subscribe</source>
+        <translation>Contratar</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Use the Usage section to view your effective limits and reservations.</source>
+        <translation>Use a seção Uso para ver seus limites efetivos e as reservas.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>After returning from Stripe, refresh this page. Allowances are updated only after the server confirms the payment.</source>
+        <translation>Ao voltar do Stripe, atualize esta página. As cotas só são atualizadas após o servidor confirmar o pagamento.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Purchased quantities and included allowances are shown separately. Installation controls where an add-on runs; it does not control billing.</source>
+        <translation>As quantidades contratadas e as cotas incluídas são exibidas separadamente. A instalação define onde o add-on é executado; ela não controla a cobrança.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Purchasing add-ons requires an active paid subscription. Included add-ons can still be installed.</source>
+        <translation>A contratação de add-ons exige uma assinatura paga ativa. Os add-ons incluídos ainda podem ser instalados.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>No add-ons available.</source>
+        <translation>Nenhum add-on disponível.</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Used: %1 · Reserved: %2 · Allowance: %3</source>
+        <translation>Usado: %1 · Reservado: %2 · Cota: %3</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unlimited</source>
+        <translation>Ilimitado</translation>
+    </message>
+    <message>
+        <location line="-75"/>
+        <location line="+6"/>
+        <location line="+7"/>
+        <location line="+9"/>
+        <location line="+62"/>
+        <source>%1 · version %2</source>
+        <translation>%1 · versão %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Purchased: %1 · Total assigned: %2</source>
+        <translation>Contratado: %1 · Total atribuído: %2</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Purchased quantity</source>
+        <translation>Quantidade contratada</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Apply</source>
+        <translation>Aplicar</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Installation active</source>
+        <translation>Instalação ativa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation paused</source>
+        <translation>Instalação pausada</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not installed</source>
+        <translation>Não instalado</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Spaces · no selection means all spaces</source>
+        <translation>Espaços · sem seleção, todos os espaços</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Save spaces</source>
+        <translation>Salvar espaços</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Install / resume</source>
+        <translation>Instalar / retomar</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Pause installation</source>
+        <translation>Pausar instalação</translation>
+    </message>
+</context>
+<context>
     <name>RolePicker</name>
     <message>
         <location filename="../qml/chrome/RolePicker.qml" line="+31"/>
@@ -671,13 +1033,13 @@
 <context>
     <name>Settings</name>
     <message>
-        <location filename="../qml/screens/Settings.qml" line="+177"/>
-        <location line="+173"/>
+        <location filename="../qml/screens/Settings.qml" line="+191"/>
+        <location line="+178"/>
         <source>Appearance</source>
         <translation>Aparência</translation>
     </message>
     <message>
-        <location line="-321"/>
+        <location line="-339"/>
         <source>Members</source>
         <translation>Membros</translation>
     </message>
@@ -697,7 +1059,17 @@
         <translation>Uso</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+1"/>
+        <source>Plan and billing</source>
+        <translation>Plano e cobrança</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Add-ons</source>
+        <translation>Add-ons</translation>
+    </message>
+    <message>
+        <location line="+37"/>
         <source>Remove %1?</source>
         <translation>Remover %1?</translation>
     </message>
@@ -742,7 +1114,7 @@
         <translation>Alterar papel</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+59"/>
         <source>Collapse %1</source>
         <translation>Recolher %1</translation>
     </message>
@@ -752,7 +1124,7 @@
         <translation>Expandir %1</translation>
     </message>
     <message>
-        <location line="+156"/>
+        <location line="+159"/>
         <source>Navigation</source>
         <translation>Navegação</translation>
     </message>
@@ -762,12 +1134,12 @@
         <translation>Voltar aos arquivos</translation>
     </message>
     <message>
-        <location line="-101"/>
+        <location line="-104"/>
         <source>Organizations</source>
         <translation>Organizações</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+121"/>
         <source>Settings</source>
         <translation>Configurações</translation>
     </message>
@@ -777,13 +1149,13 @@
         <translation>Atualizar</translation>
     </message>
     <message>
-        <location line="-121"/>
-        <location line="+178"/>
+        <location line="-124"/>
+        <location line="+184"/>
         <source>Working…</source>
         <translation>Processando…</translation>
     </message>
     <message>
-        <location line="-117"/>
+        <location line="-120"/>
         <source>Open organizations</source>
         <translation>Abrir organizações</translation>
     </message>
@@ -798,7 +1170,7 @@
         <translation>Nenhuma organização ainda.</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+147"/>
         <source>Theme</source>
         <translation>Tema</translation>
     </message>
@@ -970,7 +1342,7 @@
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+138"/>
+        <location filename="../Session.cpp" line="+143"/>
         <source>New organization</source>
         <translation>Nova organização</translation>
     </message>

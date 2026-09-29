@@ -64,8 +64,11 @@ def logo_frames(d: Device) -> list[bytes]:
     screen = d.showing("submitButton")
     wordmark = screen.labelled("Matome")
     band = (0, screen.get("languageSwitcher").box[3], wordmark.box[2], wordmark.box[1])
-    submit = screen.get("submitButton")
-    gold = (submit.box[0] + submit.height // 4, submit.center[1])
+    reference = d.screenshot()
+    left, top, right, bottom = wordmark.box
+    ink = next(((x, y) for y in range(top, bottom, 2) for x in range(left, right, 2)
+                if near(reference.pixel(x, y), LIGHT["textPrimary"])), None)
+    expect(ink is not None, "the wordmark is not painted")
     d.stop()
     d.launch()
     painted: list[bytes] = []
@@ -74,7 +77,7 @@ def logo_frames(d: Device) -> list[bytes]:
         if time.monotonic() > deadline:
             raise Failure("the logo never held still")
         image: Image = d.screenshot()
-        if near(image.pixel(*gold), LIGHT["accent"]):
+        if near(image.pixel(*ink), LIGHT["textPrimary"]):
             painted.append(image.crop(band))
     return painted
 

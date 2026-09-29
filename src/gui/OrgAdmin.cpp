@@ -88,8 +88,6 @@ void OrgAdmin::close()
     m_pending = 0;
     m_orgId.clear();
     m_organization = {};
-    m_usage = {};
-    m_entitlements = {};
     m_memberRows = {};
     m_invitationRows = {};
     m_members.replace({}, {}, false);
@@ -99,7 +97,6 @@ void OrgAdmin::close()
     m_generalError.clear();
     m_membersError.clear();
     m_invitationsError.clear();
-    m_usageError.clear();
     emit changed();
 }
 
@@ -128,11 +125,10 @@ void OrgAdmin::finished()
 void OrgAdmin::load()
 {
     const int generation = ++m_generation;
-    m_pending = 5;
+    m_pending = 3;
     m_generalError.clear();
     m_membersError.clear();
     m_invitationsError.clear();
-    m_usageError.clear();
     emit changed();
     m_session.authedGet(orgsPath() + QLatin1Char('/') + m_orgId,
                         [this, generation](const Client::Reply &reply) {
@@ -159,18 +155,6 @@ void OrgAdmin::load()
     };
     list(QStringLiteral("members"), m_memberRows, m_members, m_membersError, false);
     list(QStringLiteral("invitations"), m_invitationRows, m_invitations, m_invitationsError, true);
-    const auto get = [this, generation](const QString &key, QJsonObject &target) {
-        m_session.authedGet(orgPath(m_orgId, key), [this, generation, key, &target](const Client::Reply &reply) {
-            if (!live(generation))
-                return;
-            target = reply.ok ? reply.json.value(key).toObject() : QJsonObject();
-            if (!reply.ok)
-                m_usageError = failCode(reply);
-            finished();
-        });
-    };
-    get(QStringLiteral("usage"), m_usage);
-    get(QStringLiteral("entitlements"), m_entitlements);
 }
 
 bool OrgAdmin::canSave() const
@@ -276,29 +260,6 @@ QVariantList OrgAdmin::roles() const
     for (const char *role : {"member", "admin", "owner", "billing", "guest"}) {
         values.append(QVariantMap{{QStringLiteral("value"), QString::fromLatin1(role)},
                                   {QStringLiteral("label"), EntryModel::detailWord(QString::fromLatin1(role))}});
-    }
-    return values;
-}
-
-QString OrgAdmin::plan() const
-{
-    return m_entitlements.value(QStringLiteral("plan")).toObject().value(QStringLiteral("name")).toString();
-}
-
-QVariantList OrgAdmin::usage() const
-{
-    QVariantList values;
-    const QJsonObject dimensions = m_usage.value(QStringLiteral("dimensions")).toObject();
-    const QJsonObject limits = m_usage.value(QStringLiteral("limits")).toObject();
-    for (const char *key : {"storage_bytes", "members", "guests", "spaces"}) {
-        const QString dimension = QString::fromLatin1(key);
-        if (!dimensions.contains(dimension))
-            continue;
-        const QJsonObject amount = dimensions.value(dimension).toObject();
-        values.append(QVariantMap{{QStringLiteral("dimension"), dimension},
-                                  {QStringLiteral("used"), amount.value(QStringLiteral("confirmed")).toVariant()},
-                                  {QStringLiteral("reserved"), amount.value(QStringLiteral("reserved")).toVariant()},
-                                  {QStringLiteral("limit"), limits.value(dimension).toVariant()}});
     }
     return values;
 }

@@ -70,6 +70,13 @@ public:
 
     QString lastPath() const { return m_lastPath; }
     QString lastQuery() const { return m_lastQuery; }
+    QJsonObject billingRequest() const { return m_billingRequest; }
+    QDateTime checkoutExpiresAt;
+    void seedPackages(const QJsonArray &packages) { m_packages = packages; }
+    void seedSubscription(const QString &orgId, const QJsonObject &subscription)
+    { m_subscriptions[orgId] = subscription; }
+    void seedAddOns(const QString &orgId, const QJsonArray &products)
+    { m_addOns[orgId] = products; }
     QString lastIdempotency() const { return m_lastIdempotency; }
     int hits() const { return m_hits; }
 
@@ -248,6 +255,11 @@ public:
         m_sessionEpoch = 1;
         m_orgsByUser.clear();
         m_members.clear();
+        m_subscriptions.clear();
+        m_addOns.clear();
+        m_billingRequest = {};
+        checkoutExpiresAt = {};
+        m_packages = {};
         m_invitations.clear();
         m_nextPerson = 0;
         m_spaces.clear();
@@ -626,7 +638,11 @@ private:
                                    [&](const QString &name) { return addSpace(orgId, name); });
                 }
             }
+            if (method == "GET" && m_lastPath == QLatin1String("/api/v1/add-ons"))
+                return jsonReply(200, {{QStringLiteral("products"), addOnCatalog()}});
             const QStringList parts = m_lastPath.split(QLatin1Char('/'));
+            if (const auto reply = organizationCommerce(method, parts, json))
+                return *reply;
             if (const auto reply = organizationAdmin(method, parts, json))
                 return *reply;
             if (parts.size() >= 8 && parts.at(1) == QLatin1String("api")
@@ -928,6 +944,64 @@ private:
         return org;
     }
 
+    static QJsonArray addOnCatalog()
+    {
+        const QJsonObject limits{{QStringLiteral("addon_classifier_calls_monthly"), 1000}};
+        const QJsonObject sku{{QStringLiteral("key"), QStringLiteral("classifier-1000")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("stackable"), true},
+                {QStringLiteral("limits"), limits}};
+        const QJsonObject product{{QStringLiteral("key"), QStringLiteral("classifier")},
+                {QStringLiteral("name"), QStringLiteral("Classification")},
+                {QStringLiteral("meter_dimension"), QStringLiteral("addon_classifier_calls_monthly")},
+                {QStringLiteral("skus"), QJsonArray{sku}}};
+        return {product};
+    }
+
+    std::optional<QByteArray> organizationCommerce(const QByteArray &method, const QStringList &parts,
+                                                  const QJsonObject &json)
+    {
+        if (parts.size() < 6 || (parts.at(5) != QLatin1String("billing") && parts.at(5) != QLatin1String("add-ons")))
+            return std::nullopt;
+        const QString orgId = parts.at(4);
+        const QString role = byId(m_orgsByUser.value(m_user), orgId).value(QStringLiteral("role")).toString();
+        if (role != QLatin1String("owner") && role != QLatin1String("admin") && role != QLatin1String("billing"))
+            return errorReply(403, QStringLiteral("forbidden"));
+        if (parts.at(5) == QLatin1String("billing")) {
+            if (method == "GET" && parts.last() == QLatin1String("packages"))
+                return jsonReply(200, {{QStringLiteral("packages"), m_packages}});
+            if (method == "GET")
+                return jsonReply(200, {{QStringLiteral("subscription"), m_subscriptions.contains(orgId)
+                        ? QJsonValue(m_subscriptions.value(orgId)) : QJsonValue(QJsonValue::Null)}});
+            if (role == QLatin1String("admin")) return errorReply(403, QStringLiteral("forbidden"));
+            m_billingRequest = json;
+            if (method == "POST" && parts.last() == QLatin1String("portal-sessions"))
+                return jsonReply(200, {{QStringLiteral("url"), QStringLiteral("https://billing.stripe.com/session/test")}});
+            if (method == "POST" && parts.last() == QLatin1String("checkout-sessions"))
+                return jsonReply(200, {{QStringLiteral("url"), QStringLiteral("https://checkout.stripe.com/session/test")},
+                        {QStringLiteral("expires_at"), (checkoutExpiresAt.isValid() ? checkoutExpiresAt
+                                : QDateTime::currentDateTimeUtc().addSecs(1800)).toString(Qt::ISODateWithMs)}});
+            if (method == "PUT" && parts.last() == QLatin1String("subscription"))
+                return jsonReply(202, {{QStringLiteral("subscription"), m_subscriptions.value(orgId)}});
+        } else {
+            if (method == "GET") return jsonReply(200, {{QStringLiteral("products"), m_addOns.value(orgId)}});
+            if (role == QLatin1String("billing")) return errorReply(403, QStringLiteral("forbidden"));
+            if (parts.size() < 8) return std::nullopt;
+            const QString key = parts.at(6);
+            for (int i = 0; i < m_addOns[orgId].size(); ++i) {
+                QJsonObject product = m_addOns[orgId].at(i).toObject();
+                if (product.value(QStringLiteral("key")).toString() != key) continue;
+                QJsonObject installation = product.value(QStringLiteral("installation")).toObject();
+                if (method == "PUT") installation = json;
+                installation.insert(QStringLiteral("status"), method == "PUT" ? QStringLiteral("active") : QStringLiteral("paused"));
+                installation.insert(QStringLiteral("revision"), 2);
+                product.insert(QStringLiteral("installation"), installation);
+                m_addOns[orgId].replace(i, product);
+                return jsonReply(200, {{QStringLiteral("installation"), installation}});
+            }
+        }
+        return std::nullopt;
+    }
+
     std::optional<QByteArray> organizationAdmin(const QByteArray &method, const QStringList &parts,
                                                const QJsonObject &json)
     {
@@ -942,7 +1016,9 @@ private:
         if (org.isEmpty())
             return errorReply(403, QStringLiteral("organization_access_denied"));
         const QString role = org.value(QStringLiteral("role")).toString();
-        if (role != QLatin1String("owner") && role != QLatin1String("admin"))
+        if (role != QLatin1String("owner") && role != QLatin1String("admin")
+                && !(role == QLatin1String("billing") && method == "GET"
+                     && (kind == QLatin1String("usage") || kind == QLatin1String("entitlements"))))
             return errorReply(403, QStringLiteral("forbidden"));
         if (kind.isEmpty()) {
             if (method == "GET")
@@ -1024,7 +1100,7 @@ private:
                     {QStringLiteral("members"), 10}, {QStringLiteral("guests"), 5}, {QStringLiteral("spaces"), 10}};
             if (kind == QLatin1String("entitlements"))
                 return jsonReply(200, {{kind, QJsonObject{{QStringLiteral("limits"), limits},
-                        {QStringLiteral("plan"), QJsonObject{{QStringLiteral("name"), QStringLiteral("Free")}}}}}});
+                        {QStringLiteral("plan"), QJsonObject{{QStringLiteral("key"), QStringLiteral("free")}, {QStringLiteral("version"), 1}}}}}});
             QJsonObject dimensions;
             for (const QString &dimension : {QStringLiteral("storage_bytes"), QStringLiteral("members"),
                                              QStringLiteral("guests"), QStringLiteral("spaces")}) {
@@ -1428,6 +1504,10 @@ private:
     int m_sessionEpoch = 1;
     QHash<QString, QJsonArray> m_orgsByUser;
     QHash<QString, QJsonArray> m_members;
+    QHash<QString, QJsonObject> m_subscriptions;
+    QHash<QString, QJsonArray> m_addOns;
+    QJsonObject m_billingRequest;
+    QJsonArray m_packages;
     QHash<QString, QJsonArray> m_invitations;
     int m_nextPerson = 0;
     QHash<QString, QJsonArray> m_spaces;

@@ -102,6 +102,12 @@ private slots:
     void wordsFollowTheTranslator();
     void settingsAvailableWithoutAdminOrganization();
     void settingsSelectsOrganizationsAndDiscardsReplies();
+    void orgBillingPermissionsAndStaleReplies();
+    void orgBillingPreservesPurchasesAndGrants();
+    void orgBillingConfiguresInstallation();
+    void orgBillingSelectsVersionedPackages();
+    void orgBillingExpiresCheckoutLinks();
+    void orgBillingReportsPackageFailures();
     void orgAdminLoadsAndPreservesLocation();
     void orgAdminMutatesMembersAndInvitations();
     void orgAdminGuardsLastOwnerAndReportsErrors();
@@ -386,6 +392,8 @@ void TestCore::mapsForcedCoreErrors()
         {422, "invalid_reset_token", "invalid_reset_token"},
         {429, "rate_limited", "rate_limited"},
         {500, "server_error", "server"},
+        {503, "billing_disabled", "billing_disabled"},
+        {502, "billing_provider_error", "billing_provider_error"},
     };
     for (const auto &row : cases) {
         core.forcedStatus = row.status;
@@ -2716,14 +2724,15 @@ void TestCore::orgAdminLoadsAndPreservesLocation()
     QVERIFY(session.settingsActive());
     QVERIFY(admin->active());
     QTRY_VERIFY(!admin->busy());
+    QTRY_VERIFY(!session.orgBilling()->busy());
     QVERIFY(admin->generalError().isEmpty());
     QVERIFY(admin->membersError().isEmpty());
     QVERIFY(admin->invitationsError().isEmpty());
-    QVERIFY(admin->usageError().isEmpty());
+    QVERIFY(session.orgBilling()->usageError().isEmpty());
     QCOMPARE(admin->members()->rowCount(), 1);
-    QCOMPARE(admin->plan(), QStringLiteral("Free"));
-    QCOMPARE(admin->usage().size(), 4);
-    QCOMPARE(admin->usage().first().toMap().value(QStringLiteral("used")).toInt(), 1048576);
+    QCOMPARE(session.orgBilling()->plan(), QStringLiteral("free"));
+    QCOMPARE(session.orgBilling()->usage().size(), 4);
+    QCOMPARE(session.orgBilling()->usage().first().toMap().value(QStringLiteral("used")).toInt(), 1048576);
     admin->rename(QStringLiteral("  Team  "));
     QTRY_VERIFY(!admin->busy());
     QVERIFY(waitFor(&session));
@@ -2880,6 +2889,256 @@ void TestCore::orgAdminRestrictsEntryAndPaginates()
     admin->open();
     admin->invite(QStringLiteral("person@example.com"), QStringLiteral("admin"));
     QVERIFY(!admin->active());
+    QCOMPARE(core.hits(), hits);
+}
+
+void TestCore::orgBillingPermissionsAndStaleReplies()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(openInbox(core, session));
+    const QString ownerId = session.currentOrgId();
+    core.seedOrganization(QStringLiteral("Finance"), QStringLiteral("billing"));
+    core.seedOrganization(QStringLiteral("Admin"), QStringLiteral("admin"));
+    session.refreshOrganizations();
+    QVERIFY(waitFor(&session));
+    const QString financeId = session.organizations()->index(1).data(OrgModel::OrgIdRole).toString();
+    const QString adminId = session.organizations()->index(2).data(OrgModel::OrgIdRole).toString();
+    QVERIFY(core.failNext(QStringLiteral("GET"), matome::orgPath(ownerId, QStringLiteral("billing/subscription")),
+                          1, FakeCore::FaultMode::Hold));
+    session.openSettings();
+    auto *billing = session.orgBilling();
+    QTRY_COMPARE(core.held(), 1);
+    session.navigate(QStringLiteral("org"), financeId);
+    QTRY_VERIFY(!billing->busy());
+    QVERIFY(billing->active());
+    QVERIFY(billing->canManage());
+    QVERIFY(!billing->canInstall());
+    QVERIFY(!session.orgAdmin()->active());
+    QVERIFY(billing->billingError().isEmpty());
+    QVERIFY(billing->usageError().isEmpty());
+    core.release();
+    QTest::qWait(20);
+    QCOMPARE(billing->name(), QStringLiteral("Finance"));
+    billing->createPortal();
+    QTRY_VERIFY(!billing->busy());
+    QVERIFY(billing->paymentUrl().startsWith(QStringLiteral("https://billing.stripe.com/")));
+    session.navigate(QStringLiteral("org"), adminId);
+    QTRY_VERIFY(!billing->busy());
+    QVERIFY(billing->paymentUrl().isEmpty());
+    QVERIFY(!billing->canManage());
+    QVERIFY(billing->canInstall());
+    const int hits = core.hits();
+    billing->createPortal();
+    billing->setQuantity(QStringLiteral("classifier-1000"), 2);
+    QTest::qWait(20);
+    QCOMPARE(core.hits(), hits);
+    session.signOut();
+    QVERIFY(!billing->active());
+    QVERIFY(billing->products().isEmpty());
+}
+
+void TestCore::orgBillingPreservesPurchasesAndGrants()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(openInbox(core, session));
+    core.seedSubscription(session.currentOrgId(), {{QStringLiteral("status"), QStringLiteral("active")},
+            {QStringLiteral("plan"), QJsonObject{{QStringLiteral("key"), QStringLiteral("team")}, {QStringLiteral("version"), 1}}},
+            {QStringLiteral("add_ons"), QJsonArray{
+                QJsonObject{{QStringLiteral("key"), QStringLiteral("classifier-1000")}, {QStringLiteral("quantity"), 1}},
+                QJsonObject{{QStringLiteral("key"), QStringLiteral("storage-10gb")}, {QStringLiteral("quantity"), 3}}}}});
+    core.seedAddOns(session.currentOrgId(), {QJsonObject{{QStringLiteral("key"), QStringLiteral("classifier")},
+            {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("key"), QStringLiteral("classifier-1000")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("quantity"), 5}}}}}});
+    session.openSettings();
+    auto *billing = session.orgBilling();
+    QTRY_VERIFY(!billing->busy());
+    QVERIFY(billing->productsError().isEmpty());
+    const QVariantMap sku = billing->products().first().toMap().value(QStringLiteral("skus")).toList().first().toMap();
+    QCOMPARE(sku.value(QStringLiteral("assigned")).toInt(), 5);
+    QCOMPARE(sku.value(QStringLiteral("purchased")).toInt(), 1);
+    billing->setQuantity(QStringLiteral("classifier-1000"), 2);
+    QTRY_VERIFY(!billing->busy());
+    QVERIFY(billing->errorCode().isEmpty());
+    QCOMPARE(core.billingRequest().value(QStringLiteral("plan")).toString(), QStringLiteral("team"));
+    const QJsonArray desired = core.billingRequest().value(QStringLiteral("add_ons")).toArray();
+    QCOMPARE(desired.size(), 2);
+    QCOMPARE(desired.first().toObject().value(QStringLiteral("quantity")).toInt(), 3);
+    QCOMPARE(desired.last().toObject().value(QStringLiteral("quantity")).toInt(), 2);
+    QCOMPARE(billing->subscription().value(QStringLiteral("add_ons")).toList().first().toMap().value(QStringLiteral("quantity")).toInt(), 1);
+    QCOMPARE(billing->notice(), QStringLiteral("billing_requested"));
+    billing->setQuantity(QStringLiteral("classifier-1000"), 0);
+    QTRY_VERIFY(!billing->busy());
+    QCOMPARE(core.billingRequest().value(QStringLiteral("add_ons")).toArray().size(), 1);
+    QVERIFY(core.failNext(QStringLiteral("POST"), matome::orgPath(session.currentOrgId(), QStringLiteral("billing/portal-sessions")),
+                          1, FakeCore::FaultMode::Status, 503, QStringLiteral("billing_disabled")));
+    billing->createPortal();
+    QTRY_VERIFY(!billing->busy());
+    QCOMPARE(billing->errorCode(), QStringLiteral("billing_disabled"));
+    QVERIFY(billing->paymentUrl().isEmpty());
+}
+
+void TestCore::orgBillingConfiguresInstallation()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(openInbox(core, session));
+    const QString spaceId = session.currentSpaceId();
+    core.seedAddOns(session.currentOrgId(), {QJsonObject{{QStringLiteral("key"), QStringLiteral("classifier")},
+            {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("key"), QStringLiteral("classifier-1000")},
+                {QStringLiteral("version"), 1}, {QStringLiteral("quantity"), 1}}}},
+            {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("paused")},
+                {QStringLiteral("settings"), QJsonObject{{QStringLiteral("rerun"), true}}}}}}});
+    session.openSettings();
+    auto *billing = session.orgBilling();
+    QTRY_VERIFY(!billing->busy());
+    const int hits = core.hits();
+    billing->install(QStringLiteral("classifier"), {QStringLiteral("unrelated-space")});
+    QTest::qWait(20);
+    QCOMPARE(core.hits(), hits);
+    billing->install(QStringLiteral("classifier"), {spaceId});
+    QTRY_VERIFY(!billing->busy());
+    const QVariantMap installation = billing->products().first().toMap().value(QStringLiteral("installation")).toMap();
+    QCOMPARE(installation.value(QStringLiteral("status")).toString(), QStringLiteral("active"));
+    QCOMPARE(installation.value(QStringLiteral("space_ids")).toList(), QVariantList{spaceId});
+    QVERIFY(installation.value(QStringLiteral("settings")).toMap().value(QStringLiteral("rerun")).toBool());
+    billing->pause(QStringLiteral("classifier"));
+    QTRY_VERIFY(!billing->busy());
+    QCOMPARE(billing->products().first().toMap().value(QStringLiteral("installation")).toMap()
+                .value(QStringLiteral("status")).toString(), QStringLiteral("paused"));
+}
+
+void TestCore::orgBillingSelectsVersionedPackages()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(openInbox(core, session));
+    const QString orgId = session.currentOrgId();
+    core.seedPackages({QJsonObject{{QStringLiteral("key"), QStringLiteral("professional")},
+            {QStringLiteral("name"), QStringLiteral("Professional")}, {QStringLiteral("version"), 1},
+            {QStringLiteral("plan"), QJsonObject{{QStringLiteral("key"), QStringLiteral("pro")}, {QStringLiteral("version"), 1}}},
+            {QStringLiteral("add_ons"), QJsonArray()}},
+            QJsonObject{{QStringLiteral("key"), QStringLiteral("professional")},
+            {QStringLiteral("name"), QStringLiteral("Professional")}, {QStringLiteral("version"), 2},
+            {QStringLiteral("plan"), QJsonObject{{QStringLiteral("key"), QStringLiteral("pro")}, {QStringLiteral("version"), 1}}},
+            {QStringLiteral("add_ons"), QJsonArray()}}});
+    session.openSettings();
+    auto *billing = session.orgBilling();
+    QTRY_VERIFY(!billing->busy());
+    QVERIFY(billing->packagesError().isEmpty());
+    QCOMPARE(billing->packages().size(), 2);
+    const int hits = core.hits();
+    billing->selectPackage(QStringLiteral("professional"), 3);
+    QTest::qWait(20);
+    QCOMPARE(core.hits(), hits);
+    QVERIFY(core.failNext(QStringLiteral("POST"), matome::orgPath(orgId, QStringLiteral("billing/checkout-sessions")),
+                          1, FakeCore::FaultMode::Expire));
+    billing->selectPackage(QStringLiteral("professional"), 2);
+    QTRY_VERIFY(!billing->busy());
+    QVERIFY(billing->errorCode().isEmpty());
+    QVERIFY(!core.lastIdempotency().isEmpty());
+    QCOMPARE(billing->notice(), QStringLiteral("checkout"));
+    QVERIFY(billing->paymentUrl().startsWith(QStringLiteral("https://checkout.stripe.com/")));
+    QCOMPARE(core.billingRequest().value(QStringLiteral("package")).toObject().value(QStringLiteral("version")).toInt(), 2);
+    QCOMPARE(core.billingRequest().value(QStringLiteral("success_url")), core.billingRequest().value(QStringLiteral("cancel_url")));
+    QVERIFY(core.billingRequest().contains(QStringLiteral("success_url")));
+    QVERIFY(!core.billingRequest().contains(QStringLiteral("add_ons")));
+    QVERIFY(!core.billingRequest().contains(QStringLiteral("plan")));
+    QVERIFY(billing->subscription().isEmpty());
+    core.seedSubscription(orgId, {{QStringLiteral("status"), QStringLiteral("active")},
+            {QStringLiteral("plan"), QJsonObject{{QStringLiteral("key"), QStringLiteral("team")}}}});
+    billing->refresh();
+    QTRY_VERIFY(!billing->busy());
+    billing->selectPackage(QStringLiteral("professional"), 2);
+    QTRY_VERIFY(!billing->busy());
+    QCOMPARE(billing->notice(), QStringLiteral("billing_requested"));
+    QVERIFY(!core.billingRequest().contains(QStringLiteral("success_url")));
+    QVERIFY(!core.billingRequest().contains(QStringLiteral("add_ons")));
+    QCOMPARE(billing->subscription().value(QStringLiteral("plan")).toMap().value(QStringLiteral("key")).toString(), QStringLiteral("team"));
+    QVERIFY(billing->paymentUrl().isEmpty());
+    core.seedSubscription(orgId, {{QStringLiteral("status"), QStringLiteral("active")}, {QStringLiteral("pending_update"), true}});
+    billing->refresh();
+    QTRY_VERIFY(!billing->busy());
+    const int pendingHits = core.hits();
+    billing->selectPackage(QStringLiteral("professional"), 2);
+    QTest::qWait(20);
+    QCOMPARE(core.hits(), pendingHits);
+}
+
+void TestCore::orgBillingExpiresCheckoutLinks()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(openInbox(core, session));
+    core.seedPackages({QJsonObject{{QStringLiteral("key"), QStringLiteral("pro")}, {QStringLiteral("version"), 1}}});
+    session.openSettings();
+    auto *billing = session.orgBilling();
+    QTRY_VERIFY(!billing->busy());
+    core.checkoutExpiresAt = QDateTime::currentDateTimeUtc().addSecs(-1);
+    billing->selectPackage(QStringLiteral("pro"), 1);
+    QTRY_VERIFY(!billing->busy());
+    QCOMPARE(billing->errorCode(), QStringLiteral("checkout_expired"));
+    QVERIFY(billing->paymentUrl().isEmpty());
+    core.checkoutExpiresAt = QDateTime::currentDateTimeUtc().addMSecs(1000);
+    billing->selectPackage(QStringLiteral("pro"), 1);
+    QTRY_VERIFY(!billing->busy());
+    QVERIFY(!billing->paymentUrl().isEmpty());
+    QTRY_COMPARE(billing->errorCode(), QStringLiteral("checkout_expired"));
+    QVERIFY(billing->paymentUrl().isEmpty());
+    core.checkoutExpiresAt = QDateTime::currentDateTimeUtc().addMSecs(1000);
+    billing->selectPackage(QStringLiteral("pro"), 1);
+    QTRY_VERIFY(!billing->busy());
+    billing->createPortal();
+    QTRY_VERIFY(!billing->busy());
+    QTest::qWait(1100);
+    QVERIFY(billing->errorCode().isEmpty());
+    QCOMPARE(billing->notice(), QStringLiteral("portal"));
+    QVERIFY(billing->paymentUrl().startsWith(QStringLiteral("https://billing.stripe.com/")));
+    core.checkoutExpiresAt = QDateTime::currentDateTimeUtc().addMSecs(1000);
+    billing->selectPackage(QStringLiteral("pro"), 1);
+    QTRY_VERIFY(!billing->busy());
+    session.closeSettings();
+    QTest::qWait(1100);
+    QVERIFY(billing->errorCode().isEmpty());
+    QVERIFY(billing->paymentUrl().isEmpty());
+}
+
+void TestCore::orgBillingReportsPackageFailures()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(openInbox(core, session));
+    const QString orgId = session.currentOrgId();
+    core.seedPackages({QJsonObject{{QStringLiteral("key"), QStringLiteral("pro")}, {QStringLiteral("version"), 1}}});
+    session.openSettings();
+    auto *billing = session.orgBilling();
+    QTRY_VERIFY(!billing->busy());
+    for (const auto &error : {QStringLiteral("unknown_package"), QStringLiteral("package_unavailable"),
+                             QStringLiteral("billing_provider_error")}) {
+        QVERIFY(core.failNext(QStringLiteral("POST"), matome::orgPath(orgId, QStringLiteral("billing/checkout-sessions")),
+                              1, FakeCore::FaultMode::Status, error == QLatin1String("billing_provider_error") ? 502 : 422, error));
+        billing->selectPackage(QStringLiteral("pro"), 1);
+        QTRY_VERIFY(!billing->busy());
+        QCOMPARE(billing->errorCode(), error);
+        QVERIFY(billing->paymentUrl().isEmpty());
+        QVERIFY(billing->subscription().isEmpty());
+    }
+    QVERIFY(core.failNext(QStringLiteral("GET"), matome::orgPath(orgId, QStringLiteral("billing/packages")),
+                          1, FakeCore::FaultMode::Status, 403, QStringLiteral("forbidden")));
+    billing->refresh();
+    QTRY_VERIFY(!billing->busy());
+    QCOMPARE(billing->packagesError(), QStringLiteral("forbidden"));
+    QVERIFY(billing->packages().isEmpty());
+    const int hits = core.hits();
+    billing->selectPackage(QStringLiteral("pro"), 1);
+    QTest::qWait(20);
     QCOMPARE(core.hits(), hits);
 }
 

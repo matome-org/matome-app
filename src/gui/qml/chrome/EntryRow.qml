@@ -167,6 +167,7 @@ FocusableControl {
             font: row.titleFont
             fill: Theme.background
             placeholderText: qsTr("Name")
+            EnterKey.type: Qt.EnterKeyGo
             Keys.onReturnPressed: row.finishEdit(true)
             Keys.onEnterPressed: row.finishEdit(true)
             Keys.onEscapePressed: row.finishEdit(false)

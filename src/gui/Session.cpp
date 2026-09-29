@@ -22,6 +22,7 @@ Session::Session(QObject *parent)
     : QObject(parent)
     , m_orgs(*this)
     , m_orgAdmin(*this)
+    , m_orgBilling(*this)
     , m_spaces(*this)
     , m_folders(*this)
     , m_documents(*this)
@@ -33,8 +34,10 @@ Session::Session(QObject *parent)
             return;
         if (!signedIn())
             closeSettings();
-        else
+        else {
             m_orgAdmin.open();
+            m_orgBilling.open();
+        }
     });
     load();
     m_trail = buildTrail();
@@ -65,6 +68,7 @@ void Session::openSettings()
         return;
     m_settingsActive = true;
     m_orgAdmin.open();
+    m_orgBilling.open();
     emit settingsChanged();
 }
 
@@ -74,6 +78,7 @@ void Session::closeSettings()
         return;
     m_settingsActive = false;
     m_orgAdmin.close();
+    m_orgBilling.close();
     emit settingsChanged();
 }
 
@@ -540,6 +545,12 @@ void Session::authedPost(const QString &path, const QJsonObject &body, const Cli
     authed("POST", path, body, headers, std::move(done), false);
 }
 
+void Session::authedPut(const QString &path, const QJsonObject &body, const Client::Headers &headers,
+                        Client::Done done)
+{
+    authed("PUT", path, body, headers, std::move(done), false);
+}
+
 void Session::authedPatch(const QString &path, const QJsonObject &body, const Client::Headers &headers,
                           Client::Done done)
 {
@@ -790,6 +801,8 @@ void Session::authed(const QByteArray &method, const QString &path, const QJsonO
         m_client.get(path, finish, headers);
     else if (method == "PATCH")
         m_client.patch(path, body, finish, headers);
+    else if (method == "PUT")
+        m_client.put(path, body, finish, headers);
     else if (method == "DELETE")
         m_client.del(path, finish, headers);
     else

@@ -24,7 +24,8 @@ PUSHED = "matome-e2e-"
 APP_DOWNLOADS = f"/sdcard/Android/data/{PACKAGE}/files/Download"
 
 # Theme.cpp's Eva palettes, for pixel probes.
-LIGHT = {"background": (0xF6, 0xF4, 0xEF), "failed": (0xB2, 0x3A, 0x2E), "accent": (0xE1, 0xB3, 0x46)}
+LIGHT = {"background": (0xF6, 0xF4, 0xEF), "failed": (0xB2, 0x3A, 0x2E),
+         "accent": (0xE1, 0xB3, 0x46), "textPrimary": (0x22, 0x1E, 0x16)}
 DARK = {"background": (0x1A, 0x17, 0x14)}
 
 # One organization with a space, a folder tree two deep, and documents
@@ -106,7 +107,7 @@ class App:
     def open_server(self, screen: Screen) -> Screen:
         """Shows the Core address field if it is hidden."""
         if "apiField" not in screen:
-            self.device.tap(screen.get("serverToggle") or self.device.node("serverToggle"))
+            self.device.tap(self.device.still("serverToggle"))
             screen = self.device.showing("apiField")
         return screen
 

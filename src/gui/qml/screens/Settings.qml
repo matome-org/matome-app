@@ -16,6 +16,7 @@ FocusScope {
 
     property string section: "appearance"
     property var expandedOrganizations: ({})
+    readonly property bool commerceSection: section === "billing" || section === "addons"
     readonly property bool organizationSection: section !== "appearance"
     property string targetId
     property string targetRole
@@ -23,12 +24,14 @@ FocusScope {
     readonly property string sectionError: settings.section === "general" ? Session.orgAdmin.generalError
                                           : settings.section === "members" ? Session.orgAdmin.membersError
                                           : settings.section === "invitations" ? Session.orgAdmin.invitationsError
-                                          : settings.section === "usage" ? Session.orgAdmin.usageError : ""
+                                          : settings.section === "usage" ? Session.orgBilling.usageError : ""
     readonly property var sections: [
         { value: "general", label: qsTr("General"), icon: "settings" },
         { value: "members", label: qsTr("Members"), icon: "user" },
         { value: "invitations", label: qsTr("Invitations"), icon: "new" },
-        { value: "usage", label: qsTr("Usage"), icon: "space" }
+        { value: "usage", label: qsTr("Usage"), icon: "space", billing: true },
+        { value: "billing", label: qsTr("Plan and billing"), icon: "settings", billing: true },
+        { value: "addons", label: qsTr("Add-ons"), icon: "new", billing: true }
     ]
 
     function setOrganizationExpanded(id, expanded) {
@@ -39,7 +42,8 @@ FocusScope {
     function chooseSection(id, value) {
         if (id !== "" && id !== Session.currentOrgId)
             Session.navigate("org", id)
-        if (id === "" || (Session.currentOrgId === id && Session.orgAdmin.available)) {
+        if (id === "" || (Session.currentOrgId === id && (value === "billing" || value === "addons" || value === "usage"
+                    ? Session.orgBilling.available : Session.orgAdmin.available))) {
             settings.section = value
             if (id !== "") settings.setOrganizationExpanded(id, true)
         }
@@ -53,6 +57,8 @@ FocusScope {
     function dismiss() {
         if (navigationDrawer.visible)
             navigationDrawer.close()
+        else if (commerce.dismiss())
+            return
         else if (confirm.visible)
             confirm.close()
         else
@@ -89,13 +95,21 @@ FocusScope {
     Connections {
         target: Session.orgAdmin
         function onChanged() {
-            if (!Session.orgAdmin.active && settings.organizationSection) {
+            if (!Session.orgAdmin.active && settings.organizationSection && !settings.commerceSection && settings.section !== "usage") {
                 settings.section = "appearance"
                 confirm.close()
                 invitationEmail.clear()
             }
         }
         function onInvitationSent() { invitationEmail.clear() }
+    }
+
+    Connections {
+        target: Session.orgBilling
+        function onChanged() {
+            if (!Session.orgBilling.active && (settings.commerceSection || settings.section === "usage"))
+                settings.section = "appearance"
+        }
     }
 
     component Label: Text {
@@ -201,6 +215,7 @@ FocusScope {
                     required property string orgId
                     required property string name
                     required property bool canAdminister
+                    required property bool canReadBilling
                     readonly property bool expanded: settings.expandedOrganizations[orgId] === true
                     Layout.fillWidth: true
                     Layout.topMargin: Theme.gapS
@@ -220,7 +235,9 @@ FocusScope {
                         onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
                     }
                     Repeater {
-                        model: organization.canAdminister && organization.expanded ? settings.sections : []
+                        model: organization.expanded ? settings.sections.filter(function (s) {
+                            return s.billing === true ? organization.canReadBilling : organization.canAdminister
+                        }) : []
                         delegate: NavigationRow {
                             required property var modelData
                             checkable: true
@@ -296,7 +313,7 @@ FocusScope {
                     spacing: Theme.gapXs
                     Caption {
                         Layout.fillWidth: true
-                        text: settings.organizationSection ? Session.orgAdmin.name : Session.email
+                        text: settings.organizationSection ? Session.orgBilling.name : Session.email
                         color: Theme.accentText
                         elide: Text.ElideRight
                     }
@@ -315,8 +332,10 @@ FocusScope {
                     icon: "refresh"
                     showLabel: false
                     tip: text
-                    usable: settings.organizationSection ? !Session.orgAdmin.busy : !Session.organizationsBusy
-                    onActivated: if (settings.organizationSection) Session.orgAdmin.refresh()
+                    usable: settings.commerceSection || settings.section === "usage" ? !Session.orgBilling.busy
+                            : settings.organizationSection ? !Session.orgAdmin.busy : !Session.organizationsBusy
+                    onActivated: if (settings.commerceSection || settings.section === "usage") Session.orgBilling.refresh()
+                                 else if (settings.organizationSection) Session.orgAdmin.refresh()
                                  else Session.refreshOrganizations()
                 }
             }
@@ -355,20 +374,29 @@ FocusScope {
                 }
                 Label {
                     objectName: "orgAdminError"
-                    visible: (settings.organizationSection && Session.orgAdmin.errorCode !== "") || settings.sectionError !== ""
-                    text: Messages.adminFailure((settings.organizationSection ? Session.orgAdmin.errorCode : "") || settings.sectionError)
+                    visible: (settings.organizationSection && !settings.commerceSection && Session.orgAdmin.errorCode !== "") || settings.sectionError !== ""
+                    text: Messages.adminFailure((settings.organizationSection && !settings.commerceSection ? Session.orgAdmin.errorCode : "") || settings.sectionError)
                     color: Theme.failed
                     Accessible.role: Accessible.AlertMessage
                 }
                 Label {
                     objectName: "orgAdminNotice"
-                    visible: settings.organizationSection && Session.orgAdmin.notice !== ""
+                    visible: settings.organizationSection && !settings.commerceSection && Session.orgAdmin.notice !== ""
                     text: Messages.adminNotice(Session.orgAdmin.notice)
                     color: Theme.accentText
                 }
                 Label {
-                    visible: settings.organizationSection && Session.orgAdmin.busy
+                    visible: settings.section === "usage" ? Session.orgBilling.busy
+                             : settings.organizationSection && !settings.commerceSection && Session.orgAdmin.busy
                     text: qsTr("Working…")
+                }
+
+                OrgCommerce {
+                    id: commerce
+                    visible: settings.commerceSection
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    billing: settings.section === "billing"
                 }
 
                 Flickable {
@@ -504,9 +532,9 @@ FocusScope {
                         id: usage
                         width: parent.width
                         spacing: Theme.gapM
-                        Label { text: qsTr("Plan: %1").arg(Session.orgAdmin.plan) }
+                        Label { text: qsTr("Plan: %1").arg(Session.orgBilling.plan) }
                         Repeater {
-                            model: Session.orgAdmin.usage
+                            model: Session.orgBilling.usage
                             delegate: Rectangle {
                                 id: metric
                                 required property var modelData
