@@ -2,14 +2,25 @@
 #include "JsonList.h"
 #include "Session.h"
 
+#include <chrono>
+
 #ifdef Q_OS_WASM
 #include <emscripten/val.h>
 #endif
 
 namespace matome {
 
-OrgBilling::OrgBilling(Session &session) : QObject(&session), m_session(session)
+OrgBilling::OrgBilling(Session &session)
+    : QObject(&session), m_session(session), m_paymentExpiry(this)
 {
+    m_paymentExpiry.setSingleShot(true);
+    m_paymentExpiry.setTimerType(Qt::PreciseTimer);
+    connect(&m_paymentExpiry, &QTimer::timeout, this, [this] {
+        m_paymentUrl.clear();
+        m_notice.clear();
+        m_errorCode = QStringLiteral("checkout_expired");
+        emit changed();
+    });
     connect(&session, &Session::changed, this, [this] {
         if (m_active && (!available() || m_orgId != m_session.currentOrgId()))
             close();
@@ -44,6 +55,12 @@ QString OrgBilling::plan() const
     return m_entitlements.value(QStringLiteral("plan")).toObject().value(QStringLiteral("key")).toString();
 }
 
+QString OrgBilling::paymentUrl() const
+{
+    return m_checkoutExpiresAt.isValid() && m_checkoutExpiresAt <= QDateTime::currentDateTimeUtc()
+            ? QString() : m_paymentUrl;
+}
+
 void OrgBilling::open()
 {
     if (m_active || !available()) return;
@@ -54,6 +71,8 @@ void OrgBilling::open()
 
 void OrgBilling::close()
 {
+    m_paymentExpiry.stop();
+    m_checkoutExpiresAt = {};
     ++m_generation;
     m_active = false;
     m_saving = false;
@@ -83,6 +102,8 @@ bool OrgBilling::canSave() const { return live(m_generation) && !busy(); }
 void OrgBilling::refresh()
 {
     if (!canSave()) return;
+    m_paymentExpiry.stop();
+    m_checkoutExpiresAt = {};
     m_errorCode.clear(); m_notice.clear(); m_paymentUrl.clear();
     load();
 }
@@ -205,6 +226,8 @@ QVariantList OrgBilling::usage() const
 
 Client::Done OrgBilling::saved(const QString &notice)
 {
+    m_paymentExpiry.stop();
+    m_checkoutExpiresAt = {};
     m_saving = true;
     m_errorCode.clear(); m_notice.clear(); m_paymentUrl.clear();
     const int generation = m_generation;
@@ -221,6 +244,18 @@ Client::Done OrgBilling::saved(const QString &notice)
                     m_paymentUrl = url.toString();
                 else
                     m_errorCode = QStringLiteral("invalid_request");
+                if (notice == QLatin1String("checkout") && !m_paymentUrl.isEmpty()) {
+                    m_checkoutExpiresAt = QDateTime::fromString(
+                            reply.json.value(QStringLiteral("expires_at")).toString(), Qt::ISODate);
+                    const qint64 remaining = QDateTime::currentDateTimeUtc().msecsTo(m_checkoutExpiresAt);
+                    if (!m_checkoutExpiresAt.isValid() || remaining <= 0) {
+                        m_paymentUrl.clear();
+                        m_errorCode = m_checkoutExpiresAt.isValid() ? QStringLiteral("checkout_expired")
+                                                                   : QStringLiteral("invalid_request");
+                    } else {
+                        m_paymentExpiry.start(std::chrono::milliseconds(remaining));
+                    }
+                }
                 emit changed();
             } else {
                 load();

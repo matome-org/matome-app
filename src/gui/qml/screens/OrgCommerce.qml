@@ -170,17 +170,21 @@ FocusScope {
                             spacing: Theme.gapS
                             Text {
                                 Layout.fillWidth: true
-                                text: offer.modelData.name
+                                text: qsTr("%1 · version %2").arg(offer.modelData.name).arg(offer.modelData.version)
                                 font: Theme.heading
                                 color: Theme.textPrimary
                                 wrapMode: Text.Wrap
                             }
-                            Label { text: qsTr("Plan: %1").arg(offer.modelData.plan.key) }
+                            Label {
+                                text: qsTr("Plan: %1").arg(qsTr("%1 · version %2")
+                                        .arg(offer.modelData.plan.key).arg(offer.modelData.plan.version))
+                            }
                             Repeater {
                                 model: offer.modelData.add_ons
                                 delegate: Label {
                                     required property var modelData
-                                    text: qsTr("%1 × %2").arg(modelData.quantity).arg(modelData.sku.key)
+                                    text: qsTr("%1 × %2").arg(modelData.quantity).arg(qsTr("%1 · version %2")
+                                            .arg(modelData.sku.key).arg(modelData.sku.version))
                                 }
                             }
                             ActionButton {
@@ -188,7 +192,9 @@ FocusScope {
                                 visible: Session.orgBilling.canManage
                                 primary: true
                                 usable: !Session.orgBilling.busy && commerce.subscription.pending_update !== true
-                                onActivated: commerce.request("package", offer.modelData.name, offer.modelData.key, offer.modelData.version, [])
+                                onActivated: commerce.request("package", qsTr("%1 · version %2")
+                                        .arg(offer.modelData.name).arg(offer.modelData.version),
+                                        offer.modelData.key, offer.modelData.version, [])
                             }
                         }
                     }

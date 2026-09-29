@@ -176,6 +176,7 @@ function subscriptionStatus(value) {
 
 function billingFailure(code) {
     switch (code) {
+    case "checkout_expired": return qsTr("This checkout session has expired. Select the package again to continue.")
     case "billing_disabled": return qsTr("Billing is disabled on this server. Your current plan and allowances remain available.")
     case "no_customer": return qsTr("This organization has no billing account yet.")
     case "no_subscription": return qsTr("This organization has no active paid subscription.")

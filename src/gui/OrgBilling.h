@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Client.h"
+#include <QDateTime>
 #include <QJsonArray>
+#include <QTimer>
 #include <QVariantList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
@@ -52,7 +54,7 @@ public:
     QString usageError() const { return m_usageError; }
     QString errorCode() const { return m_errorCode; }
     QString notice() const { return m_notice; }
-    QString paymentUrl() const { return m_paymentUrl; }
+    QString paymentUrl() const;
 
     void open();
     void close();
@@ -89,5 +91,7 @@ private:
     QJsonArray m_spaces;
     QString m_billingError, m_productsError, m_usageError, m_errorCode, m_notice, m_paymentUrl;
     QString m_packagesError;
+    QDateTime m_checkoutExpiresAt;
+    QTimer m_paymentExpiry;
 };
 }

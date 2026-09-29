@@ -689,6 +689,11 @@
     </message>
     <message>
         <location line="+6"/>
+        <source>This checkout session has expired. Select the package again to continue.</source>
+        <translation>この決済セッションは期限切れです。続行するにはパッケージを再度選択してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Billing is disabled on this server. Your current plan and allowances remain available.</source>
         <translation>このサーバーでは請求が無効です。現在のプランと利用枠は引き続き利用できます。</translation>
     </message>
@@ -904,17 +909,17 @@
         <translation>有料パッケージはまだありません。現在のプランは引き続き有効です。</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
         <source>Plan: %1</source>
         <translation>プラン：%1</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>%1 × %2</source>
         <translation>%1 × %2</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Switch package</source>
         <translation>パッケージを変更</translation>
     </message>
@@ -924,7 +929,7 @@
         <translation>申し込む</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Use the Usage section to view your effective limits and reservations.</source>
         <translation>有効な利用上限と予約済み使用量は「使用状況」で確認できます。</translation>
     </message>
@@ -959,7 +964,11 @@
         <translation>無制限</translation>
     </message>
     <message>
+        <location line="-75"/>
+        <location line="+6"/>
+        <location line="+7"/>
         <location line="+9"/>
+        <location line="+62"/>
         <source>%1 · version %2</source>
         <translation>%1 · バージョン%2</translation>
     </message>

@@ -688,6 +688,11 @@
     </message>
     <message>
         <location line="+6"/>
+        <source>This checkout session has expired. Select the package again to continue.</source>
+        <translation>Esta sessão de pagamento expirou. Selecione o pacote novamente para continuar.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Billing is disabled on this server. Your current plan and allowances remain available.</source>
         <translation>A cobrança está desativada neste servidor. Seu plano e suas cotas atuais continuam disponíveis.</translation>
     </message>
@@ -903,17 +908,17 @@
         <translation>Ainda não há pacotes pagos disponíveis. Seu plano atual continua ativo.</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
         <source>Plan: %1</source>
         <translation>Plano: %1</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>%1 × %2</source>
         <translation>%1 × %2</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Switch package</source>
         <translation>Trocar pacote</translation>
     </message>
@@ -923,7 +928,7 @@
         <translation>Contratar</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Use the Usage section to view your effective limits and reservations.</source>
         <translation>Use a seção Uso para ver seus limites efetivos e as reservas.</translation>
     </message>
@@ -958,7 +963,11 @@
         <translation>Ilimitado</translation>
     </message>
     <message>
+        <location line="-75"/>
+        <location line="+6"/>
+        <location line="+7"/>
         <location line="+9"/>
+        <location line="+62"/>
         <source>%1 · version %2</source>
         <translation>%1 · versão %2</translation>
     </message>

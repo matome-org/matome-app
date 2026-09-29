@@ -71,6 +71,7 @@ public:
     QString lastPath() const { return m_lastPath; }
     QString lastQuery() const { return m_lastQuery; }
     QJsonObject billingRequest() const { return m_billingRequest; }
+    QDateTime checkoutExpiresAt;
     void seedPackages(const QJsonArray &packages) { m_packages = packages; }
     void seedSubscription(const QString &orgId, const QJsonObject &subscription)
     { m_subscriptions[orgId] = subscription; }
@@ -257,6 +258,7 @@ public:
         m_subscriptions.clear();
         m_addOns.clear();
         m_billingRequest = {};
+        checkoutExpiresAt = {};
         m_packages = {};
         m_invitations.clear();
         m_nextPerson = 0;
@@ -975,7 +977,9 @@ private:
             if (method == "POST" && parts.last() == QLatin1String("portal-sessions"))
                 return jsonReply(200, {{QStringLiteral("url"), QStringLiteral("https://billing.stripe.com/session/test")}});
             if (method == "POST" && parts.last() == QLatin1String("checkout-sessions"))
-                return jsonReply(200, {{QStringLiteral("url"), QStringLiteral("https://checkout.stripe.com/session/test")}});
+                return jsonReply(200, {{QStringLiteral("url"), QStringLiteral("https://checkout.stripe.com/session/test")},
+                        {QStringLiteral("expires_at"), (checkoutExpiresAt.isValid() ? checkoutExpiresAt
+                                : QDateTime::currentDateTimeUtc().addSecs(1800)).toString(Qt::ISODateWithMs)}});
             if (method == "PUT" && parts.last() == QLatin1String("subscription"))
                 return jsonReply(202, {{QStringLiteral("subscription"), m_subscriptions.value(orgId)}});
         } else {
