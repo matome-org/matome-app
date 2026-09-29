@@ -198,6 +198,7 @@ FocusScope {
                 visible: auth.pane !== "confirm"
                 invalid: auth.invalid(emailField, "email")
                 placeholderText: qsTr("Email")
+                inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
                 Keys.onReturnPressed: auth.submit()
                 Keys.onEnterPressed: auth.submit()
             }
@@ -304,6 +305,7 @@ FocusScope {
                 visible: auth.serverOpen
                 line: true
                 placeholderText: qsTr("Core server address")
+                inputMethodHints: Qt.ImhUrlCharactersOnly | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
                 Keys.onReturnPressed: auth.submit()
                 Keys.onEnterPressed: auth.submit()
             }
