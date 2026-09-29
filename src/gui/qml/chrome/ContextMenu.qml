@@ -16,6 +16,9 @@ C.Popup {
     property Item returnFocus: null
     property bool touch: false
     readonly property int rowHeight: menu.touch ? Theme.rowTouch : Theme.controlM
+    readonly property real listHeight: Math.min(menu.shown.length * menu.rowHeight,
+                                               Math.max(0, menu.parent.height - 2 * menu.margins
+                                                        - menu.topPadding - menu.bottomPadding))
 
     readonly property var shown: menu.ids.map(function (id) {
         return Commands.find(menu.commands, id)
@@ -31,7 +34,7 @@ C.Popup {
         if (menu.shown.length === 0)
             return
         const at = menu.parent.mapFromItem(item, x, y)
-        const height = menu.shown.length * menu.rowHeight + menu.topPadding + menu.bottomPadding
+        const height = menu.listHeight + menu.topPadding + menu.bottomPadding
         menu.returnFocus = returnTo
         list.currentIndex = 0
         menu.x = at.x
@@ -66,9 +69,11 @@ C.Popup {
         id: list
         objectName: "contextMenuList"
         implicitWidth: Theme.column
-        implicitHeight: menu.shown.length * menu.rowHeight
+        implicitHeight: menu.listHeight
         rowHeight: menu.rowHeight
-        interactive: false
+        interactive: contentHeight > height
+        clip: true
+        C.ScrollBar.vertical: ThinScrollBar {}
         model: menu.shown
         Accessible.role: Accessible.PopupMenu
         Accessible.name: qsTr("Actions")

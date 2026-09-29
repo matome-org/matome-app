@@ -6,6 +6,7 @@
 #include "FolderModel.h"
 #include "FolderTreeModel.h"
 #include "OrgModel.h"
+#include "OrgAdmin.h"
 #include "SpaceModel.h"
 
 #include <QAbstractListModel>
@@ -28,6 +29,7 @@ class Session : public QObject
     QML_ELEMENT
     QML_SINGLETON
     Q_PROPERTY(bool signedIn READ signedIn NOTIFY changed)
+    Q_PROPERTY(bool settingsActive READ settingsActive NOTIFY settingsChanged)
     Q_PROPERTY(bool confirmationPending READ confirmationPending NOTIFY changed)
     Q_PROPERTY(bool confirmationResent READ confirmationResent NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
@@ -37,6 +39,9 @@ class Session : public QObject
     Q_PROPERTY(QString email READ email NOTIFY changed)
     Q_PROPERTY(QString apiBaseUrl READ apiBaseUrl WRITE setApiBaseUrl NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *organizations READ orgList CONSTANT)
+    Q_PROPERTY(bool organizationsBusy READ organizationsBusy NOTIFY changed)
+    Q_PROPERTY(QString organizationsError READ organizationsError NOTIFY changed)
+    Q_PROPERTY(matome::OrgAdmin *orgAdmin READ orgAdmin CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
     Q_PROPERTY(QString currentSpaceId READ currentSpaceId NOTIFY changed)
@@ -66,6 +71,7 @@ public:
     explicit Session(QObject *parent = nullptr);
 
     bool signedIn() const { return m_signedIn; }
+    bool settingsActive() const { return m_settingsActive; }
     bool confirmationPending() const { return m_confirmationPending; }
     bool confirmationResent() const { return m_confirmationResent; }
     bool busy() const { return m_busy; }
@@ -80,6 +86,9 @@ public:
     void setLastOrgId(const QString &id);
 
     OrgModel *organizations() { return &m_orgs; }
+    bool organizationsBusy() const { return m_orgs.busy(); }
+    QString organizationsError() const { return m_orgs.errorCode(); }
+    OrgAdmin *orgAdmin() { return &m_orgAdmin; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }
 
@@ -150,6 +159,8 @@ public:
     Q_INVOKABLE void navigate(const QString &kind, const QString &id);
     Q_INVOKABLE void createHere(const QString &name);
     Q_INVOKABLE void toggleFolder(const QString &folderId);
+    Q_INVOKABLE void openSettings();
+    Q_INVOKABLE void closeSettings();
     Q_INVOKABLE void runCommand(const QString &id);
     Q_INVOKABLE bool handleKey(int key, int modifiers, bool inField);
 
@@ -177,6 +188,7 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 signals:
+    void settingsChanged();
     void changed();
     void trailChanged();
     void downloadReady(const QUrl &file);
@@ -299,6 +311,7 @@ private:
 
     Client m_client;
     OrgModel m_orgs;
+    OrgAdmin m_orgAdmin;
     SpaceModel m_spaces;
     FolderModel m_folders;
     DocumentModel m_documents;
@@ -308,6 +321,7 @@ private:
     QVariantList m_trail;
     int m_historyIndex = -1;
     bool m_signedIn = false;
+    bool m_settingsActive = false;
     bool m_confirmationPending = false;
     bool m_confirmationResent = false;
     bool m_busy = false;

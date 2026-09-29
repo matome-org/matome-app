@@ -4,7 +4,7 @@
 <context>
     <name>Auth</name>
     <message>
-        <location filename="../qml/screens/Auth.qml" line="+26"/>
+        <location filename="../qml/screens/Auth.qml" line="+25"/>
         <source>Sending reset…</source>
         <translation>Enviando o código…</translation>
     </message>
@@ -87,12 +87,12 @@
         <translation>Enviar outro link</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>I confirmed my email</source>
         <translation>Confirmei meu e-mail</translation>
     </message>
     <message>
-        <location line="-91"/>
+        <location line="-92"/>
         <location line="+39"/>
         <source>Sign in</source>
         <translation>Entrar</translation>
@@ -113,7 +113,7 @@
         <translation>Enviar código</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+55"/>
         <source>Back to sign in</source>
         <translation>Voltar para entrar</translation>
     </message>
@@ -177,7 +177,7 @@
 <context>
     <name>ContextMenu</name>
     <message>
-        <location filename="../qml/chrome/ContextMenu.qml" line="+74"/>
+        <location filename="../qml/chrome/ContextMenu.qml" line="+79"/>
         <source>Actions</source>
         <translation>Ações</translation>
     </message>
@@ -285,12 +285,12 @@
         <translation>Matome</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+62"/>
         <source>Delete folder “%1”?</source>
         <translation>Excluir a pasta “%1”?</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+53"/>
         <source>This cannot be undone.</source>
         <translation>Isso não pode ser desfeito.</translation>
     </message>
@@ -481,6 +481,378 @@
         <source>Could not upload “%1”: Core refused it.</source>
         <translation>Não foi possível enviar “%1”: o Core recusou.</translation>
     </message>
+    <message>
+        <location line="+8"/>
+        <source>You do not have permission for this action.</source>
+        <translation>Você não tem permissão para esta ação.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Enter a valid email address.</source>
+        <translation>Informe um endereço de email válido.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check the required fields.</source>
+        <translation>Confira os campos obrigatórios.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The organization must keep at least one owner.</source>
+        <translation>A organização deve manter pelo menos um proprietário.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Your account must keep at least one organization membership.</source>
+        <translation>Sua conta deve continuar vinculada a pelo menos uma organização.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This person already belongs to the organization.</source>
+        <translation>Esta pessoa já faz parte da organização.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>There is already a pending invitation for this email.</source>
+        <translation>Já existe um convite pendente para este email.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The invitation email could not be sent. Try again.</source>
+        <translation>Não foi possível enviar o email de convite. Tente novamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This invitation has expired. Send a new invitation.</source>
+        <translation>Este convite expirou. Envie um novo convite.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The organization has reached its plan limit.</source>
+        <translation>A organização atingiu o limite do plano.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This feature is not available on the current plan.</source>
+        <translation>Este recurso não está disponível no plano atual.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The organization changed. Review the updated details and try again.</source>
+        <translation>A organização foi alterada. Confira os dados atualizados e tente novamente.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Could not complete the organization request.</source>
+        <translation>Não foi possível concluir a solicitação da organização.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Organization updated.</source>
+        <translation>Organização atualizada.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Invitation sent by email.</source>
+        <translation>Convite enviado por email.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Member role updated.</source>
+        <translation>Papel do membro atualizado.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Member removed.</source>
+        <translation>Membro removido.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Invitation canceled.</source>
+        <translation>Convite cancelado.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Pending</source>
+        <translation>Pendente</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accepted</source>
+        <translation>Aceito</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Canceled</source>
+        <translation>Cancelado</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Expired</source>
+        <translation>Expirado</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Storage</source>
+        <translation>Armazenamento</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Members</source>
+        <translation>Membros</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Guests</source>
+        <translation>Convidados</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Spaces</source>
+        <translation>Espaços</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>B</source>
+        <translation>B</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>KiB</source>
+        <translation>KiB</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>MiB</source>
+        <translation>MiB</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>GiB</source>
+        <translation>GiB</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>TiB</source>
+        <translation>TiB</translation>
+    </message>
+</context>
+<context>
+    <name>OrgAdminPeople</name>
+    <message>
+        <location filename="../qml/screens/OrgAdminPeople.qml" line="+57"/>
+        <source>Expires %1</source>
+        <translation>Expira em %1</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Apply</source>
+        <translation>Aplicar</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Remove</source>
+        <translation>Remover</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Cancel invitation</source>
+        <translation>Cancelar convite</translation>
+    </message>
+</context>
+<context>
+    <name>RolePicker</name>
+    <message>
+        <location filename="../qml/chrome/RolePicker.qml" line="+31"/>
+        <source>Organization role</source>
+        <translation>Papel na organização</translation>
+    </message>
+</context>
+<context>
+    <name>Settings</name>
+    <message>
+        <location filename="../qml/screens/Settings.qml" line="+177"/>
+        <location line="+173"/>
+        <source>Appearance</source>
+        <translation>Aparência</translation>
+    </message>
+    <message>
+        <location line="-321"/>
+        <source>Members</source>
+        <translation>Membros</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>General</source>
+        <translation>Geral</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Invitations</source>
+        <translation>Convites</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Usage</source>
+        <translation>Uso</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Remove %1?</source>
+        <translation>Remover %1?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancel invitation for %1?</source>
+        <translation>Cancelar convite para %1?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Change the role of %1?</source>
+        <translation>Alterar o papel de %1?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This person will lose access to the organization.</source>
+        <translation>Esta pessoa perderá o acesso à organização.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The invitation link will stop working.</source>
+        <translation>O link do convite deixará de funcionar.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Their organization permissions will change.</source>
+        <translation>As permissões desta pessoa na organização serão alteradas.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Remove</source>
+        <translation>Remover</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Cancel invitation</source>
+        <translation>Cancelar convite</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Change role</source>
+        <translation>Alterar papel</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Collapse %1</source>
+        <translation>Recolher %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Expand %1</source>
+        <translation>Expandir %1</translation>
+    </message>
+    <message>
+        <location line="+156"/>
+        <source>Navigation</source>
+        <translation>Navegação</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Back to files</source>
+        <translation>Voltar aos arquivos</translation>
+    </message>
+    <message>
+        <location line="-101"/>
+        <source>Organizations</source>
+        <translation>Organizações</translation>
+    </message>
+    <message>
+        <location line="+118"/>
+        <source>Settings</source>
+        <translation>Configurações</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Refresh</source>
+        <translation>Atualizar</translation>
+    </message>
+    <message>
+        <location line="-121"/>
+        <location line="+178"/>
+        <source>Working…</source>
+        <translation>Processando…</translation>
+    </message>
+    <message>
+        <location line="-117"/>
+        <source>Open organizations</source>
+        <translation>Abrir organizações</translation>
+    </message>
+    <message>
+        <location line="-16"/>
+        <source>Open organization</source>
+        <translation>Abrir organização</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>No organizations yet.</source>
+        <translation>Nenhuma organização ainda.</translation>
+    </message>
+    <message>
+        <location line="+136"/>
+        <source>Theme</source>
+        <translation>Tema</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Language</source>
+        <translation>Idioma</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <location line="+5"/>
+        <source>Organization name</source>
+        <translation>Nome da organização</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Save changes</source>
+        <translation>Salvar alterações</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Email address</source>
+        <translation>Endereço de email</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Invite</source>
+        <translation>Convidar</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>No members to display.</source>
+        <translation>Nenhum membro para exibir.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>No invitations yet.</source>
+        <translation>Nenhum convite ainda.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Plan: %1</source>
+        <translation>Plano: %1</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Unlimited</source>
+        <translation>Ilimitado</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Reserved: %1</source>
+        <translation>Reservado: %1</translation>
+    </message>
 </context>
 <context>
     <name>Sidebar</name>
@@ -598,7 +970,7 @@
 <context>
     <name>matome::Session</name>
     <message>
-        <location filename="../Session.cpp" line="+110"/>
+        <location filename="../Session.cpp" line="+138"/>
         <source>New organization</source>
         <translation>Nova organização</translation>
     </message>
@@ -628,7 +1000,7 @@
         <translation>Lista de comandos</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+5"/>
         <source>Next region</source>
         <translation>Próxima região</translation>
     </message>
@@ -693,7 +1065,12 @@
         <translation>Restaurar da lixeira</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-36"/>
+        <source>Settings</source>
+        <translation>Configurações</translation>
+    </message>
+    <message>
+        <location line="+38"/>
         <source>Purge last trash</source>
         <translation>Excluir de vez</translation>
     </message>

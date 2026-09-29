@@ -97,6 +97,15 @@ public:
     // An organization of the signed-in user in which they hold `role`.
     void seedOrganization(const QString &name, const QString &role) { addOrg(name, role, m_user); }
 
+    QString seedMember(const QString &orgId, const QString &email, const QString &role)
+    {
+        const QString id = QString::number(++m_nextPerson);
+        m_members[orgId].append(QJsonObject{{QStringLiteral("id"), id},
+                {QStringLiteral("email"), email}, {QStringLiteral("role"), role},
+                {QStringLiteral("status"), QStringLiteral("active")}, {QStringLiteral("revision"), 1}});
+        return id;
+    }
+
     /// The live document titled `title`, with the checksum of its stored bytes.
     QJsonObject documentTitled(const QString &title) const
     {
@@ -238,6 +247,9 @@ public:
         m_pendingEmails.clear();
         m_sessionEpoch = 1;
         m_orgsByUser.clear();
+        m_members.clear();
+        m_invitations.clear();
+        m_nextPerson = 0;
         m_spaces.clear();
         m_folders.clear();
         m_documents.clear();
@@ -615,6 +627,8 @@ private:
                 }
             }
             const QStringList parts = m_lastPath.split(QLatin1Char('/'));
+            if (const auto reply = organizationAdmin(method, parts, json))
+                return *reply;
             if (parts.size() >= 8 && parts.at(1) == QLatin1String("api")
                 && parts.at(2) == QLatin1String("v1") && parts.at(3) == QLatin1String("organizations")
                 && parts.at(5) == QLatin1String("spaces")) {
@@ -910,7 +924,120 @@ private:
         org.insert(QStringLiteral("revision"), 1);
         org.insert(QStringLiteral("role"), role);
         m_orgsByUser[user].append(org);
+        seedMember(org.value(QStringLiteral("id")).toString(), user, role);
         return org;
+    }
+
+    std::optional<QByteArray> organizationAdmin(const QByteArray &method, const QStringList &parts,
+                                               const QJsonObject &json)
+    {
+        if (parts.size() < 5)
+            return std::nullopt;
+        const QString orgId = parts.at(4);
+        const QString kind = parts.size() > 5 ? parts.at(5) : QString();
+        if (!kind.isEmpty() && kind != QLatin1String("members") && kind != QLatin1String("invitations")
+            && kind != QLatin1String("usage") && kind != QLatin1String("entitlements"))
+            return std::nullopt;
+        const QJsonObject org = byId(m_orgsByUser.value(m_user), orgId);
+        if (org.isEmpty())
+            return errorReply(403, QStringLiteral("organization_access_denied"));
+        const QString role = org.value(QStringLiteral("role")).toString();
+        if (role != QLatin1String("owner") && role != QLatin1String("admin"))
+            return errorReply(403, QStringLiteral("forbidden"));
+        if (kind.isEmpty()) {
+            if (method == "GET")
+                return jsonReply(200, {{QStringLiteral("organization"), org}});
+            if (method == "PATCH") {
+                if (const auto refused = refuseRevision(org))
+                    return *refused;
+                update(m_orgsByUser[m_user], orgId, [&](QJsonObject &row) {
+                    row.insert(QStringLiteral("name"), json.value(QStringLiteral("name")));
+                });
+                return single(QStringLiteral("organization"), m_orgsByUser.value(m_user), orgId);
+            }
+        }
+        const QString id = parts.size() > 6 ? parts.at(6) : QString();
+        if (kind == QLatin1String("members")) {
+            if (method == "GET" && id.isEmpty())
+                return listed(QStringLiteral("members"), m_members.value(orgId));
+            const QJsonObject member = byId(m_members.value(orgId), id);
+            if (member.isEmpty())
+                return errorReply(404, QStringLiteral("not_found"));
+            const QString nextRole = json.value(QStringLiteral("role")).toString();
+            int owners = 0;
+            for (const QJsonValue &row : m_members.value(orgId)) {
+                if (row.toObject().value(QStringLiteral("role")) == QLatin1String("owner"))
+                    ++owners;
+            }
+            if (member.value(QStringLiteral("role")) == QLatin1String("owner") && owners == 1
+                && (method == "DELETE" || nextRole != QLatin1String("owner")))
+                return errorReply(409, QStringLiteral("last_owner"));
+            if (method == "PATCH") {
+                update(m_members[orgId], id, [&](QJsonObject &row) {
+                    row.insert(QStringLiteral("role"), nextRole);
+                });
+                if (member.value(QStringLiteral("email")).toString() == m_user) {
+                    update(m_orgsByUser[m_user], orgId, [&](QJsonObject &row) {
+                        row.insert(QStringLiteral("role"), nextRole);
+                    });
+                }
+                return single(QStringLiteral("membership"), m_members.value(orgId), id);
+            }
+            if (method == "DELETE") {
+                m_members[orgId].removeAt(indexOf(m_members.value(orgId), id));
+                return http(204, {});
+            }
+        }
+        if (kind == QLatin1String("invitations")) {
+            if (method == "GET")
+                return listed(QStringLiteral("invitations"), m_invitations.value(orgId));
+            if (method == "POST" && id.isEmpty()) {
+                const QString email = json.value(QStringLiteral("email")).toString();
+                for (const QJsonValue &member : m_members.value(orgId)) {
+                    if (member.toObject().value(QStringLiteral("email")) == email)
+                        return errorReply(409, QStringLiteral("already_member"));
+                }
+                for (const QJsonValue &value : m_invitations.value(orgId)) {
+                    const QJsonObject invitation = value.toObject();
+                    if (invitation.value(QStringLiteral("email")) == email
+                        && invitation.value(QStringLiteral("canceled_at")).isNull())
+                        return errorReply(409, QStringLiteral("already_invited"));
+                }
+                const QJsonObject invitation{{QStringLiteral("id"), QString::number(++m_nextPerson)},
+                        {QStringLiteral("email"), email}, {QStringLiteral("role"), json.value(QStringLiteral("role"))},
+                        {QStringLiteral("expires_at"), QDateTime::currentDateTimeUtc().addDays(7).toString(Qt::ISODate)},
+                        {QStringLiteral("accepted_at"), QJsonValue::Null},
+                        {QStringLiteral("canceled_at"), QJsonValue::Null}, {QStringLiteral("revision"), 1}};
+                m_invitations[orgId].append(invitation);
+                return jsonReply(201, {{QStringLiteral("invitation"), invitation}});
+            }
+            if (method == "POST" && parts.size() == 8 && parts.at(7) == QLatin1String("cancel")) {
+                if (!update(m_invitations[orgId], id, [&](QJsonObject &row) {
+                    row.insert(QStringLiteral("canceled_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+                }))
+                    return errorReply(404, QStringLiteral("not_found"));
+                return http(204, {});
+            }
+        }
+        if (method == "GET" && (kind == QLatin1String("usage") || kind == QLatin1String("entitlements"))) {
+            const QJsonObject limits{{QStringLiteral("storage_bytes"), 1073741824},
+                    {QStringLiteral("members"), 10}, {QStringLiteral("guests"), 5}, {QStringLiteral("spaces"), 10}};
+            if (kind == QLatin1String("entitlements"))
+                return jsonReply(200, {{kind, QJsonObject{{QStringLiteral("limits"), limits},
+                        {QStringLiteral("plan"), QJsonObject{{QStringLiteral("name"), QStringLiteral("Free")}}}}}});
+            QJsonObject dimensions;
+            for (const QString &dimension : {QStringLiteral("storage_bytes"), QStringLiteral("members"),
+                                             QStringLiteral("guests"), QStringLiteral("spaces")}) {
+                const int confirmed = dimension == QLatin1String("storage_bytes") ? 1048576
+                                    : dimension == QLatin1String("members") ? m_members.value(orgId).size()
+                                    : dimension == QLatin1String("spaces") ? m_spaces.value(orgId).size() : 0;
+                dimensions.insert(dimension, QJsonObject{{QStringLiteral("confirmed"), confirmed},
+                        {QStringLiteral("reserved"), 0}, {QStringLiteral("limit"), limits.value(dimension)}});
+            }
+            return jsonReply(200, {{kind, QJsonObject{{QStringLiteral("dimensions"), dimensions},
+                                                    {QStringLiteral("limits"), limits}}}});
+        }
+        return std::nullopt;
     }
 
     QJsonObject addFolder(const QString &spaceId, const QString &parentId, const QString &name)
@@ -1300,6 +1427,9 @@ private:
     QSet<QString> m_pendingEmails;
     int m_sessionEpoch = 1;
     QHash<QString, QJsonArray> m_orgsByUser;
+    QHash<QString, QJsonArray> m_members;
+    QHash<QString, QJsonArray> m_invitations;
+    int m_nextPerson = 0;
     QHash<QString, QJsonArray> m_spaces;
     QHash<QString, QJsonArray> m_folders;
     QHash<QString, QJsonArray> m_documents;

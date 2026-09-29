@@ -49,5 +49,8 @@
         <file>qml/explorer/Toolbar.qml</file>
         <file>qml/explorer/TopBar.qml</file>
         <file>qml/screens/Auth.qml</file>
+        <file>qml/screens/Settings.qml</file>
+        <file>qml/screens/OrgAdminPeople.qml</file>
+        <file>qml/chrome/RolePicker.qml</file>
     </qresource>
 </RCC>

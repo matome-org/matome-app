@@ -35,6 +35,17 @@ run the task again. Core's default local mailer does not deliver email
 externally; configure a local SMTP relay to receive the link. Override the
 API URL with `MATOME_URL`.
 
+## Web preview
+
+Run `mise run wasm:serve` to build the browser app and serve it on port
+7002. It proxies Core on port 7001. Use the preview's own origin as the
+server address to avoid cross-origin API requests.
+
+Web builds version JavaScript and WebAssembly URLs by content. The HTML
+passes the module version through Emscripten's `locateFile`, so a browser
+with an older cached module fetches the rebuilt application after a reload.
+The preview server also requires these assets to revalidate their cache.
+
 ## Client behavior
 
 The client signs in, registers accounts, resends confirmation links, and

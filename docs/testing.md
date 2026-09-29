@@ -20,12 +20,21 @@ The test suites are also available individually:
 
 ```bash
 mise run lint
+mise run test:core
+mise run test:proxy
 mise run test
 mise run test:desktop
 mise run test:web
 mise run test:mobile
 mise run test:e2e
 ```
+
+`test:core` runs the C++ unit suite, including organization administration,
+without the studio, platform e2e suites, or the combined coverage gate.
+
+`test:proxy` checks that the local web preview forwards compressed Core
+responses with their encoding headers, including API errors, and requires
+cache revalidation for JavaScript and WebAssembly assets.
 
 `test:desktop` exercises keyboard, mouse, touch, drag and drop, uploads,
 errors, and the narrow drawer against FakeCore by QML `objectName`. It then

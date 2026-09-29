@@ -21,12 +21,21 @@ namespace matome {
 Session::Session(QObject *parent)
     : QObject(parent)
     , m_orgs(*this)
+    , m_orgAdmin(*this)
     , m_spaces(*this)
     , m_folders(*this)
     , m_documents(*this)
     , m_entries(*this)
     , m_folderTree(*this)
 {
+    connect(this, &Session::changed, this, [this] {
+        if (!m_settingsActive)
+            return;
+        if (!signedIn())
+            closeSettings();
+        else
+            m_orgAdmin.open();
+    });
     load();
     m_trail = buildTrail();
     connect(&m_orgs, &OrgModel::changed, this, [this] {
@@ -48,6 +57,24 @@ Session::Session(QObject *parent)
         notify();
     });
     QCoreApplication::instance()->installEventFilter(this);
+}
+
+void Session::openSettings()
+{
+    if (!signedIn() || m_settingsActive)
+        return;
+    m_settingsActive = true;
+    m_orgAdmin.open();
+    emit settingsChanged();
+}
+
+void Session::closeSettings()
+{
+    if (!m_settingsActive)
+        return;
+    m_settingsActive = false;
+    m_orgAdmin.close();
+    emit settingsChanged();
 }
 
 bool Session::eventFilter(QObject *watched, QEvent *event)

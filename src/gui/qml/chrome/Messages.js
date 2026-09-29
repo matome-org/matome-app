@@ -91,3 +91,69 @@ function uploadFailure(code, name) {
         return qsTr("Could not upload “%1”: something here already has that name.").arg(name)
     return qsTr("Could not upload “%1”: Core refused it.").arg(name)
 }
+
+
+function adminFailure(code) {
+    switch (code) {
+    case "": return ""
+    case "forbidden":
+    case "organization_access_denied": return qsTr("You do not have permission for this action.")
+    case "invalid_email": return qsTr("Enter a valid email address.")
+    case "invalid_request": return qsTr("Check the required fields.")
+    case "last_owner": return qsTr("The organization must keep at least one owner.")
+    case "last_membership": return qsTr("Your account must keep at least one organization membership.")
+    case "already_member": return qsTr("This person already belongs to the organization.")
+    case "already_invited": return qsTr("There is already a pending invitation for this email.")
+    case "invitation_delivery_failed": return qsTr("The invitation email could not be sent. Try again.")
+    case "expired": return qsTr("This invitation has expired. Send a new invitation.")
+    case "limit_exceeded": return qsTr("The organization has reached its plan limit.")
+    case "capability_missing": return qsTr("This feature is not available on the current plan.")
+    case "revision_conflict": return qsTr("The organization changed. Review the updated details and try again.")
+    case "network":
+    case "server":
+    case "session_expired":
+    case "unauthenticated":
+    case "rate_limited": return failure(code, "org")
+    default: return qsTr("Could not complete the organization request.")
+    }
+}
+
+function adminNotice(value) {
+    switch (value) {
+    case "renamed": return qsTr("Organization updated.")
+    case "invited": return qsTr("Invitation sent by email.")
+    case "role_changed": return qsTr("Member role updated.")
+    case "removed": return qsTr("Member removed.")
+    case "canceled": return qsTr("Invitation canceled.")
+    default: return ""
+    }
+}
+
+function invitationState(value) {
+    switch (value) {
+    case "pending": return qsTr("Pending")
+    case "accepted": return qsTr("Accepted")
+    case "canceled": return qsTr("Canceled")
+    case "expired": return qsTr("Expired")
+    default: return ""
+    }
+}
+
+function usageName(value) {
+    switch (value) {
+    case "storage_bytes": return qsTr("Storage")
+    case "members": return qsTr("Members")
+    case "guests": return qsTr("Guests")
+    case "spaces": return qsTr("Spaces")
+    default: return value
+    }
+}
+
+function usageAmount(value, dimension) {
+    if (dimension !== "storage_bytes")
+        return Number(value).toLocaleString(Qt.locale(), 'f', 0)
+    const units = [qsTr("B"), qsTr("KiB"), qsTr("MiB"), qsTr("GiB"), qsTr("TiB")]
+    const index = value > 0 ? Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024))) : 0
+    return Number(value / Math.pow(1024, index)).toLocaleString(Qt.locale(), 'f', index === 0 ? 0 : 1)
+           + " " + units[index]
+}

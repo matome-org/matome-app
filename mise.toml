@@ -33,6 +33,10 @@ run = ".scripts/i18n.sh"
 description = "Runs unit tests, desktop studio e2e, and the coverage gate"
 run = ".scripts/test.sh"
 
+[tasks."test:core"]
+description = "Runs the core unit tests without studio or platform e2e"
+run = "scripts/test-core.sh"
+
 [tasks."test:desktop"]
 description = "Offscreen QML window against FakeCore, then the real binary smoke"
 run = ".scripts/e2e-desktop.sh"
@@ -76,6 +80,10 @@ run = ".scripts/wasm-build.sh"
 [tasks."wasm:serve"]
 description = "Serves the WASM studio on :7002 and proxies Core on :7001"
 run = ".scripts/wasm-serve.sh"
+
+[tasks."test:proxy"]
+description = "Checks web preview caching and compressed Core responses"
+run = "scripts/test-wasm-proxy.sh"
 
 [tasks."web:container:build"]
 description = "Builds the web container from a published release"
