@@ -81,6 +81,10 @@ run = ".scripts/wasm-build.sh"
 description = "Serves the WASM studio on :7002 and proxies Core on :7001"
 run = ".scripts/wasm-serve.sh"
 
+[tasks."test:proxy"]
+description = "Checks compressed success and error responses through the web preview proxy"
+run = "scripts/test-wasm-proxy.sh"
+
 [tasks."web:container:build"]
 description = "Builds the web container from a published release"
 usage = '''

@@ -141,7 +141,7 @@ class Handler(SimpleHTTPRequestHandler):
         """Hand Core's answer, success or error, back to the browser."""
         self.send_response(status)
         for key, value in headers.items():
-            if key.lower() in HOP | {"content-encoding"}:
+            if key.lower() in HOP:
                 continue
             self.send_header(key, value)
         self.end_headers()
