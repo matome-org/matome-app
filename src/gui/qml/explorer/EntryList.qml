@@ -47,7 +47,9 @@ FocusScope {
     }
 
     function rowMenu(row, x, y) {
-        pane.menuRequested(["download", "toggle-document-control", "controlled-docs", "rename", "cut", "paste", "trash", "restore", "new", "upload", "refresh"],
+        const reviews = row.kind === "document" && row.controlled ? ["controlled-docs"] : []
+        pane.menuRequested(["download", "toggle-document-control"].concat(reviews,
+                           ["rename", "cut", "paste", "trash", "restore", "new", "upload", "refresh"]),
                            row, x, y)
     }
 
