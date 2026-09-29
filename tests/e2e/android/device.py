@@ -183,13 +183,15 @@ class Device:
     # -- the app ---------------------------------------------------------------
 
     def stop(self) -> None:
+        self.key("KEYCODE_HOME")
+        self.wait(lambda s: PACKAGE not in s.packages(), "the launcher before stopping the app")
         self.shell("am", "force-stop", PACKAGE)
 
     def clear(self) -> None:
         self.shell("pm", "clear", PACKAGE)
 
     def launch(self) -> None:
-        self.shell("am", "start", "-W", "-n", f"{PACKAGE}/{ACTIVITY}")
+        self.shell("am", "start", "-n", f"{PACKAGE}/{ACTIVITY}")
 
     # -- reading the screen ----------------------------------------------------
 
@@ -220,16 +222,20 @@ class Device:
     def node(self, name: str, timeout: float = TIMEOUT) -> Node:
         return self.wait(lambda s: s.get(name), f"#{name}", timeout)
 
-    def still(self, name: str) -> Node:
-        """Waits for #name to rest in one place across two dumps: laid out
+    def still(self, target: str | Node) -> Node:
+        """Waits for a target to rest in one place across two dumps: laid out
         and done moving (a form panning for the soft keyboard)."""
         last: list[Node | None] = [None]
 
         def resting(s: Screen) -> Node | None:
-            node, previous = s.get(name), last[0]
+            node = s.get(target) if isinstance(target, str) else next(
+                (n for n in s.nodes if (n.rid, n.label, n.cls, n.package)
+                 == (target.rid, target.label, target.cls, target.package)), None)
+            previous = last[0]
             last[0] = node
             return node if node and previous and node.box == previous.box else None
-        return self.wait(resting, f"#{name} to rest")
+        label = target if isinstance(target, str) else target.label
+        return self.wait(resting, f"{label!r} to rest")
 
     def gone(self, name: str, timeout: float = TIMEOUT) -> Screen:
         return self.wait(lambda s: s if name not in s else None, f"#{name} to go", timeout)
@@ -296,9 +302,10 @@ class Device:
 
     def fill(self, field: Node, text: str) -> None:
         """Replaces the text of `field`: tap, select all, delete, type. Touch
-        and keys reach Qt in order, so the tap has focused it by the time
-        the keys land; callers read the result back from a dump."""
+        and keys reach Qt after the field reports focus; callers read the
+        result back from a dump."""
         self.tap(field)
+        self.focused(field.name)
         self.shell("input", "keycombination", "KEYCODE_CTRL_LEFT", "KEYCODE_A")
         self.key("KEYCODE_DEL")
         if text:
@@ -309,7 +316,7 @@ class Device:
             return target
         node = self.node(target) if isinstance(target, str) else target
         top = self.keyboard_top()
-        if top is not None and node.center[1] >= top and node.cls != "android.widget.EditText":
+        if top is not None and (node.center[1] >= top or node.width <= 0 or node.height <= 0):
             self.hide_keyboard()
-            node = self.still(node.name)
+            node = self.still(node)
         return node.center
