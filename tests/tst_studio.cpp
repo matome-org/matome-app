@@ -106,6 +106,7 @@ private slots:
     void languageSwitchesLive();
     void switcherTakesKeysAndPointer();
     void accountMenuChoosesALanguage();
+    void settingsSelectsPackagesAndRespectsBillingRoles();
     void emptyFieldsSayWhatIsMissing();
     void expiredTokenRefreshesMidUse();
     void relaunchRemembersTheLastSession();
@@ -1641,6 +1642,7 @@ void TestStudio::aStaleRowReloadsAndSaysWhy()
     QTRY_COMPARE(statusText(), changed);
     QTRY_VERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Plans")));
     QVERIFY(!rowTitled(QStringLiteral("entryRow"), QStringLiteral("Ideas")));
+    QVERIFY(waitIdle());
 
     m_core.renameElsewhere(QStringLiteral("Notes"), QStringLiteral("Memo"));
     clickItem(waitRow(QStringLiteral("entryRow"), QStringLiteral("Notes")));
@@ -2191,6 +2193,77 @@ void TestStudio::overlaysSpeakTheLandingType()
     QVERIFY(showsText(itemNamed(QStringLiteral("menu_new")), QStringLiteral("N")));
     key(Qt::Key_Escape);
     QTRY_VERIFY(!menuOpen());
+}
+
+void TestStudio::settingsSelectsPackagesAndRespectsBillingRoles()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    const QJsonObject plan{{QStringLiteral("key"), QStringLiteral("pro")}, {QStringLiteral("version"), 1}};
+    m_core.seedPackages({QJsonObject{{QStringLiteral("key"), QStringLiteral("professional")},
+            {QStringLiteral("name"), QStringLiteral("Professional")}, {QStringLiteral("version"), 2},
+            {QStringLiteral("plan"), plan}, {QStringLiteral("add_ons"), QJsonArray()}},
+            QJsonObject{{QStringLiteral("key"), QStringLiteral("professional")},
+            {QStringLiteral("name"), QStringLiteral("Professional")}, {QStringLiteral("version"), 1},
+            {QStringLiteral("plan"), plan}, {QStringLiteral("add_ons"), QJsonArray()}}});
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_billing").arg(orgId)));
+    QTRY_VERIFY(shown(QStringLiteral("billingPackage_professional_2")));
+    QCOMPARE(propertyOf(QStringLiteral("billingPackageTitle_professional_2"), "text").toString(),
+             QStringLiteral("Professional · version 2"));
+    QCOMPARE(propertyOf(QStringLiteral("billingPackageTitle_professional_1"), "text").toString(),
+             QStringLiteral("Professional · version 1"));
+    const int hits = m_core.hits();
+    clickItem(waitItem(QStringLiteral("billingPackage_professional_2")));
+    QTRY_VERIFY(shown(QStringLiteral("orgCommerceConfirm")));
+    QCOMPARE(m_core.hits(), hits);
+    clickItem(waitItem(QStringLiteral("confirmCancel")));
+    QTRY_VERIFY(!shown(QStringLiteral("orgCommerceConfirm")));
+    QCOMPARE(m_core.hits(), hits);
+    clickItem(waitItem(QStringLiteral("billingPackage_professional_2")));
+    QTRY_VERIFY(shown(QStringLiteral("orgCommerceConfirm")));
+    clickItem(waitItem(QStringLiteral("confirmAccept")));
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    QTRY_VERIFY(shown(QStringLiteral("openBillingPortalButton")));
+    QCOMPARE(m_core.billingRequest().value(QStringLiteral("package")).toObject()
+                 .value(QStringLiteral("version")).toInt(), 2);
+    QVERIFY(!m_core.billingRequest().contains(QStringLiteral("plan")));
+    QVERIFY(!m_core.billingRequest().contains(QStringLiteral("add_ons")));
+    QCOMPARE(m_session->orgBilling()->plan(), QStringLiteral("free"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->settingsActive());
+
+    m_core.seedOrganization(QStringLiteral("Admin team"), QStringLiteral("admin"));
+    m_session->refreshOrganizations();
+    QVERIFY(waitIdle());
+    const QString adminId = m_session->organizations()->index(1).data(matome::OrgModel::OrgIdRole).toString();
+    m_session->navigate(QStringLiteral("org"), adminId);
+    QVERIFY(waitIdle());
+    window()->resize(390, 844);
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    clickItem(waitItem(QStringLiteral("settingsNavigationButton")));
+    QObject *drawer = waitItem(QStringLiteral("settingsScreen"))->findChild<QObject *>(
+        QStringLiteral("settingsNavigationDrawer"));
+    QVERIFY(drawer);
+    QTRY_VERIFY(drawer->property("opened").toBool());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_billing").arg(adminId)));
+    QTRY_VERIFY(!drawer->property("visible").toBool());
+    QTRY_COMPARE(propertyOf(QStringLiteral("settingsScreen"), "section").toString(), QStringLiteral("billing"));
+    QVERIFY(!shown(QStringLiteral("billingPortalButton")));
+    QVERIFY(!shown(QStringLiteral("billingPackage_professional_2")));
+    QVERIFY(!m_session->orgBilling()->canManage());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->settingsActive());
 }
 
 // The saved choice wins, then the first system language we speak, then

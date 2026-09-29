@@ -170,6 +170,7 @@ FocusScope {
                             spacing: Theme.gapS
                             Text {
                                 Layout.fillWidth: true
+                                objectName: "billingPackageTitle_" + offer.modelData.key + "_" + offer.modelData.version
                                 text: qsTr("%1 · version %2").arg(offer.modelData.name).arg(offer.modelData.version)
                                 font: Theme.heading
                                 color: Theme.textPrimary
@@ -188,6 +189,7 @@ FocusScope {
                                 }
                             }
                             ActionButton {
+                                objectName: "billingPackage_" + offer.modelData.key + "_" + offer.modelData.version
                                 text: commerce.liveSubscription ? qsTr("Switch package") : qsTr("Subscribe")
                                 visible: Session.orgBilling.canManage
                                 primary: true
