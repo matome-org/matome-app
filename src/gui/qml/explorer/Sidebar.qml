@@ -70,14 +70,6 @@ Rectangle {
                 onOpened: function (id) { sidebar.go("org", id) }
                 onMoved: function (row) { sidebar.reveal(row) }
             }
-            CommandButton {
-                Layout.fillWidth: true
-                Layout.leftMargin: Theme.gapS
-                Layout.rightMargin: Theme.gapS
-                visible: Session.orgAdmin.available
-                commandId: "org-admin"
-                text: qsTr("Administration")
-            }
             SidebarSection {
                 id: spaces
                 visible: Session.currentOrgId !== ""

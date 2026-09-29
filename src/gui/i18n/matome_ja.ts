@@ -177,7 +177,7 @@
 <context>
     <name>ContextMenu</name>
     <message>
-        <location filename="../qml/chrome/ContextMenu.qml" line="+74"/>
+        <location filename="../qml/chrome/ContextMenu.qml" line="+79"/>
         <source>Actions</source>
         <translation>操作</translation>
     </message>
@@ -816,12 +816,7 @@
         <translation>組織</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>Administration</source>
-        <translation>管理</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+16"/>
         <source>Spaces</source>
         <translation>スペース</translation>
     </message>
@@ -959,12 +954,7 @@
         <translation>コマンド一覧</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Organization administration</source>
-        <translation>組織の管理</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Next region</source>
         <translation>次の領域</translation>
     </message>
@@ -1029,7 +1019,12 @@
         <translation>元に戻す</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-36"/>
+        <source>Settings</source>
+        <translation>設定</translation>
+    </message>
+    <message>
+        <location line="+38"/>
         <source>Purge last trash</source>
         <translation>完全に削除</translation>
     </message>

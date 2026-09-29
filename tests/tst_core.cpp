@@ -2627,7 +2627,7 @@ void TestCore::orgAdminLoadsAndPreservesLocation()
     Session session;
     QVERIFY(openInbox(core, session));
     const QString spaceId = session.currentSpaceId();
-    session.runCommand(QStringLiteral("org-admin"));
+    session.runCommand(QStringLiteral("settings"));
     auto *admin = session.orgAdmin();
     QVERIFY(admin->active());
     QTRY_VERIFY(!admin->busy());
@@ -2765,7 +2765,7 @@ void TestCore::orgAdminClosesWhenAdminAccessIsLost()
     admin->changeRole(id, QStringLiteral("member"));
     QTRY_VERIFY(!admin->active());
     QVERIFY(!admin->available());
-    QVERIFY(!usable(session, QStringLiteral("org-admin")));
+    QVERIFY(!usable(session, QStringLiteral("settings")));
     QCOMPARE(admin->members()->rowCount(), 0);
     admin->open();
     QVERIFY(!admin->active());

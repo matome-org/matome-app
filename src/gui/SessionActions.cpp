@@ -293,7 +293,7 @@ const QList<Session::Command> &Session::commands()
                  always, [](Session &s) { emit s.showKeymap(); }},
                 {"sheet", QT_TR_NOOP("Command sheet"),
                  always, [](Session &s) { emit s.showSheet(); }},
-                {"org-admin", QT_TR_NOOP("Organization administration"),
+                {"settings", QT_TR_NOOP("Settings"),
                  [](const Session &s) { return s.m_orgAdmin.available() && !s.m_orgAdmin.active(); },
                  [](Session &s) { s.m_orgAdmin.open(); }},
                 {"next-region", QT_TR_NOOP("Next region"),

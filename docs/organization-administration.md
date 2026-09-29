@@ -1,8 +1,8 @@
 # Organization administration
 
-Open an organization as an owner or admin, then choose **Organization
-administration** in the explorer sidebar or command sheet. On narrow
-windows, open **Browse** to reach the sidebar. **Back to files** or Escape
+Open an organization as an owner or admin, click the account at the bottom
+right of the explorer, and choose **Settings**. The command sheet also
+offers **Settings**. **Back to files** or Escape
 returns to the explorer at the same space and folder.
 
 The panel includes:

@@ -239,7 +239,7 @@ FocusScope {
             touch: explorer.touch
             errorText: Session.entryCount > 0 ? list.errorText : ""
             onAccountMenuRequested: function (item) {
-                menu.show(["theme-light", "theme-dark", "theme-system"]
+                menu.show(["settings", "theme-light", "theme-dark", "theme-system"]
                           .concat(Commands.languageIds(Theme.languages), ["keymap", "sheet", "sign-out"]),
                           item, 0, 0, item)
             }

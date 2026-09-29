@@ -9,7 +9,7 @@ import "../chrome/Messages.js" as Messages
 // The landing's footer under the explorer: upload progress and the one line
 // of news (an error, a file that did not upload, a pending cut, or an
 // undoable trash) in quiet small type, and the account as a quiet link that
-// opens theme, language, and sign-out.
+// opens settings, theme, language, and sign-out.
 Rectangle {
     id: status
 

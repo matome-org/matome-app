@@ -177,7 +177,7 @@
 <context>
     <name>ContextMenu</name>
     <message>
-        <location filename="../qml/chrome/ContextMenu.qml" line="+74"/>
+        <location filename="../qml/chrome/ContextMenu.qml" line="+79"/>
         <source>Actions</source>
         <translation>Ações</translation>
     </message>
@@ -815,12 +815,7 @@
         <translation>Organizações</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>Administration</source>
-        <translation>Administração</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+16"/>
         <source>Spaces</source>
         <translation>Espaços</translation>
     </message>
@@ -958,12 +953,7 @@
         <translation>Lista de comandos</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Organization administration</source>
-        <translation>Administração da organização</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Next region</source>
         <translation>Próxima região</translation>
     </message>
@@ -1028,7 +1018,12 @@
         <translation>Restaurar da lixeira</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-36"/>
+        <source>Settings</source>
+        <translation>Configurações</translation>
+    </message>
+    <message>
+        <location line="+38"/>
         <source>Purge last trash</source>
         <translation>Excluir de vez</translation>
     </message>
