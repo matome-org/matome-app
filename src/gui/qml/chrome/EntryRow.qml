@@ -18,6 +18,9 @@ FocusableControl {
     property string title
     property string detail
     property bool controlled: false
+    // Only Markdown can come under document control, so only it has a state.
+    readonly property bool controllable: row.kind === "document"
+                                         && (row.controlled || row.title.toLowerCase().endsWith(".md"))
     property real detailWidth: 0
     property bool selected: false
     property bool along: false
@@ -69,7 +72,7 @@ FocusableControl {
     borderColor: drop.containsDrag ? Theme.accentLine : "transparent"
 
     Accessible.role: Accessible.ListItem
-    Accessible.name: row.kind === "document" ? row.title + ", " + (row.controlled ? qsTr("Managed") : qsTr("Not managed"))
+    Accessible.name: row.controllable ? row.title + ", " + (row.controlled ? qsTr("Managed") : qsTr("Not managed"))
                    : !row.expandable ? row.title
                    : row.expanded ? qsTr("%1, expanded").arg(row.title)
                    : qsTr("%1, collapsed").arg(row.title)
@@ -161,7 +164,7 @@ FocusableControl {
 
         Text {
             objectName: "documentControlState"
-            visible: row.kind === "document" && !row.editing
+            visible: row.controllable && !row.editing
             text: row.controlled ? qsTr("Managed") : qsTr("Not managed")
             color: row.controlled ? Theme.accentText : Theme.textMuted
             font: Theme.caption
