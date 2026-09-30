@@ -12,8 +12,9 @@ class Session;
 
 /// The document screen: one document of the open space, any type. Shows the
 /// selected published version (the current one by default) when its type
-/// has a preview, lists the versions, and saves an edited Markdown or text
-/// document as a new version. Add-ons extend it; it knows none of them.
+/// has a preview, lists the versions and the documents it links or that link
+/// it, and saves an edited Markdown or text document as a new version.
+/// Add-ons extend it; it knows none of them.
 class DocumentView : public QObject
 {
     Q_OBJECT
@@ -31,6 +32,12 @@ class DocumentView : public QObject
     Q_PROPERTY(QString text READ text NOTIFY textChanged)
     Q_PROPERTY(bool textLoaded READ textLoaded NOTIFY changed)
     Q_PROPERTY(bool editable READ editable NOTIFY changed)
+    Q_PROPERTY(QVariantList incoming READ incoming NOTIFY changed)
+    Q_PROPERTY(QVariantList outgoing READ outgoing NOTIFY changed)
+    Q_PROPERTY(int hiddenCount READ hiddenCount NOTIFY changed)
+    Q_PROPERTY(bool relatedLoaded READ relatedLoaded NOTIFY changed)
+    Q_PROPERTY(bool incomingMore READ incomingMore NOTIFY changed)
+    Q_PROPERTY(bool outgoingMore READ outgoingMore NOTIFY changed)
     Q_PROPERTY(QString tab READ tab WRITE setTab NOTIFY changed)
     Q_PROPERTY(QString errorCode READ errorCode NOTIFY changed)
     Q_PROPERTY(int errorIndex READ errorIndex NOTIFY changed)
@@ -55,6 +62,17 @@ public:
     QString text() const { return m_text; }
     bool textLoaded() const { return m_textLoaded; }
     bool editable() const;
+    /// The active documents whose current version links this one, as Core's
+    /// incoming references; readable sources only.
+    QVariantList incoming() const { return m_incoming.toVariantList(); }
+    /// What the current version links, in order, each with its `target`
+    /// resolved now (`state` "ok", "broken", "trashed", "purged", "forbidden").
+    QVariantList outgoing() const { return m_outgoing.toVariantList(); }
+    /// Sources linking this document that the user may not read.
+    int hiddenCount() const { return m_hiddenCount; }
+    bool relatedLoaded() const { return m_relatedLoaded; }
+    bool incomingMore() const { return !m_incomingCursor.isEmpty(); }
+    bool outgoingMore() const { return !m_outgoingCursor.isEmpty(); }
     QString tab() const { return m_tab; }
     void setTab(const QString &tab);
     QString errorCode() const { return m_errorCode; }
@@ -65,9 +83,16 @@ public:
     Q_INVOKABLE void close();
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void selectVersion(const QString &versionId);
-    /// Publishes `text` as the document's next version, with its image
-    /// references and an optional `reason`.
-    Q_INVOKABLE void save(const QString &text, const QString &reason);
+    /// Lists the next page of related documents in `direction`, "incoming"
+    /// or "outgoing".
+    Q_INVOKABLE void loadMoreRelated(const QString &direction);
+    /// Publishes `text` as the document's next version, with the files it
+    /// links (its `/` links too unless `paths` is false) and an optional
+    /// `reason`. A managed document's `proposal` names the published version
+    /// the text was edited from (`base_version_id`) and, to update a review,
+    /// that review (`review_id`).
+    Q_INVOKABLE void save(const QString &text, const QString &reason, bool paths = true,
+                          const QVariantMap &proposal = {});
     /// The UTF-8 Markdown in a dropped local .md file; empty, with an error,
     /// when it is not a file Core would take.
     Q_INVOKABLE QString readDraft(const QUrl &url);
@@ -83,7 +108,8 @@ signals:
     void textChanged();
     void opened(const QString &documentId);
     void closed();
-    void saved();
+    /// A new version was published, or `reviewId` was opened for it.
+    void saved(const QString &reviewId);
     void requested(const QString &id);
 
 private:
@@ -91,15 +117,18 @@ private:
     bool live(int generation) const { return m_active && generation == m_generation; }
     void load();
     void loadText();
+    void loadRelated(const QString &direction = {});
+    void clearRelated();
     void fail(const QString &code, int index = -1);
 
     Session &m_session;
     AddOnBackend &m_backend;
-    bool m_active = false, m_textLoaded = false;
-    int m_generation = 0, m_pending = 0, m_errorIndex = -1;
+    bool m_active = false, m_textLoaded = false, m_relatedAsked = false, m_relatedLoaded = false;
+    int m_generation = 0, m_pending = 0, m_errorIndex = -1, m_hiddenCount = 0;
     QString m_orgId, m_spaceId, m_documentId, m_tab, m_text, m_errorCode, m_notice;
+    QString m_incomingCursor, m_outgoingCursor;
     QJsonObject m_document, m_version;
-    QJsonArray m_versions;
+    QJsonArray m_versions, m_incoming, m_outgoing;
     QStringList m_extraTabs;
 };
 }

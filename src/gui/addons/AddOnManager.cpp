@@ -153,7 +153,7 @@ void AddOnManager::mutate(const QByteArray &method, const QString &key, const QS
     });
 }
 
-void AddOnManager::install(const QString &key, const QVariantList &spaceIds)
+void AddOnManager::install(const QString &key, const QVariantList &spaceIds, const QVariantMap &settings)
 {
     if (!entitled(key) || !catalogued(key)) return;
     for (const auto &id : spaceIds) {
@@ -161,10 +161,18 @@ void AddOnManager::install(const QString &key, const QVariantList &spaceIds)
         for (const auto &space : m_spaces) found |= jsonId(space.toObject().value(QStringLiteral("id"))) == id.toString();
         if (!found) { m_errorCode = QStringLiteral("invalid_space"); emit changed(); return; }
     }
-    const auto installation = product(key).value(QStringLiteral("installation")).toObject();
-    mutate("PUT", key, {}, {{QStringLiteral("settings"), installation.value(QStringLiteral("settings")).toObject()},
+    auto merged = product(key).value(QStringLiteral("installation")).toObject().value(QStringLiteral("settings")).toObject();
+    for (auto it = settings.begin(); it != settings.end(); ++it) merged.insert(it.key(), QJsonValue::fromVariant(it.value()));
+    mutate("PUT", key, {}, {{QStringLiteral("settings"), merged},
            {QStringLiteral("space_ids"), QJsonArray::fromVariantList(spaceIds)}},
            idempotencyHeader(), QStringLiteral("installation_saved"));
+}
+
+void AddOnManager::saveSettings(const QString &key, const QVariantMap &settings)
+{
+    if (settings.isEmpty() || product(key).value(QStringLiteral("installation")).toObject().isEmpty()) return;
+    mutate("PATCH", key, {}, {{QStringLiteral("settings"), QJsonObject::fromVariantMap(settings)}},
+           idempotencyHeader(), QStringLiteral("settings_saved"));
 }
 
 void AddOnManager::pause(const QString &key)

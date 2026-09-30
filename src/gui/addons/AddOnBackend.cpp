@@ -12,6 +12,7 @@ void CoreAddOnBackend::request(const QByteArray &method, const QString &path,
 {
     if (method == "GET") m_session.authedGet(path, std::move(done));
     else if (method == "PUT") m_session.authedPut(path, body, headers, std::move(done));
+    else if (method == "PATCH") m_session.authedPatch(path, body, headers, std::move(done));
     else if (method == "POST") m_session.authedPost(path, body, headers, std::move(done));
     else if (method == "DELETE") m_session.authedDelete(path, headers, std::move(done));
 }

@@ -207,8 +207,11 @@ function controlledFailure(code) {
     case "not_found": return qsTr("This document, review, or rule is no longer available to you. Refresh the current space.")
     case "controlled_docs_unavailable": return qsTr("Document control is unavailable. Refresh after the administrator resumes the add-on or restores access.")
     case "review_closed": return qsTr("This review was already decided. Refresh to see the result.")
-    case "stale_base": return qsTr("The published version changed. Refresh before proposing or deciding again.")
+    case "stale_base": return qsTr("This review is not based on the published version. Its author must update it before it can be approved.")
+    case "merge_too_large": return qsTr("This review is too large to merge here. Download the candidate, apply your changes to the published version, and submit it again.")
     case "stale_rule": return qsTr("The space rule changed. Refresh before deciding again.")
+    case "already_approved": return qsTr("You already approved this version. Another reviewer must approve it too.")
+    case "invalid_settings": return qsTr("The server refused these settings. Check the allowed values and try again.")
     case "revision_conflict": return qsTr("The document, rule, or review changed. Refresh and inspect the current state before trying again.")
     case "revision_required": return qsTr("Refresh to obtain the current revision before saving.")
     case "published_version_required": return qsTr("Upload and publish a Markdown version before enabling document control.")
@@ -220,6 +223,38 @@ function controlledFailure(code) {
     }
 }
 
+// A space rule's failure: Core refuses rule changes while any document of
+// the space has an open review.
+function ruleFailure(code) {
+    switch (code) {
+    case "review_open": return qsTr("This space has open reviews. Decide or cancel them before changing its rule or settings.")
+    default: return controlledFailure(code)
+    }
+}
+
+// An add-on setting's name and what it does, by its `settings_schema` key;
+// a key this app does not know reads as itself.
+function settingName(key) {
+    switch (key) {
+    case "require_version_references": return qsTr("Require pinned versions")
+    case "allow_author_approval": return qsTr("Authors may approve their own proposals")
+    case "required_approvals": return qsTr("Required approvals")
+    default: {
+        const words = String(key).replace(/_/g, " ")
+        return words.charAt(0).toUpperCase() + words.slice(1)
+    }
+    }
+}
+
+function settingDetail(key) {
+    switch (key) {
+    case "require_version_references": return qsTr("Images and linked files must pin a version, so an approved document shows exactly what was reviewed.")
+    case "allow_author_approval": return qsTr("The author’s approval counts toward the required approvals. Only another reviewer can reject.")
+    case "required_approvals": return qsTr("How many different reviewers must approve a proposal before it is published.")
+    default: return ""
+    }
+}
+
 function documentFailure(code) {
     switch (code) {
     case "invalid_markdown":
@@ -227,11 +262,13 @@ function documentFailure(code) {
     case "unsupported_media_type":
     case "invalid_media_type":
     case "media_too_large": return qsTr("A managed document must stay valid UTF-8 Markdown of at most 1 MiB.")
-    case "review_open": return qsTr("A review of this document is open. Decide or cancel it before submitting more changes.")
+    case "review_open": return qsTr("This document has open reviews. Decide or cancel them before moving, deleting, or changing its rule.")
+    case "review_closed": return qsTr("This review was decided or cancelled while you edited it. Discard and submit your text as a new proposal.")
+    case "invalid_base_version": return qsTr("The version you edited is no longer published. Refresh and edit the current version.")
     case "reason_required":
     case "invalid_reason": return qsTr("Enter a reason of up to 500 characters.")
-    case "invalid_references":
-    case "invalid_reference_path": return qsTr("The selected image link is malformed. Remove it or insert the image again.")
+    case "invalid_references": return qsTr("The selected image link is malformed. Remove it or insert the image again.")
+    case "invalid_reference_path": return qsTr("The selected path link names no valid place in this space. Fix or remove it.")
     case "reference_not_found": return qsTr("The selected image was removed or its version is no longer published. Insert it again.")
     case "reference_forbidden": return qsTr("You cannot read the selected image. Insert one you have access to.")
     case "reference_cross_space": return qsTr("The selected image belongs to another space. Insert a copy in this one.")
@@ -246,7 +283,19 @@ function documentNotice(code) {
     switch (code) {
     case "version_published": return qsTr("New version saved.")
     case "review_requested": return qsTr("Changes submitted for review. The published version stays available until approval.")
+    case "review_updated": return qsTr("Review updated. Reviewers now see your new proposal.")
     default: return controlledNotice(code)
+    }
+}
+
+// A linked file that no longer opens, by Core's reference `state`.
+function referenceState(state) {
+    switch (state) {
+    case "broken": return qsTr("Nothing is at this path any more")
+    case "trashed": return qsTr("In the trash")
+    case "purged": return qsTr("Deleted")
+    case "forbidden": return qsTr("You cannot open this file")
+    default: return ""
     }
 }
 
@@ -268,6 +317,7 @@ function controlledNotice(code) {
     case "control_enabled": return qsTr("Document control enabled.")
     case "control_removed": return qsTr("Document control removed. Open reviews were cancelled.")
     case "review_approve": return qsTr("Proposal approved and published.")
+    case "review_approval_added": return qsTr("Approval recorded. The proposal is published once enough reviewers approve it.")
     case "review_reject": return qsTr("Proposal rejected. The published version remains available.")
     case "review_cancel": return qsTr("Review cancelled. The published version remains available.")
     case "access_saved": return qsTr("Space access granted.")
@@ -284,5 +334,28 @@ function reviewStatus(value) {
     case "rejected": return qsTr("Rejected")
     case "cancelled": return qsTr("Cancelled")
     default: return value
+    }
+}
+
+// How an open review stands against the published version, by Core's
+// `merge_state`; a review recorded before merge states is `clean`.
+function mergeState(value) {
+    switch (value) {
+    case "behind": return qsTr("Behind the published version")
+    case "dirty": return qsTr("Conflicts with the published version")
+    default: return qsTr("Ready to approve")
+    }
+}
+
+// What an open review's `merge_state` asks of its author or its reviewers.
+function mergeAdvice(value, author) {
+    switch (value) {
+    case "behind": return author
+            ? qsTr("Another review was published after yours. Your changes merge without conflicts: choose Update review to base it on the published version.")
+            : qsTr("Another review was published after this one. Its author must update it before it can be approved; it can still be rejected.")
+    case "dirty": return author
+            ? qsTr("Another review changed the same lines after yours. Choose Resolve conflicts to settle them in the editor.")
+            : qsTr("This review conflicts with the published version. Its author must resolve the conflicts before it can be approved; it can still be rejected.")
+    default: return ""
     }
 }

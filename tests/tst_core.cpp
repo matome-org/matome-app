@@ -107,7 +107,10 @@ private slots:
     void addOnsUseMockBackend();
     void addOnsDiscardStaleMockReplies();
     void documentViewPreviewsAndSaves();
+    void documentViewListsRelated();
     void controlledDocsExtendDocumentView();
+    void controlledDocsRunParallelReviews();
+    void controlledDocsCountApprovals();
     void spaceSettingsManageAccessAndRule();
     void markdownReferencesFollowAssetLinks();
     void assetsSearchFindsFilesByName();
@@ -2969,12 +2972,26 @@ void TestCore::addOnsUseMockBackend()
     QVERIFY(resume.body.value(QStringLiteral("space_ids")).toArray().isEmpty());
     QVERIFY(!resume.headers.isEmpty());
     QTRY_VERIFY(!manager.busy());
+    backend.respond("PATCH", path + QStringLiteral("/controlled_docs/installation"), {});
+    manager.saveSettings(QStringLiteral("controlled_docs"), {{QStringLiteral("required_approvals"), 3}});
+    const auto patch = backend.calls.constLast();
+    QCOMPARE(patch.method, QByteArray("PATCH"));
+    QCOMPARE(patch.body.value(QStringLiteral("settings")).toObject().value(QStringLiteral("required_approvals")).toInt(), 3);
+    QVERIFY(!patch.body.contains(QStringLiteral("space_ids")));
+    QTRY_VERIFY(!manager.busy());
+    QCOMPARE(manager.notice(), QStringLiteral("settings_saved"));
+    manager.install(QStringLiteral("controlled_docs"), {QStringLiteral("space-a")}, {{QStringLiteral("required_approvals"), 2}});
+    const auto configured = backend.calls.constLast().body.value(QStringLiteral("settings")).toObject();
+    QVERIFY(configured.value(QStringLiteral("keep")).toBool());
+    QCOMPARE(configured.value(QStringLiteral("required_approvals")).toInt(), 2);
+    QTRY_VERIFY(!manager.busy());
     manager.setContext(org, true, false);
     manager.refresh();
     QTRY_VERIFY(!manager.busy());
     const int readonlyCalls = backend.calls.size();
     manager.install(QStringLiteral("controlled_docs"), {});
     manager.pause(QStringLiteral("controlled_docs"));
+    manager.saveSettings(QStringLiteral("controlled_docs"), {{QStringLiteral("required_approvals"), 2}});
     QCOMPARE(backend.calls.size(), readonlyCalls);
 }
 
@@ -3074,7 +3091,7 @@ void TestCore::documentViewPreviewsAndSaves()
                                               {QStringLiteral("review"), QJsonValue::Null}}}});
     QSignalSpy saved(view, &matome::DocumentView::saved);
     const QString image = QStringLiteral("0b6f0c2e-3f7a-4c55-9d3e-8a1b2c3d4e5f");
-    view->save(QStringLiteral("# Current\n\n![logo](matome:asset/7?version=%1)\n").arg(image), QStringLiteral("  "));
+    view->save(QStringLiteral("# Current\n\n![logo](matome:asset/7?version=%1)\nSee [plan](/Specs/plan.md).\n").arg(image), QStringLiteral("  "));
     QTRY_COMPARE(saved.size(), 1);
     QCOMPARE(view->notice(), QStringLiteral("version_published"));
     bool uploaded = false;
@@ -3083,9 +3100,10 @@ void TestCore::documentViewPreviewsAndSaves()
         QCOMPARE(call.body.value(QStringLiteral("filename")).toString(), QStringLiteral("procedure.md"));
         QVERIFY(!call.body.contains(QStringLiteral("reason")));
         const QJsonArray references = call.body.value(QStringLiteral("references")).toArray();
-        QCOMPARE(references.size(), 1);
+        QCOMPARE(references.size(), 2);
         QCOMPARE(references.at(0).toObject().value(QStringLiteral("document_id")).toInteger(), 7);
         QCOMPARE(references.at(0).toObject().value(QStringLiteral("version_id")).toString(), image);
+        QCOMPARE(references.at(1).toObject().value(QStringLiteral("path")).toString(), QStringLiteral("/Specs/plan.md"));
         uploaded = true;
     }
     QVERIFY(uploaded);
@@ -3119,6 +3137,95 @@ void TestCore::documentViewPreviewsAndSaves()
     view->close();
     QVERIFY(!view->active());
     QVERIFY(usable(session, QStringLiteral("new")));
+}
+
+void TestCore::documentViewListsRelated()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString doc = matome::contentPath(org, space, QStringLiteral("documents/41"));
+    const QString other = matome::contentPath(org, space, QStringLiteral("documents/43"));
+    const QByteArray current("# Current\n");
+    serveDocument(backend, doc, {{QStringLiteral("id"), 41}, {QStringLiteral("title"), QStringLiteral("procedure.md")}},
+                  {{markdownVersion(QStringLiteral("base"), 1, true, current), current}});
+    serveDocument(backend, other, {{QStringLiteral("id"), 43}, {QStringLiteral("title"), QStringLiteral("notes.md")}},
+                  {{markdownVersion(QStringLiteral("notes"), 1, true, current), current}});
+    const QJsonObject logo{{QStringLiteral("position"), 0}, {QStringLiteral("mode"), QStringLiteral("version")},
+        {QStringLiteral("document_id"), 7}, {QStringLiteral("target"), QJsonObject{{QStringLiteral("document_id"), 7},
+            {QStringLiteral("title"), QStringLiteral("logo.png")}, {QStringLiteral("path"), QStringLiteral("/assets/logo.png")},
+            {QStringLiteral("state"), QStringLiteral("ok")}}}};
+    const QJsonObject gone{{QStringLiteral("position"), 1}, {QStringLiteral("mode"), QStringLiteral("path")},
+        {QStringLiteral("path"), QStringLiteral("/gone.md")}, {QStringLiteral("target"), QJsonObject{{QStringLiteral("state"), QStringLiteral("broken")}}}};
+    const QJsonObject index{{QStringLiteral("document_id"), 50}, {QStringLiteral("title"), QStringLiteral("index.md")},
+                            {QStringLiteral("path"), QStringLiteral("/index.md")}, {QStringLiteral("modes"), QJsonArray{QStringLiteral("document")}}};
+    backend.respond("GET", doc + QStringLiteral("/references?direction=both"), {{QStringLiteral("data"), QJsonObject{
+        {QStringLiteral("incoming"), QJsonObject{{QStringLiteral("references"), QJsonArray{index}}, {QStringLiteral("hidden_count"), 2},
+            {QStringLiteral("page"), QJsonObject{{QStringLiteral("has_more"), true}, {QStringLiteral("next_cursor"), QStringLiteral("c1")}}}}},
+        {QStringLiteral("outgoing"), QJsonObject{{QStringLiteral("version_id"), QStringLiteral("base")}, {QStringLiteral("references"), QJsonArray{logo, gone}},
+            {QStringLiteral("page"), QJsonObject{{QStringLiteral("has_more"), false}}}}}}}});
+    backend.respond("GET", doc + QStringLiteral("/references?direction=incoming&cursor=c1"), {{QStringLiteral("data"), QJsonObject{
+        {QStringLiteral("incoming"), QJsonObject{{QStringLiteral("references"), QJsonArray{QJsonObject{{QStringLiteral("document_id"), 51},
+            {QStringLiteral("title"), QStringLiteral("plan.md")}}}}, {QStringLiteral("hidden_count"), 2},
+            {QStringLiteral("page"), QJsonObject{{QStringLiteral("has_more"), false}}}}}}}});
+    backend.respond("GET", other + QStringLiteral("/references?direction=both"), {{QStringLiteral("data"), QJsonObject{
+        {QStringLiteral("incoming"), QJsonObject{{QStringLiteral("references"), QJsonArray()}, {QStringLiteral("hidden_count"), 0}}},
+        {QStringLiteral("outgoing"), QJsonObject{{QStringLiteral("references"), QJsonArray()}}}}}});
+    const auto asked = [&backend](const QString &path) {
+        return std::count_if(backend.calls.cbegin(), backend.calls.cend(), [&path](const auto &call) {
+            return call.path.startsWith(path + QStringLiteral("/references"));
+        });
+    };
+    auto *view = session.documentView();
+    session.openEntry(QStringLiteral("document"), QStringLiteral("41"));
+    QTRY_VERIFY(!view->busy());
+    QVERIFY(usable(session, QStringLiteral("related-tab")));
+    // Only the Related tab asks Core for the references.
+    QCOMPARE(asked(doc), 0);
+    session.runCommand(QStringLiteral("related-tab"));
+    QCOMPARE(view->tab(), QStringLiteral("related"));
+    QTRY_VERIFY(view->relatedLoaded());
+    QTRY_VERIFY(!view->busy());
+    QCOMPARE(view->incoming().size(), 1);
+    QCOMPARE(view->incoming().constFirst().toMap().value(QStringLiteral("title")).toString(), QStringLiteral("index.md"));
+    QCOMPARE(view->hiddenCount(), 2);
+    QVERIFY(view->incomingMore());
+    QVERIFY(!view->outgoingMore());
+    QCOMPARE(view->outgoing().size(), 2);
+    QCOMPARE(view->outgoing().at(1).toMap().value(QStringLiteral("target")).toMap().value(QStringLiteral("state")).toString(),
+             QStringLiteral("broken"));
+    session.runCommand(QStringLiteral("view-tab"));
+    session.runCommand(QStringLiteral("related-tab"));
+    QCOMPARE(asked(doc), 1);
+    view->loadMoreRelated(QStringLiteral("outgoing"));
+    QCOMPARE(asked(doc), 1);
+    view->loadMoreRelated(QStringLiteral("incoming"));
+    QTRY_VERIFY(!view->busy());
+    QCOMPARE(view->incoming().size(), 2);
+    QCOMPARE(view->incoming().at(1).toMap().value(QStringLiteral("title")).toString(), QStringLiteral("plan.md"));
+    QCOMPARE(view->outgoing().size(), 2);
+    QVERIFY(!view->incomingMore());
+    // Refreshing on the tab lists again; a reply for a document left behind
+    // never lands on the next one.
+    backend.delayMs = 30;
+    view->refresh();
+    QVERIFY(!view->relatedLoaded());
+    session.openEntry(QStringLiteral("document"), QStringLiteral("43"));
+    QTRY_VERIFY(!view->busy());
+    QVERIFY(!view->relatedLoaded());
+    QVERIFY(view->incoming().isEmpty());
+    session.runCommand(QStringLiteral("related-tab"));
+    QTRY_VERIFY(view->relatedLoaded());
+    QVERIFY(view->incoming().isEmpty());
+    QVERIFY(view->outgoing().isEmpty());
+    QCOMPARE(view->hiddenCount(), 0);
+    QTest::qWait(90);
+    QVERIFY(view->incoming().isEmpty());
+    view->close();
+    QVERIFY(!view->relatedLoaded());
 }
 
 void TestCore::controlledDocsExtendDocumentView()
@@ -3158,7 +3265,7 @@ void TestCore::controlledDocsExtendDocumentView()
     QTRY_VERIFY(control->active());
     QTRY_VERIFY(!control->busy());
     QVERIFY(control->controlled());
-    QVERIFY(control->reviewOpen());
+    QCOMPARE(control->openReviews(), 1);
     QVERIFY(usable(session, QStringLiteral("reviews-tab")));
     QVERIFY(!usable(session, QStringLiteral("manage-document")));
     QVERIFY(usable(session, QStringLiteral("unmanage-document")));
@@ -3179,7 +3286,7 @@ void TestCore::controlledDocsExtendDocumentView()
     QCOMPARE(control->candidate(), QStringLiteral("# Candidate\n"));
     QCOMPARE(control->diffReferences().value(QStringLiteral("changed")).toList().constFirst().toMap()
                      .value(QStringLiteral("to_version_id")).toString(), QStringLiteral("after"));
-    QVERIFY(!control->canDecide());
+    QVERIFY(!control->canReject());
     const int hits = backend.calls.size();
     control->decide(QStringLiteral("approve"), {});
     QCOMPARE(backend.calls.size(), hits);
@@ -3190,7 +3297,7 @@ void TestCore::controlledDocsExtendDocumentView()
     QTRY_VERIFY(!control->busy());
     QCOMPARE(control->review().value(QStringLiteral("id")).toString(), QStringLiteral("review-one"));
     QCOMPARE(control->candidate(), QStringLiteral("# Candidate\n"));
-    QVERIFY(control->canDecide());
+    QVERIFY(control->canReject());
     backend.respond("POST", reviewPath + QStringLiteral("/approve"), {}, 409, QStringLiteral("review_closed"));
     control->decide(QStringLiteral("approve"), QStringLiteral("checked"));
     const auto decision = backend.calls.constLast();
@@ -3206,6 +3313,31 @@ void TestCore::controlledDocsExtendDocumentView()
     // Leaving the Reviews tab closes the review.
     session.runCommand(QStringLiteral("view-tab"));
     QVERIFY(control->review().isEmpty());
+    // Saving opens a second review; it becomes the selected one, not the
+    // older review that was still selected.
+    QJsonObject second = review;
+    second.insert(QStringLiteral("id"), QStringLiteral("review-two"));
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{second, review}}});
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("upload_id"), QStringLiteral("proposal")},
+            {QStringLiteral("generation"), 1}, {QStringLiteral("request"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/proposal")}}}}}});
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/proposal/complete")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("version"), QJsonObject{{QStringLiteral("id"), QStringLiteral("proposed")}}},
+            {QStringLiteral("review"), QJsonObject{{QStringLiteral("id"), QStringLiteral("review-two")}, {QStringLiteral("status"), QStringLiteral("open")}}}}}});
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->selectedReviewId(), QStringLiteral("review-one"));
+    session.runCommand(QStringLiteral("edit-tab"));
+    QSignalSpy saved(view, &matome::DocumentView::saved);
+    view->save(QStringLiteral("# Proposal\n"), QStringLiteral("Second change"));
+    QTRY_COMPARE(saved.size(), 1);
+    QCOMPARE(saved.constFirst().constFirst().toString(), QStringLiteral("review-two"));
+    QCOMPARE(view->notice(), QStringLiteral("review_requested"));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->selectedReviewId(), QStringLiteral("review-two"));
+    session.runCommand(QStringLiteral("reviews-tab"));
+    session.runCommand(QStringLiteral("open-review"));
+    QCOMPARE(control->review().value(QStringLiteral("id")).toString(), QStringLiteral("review-two"));
+    session.runCommand(QStringLiteral("close-review"));
     view->close();
     QVERIFY(!control->active());
     QVERIFY(control->reviews().isEmpty());
@@ -3216,6 +3348,230 @@ void TestCore::controlledDocsExtendDocumentView()
     QTRY_VERIFY(!view->busy());
     QVERIFY(!control->active());
     QVERIFY(!usable(session, QStringLiteral("reviews-tab")));
+}
+
+// Each proposal is its own review. One that fell behind a later publication
+// is updated in one step; one that conflicts goes to the editor with Core's
+// markers; only a clean one can be approved.
+void TestCore::controlledDocsRunParallelReviews()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString doc = matome::contentPath(org, space, QStringLiteral("documents/41"));
+    const QByteArray current("# Current\n");
+    serveDocument(backend, doc, {{QStringLiteral("id"), 41}, {QStringLiteral("title"), QStringLiteral("procedure.md")},
+                                 {QStringLiteral("revision"), 3}, {QStringLiteral("controlled_docs_enabled"), true}},
+                  {{markdownVersion(QStringLiteral("v1"), 1, false, "# First\n"), "# First\n"},
+                   {markdownVersion(QStringLiteral("v2"), 2, true, current), current}});
+    const auto reviewRow = [](const QString &id, const QString &status, const QString &merge) {
+        return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("revision"), 4}, {QStringLiteral("status"), status},
+                           {QStringLiteral("merge_state"), merge}, {QStringLiteral("reason"), id + QStringLiteral(" reason")},
+                           {QStringLiteral("author_membership_id"), QStringLiteral("author")},
+                           {QStringLiteral("base_version_id"), QStringLiteral("v1")},
+                           {QStringLiteral("candidate_version_id"), id + QStringLiteral("-candidate")}};
+    };
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("controlled-docs-rule")),
+                    {{QStringLiteral("data"), QJsonObject{{QStringLiteral("active"), true}, {QStringLiteral("revision"), 2}}}});
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{
+        reviewRow(QStringLiteral("done"), QStringLiteral("approved"), QStringLiteral("clean")),
+        reviewRow(QStringLiteral("behind"), QStringLiteral("open"), QStringLiteral("behind")),
+        reviewRow(QStringLiteral("dirty"), QStringLiteral("open"), QStringLiteral("dirty"))}}});
+    const auto member = [&backend, &session, org](const QString &id) {
+        backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
+                        {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("email"), session.email()}}}}});
+    };
+    member(QStringLiteral("author"));
+    for (const QString id : {QStringLiteral("behind"), QStringLiteral("dirty")}) {
+        const QString path = matome::orgPath(org, QStringLiteral("reviews/") + id);
+        backend.respond("GET", path + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QString()}}}});
+        backend.respond("GET", path + QStringLiteral("/candidate/download"),
+                        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/") + id}}}});
+        backend.file(QUrl(QStringLiteral("https://storage.invalid/") + id), QByteArray("# Proposal\n"));
+    }
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("upload_id"), QStringLiteral("up")}, {QStringLiteral("generation"), 1},
+            {QStringLiteral("request"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/up")}}}}}});
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/up/complete")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("version"), QJsonObject{{QStringLiteral("id"), QStringLiteral("next")}}},
+            {QStringLiteral("review"), QJsonObject{{QStringLiteral("id"), QStringLiteral("behind")}, {QStringLiteral("status"), QStringLiteral("open")}}}}}});
+    const auto lastUpload = [&backend]() {
+        for (auto it = backend.calls.crbegin(); it != backend.calls.crend(); ++it)
+            if (it->method == "POST" && it->path.endsWith(QLatin1String("/uploads"))) return it->body;
+        return QJsonObject();
+    };
+    auto *view = session.documentView();
+    auto *control = session.controlledDocs();
+    session.openEntry(QStringLiteral("document"), QStringLiteral("41"));
+    QTRY_VERIFY(control->active());
+    QTRY_VERIFY(!control->busy() && !view->busy());
+    QCOMPARE(control->openReviews(), 2);
+    QStringList order;
+    for (const auto &row : control->reviews()) order.append(row.toMap().value(QStringLiteral("id")).toString());
+    QCOMPARE(order, (QStringList{QStringLiteral("behind"), QStringLiteral("dirty"), QStringLiteral("done")}));
+    // A new proposal names the published version it was edited from.
+    QCOMPARE(control->proposal(), (QVariantMap{{QStringLiteral("base_version_id"), QStringLiteral("v2")}}));
+    session.runCommand(QStringLiteral("edit-tab"));
+    view->save(QStringLiteral("# Mine\n"), QStringLiteral("Third change"), true, control->proposal());
+    QTRY_VERIFY(!view->busy());
+    QCOMPARE(lastUpload().value(QStringLiteral("base_version_id")).toString(), QStringLiteral("v2"));
+    QVERIFY(!lastUpload().contains(QStringLiteral("review_id")));
+    QTRY_VERIFY(!control->busy());
+
+    session.runCommand(QStringLiteral("reviews-tab"));
+    control->selectReview(QStringLiteral("behind"));
+    session.runCommand(QStringLiteral("open-review"));
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(control->authored());
+    QVERIFY(usable(session, QStringLiteral("update-review")));
+    QVERIFY(usable(session, QStringLiteral("edit-proposal")));
+    QVERIFY(!usable(session, QStringLiteral("resolve-conflicts")));
+    const QString behindPath = matome::orgPath(org, QStringLiteral("reviews/behind"));
+    backend.respond("GET", behindPath + QStringLiteral("/merge"), {{QStringLiteral("data"), QJsonObject{
+        {QStringLiteral("merge_state"), QStringLiteral("behind")}, {QStringLiteral("target_version_id"), QStringLiteral("v2")},
+        {QStringLiteral("conflicts"), 0}, {QStringLiteral("content"), QStringLiteral("# Merged\n")}}}});
+    session.runCommand(QStringLiteral("update-review"));
+    QTRY_COMPARE(control->notice(), QStringLiteral("review_updated"));
+    const QJsonObject update = lastUpload();
+    QCOMPARE(update.value(QStringLiteral("review_id")).toString(), QStringLiteral("behind"));
+    QCOMPARE(update.value(QStringLiteral("base_version_id")).toString(), QStringLiteral("v2"));
+    QCOMPARE(update.value(QStringLiteral("reason")).toString(), QStringLiteral("behind reason"));
+    QCOMPARE(update.value(QStringLiteral("filename")).toString(), QStringLiteral("procedure.md"));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->selectedReviewId(), QStringLiteral("behind"));
+
+    // A reviewer may reject a review that is behind, never approve it.
+    member(QStringLiteral("reviewer"));
+    control->refresh();
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(!control->authored());
+    QVERIFY(control->canReject());
+    QVERIFY(!control->canApprove());
+    QVERIFY(!usable(session, QStringLiteral("approve-review")));
+    QVERIFY(usable(session, QStringLiteral("reject-review")));
+    QVERIFY(!usable(session, QStringLiteral("update-review")));
+    const int calls = backend.calls.size();
+    control->decide(QStringLiteral("approve"), {});
+    QCOMPARE(backend.calls.size(), calls);
+
+    member(QStringLiteral("author"));
+    session.runCommand(QStringLiteral("close-review"));
+    control->refresh();
+    QTRY_VERIFY(!control->busy());
+    control->selectReview(QStringLiteral("dirty"));
+    session.runCommand(QStringLiteral("open-review"));
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(usable(session, QStringLiteral("resolve-conflicts")));
+    QVERIFY(!usable(session, QStringLiteral("update-review")));
+    QVERIFY(!usable(session, QStringLiteral("edit-proposal")));
+    const QString marked = QStringLiteral("<<<<<<< published\n# Current\n=======\n# Mine\n>>>>>>> review\n");
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("reviews/dirty/merge")), {{QStringLiteral("data"), QJsonObject{
+        {QStringLiteral("merge_state"), QStringLiteral("dirty")}, {QStringLiteral("target_version_id"), QStringLiteral("v2")},
+        {QStringLiteral("conflicts"), 1}, {QStringLiteral("content"), marked}}}});
+    QSignalSpy ready(control, &matome::ControlledDocs::proposalReady);
+    const int uploads = int(std::count_if(backend.calls.cbegin(), backend.calls.cend(),
+                                          [](const auto &call) { return call.path.endsWith(QLatin1String("/uploads")); }));
+    session.runCommand(QStringLiteral("resolve-conflicts"));
+    QTRY_COMPARE(ready.size(), 1);
+    QCOMPARE(ready.constFirst().at(0).toString(), marked);
+    QCOMPARE(ready.constFirst().at(1).toInt(), 1);
+    QCOMPARE(int(std::count_if(backend.calls.cbegin(), backend.calls.cend(),
+                               [](const auto &call) { return call.path.endsWith(QLatin1String("/uploads")); })), uploads);
+    QCOMPARE(control->proposalReviewId(), QStringLiteral("dirty"));
+    QCOMPARE(control->proposal(), (QVariantMap{{QStringLiteral("review_id"), QStringLiteral("dirty")},
+                                               {QStringLiteral("base_version_id"), QStringLiteral("v2")}}));
+    session.runCommand(QStringLiteral("edit-tab"));
+    view->save(QStringLiteral("# Resolved\n"), QStringLiteral("Kept both"), true, control->proposal());
+    QTRY_VERIFY(!view->busy());
+    QCOMPARE(lastUpload().value(QStringLiteral("review_id")).toString(), QStringLiteral("dirty"));
+    QCOMPARE(view->notice(), QStringLiteral("review_updated"));
+    // Once saved, or when the editor goes back to the published text, it no
+    // longer holds the review's proposal.
+    QVERIFY(control->proposalReviewId().isEmpty());
+    view->close();
+    QVERIFY(control->proposal().isEmpty());
+}
+
+// A review keeps the settings it was submitted with: how many distinct
+// approvers publish it and whether its author may be one of them. An
+// approval short of the count leaves it open, and its approver cannot
+// approve it again.
+void TestCore::controlledDocsCountApprovals()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString doc = matome::contentPath(org, space, QStringLiteral("documents/41"));
+    const QString path = matome::orgPath(org, QStringLiteral("reviews/pending"));
+    const QByteArray current("# Current\n");
+    serveDocument(backend, doc, {{QStringLiteral("id"), 41}, {QStringLiteral("title"), QStringLiteral("procedure.md")},
+                                 {QStringLiteral("revision"), 3}, {QStringLiteral("controlled_docs_enabled"), true}},
+                  {{markdownVersion(QStringLiteral("v1"), 1, true, current), current}});
+    const auto review = [](bool authorMayApprove, const QJsonArray &approvals) {
+        return QJsonObject{{QStringLiteral("id"), QStringLiteral("pending")}, {QStringLiteral("revision"), 4},
+            {QStringLiteral("status"), QStringLiteral("open")}, {QStringLiteral("merge_state"), QStringLiteral("clean")},
+            {QStringLiteral("author_membership_id"), QStringLiteral("author")},
+            {QStringLiteral("base_version_id"), QStringLiteral("v1")}, {QStringLiteral("candidate_version_id"), QStringLiteral("candidate")},
+            {QStringLiteral("settings"), QJsonObject{{QStringLiteral("required_approvals"), 2},
+                {QStringLiteral("allow_author_approval"), authorMayApprove}, {QStringLiteral("require_version_references"), true}}},
+            {QStringLiteral("approvals"), approvals}};
+    };
+    const QJsonArray approvedByAuthor{QJsonObject{{QStringLiteral("id"), QStringLiteral("approval")},
+        {QStringLiteral("approving_membership_id"), QStringLiteral("author")}, {QStringLiteral("candidate_version_id"), QStringLiteral("candidate")}}};
+    // The rule is for managers only: the open review says links must pin.
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("controlled-docs-rule")), {}, 403, QStringLiteral("forbidden"));
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{review(true, {})}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
+                    {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("author")},
+                        {QStringLiteral("email"), session.email()}}}}});
+    backend.respond("GET", path + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QString()}}}});
+    backend.respond("GET", path + QStringLiteral("/candidate/download"),
+                    {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/pending")}}}});
+    backend.file(QUrl(QStringLiteral("https://storage.invalid/pending")), QByteArray("# Proposal\n"));
+    auto *control = session.controlledDocs();
+    session.openEntry(QStringLiteral("document"), QStringLiteral("41"));
+    QTRY_VERIFY(control->active());
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(control->pinsLinks());
+    session.runCommand(QStringLiteral("reviews-tab"));
+    session.runCommand(QStringLiteral("open-review"));
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(control->authored());
+    QVERIFY(control->authorMayApprove());
+    QCOMPARE(control->requiredApprovals(), 2);
+    QCOMPARE(control->approvals(), 0);
+    QVERIFY(control->canApprove());
+    QVERIFY(!control->canReject());
+    QVERIFY(usable(session, QStringLiteral("approve-review")));
+    QVERIFY(!usable(session, QStringLiteral("reject-review")));
+
+    backend.respond("POST", path + QStringLiteral("/approve"), {{QStringLiteral("data"), review(true, approvedByAuthor)}});
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{review(true, approvedByAuthor)}}});
+    control->decide(QStringLiteral("approve"), {});
+    QTRY_COMPARE(control->notice(), QStringLiteral("review_approval_added"));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->review().value(QStringLiteral("status")).toString(), QStringLiteral("open"));
+    QCOMPARE(control->approvals(), 1);
+    QVERIFY(control->approved());
+    QVERIFY(!control->canApprove());
+    const int calls = backend.calls.size();
+    control->decide(QStringLiteral("approve"), {});
+    QCOMPARE(backend.calls.size(), calls);
+
+    // Without the setting, the author may neither approve nor reject.
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{review(false, {})}}});
+    control->refresh();
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(!control->authorMayApprove());
+    QVERIFY(!control->approved());
+    QVERIFY(!control->canApprove());
+    QVERIFY(!control->canReject());
 }
 
 void TestCore::spaceSettingsManageAccessAndRule()
@@ -3266,7 +3622,10 @@ void TestCore::spaceSettingsManageAccessAndRule()
             QStringLiteral("document.controlled_docs_manage"), QStringLiteral("space.controlled_docs_manage")}}};
     backend.respond("POST", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("role"), manager}}, 201);
     backend.respond("GET", rule, {{QStringLiteral("data"), QJsonObject{{QStringLiteral("active"), false}, {QStringLiteral("revision"), 4},
-        {QStringLiteral("id"), QStringLiteral("rule")}, {QStringLiteral("require_version_references"), true}}}});
+        {QStringLiteral("id"), QStringLiteral("rule")},
+        {QStringLiteral("settings"), QJsonObject{{QStringLiteral("allow_author_approval"), true}}},
+        {QStringLiteral("effective_settings"), QJsonObject{{QStringLiteral("allow_author_approval"), true},
+            {QStringLiteral("required_approvals"), 1}, {QStringLiteral("require_version_references"), false}}}}}});
     QSignalSpy accessChanged(controlled, &matome::ControlledRule::accessChanged);
     controlled->grantSelf();
     QTRY_COMPARE(accessChanged.size(), 1);
@@ -3280,12 +3639,29 @@ void TestCore::spaceSettingsManageAccessAndRule()
     QVERIFY(granted);
     QVERIFY(controlled->readable());
     backend.respond("PUT", rule, {});
-    controlled->save(true, controlled->rule().value(QStringLiteral("require_version_references")).toBool());
+    // A space overrides one setting and follows the organization again on another.
+    controlled->save(true, {{QStringLiteral("required_approvals"), 2},
+                            {QStringLiteral("allow_author_approval"), QVariant::fromValue(nullptr)}});
     QTRY_COMPARE(controlled->notice(), QStringLiteral("rule_saved"));
+    bool saved = false;
     for (const auto &call : backend.calls) if (call.method == "PUT" && call.path == rule) {
+        const auto settings = call.body.value(QStringLiteral("settings")).toObject();
         QVERIFY(call.body.value(QStringLiteral("active")).toBool());
-        QVERIFY(call.body.value(QStringLiteral("require_version_references")).toBool());
+        QVERIFY(!call.body.contains(QStringLiteral("require_version_references")));
+        QCOMPARE(settings.value(QStringLiteral("required_approvals")).toInt(), 2);
+        QVERIFY(settings.contains(QStringLiteral("allow_author_approval")));
+        QVERIFY(settings.value(QStringLiteral("allow_author_approval")).isNull());
+        QVERIFY(call.headers.contains(qMakePair(QByteArrayLiteral("If-Match"), QByteArrayLiteral("4"))));
+        saved = true;
     }
+    QVERIFY(saved);
+    QTRY_VERIFY(!controlled->busy());
+    const auto paused = backend.calls.size();
+    controlled->save(false);
+    QCOMPARE(backend.calls.at(paused).method, QByteArray("PUT"));
+    QVERIFY(!backend.calls.at(paused).body.value(QStringLiteral("active")).toBool());
+    QVERIFY(!backend.calls.at(paused).body.contains(QStringLiteral("settings")));
+    QTRY_VERIFY(!controlled->busy());
     QTRY_VERIFY(!controlled->busy());
     const int calls = backend.calls.size();
     controlled->remove(QStringLiteral("  "));
@@ -3583,7 +3959,22 @@ void TestCore::markdownReferencesFollowAssetLinks()
              QStringLiteral("[plan.md](matome:doc/9?version=%1)").arg(b));
     QCOMPARE(matome::Assets::pathLink(QStringLiteral("plan [v2].md"), QStringLiteral("/Specs (old)/plan [v2].md")),
              QStringLiteral("[plan v2.md](/Specs%20%28old%29/plan%20%5Bv2%5D.md)"));
-    QVERIFY(matome::Assets::references(QStringLiteral("[plan.md](/Specs/plan.md)")).isEmpty());
+    // `/` links are path references, decoded, in text order among the others
+    // and once each by Core's name key; other sites and folders are not.
+    const QString paths = QStringLiteral("[plan](/Specs%20%28old%29/plan%20%5Bv2%5D.md) [pin](matome:doc/9?version=%1)\n"
+                                         "[again](/specs%20(OLD)/Plan%20[v2].md#top) [titled](/notes.md \"Notes\")\n"
+                                         "[web](//example.com/x) [site](https://example.com/y) [folder](/Specs/) [root](/)")
+                                  .arg(b);
+    const QJsonArray declared = matome::Assets::references(paths);
+    QCOMPARE(declared.size(), 3);
+    QCOMPARE(declared.at(0).toObject(), (QJsonObject{{QStringLiteral("path"), QStringLiteral("/Specs (old)/plan [v2].md")}}));
+    QCOMPARE(declared.at(1).toObject().value(QStringLiteral("document_id")).toInteger(), 9);
+    QCOMPARE(declared.at(2).toObject(), (QJsonObject{{QStringLiteral("path"), QStringLiteral("/notes.md")}}));
+    QCOMPARE(assets->referenceAt(paths, 2).value(QStringLiteral("start")).toInt(), paths.indexOf(QStringLiteral("](/notes.md")));
+    const QJsonArray pinned = matome::Assets::references(paths, false);
+    QCOMPARE(pinned.size(), 1);
+    QCOMPARE(pinned.at(0).toObject().value(QStringLiteral("document_id")).toInteger(), 9);
+    QCOMPARE(assets->referenceAt(paths, 0, false).value(QStringLiteral("start")).toInt(), paths.indexOf(QStringLiteral("](matome:doc/9")));
     const QVariantMap at = assets->referenceAt(markdown, 1);
     QCOMPARE(markdown.mid(at.value(QStringLiteral("start")).toInt(), at.value(QStringLiteral("length")).toInt()),
              QStringLiteral("](matome:asset/4?version=%1)").arg(b));

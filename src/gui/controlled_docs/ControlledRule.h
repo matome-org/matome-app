@@ -10,7 +10,7 @@ namespace matome {
 class Session;
 
 /// The controlled-documents add-on's settings for one space, managed from
-/// Settings: the space rule, whether links must pin a version, the review
+/// Settings: the space rule, its overrides of the add-on settings, the review
 /// roles the space access can grant, and the explicit grant an organization
 /// administrator needs before managing control.
 class ControlledRule : public QObject
@@ -47,8 +47,9 @@ public:
     Q_INVOKABLE void open(const QString &spaceId);
     Q_INVOKABLE void close();
     Q_INVOKABLE void refresh();
-    /// Saves the rule `active`, keeping or setting whether links must pin a version.
-    Q_INVOKABLE void save(bool active, bool requireVersionReferences);
+    /// Saves the rule `active` with `settings` merged over its overrides of
+    /// the organization's add-on settings; a null value drops that override.
+    Q_INVOKABLE void save(bool active, const QVariantMap &settings = {});
     Q_INVOKABLE void remove(const QString &reason);
     /// Creates the reviewer and management roles the organization lacks.
     Q_INVOKABLE void addRoles();

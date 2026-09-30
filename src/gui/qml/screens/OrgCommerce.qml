@@ -6,16 +6,16 @@ import matome
 import "../chrome"
 import "../chrome/Messages.js" as Messages
 
-// Plan and billing, or add-ons: the subscription and its packages, or the
-// add-ons, as tiles to select. The Settings command bar acts on the
-// selection through the `can…` flags and the functions below; each verb
-// asks in a dialog before it reaches Stripe or Core.
+// Plan and billing, or add-ons: the subscription and its packages, which
+// the Settings command bar acts on through `canSubscribe` and `subscribe`,
+// or the add-ons as tiles, each opening its own page to install and
+// configure it. Each verb asks in a dialog before it reaches Stripe or Core.
 FocusScope {
     id: commerce
     property bool billing: true
     property bool narrow: false
     property int packageIndex: -1
-    property int productIndex: -1
+    property string productKey
     property string targetAction
     readonly property var subscription: Session.orgBilling.subscription
     readonly property bool liveSubscription: ["active", "trialing", "past_due", "unpaid", "incomplete", "paused"].includes(subscription.status)
@@ -23,13 +23,11 @@ FocusScope {
     readonly property string loadError: billing ? Session.orgBilling.billingError || Session.orgBilling.usageError
                                                : Session.addOns.errorCode
     readonly property var selectedPackage: Session.orgBilling.packages[packageIndex] ?? null
-    readonly property var selectedProduct: Session.orgBilling.products[productIndex] ?? null
+    readonly property var selectedProduct: Session.orgBilling.products.find(function (product) { return product.key === commerce.productKey }) ?? null
     readonly property var installation: selectedProduct?.installation ?? ({})
 
     readonly property bool canSubscribe: selectedPackage !== null && Session.orgBilling.canManage && !busy
                                          && subscription.pending_update !== true
-    readonly property bool canInstall: selectedProduct !== null && Session.addOns.canInstall && !busy
-                                       && selectedProduct.entitled === true && selectedProduct.catalogued === true
     readonly property bool canPause: selectedProduct !== null && Session.addOns.canInstall && !busy
                                      && installation.status === "active"
     readonly property bool canUninstall: selectedProduct !== null && Session.addOns.canInstall && !Session.addOns.busy
@@ -37,9 +35,12 @@ FocusScope {
     readonly property bool canChangeQuantity: selectedProduct !== null && Session.orgBilling.canManage && liveSubscription
                                               && !busy && subscription.pending_update !== true
                                               && (selectedProduct.skus?.length ?? 0) > 0
-    readonly property string installLabel: installation.status === "active" ? qsTr("Choose spaces")
-                                         : installation.status === "paused" ? qsTr("Resume") : qsTr("Install")
 
+    // Opens the add-on `key`, on `spaceId`'s settings when it has any.
+    function openProduct(key, spaceId) {
+        commerce.productKey = key
+        if (spaceId) detailPage.showSpace(spaceId)
+    }
     function date(value) {
         if (!value) return ""
         const parsed = new Date(value)
@@ -50,48 +51,55 @@ FocusScope {
         commerce.targetAction = action
         confirmation.title = action === "package" ? qsTr("Select %1?").arg(commerce.version(commerce.selectedPackage.name, commerce.selectedPackage.version))
                            : action === "uninstall" ? qsTr("Uninstall document control?")
+                           : action === "remove-rule" ? qsTr("Remove this space rule?")
                            : qsTr("Pause this installation?")
         confirmation.detail = action === "package"
                 ? qsTr("This package replaces the subscription plan and purchased add-ons with the items shown. Independent grants are preserved. Stripe handles charges; paid changes require payment confirmation.")
                 : action === "uninstall" ? qsTr("All open reviews will be cancelled and document control will be removed throughout this organization. Published versions and purchased allowances remain. Resuming does not restore document control.")
+                : action === "remove-rule" ? qsTr("Existing controlled documents will remain blocked until the rule is reactivated or their control is removed.")
                 : commerce.selectedProduct.key === "controlled_docs" ? qsTr("New proposals and approvals will stop. Published documents, reviews, and control rules remain. Billing is unchanged.")
                 : qsTr("Processing will stop. This does not cancel the purchased add-on or its billing.")
-        confirmation.reasonLabel = action === "uninstall" ? qsTr("Reason for uninstalling document control") : ""
+        confirmation.reasonLabel = action === "uninstall" ? qsTr("Reason for uninstalling document control")
+                                 : action === "remove-rule" ? qsTr("Reason for removing the space rule") : ""
         confirmation.action = action === "pause" ? qsTr("Pause")
-                            : action === "uninstall" ? qsTr("Uninstall") : qsTr("Confirm")
+                            : action === "uninstall" ? qsTr("Uninstall")
+                            : action === "remove-rule" ? qsTr("Remove rule") : qsTr("Confirm")
         confirmation.open()
     }
     function subscribe() { if (commerce.canSubscribe) commerce.ask("package") }
     function pause() { if (commerce.canPause) commerce.ask("pause") }
     function uninstall() { if (commerce.canUninstall) commerce.ask("uninstall") }
-    function install() {
-        if (!commerce.canInstall) return
-        const chosen = commerce.installation.space_ids ?? []
-        spacesDialog.chosen = chosen.slice()
-        coverage.value = chosen.length > 0 ? "selected" : "all"
-        spacesDialog.open()
-    }
     function changeQuantity() {
         if (!commerce.canChangeQuantity) return
         skuPicker.value = commerce.selectedProduct.skus[0].key
         quantityDialog.open()
     }
+    // Closes the open dialog, else the open add-on.
     function dismiss() {
-        for (const dialog of [confirmation, spacesDialog, quantityDialog]) {
+        for (const dialog of [confirmation, quantityDialog]) {
             if (dialog.visible) {
                 dialog.close()
                 return true
             }
         }
+        if (!commerce.billing && commerce.productKey !== "") {
+            commerce.productKey = ""
+            return true
+        }
         return false
     }
     function closeDialogs() {
         confirmation.close()
-        spacesDialog.close()
         quantityDialog.close()
     }
-    onVisibleChanged: if (!visible) closeDialogs()
-    onBillingChanged: closeDialogs()
+    onVisibleChanged: if (!visible) {
+        closeDialogs()
+        commerce.productKey = ""
+    }
+    onBillingChanged: {
+        closeDialogs()
+        commerce.productKey = ""
+    }
     Connections {
         target: Session
         function onChanged() { commerce.closeDialogs() }
@@ -112,9 +120,13 @@ FocusScope {
             color: Theme.accentText
         }
         Label {
+            objectName: "addonNotice"
             visible: !commerce.billing && Session.addOns.notice !== ""
             text: Session.addOns.notice === "installation_paused" ? qsTr("Installation paused. Billing is unchanged.")
                 : Session.addOns.notice === "installation_removed" ? qsTr("Document control uninstalled. Billing is unchanged.")
+                : Session.addOns.notice === "settings_saved" && commerce.productKey === "controlled_docs"
+                ? qsTr("Settings saved. New reviews use them; open reviews keep the settings they were submitted with.")
+                : Session.addOns.notice === "settings_saved" ? qsTr("Settings saved.")
                 : qsTr("Installation saved.")
             color: Theme.accentText
         }
@@ -195,10 +207,10 @@ FocusScope {
         }
 
         ColumnLayout {
-            visible: !commerce.billing && commerce.loadError === ""
+            visible: !commerce.billing && commerce.loadError === "" && commerce.selectedProduct === null
             Layout.fillWidth: true
             spacing: Theme.gapM
-            Label { text: qsTr("Select an add-on, then choose what to do in the bar above. Installation controls where an add-on runs; it does not control billing.") }
+            Label { text: qsTr("Open an add-on to install it, choose where it runs, and configure it.") }
             Label {
                 visible: !commerce.liveSubscription
                 text: qsTr("Purchasing add-ons requires an active paid subscription. Included add-ons can still be installed.")
@@ -213,18 +225,21 @@ FocusScope {
                     delegate: Tile {
                         id: product
                         required property var modelData
-                        required property int index
                         readonly property var installation: modelData.installation || ({})
                         objectName: "addon_" + product.modelData.key
-                        selected: commerce.productIndex === product.index
                         Accessible.name: product.modelData.name
-                        onChosen: commerce.productIndex = product.index
-                        Text {
+                        onChosen: commerce.openProduct(product.modelData.key, "")
+                        RowLayout {
                             Layout.fillWidth: true
-                            text: product.modelData.name
-                            font: Theme.heading
-                            color: Theme.textPrimary
-                            wrapMode: Text.Wrap
+                            spacing: Theme.gapS
+                            Text {
+                                Layout.fillWidth: true
+                                text: product.modelData.name
+                                font: Theme.heading
+                                color: Theme.textPrimary
+                                wrapMode: Text.Wrap
+                            }
+                            Icon { name: "chevron"; color: Theme.textSecondary }
                         }
                         Label {
                             color: product.installation.status === "active" ? Theme.accentText : Theme.textSecondary
@@ -240,64 +255,27 @@ FocusScope {
                                     .arg(product.modelData.usage?.reserved ?? 0)
                                     .arg(product.modelData.allowance?.limit ?? qsTr("Unlimited"))
                         }
-                        Repeater {
-                            model: product.modelData.skus
-                            delegate: ColumnLayout {
-                                id: sku
-                                required property var modelData
-                                Layout.fillWidth: true
-                                Layout.topMargin: Theme.gapXs
-                                spacing: Theme.gapXs
-                                Caption { Layout.fillWidth: true; text: commerce.version(sku.modelData.key, sku.modelData.version) }
-                                Label { text: qsTr("Purchased: %1 · Total assigned: %2").arg(sku.modelData.purchased).arg(sku.modelData.assigned) }
-                                Repeater {
-                                    model: Object.keys(sku.modelData.limits)
-                                    delegate: Label {
-                                        required property string modelData
-                                        text: Messages.usageName(modelData) + ": " + Messages.usageAmount(sku.modelData.limits[modelData], modelData)
-                                    }
-                                }
-                            }
+                        Label {
+                            visible: Object.keys(product.modelData.settings_schema ?? {}).length > 0
+                            text: qsTr("%n setting(s)", "", Object.keys(product.modelData.settings_schema ?? {}).length)
                         }
                     }
                 }
             }
         }
-    }
 
-    Dialog {
-        id: spacesDialog
-        objectName: "addonSpacesDialog"
-        anchors.fill: parent
-        property var chosen: []
-        title: commerce.installLabel
-        action: commerce.installLabel
-        ready: coverage.currentValue === "all" || spacesDialog.chosen.length > 0
-        initialFocus: coverage
-        onAccepted: Session.addOns.install(commerce.selectedProduct.key, coverage.currentValue === "all" ? [] : spacesDialog.chosen)
-        Label { text: qsTr("The add-on will be enabled where you choose. Existing add-on settings are preserved.") }
-        Picker {
-            id: coverage
-            Layout.fillWidth: true
-            model: [{ value: "all", label: qsTr("All spaces") }, { value: "selected", label: qsTr("Only the selected spaces") }]
-            Accessible.name: qsTr("Spaces")
-        }
-        Repeater {
-            model: coverage.currentValue === "selected" ? Session.addOns.spaces : []
-            delegate: NavigationRow {
-                id: space
-                required property var modelData
-                readonly property bool checked: spacesDialog.chosen.includes(space.modelData.id)
-                text: space.modelData.name
-                icon: space.checked ? "check" : "space"
-                checkable: true
-                selected: space.checked
-                touch: commerce.narrow
-                onActivated: {
-                    const others = spacesDialog.chosen.filter(function (id) { return id !== space.modelData.id })
-                    spacesDialog.chosen = space.checked ? others : others.concat([space.modelData.id])
-                }
-            }
+        AddOnDetail {
+            id: detailPage
+            objectName: "addonDetail"
+            visible: !commerce.billing && commerce.loadError === "" && commerce.selectedProduct !== null
+            product: commerce.selectedProduct
+            narrow: commerce.narrow
+            canChangeQuantity: commerce.canChangeQuantity
+            onBack: commerce.productKey = ""
+            onPauseRequested: commerce.pause()
+            onUninstallRequested: commerce.uninstall()
+            onQuantityRequested: commerce.changeQuantity()
+            onRemoveRuleRequested: commerce.ask("remove-rule")
         }
     }
 
@@ -339,6 +317,7 @@ FocusScope {
         onAccepted: {
             if (commerce.targetAction === "uninstall") Session.addOns.uninstallControlledDocs(confirmation.reason)
             else if (commerce.targetAction === "package") Session.orgBilling.selectPackage(commerce.selectedPackage.key, commerce.selectedPackage.version)
+            else if (commerce.targetAction === "remove-rule") Session.controlledRule.remove(confirmation.reason)
             else Session.addOns.pause(commerce.selectedProduct.key)
         }
     }

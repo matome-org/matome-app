@@ -8,8 +8,10 @@
 #include <QFileInfo>
 #include <QStringDecoder>
 #include <QUrl>
+#include <QUrlQuery>
 
 #include <algorithm>
+#include <memory>
 
 namespace matome {
 
@@ -103,6 +105,8 @@ void DocumentView::setTab(const QString &tab)
         return;
     m_tab = tab;
     emit changed();
+    if (m_tab == QLatin1String("related") && !m_relatedAsked)
+        loadRelated();
 }
 
 void DocumentView::setExtraTab(const QString &tab, bool shown)
@@ -149,6 +153,7 @@ void DocumentView::close()
     m_text.clear(); m_errorCode.clear(); m_notice.clear();
     m_document = m_version = {};
     m_versions = {};
+    clearRelated();
     m_extraTabs.clear();
     emit textChanged();
     emit changed();
@@ -169,9 +174,12 @@ void DocumentView::load()
     const QString shown = versionId();
     m_pending = 2;
     m_errorCode.clear();
+    clearRelated();
     emit changed();
-    const auto settle = [this, shown] {
-        if (--m_pending > 0) return;
+    const auto left = std::make_shared<int>(2);
+    const auto settle = [this, shown, left] {
+        --m_pending;
+        if (--*left > 0) return;
         const auto pick = [this](const QString &id) {
             for (const auto &value : std::as_const(m_versions)) {
                 const auto version = value.toObject();
@@ -184,6 +192,7 @@ void DocumentView::load()
         if (m_version.isEmpty()) m_version = pick({});
         if (m_version.isEmpty() && !m_versions.isEmpty()) m_version = m_versions.first().toObject();
         loadText();
+        if (m_tab == QLatin1String("related") && !m_relatedAsked) loadRelated();
     };
     m_backend.request("GET", documentPath(), {}, {}, [this, generation, settle](const Client::Reply &reply) {
         if (!live(generation)) return;
@@ -261,7 +270,70 @@ void DocumentView::loadText()
     });
 }
 
-void DocumentView::save(const QString &text, const QString &reason)
+void DocumentView::loadMoreRelated(const QString &direction)
+{
+    if (!m_active || busy() || !m_relatedLoaded)
+        return;
+    if ((direction == QLatin1String("incoming") && incomingMore())
+            || (direction == QLatin1String("outgoing") && outgoingMore()))
+        loadRelated(direction);
+}
+
+// Both directions of the document's references, or the next page of one
+// `direction`: Core pages each on its own, and a cursor names one.
+void DocumentView::loadRelated(const QString &direction)
+{
+    const bool more = !direction.isEmpty();
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("direction"), more ? direction : QStringLiteral("both"));
+    if (more)
+        query.addQueryItem(QStringLiteral("cursor"), direction == QLatin1String("incoming") ? m_incomingCursor : m_outgoingCursor);
+    const int generation = m_generation;
+    m_relatedAsked = true;
+    ++m_pending;
+    emit changed();
+    m_backend.request("GET", documentPath(QStringLiteral("/references?") + query.toString(QUrl::FullyEncoded)), {}, {},
+                      [this, generation, more](const Client::Reply &reply) {
+        if (!live(generation)) return;
+        --m_pending;
+        if (!reply.ok) {
+            if (!more) m_relatedAsked = false;
+            fail(failCode(reply));
+            return;
+        }
+        if (!more) clearRelated();
+        m_relatedAsked = true;
+        const auto data = reply.json.value(QStringLiteral("data")).toObject();
+        const auto next = [](const QJsonObject &side) {
+            const auto page = side.value(QStringLiteral("page")).toObject();
+            return page.value(QStringLiteral("has_more")).toBool() ? page.value(QStringLiteral("next_cursor")).toString() : QString();
+        };
+        if (data.contains(QStringLiteral("incoming"))) {
+            const auto side = data.value(QStringLiteral("incoming")).toObject();
+            for (const auto &row : side.value(QStringLiteral("references")).toArray()) m_incoming.append(row);
+            m_hiddenCount = side.value(QStringLiteral("hidden_count")).toInt();
+            m_incomingCursor = next(side);
+        }
+        if (data.contains(QStringLiteral("outgoing"))) {
+            const auto side = data.value(QStringLiteral("outgoing")).toObject();
+            for (const auto &row : side.value(QStringLiteral("references")).toArray()) m_outgoing.append(row);
+            m_outgoingCursor = next(side);
+        }
+        m_relatedLoaded = true;
+        emit changed();
+    });
+}
+
+void DocumentView::clearRelated()
+{
+    m_relatedAsked = m_relatedLoaded = false;
+    m_hiddenCount = 0;
+    m_incoming = m_outgoing = {};
+    m_incomingCursor.clear();
+    m_outgoingCursor.clear();
+}
+
+void DocumentView::save(const QString &text, const QString &reason, bool paths, const QVariantMap &proposal)
 {
     if (!allows("save-document"))
         return;
@@ -272,8 +344,12 @@ void DocumentView::save(const QString &text, const QString &reason)
                            {QStringLiteral("content_type"), m_version.value(QStringLiteral("content_type"))}};
     if (!reason.trimmed().isEmpty())
         descriptor.insert(QStringLiteral("reason"), reason.trimmed());
+    for (const QString &key : {QStringLiteral("base_version_id"), QStringLiteral("review_id")})
+        if (!proposal.value(key).toString().isEmpty())
+            descriptor.insert(key, proposal.value(key).toString());
+    const bool update = descriptor.contains(QStringLiteral("review_id"));
     if (markdown)
-        descriptor.insert(QStringLiteral("references"), Assets::references(text));
+        descriptor.insert(QStringLiteral("references"), Assets::references(text, paths));
     const int generation = m_generation;
     ++m_pending;
     m_errorCode.clear();
@@ -281,15 +357,16 @@ void DocumentView::save(const QString &text, const QString &reason)
     m_notice.clear();
     emit changed();
     m_backend.upload(m_orgId, descriptor, bytes, [this, generation] { return live(generation); },
-                     [this](const Client::Reply &reply) {
+                     [this, update](const Client::Reply &reply) {
         --m_pending;
         if (!reply.ok) {
             fail(failCode(reply), reply.json.value(QStringLiteral("details")).toObject().value(QStringLiteral("index")).toInt(-1));
             return;
         }
-        const bool review = reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("review")).isObject();
-        m_notice = review ? QStringLiteral("review_requested") : QStringLiteral("version_published");
-        emit saved();
+        const QJsonValue review = reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("review"));
+        m_notice = !review.isObject() ? QStringLiteral("version_published")
+                 : update ? QStringLiteral("review_updated") : QStringLiteral("review_requested");
+        emit saved(jsonId(review.toObject().value(QStringLiteral("id"))));
         m_session.documents()->reload();
         load();
     });
@@ -320,7 +397,7 @@ bool DocumentView::allows(QByteArrayView id) const
         return false;
     const bool idle = !busy();
     const bool editing = m_tab == QLatin1String("edit") && editable() && idle;
-    if (id == "view-tab" || id == "versions-tab") return true;
+    if (id == "view-tab" || id == "versions-tab" || id == "related-tab") return true;
     if (id == "edit-tab") return editable();
     if (id == "reviews-tab") return m_extraTabs.contains(QStringLiteral("reviews"));
     if (id == "download-version") return idle && !m_version.isEmpty();

@@ -7,7 +7,8 @@ import "../chrome"
 import "../chrome/Messages.js" as Messages
 
 // The controlled-documents add-on's Reviews tab: the document's reviews,
-// newest first. A tap or the arrows select one; Enter, a double tap, or the
+// open ones first, each open one with how it stands against the published
+// version. A tap or the arrows select one; Enter, a double tap, or the
 // screen's Open review opens it on its own page, where it is decided.
 ColumnLayout {
     id: list
@@ -17,6 +18,11 @@ ColumnLayout {
 
     function memberEmail(id) {
         return list.control.members.find(function (member) { return String(member.id) === String(id) })?.email ?? ""
+    }
+    // The published version a review changes.
+    function baseVersion(id) {
+        const number = Session.documentView.versions.find(function (version) { return version.id === id })?.version_number
+        return number !== undefined ? qsTr("on version %1").arg(number) : ""
     }
     function select(index) {
         const review = list.control.reviews[index]
@@ -74,7 +80,10 @@ ColumnLayout {
             cursor: reviews.currentIndex === row.index
             selected: list.control.selectedReviewId === row.modelData.id
             title: row.modelData.reason
-            detail: [Messages.reviewStatus(row.modelData.status), list.memberEmail(row.modelData.author_membership_id),
+            detail: [row.modelData.status === "open" ? Messages.mergeState(row.modelData.merge_state)
+                                                     : Messages.reviewStatus(row.modelData.status),
+                     list.memberEmail(row.modelData.author_membership_id),
+                     list.baseVersion(row.modelData.base_version_id),
                      row.modelData.inserted_at ? new Date(row.modelData.inserted_at).toLocaleString(Qt.locale(), Locale.ShortFormat) : ""]
                     .filter(function (part) { return part !== "" }).join(" · ")
             onClicked: list.select(row.index)

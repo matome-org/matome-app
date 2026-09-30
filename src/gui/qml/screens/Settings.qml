@@ -76,22 +76,23 @@ FocusScope {
         settings.targetAction = action
         confirm.title = action === "remove" ? qsTr("Remove %1?").arg(email)
                       : action === "cancel" ? qsTr("Cancel invitation for %1?").arg(email)
-                      : action === "revoke" ? qsTr("Revoke this access grant?")
-                      : qsTr("Remove this space rule?")
+                      : qsTr("Revoke this access grant?")
         confirm.detail = action === "remove" ? qsTr("This person will lose access to the organization.")
                        : action === "cancel" ? qsTr("The invitation link will stop working.")
-                       : action === "revoke" ? qsTr("%1 loses what this role allows in the space. Access from other grants is preserved.").arg(email)
-                       : qsTr("Existing controlled documents will remain blocked until the rule is reactivated or their control is removed.")
-        confirm.reasonLabel = action === "remove-rule" ? qsTr("Reason for removing the space rule") : ""
+                       : qsTr("%1 loses what this role allows in the space. Access from other grants is preserved.").arg(email)
         confirm.action = action === "remove" ? qsTr("Remove")
-                       : action === "cancel" ? qsTr("Cancel invitation")
-                       : action === "revoke" ? qsTr("Revoke") : qsTr("Remove rule")
+                       : action === "cancel" ? qsTr("Cancel invitation") : qsTr("Revoke")
         confirm.open()
     }
     // Space settings follow the space picked in the Spaces section.
     function openSpace(id) {
         Session.spaceAccess.open(id)
         Session.controlledRule.open(id)
+    }
+    // Document control's own page under Add-ons, on `spaceId`'s rule.
+    function configureControl(spaceId) {
+        settings.section = "addons"
+        commerce.openProduct("controlled_docs", spaceId)
     }
     function closeDialogs() {
         confirm.close()
@@ -360,36 +361,6 @@ FocusScope {
                         onActivated: Session.controlledRule.addRoles()
                     }
                     ActionButton {
-                        visible: settings.section === "spaces" && Session.controlledRule.readable
-                        text: Session.controlledRule.rule.require_version_references === true
-                              ? qsTr("Let links follow new versions") : qsTr("Require pinned versions")
-                        icon: "image"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.controlledRule.busy && Session.controlledRule.rule.id !== undefined
-                        onActivated: Session.controlledRule.save(Session.controlledRule.rule.active === true,
-                                                                 Session.controlledRule.rule.require_version_references !== true)
-                    }
-                    ActionButton {
-                        visible: settings.section === "spaces" && Session.controlledRule.readable && Session.controlledRule.rule.id !== undefined
-                        text: qsTr("Remove space rule")
-                        icon: "trash"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.controlledRule.busy
-                        onActivated: settings.ask("remove-rule", "", "")
-                    }
-                    ActionButton {
-                        visible: settings.section === "spaces" && Session.controlledRule.readable
-                        text: Session.controlledRule.rule.active === true ? qsTr("Pause space rule") : qsTr("Activate space rule")
-                        icon: Session.controlledRule.rule.active === true ? "pause" : "check"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.controlledRule.busy
-                        onActivated: Session.controlledRule.save(Session.controlledRule.rule.active !== true,
-                                                                 Session.controlledRule.rule.require_version_references === true)
-                    }
-                    ActionButton {
                         visible: settings.section === "spaces" && Session.controlledRule.canGrantSelf
                         text: qsTr("Grant me management access")
                         icon: "user"
@@ -449,45 +420,6 @@ FocusScope {
                         onActivated: commerce.subscribe()
                     }
 
-                    ActionButton {
-                        objectName: "changeQuantityButton"
-                        visible: settings.section === "addons" && Session.orgBilling.canManage
-                        text: qsTr("Change quantity")
-                        icon: "rename"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: commerce.canChangeQuantity
-                        onActivated: commerce.changeQuantity()
-                    }
-                    ActionButton {
-                        objectName: "pauseAddonButton"
-                        visible: settings.section === "addons" && Session.addOns.canInstall
-                        text: qsTr("Pause installation")
-                        icon: "pause"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: commerce.canPause
-                        onActivated: commerce.pause()
-                    }
-                    ActionButton {
-                        objectName: "uninstallAddonButton"
-                        visible: settings.section === "addons" && Session.addOns.canInstall
-                        text: qsTr("Uninstall")
-                        icon: "trash"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: commerce.canUninstall
-                        onActivated: commerce.uninstall()
-                    }
-                    ActionButton {
-                        objectName: "installAddonButton"
-                        visible: settings.section === "addons" && Session.addOns.canInstall
-                        text: commerce.installLabel
-                        icon: "check"
-                        primary: true
-                        usable: commerce.canInstall
-                        onActivated: commerce.install()
-                    }
                 }
                 Label {
                     objectName: "orgAdminError"
@@ -677,13 +609,27 @@ FocusScope {
                         }
                         Label {
                             visible: Session.controlledRule.readable
-                            text: Session.controlledRule.rule.require_version_references === true
+                            text: Session.controlledRule.rule.effective_settings?.require_version_references === true
                                   ? qsTr("Images and linked files must pin a version, so an approved document shows exactly what was reviewed.")
                                   : qsTr("Images and linked files may follow later versions of their files.")
                         }
                         Label {
+                            visible: Session.controlledRule.readable
+                            text: qsTr("%n approval(s) publish a proposal.", "", Session.controlledRule.rule.effective_settings?.required_approvals ?? 1)
+                                  + " " + (Session.controlledRule.rule.effective_settings?.allow_author_approval === true
+                                           ? qsTr("Authors may approve their own proposals.")
+                                           : qsTr("Authors cannot approve their own proposals."))
+                        }
+                        Label {
                             visible: Session.controlledRule.rolesMissing
                             text: qsTr("Add review roles to grant reviewer and manager access under Access.")
+                        }
+                        ActionButton {
+                            objectName: "configureControlButton"
+                            visible: Session.orgBilling.available
+                            text: qsTr("Configure document control")
+                            icon: "settings"
+                            onActivated: settings.configureControl(spacePicker.currentValue)
                         }
                     }
                 }
@@ -843,10 +789,8 @@ FocusScope {
                 Session.orgAdmin.removeMember(settings.targetId)
             else if (settings.targetAction === "cancel")
                 Session.orgAdmin.cancelInvitation(settings.targetId)
-            else if (settings.targetAction === "revoke")
-                Session.spaceAccess.revoke(settings.targetId)
             else
-                Session.controlledRule.remove(confirm.reason)
+                Session.spaceAccess.revoke(settings.targetId)
         }
         onVisibleChanged: if (!confirm.visible && settings.visible) settings.focusDefault()
     }

@@ -77,6 +77,10 @@ public:
     { m_subscriptions[orgId] = subscription; }
     void seedAddOns(const QString &orgId, const QJsonArray &products)
     { m_addOns[orgId] = products; }
+    // A catalog product beside the built-in ones, with its settings schema.
+    void seedCatalogProduct(const QJsonObject &product) { m_catalog.append(product); }
+    // The body of the last installation change.
+    QJsonObject addOnRequest() const { return m_addOnRequest; }
     QString lastIdempotency() const { return m_lastIdempotency; }
     int hits() const { return m_hits; }
 
@@ -98,6 +102,10 @@ public:
     {
         addDocument(spaceId, title, folderId, content);
     }
+
+    /// What `GET …/documents/:id/references` answers in `data` for `documentId`;
+    /// both directions are empty until seeded.
+    void seedReferences(const QString &documentId, const QJsonObject &data) { m_references.insert(documentId, data); }
 
     void seedSpace(const QString &orgId, const QString &name) { addSpace(orgId, name); }
 
@@ -257,6 +265,8 @@ public:
         m_members.clear();
         m_subscriptions.clear();
         m_addOns.clear();
+        m_catalog = {};
+        m_addOnRequest = {};
         m_billingRequest = {};
         checkoutExpiresAt = {};
         m_packages = {};
@@ -638,8 +648,11 @@ private:
                                    [&](const QString &name) { return addSpace(orgId, name); });
                 }
             }
-            if (method == "GET" && m_lastPath == QLatin1String("/api/v1/add-ons"))
-                return jsonReply(200, {{QStringLiteral("products"), addOnCatalog()}});
+            if (method == "GET" && m_lastPath == QLatin1String("/api/v1/add-ons")) {
+                QJsonArray catalog = addOnCatalog();
+                for (const auto &product : std::as_const(m_catalog)) catalog.append(product);
+                return jsonReply(200, {{QStringLiteral("products"), catalog}});
+            }
             const QStringList parts = m_lastPath.split(QLatin1Char('/'));
             if (const auto reply = organizationCommerce(method, parts, json))
                 return *reply;
@@ -698,6 +711,12 @@ private:
                     data.insert(QStringLiteral("url"), origin() + QStringLiteral("/files/") + itemId);
                     data.insert(QStringLiteral("method"), QStringLiteral("GET"));
                     return jsonReply(200, QJsonObject{{QStringLiteral("data"), data}});
+                }
+                if (kind == QLatin1String("documents") && action == QLatin1String("references") && method == "GET") {
+                    const QJsonObject none{{QStringLiteral("incoming"), QJsonObject{{QStringLiteral("references"), QJsonArray()},
+                                                                                    {QStringLiteral("hidden_count"), 0}}},
+                                           {QStringLiteral("outgoing"), QJsonObject{{QStringLiteral("references"), QJsonArray()}}}};
+                    return jsonReply(200, QJsonObject{{QStringLiteral("data"), m_references.value(itemId, none)}});
                 }
                 if (kind == QLatin1String("documents") && action == QLatin1String("move")) {
                     const QString folderId = json.value(QStringLiteral("folder_id")).toString();
@@ -992,9 +1011,17 @@ private:
                 QJsonObject product = m_addOns[orgId].at(i).toObject();
                 if (product.value(QStringLiteral("key")).toString() != key) continue;
                 QJsonObject installation = product.value(QStringLiteral("installation")).toObject();
-                if (method == "PUT") installation = json;
-                installation.insert(QStringLiteral("status"), method == "PUT" ? QStringLiteral("active") : QStringLiteral("paused"));
-                installation.insert(QStringLiteral("revision"), 2);
+                m_addOnRequest = json;
+                if (method == "PATCH") {
+                    QJsonObject settings = installation.value(QStringLiteral("settings")).toObject();
+                    const auto patch = json.value(QStringLiteral("settings")).toObject();
+                    for (auto it = patch.begin(); it != patch.end(); ++it) settings.insert(it.key(), it.value());
+                    installation.insert(QStringLiteral("settings"), settings);
+                } else {
+                    if (method == "PUT") installation = json;
+                    installation.insert(QStringLiteral("status"), method == "PUT" ? QStringLiteral("active") : QStringLiteral("paused"));
+                }
+                installation.insert(QStringLiteral("revision"), installation.value(QStringLiteral("revision")).toInt() + 1);
                 product.insert(QStringLiteral("installation"), installation);
                 m_addOns[orgId].replace(i, product);
                 return jsonReply(200, {{QStringLiteral("installation"), installation}});
@@ -1514,6 +1541,8 @@ private:
     QHash<QString, QJsonArray> m_members;
     QHash<QString, QJsonObject> m_subscriptions;
     QHash<QString, QJsonArray> m_addOns;
+    QJsonArray m_catalog;
+    QJsonObject m_addOnRequest;
     QJsonObject m_billingRequest;
     QJsonArray m_packages;
     QHash<QString, QJsonArray> m_invitations;
@@ -1538,6 +1567,7 @@ private:
     QHash<QString, QJsonObject> m_uploads;
     QHash<QString, QByteArray> m_blobs;
     QHash<QString, QJsonObject> m_trashed;
+    QHash<QString, QJsonObject> m_references;
 };
 
 } // namespace test

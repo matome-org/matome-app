@@ -122,12 +122,13 @@ void ControlledRule::refresh()
     });
 }
 
-void ControlledRule::save(bool active, bool requireVersionReferences)
+void ControlledRule::save(bool active, const QVariantMap &settings)
 {
     if (busy() || !readable())
         return;
-    change("PUT", contentPath(m_orgId, m_spaceId, QStringLiteral("controlled-docs-rule")),
-           {{QStringLiteral("active"), active}, {QStringLiteral("require_version_references"), requireVersionReferences}},
+    QJsonObject body{{QStringLiteral("active"), active}};
+    if (!settings.isEmpty()) body.insert(QStringLiteral("settings"), QJsonObject::fromVariantMap(settings));
+    change("PUT", contentPath(m_orgId, m_spaceId, QStringLiteral("controlled-docs-rule")), body,
            idempotentMatchHeader(m_rule.value(QStringLiteral("revision")).toInt()), QStringLiteral("rule_saved"));
 }
 

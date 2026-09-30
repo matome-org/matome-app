@@ -51,6 +51,8 @@
         <file>qml/screens/Auth.qml</file>
         <file>qml/screens/Settings.qml</file>
         <file>qml/screens/OrgCommerce.qml</file>
+        <file>qml/screens/AddOnDetail.qml</file>
+        <file>qml/screens/AddOnSetting.qml</file>
         <file>qml/screens/OrgAdminPeople.qml</file>
         <file>qml/chrome/RolePicker.qml</file>
         <file>qml/chrome/Card.qml</file>

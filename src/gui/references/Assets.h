@@ -59,9 +59,10 @@ public:
     void clear();
     void fetch(const Target &target, Fetched done);
 
-    /// The `version` references `markdown` links, in order and once each,
-    /// as `POST /uploads` declares them.
-    static QJsonArray references(const QString &markdown);
+    /// The references `markdown` links, in order and once each, as
+    /// `POST /uploads` declares them: `matome:` links by document (and
+    /// version), `/` links by path unless `paths` is false.
+    static QJsonArray references(const QString &markdown, bool paths = true);
     /// `markdown` ready for a TextEdit: pinned images come from the image
     /// provider no wider than `width`, signed through `viaVersionId`; other
     /// remote images become a line naming them unless `external`.
@@ -73,15 +74,15 @@ public:
     Q_INVOKABLE static QString markdownLink(const QString &title, const QString &documentId,
                                             const QString &versionId, bool image);
     /// The Markdown that links a file of the space by its `path` from the
-    /// space root: plain Markdown, no reference Core keeps.
+    /// space root, declared to Core as a `path` reference.
     Q_INVOKABLE static QString pathLink(const QString &title, const QString &path);
     /// The image provider source of one pinned image, signed through
     /// `viaVersionId` (empty: a draft no version pins) and no wider than `width`.
     Q_INVOKABLE static QString source(const QString &orgId, const QString &spaceId, const QString &viaVersionId,
                                       const QString &documentId, const QString &versionId, int width);
-    /// Where the reference at `index` of references(markdown) is linked
-    /// first: `{start, length}` of its link, empty when there is none.
-    Q_INVOKABLE QVariantMap referenceAt(const QString &markdown, int index) const;
+    /// Where the reference at `index` of references(markdown, paths) is
+    /// linked first: `{start, length}` of its link, empty when there is none.
+    Q_INVOKABLE QVariantMap referenceAt(const QString &markdown, int index, bool paths = true) const;
     /// Whether `markdown` links an image that render() would block.
     Q_INVOKABLE bool linksExternal(const QString &markdown) const;
 

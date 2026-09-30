@@ -13,7 +13,9 @@ class Session;
 /// a space where the add-on is installed, and adds nothing otherwise: whether the document is
 /// managed, its reviews, the one opened with its candidate and diff, the
 /// decisions on it, and managing or unmanaging the document. Saving an edit of a managed document is the
-/// document screen's own upload, which Core turns into a review.
+/// document screen's own upload, which Core turns into a review; each save
+/// opens its own. The author updates a review that fell behind a later
+/// publication, in one step or by resolving its conflicts in the editor.
 class ControlledDocs : public QObject
 {
     Q_OBJECT
@@ -21,8 +23,15 @@ class ControlledDocs : public QObject
     Q_PROPERTY(bool active READ active NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(bool controlled READ controlled NOTIFY changed)
-    Q_PROPERTY(bool canDecide READ canDecide NOTIFY changed)
-    Q_PROPERTY(bool reviewOpen READ reviewOpen NOTIFY changed)
+    Q_PROPERTY(bool canReject READ canReject NOTIFY changed)
+    Q_PROPERTY(bool canApprove READ canApprove NOTIFY changed)
+    Q_PROPERTY(bool authored READ authored NOTIFY changed)
+    Q_PROPERTY(bool approved READ approved NOTIFY changed)
+    Q_PROPERTY(bool authorMayApprove READ authorMayApprove NOTIFY changed)
+    Q_PROPERTY(int approvals READ approvals NOTIFY changed)
+    Q_PROPERTY(int requiredApprovals READ requiredApprovals NOTIFY changed)
+    Q_PROPERTY(int openReviews READ openReviews NOTIFY changed)
+    Q_PROPERTY(QString proposalReviewId READ proposalReviewId NOTIFY changed)
     Q_PROPERTY(bool pinsLinks READ pinsLinks NOTIFY changed)
     Q_PROPERTY(QString errorCode READ errorCode NOTIFY changed)
     Q_PROPERTY(QString reviewsError READ reviewsError NOTIFY changed)
@@ -41,8 +50,31 @@ public:
     bool active() const { return m_active; }
     bool busy() const { return m_pending > 0 || m_reviewPending > 0 || m_saving; }
     bool controlled() const;
-    bool canDecide() const;
-    bool reviewOpen() const;
+    /// Whether this person may reject the opened review: never its author.
+    bool canReject() const;
+    /// Whether this person may approve the opened review: it is `clean`, as
+    /// Core approves only a review based on the published version, they
+    /// have not approved its candidate yet, and they did not write it
+    /// unless the review's settings let authors approve.
+    bool canApprove() const;
+    /// Whether this person wrote the opened review.
+    bool authored() const;
+    /// Whether this person already approved the opened review's candidate.
+    bool approved() const;
+    bool authorMayApprove() const;
+    /// The approvals of the opened review's candidate, and how many
+    /// distinct approvers publish it.
+    int approvals() const;
+    int requiredApprovals() const;
+    int openReviews() const;
+    /// The review whose proposal the editor holds, empty for a new proposal.
+    QString proposalReviewId() const { return m_draftReviewId; }
+    /// What a save of the editor declares to Core beside the text: the
+    /// published version it was edited from and, while the editor holds a
+    /// review's proposal, that review. Empty unless the document is managed.
+    Q_INVOKABLE QVariantMap proposal() const;
+    /// The editor no longer holds a review's proposal.
+    Q_INVOKABLE void clearProposal();
     /// Links in this managed document must pin a version: the space rule
     /// requires it, so Core refuses links that follow the current one.
     bool pinsLinks() const;
@@ -74,12 +106,18 @@ public:
 signals:
     void changed();
     void requested(const QString &id);
+    /// The opened review's proposal merged over the published version, for
+    /// the editor; `conflicts` blocks are marked in it.
+    void proposalReady(const QString &text, int conflicts);
 
 private:
     bool live(int generation) const;
     AddOnBackend::Live guard() const;
     bool unavailable() const;
     bool installed() const;
+    /// The review is open to this person's decision, author or not.
+    bool reviewing() const;
+    QVariant reviewSetting(const QString &key) const;
     void attach();
     void detach();
     QString documentPath(const QString &suffix = {}) const;
@@ -90,11 +128,18 @@ private:
     void loadReview();
     void mutation(const QByteArray &method, const QString &path, QJsonObject body,
                   int revision, const QString &notice);
+    /// Merges the opened review over the published version; a clean merge
+    /// becomes its candidate when `submit`, else the editor gets it.
+    void merge(bool submit);
+    void resubmit(const QString &text, const QString &baseVersionId);
+    bool mergeState(const char *state) const;
+    void reloadAll();
     Session &m_session;
     DocumentView &m_view;
     AddOnManager &m_addOns;
     AddOnBackend &m_backend;
     QString m_orgId, m_spaceId, m_documentId, m_membershipId, m_selectedId;
+    QString m_draftReviewId, m_draftBaseId;
     bool m_active = false, m_saving = false, m_ruleRead = false;
     int m_generation = 0, m_pending = 0, m_reviewGeneration = 0, m_reviewPending = 0;
     QJsonObject m_rule, m_review, m_diffReferences;

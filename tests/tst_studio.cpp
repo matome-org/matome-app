@@ -79,6 +79,7 @@ private slots:
     void keyboardDrivesTheExplorer();
     void tabReachesEveryRegion();
     void explorerOpensDocumentsOnlyWhenAsked();
+    void relatedTabOpensLinkedDocuments();
     void f6CyclesRegions();
     void keyboardWalksTheTree();
     void keyboardOpensSheetKeymapAndUpload();
@@ -109,6 +110,7 @@ private slots:
     void switcherTakesKeysAndPointer();
     void accountMenuChoosesALanguage();
     void settingsSelectsPackagesAndRespectsBillingRoles();
+    void addOnPageConfiguresSettings();
     void emptyFieldsSayWhatIsMissing();
     void expiredTokenRefreshesMidUse();
     void relaunchRemembersTheLastSession();
@@ -1147,6 +1149,56 @@ void TestStudio::explorerOpensDocumentsOnlyWhenAsked()
     key(Qt::Key_Escape);
     QTRY_VERIFY(!m_session->documentView()->active());
     QTRY_VERIFY(itemNamed(QStringLiteral("explorer"))->isVisible());
+}
+
+// 4 shows what links the document and what it links; Enter on a source
+// opens it, and a broken link is listed but dimmed.
+void TestStudio::relatedTabOpensLinkedDocuments()
+{
+    openSpace(QStringLiteral("Inbox"));
+    addFolder(QStringLiteral("Guides"));
+    const QString folder = entryId(QStringLiteral("Guides"));
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("notes.md"), folder, QByteArray("# Notes\n"));
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("plan.md"), folder, QByteArray("# Plan\n"));
+    m_session->navigate(QStringLiteral("folder"), folder);
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!entryId(QStringLiteral("plan.md")).isEmpty());
+    const QString notes = entryId(QStringLiteral("notes.md")), plan = entryId(QStringLiteral("plan.md"));
+    m_core.seedReferences(notes, {
+        {QStringLiteral("incoming"), QJsonObject{{QStringLiteral("hidden_count"), 1}, {QStringLiteral("references"), QJsonArray{
+            QJsonObject{{QStringLiteral("document_id"), plan}, {QStringLiteral("title"), QStringLiteral("plan.md")},
+                        {QStringLiteral("path"), QStringLiteral("/plan.md")}}}}}},
+        {QStringLiteral("outgoing"), QJsonObject{{QStringLiteral("references"), QJsonArray{
+            QJsonObject{{QStringLiteral("position"), 0}, {QStringLiteral("mode"), QStringLiteral("path")},
+                        {QStringLiteral("path"), QStringLiteral("/gone.md")},
+                        {QStringLiteral("target"), QJsonObject{{QStringLiteral("state"), QStringLiteral("broken")}}}}}}}}});
+    m_session->openEntry(QStringLiteral("document"), notes);
+    QTRY_VERIFY(m_session->documentView()->active());
+    QVERIFY(waitIdle());
+    settle();
+    key(Qt::Key_4);
+    QTRY_COMPARE(m_session->documentView()->tab(), QStringLiteral("related"));
+    QTRY_VERIFY(m_session->documentView()->relatedLoaded());
+    settle();
+    QQuickItem *source = itemNamed(QStringLiteral("incoming_0"));
+    QVERIFY(source && source->isVisible());
+    QCOMPARE(source->property("title").toString(), QStringLiteral("plan.md"));
+    QVERIFY(itemNamed(QStringLiteral("relatedHidden"))->isVisible());
+    QQuickItem *broken = itemNamed(QStringLiteral("outgoing_0"));
+    QVERIFY(broken);
+    QCOMPARE(broken->property("title").toString(), QStringLiteral("/gone.md"));
+    QCOMPARE(broken->property("detail").toString(), QStringLiteral("Nothing is at this path any more · By path"));
+    QVERIFY(broken->opacity() < 1);
+    QVERIFY(!itemNamed(QStringLiteral("relatedEmpty"))->isVisible());
+    itemNamed(QStringLiteral("incomingList"))->forceActiveFocus();
+    settle();
+    key(Qt::Key_Return);
+    QTRY_COMPARE(m_session->documentView()->documentId(), plan);
+    QCOMPARE(m_session->documentView()->tab(), QStringLiteral("view"));
+    key(Qt::Key_4);
+    QTRY_VERIFY(m_session->documentView()->relatedLoaded());
+    settle();
+    QVERIFY(itemNamed(QStringLiteral("relatedEmpty"))->isVisible());
 }
 
 void TestStudio::tabReachesEveryRegion()
@@ -2302,6 +2354,68 @@ void TestStudio::settingsSelectsPackagesAndRespectsBillingRoles()
     // Packages stay readable; only a billing manager may subscribe.
     QVERIFY(!shown(QStringLiteral("subscribePackageButton")));
     QVERIFY(!m_session->orgBilling()->canManage());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->settingsActive());
+}
+
+// An add-on's tile opens its page, whose form follows the catalog's
+// settings schema; saving sends only what changed.
+void TestStudio::addOnPageConfiguresSettings()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    m_core.seedCatalogProduct({{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("name"), QStringLiteral("Controlled documents")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
+        {QStringLiteral("settings_schema"), QJsonObject{
+            {QStringLiteral("allow_author_approval"), QJsonObject{{QStringLiteral("type"), QStringLiteral("boolean")}, {QStringLiteral("default"), false}}},
+            {QStringLiteral("required_approvals"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}, {QStringLiteral("default"), 1},
+                {QStringLiteral("minimum"), 1}, {QStringLiteral("maximum"), 10}}}}},
+        {QStringLiteral("skus"), QJsonArray()}});
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")},
+            {QStringLiteral("space_ids"), QJsonArray()}, {QStringLiteral("revision"), 1},
+            {QStringLiteral("settings"), QJsonObject{{QStringLiteral("allow_author_approval"), false},
+                {QStringLiteral("required_approvals"), 1}}}}}}});
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
+    QTRY_VERIFY(shown(QStringLiteral("addon_controlled_docs")));
+    QVERIFY(!shown(QStringLiteral("addonDetail")));
+    QVERIFY(!shown(QStringLiteral("installAddonButton")));
+    clickItem(waitItem(QStringLiteral("addon_controlled_docs")));
+    QTRY_VERIFY(shown(QStringLiteral("addonDetail")));
+    QVERIFY(!shown(QStringLiteral("addon_controlled_docs")));
+    QCOMPARE(propertyOf(QStringLiteral("addonTitle"), "text").toString(), QStringLiteral("Controlled documents"));
+    QVERIFY(shown(QStringLiteral("pauseAddonButton")));
+    QVERIFY(shown(QStringLiteral("addonSettingMode_organization_allow_author_approval")));
+    QVERIFY(!shown(QStringLiteral("addonSettingMode_organization_required_approvals")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonSettingValue_organization_required_approvals"), "text").toString(), QStringLiteral("1"));
+    QVERIFY(!propertyOf(QStringLiteral("saveAddonSettingsButton"), "usable").toBool());
+    // Out of the schema's bounds, the value cannot be saved.
+    clicks(waitItem(QStringLiteral("addonSettingValue_organization_required_approvals")), QStringLiteral("0"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("addonSettingValue_organization_required_approvals"), "invalid").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("saveAddonSettingsButton"), "usable").toBool());
+    key(Qt::Key_Backspace);
+    type(QStringLiteral("3"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("saveAddonSettingsButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("saveAddonSettingsButton")));
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    const QJsonObject sent = m_core.addOnRequest().value(QStringLiteral("settings")).toObject();
+    QCOMPARE(sent.value(QStringLiteral("required_approvals")).toInt(), 3);
+    QVERIFY(!sent.contains(QStringLiteral("allow_author_approval")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonSettingValue_organization_required_approvals"), "text").toString(), QStringLiteral("3"));
+    QTRY_VERIFY(shown(QStringLiteral("addonNotice")));
+    // Escape leaves the add-on for the list before it leaves Settings.
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(shown(QStringLiteral("addon_controlled_docs")));
+    QVERIFY(m_session->settingsActive());
     key(Qt::Key_Escape);
     QTRY_VERIFY(!m_session->settingsActive());
 }

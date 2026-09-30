@@ -2,6 +2,261 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ja" sourcelanguage="en">
 <context>
+    <name>AddOnDetail</name>
+    <message>
+        <location filename="../qml/screens/AddOnDetail.qml" line="+107"/>
+        <source>All add-ons</source>
+        <translation>すべてのアドオン</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+20"/>
+        <source>Installed in %n space(s)</source>
+        <translation>
+            <numerusform>%n件のスペースにインストール済み</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installed in all spaces</source>
+        <translation>すべてのスペースにインストール済み</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation paused</source>
+        <translation>インストール一時停止中</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not installed</source>
+        <translation>未インストール</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>This organization’s plan does not include this add-on. Purchase it to install it.</source>
+        <translation>この組織のプランにはこのアドオンが含まれていません。インストールするには購入してください。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Used: %1 · Reserved: %2 · Allowance: %3</source>
+        <translation>使用済み：%1 · 予約済み：%2 · 利用枠：%3</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unlimited</source>
+        <translation>無制限</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>%1 · version %2</source>
+        <translation>%1 · バージョン%2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Purchased: %1 · Total assigned: %2</source>
+        <translation>購入数：%1 · 付与合計：%2</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Change quantity</source>
+        <translation>数量を変更</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Pause installation</source>
+        <translation>インストールを一時停止</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Uninstall</source>
+        <translation>アンインストール</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Where it runs</source>
+        <translation>動作する場所</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation controls where an add-on runs; it does not control billing.</source>
+        <translation>インストールはアドオンが動作する場所を決めるもので、請求は変わりません。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>All spaces</source>
+        <translation>すべてのスペース</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Only the selected spaces</source>
+        <translation>選択したスペースのみ</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Spaces</source>
+        <translation>スペース</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Save spaces</source>
+        <translation>スペースを保存</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Resume</source>
+        <translation>再開</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Install</source>
+        <translation>インストール</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Organization settings</source>
+        <translation>組織の設定</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>These settings apply once the add-on is installed.</source>
+        <translation>これらの設定はアドオンのインストール後に適用されます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Every space uses these settings unless it sets its own.</source>
+        <translation>独自に設定しない限り、すべてのスペースがこれらの設定を使います。</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Only organization owners and administrators can change add-on settings.</source>
+        <translation>アドオンの設定を変更できるのは組織のオーナーと管理者だけです。</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Save settings</source>
+        <translation>設定を保存</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Space settings</source>
+        <translation>スペースの設定</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Each space follows the organization settings unless it sets its own. A space’s rule and settings cannot change while it has open reviews.</source>
+        <translation>各スペースは独自に設定しない限り組織の設定に従います。未完了のレビューがある間は、スペースのルールと設定を変更できません。</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Space</source>
+        <translation>スペース</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Working…</source>
+        <translation>処理中…</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>You need management access</source>
+        <translation>管理権限が必要です</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No rule in this space yet</source>
+        <translation>このスペースにはまだルールがありません</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Space rule active</source>
+        <translation>スペースのルールは有効</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Space rule paused</source>
+        <translation>スペースのルールは一時停止中</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Organization administrators manage document control only through an explicit grant: use Grant me management access.</source>
+        <translation>組織の管理者は明示的な付与によってのみ文書管理を行えます。「自分に管理アクセスを付与」を使ってください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ask an organization administrator to grant you the Document control managers role here.</source>
+        <translation>組織の管理者に、ここで Document control managers の役割を付与するよう依頼してください。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Saving settings or activating creates the space’s rule. Documents can be managed once it is active.</source>
+        <translation>設定を保存するか有効にすると、スペースのルールが作成されます。ルールが有効になると文書を管理できます。</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Grant me management access</source>
+        <translation>自分に管理権限を付与</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add review roles</source>
+        <translation>レビュー用の役割を追加</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Remove space rule</source>
+        <translation>スペースのルールを削除</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Pause space rule</source>
+        <translation>スペースのルールを一時停止</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Activate space rule</source>
+        <translation>スペースのルールを有効にする</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Save space settings</source>
+        <translation>スペースの設定を保存</translation>
+    </message>
+</context>
+<context>
+    <name>AddOnSetting</name>
+    <message>
+        <location filename="../qml/screens/AddOnSetting.qml" line="+35"/>
+        <location line="+48"/>
+        <source>On</source>
+        <translation>オン</translation>
+    </message>
+    <message>
+        <location line="-48"/>
+        <location line="+48"/>
+        <source>Off</source>
+        <translation>オフ</translation>
+    </message>
+    <message>
+        <location line="-47"/>
+        <source>Not set</source>
+        <translation>未設定</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Follow the organization: %1</source>
+        <translation>組織に従う: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Set for this space</source>
+        <translation>このスペースで設定</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>From %1 to %2</source>
+        <translation>%1〜%2</translation>
+    </message>
+</context>
+<context>
     <name>Auth</name>
     <message>
         <location filename="../qml/screens/Auth.qml" line="+26"/>
@@ -200,7 +455,44 @@
 <context>
     <name>DocumentScreen</name>
     <message>
-        <location filename="../qml/documents/DocumentScreen.qml" line="+45"/>
+        <location filename="../qml/documents/DocumentScreen.qml" line="+52"/>
+        <location line="+6"/>
+        <source>By path</source>
+        <translation>パスでリンク</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Unavailable file</source>
+        <translation>利用できないファイル</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Pinned version</source>
+        <translation>固定された版</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Update this review?</source>
+        <translation>このレビューを更新しますか？</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The edited text becomes the review&apos;s proposal, based on the published version. The review keeps its summary.</source>
+        <translation>編集したテキストが公開版に基づくレビューの提案になります。レビューの概要はそのまま残ります。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What changed</source>
+        <translation>変更内容</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+193"/>
+        <source>Update review</source>
+        <translation>レビューを更新</translation>
+    </message>
+    <message>
+        <location line="-189"/>
         <source>Submit your changes for review?</source>
         <translation>変更をレビューに提出しますか？</translation>
     </message>
@@ -286,12 +578,12 @@
     </message>
     <message>
         <location line="+3"/>
-        <location line="+150"/>
+        <location line="+172"/>
         <source>Submit for review</source>
         <translation>レビューに提出</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="-172"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
@@ -306,7 +598,7 @@
         <translation>確認</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+67"/>
         <source>Insert image</source>
         <translation>画像を挿入</translation>
     </message>
@@ -336,31 +628,53 @@
         <translation>この版を表示</translation>
     </message>
     <message>
-        <location line="+46"/>
-        <location line="+156"/>
+        <location line="+10"/>
+        <source>Open</source>
+        <translation>開く</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <location line="+171"/>
         <source>Version %1</source>
         <translation>第%1版</translation>
     </message>
     <message>
-        <location line="-154"/>
-        <location line="+154"/>
+        <location line="-169"/>
+        <location line="+169"/>
         <source>Current</source>
         <translation>現在</translation>
     </message>
     <message>
-        <location line="-154"/>
+        <location line="-169"/>
         <source>Earlier version</source>
         <translation>以前の版</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Managed · review open</source>
-        <translation>管理対象 · レビュー中</translation>
+        <location line="+86"/>
+        <source>You are editing the proposal of your review “%1”. Saving updates that review; discarding leaves it as it is.</source>
+        <translation>レビュー「%1」の提案を編集しています。保存するとそのレビューが更新され、破棄するとそのまま残ります。</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+7"/>
+        <source>Resolve each conflict before saving: keep the text you want between &lt;&lt;&lt;&lt;&lt;&lt;&lt; published and &gt;&gt;&gt;&gt;&gt;&gt;&gt; review, then delete the three marker lines.</source>
+        <translation>保存する前に各競合を解消してください。&lt;&lt;&lt;&lt;&lt;&lt;&lt; published と &gt;&gt;&gt;&gt;&gt;&gt;&gt; review の間で残したいテキストを選び、3 行のマーカーを削除します。</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Saving opens a new review of your changes. Other open reviews stay as they are.</source>
+        <translation>保存すると変更の新しいレビューが開きます。ほかの進行中のレビューはそのまま残ります。</translation>
+    </message>
+    <message>
+        <location line="-96"/>
         <source>Managed</source>
         <translation>管理対象</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0"/>
+        <source>Managed · %n open review(s)</source>
+        <translation>
+            <numerusform>管理対象 · 進行中のレビュー %n 件</numerusform>
+        </translation>
     </message>
     <message>
         <location line="+21"/>
@@ -378,12 +692,7 @@
         <translation>この種類のファイルはプレビューできません。ダウンロードして端末で開いてください。</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>A review of this document is open. Decide or cancel it before submitting more changes.</source>
-        <translation>この文書のレビューが進行中です。さらに変更を提出する前に、判断するか取り消してください。</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+26"/>
         <source>Paste or drop images to store them in the space&apos;s assets folder. Type @ or / to link a file, # at a line&apos;s start for actions.</source>
         <translation>画像を貼り付けるかドロップすると、スペースの assets フォルダーに保存されます。@ または / でファイルをリンクし、行頭の # で操作を表示します。</translation>
     </message>
@@ -407,6 +716,45 @@
         <location line="+37"/>
         <source>Versions</source>
         <translation>版</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>No other document links this one, and it links none.</source>
+        <translation>この文書にリンクしている文書はなく、この文書もどこにもリンクしていません。</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+26"/>
+        <source>Linked from</source>
+        <translation>リンク元</translation>
+    </message>
+    <message>
+        <location line="-26"/>
+        <location line="+26"/>
+        <source>Links to</source>
+        <translation>リンク先</translation>
+    </message>
+    <message>
+        <location line="-22"/>
+        <source>Show more</source>
+        <translation>さらに表示</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>No document you can open links this one.</source>
+        <translation>この文書にリンクしている、開ける文書はありません。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The current version links no files.</source>
+        <translation>現在の版はどのファイルにもリンクしていません。</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+38"/>
+        <source>%n more document(s) you cannot open link this one.</source>
+        <translation>
+            <numerusform>ほかに開けない文書%n件がこの文書にリンクしています。</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1135,17 +1483,97 @@
         <translation>このレビューは既に判断済みです。更新して結果を確認してください。</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>The published version changed. Refresh before proposing or deciding again.</source>
-        <translation>公開版が変更されました。再度提案または判断する前に更新してください。</translation>
+        <location line="+4"/>
+        <source>You already approved this version. Another reviewer must approve it too.</source>
+        <translation>このバージョンはすでに承認済みです。別のレビュアーの承認も必要です。</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>The server refused these settings. Check the allowed values and try again.</source>
+        <translation>サーバーがこの設定を拒否しました。使用できる値を確認して、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>This space has open reviews. Decide or cancel them before changing its rule or settings.</source>
+        <translation>このスペースには未完了のレビューがあります。ルールや設定を変更する前に、決定するかキャンセルしてください。</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Require pinned versions</source>
+        <translation>固定バージョンを必須にする</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Authors may approve their own proposals</source>
+        <translation>作成者が自分の提案を承認できる</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Required approvals</source>
+        <translation>必要な承認数</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Images and linked files must pin a version, so an approved document shows exactly what was reviewed.</source>
+        <translation>画像とリンクされたファイルは版を固定する必要があり、承認された文書はレビューされた内容をそのまま表示します。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The author’s approval counts toward the required approvals. Only another reviewer can reject.</source>
+        <translation>作成者の承認も必要な承認数に数えられます。却下できるのは別のレビュアーだけです。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How many different reviewers must approve a proposal before it is published.</source>
+        <translation>提案が公開されるまでに承認が必要な、異なるレビュアーの人数です。</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Approval recorded. The proposal is published once enough reviewers approve it.</source>
+        <translation>承認を記録しました。十分な数のレビュアーが承認すると提案が公開されます。</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Behind the published version</source>
+        <translation>公開版より古い</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Conflicts with the published version</source>
+        <translation>公開版と競合</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ready to approve</source>
+        <translation>承認可能</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Another review was published after yours. Your changes merge without conflicts: choose Update review to base it on the published version.</source>
+        <translation>あなたのレビューの後に別のレビューが公開されました。変更は競合なく統合できます。「レビューを更新」を選んで公開版に基づくレビューにしてください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Another review was published after this one. Its author must update it before it can be approved; it can still be rejected.</source>
+        <translation>このレビューの後に別のレビューが公開されました。承認するには作成者による更新が必要です。却下はできます。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Another review changed the same lines after yours. Choose Resolve conflicts to settle them in the editor.</source>
+        <translation>あなたのレビューの後に別のレビューが同じ行を変更しました。「競合を解消」を選んでエディターで解消してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This review conflicts with the published version. Its author must resolve the conflicts before it can be approved; it can still be rejected.</source>
+        <translation>このレビューは公開版と競合しています。承認するには作成者による競合の解消が必要です。却下はできます。</translation>
+    </message>
+    <message>
+        <location line="-146"/>
         <source>The space rule changed. Refresh before deciding again.</source>
         <translation>スペースのルールが変更されました。再度判断する前に更新してください。</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>The document, rule, or review changed. Refresh and inspect the current state before trying again.</source>
         <translation>文書、ルール、またはレビューが変更されました。更新して現在の状態を確認してから再試行してください。</translation>
     </message>
@@ -1155,17 +1583,42 @@
         <translation>保存前に更新して現在のリビジョンを取得してください。</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+49"/>
+        <source>This document has open reviews. Decide or cancel them before moving, deleting, or changing its rule.</source>
+        <translation>この文書には進行中のレビューがあります。移動、削除、ルールの変更の前に、それらを決定するか取り消してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This review was decided or cancelled while you edited it. Discard and submit your text as a new proposal.</source>
+        <translation>編集中にこのレビューは決定または取り消されました。破棄して、テキストを新しい提案として提出してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The version you edited is no longer published. Refresh and edit the current version.</source>
+        <translation>編集した版は公開版ではなくなりました。更新して現在の版を編集してください。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Enter a reason of up to 500 characters.</source>
         <translation>500文字以内で理由を入力してください。</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-52"/>
         <source>Upload and publish a Markdown version before enabling document control.</source>
         <translation>文書の管理を有効にする前に、Markdown版をアップロードして公開してください。</translation>
     </message>
     <message>
+        <location line="-7"/>
+        <source>This review is not based on the published version. Its author must update it before it can be approved.</source>
+        <translation>このレビューは公開版に基づいていません。承認するには作成者による更新が必要です。</translation>
+    </message>
+    <message>
         <location line="+1"/>
+        <source>This review is too large to merge here. Download the candidate, apply your changes to the published version, and submit it again.</source>
+        <translation>このレビューは大きすぎてここでは統合できません。候補をダウンロードし、変更を公開版に反映してから再度提出してください。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>This diff exceeds the server limit. Download the candidate to inspect it.</source>
         <translation>差分がサーバーの制限を超えています。候補をダウンロードして確認してください。</translation>
     </message>
@@ -1185,7 +1638,7 @@
         <translation>管理を有効にする前に、互換性のない準備完了時の自動処理や処理サブスクリプションを一時停止してください。</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+40"/>
         <source>This file is not valid UTF-8 text, so it cannot be shown or edited here.</source>
         <translation>このファイルは有効な UTF-8 テキストではないため、ここでは表示も編集もできません。</translation>
     </message>
@@ -1195,14 +1648,14 @@
         <translation>管理対象の文書は、1 MiB 以下の有効な UTF-8 Markdown である必要があります。</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>A review of this document is open. Decide or cancel it before submitting more changes.</source>
-        <translation>この文書のレビューが進行中です。さらに変更を提出する前に、判断するか取り消してください。</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+6"/>
         <source>The selected image link is malformed. Remove it or insert the image again.</source>
         <translation>選択した画像のリンクが正しくありません。削除するか、画像を挿入し直してください。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The selected path link names no valid place in this space. Fix or remove it.</source>
+        <translation>選択したパスのリンクは、このスペースの有効な場所を指していません。修正するか削除してください。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1243,6 +1696,31 @@
         <location line="+1"/>
         <source>Changes submitted for review. The published version stays available until approval.</source>
         <translation>変更をレビューに提出しました。承認されるまで公開版は引き続き閲覧できます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review updated. Reviewers now see your new proposal.</source>
+        <translation>レビューを更新しました。レビュー担当者には新しい提案が表示されます。</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Nothing is at this path any more</source>
+        <translation>このパスにはもう何もありません</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In the trash</source>
+        <translation>ゴミ箱にあります</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Deleted</source>
+        <translation>完全に削除済み</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You cannot open this file</source>
+        <translation>このファイルは開けません</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1295,7 +1773,7 @@
         <translation>提案を承認して公開しました。</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Proposal rejected. The published version remains available.</source>
         <translation>提案を却下しました。公開版は引き続き閲覧できます。</translation>
     </message>
@@ -1374,7 +1852,7 @@
 <context>
     <name>OrgCommerce</name>
     <message>
-        <location filename="../qml/screens/OrgCommerce.qml" line="+51"/>
+        <location filename="../qml/screens/OrgCommerce.qml" line="+52"/>
         <source>Select %1?</source>
         <translation>%1を選択しますか？</translation>
     </message>
@@ -1384,7 +1862,7 @@
         <translation>文書管理をアンインストールしますか？</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Pause this installation?</source>
         <translation>このインストールを一時停止しますか？</translation>
     </message>
@@ -1393,33 +1871,25 @@
         <source>This package replaces the subscription plan and purchased add-ons with the items shown. Independent grants are preserved. Stripe handles charges; paid changes require payment confirmation.</source>
         <translation>このパッケージはサブスクリプションのプランと購入済みアドオンを表示された項目に置き換えます。独立した付与は保持されます。請求はStripeが処理し、有料の変更には支払い確認が必要です。</translation>
     </message>
+    <message numerus="yes">
+        <location line="+203"/>
+        <source>%n setting(s)</source>
+        <translation>
+            <numerusform>%n 件の設定</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+260"/>
+        <location line="+33"/>
         <source>This changes your subscription. Stripe handles charges and proration. Paid changes take effect after payment confirmation; removing a purchased add-on can reduce its allowance immediately.</source>
         <translation>サブスクリプションが変更されます。請求と日割り計算はStripeが処理します。有料の変更は支払い確認後に適用され、購入済みアドオンの削除は利用枠を直ちに減らす場合があります。</translation>
     </message>
     <message>
-        <location line="-259"/>
+        <location line="-235"/>
         <source>All open reviews will be cancelled and document control will be removed throughout this organization. Published versions and purchased allowances remain. Resuming does not restore document control.</source>
         <translation>組織内の進行中のレビューはすべて取り消され、文書の管理は解除されます。公開版と購入済みの利用枠は維持されます。再開しても文書の管理は復元されません。</translation>
     </message>
     <message>
-        <location line="-16"/>
-        <source>Choose spaces</source>
-        <translation>スペースを選択</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Resume</source>
-        <translation>再開</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Install</source>
-        <translation>インストール</translation>
-    </message>
-    <message>
-        <location line="+16"/>
+        <location line="+2"/>
         <source>New proposals and approvals will stop. Published documents, reviews, and control rules remain. Billing is unchanged.</source>
         <translation>新しい提案と承認は停止します。公開文書、レビュー、管理ルールは維持され、請求は変わりません。</translation>
     </message>
@@ -1429,22 +1899,42 @@
         <translation>処理が停止します。購入済みアドオンやその請求は解約されません。</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Pause</source>
         <translation>一時停止</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Confirm</source>
         <translation>確認</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-1"/>
         <source>Uninstall</source>
         <translation>アンインストール</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="-11"/>
+        <source>Remove this space rule?</source>
+        <translation>このスペースのルールを削除しますか？</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Existing controlled documents will remain blocked until the rule is reactivated or their control is removed.</source>
+        <translation>ルールを再度有効にするか管理を解除するまで、既存の管理対象文書はブロックされたままです。</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Reason for removing the space rule</source>
+        <translation>スペースのルールを削除する理由</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Remove rule</source>
+        <translation>ルールを削除</translation>
+    </message>
+    <message>
+        <location line="+50"/>
         <source>Working…</source>
         <translation>処理中…</translation>
     </message>
@@ -1454,7 +1944,7 @@
         <translation>変更をリクエストしました。支払い確認後に更新すると、適用済みのサブスクリプションと利用枠が表示されます。</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Installation paused. Billing is unchanged.</source>
         <translation>インストールを一時停止しました。請求は変更されていません。</translation>
     </message>
@@ -1462,6 +1952,16 @@
         <location line="+1"/>
         <source>Document control uninstalled. Billing is unchanged.</source>
         <translation>文書管理をアンインストールしました。請求は変わりません。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Settings saved. New reviews use them; open reviews keep the settings they were submitted with.</source>
+        <translation>設定を保存しました。新しいレビューはこの設定を使い、未完了のレビューは提出時の設定を保ちます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Settings saved.</source>
+        <translation>設定を保存しました。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1534,7 +2034,12 @@
         <translation>Stripeから戻ったらこのページを更新してください。利用枠はサーバーによる支払い確認後に更新されます。</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+7"/>
+        <source>Open an add-on to install it, choose where it runs, and configure it.</source>
+        <translation>アドオンを開いて、インストール、動作する場所の選択、設定を行います。</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Purchasing add-ons requires an active paid subscription. Included add-ons can still be installed.</source>
         <translation>アドオンの購入には有効な有料サブスクリプションが必要です。付与済みアドオンは引き続きインストールできます。</translation>
     </message>
@@ -1544,7 +2049,7 @@
         <translation>利用可能なアドオンはありません。</translation>
     </message>
     <message numerus="yes">
-        <location line="+24"/>
+        <location line="+27"/>
         <source>Installed in %n space(s)</source>
         <translation>
             <numerusform>%n件のスペースにインストール済み</numerusform>
@@ -1566,42 +2071,12 @@
         <translation>無制限</translation>
     </message>
     <message>
-        <location line="-193"/>
+        <location line="-207"/>
         <source>%1 · version %2</source>
         <translation>%1 · バージョン%2</translation>
     </message>
     <message>
-        <location line="+153"/>
-        <source>Select an add-on, then choose what to do in the bar above. Installation controls where an add-on runs; it does not control billing.</source>
-        <translation>アドオンを選択し、上のバーで操作を選んでください。インストールはアドオンが動作する場所を決めるもので、請求には影響しません。</translation>
-    </message>
-    <message>
-        <location line="+51"/>
-        <source>Purchased: %1 · Total assigned: %2</source>
-        <translation>購入数：%1 · 付与合計：%2</translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>The add-on will be enabled where you choose. Existing add-on settings are preserved.</source>
-        <translation>アドオンは選択した場所で有効になります。既存の設定は保持されます。</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>All spaces</source>
-        <translation>すべてのスペース</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Only the selected spaces</source>
-        <translation>選択したスペースのみ</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Spaces</source>
-        <translation>スペース</translation>
-    </message>
-    <message>
-        <location line="+26"/>
+        <location line="+238"/>
         <source>Change purchased quantity</source>
         <translation>購入数量を変更</translation>
     </message>
@@ -1621,7 +2096,7 @@
         <translation>適用</translation>
     </message>
     <message>
-        <location line="-76"/>
+        <location line="-39"/>
         <source>Installation paused</source>
         <translation>インストール一時停止中</translation>
     </message>
@@ -1631,7 +2106,7 @@
         <translation>未インストール</translation>
     </message>
     <message>
-        <location line="-175"/>
+        <location line="-187"/>
         <source>Reason for uninstalling document control</source>
         <translation>文書管理をアンインストールする理由</translation>
     </message>
@@ -1639,7 +2114,12 @@
 <context>
     <name>ReviewList</name>
     <message>
-        <location filename="../qml/controlled_docs/ReviewList.qml" line="+48"/>
+        <location filename="../qml/controlled_docs/ReviewList.qml" line="+25"/>
+        <source>on version %1</source>
+        <translation>版 %1 に基づく</translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <source>No reviews yet. Edit the document and submit it for review to start one.</source>
         <translation>レビューはまだありません。文書を編集してレビューに提出すると開始されます。</translation>
     </message>
@@ -1652,7 +2132,7 @@
 <context>
     <name>ReviewPage</name>
     <message>
-        <location filename="../qml/controlled_docs/ReviewPage.qml" line="+50"/>
+        <location filename="../qml/controlled_docs/ReviewPage.qml" line="+59"/>
         <source>Submitted by %1</source>
         <translation>提出者: %1</translation>
     </message>
@@ -1673,18 +2153,36 @@
     </message>
     <message>
         <location line="+0"/>
+        <location line="+10"/>
         <source>a reviewer</source>
         <translation>レビュー担当者</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-7"/>
         <source>Comment: %1</source>
         <translation>コメント: %1</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>You submitted this review, so another reviewer must approve or reject it. You can still cancel it.</source>
-        <translation>このレビューはあなたが提出したため、承認または却下は別のレビュー担当者が行います。取り消すことはできます。</translation>
+        <location line="+9"/>
+        <source>Approvals: %1 of %2</source>
+        <translation>承認: %1 / %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+8"/>
+        <source>You approved this version. It is published once %n more reviewer(s) approve it.</source>
+        <translation>
+            <numerusform>このバージョンを承認しました。あと %n 人のレビュアーが承認すると公開されます。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>You submitted this review. This space lets authors approve their own reviews, but only another reviewer can reject it.</source>
+        <translation>このレビューはあなたが提出しました。このスペースでは作成者が自分のレビューを承認できますが、却下できるのは別のレビュアーだけです。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>You submitted this review, so another reviewer must approve or reject it. You can still edit or cancel it.</source>
+        <translation>このレビューはあなたが提出したため、別のレビュー担当者が承認または却下する必要があります。編集や取り消しはできます。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1762,13 +2260,13 @@
 <context>
     <name>Settings</name>
     <message>
-        <location filename="../qml/screens/Settings.qml" line="+167"/>
+        <location filename="../qml/screens/Settings.qml" line="+168"/>
         <location line="+132"/>
         <source>Appearance</source>
         <translation>外観</translation>
     </message>
     <message>
-        <location line="-271"/>
+        <location line="-272"/>
         <source>Members</source>
         <translation>メンバー</translation>
     </message>
@@ -1813,7 +2311,7 @@
         <translation>%1への招待を取り消しますか？</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>This person will lose access to the organization.</source>
         <translation>このユーザーは組織にアクセスできなくなります。</translation>
     </message>
@@ -1823,29 +2321,29 @@
         <translation>招待リンクは無効になります。</translation>
     </message>
     <message>
-        <location line="+695"/>
+        <location line="+642"/>
         <source>Their organization permissions will change.</source>
         <translation>このユーザーの組織での権限が変更されます。</translation>
     </message>
     <message>
-        <location line="-691"/>
+        <location line="-640"/>
         <source>Remove</source>
         <translation>削除</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+249"/>
+        <location line="+253"/>
         <source>Cancel invitation</source>
         <translation>招待を取り消す</translation>
     </message>
     <message>
         <location line="-21"/>
-        <location line="+458"/>
+        <location line="+403"/>
         <source>Change role</source>
         <translation>役割を変更</translation>
     </message>
     <message>
-        <location line="-510"/>
+        <location line="-455"/>
         <source>Back to files</source>
         <translation>ファイルに戻る</translation>
     </message>
@@ -1861,12 +2359,12 @@
     </message>
     <message>
         <location line="-80"/>
-        <location line="+337"/>
+        <location line="+268"/>
         <source>Working…</source>
         <translation>処理中…</translation>
     </message>
     <message>
-        <location line="-272"/>
+        <location line="-203"/>
         <source>Open organizations</source>
         <translation>組織一覧を開く</translation>
     </message>
@@ -1876,14 +2374,9 @@
         <translation>組織を開く</translation>
     </message>
     <message>
-        <location line="-152"/>
+        <location line="-153"/>
         <source>Revoke this access grant?</source>
         <translation>このアクセス権の付与を取り消しますか？</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Remove this space rule?</source>
-        <translation>このスペースのルールを削除しますか？</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1891,79 +2384,39 @@
         <translation>%1 はこのスペースでこの役割による権限を失います。他の付与によるアクセスは保持されます。</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Existing controlled documents will remain blocked until the rule is reactivated or their control is removed.</source>
-        <translation>ルールを再度有効にするか管理を解除するまで、既存の管理対象文書はブロックされたままです。</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reason for removing the space rule</source>
-        <translation>スペースのルールを削除する理由</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>Revoke</source>
         <translation>取り消す</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Remove rule</source>
-        <translation>ルールを削除</translation>
-    </message>
-    <message>
-        <location line="+154"/>
+        <location line="+159"/>
         <source>No organizations yet.</source>
         <translation>まだ組織はありません。</translation>
     </message>
     <message>
         <location line="+63"/>
-        <location line="+446"/>
+        <location line="+391"/>
         <source>Rename organization</source>
         <translation>組織の名前を変更</translation>
     </message>
     <message>
-        <location line="-426"/>
+        <location line="-371"/>
         <source>Remove member</source>
         <translation>メンバーを削除</translation>
     </message>
     <message>
         <location line="+21"/>
-        <location line="+442"/>
+        <location line="+387"/>
         <source>Invite member</source>
         <translation>メンバーを招待</translation>
     </message>
     <message>
-        <location line="-433"/>
+        <location line="-378"/>
         <source>Add review roles</source>
         <translation>レビュー用の役割を追加</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Let links follow new versions</source>
-        <translation>リンクが新しい版に追従できるようにする</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Require pinned versions</source>
-        <translation>版の固定を必須にする</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Remove space rule</source>
-        <translation>スペースのルールを削除</translation>
-    </message>
-    <message>
         <location line="+9"/>
-        <source>Pause space rule</source>
-        <translation>スペースのルールを一時停止</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Activate space rule</source>
-        <translation>スペースのルールを有効にする</translation>
-    </message>
-    <message>
-        <location line="+10"/>
         <source>Grant me management access</source>
         <translation>自分に管理権限を付与</translation>
     </message>
@@ -2008,22 +2461,7 @@
         <translation>購読する</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Change quantity</source>
-        <translation>数量を変更</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Pause installation</source>
-        <translation>インストールを一時停止</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Uninstall</source>
-        <translation>アンインストール</translation>
-    </message>
-    <message>
-        <location line="+61"/>
+        <location line="+52"/>
         <location line="+9"/>
         <source>Theme</source>
         <translation>テーマ</translation>
@@ -2051,12 +2489,12 @@
     </message>
     <message>
         <location line="+12"/>
-        <location line="+196"/>
+        <location line="+210"/>
         <source>Organization name</source>
         <translation>組織名</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-172"/>
         <source>No invitations yet. Use Invite member to send one.</source>
         <translation>招待はまだありません。「メンバーを招待」から送信できます。</translation>
     </message>
@@ -2126,13 +2564,35 @@
         <source>Images and linked files may follow later versions of their files.</source>
         <translation>画像とリンクされたファイルは、それぞれのファイルの新しい版に追従できます。</translation>
     </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n approval(s) publish a proposal.</source>
+        <translation>
+            <numerusform>%n 件の承認で提案が公開されます。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Authors may approve their own proposals.</source>
+        <translation>作成者は自分の提案を承認できます。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Authors cannot approve their own proposals.</source>
+        <translation>作成者は自分の提案を承認できません。</translation>
+    </message>
     <message>
         <location line="+4"/>
         <source>Add review roles to grant reviewer and manager access under Access.</source>
         <translation>レビュー用の役割を追加すると、「アクセス」でレビュー担当者と管理者の権限を付与できます。</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+5"/>
+        <source>Configure document control</source>
+        <translation>文書管理を設定</translation>
+    </message>
+    <message>
+        <location line="+68"/>
         <source>Save changes</source>
         <translation>変更を保存</translation>
     </message>
@@ -2179,12 +2639,12 @@
         <translation>このスペースでの役割</translation>
     </message>
     <message>
-        <location line="-228"/>
+        <location line="-242"/>
         <source>No members to display.</source>
         <translation>表示するメンバーがいません。</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+104"/>
         <source>Plan: %1</source>
         <translation>プラン：%1</translation>
     </message>
@@ -2267,7 +2727,7 @@
 <context>
     <name>matome::Assets</name>
     <message>
-        <location filename="../references/Assets.cpp" line="+134"/>
+        <location filename="../references/Assets.cpp" line="+172"/>
         <source>(external image not loaded: %1)</source>
         <translation>（外部の画像は読み込まれていません: %1）</translation>
     </message>
@@ -2394,12 +2854,12 @@
     </message>
     <message>
         <location line="+2"/>
-        <location line="+45"/>
+        <location line="+46"/>
         <source>Download</source>
         <translation>ダウンロード</translation>
     </message>
     <message>
-        <location line="-4"/>
+        <location line="-5"/>
         <source>Preview</source>
         <translation>プレビュー</translation>
     </message>
@@ -2412,6 +2872,11 @@
         <location line="+1"/>
         <source>Versions</source>
         <translation>版</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Related</source>
+        <translation>関連</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2465,6 +2930,21 @@
     </message>
     <message>
         <location line="+1"/>
+        <source>Update review</source>
+        <translation>レビューを更新</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Resolve conflicts</source>
+        <translation>競合を解消</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Edit proposal</source>
+        <translation>提案を編集</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Manage with reviews</source>
         <translation>レビューで管理</translation>
     </message>
@@ -2474,12 +2954,12 @@
         <translation>管理をやめる</translation>
     </message>
     <message>
-        <location line="-56"/>
+        <location line="-60"/>
         <source>Rename</source>
         <translation>名前を変更</translation>
     </message>
     <message>
-        <location line="+160"/>
+        <location line="+165"/>
         <source>Delete folder</source>
         <translation>フォルダーを削除</translation>
     </message>
@@ -2489,7 +2969,7 @@
         <translation>ゴミ箱へ移動</translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-161"/>
         <source>Restore last trash</source>
         <translation>元に戻す</translation>
     </message>

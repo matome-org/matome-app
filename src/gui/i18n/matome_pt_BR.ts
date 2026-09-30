@@ -2,6 +2,262 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="pt_BR" sourcelanguage="en">
 <context>
+    <name>AddOnDetail</name>
+    <message>
+        <location filename="../qml/screens/AddOnDetail.qml" line="+107"/>
+        <source>All add-ons</source>
+        <translation>Todos os add-ons</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+20"/>
+        <source>Installed in %n space(s)</source>
+        <translation>
+            <numerusform>Instalado em %n espaço</numerusform>
+            <numerusform>Instalado em %n espaços</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installed in all spaces</source>
+        <translation>Instalado em todos os espaços</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation paused</source>
+        <translation>Instalação pausada</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not installed</source>
+        <translation>Não instalado</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>This organization’s plan does not include this add-on. Purchase it to install it.</source>
+        <translation>O plano desta organização não inclui este add-on. Compre-o para instalá-lo.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Used: %1 · Reserved: %2 · Allowance: %3</source>
+        <translation>Usado: %1 · Reservado: %2 · Cota: %3</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unlimited</source>
+        <translation>Ilimitado</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>%1 · version %2</source>
+        <translation>%1 · versão %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Purchased: %1 · Total assigned: %2</source>
+        <translation>Contratado: %1 · Total atribuído: %2</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Change quantity</source>
+        <translation>Alterar quantidade</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Pause installation</source>
+        <translation>Pausar instalação</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Uninstall</source>
+        <translation>Desinstalar</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Where it runs</source>
+        <translation>Onde ele funciona</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installation controls where an add-on runs; it does not control billing.</source>
+        <translation>A instalação controla onde um add-on funciona; ela não controla a cobrança.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>All spaces</source>
+        <translation>Todos os espaços</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Only the selected spaces</source>
+        <translation>Somente os espaços selecionados</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Spaces</source>
+        <translation>Espaços</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Save spaces</source>
+        <translation>Salvar espaços</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Resume</source>
+        <translation>Retomar</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Install</source>
+        <translation>Instalar</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Organization settings</source>
+        <translation>Configurações da organização</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>These settings apply once the add-on is installed.</source>
+        <translation>Estas configurações valem assim que o add-on for instalado.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Every space uses these settings unless it sets its own.</source>
+        <translation>Todos os espaços usam estas configurações, a menos que definam as suas.</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Only organization owners and administrators can change add-on settings.</source>
+        <translation>Somente proprietários e administradores da organização podem alterar as configurações de add-ons.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Save settings</source>
+        <translation>Salvar configurações</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Space settings</source>
+        <translation>Configurações do espaço</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Each space follows the organization settings unless it sets its own. A space’s rule and settings cannot change while it has open reviews.</source>
+        <translation>Cada espaço segue as configurações da organização, a menos que defina as suas. A regra e as configurações de um espaço não podem mudar enquanto ele tiver revisões abertas.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Space</source>
+        <translation>Espaço</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Working…</source>
+        <translation>Processando…</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>You need management access</source>
+        <translation>Você precisa de acesso de gerenciamento</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>No rule in this space yet</source>
+        <translation>Ainda não há regra neste espaço</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Space rule active</source>
+        <translation>Regra do espaço ativa</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Space rule paused</source>
+        <translation>Regra do espaço pausada</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Organization administrators manage document control only through an explicit grant: use Grant me management access.</source>
+        <translation>Administradores da organização só gerenciam o controle de documentos com uma concessão explícita: use Conceder-me acesso de gerenciamento.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ask an organization administrator to grant you the Document control managers role here.</source>
+        <translation>Peça a um administrador da organização que conceda a você o papel Document control managers aqui.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Saving settings or activating creates the space’s rule. Documents can be managed once it is active.</source>
+        <translation>Salvar configurações ou ativar cria a regra do espaço. Os documentos podem ser controlados quando ela estiver ativa.</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Grant me management access</source>
+        <translation>Conceder a mim acesso de gerenciamento</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Add review roles</source>
+        <translation>Adicionar papéis de revisão</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Remove space rule</source>
+        <translation>Remover regra do espaço</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Pause space rule</source>
+        <translation>Pausar regra do espaço</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Activate space rule</source>
+        <translation>Ativar regra do espaço</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Save space settings</source>
+        <translation>Salvar configurações do espaço</translation>
+    </message>
+</context>
+<context>
+    <name>AddOnSetting</name>
+    <message>
+        <location filename="../qml/screens/AddOnSetting.qml" line="+35"/>
+        <location line="+48"/>
+        <source>On</source>
+        <translation>Ativado</translation>
+    </message>
+    <message>
+        <location line="-48"/>
+        <location line="+48"/>
+        <source>Off</source>
+        <translation>Desativado</translation>
+    </message>
+    <message>
+        <location line="-47"/>
+        <source>Not set</source>
+        <translation>Não definido</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Follow the organization: %1</source>
+        <translation>Seguir a organização: %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Set for this space</source>
+        <translation>Definir para este espaço</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>From %1 to %2</source>
+        <translation>De %1 a %2</translation>
+    </message>
+</context>
+<context>
     <name>Auth</name>
     <message>
         <location filename="../qml/screens/Auth.qml" line="+26"/>
@@ -201,7 +457,44 @@
 <context>
     <name>DocumentScreen</name>
     <message>
-        <location filename="../qml/documents/DocumentScreen.qml" line="+45"/>
+        <location filename="../qml/documents/DocumentScreen.qml" line="+52"/>
+        <location line="+6"/>
+        <source>By path</source>
+        <translation>Por caminho</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Unavailable file</source>
+        <translation>Arquivo indisponível</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Pinned version</source>
+        <translation>Versão fixada</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Update this review?</source>
+        <translation>Atualizar esta revisão?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The edited text becomes the review&apos;s proposal, based on the published version. The review keeps its summary.</source>
+        <translation>O texto editado passa a ser a proposta da revisão, baseada na versão publicada. A revisão mantém seu resumo.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>What changed</source>
+        <translation>O que mudou</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+193"/>
+        <source>Update review</source>
+        <translation>Atualizar revisão</translation>
+    </message>
+    <message>
+        <location line="-189"/>
         <source>Submit your changes for review?</source>
         <translation>Enviar suas alterações para revisão?</translation>
     </message>
@@ -287,12 +580,12 @@
     </message>
     <message>
         <location line="+3"/>
-        <location line="+150"/>
+        <location line="+172"/>
         <source>Submit for review</source>
         <translation>Enviar para revisão</translation>
     </message>
     <message>
-        <location line="-150"/>
+        <location line="-172"/>
         <source>Save</source>
         <translation>Salvar</translation>
     </message>
@@ -307,7 +600,7 @@
         <translation>Confirmar</translation>
     </message>
     <message>
-        <location line="+54"/>
+        <location line="+67"/>
         <source>Insert image</source>
         <translation>Inserir imagem</translation>
     </message>
@@ -337,31 +630,54 @@
         <translation>Mostrar esta versão</translation>
     </message>
     <message>
-        <location line="+46"/>
-        <location line="+156"/>
+        <location line="+10"/>
+        <source>Open</source>
+        <translation>Abrir</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <location line="+171"/>
         <source>Version %1</source>
         <translation>Versão %1</translation>
     </message>
     <message>
-        <location line="-154"/>
-        <location line="+154"/>
+        <location line="-169"/>
+        <location line="+169"/>
         <source>Current</source>
         <translation>Atual</translation>
     </message>
     <message>
-        <location line="-154"/>
+        <location line="-169"/>
         <source>Earlier version</source>
         <translation>Versão anterior</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Managed · review open</source>
-        <translation>Gerenciado · revisão aberta</translation>
+        <location line="+86"/>
+        <source>You are editing the proposal of your review “%1”. Saving updates that review; discarding leaves it as it is.</source>
+        <translation>Você está editando a proposta da sua revisão “%1”. Salvar atualiza essa revisão; descartar a deixa como está.</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+7"/>
+        <source>Resolve each conflict before saving: keep the text you want between &lt;&lt;&lt;&lt;&lt;&lt;&lt; published and &gt;&gt;&gt;&gt;&gt;&gt;&gt; review, then delete the three marker lines.</source>
+        <translation>Resolva cada conflito antes de salvar: mantenha o texto desejado entre &lt;&lt;&lt;&lt;&lt;&lt;&lt; published e &gt;&gt;&gt;&gt;&gt;&gt;&gt; review e apague as três linhas de marcação.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Saving opens a new review of your changes. Other open reviews stay as they are.</source>
+        <translation>Salvar abre uma nova revisão das suas alterações. As outras revisões abertas continuam como estão.</translation>
+    </message>
+    <message>
+        <location line="-96"/>
         <source>Managed</source>
         <translation>Gerenciado</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+0"/>
+        <source>Managed · %n open review(s)</source>
+        <translation>
+            <numerusform>Gerenciado · %n revisão aberta</numerusform>
+            <numerusform>Gerenciado · %n revisões abertas</numerusform>
+        </translation>
     </message>
     <message>
         <location line="+21"/>
@@ -379,12 +695,7 @@
         <translation>Não há pré-visualização para este tipo de arquivo. Baixe-o para abrir no seu dispositivo.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>A review of this document is open. Decide or cancel it before submitting more changes.</source>
-        <translation>Há uma revisão aberta deste documento. Decida ou cancele antes de enviar mais alterações.</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+26"/>
         <source>Paste or drop images to store them in the space&apos;s assets folder. Type @ or / to link a file, # at a line&apos;s start for actions.</source>
         <translation>Cole ou solte imagens para guardá-las na pasta assets do espaço. Digite @ ou / para vincular um arquivo e # no início da linha para ver as ações.</translation>
     </message>
@@ -408,6 +719,46 @@
         <location line="+37"/>
         <source>Versions</source>
         <translation>Versões</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>No other document links this one, and it links none.</source>
+        <translation>Nenhum outro documento vincula este, e ele não vincula nenhum.</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+26"/>
+        <source>Linked from</source>
+        <translation>Vinculado em</translation>
+    </message>
+    <message>
+        <location line="-26"/>
+        <location line="+26"/>
+        <source>Links to</source>
+        <translation>Vincula</translation>
+    </message>
+    <message>
+        <location line="-22"/>
+        <source>Show more</source>
+        <translation>Mostrar mais</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>No document you can open links this one.</source>
+        <translation>Nenhum documento que você pode abrir vincula este.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The current version links no files.</source>
+        <translation>A versão atual não vincula nenhum arquivo.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+38"/>
+        <source>%n more document(s) you cannot open link this one.</source>
+        <translation>
+            <numerusform>Mais %n documento que você não pode abrir vincula este.</numerusform>
+            <numerusform>Mais %n documentos que você não pode abrir vinculam este.</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -1137,17 +1488,97 @@
         <translation>Esta revisão já foi decidida. Atualize para ver o resultado.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>The published version changed. Refresh before proposing or deciding again.</source>
-        <translation>A versão publicada mudou. Atualize antes de propor ou decidir novamente.</translation>
+        <location line="+4"/>
+        <source>You already approved this version. Another reviewer must approve it too.</source>
+        <translation>Você já aprovou esta versão. Outro revisor também precisa aprová-la.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>The server refused these settings. Check the allowed values and try again.</source>
+        <translation>O servidor recusou estas configurações. Verifique os valores permitidos e tente novamente.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>This space has open reviews. Decide or cancel them before changing its rule or settings.</source>
+        <translation>Este espaço tem revisões abertas. Decida ou cancele-as antes de alterar a regra ou as configurações.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Require pinned versions</source>
+        <translation>Exigir versões fixadas</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Authors may approve their own proposals</source>
+        <translation>Autores podem aprovar as próprias propostas</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Required approvals</source>
+        <translation>Aprovações necessárias</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Images and linked files must pin a version, so an approved document shows exactly what was reviewed.</source>
+        <translation>Imagens e arquivos vinculados precisam fixar uma versão, para que um documento aprovado mostre exatamente o que foi revisado.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The author’s approval counts toward the required approvals. Only another reviewer can reject.</source>
+        <translation>A aprovação do autor conta para as aprovações necessárias. Somente outro revisor pode rejeitar.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>How many different reviewers must approve a proposal before it is published.</source>
+        <translation>Quantos revisores diferentes precisam aprovar uma proposta antes de ela ser publicada.</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Approval recorded. The proposal is published once enough reviewers approve it.</source>
+        <translation>Aprovação registrada. A proposta é publicada quando revisores suficientes a aprovarem.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Behind the published version</source>
+        <translation>Atrás da versão publicada</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Conflicts with the published version</source>
+        <translation>Em conflito com a versão publicada</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ready to approve</source>
+        <translation>Pronta para aprovação</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Another review was published after yours. Your changes merge without conflicts: choose Update review to base it on the published version.</source>
+        <translation>Outra revisão foi publicada depois da sua. Suas alterações se combinam sem conflitos: escolha Atualizar revisão para baseá-la na versão publicada.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Another review was published after this one. Its author must update it before it can be approved; it can still be rejected.</source>
+        <translation>Outra revisão foi publicada depois desta. O autor precisa atualizá-la antes que possa ser aprovada; ela ainda pode ser rejeitada.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Another review changed the same lines after yours. Choose Resolve conflicts to settle them in the editor.</source>
+        <translation>Outra revisão alterou as mesmas linhas depois da sua. Escolha Resolver conflitos para acertá-los no editor.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This review conflicts with the published version. Its author must resolve the conflicts before it can be approved; it can still be rejected.</source>
+        <translation>Esta revisão está em conflito com a versão publicada. O autor precisa resolver os conflitos antes que possa ser aprovada; ela ainda pode ser rejeitada.</translation>
+    </message>
+    <message>
+        <location line="-146"/>
         <source>The space rule changed. Refresh before deciding again.</source>
         <translation>A regra do espaço mudou. Atualize antes de decidir novamente.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>The document, rule, or review changed. Refresh and inspect the current state before trying again.</source>
         <translation>O documento, a regra ou a revisão mudou. Atualize e confira o estado atual antes de tentar novamente.</translation>
     </message>
@@ -1157,17 +1588,42 @@
         <translation>Atualize para obter a revisão atual antes de salvar.</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+49"/>
+        <source>This document has open reviews. Decide or cancel them before moving, deleting, or changing its rule.</source>
+        <translation>Este documento tem revisões abertas. Decida ou cancele-as antes de mover, excluir ou alterar sua regra.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This review was decided or cancelled while you edited it. Discard and submit your text as a new proposal.</source>
+        <translation>Esta revisão foi decidida ou cancelada enquanto você a editava. Descarte e envie seu texto como uma nova proposta.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The version you edited is no longer published. Refresh and edit the current version.</source>
+        <translation>A versão que você editou não é mais a publicada. Atualize e edite a versão atual.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Enter a reason of up to 500 characters.</source>
         <translation>Informe um motivo de até 500 caracteres.</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-52"/>
         <source>Upload and publish a Markdown version before enabling document control.</source>
         <translation>Envie e publique uma versão Markdown antes de ativar o controle do documento.</translation>
     </message>
     <message>
+        <location line="-7"/>
+        <source>This review is not based on the published version. Its author must update it before it can be approved.</source>
+        <translation>Esta revisão não se baseia na versão publicada. O autor precisa atualizá-la antes que possa ser aprovada.</translation>
+    </message>
+    <message>
         <location line="+1"/>
+        <source>This review is too large to merge here. Download the candidate, apply your changes to the published version, and submit it again.</source>
+        <translation>Esta revisão é grande demais para ser combinada aqui. Baixe a candidata, aplique suas alterações à versão publicada e envie novamente.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>This diff exceeds the server limit. Download the candidate to inspect it.</source>
         <translation>Estas diferenças excedem o limite do servidor. Baixe a candidata para analisá-la.</translation>
     </message>
@@ -1187,7 +1643,7 @@
         <translation>Pause as automações ou assinaturas de processamento incompatíveis com a publicação antes de ativar o controle.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+40"/>
         <source>This file is not valid UTF-8 text, so it cannot be shown or edited here.</source>
         <translation>Este arquivo não é texto UTF-8 válido, então não pode ser exibido nem editado aqui.</translation>
     </message>
@@ -1197,14 +1653,14 @@
         <translation>Um documento gerenciado precisa continuar sendo Markdown UTF-8 válido de até 1 MiB.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>A review of this document is open. Decide or cancel it before submitting more changes.</source>
-        <translation>Há uma revisão aberta deste documento. Decida ou cancele antes de enviar mais alterações.</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="+6"/>
         <source>The selected image link is malformed. Remove it or insert the image again.</source>
         <translation>O link da imagem selecionada está malformado. Remova-o ou insira a imagem novamente.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The selected path link names no valid place in this space. Fix or remove it.</source>
+        <translation>O link por caminho selecionado não aponta para um lugar válido neste espaço. Corrija-o ou remova-o.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1245,6 +1701,31 @@
         <location line="+1"/>
         <source>Changes submitted for review. The published version stays available until approval.</source>
         <translation>Alterações enviadas para revisão. A versão publicada continua acessível até a aprovação.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Review updated. Reviewers now see your new proposal.</source>
+        <translation>Revisão atualizada. Os revisores agora veem sua nova proposta.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Nothing is at this path any more</source>
+        <translation>Não há mais nada neste caminho</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In the trash</source>
+        <translation>Na lixeira</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Deleted</source>
+        <translation>Excluído de vez</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You cannot open this file</source>
+        <translation>Você não pode abrir este arquivo</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -1297,7 +1778,7 @@
         <translation>Proposta aprovada e publicada.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Proposal rejected. The published version remains available.</source>
         <translation>Proposta rejeitada. A versão publicada continua acessível.</translation>
     </message>
@@ -1376,7 +1857,7 @@
 <context>
     <name>OrgCommerce</name>
     <message>
-        <location filename="../qml/screens/OrgCommerce.qml" line="+51"/>
+        <location filename="../qml/screens/OrgCommerce.qml" line="+52"/>
         <source>Select %1?</source>
         <translation>Selecionar %1?</translation>
     </message>
@@ -1386,7 +1867,7 @@
         <translation>Desinstalar o controle de documentos?</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Pause this installation?</source>
         <translation>Pausar esta instalação?</translation>
     </message>
@@ -1395,33 +1876,26 @@
         <source>This package replaces the subscription plan and purchased add-ons with the items shown. Independent grants are preserved. Stripe handles charges; paid changes require payment confirmation.</source>
         <translation>Este pacote substitui o plano da assinatura e os add-ons contratados pelos itens exibidos. As concessões independentes são preservadas. O Stripe processa as cobranças; alterações pagas exigem confirmação do pagamento.</translation>
     </message>
+    <message numerus="yes">
+        <location line="+203"/>
+        <source>%n setting(s)</source>
+        <translation>
+            <numerusform>%n configuração</numerusform>
+            <numerusform>%n configurações</numerusform>
+        </translation>
+    </message>
     <message>
-        <location line="+260"/>
+        <location line="+33"/>
         <source>This changes your subscription. Stripe handles charges and proration. Paid changes take effect after payment confirmation; removing a purchased add-on can reduce its allowance immediately.</source>
         <translation>Isso altera sua assinatura. O Stripe calcula as cobranças e os valores proporcionais. Alterações pagas entram em vigor após a confirmação do pagamento; remover um add-on contratado pode reduzir sua cota imediatamente.</translation>
     </message>
     <message>
-        <location line="-259"/>
+        <location line="-235"/>
         <source>All open reviews will be cancelled and document control will be removed throughout this organization. Published versions and purchased allowances remain. Resuming does not restore document control.</source>
         <translation>Todas as revisões abertas serão canceladas e o controle de documentos será removido de toda a organização. As versões publicadas e as cotas contratadas permanecem. Retomar não restaura o controle de documentos.</translation>
     </message>
     <message>
-        <location line="-16"/>
-        <source>Choose spaces</source>
-        <translation>Escolher espaços</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Resume</source>
-        <translation>Retomar</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Install</source>
-        <translation>Instalar</translation>
-    </message>
-    <message>
-        <location line="+16"/>
+        <location line="+2"/>
         <source>New proposals and approvals will stop. Published documents, reviews, and control rules remain. Billing is unchanged.</source>
         <translation>Novas propostas e aprovações serão bloqueadas. Os documentos publicados, as revisões e as regras de controle permanecem. A cobrança não muda.</translation>
     </message>
@@ -1431,22 +1905,42 @@
         <translation>O processamento será interrompido. Isso não cancela o add-on contratado nem sua cobrança.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Pause</source>
         <translation>Pausar</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Confirm</source>
         <translation>Confirmar</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-1"/>
         <source>Uninstall</source>
         <translation>Desinstalar</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="-11"/>
+        <source>Remove this space rule?</source>
+        <translation>Remover esta regra do espaço?</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Existing controlled documents will remain blocked until the rule is reactivated or their control is removed.</source>
+        <translation>Os documentos controlados existentes continuarão bloqueados até a regra ser reativada ou o controle deles ser removido.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Reason for removing the space rule</source>
+        <translation>Motivo para remover a regra do espaço</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Remove rule</source>
+        <translation>Remover regra</translation>
+    </message>
+    <message>
+        <location line="+50"/>
         <source>Working…</source>
         <translation>Processando…</translation>
     </message>
@@ -1456,7 +1950,7 @@
         <translation>Alteração solicitada. Atualize após a confirmação do pagamento para ver a assinatura e as cotas efetivas.</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Installation paused. Billing is unchanged.</source>
         <translation>Instalação pausada. A cobrança não foi alterada.</translation>
     </message>
@@ -1464,6 +1958,16 @@
         <location line="+1"/>
         <source>Document control uninstalled. Billing is unchanged.</source>
         <translation>Controle de documentos desinstalado. A cobrança não muda.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Settings saved. New reviews use them; open reviews keep the settings they were submitted with.</source>
+        <translation>Configurações salvas. Novas revisões as usam; revisões abertas mantêm as configurações com que foram enviadas.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Settings saved.</source>
+        <translation>Configurações salvas.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1536,7 +2040,12 @@
         <translation>Ao voltar do Stripe, atualize esta página. As cotas só são atualizadas após o servidor confirmar o pagamento.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+7"/>
+        <source>Open an add-on to install it, choose where it runs, and configure it.</source>
+        <translation>Abra um add-on para instalá-lo, escolher onde ele funciona e configurá-lo.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Purchasing add-ons requires an active paid subscription. Included add-ons can still be installed.</source>
         <translation>A contratação de add-ons exige uma assinatura paga ativa. Os add-ons incluídos ainda podem ser instalados.</translation>
     </message>
@@ -1546,7 +2055,7 @@
         <translation>Nenhum add-on disponível.</translation>
     </message>
     <message numerus="yes">
-        <location line="+24"/>
+        <location line="+27"/>
         <source>Installed in %n space(s)</source>
         <translation>
             <numerusform>Instalado em %n espaço</numerusform>
@@ -1569,42 +2078,12 @@
         <translation>Ilimitado</translation>
     </message>
     <message>
-        <location line="-193"/>
+        <location line="-207"/>
         <source>%1 · version %2</source>
         <translation>%1 · versão %2</translation>
     </message>
     <message>
-        <location line="+153"/>
-        <source>Select an add-on, then choose what to do in the bar above. Installation controls where an add-on runs; it does not control billing.</source>
-        <translation>Selecione um add-on e escolha o que fazer na barra acima. A instalação define onde o add-on funciona; ela não controla a cobrança.</translation>
-    </message>
-    <message>
-        <location line="+51"/>
-        <source>Purchased: %1 · Total assigned: %2</source>
-        <translation>Contratado: %1 · Total atribuído: %2</translation>
-    </message>
-    <message>
-        <location line="+26"/>
-        <source>The add-on will be enabled where you choose. Existing add-on settings are preserved.</source>
-        <translation>O add-on será ativado onde você escolher. As configurações existentes do add-on são preservadas.</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>All spaces</source>
-        <translation>Todos os espaços</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Only the selected spaces</source>
-        <translation>Somente os espaços selecionados</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Spaces</source>
-        <translation>Espaços</translation>
-    </message>
-    <message>
-        <location line="+26"/>
+        <location line="+238"/>
         <source>Change purchased quantity</source>
         <translation>Alterar quantidade contratada</translation>
     </message>
@@ -1624,7 +2103,7 @@
         <translation>Aplicar</translation>
     </message>
     <message>
-        <location line="-76"/>
+        <location line="-39"/>
         <source>Installation paused</source>
         <translation>Instalação pausada</translation>
     </message>
@@ -1634,7 +2113,7 @@
         <translation>Não instalado</translation>
     </message>
     <message>
-        <location line="-175"/>
+        <location line="-187"/>
         <source>Reason for uninstalling document control</source>
         <translation>Motivo para desinstalar o controle de documentos</translation>
     </message>
@@ -1642,7 +2121,12 @@
 <context>
     <name>ReviewList</name>
     <message>
-        <location filename="../qml/controlled_docs/ReviewList.qml" line="+48"/>
+        <location filename="../qml/controlled_docs/ReviewList.qml" line="+25"/>
+        <source>on version %1</source>
+        <translation>na versão %1</translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <source>No reviews yet. Edit the document and submit it for review to start one.</source>
         <translation>Nenhuma revisão ainda. Edite o documento e envie para revisão para começar uma.</translation>
     </message>
@@ -1655,7 +2139,7 @@
 <context>
     <name>ReviewPage</name>
     <message>
-        <location filename="../qml/controlled_docs/ReviewPage.qml" line="+50"/>
+        <location filename="../qml/controlled_docs/ReviewPage.qml" line="+59"/>
         <source>Submitted by %1</source>
         <translation>Enviada por %1</translation>
     </message>
@@ -1676,18 +2160,37 @@
     </message>
     <message>
         <location line="+0"/>
+        <location line="+10"/>
         <source>a reviewer</source>
         <translation>um revisor</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-7"/>
         <source>Comment: %1</source>
         <translation>Comentário: %1</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>You submitted this review, so another reviewer must approve or reject it. You can still cancel it.</source>
-        <translation>Você enviou esta revisão, então outro revisor precisa aprová-la ou rejeitá-la. Você ainda pode cancelá-la.</translation>
+        <location line="+9"/>
+        <source>Approvals: %1 of %2</source>
+        <translation>Aprovações: %1 de %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+8"/>
+        <source>You approved this version. It is published once %n more reviewer(s) approve it.</source>
+        <translation>
+            <numerusform>Você aprovou esta versão. Ela é publicada quando mais %n revisor a aprovar.</numerusform>
+            <numerusform>Você aprovou esta versão. Ela é publicada quando mais %n revisores a aprovarem.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>You submitted this review. This space lets authors approve their own reviews, but only another reviewer can reject it.</source>
+        <translation>Você enviou esta revisão. Este espaço permite que autores aprovem as próprias revisões, mas somente outro revisor pode rejeitá-la.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>You submitted this review, so another reviewer must approve or reject it. You can still edit or cancel it.</source>
+        <translation>Você enviou esta revisão, então outro revisor precisa aprová-la ou rejeitá-la. Você ainda pode editá-la ou cancelá-la.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1765,13 +2268,13 @@
 <context>
     <name>Settings</name>
     <message>
-        <location filename="../qml/screens/Settings.qml" line="+167"/>
+        <location filename="../qml/screens/Settings.qml" line="+168"/>
         <location line="+132"/>
         <source>Appearance</source>
         <translation>Aparência</translation>
     </message>
     <message>
-        <location line="-271"/>
+        <location line="-272"/>
         <source>Members</source>
         <translation>Membros</translation>
     </message>
@@ -1816,7 +2319,7 @@
         <translation>Cancelar convite para %1?</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>This person will lose access to the organization.</source>
         <translation>Esta pessoa perderá o acesso à organização.</translation>
     </message>
@@ -1826,29 +2329,29 @@
         <translation>O link do convite deixará de funcionar.</translation>
     </message>
     <message>
-        <location line="+695"/>
+        <location line="+642"/>
         <source>Their organization permissions will change.</source>
         <translation>As permissões desta pessoa na organização serão alteradas.</translation>
     </message>
     <message>
-        <location line="-691"/>
+        <location line="-640"/>
         <source>Remove</source>
         <translation>Remover</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+249"/>
+        <location line="+253"/>
         <source>Cancel invitation</source>
         <translation>Cancelar convite</translation>
     </message>
     <message>
         <location line="-21"/>
-        <location line="+458"/>
+        <location line="+403"/>
         <source>Change role</source>
         <translation>Alterar papel</translation>
     </message>
     <message>
-        <location line="-510"/>
+        <location line="-455"/>
         <source>Back to files</source>
         <translation>Voltar aos arquivos</translation>
     </message>
@@ -1864,12 +2367,12 @@
     </message>
     <message>
         <location line="-80"/>
-        <location line="+337"/>
+        <location line="+268"/>
         <source>Working…</source>
         <translation>Processando…</translation>
     </message>
     <message>
-        <location line="-272"/>
+        <location line="-203"/>
         <source>Open organizations</source>
         <translation>Abrir organizações</translation>
     </message>
@@ -1879,14 +2382,9 @@
         <translation>Abrir organização</translation>
     </message>
     <message>
-        <location line="-152"/>
+        <location line="-153"/>
         <source>Revoke this access grant?</source>
         <translation>Revogar esta concessão de acesso?</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Remove this space rule?</source>
-        <translation>Remover esta regra do espaço?</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1894,79 +2392,39 @@
         <translation>%1 perde o que este papel permite no espaço. O acesso vindo de outras concessões é preservado.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Existing controlled documents will remain blocked until the rule is reactivated or their control is removed.</source>
-        <translation>Os documentos controlados existentes continuarão bloqueados até a regra ser reativada ou o controle deles ser removido.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reason for removing the space rule</source>
-        <translation>Motivo para remover a regra do espaço</translation>
-    </message>
-    <message>
-        <location line="+3"/>
+        <location line="+2"/>
         <source>Revoke</source>
         <translation>Revogar</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Remove rule</source>
-        <translation>Remover regra</translation>
-    </message>
-    <message>
-        <location line="+154"/>
+        <location line="+159"/>
         <source>No organizations yet.</source>
         <translation>Nenhuma organização ainda.</translation>
     </message>
     <message>
         <location line="+63"/>
-        <location line="+446"/>
+        <location line="+391"/>
         <source>Rename organization</source>
         <translation>Renomear organização</translation>
     </message>
     <message>
-        <location line="-426"/>
+        <location line="-371"/>
         <source>Remove member</source>
         <translation>Remover membro</translation>
     </message>
     <message>
         <location line="+21"/>
-        <location line="+442"/>
+        <location line="+387"/>
         <source>Invite member</source>
         <translation>Convidar membro</translation>
     </message>
     <message>
-        <location line="-433"/>
+        <location line="-378"/>
         <source>Add review roles</source>
         <translation>Adicionar papéis de revisão</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Let links follow new versions</source>
-        <translation>Permitir que links sigam novas versões</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Require pinned versions</source>
-        <translation>Exigir versões fixadas</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Remove space rule</source>
-        <translation>Remover regra do espaço</translation>
-    </message>
-    <message>
         <location line="+9"/>
-        <source>Pause space rule</source>
-        <translation>Pausar regra do espaço</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Activate space rule</source>
-        <translation>Ativar regra do espaço</translation>
-    </message>
-    <message>
-        <location line="+10"/>
         <source>Grant me management access</source>
         <translation>Conceder a mim acesso de gerenciamento</translation>
     </message>
@@ -2011,22 +2469,7 @@
         <translation>Assinar</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Change quantity</source>
-        <translation>Alterar quantidade</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Pause installation</source>
-        <translation>Pausar instalação</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Uninstall</source>
-        <translation>Desinstalar</translation>
-    </message>
-    <message>
-        <location line="+61"/>
+        <location line="+52"/>
         <location line="+9"/>
         <source>Theme</source>
         <translation>Tema</translation>
@@ -2054,12 +2497,12 @@
     </message>
     <message>
         <location line="+12"/>
-        <location line="+196"/>
+        <location line="+210"/>
         <source>Organization name</source>
         <translation>Nome da organização</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-172"/>
         <source>No invitations yet. Use Invite member to send one.</source>
         <translation>Nenhum convite ainda. Use Convidar membro para enviar um.</translation>
     </message>
@@ -2129,13 +2572,36 @@
         <source>Images and linked files may follow later versions of their files.</source>
         <translation>Imagens e arquivos vinculados podem seguir versões posteriores dos seus arquivos.</translation>
     </message>
+    <message numerus="yes">
+        <location line="+4"/>
+        <source>%n approval(s) publish a proposal.</source>
+        <translation>
+            <numerusform>%n aprovação publica uma proposta.</numerusform>
+            <numerusform>%n aprovações publicam uma proposta.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Authors may approve their own proposals.</source>
+        <translation>Autores podem aprovar as próprias propostas.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Authors cannot approve their own proposals.</source>
+        <translation>Autores não podem aprovar as próprias propostas.</translation>
+    </message>
     <message>
         <location line="+4"/>
         <source>Add review roles to grant reviewer and manager access under Access.</source>
         <translation>Adicione os papéis de revisão para conceder acesso de revisor e de gerente em Acesso.</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+5"/>
+        <source>Configure document control</source>
+        <translation>Configurar controle de documentos</translation>
+    </message>
+    <message>
+        <location line="+68"/>
         <source>Save changes</source>
         <translation>Salvar alterações</translation>
     </message>
@@ -2182,12 +2648,12 @@
         <translation>Papel neste espaço</translation>
     </message>
     <message>
-        <location line="-228"/>
+        <location line="-242"/>
         <source>No members to display.</source>
         <translation>Nenhum membro para exibir.</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+104"/>
         <source>Plan: %1</source>
         <translation>Plano: %1</translation>
     </message>
@@ -2270,7 +2736,7 @@
 <context>
     <name>matome::Assets</name>
     <message>
-        <location filename="../references/Assets.cpp" line="+134"/>
+        <location filename="../references/Assets.cpp" line="+172"/>
         <source>(external image not loaded: %1)</source>
         <translation>(imagem externa não carregada: %1)</translation>
     </message>
@@ -2397,12 +2863,12 @@
     </message>
     <message>
         <location line="+2"/>
-        <location line="+45"/>
+        <location line="+46"/>
         <source>Download</source>
         <translation>Baixar</translation>
     </message>
     <message>
-        <location line="-4"/>
+        <location line="-5"/>
         <source>Preview</source>
         <translation>Visualizar</translation>
     </message>
@@ -2415,6 +2881,11 @@
         <location line="+1"/>
         <source>Versions</source>
         <translation>Versões</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Related</source>
+        <translation>Relacionados</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2468,6 +2939,21 @@
     </message>
     <message>
         <location line="+1"/>
+        <source>Update review</source>
+        <translation>Atualizar revisão</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Resolve conflicts</source>
+        <translation>Resolver conflitos</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Edit proposal</source>
+        <translation>Editar proposta</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Manage with reviews</source>
         <translation>Gerenciar com revisões</translation>
     </message>
@@ -2477,12 +2963,12 @@
         <translation>Deixar de gerenciar</translation>
     </message>
     <message>
-        <location line="-56"/>
+        <location line="-60"/>
         <source>Rename</source>
         <translation>Renomear</translation>
     </message>
     <message>
-        <location line="+160"/>
+        <location line="+165"/>
         <source>Delete folder</source>
         <translation>Excluir pasta</translation>
     </message>
@@ -2492,7 +2978,7 @@
         <translation>Mover para a lixeira</translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-161"/>
         <source>Restore last trash</source>
         <translation>Restaurar da lixeira</translation>
     </message>

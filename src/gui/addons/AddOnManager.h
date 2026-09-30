@@ -29,7 +29,12 @@ public:
     AddOnBackend &backend() { return m_backend; }
     Q_INVOKABLE QVariantMap state(const QString &key, const QString &spaceId) const;
     Q_INVOKABLE void refresh();
-    Q_INVOKABLE void install(const QString &key, const QVariantList &spaceIds);
+    /// Installs or resumes `key` in `spaceIds` (every space when empty),
+    /// with `settings` over the installation's current settings.
+    Q_INVOKABLE void install(const QString &key, const QVariantList &spaceIds, const QVariantMap &settings = {});
+    /// Changes the organization's settings of the installed `key`; the
+    /// settings it omits keep their values.
+    Q_INVOKABLE void saveSettings(const QString &key, const QVariantMap &settings);
     Q_INVOKABLE void pause(const QString &key);
     Q_INVOKABLE void uninstallControlledDocs(const QString &reason);
 

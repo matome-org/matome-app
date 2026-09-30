@@ -22,7 +22,7 @@ ColumnLayout {
     readonly property var linked: {
         const seen = {}
         const list = []
-        const pattern = /(^|[^!])\[([^\]]*)\]\((matome:doc\/\d+|\/[^)\s]*)[^)]*\)/g
+        const pattern = /(^|[^!])\[([^\]]*)\]\((matome:doc\/\d+|\/(?:[^\s()]|\([^\s()]*\))*)[^)]*\)/g
         let match
         while ((match = pattern.exec(view.markdown)) !== null) {
             if (seen[match[3]])
