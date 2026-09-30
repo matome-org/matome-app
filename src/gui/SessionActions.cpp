@@ -240,11 +240,15 @@ const QList<Session::Command> &Session::commands()
 {
     const auto always = [](const Session &) { return true; };
     const auto signedIn = [](const Session &s) { return s.m_signedIn; };
+    // The explorer is the screen: neither settings nor document reviews cover it.
+    static const auto explorer = [](const Session &s) {
+        return s.m_signedIn && !s.m_settingsActive && !s.m_controlledDocs.active();
+    };
     // Only inside a space: files, folders, uploads, the clipboard.
-    static const auto inFiles = [](const Session &s) { return s.inSpace(); };
+    static const auto inFiles = [](const Session &s) { return explorer(s) && s.inSpace(); };
     const auto focused = [](const Session &s) { return inFiles(s) && !s.m_focusPayload.isEmpty(); };
     const auto trashed = [](const Session &s) {
-        return s.m_signedIn && !s.m_lastTrashed.id.isEmpty();
+        return explorer(s) && !s.m_lastTrashed.id.isEmpty();
     };
     static const QList<Command> table = [&] {
         QList<Command> rows{
@@ -252,26 +256,26 @@ const QList<Session::Command> &Session::commands()
                  always, [](Session &s) { emit s.showKeymap(); }},
                 {"sheet", QT_TR_NOOP("Command sheet"),
                  always, [](Session &s) { emit s.showSheet(); }},
-                {"settings", QT_TR_NOOP("Settings"),
-                 [](const Session &s) { return s.signedIn(); },
+                {"settings", QT_TR_NOOP("Settings"), explorer,
                  [](Session &s) { s.openSettings(); }},
                 {"next-region", QT_TR_NOOP("Next region"),
-                 signedIn, [](Session &s) { emit s.cycleRegion(1); }},
-                {"previous-region", QT_TR_NOOP("Previous region"), signedIn,
+                 explorer, [](Session &s) { emit s.cycleRegion(1); }},
+                {"previous-region", QT_TR_NOOP("Previous region"), explorer,
                  [](Session &s) { emit s.cycleRegion(-1); }},
-                {"back", QT_TR_NOOP("Back"), [](const Session &s) { return s.canGoBack(); },
+                {"back", QT_TR_NOOP("Back"), [](const Session &s) { return explorer(s) && s.canGoBack(); },
                  [](Session &s) { s.stepHistory(-1); }},
                 {"forward", QT_TR_NOOP("Forward"),
-                 [](const Session &s) { return s.canGoForward(); },
+                 [](const Session &s) { return explorer(s) && s.canGoForward(); },
                  [](Session &s) { s.stepHistory(1); }},
                 {"up", QT_TR_NOOP("Up one level"),
-                 [](const Session &s) { return s.m_signedIn && s.where() != Level::Orgs; },
+                 [](const Session &s) { return explorer(s) && s.where() != Level::Orgs; },
                  [](Session &s) { s.goUp(); }},
                 {"refresh", QT_TR_NOOP("Refresh"),
-                 signedIn, [](Session &s) { s.refreshLocation(); }},
+                 [](const Session &s) { return explorer(s) || s.m_controlledDocs.active(); },
+                 [](Session &s) { s.refreshLocation(); }},
                 {"filter", QT_TR_NOOP("Filter"),
-                 signedIn, [](Session &s) { emit s.focusFilter(); }},
-                {"new", nullptr, signedIn, [](Session &s) { emit s.promptNew(); }},
+                 explorer, [](Session &s) { emit s.focusFilter(); }},
+                {"new", nullptr, explorer, [](Session &s) { emit s.promptNew(); }},
                 {"upload", QT_TR_NOOP("Upload file"),
                  inFiles, [](Session &s) { s.requestUpload(); }},
                 {"download", QT_TR_NOOP("Download"),
@@ -294,7 +298,7 @@ const QList<Session::Command> &Session::commands()
                      return s.m_documents.controlledOf(id)
                              || s.m_documents.titleOf(id).endsWith(QLatin1String(".md"), Qt::CaseInsensitive);
                  },
-                 [](Session &s) { s.m_controlledDocs.open(s.focusedEntry().id, true); }},
+                 [](Session &s) { s.m_controlledDocs.open(s.focusedEntry().id, QStringLiteral("control")); }},
                 {"rename", QT_TR_NOOP("Rename"),
                  focused, [](Session &s) { s.promptRenameFocused(); }},
                 {"trash", nullptr,
@@ -316,6 +320,38 @@ const QList<Session::Command> &Session::commands()
                 {"theme-dark", QT_TR_NOOP("Theme dark"), always, nullptr},
                 {"theme-system", QT_TR_NOOP("Theme system"), always, nullptr},
         };
+        // The document reviews screen's verbs: ControlledDocs decides when
+        // each can run and runs it, or asks the screen to.
+        static const struct {
+            const char *id;
+            const char *title;
+            const char *icon;
+        } reviewing[] = {
+                {"reviews-section", QT_TR_NOOP("Reviews"), "controlled-docs"},
+                {"edit-section", QT_TR_NOOP("Edit document"), "rename"},
+                {"control-section", QT_TR_NOOP("Control"), "settings"},
+                {"access-section", QT_TR_NOOP("Review access"), "user"},
+                {"download-candidate", QT_TR_NOOP("Download candidate"), "download"},
+                {"approve-review", QT_TR_NOOP("Approve"), "check"},
+                {"reject-review", QT_TR_NOOP("Reject"), "close"},
+                {"cancel-review", QT_TR_NOOP("Cancel review"), "cancel"},
+                {"discard-changes", QT_TR_NOOP("Discard changes"), "restore"},
+                {"submit-proposal", QT_TR_NOOP("Submit for review"), "upload"},
+                {"activate-rule", QT_TR_NOOP("Activate space rule"), "check"},
+                {"pause-rule", QT_TR_NOOP("Pause space rule"), "pause"},
+                {"remove-rule", QT_TR_NOOP("Remove space rule"), "trash"},
+                {"manage-document", QT_TR_NOOP("Manage document"), "controlled-docs"},
+                {"unmanage-document", QT_TR_NOOP("Unmanage document"), "document"},
+                {"grant-access", QT_TR_NOOP("Grant access"), "new"},
+                {"grant-self-management", QT_TR_NOOP("Grant me management access"), "user"},
+                {"revoke-access", QT_TR_NOOP("Revoke access"), "close"},
+        };
+        for (const auto &action : reviewing) {
+            const QByteArray id(action.id);
+            rows.append({id, action.title,
+                         [id](const Session &s) { return s.m_controlledDocs.allows(id); },
+                         [id](Session &s) { s.m_controlledDocs.perform(id); }, action.icon});
+        }
         // Each language by its own name, untranslated, like the switcher.
         for (const Language &language : kLanguages)
             rows.append({QByteArray(kLanguageCommand) + language.code, language.name, always,
@@ -339,7 +375,8 @@ namespace {
 // Every key the window routes here. A binding without Shift matches with or
 // without it, so layouts that shift '?' and ':' still reach them; a Shift
 // binding therefore comes before its plain twin. Labels feed the keymap; an
-// empty label is an alternate spelling of the row above.
+// empty label is an alternate spelling of the row above. A key may bind one
+// command per screen: the first usable one runs.
 const struct {
     int key;
     int modifiers;
@@ -366,6 +403,13 @@ const struct {
         {Qt::Key_N, Qt::ControlModifier | Qt::ShiftModifier, true, "new", "Ctrl+Shift+N"},
         {Qt::Key_U, 0, false, "upload", "U"},
         {Qt::Key_D, 0, false, "download", "D"},
+        {Qt::Key_D, 0, false, "download-candidate", "D"},
+        {Qt::Key_1, 0, false, "reviews-section", "1"},
+        {Qt::Key_2, 0, false, "edit-section", "2"},
+        {Qt::Key_3, 0, false, "control-section", "3"},
+        {Qt::Key_4, 0, false, "access-section", "4"},
+        {Qt::Key_Return, Qt::ControlModifier, true, "submit-proposal", "Ctrl+Enter"},
+        {Qt::Key_Enter, Qt::ControlModifier, true, "submit-proposal", ""},
         {Qt::Key_F2, 0, false, "rename", "F2"},
         {Qt::Key_Delete, 0, false, "trash", "Del"},
         {Qt::Key_Z, Qt::ControlModifier, false, "restore", "Ctrl+Z"},
@@ -405,7 +449,7 @@ Session::Face Session::faceOf(const Command &row) const
                 "controlled-docs"};
     }
     if (row.title)
-        return {row.title, row.id.constData()};
+        return {row.title, row.icon ? row.icon : row.id.constData()};
     if (row.id == "trash") {
         if (focusedEntry().kind == QLatin1String("folder"))
             return {QT_TR_NOOP("Delete folder"), "purge"};
@@ -423,6 +467,10 @@ void Session::runCommand(const QString &id)
 
 void Session::refreshLocation()
 {
+    if (m_controlledDocs.active()) {
+        m_controlledDocs.refresh();
+        return;
+    }
     switch (where()) {
     case Level::Orgs:
         m_orgs.reload();
@@ -455,7 +503,7 @@ bool Session::handleKey(int key, int modifiers, bool inField)
             continue;
         const Command *row = command(QString::fromLatin1(binding.command));
         if (!row->usable(*this))
-            return false;
+            continue;
         row->run(*this);
         return true;
     }

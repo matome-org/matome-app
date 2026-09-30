@@ -21,6 +21,8 @@
 #include <QUrl>
 #include <QVariantList>
 #include <QVector>
+
+#include <functional>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 namespace matome {
@@ -60,7 +62,7 @@ class Session : public QObject
     Q_PROPERTY(QString uploadError READ uploadError NOTIFY changed)
     Q_PROPERTY(QString uploadErrorName READ uploadErrorName NOTIFY changed)
     Q_PROPERTY(QString lastTrashedId READ lastTrashedId NOTIFY changed)
-    Q_PROPERTY(QVariantList commandList READ commandList NOTIFY changed)
+    Q_PROPERTY(QVariantList commandList READ commandList NOTIFY commandsChanged)
     Q_PROPERTY(QString childKind READ childKind NOTIFY changed)
     Q_PROPERTY(bool loading READ loading NOTIFY changed)
     Q_PROPERTY(QString locationError READ locationError NOTIFY changed)
@@ -208,6 +210,7 @@ signals:
     void promptUpload();
     void promptNew();
     void focusFilter();
+    void commandsChanged();
     void showKeymap();
     void showSheet();
     void cycleRegion(int step);
@@ -216,12 +219,14 @@ private:
     /// One row of the command table: the keymap, sheet, buttons, and keys
     /// all read it. Titles are English and translated when read; a null
     /// title depends on where the session stands (`faceOf`); a null run is a
-    /// command the window carries out (themes, languages).
+    /// command the window carries out (themes, languages). A null icon is
+    /// the id.
     struct Command {
         QByteArray id;
         const char *title;
-        bool (*usable)(const Session &);
-        void (*run)(Session &);
+        std::function<bool(const Session &)> usable;
+        std::function<void(Session &)> run;
+        const char *icon = nullptr;
     };
     static const QList<Command> &commands();
     /// The title and icon a command shows now.

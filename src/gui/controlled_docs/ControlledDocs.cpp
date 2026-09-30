@@ -3,6 +3,9 @@
 #include "JsonList.h"
 #include <QPointer>
 #include <QCryptographicHash>
+#include <QFile>
+#include <QStringDecoder>
+#include <QUrl>
 
 namespace matome {
 ControlledDocs::ControlledDocs(Session &session)
@@ -65,12 +68,12 @@ QString ControlledDocs::reviewPath(const QString &suffix) const
     return orgPath(m_orgId, QStringLiteral("reviews/%1%2").arg(m_review.value(QStringLiteral("id")).toString(), suffix));
 }
 
-void ControlledDocs::open(const QString &documentId, bool controlTab)
+void ControlledDocs::open(const QString &documentId, const QString &section)
 {
     if (!m_session.inSpace()) return;
     close();
-    m_controlTab = controlTab;
     m_active = true;
+    m_section = !section.isEmpty() ? section : documentId.isEmpty() ? QStringLiteral("control") : QStringLiteral("reviews");
     m_orgId = m_session.currentOrgId();
     m_spaceId = m_session.currentSpaceId();
     m_documentId = documentId;
@@ -82,16 +85,81 @@ void ControlledDocs::close()
 {
     ++m_generation;
     ++m_reviewGeneration;
-    m_active = m_controlTab = m_saving = m_ruleRead = m_sourceLoaded = false;
+    m_active = m_saving = m_ruleRead = m_sourceLoaded = false;
     m_pending = 0;
-    m_orgId.clear(); m_spaceId.clear(); m_documentId.clear(); m_membershipId.clear();
+    m_orgId.clear(); m_spaceId.clear(); m_documentId.clear(); m_membershipId.clear(); m_section.clear();
     m_document = m_rule = m_review = {};
     m_reviews = m_members = m_roles = m_grants = {};
     m_accessError.clear();
     m_errorCode.clear(); m_ruleError.clear(); m_reviewsError.clear(); m_notice.clear();
-    m_diff.clear(); m_source.clear(); m_sourceVersion.clear();
+    m_diff.clear(); m_candidate.clear(); m_source.clear(); m_sourceVersion.clear();
     emit sourceChanged();
     emit changed();
+}
+
+void ControlledDocs::setSection(const QString &section)
+{
+    if (section == m_section || !allows((section + QLatin1String("-section")).toLatin1())) return;
+    m_section = section;
+    emit changed();
+}
+
+bool ControlledDocs::allows(QByteArrayView id) const
+{
+    if (!m_active) return false;
+    const bool idle = !busy();
+    const bool ruleActive = m_rule.value(QStringLiteral("active")).toBool();
+    if (id == "reviews-section") return hasDocument();
+    if (id == "edit-section") return hasDocument() && controlled();
+    if (id == "control-section") return true;
+    if (id == "access-section") return m_addOns.canInstall();
+    if (id == "download-candidate") return idle && !m_review.isEmpty();
+    if (id == "approve-review" || id == "reject-review") return canDecide();
+    if (id == "cancel-review") return idle && m_review.value(QStringLiteral("status")).toString() == QLatin1String("open");
+    if (id == "discard-changes") return idle && m_sourceLoaded;
+    if (id == "submit-proposal") return canSubmit();
+    if (id == "activate-rule") return idle && canManageRule() && !unavailable() && !ruleActive;
+    if (id == "pause-rule") return idle && canManageRule() && !unavailable() && ruleActive;
+    if (id == "remove-rule") return idle && canManageRule() && m_rule.contains(QStringLiteral("id"));
+    if (id == "manage-document") return idle && hasDocument() && !controlled() && !unavailable() && ruleActive;
+    if (id == "unmanage-document") return idle && hasDocument() && controlled();
+    if (id == "grant-access") return canAssign() && !m_members.isEmpty();
+    if (id == "grant-self-management")
+        return canAssign() && !m_membershipId.isEmpty() && m_ruleError == QLatin1String("forbidden");
+    if (id == "revoke-access") return canAssign() && !grants().isEmpty();
+    return false;
+}
+
+void ControlledDocs::perform(QByteArrayView id)
+{
+    if (!allows(id)) return;
+    if (id.endsWith("-section")) setSection(QString::fromLatin1(id.chopped(8)));
+    else if (id == "download-candidate") downloadCandidate();
+    else if (id == "activate-rule" || id == "pause-rule") saveRule(id == "activate-rule");
+    else if (id == "manage-document") setControlled(true);
+    else if (id == "grant-self-management") grantAccess(m_membershipId, true);
+    else emit requested(QString::fromLatin1(id));
+}
+
+QString ControlledDocs::readDraft(const QUrl &url)
+{
+    const QString path = url.isLocalFile() ? url.toLocalFile() : url.toString();
+    QFile file(path);
+    QString text;
+    bool valid = path.endsWith(QLatin1String(".md"), Qt::CaseInsensitive) && file.open(QIODevice::ReadOnly)
+            && file.size() <= 1024 * 1024;
+    if (valid) {
+        const QByteArray bytes = file.readAll();
+        QStringDecoder utf8(QStringDecoder::Utf8);
+        text = utf8(bytes);
+        valid = !utf8.hasError() && !bytes.contains('\0');
+    }
+    if (!valid) {
+        m_errorCode = QStringLiteral("invalid_markdown");
+        emit changed();
+        return {};
+    }
+    return text;
 }
 
 void ControlledDocs::refresh()
@@ -113,6 +181,7 @@ void ControlledDocs::load()
     m_review = {};
     m_reviews = {};
     m_diff.clear();
+    m_candidate.clear();
     emit changed();
     const QPointer<ControlledDocs> self(this);
     const auto live = [self, generation] { return self && self->live(generation); };
@@ -328,27 +397,43 @@ void ControlledDocs::selectReview(const QString &id)
     ++m_reviewGeneration;
     m_review = {};
     m_diff.clear();
+    m_candidate.clear();
     for (const auto &value : m_reviews)
         if (value.toObject().value(QStringLiteral("id")).toString() == id) m_review = value.toObject();
-    emit changed();
+    if (m_review.isEmpty()) emit changed();
+    else loadReview();
 }
 
-void ControlledDocs::loadDiff()
+// The selected review's diff and its candidate Markdown, fetched together.
+void ControlledDocs::loadReview()
 {
-    if (!m_active || busy() || m_review.isEmpty()) return;
-    m_pending = 1;
+    m_pending = 2;
     m_errorCode.clear();
-    m_diff.clear();
     const auto isLive = guard();
     const int reviewGeneration = m_reviewGeneration;
+    const auto current = [this, isLive, reviewGeneration] { return isLive() && reviewGeneration == m_reviewGeneration; };
     emit changed();
-    m_backend.request("GET", reviewPath(QStringLiteral("/diff")), {}, {},
-            [this, isLive, reviewGeneration](const Client::Reply &reply) {
-        if (!isLive() || reviewGeneration != m_reviewGeneration) return;
-        m_pending = 0;
+    m_backend.request("GET", reviewPath(QStringLiteral("/diff")), {}, {}, [this, current](const Client::Reply &reply) {
+        if (!current()) return;
+        --m_pending;
         if (reply.ok) m_diff = reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("diff")).toString();
         else m_errorCode = failCode(reply);
         emit changed();
+    });
+    m_backend.request("GET", reviewPath(QStringLiteral("/candidate/download")), {}, {}, [this, current](const Client::Reply &reply) {
+        if (!current()) return;
+        if (!reply.ok) { --m_pending; m_errorCode = failCode(reply); emit changed(); return; }
+        const QUrl url(reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("url")).toString());
+        m_backend.getFile(url, [this, current](const Client::Reply &file) {
+            if (!current()) return;
+            --m_pending;
+            QStringDecoder utf8(QStringDecoder::Utf8);
+            const QString text = utf8(file.bytes);
+            if (file.ok && file.bytes.size() <= 1024 * 1024 && !file.bytes.contains('\0') && !utf8.hasError())
+                m_candidate = text;
+            else m_errorCode = file.ok ? QStringLiteral("candidate_unavailable") : failCode(file);
+            emit changed();
+        });
     });
 }
 

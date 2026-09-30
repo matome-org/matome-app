@@ -65,20 +65,17 @@ Window {
         focus: true
 
         Keys.onPressed: function (event) {
-            if (controlledScreen.visible && event.key === Qt.Key_Escape) {
+            if (event.key === Qt.Key_Escape && controlledScreen.visible) {
                 controlledScreen.dismiss()
                 event.accepted = true
-            } else if (controlledScreen.visible && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
-                event.accepted = true
-            } else if (settingsScreen.visible && event.key === Qt.Key_Escape) {
+            } else if (event.key === Qt.Key_Escape && settingsScreen.visible) {
                 settingsScreen.dismiss()
                 event.accepted = true
-            } else if (settingsScreen.visible && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
+            } else if (event.key === Qt.Key_Escape && explorer.visible && explorer.dismiss()) {
                 event.accepted = true
-            } else if (event.key === Qt.Key_Escape && explorer.visible && explorer.dismiss())
-                event.accepted = true
-            else if (Session.handleKey(event.key, event.modifiers, win.inField))
-                event.accepted = true
+            } else {
+                event.accepted = Session.handleKey(event.key, event.modifiers, win.inField)
+            }
         }
 
         Connections {

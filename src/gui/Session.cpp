@@ -61,6 +61,10 @@ Session::Session(QObject *parent, AddOnBackend *backend)
         notify();
     });
     connect(&m_documents, &DocumentModel::changed, this, &Session::notify);
+    // Commands follow the screen shown and the review in hand, not only the location.
+    connect(this, &Session::changed, this, &Session::commandsChanged);
+    connect(this, &Session::settingsChanged, this, &Session::commandsChanged);
+    connect(&m_controlledDocs, &ControlledDocs::changed, this, &Session::commandsChanged);
     connect(&m_documents, &DocumentModel::downloadReady, this, &Session::downloadReady);
     connect(&m_documents, &DocumentModel::trashed, this, [this](const QString &id, int revision) {
         m_lastTrashed = {QStringLiteral("document"), id, revision};
