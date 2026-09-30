@@ -42,6 +42,7 @@ class Theme : public QObject
     Q_PROPERTY(QColor subtleFill READ subtleFill NOTIFY paletteChanged)
     Q_PROPERTY(QColor subtleFillStrong READ subtleFillStrong NOTIFY paletteChanged)
     Q_PROPERTY(QColor failed READ failed NOTIFY paletteChanged)
+    Q_PROPERTY(QColor added READ added NOTIFY paletteChanged)
 
     // The interface language (persisted): it picks the words, the locale
     // numbers and sizes follow, and the families (Japanese puts Noto JP
@@ -54,6 +55,7 @@ class Theme : public QObject
     Q_PROPERTY(QFont caption READ caption NOTIFY typeChanged)
     Q_PROPERTY(QFont body READ body NOTIFY typeChanged)
     Q_PROPERTY(QFont bodyLarge READ bodyLarge NOTIFY typeChanged)
+    Q_PROPERTY(QFont mono READ mono NOTIFY typeChanged)
     Q_PROPERTY(QFont button READ button NOTIFY typeChanged)
     Q_PROPERTY(QFont link READ link NOTIFY typeChanged)
     Q_PROPERTY(QFont heading READ heading NOTIFY typeChanged)
@@ -117,6 +119,8 @@ public:
         QColor subtleFill;
         QColor subtleFillStrong;
         QColor failed;
+        /// Ink for what a change adds; `failed` marks what it removes.
+        QColor added;
     };
 
     explicit Theme(QObject *parent = nullptr);
@@ -144,6 +148,7 @@ public:
     QColor subtleFill() const { return m_shown.subtleFill; }
     QColor subtleFillStrong() const { return m_shown.subtleFillStrong; }
     QColor failed() const { return m_shown.failed; }
+    QColor added() const { return m_shown.added; }
 
     QString language() const { return m_language; }
     void setLanguage(const QString &language);
@@ -155,6 +160,9 @@ public:
     QFont caption() const;
     QFont body() const;
     QFont bodyLarge() const;
+    /// Fixed-width text for diffs and source: the platform fixed font,
+    /// which WebAssembly provides too.
+    QFont mono() const;
     QFont button() const;
     QFont link() const;
     QFont heading() const;

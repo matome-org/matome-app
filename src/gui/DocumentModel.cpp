@@ -44,6 +44,12 @@ QString DocumentModel::titleOf(const QString &documentId) const
     return row ? row->title : QString();
 }
 
+bool DocumentModel::controlledOf(const QString &documentId) const
+{
+    const DocumentRow *row = find(documentId);
+    return row && row->controlled;
+}
+
 int DocumentModel::rowCount(const QModelIndex &parent) const
 {
     return parent.isValid() ? 0 : m_rows.size();
@@ -65,6 +71,8 @@ QVariant DocumentModel::data(const QModelIndex &index, int role) const
         return row.byteSize;
     case RevisionRole:
         return row.revision;
+    case ControlledRole:
+        return row.controlled;
     default:
         return {};
     }
@@ -76,7 +84,8 @@ QHash<int, QByteArray> DocumentModel::roleNames() const
             {FolderIdRole, "folderId"},
             {TitleRole, "documentTitle"},
             {ByteSizeRole, "byteSize"},
-            {RevisionRole, "revision"}};
+            {RevisionRole, "revision"},
+            {ControlledRole, "controlled"}};
 }
 
 void DocumentModel::reload(const QString &settled)
@@ -112,7 +121,7 @@ void DocumentModel::select(const QString &documentId)
     emit changed();
 }
 
-void DocumentModel::download(const QString &documentId)
+void DocumentModel::download(const QString &documentId, const QString &versionId)
 {
     if (m_busy || documentId.isEmpty() || !m_session.inSpace())
         return;
@@ -120,7 +129,9 @@ void DocumentModel::download(const QString &documentId)
     const QString title = titleOf(documentId);
     const int generation = ++m_generation;
     setBusy();
-    const QString path = m_session.spacePath(QStringLiteral("documents/%1/download").arg(documentId));
+    QString path = m_session.spacePath(QStringLiteral("documents/%1/download").arg(documentId));
+    if (!versionId.isEmpty())
+        path += QStringLiteral("?version_id=") + versionId;
     m_session.authedGet(path, [this, generation, title](const Client::Reply &reply) {
         if (generation != m_generation)
             return;
@@ -239,6 +250,7 @@ void DocumentModel::clear()
     m_listed.clear();
     m_busy = false;
     m_errorCode.clear();
+    m_errorDetails = {};
     m_currentDocumentId.clear();
     emit changed();
 }
@@ -247,6 +259,7 @@ void DocumentModel::setBusy()
 {
     m_busy = true;
     m_errorCode.clear();
+    m_errorDetails = {};
     emit changed();
 }
 
@@ -269,14 +282,15 @@ void DocumentModel::finish(int generation, const Client::Reply &reply)
     if (generation != m_generation)
         return;
     if (!reply.ok) {
-        refuse(failCode(reply));
+        refuse(failCode(reply), reply.json.value(QStringLiteral("details")).toObject());
         return;
     }
     reload();
 }
 
-void DocumentModel::refuse(const QString &errorCode)
+void DocumentModel::refuse(const QString &errorCode, const QJsonObject &details)
 {
+    m_errorDetails = details;
     if (errorCode == QLatin1String("revision_conflict"))
         reload(errorCode);
     else
@@ -312,6 +326,7 @@ DocumentRow DocumentModel::parseRow(const QJsonObject &json)
     row.id = jsonId(json.value(QStringLiteral("id")));
     row.folderId = jsonId(json.value(QStringLiteral("folder_id")));
     row.title = json.value(QStringLiteral("title")).toString();
+    row.controlled = json.value(QStringLiteral("controlled_docs_enabled")).toBool();
     const QJsonValue version = json.value(QStringLiteral("current_version"));
     if (version.isObject())
         row.byteSize = QString::number(version.toObject().value(QStringLiteral("byte_size")).toInteger());

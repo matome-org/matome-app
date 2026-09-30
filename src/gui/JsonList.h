@@ -21,6 +21,12 @@ inline QString jsonId(const QJsonValue &value)
     return {};
 }
 
+inline bool validReason(const QString &text)
+{
+    const QString reason = text.trimmed();
+    return !reason.isEmpty() && reason.toUcs4().size() <= 500 && !reason.contains(QChar::Null);
+}
+
 inline Client::Headers idempotencyHeader()
 {
     return {{QByteArrayLiteral("Idempotency-Key"),

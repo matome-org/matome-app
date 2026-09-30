@@ -9,6 +9,12 @@
 #include "OrgAdmin.h"
 #include "OrgBilling.h"
 #include "SpaceModel.h"
+#include "addons/AddOnManager.h"
+#include "controlled_docs/ControlledDocs.h"
+#include "controlled_docs/ControlledRule.h"
+#include "documents/DocumentView.h"
+#include "references/Assets.h"
+#include "spaces/SpaceAccess.h"
 
 #include <QAbstractListModel>
 #include <QJsonArray>
@@ -19,6 +25,8 @@
 #include <QUrl>
 #include <QVariantList>
 #include <QVector>
+
+#include <functional>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 namespace matome {
@@ -44,6 +52,12 @@ class Session : public QObject
     Q_PROPERTY(QString organizationsError READ organizationsError NOTIFY changed)
     Q_PROPERTY(matome::OrgAdmin *orgAdmin READ orgAdmin CONSTANT)
     Q_PROPERTY(matome::OrgBilling *orgBilling READ orgBilling CONSTANT)
+    Q_PROPERTY(matome::AddOnManager *addOns READ addOns CONSTANT)
+    Q_PROPERTY(matome::Assets *assets READ assets CONSTANT)
+    Q_PROPERTY(matome::DocumentView *documentView READ documentView CONSTANT)
+    Q_PROPERTY(matome::SpaceAccess *spaceAccess READ spaceAccess CONSTANT)
+    Q_PROPERTY(matome::ControlledRule *controlledRule READ controlledRule CONSTANT)
+    Q_PROPERTY(matome::ControlledDocs *controlledDocs READ controlledDocs CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
     Q_PROPERTY(QString currentSpaceId READ currentSpaceId NOTIFY changed)
@@ -56,10 +70,11 @@ class Session : public QObject
     Q_PROPERTY(QString uploadError READ uploadError NOTIFY changed)
     Q_PROPERTY(QString uploadErrorName READ uploadErrorName NOTIFY changed)
     Q_PROPERTY(QString lastTrashedId READ lastTrashedId NOTIFY changed)
-    Q_PROPERTY(QVariantList commandList READ commandList NOTIFY changed)
+    Q_PROPERTY(QVariantList commandList READ commandList NOTIFY commandsChanged)
     Q_PROPERTY(QString childKind READ childKind NOTIFY changed)
     Q_PROPERTY(bool loading READ loading NOTIFY changed)
     Q_PROPERTY(QString locationError READ locationError NOTIFY changed)
+    Q_PROPERTY(QVariantMap locationErrorDetails READ locationErrorDetails NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *entries READ entryList CONSTANT)
     Q_PROPERTY(int entryCount READ entryCount NOTIFY changed)
     Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY changed)
@@ -70,7 +85,7 @@ public:
     /// How deep the explorer stands: what its entries list.
     enum class Level { Orgs, Spaces, Files };
 
-    explicit Session(QObject *parent = nullptr);
+    explicit Session(QObject *parent = nullptr, AddOnBackend *backend = nullptr);
 
     bool signedIn() const { return m_signedIn; }
     bool settingsActive() const { return m_settingsActive; }
@@ -92,6 +107,12 @@ public:
     QString organizationsError() const { return m_orgs.errorCode(); }
     OrgAdmin *orgAdmin() { return &m_orgAdmin; }
     OrgBilling *orgBilling() { return &m_orgBilling; }
+    AddOnManager *addOns() { return &m_addOns; }
+    Assets *assets() { return &m_assets; }
+    DocumentView *documentView() { return &m_documentView; }
+    SpaceAccess *spaceAccess() { return &m_spaceAccess; }
+    ControlledRule *controlledRule() { return &m_controlledRule; }
+    ControlledDocs *controlledDocs() { return &m_controlledDocs; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }
 
@@ -128,6 +149,7 @@ public:
     QString childKind() const;
     bool loading() const;
     QString locationError() const;
+    QVariantMap locationErrorDetails() const;
     EntryModel *entries() { return &m_entries; }
     QAbstractListModel *entryList() { return &m_entries; }
     int entryCount() const { return m_entries.rowCount(); }
@@ -159,6 +181,8 @@ public:
     /// Files go one at a time; one that fails is reported and the rest go on.
     void upload(const QString &name, const QByteArray &bytes);
     Q_INVOKABLE void openEntry(const QString &kind, const QString &id);
+    /// Marks the document under the explorer's cursor, without opening it.
+    Q_INVOKABLE void selectDocument(const QString &id);
     Q_INVOKABLE void navigate(const QString &kind, const QString &id);
     Q_INVOKABLE void createHere(const QString &name);
     Q_INVOKABLE void toggleFolder(const QString &folderId);
@@ -202,6 +226,7 @@ signals:
     void promptUpload();
     void promptNew();
     void focusFilter();
+    void commandsChanged();
     void showKeymap();
     void showSheet();
     void cycleRegion(int step);
@@ -210,12 +235,14 @@ private:
     /// One row of the command table: the keymap, sheet, buttons, and keys
     /// all read it. Titles are English and translated when read; a null
     /// title depends on where the session stands (`faceOf`); a null run is a
-    /// command the window carries out (themes, languages).
+    /// command the window carries out (themes, languages). A null icon is
+    /// the id.
     struct Command {
         QByteArray id;
         const char *title;
-        bool (*usable)(const Session &);
-        void (*run)(Session &);
+        std::function<bool(const Session &)> usable;
+        std::function<void(Session &)> run;
+        const char *icon = nullptr;
     };
     static const QList<Command> &commands();
     /// The title and icon a command shows now.
@@ -297,10 +324,6 @@ private:
     void authed(const QByteArray &method, const QString &path, const QJsonObject &body,
                 const Client::Headers &headers, Client::Done done, bool retried);
     void refreshQuiet(const std::function<void(bool)> &done);
-    /// The page of `path` after `cursor` (the first when empty), with the
-    /// entries of the pages before it.
-    void listPage(const QString &path, const QString &cursor, const QString &key, const QJsonArray &entries,
-                  const Live &live, const ListDone &done);
     void syncSpaces();
     void syncFiles();
     void syncDocuments();
@@ -315,6 +338,13 @@ private:
     void enter(const Location &to);
 
     Client m_client;
+    CoreAddOnBackend m_coreAddOnBackend;
+    AddOnManager m_addOns;
+    Assets m_assets;
+    DocumentView m_documentView;
+    ControlledDocs m_controlledDocs;
+    SpaceAccess m_spaceAccess;
+    ControlledRule m_controlledRule;
     OrgModel m_orgs;
     OrgAdmin m_orgAdmin;
     OrgBilling m_orgBilling;

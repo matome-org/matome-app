@@ -26,6 +26,7 @@ SOURCES += OrgBilling.cpp OrgAdmin.cpp main.cpp Theme.cpp Session.cpp SessionAct
            DocumentModel.cpp ViewModel.cpp EntryModel.cpp FolderTreeModel.cpp
 RESOURCES += resources.qrc
 include($$PWD/i18n/i18n.pri)
+include($$PWD/references/images.pri)
 
 # The browser's file picker (QWasmLocalFileAccess) and page objects
 # (qstdweb) are Qt private API.
@@ -62,3 +63,5 @@ android {
     PRE_TARGETDEPS -= $$OUT_PWD/../core/libmatomecore.a
     PRE_TARGETDEPS += $$OUT_PWD/../core/libmatomecore_$${MATOME_ANDROID_ABI}.a
 }
+
+include($$PWD/addons.pri)

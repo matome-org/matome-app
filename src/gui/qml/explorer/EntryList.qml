@@ -21,12 +21,14 @@ FocusScope {
     readonly property Item popups: C.Overlay.overlay
     property string pendingName
 
-    readonly property string errorText: Messages.failure(Session.locationError, Session.childKind)
+    readonly property var hereCommands: ["new", "upload", "paste", "restore", "refresh"]
+    readonly property string here: Session.trail.length > 0 ? Session.trail[Session.trail.length - 1].name : ""
+    readonly property string errorText: Messages.failure(Session.locationError, Session.childKind, Session.locationErrorDetails)
     readonly property Item listView: list
     readonly property EntryRow cursorRow: list.currentItem as EntryRow
     readonly property string cursorPayload: pane.cursorRow ? pane.cursorRow.payload : ""
 
-    signal menuRequested(var ids, Item item, real x, real y)
+    signal menuRequested(var groups, Item item, real x, real y)
 
     function focusList() {
         list.forceActiveFocus()
@@ -46,13 +48,15 @@ FocusScope {
             Session.openEntry(pane.cursorRow.kind, pane.cursorRow.entryId)
     }
 
+    // What acts on the row, under its name, then what acts on the open
+    // location, under its own.
     function rowMenu(row, x, y) {
-        pane.menuRequested(["download", "rename", "cut", "paste", "trash", "restore", "new", "upload", "refresh"],
-                           row, x, y)
+        pane.menuRequested([{ title: row.title, ids: ["open", "download", "rename", "cut", "trash"] },
+                            { title: pane.here, ids: pane.hereCommands }], row, x, y)
     }
 
     function blankMenu(x, y) {
-        pane.menuRequested(["new", "upload", "paste", "restore", "refresh"], list, x, y)
+        pane.menuRequested([{ title: pane.here, ids: pane.hereCommands }], list, x, y)
     }
 
     // Lands the cursor after the rows change: a row just created by name,
@@ -84,7 +88,7 @@ FocusScope {
 
     onCursorPayloadChanged: Session.setFocusPayload(pane.cursorPayload)
     onCursorRowChanged: if (pane.cursorRow && pane.cursorRow.kind === "document" && !pane.cursorRow.here)
-        Session.openEntry("document", pane.cursorRow.entryId)
+        Session.selectDocument(pane.cursorRow.entryId)
 
     Connections {
         target: Session.entries
@@ -189,6 +193,7 @@ FocusScope {
                 required colorIndex
                 required property string name
                 required property bool current
+                required controlled
                 required property int index
 
                 objectName: "entryRow" + entry.index

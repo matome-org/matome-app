@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import matome
 import "../chrome"
+import "../chrome/Scroll.js" as Scroll
 import "../chrome/Messages.js" as Messages
 
 // Sign in, create an account, and recover a password, in the landing's voice:
@@ -92,18 +93,8 @@ FocusScope {
 
     // Keeps the focused control in sight when the window is too short.
     function reveal(item) {
-        if (!item || !flick.interactive)
-            return
-        for (let at = item; at; at = at.parent) {
-            if (at === column) {
-                const top = item.mapToItem(column, 0, 0).y + column.y
-                if (top - Theme.gapXl < flick.contentY)
-                    flick.contentY = Math.max(0, top - Theme.gapXl)
-                else if (top + item.height + Theme.gapXl > flick.contentY + flick.height)
-                    flick.contentY = top + item.height + Theme.gapXl - flick.height
-                return
-            }
-        }
+        if (item && flick.interactive)
+            Scroll.reveal(flick, item, null, Theme.gapXl)
     }
 
     // Esc (Android's Back) returns to sign-in; on sign-in it is not taken,

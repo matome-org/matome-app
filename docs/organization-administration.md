@@ -33,6 +33,13 @@ The panel includes:
   cannot be assigned through invitations.
 - Usage: inspect the plan and storage, member, guest, and space limits.
   Confirmed usage and reservations are shown separately.
+- Add-ons: select an add-on, then install, resume, pause, or uninstall it
+  and choose its spaces from the command bar.
+- Spaces: pick a space from the dropdown to list who holds which role in it.
+  **Grant access** opens a dialog to choose the member and the role;
+  **Revoke access** removes the selected grant after confirmation. Add-ons
+  that work per space, such as [controlled documents](controlled-documents.md),
+  add their settings to this page.
 
 Role changes, removals, and invitation cancellations require confirmation.
 Core enforces authorization, plan limits, and the last-owner constraint.
@@ -52,6 +59,6 @@ out closes Settings.
 
 For local validation, run `mise run studio` and sign in to a local Core as
 an organization owner or admin. Verify Appearance without an open
-organization, selection through the organization sidebar, all four administration
-sections, confirmations, return navigation, and a narrow window. The unit checks are available with
+organization, selection through the organization sidebar, every administration
+section, confirmations, return navigation, and a narrow window. The unit checks are available with
 `mise run test:core`; QML lint is `mise run lint`.

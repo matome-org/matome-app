@@ -29,9 +29,16 @@ function perKind(kind) {
     }
 }
 
-function failure(code, kind) {
+function failure(code, kind, details) {
     if (code === "")
         return ""
+    if (code === "reference_in_use") {
+        const titles = (details?.sources ?? []).map(function (source) { return "“" + source.title + "”" }).join(", ")
+        const hidden = details?.hidden_count ?? 0
+        const users = titles === "" ? qsTr("%n document(s) you cannot see", "", hidden)
+                    : hidden > 0 ? qsTr("%1 and %n more", "", hidden).arg(titles) : titles
+        return qsTr("This file is shown by %1. Remove it from those documents before deleting or moving it to another space.").arg(users)
+    }
     if (code === "network")
         return qsTr("Could not reach Core at that URL.")
     if (code === "server")
@@ -191,5 +198,91 @@ function billingFailure(code) {
     case "invalid_settings": return qsTr("The server refused these add-on settings.")
     case "billing_provider_error": return qsTr("The payment provider is unavailable. Try again later.")
     default: return adminFailure(code)
+    }
+}
+
+function controlledFailure(code) {
+    switch (code) {
+    case "forbidden": return qsTr("You do not have permission for this document, review, or space operation.")
+    case "not_found": return qsTr("This document, review, or rule is no longer available to you. Refresh the current space.")
+    case "controlled_docs_unavailable": return qsTr("Document control is unavailable. Refresh after the administrator resumes the add-on or restores access.")
+    case "review_closed": return qsTr("This review was already decided. Refresh to see the result.")
+    case "stale_base": return qsTr("The published version changed. Refresh before proposing or deciding again.")
+    case "stale_rule": return qsTr("The space rule changed. Refresh before deciding again.")
+    case "revision_conflict": return qsTr("The document, rule, or review changed. Refresh and inspect the current state before trying again.")
+    case "revision_required": return qsTr("Refresh to obtain the current revision before saving.")
+    case "published_version_required": return qsTr("Upload and publish a Markdown version before enabling document control.")
+    case "diff_too_large": return qsTr("This diff exceeds the server limit. Download the candidate to inspect it.")
+    case "candidate_unavailable": return qsTr("The candidate is unavailable. Refresh this review.")
+    case "invalid_comment": return qsTr("Use a decision comment of at most 2,000 characters without NUL characters.")
+    case "incompatible_publication_subscriptions": return qsTr("Pause incompatible readiness automations or processing subscriptions before enabling control.")
+    default: return documentFailure(code)
+    }
+}
+
+function documentFailure(code) {
+    switch (code) {
+    case "invalid_markdown":
+    case "invalid_encoding": return qsTr("This file is not valid UTF-8 text, so it cannot be shown or edited here.")
+    case "unsupported_media_type":
+    case "invalid_media_type":
+    case "media_too_large": return qsTr("A managed document must stay valid UTF-8 Markdown of at most 1 MiB.")
+    case "review_open": return qsTr("A review of this document is open. Decide or cancel it before submitting more changes.")
+    case "reason_required":
+    case "invalid_reason": return qsTr("Enter a reason of up to 500 characters.")
+    case "invalid_references":
+    case "invalid_reference_path": return qsTr("The selected image link is malformed. Remove it or insert the image again.")
+    case "reference_not_found": return qsTr("The selected image was removed or its version is no longer published. Insert it again.")
+    case "reference_forbidden": return qsTr("You cannot read the selected image. Insert one you have access to.")
+    case "reference_cross_space": return qsTr("The selected image belongs to another space. Insert a copy in this one.")
+    case "reference_self": return qsTr("A document cannot link to itself.")
+    case "too_many_references": return qsTr("A document can link at most 200 images and files.")
+    case "reference_mode_not_allowed": return qsTr("This space requires links that pin a version. Insert the selected image again.")
+    default: return adminFailure(code)
+    }
+}
+
+function documentNotice(code) {
+    switch (code) {
+    case "version_published": return qsTr("New version saved.")
+    case "review_requested": return qsTr("Changes submitted for review. The published version stays available until approval.")
+    default: return controlledNotice(code)
+    }
+}
+
+function assetFailure(code) {
+    switch (code) {
+    case "unsupported_image": return qsTr("Only PNG, JPEG, GIF, and WebP images can be inserted.")
+    case "unreadable": return qsTr("The image could not be read from this device.")
+    case "assets_unavailable": return qsTr("The space's assets folder could not be created. Another file may already be named assets.")
+    case "forbidden": return qsTr("You cannot add files to this space.")
+    case "name_conflict": return qsTr("The assets folder already holds a file with this name. Rename the image and try again.")
+    default: return adminFailure(code)
+    }
+}
+
+function controlledNotice(code) {
+    switch (code) {
+    case "rule_saved": return qsTr("Space rule saved.")
+    case "rule_removed": return qsTr("Space rule removed. Existing document gates remain.")
+    case "control_enabled": return qsTr("Document control enabled.")
+    case "control_removed": return qsTr("Document control removed. Open reviews were cancelled.")
+    case "review_approve": return qsTr("Proposal approved and published.")
+    case "review_reject": return qsTr("Proposal rejected. The published version remains available.")
+    case "review_cancel": return qsTr("Review cancelled. The published version remains available.")
+    case "access_saved": return qsTr("Space access granted.")
+    case "access_removed": return qsTr("Space access grant revoked.")
+    case "roles_added": return qsTr("Review roles added. Grant them under Access.")
+    default: return ""
+    }
+}
+
+function reviewStatus(value) {
+    switch (value) {
+    case "open": return qsTr("Open")
+    case "approved": return qsTr("Approved")
+    case "rejected": return qsTr("Rejected")
+    case "cancelled": return qsTr("Cancelled")
+    default: return value
     }
 }

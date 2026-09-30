@@ -952,6 +952,7 @@ private:
                 {QStringLiteral("limits"), limits}};
         const QJsonObject product{{QStringLiteral("key"), QStringLiteral("classifier")},
                 {QStringLiteral("name"), QStringLiteral("Classification")},
+                {QStringLiteral("capability"), QStringLiteral("addon.classifier")},
                 {QStringLiteral("meter_dimension"), QStringLiteral("addon_classifier_calls_monthly")},
                 {QStringLiteral("skus"), QJsonArray{sku}}};
         return {product};
@@ -1098,9 +1099,16 @@ private:
         if (method == "GET" && (kind == QLatin1String("usage") || kind == QLatin1String("entitlements"))) {
             const QJsonObject limits{{QStringLiteral("storage_bytes"), 1073741824},
                     {QStringLiteral("members"), 10}, {QStringLiteral("guests"), 5}, {QStringLiteral("spaces"), 10}};
-            if (kind == QLatin1String("entitlements"))
-                return jsonReply(200, {{kind, QJsonObject{{QStringLiteral("limits"), limits},
+            if (kind == QLatin1String("entitlements")) {
+                QJsonObject capabilities;
+                for (const auto &value : m_addOns.value(orgId)) {
+                    const auto product = value.toObject();
+                    capabilities.insert(QStringLiteral("addon.") + product.value(QStringLiteral("key")).toString(),
+                            !product.value(QStringLiteral("assignments")).toArray().isEmpty());
+                }
+                return jsonReply(200, {{kind, QJsonObject{{QStringLiteral("limits"), limits}, {QStringLiteral("capabilities"), capabilities},
                         {QStringLiteral("plan"), QJsonObject{{QStringLiteral("key"), QStringLiteral("free")}, {QStringLiteral("version"), 1}}}}}});
+            }
             QJsonObject dimensions;
             for (const QString &dimension : {QStringLiteral("storage_bytes"), QStringLiteral("members"),
                                              QStringLiteral("guests"), QStringLiteral("spaces")}) {

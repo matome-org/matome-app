@@ -54,3 +54,6 @@ include($$PWD/../src/gui/i18n/i18n.pri)
 
 QMAKE_CXXFLAGS += -O0 -g --coverage
 QMAKE_LFLAGS += --coverage
+
+include($$PWD/../src/gui/addons.pri)
+include($$PWD/../src/gui/references/images.pri)

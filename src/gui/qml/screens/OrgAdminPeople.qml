@@ -2,104 +2,65 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Basic as C
-import QtQuick.Layouts
 import matome
 import "../chrome"
 import "../chrome/Messages.js" as Messages
 
-ListView {
+// Members or invitations as a list to select from: email over role and
+// state. The Settings command bar acts on the person under the cursor;
+// Enter or a double tap asks for its main verb (`opened`).
+CursorList {
     id: people
 
     property bool invitations: false
-    property bool narrow: false
+    property bool touch: false
+    readonly property PersonRow current: people.currentItem as PersonRow
+    readonly property string currentId: people.current?.personId ?? ""
+    readonly property string currentEmail: people.current?.email ?? ""
+    readonly property string currentRole: people.current?.roleName ?? ""
+    readonly property string currentStatus: people.current?.status ?? ""
 
-    signal roleRequested(string personId, string email, string role)
-    signal removalRequested(string personId, string email)
-    signal cancellationRequested(string personId, string email)
+    signal opened()
 
-    model: people.invitations ? Session.orgAdmin.invitations : Session.orgAdmin.members
-    clip: true
-    spacing: Theme.gapS
-    boundsBehavior: Flickable.StopAtBounds
-    C.ScrollBar.vertical: ThinScrollBar {}
+    function roleLabel(value) {
+        return Session.orgAdmin.roles.find(function (role) { return role.value === value })?.label ?? value
+    }
 
-    delegate: Rectangle {
-        id: row
+    component PersonRow: ListRow {
         required property string personId
         required property string email
         required property string roleName
         required property string status
         required property string expiresAt
+    }
 
-        width: people.width
-        implicitHeight: content.implicitHeight + 2 * Theme.gapM
-        color: Theme.surface
-        radius: Theme.rounding
-        border.color: Theme.border
+    model: people.invitations ? Session.orgAdmin.invitations : Session.orgAdmin.members
+    clip: true
+    activeFocusOnTab: true
+    spacing: Theme.gapS
+    rowHeight: people.touch ? Theme.rowTouch : Theme.controlM
+    C.ScrollBar.vertical: ThinScrollBar {}
+    Accessible.role: Accessible.List
+    Accessible.name: people.invitations ? qsTr("Invitations") : qsTr("Members")
 
-        ColumnLayout {
-            id: content
-            anchors.fill: parent
-            anchors.margins: Theme.gapM
-            spacing: Theme.gapS
-
-            Text {
-                Layout.fillWidth: true
-                text: row.email
-                font: Theme.strong(Theme.body)
-                color: Theme.textPrimary
-                elide: Text.ElideRight
-            }
-            Text {
-                visible: people.invitations
-                Layout.fillWidth: true
-                text: Messages.invitationState(row.status)
-                      + (row.expiresAt !== "" ? " · " + qsTr("Expires %1").arg(row.expiresAt) : "")
-                font: Theme.caption
-                color: Theme.textSecondary
-                wrapMode: Text.Wrap
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.gapS
-
-                RolePicker {
-                    id: role
-                    Layout.fillWidth: true
-                    roleName: row.roleName
-                    enabled: !people.invitations && !Session.orgAdmin.busy
-                }
-                ActionButton {
-                    objectName: "changeRoleButton"
-                    visible: !people.invitations
-                    text: qsTr("Apply")
-                    icon: "check"
-                    showLabel: !people.narrow
-                    tip: text
-                    usable: !Session.orgAdmin.busy && role.currentValue !== row.roleName
-                    onActivated: people.roleRequested(row.personId, row.email, role.currentValue)
-                }
-                ActionButton {
-                    objectName: "removeMemberButton"
-                    visible: !people.invitations
-                    text: qsTr("Remove")
-                    icon: "trash"
-                    showLabel: !people.narrow
-                    tip: text
-                    usable: !Session.orgAdmin.busy
-                    onActivated: people.removalRequested(row.personId, row.email)
-                }
-                ActionButton {
-                    objectName: "cancelInvitationButton"
-                    visible: people.invitations && row.status === "pending"
-                    text: qsTr("Cancel invitation")
-                    icon: "close"
-                    showLabel: !people.narrow
-                    tip: text
-                    usable: !Session.orgAdmin.busy
-                    onActivated: people.cancellationRequested(row.personId, row.email)
-                }
-            }
+    delegate: PersonRow {
+        id: row
+        required property int index
+        objectName: (people.invitations ? "invitation_" : "member_") + row.personId
+        view: people
+        touch: people.touch
+        cursor: people.currentIndex === row.index
+        selected: row.cursor
+        title: row.email
+        detail: people.invitations
+                ? [people.roleLabel(row.roleName), Messages.invitationState(row.status),
+                   row.expiresAt !== "" ? qsTr("Expires %1").arg(row.expiresAt) : ""]
+                  .filter(function (part) { return part !== "" }).join(" · ")
+                : people.roleLabel(row.roleName)
+        onClicked: people.currentIndex = row.index
+        onActivated: {
+            people.currentIndex = row.index
+            people.opened()
         }
     }
 }

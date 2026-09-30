@@ -18,8 +18,15 @@
 
 namespace matome {
 
-Session::Session(QObject *parent)
+Session::Session(QObject *parent, AddOnBackend *backend)
     : QObject(parent)
+    , m_coreAddOnBackend(*this)
+    , m_addOns(backend ? *backend : m_coreAddOnBackend, this)
+    , m_assets(*this, m_addOns.backend())
+    , m_documentView(*this, m_addOns.backend())
+    , m_controlledDocs(*this, m_documentView)
+    , m_spaceAccess(*this, m_addOns.backend())
+    , m_controlledRule(*this)
     , m_orgs(*this)
     , m_orgAdmin(*this)
     , m_orgBilling(*this)
@@ -29,6 +36,19 @@ Session::Session(QObject *parent)
     , m_entries(*this)
     , m_folderTree(*this)
 {
+    connect(this, &Session::changed, this, [this] {
+        const QString org = signedIn() ? currentOrgId() : QString();
+        m_addOns.setContext(org, m_orgs.canReadBilling(org), m_orgs.canAdminister(org));
+    });
+    connect(this, &Session::changed, this, [this] {
+        if (!signedIn())
+            m_assets.clear();
+    });
+    // A stored image may have created the assets folder or a file in it.
+    connect(&m_assets, &Assets::uploaded, this, [this] {
+        if (inSpace())
+            m_folders.reload();
+    });
     connect(this, &Session::changed, this, [this] {
         if (!m_settingsActive)
             return;
@@ -54,6 +74,13 @@ Session::Session(QObject *parent)
         notify();
     });
     connect(&m_documents, &DocumentModel::changed, this, &Session::notify);
+    // Commands follow the screen shown and the review in hand, not only the location.
+    connect(this, &Session::changed, this, &Session::commandsChanged);
+    connect(this, &Session::settingsChanged, this, &Session::commandsChanged);
+    connect(&m_documentView, &DocumentView::changed, this, &Session::commandsChanged);
+    // Space settings list the organization's spaces.
+    connect(&m_spaces, &SpaceModel::changed, &m_spaceAccess, &SpaceAccess::changed);
+    connect(&m_controlledDocs, &ControlledDocs::changed, this, &Session::commandsChanged);
     connect(&m_documents, &DocumentModel::downloadReady, this, &Session::downloadReady);
     connect(&m_documents, &DocumentModel::trashed, this, [this](const QString &id, int revision) {
         m_lastTrashed = {QStringLiteral("document"), id, revision};
@@ -67,6 +94,7 @@ void Session::openSettings()
     if (!signedIn() || m_settingsActive)
         return;
     m_settingsActive = true;
+    m_addOns.refresh();
     m_orgAdmin.open();
     m_orgBilling.open();
     emit settingsChanged();
@@ -183,6 +211,11 @@ QString Session::locationError() const
     return m_folders.errorCode().isEmpty() ? m_documents.errorCode() : m_folders.errorCode();
 }
 
+QVariantMap Session::locationErrorDetails() const
+{
+    return where() == Level::Files && m_folders.errorCode().isEmpty() ? m_documents.errorDetails() : QVariantMap();
+}
+
 void Session::setFilter(const QString &filter)
 {
     if (filter == m_entries.filter())
@@ -210,11 +243,17 @@ QVariantList Session::buildTrail() const
     return crumbs;
 }
 
+void Session::selectDocument(const QString &id)
+{
+    m_documents.select(id);
+}
+
 void Session::openEntry(const QString &kind, const QString &id)
 {
-    if (kind == QLatin1String("document"))
+    if (kind == QLatin1String("document")) {
         m_documents.select(id);
-    else
+        m_documentView.open(id);
+    } else
         navigate(kind, id);
 }
 
@@ -564,33 +603,7 @@ void Session::authedDelete(const QString &path, const Client::Headers &headers, 
 
 void Session::authedList(const QString &path, const QString &key, Live live, ListDone done)
 {
-    listPage(path, QString(), key, QJsonArray(), live, done);
-}
-
-void Session::listPage(const QString &path, const QString &cursor, const QString &key,
-                       const QJsonArray &entries, const Live &live, const ListDone &done)
-{
-    const QString page = cursor.isEmpty()
-            ? path
-            : path + (path.contains(QLatin1Char('?')) ? QLatin1Char('&') : QLatin1Char('?'))
-                    + QStringLiteral("cursor=") + QString::fromLatin1(QUrl::toPercentEncoding(cursor));
-    authedGet(page, [this, path, key, entries, live, done](const Client::Reply &reply) {
-        if (!live())
-            return;
-        if (!reply.ok) {
-            done(reply, {});
-            return;
-        }
-        QJsonArray all = entries;
-        for (const QJsonValue &value : reply.json.value(key).toArray())
-            all.append(value);
-        const QJsonObject paging = reply.json.value(QStringLiteral("page")).toObject();
-        if (paging.value(QStringLiteral("has_more")).toBool()) {
-            listPage(path, paging.value(QStringLiteral("next_cursor")).toString(), key, all, live, done);
-            return;
-        }
-        done(reply, all);
-    });
+    m_coreAddOnBackend.list(path, key, std::move(live), std::move(done));
 }
 
 QString Session::defaultApiBaseUrl()

@@ -2,21 +2,14 @@
 
 #include "JsonList.h"
 #include "Languages.h"
+#include "LocalFiles.h"
 
-#include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonObject>
 #include <QStringList>
 #include <QUrl>
 #include <QVariantMap>
-
-#ifdef Q_OS_WASM
-#include <QtGui/private/qwasmlocalfileaccess_p.h>
-
-#include <list>
-#include <memory>
-#endif
 
 namespace matome {
 
@@ -91,7 +84,7 @@ void Session::settleLastTrashed(const char *action, bool refills)
                        // the trash this would undo or finish.
                        if (code == QLatin1String("revision_conflict"))
                            m_lastTrashed = {};
-                       m_documents.refuse(code);
+                       m_documents.refuse(code, reply.json.value(QStringLiteral("details")).toObject());
                        return;
                    }
                    m_lastTrashed = {};
@@ -139,21 +132,7 @@ void Session::upload(const QString &name, const QByteArray &bytes)
 void Session::requestUpload()
 {
 #ifdef Q_OS_WASM
-    // QML's FileDialog cannot read the visitor's disk; the browser's picker
-    // hands over each chosen file's name and bytes, one after another.
-    auto picked = std::make_shared<std::list<std::pair<QString, QByteArray>>>();
-    QWasmLocalFileAccess::openFiles(
-            "*", QWasmLocalFileAccess::FileSelectMode::MultipleFiles, [](int) {},
-            [picked](uint64_t size, const std::string &name) {
-                picked->emplace_back(QString::fromStdString(name),
-                                     QByteArray(qsizetype(size), Qt::Uninitialized));
-                return picked->back().second.data();
-            },
-            [this, picked] {
-                const auto [name, bytes] = picked->front();
-                picked->pop_front();
-                upload(name, bytes);
-            });
+    pickLocalFiles("*", [this](const QString &name, const QByteArray &bytes) { upload(name, bytes); });
 #else
     emit promptUpload();
 #endif
@@ -183,54 +162,13 @@ void Session::startUpload()
     const QString spaceId = next.to.spaceId;
     const QString name = next.name;
     const QByteArray bytes = next.bytes;
-    const QString checksum = QString::fromLatin1(
-            QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
     QJsonObject document;
     document.insert(QStringLiteral("title"), name);
     if (!next.to.folderId.isEmpty())
         document.insert(QStringLiteral("folder_id"), next.to.folderId);
-    const auto store = live([this, live, orgId, bytes, run](const Client::Reply &created) {
-        if (!created.ok) {
-            finishUpload(failCode(created));
-            return;
-        }
-        const QJsonObject data = created.json.value(QStringLiteral("data")).toObject();
-        const QString uploadId = data.value(QStringLiteral("upload_id")).toString();
-        QJsonObject body;
-        body.insert(QStringLiteral("generation"), data.value(QStringLiteral("generation")).toInt());
-        const QJsonObject request = data.value(QStringLiteral("request")).toObject();
-        Client::Headers headers;
-        const QJsonObject headerMap = request.value(QStringLiteral("headers")).toObject();
-        for (auto it = headerMap.begin(); it != headerMap.end(); ++it)
-            headers.append({it.key().toUtf8(), it.value().toString().toUtf8()});
-        const QString completePath =
-                orgPath(orgId, QStringLiteral("uploads/%1/complete").arg(uploadId));
-        m_client.putRaw(
-                QUrl(request.value(QStringLiteral("url")).toString()), bytes, headers,
-                live([this, live, completePath, body](const Client::Reply &put) {
-                    if (!put.ok) {
-                        finishUpload(failCode(put));
-                        return;
-                    }
-                    // The bytes are all there, whether or not the backend
-                    // reported progress on the way (the browser's fetch never does).
-                    m_uploadProgress = 1;
-                    notify();
-                    authedPost(completePath, body, idempotencyHeader(),
-                               live([this](const Client::Reply &done) {
-                                   finishUpload(done.ok ? QString() : failCode(done));
-                               }));
-                }),
-                [this, run](qint64 sent, qint64 total) {
-                    if (run == m_uploadRun && total > 0) {
-                        m_uploadProgress = double(sent) / double(total);
-                        notify();
-                    }
-                });
-    });
     authedPost(contentPath(orgId, spaceId, QStringLiteral("documents")), document,
                idempotencyHeader(),
-               live([this, store, orgId, spaceId, name, bytes, checksum](const Client::Reply &reply) {
+               live([this, orgId, spaceId, name, bytes, run](const Client::Reply &reply) {
                    const QString documentId =
                            jsonId(reply.json.value(QStringLiteral("document"))
                                           .toObject()
@@ -243,12 +181,13 @@ void Session::startUpload()
                    upload.insert(QStringLiteral("space_id"), spaceId);
                    upload.insert(QStringLiteral("document_id"), documentId);
                    upload.insert(QStringLiteral("filename"), name);
-                   upload.insert(QStringLiteral("content_type"),
-                                 QStringLiteral("application/octet-stream"));
-                   upload.insert(QStringLiteral("byte_size"), bytes.size());
-                   upload.insert(QStringLiteral("checksum_sha256"), checksum);
-                   authedPost(orgPath(orgId, QStringLiteral("uploads")), upload,
-                              idempotencyHeader(), store);
+                   upload.insert(QStringLiteral("content_type"), name.endsWith(QLatin1String(".md"), Qt::CaseInsensitive)
+                                 ? QStringLiteral("text/markdown") : QStringLiteral("application/octet-stream"));
+                   m_coreAddOnBackend.upload(orgId, upload, bytes, [this, run] { return run == m_uploadRun; },
+                           [this](const Client::Reply &done) { finishUpload(done.ok ? QString() : failCode(done)); },
+                           [this](qint64 sent, qint64 total) {
+                               if (total > 0) { m_uploadProgress = double(sent) / double(total); notify(); }
+                           });
                }));
 }
 
@@ -281,11 +220,15 @@ const QList<Session::Command> &Session::commands()
 {
     const auto always = [](const Session &) { return true; };
     const auto signedIn = [](const Session &s) { return s.m_signedIn; };
+    // The explorer is the screen: neither settings nor document reviews cover it.
+    static const auto explorer = [](const Session &s) {
+        return s.m_signedIn && !s.m_settingsActive && !s.m_documentView.active();
+    };
     // Only inside a space: files, folders, uploads, the clipboard.
-    static const auto inFiles = [](const Session &s) { return s.inSpace(); };
+    static const auto inFiles = [](const Session &s) { return explorer(s) && s.inSpace(); };
     const auto focused = [](const Session &s) { return inFiles(s) && !s.m_focusPayload.isEmpty(); };
     const auto trashed = [](const Session &s) {
-        return s.m_signedIn && !s.m_lastTrashed.id.isEmpty();
+        return explorer(s) && !s.m_lastTrashed.id.isEmpty();
     };
     static const QList<Command> table = [&] {
         QList<Command> rows{
@@ -293,26 +236,26 @@ const QList<Session::Command> &Session::commands()
                  always, [](Session &s) { emit s.showKeymap(); }},
                 {"sheet", QT_TR_NOOP("Command sheet"),
                  always, [](Session &s) { emit s.showSheet(); }},
-                {"settings", QT_TR_NOOP("Settings"),
-                 [](const Session &s) { return s.signedIn(); },
+                {"settings", QT_TR_NOOP("Settings"), explorer,
                  [](Session &s) { s.openSettings(); }},
                 {"next-region", QT_TR_NOOP("Next region"),
-                 signedIn, [](Session &s) { emit s.cycleRegion(1); }},
-                {"previous-region", QT_TR_NOOP("Previous region"), signedIn,
+                 explorer, [](Session &s) { emit s.cycleRegion(1); }},
+                {"previous-region", QT_TR_NOOP("Previous region"), explorer,
                  [](Session &s) { emit s.cycleRegion(-1); }},
-                {"back", QT_TR_NOOP("Back"), [](const Session &s) { return s.canGoBack(); },
+                {"back", QT_TR_NOOP("Back"), [](const Session &s) { return explorer(s) && s.canGoBack(); },
                  [](Session &s) { s.stepHistory(-1); }},
                 {"forward", QT_TR_NOOP("Forward"),
-                 [](const Session &s) { return s.canGoForward(); },
+                 [](const Session &s) { return explorer(s) && s.canGoForward(); },
                  [](Session &s) { s.stepHistory(1); }},
                 {"up", QT_TR_NOOP("Up one level"),
-                 [](const Session &s) { return s.m_signedIn && s.where() != Level::Orgs; },
+                 [](const Session &s) { return explorer(s) && s.where() != Level::Orgs; },
                  [](Session &s) { s.goUp(); }},
                 {"refresh", QT_TR_NOOP("Refresh"),
-                 signedIn, [](Session &s) { s.refreshLocation(); }},
+                 [](const Session &s) { return explorer(s) || s.m_documentView.active(); },
+                 [](Session &s) { s.refreshLocation(); }},
                 {"filter", QT_TR_NOOP("Filter"),
-                 signedIn, [](Session &s) { emit s.focusFilter(); }},
-                {"new", nullptr, signedIn, [](Session &s) { emit s.promptNew(); }},
+                 explorer, [](Session &s) { emit s.focusFilter(); }},
+                {"new", nullptr, explorer, [](Session &s) { emit s.promptNew(); }},
                 {"upload", QT_TR_NOOP("Upload file"),
                  inFiles, [](Session &s) { s.requestUpload(); }},
                 {"download", QT_TR_NOOP("Download"),
@@ -324,6 +267,10 @@ const QList<Session::Command> &Session::commands()
                      if (entry.kind == QLatin1String("document"))
                          s.m_documents.download(entry.id);
                  }},
+                {"open", QT_TR_NOOP("Open"), focused, [](Session &s) {
+                     const Entry entry = s.focusedEntry();
+                     s.openEntry(entry.kind, entry.id);
+                 }, "forward"},
                 {"rename", QT_TR_NOOP("Rename"),
                  focused, [](Session &s) { s.promptRenameFocused(); }},
                 {"trash", nullptr,
@@ -345,6 +292,49 @@ const QList<Session::Command> &Session::commands()
                 {"theme-dark", QT_TR_NOOP("Theme dark"), always, nullptr},
                 {"theme-system", QT_TR_NOOP("Theme system"), always, nullptr},
         };
+        // The document screen's verbs: DocumentView decides when each can
+        // run and runs it, or asks the screen to.
+        static const struct {
+            const char *id;
+            const char *title;
+            const char *icon;
+        } viewing[] = {
+                {"view-tab", QT_TR_NOOP("Preview"), "document"},
+                {"edit-tab", QT_TR_NOOP("Edit"), "rename"},
+                {"versions-tab", QT_TR_NOOP("Versions"), "restore"},
+                {"reviews-tab", QT_TR_NOOP("Reviews"), "controlled-docs"},
+                {"download-version", QT_TR_NOOP("Download"), "download"},
+                {"insert-image", QT_TR_NOOP("Insert image"), "image"},
+                {"discard-changes", QT_TR_NOOP("Discard changes"), "restore"},
+                {"save-document", QT_TR_NOOP("Save"), "check"},
+        };
+        for (const auto &action : viewing) {
+            const QByteArray id(action.id);
+            rows.append({id, action.title,
+                         [id](const Session &s) { return s.m_documentView.allows(id); },
+                         [id](Session &s) { s.m_documentView.perform(id); }, action.icon});
+        }
+        // The controlled-documents add-on's verbs on the open document.
+        static const struct {
+            const char *id;
+            const char *title;
+            const char *icon;
+        } reviewing[] = {
+                {"open-review", QT_TR_NOOP("Open review"), "forward"},
+                {"close-review", QT_TR_NOOP("Back to reviews"), "back"},
+                {"download-candidate", QT_TR_NOOP("Download candidate"), "download"},
+                {"approve-review", QT_TR_NOOP("Approve"), "check"},
+                {"reject-review", QT_TR_NOOP("Reject"), "close"},
+                {"cancel-review", QT_TR_NOOP("Cancel review"), "cancel"},
+                {"manage-document", QT_TR_NOOP("Manage with reviews"), "controlled-docs"},
+                {"unmanage-document", QT_TR_NOOP("Stop managing"), "document"},
+        };
+        for (const auto &action : reviewing) {
+            const QByteArray id(action.id);
+            rows.append({id, action.title,
+                         [id](const Session &s) { return s.m_controlledDocs.allows(id); },
+                         [id](Session &s) { s.m_controlledDocs.perform(id); }, action.icon});
+        }
         // Each language by its own name, untranslated, like the switcher.
         for (const Language &language : kLanguages)
             rows.append({QByteArray(kLanguageCommand) + language.code, language.name, always,
@@ -368,7 +358,8 @@ namespace {
 // Every key the window routes here. A binding without Shift matches with or
 // without it, so layouts that shift '?' and ':' still reach them; a Shift
 // binding therefore comes before its plain twin. Labels feed the keymap; an
-// empty label is an alternate spelling of the row above.
+// empty label is an alternate spelling of the row above. A key may bind one
+// command per screen: the first usable one runs.
 const struct {
     int key;
     int modifiers;
@@ -395,6 +386,14 @@ const struct {
         {Qt::Key_N, Qt::ControlModifier | Qt::ShiftModifier, true, "new", "Ctrl+Shift+N"},
         {Qt::Key_U, 0, false, "upload", "U"},
         {Qt::Key_D, 0, false, "download", "D"},
+        {Qt::Key_D, 0, false, "download-version", "D"},
+        {Qt::Key_1, 0, false, "view-tab", "1"},
+        {Qt::Key_2, 0, false, "edit-tab", "2"},
+        {Qt::Key_3, 0, false, "versions-tab", "3"},
+        {Qt::Key_4, 0, false, "reviews-tab", "4"},
+        {Qt::Key_S, Qt::ControlModifier, true, "save-document", "Ctrl+S"},
+        {Qt::Key_Return, Qt::ControlModifier, true, "save-document", "Ctrl+Enter"},
+        {Qt::Key_Enter, Qt::ControlModifier, true, "save-document", ""},
         {Qt::Key_F2, 0, false, "rename", "F2"},
         {Qt::Key_Delete, 0, false, "trash", "Del"},
         {Qt::Key_Z, Qt::ControlModifier, false, "restore", "Ctrl+Z"},
@@ -429,7 +428,7 @@ QVariantList Session::commandList() const
 Session::Face Session::faceOf(const Command &row) const
 {
     if (row.title)
-        return {row.title, row.id.constData()};
+        return {row.title, row.icon ? row.icon : row.id.constData()};
     if (row.id == "trash") {
         if (focusedEntry().kind == QLatin1String("folder"))
             return {QT_TR_NOOP("Delete folder"), "purge"};
@@ -447,6 +446,11 @@ void Session::runCommand(const QString &id)
 
 void Session::refreshLocation()
 {
+    if (m_documentView.active()) {
+        m_documentView.refresh();
+        m_controlledDocs.refresh();
+        return;
+    }
     switch (where()) {
     case Level::Orgs:
         m_orgs.reload();
@@ -479,7 +483,7 @@ bool Session::handleKey(int key, int modifiers, bool inField)
             continue;
         const Command *row = command(QString::fromLatin1(binding.command));
         if (!row->usable(*this))
-            return false;
+            continue;
         row->run(*this);
         return true;
     }

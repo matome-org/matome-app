@@ -44,6 +44,14 @@ QString FolderModel::nameOf(const QString &folderId) const
     return row ? row->name : QString();
 }
 
+QStringList FolderModel::namesTo(const QString &folderId) const
+{
+    QStringList names;
+    for (const FolderRow *row = find(folderId); row && names.size() < 64; row = find(row->parentId))
+        names.prepend(row->name);
+    return names;
+}
+
 QVector<FolderRow> FolderModel::path() const
 {
     QVector<FolderRow> rows;

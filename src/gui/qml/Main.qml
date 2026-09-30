@@ -4,6 +4,7 @@ import QtQuick
 import matome
 import "screens"
 import "explorer"
+import "documents"
 import "chrome"
 import "chrome/Commands.js" as Commands
 
@@ -17,8 +18,11 @@ Window {
     title: qsTr("Matome")
     color: Theme.background
 
-    onActiveChanged: if (win.active)
+    onActiveChanged: if (win.active) {
         Session.refreshOrganizations()
+        Session.addOns.refresh()
+        if (Session.documentView.active) Session.runCommand("refresh")
+    }
 
     readonly property bool inField: {
         const item = win.activeFocusItem
@@ -26,7 +30,9 @@ Window {
     }
 
     function restoreFocus() {
-        if (settingsScreen.visible)
+        if (documentScreen.visible)
+            documentScreen.focusDefault()
+        else if (settingsScreen.visible)
             settingsScreen.focusDefault()
         else if (explorer.visible)
             explorer.focusDefault()
@@ -60,15 +66,17 @@ Window {
         focus: true
 
         Keys.onPressed: function (event) {
-            if (settingsScreen.visible && event.key === Qt.Key_Escape) {
+            if (event.key === Qt.Key_Escape && documentScreen.visible) {
+                documentScreen.dismiss()
+                event.accepted = true
+            } else if (event.key === Qt.Key_Escape && settingsScreen.visible) {
                 settingsScreen.dismiss()
                 event.accepted = true
-            } else if (settingsScreen.visible && event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
+            } else if (event.key === Qt.Key_Escape && explorer.visible && explorer.dismiss()) {
                 event.accepted = true
-            } else if (event.key === Qt.Key_Escape && explorer.visible && explorer.dismiss())
-                event.accepted = true
-            else if (Session.handleKey(event.key, event.modifiers, win.inField))
-                event.accepted = true
+            } else {
+                event.accepted = Session.handleKey(event.key, event.modifiers, win.inField)
+            }
         }
 
         Connections {
@@ -93,7 +101,7 @@ Window {
             id: explorer
             objectName: "explorer"
             anchors.fill: parent
-            visible: Session.signedIn && !Session.settingsActive
+            visible: Session.signedIn && !Session.settingsActive && !Session.documentView.active
             enabled: explorer.visible
             onCommandChosen: function (id) { win.perform(id) }
         }
@@ -106,6 +114,15 @@ Window {
             enabled: visible
             onCommandChosen: function (id) { win.perform(id) }
             onVisibleChanged: if (!settingsScreen.visible && explorer.visible) explorer.focusDefault()
+        }
+
+        DocumentScreen {
+            id: documentScreen
+            objectName: "documentScreen"
+            anchors.fill: parent
+            visible: Session.signedIn && !Session.settingsActive && Session.documentView.active
+            enabled: visible
+            onVisibleChanged: if (!visible && explorer.visible) explorer.focusDefault()
         }
 
         CommandSheet {

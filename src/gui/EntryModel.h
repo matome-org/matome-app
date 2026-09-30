@@ -23,7 +23,8 @@ public:
         DetailRole,
         ColorIndexRole,
         PayloadRole,
-        CurrentRole
+        CurrentRole,
+        ControlledRole
     };
     Q_ENUM(Role)
 
@@ -37,7 +38,7 @@ public:
 private:
     void add(QList<QVariantList> &rows, const QString &kind, const QString &id,
              const QString &name, const QString &detail, int colorIndex, const QString &payload,
-             bool current) const;
+             bool current, bool controlled = false) const;
 
     Session &m_session;
     QString m_filter;

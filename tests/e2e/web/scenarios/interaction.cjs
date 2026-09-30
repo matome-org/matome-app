@@ -69,16 +69,18 @@ module.exports = (scenario) => {
       await core.seed(SPACE);
       await studio.enter("Acme", "Docs");
       await studio.openMenu("Notes");
-      assert.deepEqual(await studio.menuIds(), ["download", "rename", "cut", "trash", "new", "upload", "refresh"]);
-      assert.equal(await studio.focusName(), "menu_download");
+      // The row's commands under its name, then the folder's under a divider.
+      assert.deepEqual(await studio.menuIds(), ["open", "download", "rename", "cut", "trash", "new", "upload", "refresh"]);
+      assert.equal(await studio.focusName(), "menu_open");
       await studio.press("Escape");
       await studio.untilShown("contextMenuList", false);
       await studio.untilRegion("entryPane");
 
       await studio.press("ContextMenu");
-      await studio.untilFocus("menu_download");
+      await studio.untilFocus("menu_open");
       await studio.press("ArrowDown");
-      await studio.untilProp("contextMenuList", "currentIndex", 1);
+      await studio.press("ArrowDown");
+      await studio.untilProp("contextMenuList", "currentIndex", 3);
       await studio.untilFocus("menu_rename");
       assert.ok(shows(await studio.texts("menu_rename"), "Rename", "F2"));
       await studio.press("Escape");

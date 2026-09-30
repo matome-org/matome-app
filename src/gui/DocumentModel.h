@@ -4,8 +4,10 @@
 
 #include <QAbstractListModel>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QString>
 #include <QUrl>
+#include <QVariantMap>
 #include <QVector>
 
 namespace matome {
@@ -18,6 +20,7 @@ struct DocumentRow {
     QString title;
     QString byteSize;
     int revision = 1;
+    bool controlled = false;
 };
 
 /// Documents in the current folder; the entry list reads it.
@@ -31,16 +34,21 @@ public:
         FolderIdRole,
         TitleRole,
         ByteSizeRole,
-        RevisionRole
+        RevisionRole,
+        ControlledRole
     };
 
     explicit DocumentModel(Session &session);
 
     bool busy() const { return m_busy; }
     QString errorCode() const { return m_errorCode; }
+    /// What Core said about the last refusal (`details`), e.g. the documents
+    /// that still link a file it would not trash.
+    QVariantMap errorDetails() const { return m_errorDetails.toVariantMap(); }
     QString currentDocumentId() const { return m_currentDocumentId; }
     int revisionOf(const QString &documentId) const;
     QString titleOf(const QString &documentId) const;
+    bool controlledOf(const QString &documentId) const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role) const override;
@@ -49,14 +57,15 @@ public:
     /// Lists again; a list that lands then reports `settled` (nothing when empty).
     void reload(const QString &settled = QString());
     void select(const QString &documentId);
-    void download(const QString &documentId);
+    /// Saves the current version of the document, or `versionId` of it.
+    void download(const QString &documentId, const QString &versionId = {});
     void move(const QString &documentId, const QString &folderId, int revision);
     void rename(const QString &documentId, const QString &title, int revision);
     void trash(const QString &documentId, int revision);
     /// Not busy any more, failed with `errorCode` (none when empty).
     void settle(const QString &errorCode = QString());
     /// Fails with Core's `errorCode`; a stale revision lists again first.
-    void refuse(const QString &errorCode);
+    void refuse(const QString &errorCode, const QJsonObject &details = {});
     void clear();
 
 signals:
@@ -80,6 +89,7 @@ private:
     // The space and folder `m_rows` were listed for.
     QString m_listed;
     QString m_errorCode;
+    QJsonObject m_errorDetails;
     bool m_busy = false;
     int m_generation = 0;
 };

@@ -1,4 +1,6 @@
+#include "Session.h"
 #include "Theme.h"
+#include "references/AssetImages.h"
 
 #include <QGuiApplication>
 #include <QIcon>
@@ -66,6 +68,8 @@ int main(int argc, char **argv)
     // Theme first: it resolves the language and installs its translator
     // before any QML binding reads a string.
     engine.singletonInstance<matome::Theme *>(QStringLiteral("matome"), QStringLiteral("Theme"));
+    matome::installAssetImages(engine, *engine.singletonInstance<matome::Session *>(QStringLiteral("matome"),
+                                                                                 QStringLiteral("Session")));
     engine.load(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
     if (engine.rootObjects().isEmpty())
         return 1;
