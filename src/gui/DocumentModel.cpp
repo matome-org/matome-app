@@ -248,6 +248,7 @@ void DocumentModel::clear()
     m_listed.clear();
     m_busy = false;
     m_errorCode.clear();
+    m_errorDetails = {};
     m_currentDocumentId.clear();
     emit changed();
 }
@@ -256,6 +257,7 @@ void DocumentModel::setBusy()
 {
     m_busy = true;
     m_errorCode.clear();
+    m_errorDetails = {};
     emit changed();
 }
 
@@ -278,14 +280,15 @@ void DocumentModel::finish(int generation, const Client::Reply &reply)
     if (generation != m_generation)
         return;
     if (!reply.ok) {
-        refuse(failCode(reply));
+        refuse(failCode(reply), reply.json.value(QStringLiteral("details")).toObject());
         return;
     }
     reload();
 }
 
-void DocumentModel::refuse(const QString &errorCode)
+void DocumentModel::refuse(const QString &errorCode, const QJsonObject &details)
 {
+    m_errorDetails = details;
     if (errorCode == QLatin1String("revision_conflict"))
         reload(errorCode);
     else

@@ -21,7 +21,7 @@ FocusScope {
     readonly property Item popups: C.Overlay.overlay
     property string pendingName
 
-    readonly property string errorText: Messages.failure(Session.locationError, Session.childKind)
+    readonly property string errorText: Messages.failure(Session.locationError, Session.childKind, Session.locationErrorDetails)
     readonly property Item listView: list
     readonly property EntryRow cursorRow: list.currentItem as EntryRow
     readonly property string cursorPayload: pane.cursorRow ? pane.cursorRow.payload : ""

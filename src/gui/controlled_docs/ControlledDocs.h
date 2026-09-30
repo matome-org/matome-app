@@ -32,6 +32,9 @@ class ControlledDocs : public QObject
     Q_PROPERTY(QString accessError READ accessError NOTIFY changed)
     Q_PROPERTY(QString diff READ diff NOTIFY changed)
     Q_PROPERTY(QString candidate READ candidate NOTIFY changed)
+    Q_PROPERTY(QVariantMap diffReferences READ diffReferences NOTIFY changed)
+    Q_PROPERTY(QString publishedVersionId READ publishedVersionId NOTIFY changed)
+    Q_PROPERTY(int errorIndex READ errorIndex NOTIFY changed)
     Q_PROPERTY(QString source READ source NOTIFY sourceChanged)
     Q_PROPERTY(bool sourceLoaded READ sourceLoaded NOTIFY changed)
     Q_PROPERTY(bool draftStale READ draftStale NOTIFY changed)
@@ -63,6 +66,11 @@ public:
     QVariantMap availability() const;
     QString diff() const { return m_diff; }
     QString candidate() const { return m_candidate; }
+    /// The review's reference changes: `{added, removed, changed}`.
+    QVariantMap diffReferences() const { return m_diffReferences.toVariantMap(); }
+    QString publishedVersionId() const;
+    /// The declared reference the last error names (`details.index`), or -1.
+    int errorIndex() const { return m_errorIndex; }
     QString source() const { return m_source; }
     bool sourceLoaded() const { return m_sourceLoaded; }
     bool draftStale() const;
@@ -113,7 +121,8 @@ private:
     QString m_orgId, m_spaceId, m_documentId, m_membershipId, m_section;
     bool m_active = false, m_saving = false, m_ruleRead = false, m_sourceLoaded = false;
     int m_generation = 0, m_pending = 0, m_reviewGeneration = 0;
-    QJsonObject m_document, m_rule, m_review;
+    QJsonObject m_document, m_rule, m_review, m_diffReferences;
+    int m_errorIndex = -1;
     QJsonArray m_reviews;
     QJsonArray m_members, m_roles, m_grants;
     QString m_accessError;

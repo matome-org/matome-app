@@ -53,7 +53,8 @@ Canvas {
         "check": "M20 6L9 17l-5-5",
         "diff": "M12 4v10 M7 9h10 M7 20h10",
         "cancel": "M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0z M4.93 4.93l14.14 14.14",
-        "pause": "M9 5v14 M15 5v14"
+        "pause": "M9 5v14 M15 5v14",
+        "image": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M10 9a1.5 1.5 0 1 1-3 0a1.5 1.5 0 1 1 3 0z M21 15l-5-5L5 21"
     })
     readonly property var solids: ({
         "theme": "M12 4a8 8 0 0 1 0 16z"

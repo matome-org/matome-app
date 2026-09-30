@@ -1,6 +1,7 @@
 #include "ControlledDocs.h"
 #include "Session.h"
 #include "JsonList.h"
+#include "references/Assets.h"
 #include <QPointer>
 #include <QCryptographicHash>
 #include <QFile>
@@ -36,6 +37,11 @@ QString ControlledDocs::title() const
 {
     return m_documentId.isEmpty() ? m_session.spaces()->nameOf(m_spaceId)
                                  : m_document.value(QStringLiteral("title")).toString();
+}
+
+QString ControlledDocs::publishedVersionId() const
+{
+    return m_document.value(QStringLiteral("current_version")).toObject().value(QStringLiteral("id")).toString();
 }
 
 bool ControlledDocs::canSubmit() const
@@ -87,12 +93,13 @@ void ControlledDocs::close()
     ++m_reviewGeneration;
     m_active = m_saving = m_ruleRead = m_sourceLoaded = false;
     m_pending = 0;
+    m_errorIndex = -1;
     m_orgId.clear(); m_spaceId.clear(); m_documentId.clear(); m_membershipId.clear(); m_section.clear();
     m_document = m_rule = m_review = {};
     m_reviews = m_members = m_roles = m_grants = {};
     m_accessError.clear();
     m_errorCode.clear(); m_ruleError.clear(); m_reviewsError.clear(); m_notice.clear();
-    m_diff.clear(); m_candidate.clear(); m_source.clear(); m_sourceVersion.clear();
+    m_diff.clear(); m_candidate.clear(); m_diffReferences = {}; m_source.clear(); m_sourceVersion.clear();
     emit sourceChanged();
     emit changed();
 }
@@ -116,7 +123,7 @@ bool ControlledDocs::allows(QByteArrayView id) const
     if (id == "download-candidate") return idle && !m_review.isEmpty();
     if (id == "approve-review" || id == "reject-review") return canDecide();
     if (id == "cancel-review") return idle && m_review.value(QStringLiteral("status")).toString() == QLatin1String("open");
-    if (id == "discard-changes") return idle && m_sourceLoaded;
+    if (id == "discard-changes" || id == "insert-image") return idle && m_sourceLoaded && m_section == QLatin1String("edit");
     if (id == "submit-proposal") return canSubmit();
     if (id == "activate-rule") return idle && canManageRule() && !unavailable() && !ruleActive;
     if (id == "pause-rule") return idle && canManageRule() && !unavailable() && ruleActive;
@@ -182,6 +189,7 @@ void ControlledDocs::load()
     m_reviews = {};
     m_diff.clear();
     m_candidate.clear();
+    m_diffReferences = {};
     emit changed();
     const QPointer<ControlledDocs> self(this);
     const auto live = [self, generation] { return self && self->live(generation); };
@@ -347,6 +355,7 @@ void ControlledDocs::mutation(const QByteArray &method, const QString &path, QJs
 void ControlledDocs::finishMutation(const Client::Reply &reply, const QString &notice)
 {
     m_saving = false;
+    m_errorIndex = reply.json.value(QStringLiteral("details")).toObject().value(QStringLiteral("index")).toInt(-1);
     if (!reply.ok) {
         const QString code = failCode(reply);
         // Conflict refreshes preserve the server's explanation for the rejected action.
@@ -368,7 +377,9 @@ void ControlledDocs::saveRule(bool active)
 {
     if (!canManageRule() || unavailable()) return;
     mutation("PUT", contentPath(m_orgId, m_spaceId, QStringLiteral("controlled-docs-rule")),
-             {{QStringLiteral("active"), active}}, m_rule.value(QStringLiteral("revision")).toInt(),
+             {{QStringLiteral("active"), active},
+              {QStringLiteral("require_version_references"), m_rule.value(QStringLiteral("require_version_references")).toBool()}},
+             m_rule.value(QStringLiteral("revision")).toInt(),
              QStringLiteral("rule_saved"));
 }
 
@@ -398,6 +409,7 @@ void ControlledDocs::selectReview(const QString &id)
     m_review = {};
     m_diff.clear();
     m_candidate.clear();
+    m_diffReferences = {};
     for (const auto &value : m_reviews)
         if (value.toObject().value(QStringLiteral("id")).toString() == id) m_review = value.toObject();
     if (m_review.isEmpty()) emit changed();
@@ -416,8 +428,11 @@ void ControlledDocs::loadReview()
     m_backend.request("GET", reviewPath(QStringLiteral("/diff")), {}, {}, [this, current](const Client::Reply &reply) {
         if (!current()) return;
         --m_pending;
-        if (reply.ok) m_diff = reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("diff")).toString();
-        else m_errorCode = failCode(reply);
+        const auto data = reply.json.value(QStringLiteral("data")).toObject();
+        if (reply.ok) {
+            m_diff = data.value(QStringLiteral("diff")).toString();
+            m_diffReferences = data.value(QStringLiteral("references")).toObject();
+        } else m_errorCode = failCode(reply);
         emit changed();
     });
     m_backend.request("GET", reviewPath(QStringLiteral("/candidate/download")), {}, {}, [this, current](const Client::Reply &reply) {
@@ -508,7 +523,8 @@ void ControlledDocs::submit(const QString &markdown, const QString &reason)
     emit changed();
     m_backend.upload(m_orgId, {{QStringLiteral("space_id"), m_spaceId}, {QStringLiteral("document_id"), m_documentId},
                       {QStringLiteral("filename"), filename}, {QStringLiteral("content_type"), QStringLiteral("text/markdown")},
-                      {QStringLiteral("reason"), reason.trimmed()}}, bytes, isLive,
+                      {QStringLiteral("reason"), reason.trimmed()},
+                      {QStringLiteral("references"), Assets::references(markdown)}}, bytes, isLive,
             [this, isLive](const Client::Reply &reply) {
         if (!isLive()) return;
         const auto review = reply.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("review"));

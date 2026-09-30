@@ -11,6 +11,7 @@
 #include "SpaceModel.h"
 #include "addons/AddOnManager.h"
 #include "controlled_docs/ControlledDocs.h"
+#include "references/Assets.h"
 
 #include <QAbstractListModel>
 #include <QJsonArray>
@@ -49,6 +50,7 @@ class Session : public QObject
     Q_PROPERTY(matome::OrgAdmin *orgAdmin READ orgAdmin CONSTANT)
     Q_PROPERTY(matome::OrgBilling *orgBilling READ orgBilling CONSTANT)
     Q_PROPERTY(matome::AddOnManager *addOns READ addOns CONSTANT)
+    Q_PROPERTY(matome::Assets *assets READ assets CONSTANT)
     Q_PROPERTY(matome::ControlledDocs *controlledDocs READ controlledDocs CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
@@ -66,6 +68,7 @@ class Session : public QObject
     Q_PROPERTY(QString childKind READ childKind NOTIFY changed)
     Q_PROPERTY(bool loading READ loading NOTIFY changed)
     Q_PROPERTY(QString locationError READ locationError NOTIFY changed)
+    Q_PROPERTY(QVariantMap locationErrorDetails READ locationErrorDetails NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *entries READ entryList CONSTANT)
     Q_PROPERTY(int entryCount READ entryCount NOTIFY changed)
     Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY changed)
@@ -99,6 +102,7 @@ public:
     OrgAdmin *orgAdmin() { return &m_orgAdmin; }
     OrgBilling *orgBilling() { return &m_orgBilling; }
     AddOnManager *addOns() { return &m_addOns; }
+    Assets *assets() { return &m_assets; }
     ControlledDocs *controlledDocs() { return &m_controlledDocs; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }
@@ -136,6 +140,7 @@ public:
     QString childKind() const;
     bool loading() const;
     QString locationError() const;
+    QVariantMap locationErrorDetails() const;
     EntryModel *entries() { return &m_entries; }
     QAbstractListModel *entryList() { return &m_entries; }
     int entryCount() const { return m_entries.rowCount(); }
@@ -324,6 +329,7 @@ private:
     Client m_client;
     CoreAddOnBackend m_coreAddOnBackend;
     AddOnManager m_addOns;
+    Assets m_assets;
     ControlledDocs m_controlledDocs;
     OrgModel m_orgs;
     OrgAdmin m_orgAdmin;

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Basic as C
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import matome
 import "../chrome"
@@ -24,6 +25,20 @@ FocusScope {
     readonly property var reviewCommands: ["download-candidate", "approve-review", "reject-review", "cancel-review"]
     readonly property bool reviewOpen: control.reviews.some(function (review) { return review.status === "open" })
     property string reviewView: "document"
+    property string editView: "edit"
+    property bool externalImages: false
+    property string assetError
+    // Placeholder text and file name of each image upload under way, by token.
+    property var uploads: ({})
+    readonly property int errorIndex: control.errorIndex
+    onErrorIndexChanged: if (screen.errorIndex >= 0 && screen.control.section === "edit") {
+        const at = Session.assets.referenceAt(markdown.text, screen.errorIndex)
+        if (at.start !== undefined) {
+            screen.editView = "edit"
+            markdown.select(at.start, at.start + at.length)
+            markdown.forceActiveFocus()
+        }
+    }
     property string pendingAction
     property string pendingGrant
     property string pendingText
@@ -81,6 +96,7 @@ FocusScope {
         else if (id === "remove-rule") screen.ask("remove-rule")
         else if (id === "unmanage-document") screen.ask("remove-control")
         else if (id === "grant-access") grantDialog.open()
+        else if (id === "insert-image") Session.assets.pickImages()
         else if (id === "revoke-access" && grantList.currentIndex >= 0) {
             screen.pendingGrant = screen.control.grants[grantList.currentIndex].id
             screen.ask("revoke-access")
@@ -139,6 +155,18 @@ FocusScope {
             screen.control.loadPublished()
         }
     }
+    // Swaps the placeholder of upload `token` for `text` where it now stands.
+    function settleUpload(token, text) {
+        const upload = screen.uploads[token]
+        if (!upload)
+            return
+        const at = markdown.text.indexOf(upload.placeholder)
+        if (at >= 0) {
+            markdown.remove(at, at + upload.placeholder.length)
+            markdown.insert(at, text)
+        }
+        delete screen.uploads[token]
+    }
     function focusDefault() { header.backButton.forceActiveFocus() }
     onVisibleChanged: if (visible) focusDefault()
 
@@ -155,6 +183,7 @@ FocusScope {
         function onRequested(id) { screen.perform(id) }
         function onChanged() {
             screen.loadSource()
+            if (!screen.control.active) screen.externalImages = false
             if (screen.control.active && screen.control.section === "reviews" && screen.control.review.id === undefined
                     && screen.control.reviews.length > 0 && !screen.control.busy)
                 screen.selectReview(0)
@@ -167,6 +196,35 @@ FocusScope {
                 screen.submittedText = ""
             }
         }
+    }
+
+    Connections {
+        target: Session.assets
+        function onQueued(token, name) {
+            if (!screen.visible || screen.control.section !== "edit")
+                return
+            const placeholder = "![" + qsTr("Uploading %1…").arg(name) + "](matome:uploading/" + token + ")"
+            screen.uploads[token] = { placeholder: placeholder, name: name }
+            screen.assetError = ""
+            screen.editView = "edit"
+            markdown.insert(markdown.cursorPosition, placeholder)
+        }
+        function onUploaded(token, link) {
+            screen.settleUpload(token, "![" + (screen.uploads[token]?.name ?? "") + "](" + link + ")")
+        }
+        function onFailed(token, code) {
+            screen.settleUpload(token, "")
+            screen.assetError = code
+        }
+        function onPromptPick() { if (screen.visible) imagePicker.open() }
+    }
+
+    FileDialog {
+        id: imagePicker
+        title: qsTr("Insert image")
+        fileMode: FileDialog.OpenFiles
+        nameFilters: [qsTr("Images (*.png *.jpg *.jpeg *.gif *.webp)")]
+        onAccepted: Session.assets.uploadUrls(imagePicker.selectedFiles)
     }
 
     component Editor: C.TextArea {
@@ -188,9 +246,13 @@ FocusScope {
             radius: Theme.rounding
             border.color: editor.highlighted || editor.activeFocus ? Theme.accentLine : Theme.border
         }
-        // Tab leaves the editor; Ctrl+Enter reaches the window's keys.
+        // Tab leaves the editor; Ctrl+Enter reaches the window's keys; a
+        // pasted image is uploaded and linked where the cursor is.
         Keys.onPressed: function (event) {
-            if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+            if (event.matches(StandardKey.Paste) && Clipboard.hasImage()) {
+                Session.assets.uploadImage(Clipboard.imageName(), Clipboard.image())
+                event.accepted = true
+            } else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
                 editor.nextItemInFocusChain(event.key === Qt.Key_Tab).forceActiveFocus(Qt.TabFocusReason)
                 event.accepted = true
             } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
@@ -200,15 +262,68 @@ FocusScope {
         }
     }
 
-    // One of the review's two views; the gold-soft wash marks the one shown.
+    // One of two views of a document; the gold-soft wash marks `current`.
     component ViewTab: ActionButton {
         id: tab
         required property string view
-        color: screen.reviewView === tab.view ? Theme.accentSoft : "transparent"
+        required property string current
+        signal picked(string view)
+        color: tab.current === tab.view ? Theme.accentSoft : "transparent"
         Accessible.role: Accessible.PageTab
         Accessible.checkable: true
-        Accessible.checked: screen.reviewView === tab.view
-        onActivated: screen.reviewView = tab.view
+        Accessible.checked: tab.current === tab.view
+        onActivated: tab.picked(tab.view)
+    }
+
+    // Rendered Markdown: pinned images through the image provider, remote
+    // ones only once the reader asks.
+    component Rendered: TextEdit {
+        id: rendered
+        property string markdown
+        property string via
+        Layout.fillWidth: true
+        readOnly: true
+        selectByMouse: true
+        selectByKeyboard: true
+        activeFocusOnTab: true
+        wrapMode: TextEdit.Wrap
+        textFormat: TextEdit.MarkdownText
+        text: Session.assets.render(rendered.markdown, Session.currentOrgId, Session.currentSpaceId, rendered.via,
+                                    Math.floor(rendered.width), screen.externalImages)
+        font: Theme.body
+        color: Theme.textPrimary
+        selectionColor: Theme.accentSoft
+        selectedTextColor: Theme.textPrimary
+    }
+
+    component ExternalNotice: RowLayout {
+        id: notice
+        property string markdown
+        visible: !screen.externalImages && Session.assets.linksExternal(notice.markdown)
+        Layout.fillWidth: true
+        spacing: Theme.gapS
+        Label { text: qsTr("Images from other sites are not loaded, so opening this document does not reach them.") }
+        ActionButton { text: qsTr("Load external images"); icon: "image"; onActivated: screen.externalImages = true }
+    }
+
+    // A pinned image beside what it names, for the reference changes.
+    component PinnedImage: ColumnLayout {
+        id: pinned
+        property string via
+        property string documentId
+        property string versionId
+        property string caption
+        spacing: Theme.gapXs
+        Image {
+            visible: pinned.versionId !== ""
+            source: pinned.versionId !== "" ? Session.assets.source(Session.currentOrgId, Session.currentSpaceId, pinned.via,
+                                                                    pinned.documentId, pinned.versionId, 240) : ""
+            asynchronous: true
+            fillMode: Image.PreserveAspectFit
+            Layout.maximumWidth: 240
+            Layout.maximumHeight: 180
+        }
+        Caption { Layout.fillWidth: true; text: pinned.caption }
     }
 
     component Navigation: Page {
@@ -290,6 +405,7 @@ FocusScope {
                     CommandButton { commandId: "reject-review"; visible: screen.control.section === "reviews"; showLabel: !screen.narrow }
                     CommandButton { commandId: "cancel-review"; visible: screen.control.section === "reviews"; showLabel: !screen.narrow }
 
+                    CommandButton { commandId: "insert-image"; visible: screen.control.section === "edit"; showLabel: !screen.narrow }
                     CommandButton {
                         id: discard
                         commandId: "discard-changes"
@@ -302,7 +418,7 @@ FocusScope {
                         commandId: "submit-proposal"
                         visible: screen.control.section === "edit"
                         primary: true
-                        usable: submit.command.usable && screen.dirty
+                        usable: submit.command.usable && screen.dirty && !Session.assets.uploading
                     }
 
                     CommandButton {
@@ -414,24 +530,15 @@ FocusScope {
                         RowLayout {
                             spacing: Theme.gapXs
                             Accessible.role: Accessible.PageTabList
-                            ViewTab { view: "document"; text: qsTr("Document"); icon: "document" }
-                            ViewTab { view: "changes"; text: qsTr("Changes"); icon: "diff" }
+                            ViewTab { view: "document"; current: screen.reviewView; text: qsTr("Document"); icon: "document"; onPicked: function (view) { screen.reviewView = view } }
+                            ViewTab { view: "changes"; current: screen.reviewView; text: qsTr("Changes"); icon: "diff"; onPicked: function (view) { screen.reviewView = view } }
                         }
-                        TextEdit {
+                        ExternalNotice { markdown: screen.reviewView === "document" ? screen.control.candidate : "" }
+                        Rendered {
                             objectName: "controlledCandidate"
                             visible: screen.reviewView === "document"
-                            Layout.fillWidth: true
-                            readOnly: true
-                            selectByMouse: true
-                            selectByKeyboard: true
-                            activeFocusOnTab: true
-                            wrapMode: TextEdit.Wrap
-                            textFormat: TextEdit.MarkdownText
-                            text: screen.control.candidate
-                            font: Theme.body
-                            color: Theme.textPrimary
-                            selectionColor: Theme.accentSoft
-                            selectedTextColor: Theme.textPrimary
+                            markdown: screen.control.candidate
+                            via: screen.control.review.candidate_version_id ?? ""
                             Accessible.name: qsTr("Edited document")
                         }
                         TextEdit {
@@ -449,6 +556,61 @@ FocusScope {
                             selectionColor: Theme.accentSoft
                             Accessible.name: qsTr("Changes")
                         }
+                        ColumnLayout {
+                            readonly property var references: screen.control.diffReferences
+                            readonly property int total: (references.added?.length ?? 0) + (references.removed?.length ?? 0)
+                                                         + (references.changed?.length ?? 0)
+                            visible: screen.reviewView === "changes" && total > 0
+                            Layout.fillWidth: true
+                            Layout.topMargin: Theme.gapM
+                            spacing: Theme.gapS
+                            Caption { Layout.fillWidth: true; text: qsTr("Images and linked files") }
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: Theme.gapL
+                                Repeater {
+                                    model: screen.control.diffReferences.changed ?? []
+                                    delegate: RowLayout {
+                                        id: swap
+                                        required property var modelData
+                                        spacing: Theme.gapS
+                                        PinnedImage {
+                                            via: screen.control.review.base_version_id ?? ""
+                                            documentId: String(swap.modelData.document_id)
+                                            versionId: swap.modelData.from_version_id
+                                            caption: qsTr("Before")
+                                        }
+                                        Icon { name: "forward" }
+                                        PinnedImage {
+                                            via: screen.control.review.candidate_version_id ?? ""
+                                            documentId: String(swap.modelData.document_id)
+                                            versionId: swap.modelData.to_version_id
+                                            caption: qsTr("After")
+                                        }
+                                    }
+                                }
+                                Repeater {
+                                    model: screen.control.diffReferences.added ?? []
+                                    delegate: PinnedImage {
+                                        required property var modelData
+                                        via: screen.control.review.candidate_version_id ?? ""
+                                        documentId: String(modelData.document_id ?? "")
+                                        versionId: modelData.version_id ?? ""
+                                        caption: qsTr("Added: %1").arg(modelData.path ?? qsTr("document %1").arg(modelData.document_id))
+                                    }
+                                }
+                                Repeater {
+                                    model: screen.control.diffReferences.removed ?? []
+                                    delegate: PinnedImage {
+                                        required property var modelData
+                                        via: screen.control.review.base_version_id ?? ""
+                                        documentId: String(modelData.document_id ?? "")
+                                        versionId: modelData.version_id ?? ""
+                                        caption: qsTr("Removed: %1").arg(modelData.path ?? qsTr("document %1").arg(modelData.document_id))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -458,16 +620,37 @@ FocusScope {
                     Layout.fillHeight: true
                     Label {
                         text: screen.reviewOpen ? qsTr("A review of this document is open. Decide or cancel it before submitting more changes.")
-                                                : qsTr("Edit the Markdown, or drop an .md file on it. Submitting sends the edited document for review; the published version stays available until approval.")
+                                                : qsTr("Edit the Markdown. Paste or drop images to store them in the space's assets folder and link them here. Submitting sends the edited document for review; the published version stays available until approval.")
                     }
                     Label {
                         visible: screen.control.draftStale
                         color: Theme.failed
                         text: qsTr("The published version changed since you started editing. Copy your edits, then discard them to start from the new version.")
                     }
+                    Label {
+                        visible: screen.assetError !== ""
+                        color: Theme.failed
+                        text: Messages.assetFailure(screen.assetError)
+                        Accessible.role: Accessible.AlertMessage
+                    }
+                    RowLayout {
+                        spacing: Theme.gapXs
+                        Accessible.role: Accessible.PageTabList
+                        ViewTab { view: "edit"; current: screen.editView; text: qsTr("Edit"); icon: "rename"; onPicked: function (view) { screen.editView = view } }
+                        ViewTab { view: "preview"; current: screen.editView; text: qsTr("Preview"); icon: "document"; onPicked: function (view) { screen.editView = view } }
+                    }
+                    ExternalNotice { markdown: screen.editView === "preview" ? markdown.text : "" }
+                    Rendered {
+                        objectName: "controlledPreview"
+                        visible: screen.editView === "preview"
+                        markdown: screen.editView === "preview" ? markdown.text : ""
+                        via: screen.control.publishedVersionId
+                        Accessible.name: qsTr("Preview")
+                    }
                     Editor {
                         id: markdown
                         objectName: "controlledMarkdownEditor"
+                        visible: screen.editView === "edit"
                         placeholderText: qsTr("Markdown")
                         Accessible.name: markdown.placeholderText
                         Layout.preferredHeight: Math.max(10 * Theme.controlL, markdown.implicitHeight)
@@ -478,9 +661,14 @@ FocusScope {
                             anchors.fill: parent
                             onEntered: function (drag) { drag.accepted = drag.hasUrls && markdown.enabled }
                             onDropped: function (event) {
-                                const text = screen.control.readDraft(event.urls[0])
-                                if (text !== "")
-                                    markdown.text = text
+                                const first = String(event.urls[0])
+                                if (first.toLowerCase().endsWith(".md")) {
+                                    const text = screen.control.readDraft(event.urls[0])
+                                    if (text !== "")
+                                        markdown.text = text
+                                } else {
+                                    Session.assets.uploadUrls(event.urls)
+                                }
                                 event.acceptProposedAction()
                             }
                         }
@@ -515,6 +703,10 @@ FocusScope {
                                 wrapMode: Text.Wrap
                             }
                             Label { text: qsTr("Control requires an active installation, a space rule, and explicit permissions.") }
+                            Label {
+                                visible: screen.control.rule.require_version_references === true
+                                text: qsTr("Images and linked files must pin a version, so an approved document shows exactly what was reviewed.")
+                            }
                         }
                         Card {
                             visible: screen.control.hasDocument

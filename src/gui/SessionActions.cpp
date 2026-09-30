@@ -2,6 +2,7 @@
 
 #include "JsonList.h"
 #include "Languages.h"
+#include "LocalFiles.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -9,13 +10,6 @@
 #include <QStringList>
 #include <QUrl>
 #include <QVariantMap>
-
-#ifdef Q_OS_WASM
-#include <QtGui/private/qwasmlocalfileaccess_p.h>
-
-#include <list>
-#include <memory>
-#endif
 
 namespace matome {
 
@@ -90,7 +84,7 @@ void Session::settleLastTrashed(const char *action, bool refills)
                        // the trash this would undo or finish.
                        if (code == QLatin1String("revision_conflict"))
                            m_lastTrashed = {};
-                       m_documents.refuse(code);
+                       m_documents.refuse(code, reply.json.value(QStringLiteral("details")).toObject());
                        return;
                    }
                    m_lastTrashed = {};
@@ -138,21 +132,7 @@ void Session::upload(const QString &name, const QByteArray &bytes)
 void Session::requestUpload()
 {
 #ifdef Q_OS_WASM
-    // QML's FileDialog cannot read the visitor's disk; the browser's picker
-    // hands over each chosen file's name and bytes, one after another.
-    auto picked = std::make_shared<std::list<std::pair<QString, QByteArray>>>();
-    QWasmLocalFileAccess::openFiles(
-            "*", QWasmLocalFileAccess::FileSelectMode::MultipleFiles, [](int) {},
-            [picked](uint64_t size, const std::string &name) {
-                picked->emplace_back(QString::fromStdString(name),
-                                     QByteArray(qsizetype(size), Qt::Uninitialized));
-                return picked->back().second.data();
-            },
-            [this, picked] {
-                const auto [name, bytes] = picked->front();
-                picked->pop_front();
-                upload(name, bytes);
-            });
+    pickLocalFiles("*", [this](const QString &name, const QByteArray &bytes) { upload(name, bytes); });
 #else
     emit promptUpload();
 #endif
@@ -336,6 +316,7 @@ const QList<Session::Command> &Session::commands()
                 {"reject-review", QT_TR_NOOP("Reject"), "close"},
                 {"cancel-review", QT_TR_NOOP("Cancel review"), "cancel"},
                 {"discard-changes", QT_TR_NOOP("Discard changes"), "restore"},
+                {"insert-image", QT_TR_NOOP("Insert image"), "image"},
                 {"submit-proposal", QT_TR_NOOP("Submit for review"), "upload"},
                 {"activate-rule", QT_TR_NOOP("Activate space rule"), "check"},
                 {"pause-rule", QT_TR_NOOP("Pause space rule"), "pause"},

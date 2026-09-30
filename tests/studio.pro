@@ -56,3 +56,4 @@ QMAKE_CXXFLAGS += -O0 -g --coverage
 QMAKE_LFLAGS += --coverage
 
 include($$PWD/../src/gui/addons.pri)
+include($$PWD/../src/gui/references/images.pri)

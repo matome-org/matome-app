@@ -22,6 +22,7 @@ Session::Session(QObject *parent, AddOnBackend *backend)
     : QObject(parent)
     , m_coreAddOnBackend(*this)
     , m_addOns(backend ? *backend : m_coreAddOnBackend, this)
+    , m_assets(*this, m_addOns.backend())
     , m_controlledDocs(*this)
     , m_orgs(*this)
     , m_orgAdmin(*this)
@@ -35,6 +36,15 @@ Session::Session(QObject *parent, AddOnBackend *backend)
     connect(this, &Session::changed, this, [this] {
         const QString org = signedIn() ? currentOrgId() : QString();
         m_addOns.setContext(org, m_orgs.canReadBilling(org), m_orgs.canAdminister(org));
+    });
+    connect(this, &Session::changed, this, [this] {
+        if (!signedIn())
+            m_assets.clear();
+    });
+    // A stored image may have created the assets folder or a file in it.
+    connect(&m_assets, &Assets::uploaded, this, [this] {
+        if (inSpace())
+            m_folders.reload();
     });
     connect(this, &Session::changed, this, [this] {
         if (!m_settingsActive)
@@ -193,6 +203,11 @@ QString Session::locationError() const
         break;
     }
     return m_folders.errorCode().isEmpty() ? m_documents.errorCode() : m_folders.errorCode();
+}
+
+QVariantMap Session::locationErrorDetails() const
+{
+    return where() == Level::Files && m_folders.errorCode().isEmpty() ? m_documents.errorDetails() : QVariantMap();
 }
 
 void Session::setFilter(const QString &filter)

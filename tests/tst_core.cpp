@@ -107,6 +107,9 @@ private slots:
     void addOnsUseMockBackend();
     void addOnsDiscardStaleMockReplies();
     void controlledDocsUseMockBackend();
+    void markdownReferencesFollowAssetLinks();
+    void assetsUploadIntoAssetsFolder();
+    void assetsSignThroughViaVersion();
     void orgBillingPermissionsAndStaleReplies();
     void orgBillingPreservesPurchasesAndGrants();
     void orgBillingConfiguresInstallation();
@@ -3020,7 +3023,11 @@ void TestCore::controlledDocsUseMockBackend()
                         {QStringLiteral("email"), session.email()}}}}});
     backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray()}});
     backend.respond("GET", matome::contentPath(org, space, QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray()}});
-    backend.respond("GET", reviewPath + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QStringLiteral("-old\n+new")}}}});
+    const QJsonObject changedImage{{QStringLiteral("document_id"), 7}, {QStringLiteral("from_version_id"), QStringLiteral("before")},
+                                   {QStringLiteral("to_version_id"), QStringLiteral("after")}};
+    backend.respond("GET", reviewPath + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QStringLiteral("-old\n+new")},
+        {QStringLiteral("references"), QJsonObject{{QStringLiteral("added"), QJsonArray()}, {QStringLiteral("removed"), QJsonArray()},
+                                                   {QStringLiteral("changed"), QJsonArray{changedImage}}}}}}});
     backend.respond("GET", reviewPath + QStringLiteral("/candidate/download"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/candidate")}}}});
     backend.file(QUrl(QStringLiteral("https://storage.invalid/candidate")), QByteArray("# Candidate\n"));
     auto *control = session.controlledDocs();
@@ -3030,6 +3037,8 @@ void TestCore::controlledDocsUseMockBackend()
     QTRY_VERIFY(!control->busy());
     QCOMPARE(control->diff(), QStringLiteral("-old\n+new"));
     QCOMPARE(control->candidate(), QStringLiteral("# Candidate\n"));
+    QCOMPARE(control->diffReferences().value(QStringLiteral("changed")).toList().constFirst().toMap()
+                     .value(QStringLiteral("to_version_id")).toString(), QStringLiteral("after"));
     QVERIFY(!control->canDecide());
     const int hits = backend.calls.size();
     control->decide(QStringLiteral("approve"), {});
@@ -3059,7 +3068,8 @@ void TestCore::controlledDocsUseMockBackend()
             {QStringLiteral("generation"), 1}, {QStringLiteral("request"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/file")}}}}}});
     backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/upload-one/complete")),
         {{QStringLiteral("data"), QJsonObject{{QStringLiteral("review"), review}}}});
-    control->submit(QStringLiteral("# Updated\n"), QStringLiteral("Update procedure"));
+    const QString image = QStringLiteral("0b6f0c2e-3f7a-4c55-9d3e-8a1b2c3d4e5f");
+    control->submit(QStringLiteral("# Updated\n\n![logo](matome:asset/7?version=%1)\n").arg(image), QStringLiteral("Update procedure"));
     QTRY_VERIFY(!control->busy());
     QCOMPARE(control->notice(), QStringLiteral("review_requested"));
     bool uploaded = false;
@@ -3068,6 +3078,10 @@ void TestCore::controlledDocsUseMockBackend()
         QCOMPARE(call.body.value(QStringLiteral("content_type")).toString(), QStringLiteral("text/markdown"));
         QCOMPARE(call.body.value(QStringLiteral("reason")).toString(), QStringLiteral("Update procedure"));
         QCOMPARE(call.body.value(QStringLiteral("checksum_sha256")).toString().size(), 64);
+        const QJsonArray references = call.body.value(QStringLiteral("references")).toArray();
+        QCOMPARE(references.size(), 1);
+        QCOMPARE(references.at(0).toObject().value(QStringLiteral("document_id")).toInteger(), 7);
+        QCOMPARE(references.at(0).toObject().value(QStringLiteral("version_id")).toString(), image);
         uploaded = true;
     }
     QVERIFY(uploaded);
@@ -3396,6 +3410,142 @@ void TestCore::orgBillingReportsPackageFailures()
     billing->selectPackage(QStringLiteral("pro"), 1);
     QTest::qWait(20);
     QCOMPARE(core.hits(), hits);
+}
+
+void TestCore::markdownReferencesFollowAssetLinks()
+{
+    const QString a = QStringLiteral("11111111-2222-3333-4444-555555555555");
+    const QString b = QStringLiteral("66666666-7777-8888-9999-000000000000");
+    const QString markdown = QStringLiteral("![a](matome:asset/3?version=%1) text ![b](matome:asset/4?version=%2)\n"
+                                            "![again](matome:asset/3?version=%1) ![web](https://example.com/x.png)")
+                                     .arg(a, b);
+    const QJsonArray references = matome::Assets::references(markdown);
+    QCOMPARE(references.size(), 2);
+    QCOMPARE(references.at(0).toObject().value(QStringLiteral("document_id")).toInteger(), 3);
+    QCOMPARE(references.at(1).toObject().value(QStringLiteral("version_id")).toString(), b);
+    Session session;
+    auto *assets = session.assets();
+    const QString shown = assets->render(markdown, QStringLiteral("org"), QStringLiteral("space"), QStringLiteral("via"), 480, false);
+    QVERIFY(shown.contains(QStringLiteral("(image://asset/org/space/via/3/%1?w=480)").arg(a)));
+    QVERIFY(!shown.contains(QStringLiteral("![web]")));
+    QVERIFY(shown.contains(QStringLiteral("https://example.com/x.png")));
+    QVERIFY(assets->linksExternal(markdown));
+    QVERIFY(assets->render(markdown, QStringLiteral("org"), QStringLiteral("space"), {}, 480, true)
+                    .contains(QStringLiteral("![web](https://example.com/x.png)")));
+    QVERIFY(assets->render(markdown, QStringLiteral("org"), QStringLiteral("space"), {}, 480, true)
+                    .contains(QStringLiteral("image://asset/org/space/-/4/")));
+    const QVariantMap at = assets->referenceAt(markdown, 1);
+    QCOMPARE(markdown.mid(at.value(QStringLiteral("start")).toInt(), at.value(QStringLiteral("length")).toInt()),
+             QStringLiteral("](matome:asset/4?version=%1)").arg(b));
+    QVERIFY(assets->referenceAt(markdown, 2).isEmpty());
+}
+
+void TestCore::assetsUploadIntoAssetsFolder()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QByteArray png("\x89PNG\r\n\x1a\n-image-bytes", 20);
+    const QString checksum = QString::fromLatin1(QCryptographicHash::hash(png, QCryptographicHash::Sha256).toHex());
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("documents?checksum_sha256=") + checksum),
+                    {{QStringLiteral("documents"), QJsonArray()}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("folders")),
+                    {{QStringLiteral("folders"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("5")},
+                        {QStringLiteral("name"), QStringLiteral("assets")}, {QStringLiteral("parent_id"), QStringLiteral("1")}}}}});
+    backend.respond("POST", matome::contentPath(org, space, QStringLiteral("folders")),
+                    {{QStringLiteral("folder"), QJsonObject{{QStringLiteral("id"), QStringLiteral("9")}}}}, 201);
+    backend.queue("POST", matome::contentPath(org, space, QStringLiteral("documents")),
+                  [] { Client::Reply taken; taken.status = 409; taken.code = QStringLiteral("name_conflict"); return taken; }());
+    backend.respond("POST", matome::contentPath(org, space, QStringLiteral("documents")),
+                    {{QStringLiteral("document"), QJsonObject{{QStringLiteral("id"), 77}}}}, 201);
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("upload_id"), QStringLiteral("image-upload")},
+            {QStringLiteral("generation"), 1}, {QStringLiteral("request"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/image")}}}}}});
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/image-upload/complete")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("version"), QJsonObject{{QStringLiteral("id"), QStringLiteral("image-version")}}}}}});
+    auto *assets = session.assets();
+    QSignalSpy queued(assets, &matome::Assets::queued);
+    QSignalSpy uploaded(assets, &matome::Assets::uploaded);
+    QSignalSpy failed(assets, &matome::Assets::failed);
+    assets->uploadImage(QStringLiteral("logo.png"), png);
+    QCOMPARE(queued.size(), 1);
+    QCOMPARE(queued.constFirst().at(1).toString(), QStringLiteral("logo.png"));
+    QTRY_COMPARE(uploaded.size(), 1);
+    QCOMPARE(uploaded.constFirst().at(1).toString(), QStringLiteral("matome:asset/77?version=image-version"));
+    QCOMPARE(failed.size(), 0);
+    QStringList titles;
+    for (const auto &call : backend.calls) {
+        if (call.method == "POST" && call.path.endsWith(QLatin1String("/folders")))
+            QCOMPARE(call.body.value(QStringLiteral("name")).toString(), QStringLiteral("assets"));
+        if (call.method == "POST" && call.path.endsWith(QLatin1String("/documents"))) {
+            QCOMPARE(call.body.value(QStringLiteral("folder_id")).toString(), QStringLiteral("9"));
+            titles.append(call.body.value(QStringLiteral("title")).toString());
+        }
+        if (call.method == "POST" && call.path.endsWith(QLatin1String("/uploads")))
+            QCOMPARE(call.body.value(QStringLiteral("content_type")).toString(), QStringLiteral("image/png"));
+    }
+    QCOMPARE(titles.size(), 2);
+    QCOMPARE(titles.constFirst(), QStringLiteral("logo.png"));
+    QVERIFY(titles.constLast().startsWith(QLatin1String("logo-")) && titles.constLast().endsWith(QLatin1String(".png")));
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("documents?checksum_sha256=") + checksum),
+                    {{QStringLiteral("documents"), QJsonArray{QJsonObject{{QStringLiteral("id"), 77},
+                        {QStringLiteral("current_version"), QJsonObject{{QStringLiteral("id"), QStringLiteral("image-version")}}}}}}});
+    const int calls = backend.calls.size();
+    assets->uploadImage({}, png);
+    QTRY_COMPARE(uploaded.size(), 2);
+    QCOMPARE(uploaded.constLast().at(1).toString(), QStringLiteral("matome:asset/77?version=image-version"));
+    QCOMPARE(backend.calls.size(), calls + 1);
+    assets->uploadImage(QStringLiteral("notes.txt"), QByteArray("plain text"));
+    QCOMPARE(failed.size(), 1);
+    QCOMPARE(failed.constFirst().at(1).toString(), QStringLiteral("unsupported_image"));
+}
+
+void TestCore::assetsSignThroughViaVersion()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    backend.respond("POST", matome::contentPath(org, space, QStringLiteral("documents/download-urls")),
+        {{QStringLiteral("data"), QJsonArray{
+            QJsonObject{{QStringLiteral("index"), 0}, {QStringLiteral("url"), QStringLiteral("https://storage.invalid/pinned")}},
+            QJsonObject{{QStringLiteral("index"), 1}, {QStringLiteral("error"), QStringLiteral("purged")}}}}});
+    const QByteArray png("\x89PNG\r\n\x1a\npinned", 14);
+    backend.file(QUrl(QStringLiteral("https://storage.invalid/pinned")), png);
+    auto *assets = session.assets();
+    QByteArray shown;
+    QString error;
+    int answers = 0;
+    assets->fetch({org, space, QStringLiteral("markdown-version"), QStringLiteral("7"), QStringLiteral("v-one")},
+                  [&](const QByteArray &bytes, const QString &) { shown = bytes; ++answers; });
+    assets->fetch({org, space, QStringLiteral("markdown-version"), QStringLiteral("8"), QStringLiteral("v-two")},
+                  [&](const QByteArray &, const QString &code) { error = code; ++answers; });
+    QTRY_COMPARE(answers, 2);
+    QCOMPARE(shown, png);
+    QCOMPARE(error, QStringLiteral("purged"));
+    int signs = 0;
+    for (const auto &call : backend.calls) {
+        if (!call.path.endsWith(QLatin1String("/download-urls")))
+            continue;
+        ++signs;
+        QCOMPARE(call.body.value(QStringLiteral("via_version_id")).toString(), QStringLiteral("markdown-version"));
+        const QJsonArray items = call.body.value(QStringLiteral("items")).toArray();
+        QCOMPARE(items.size(), 2);
+        QVERIFY(items.at(0).toObject().value(QStringLiteral("document_id")).isDouble());
+    }
+    QCOMPARE(signs, 1);
+    QVERIFY(matome::isRasterImage(png));
+    QVERIFY(!matome::isRasterImage(QByteArray("<svg/>")));
+    const int calls = backend.calls.size();
+    assets->fetch({org, space, QStringLiteral("markdown-version"), QStringLiteral("7"), QStringLiteral("v-one")},
+                  [&](const QByteArray &bytes, const QString &) { shown = bytes; ++answers; });
+    QCOMPARE(answers, 3);
+    QCOMPARE(backend.calls.size(), calls);
 }
 
 QTEST_GUILESS_MAIN(TestCore)

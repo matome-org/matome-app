@@ -29,9 +29,16 @@ function perKind(kind) {
     }
 }
 
-function failure(code, kind) {
+function failure(code, kind, details) {
     if (code === "")
         return ""
+    if (code === "reference_in_use") {
+        const titles = (details?.sources ?? []).map(function (source) { return "“" + source.title + "”" }).join(", ")
+        const hidden = details?.hidden_count ?? 0
+        const users = titles === "" ? qsTr("%n document(s) you cannot see", "", hidden)
+                    : hidden > 0 ? qsTr("%1 and %n more", "", hidden).arg(titles) : titles
+        return qsTr("This file is shown by %1. Remove it from those documents before deleting or moving it to another space.").arg(users)
+    }
     if (code === "network")
         return qsTr("Could not reach Core at that URL.")
     if (code === "server")
@@ -217,6 +224,25 @@ function controlledFailure(code) {
     case "candidate_unavailable": return qsTr("The candidate is unavailable. Refresh this review.")
     case "invalid_comment": return qsTr("Use a decision comment of at most 2,000 characters without NUL characters.")
     case "incompatible_publication_subscriptions": return qsTr("Pause incompatible readiness automations or processing subscriptions before enabling control.")
+    case "invalid_references":
+    case "invalid_reference_path": return qsTr("The selected image link is malformed. Remove it or insert the image again.")
+    case "reference_not_found": return qsTr("The selected image was removed or its version is no longer published. Insert it again.")
+    case "reference_forbidden": return qsTr("You cannot read the selected image. Insert one you have access to.")
+    case "reference_cross_space": return qsTr("The selected image belongs to another space. Insert a copy in this one.")
+    case "reference_self": return qsTr("A document cannot link to itself.")
+    case "too_many_references": return qsTr("A document can link at most 200 images and files.")
+    case "reference_mode_not_allowed": return qsTr("This space requires links that pin a version. Insert the selected image again.")
+    default: return adminFailure(code)
+    }
+}
+
+function assetFailure(code) {
+    switch (code) {
+    case "unsupported_image": return qsTr("Only PNG, JPEG, GIF, and WebP images can be inserted.")
+    case "unreadable": return qsTr("The image could not be read from this device.")
+    case "assets_unavailable": return qsTr("The space's assets folder could not be created. Another file may already be named assets.")
+    case "forbidden": return qsTr("You cannot add files to this space.")
+    case "name_conflict": return qsTr("The assets folder already holds a file with this name. Rename the image and try again.")
     default: return adminFailure(code)
     }
 }
