@@ -91,9 +91,12 @@ void AddOnBackend::upload(const QString &orgId, QJsonObject descriptor, const QB
                 if (live()) done(reply);
             });
         };
-        putFile(url, bytes, headers, [this, orgId, id, body, live, finish](const Client::Reply &stored) {
+        putFile(url, bytes, headers, [this, orgId, id, body, live, finish, progress, size = bytes.size()](const Client::Reply &stored) {
             if (!live()) return;
             if (!stored.ok) { finish(stored); return; }
+            // The bytes are all there, whether or not the transfer reported
+            // progress on the way (the browser's fetch never does).
+            if (progress) progress(size, size);
             request("POST", orgPath(orgId, QStringLiteral("uploads/%1/complete").arg(id)),
                     body, idempotencyHeader(), [live, finish](const Client::Reply &reply) {
                 if (live()) finish(reply);

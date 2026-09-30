@@ -19,6 +19,8 @@ public:
     using AddOnBackend::AddOnBackend;
     QVector<Call> calls;
     int delayMs = 0;
+    // Whether a transfer reports its progress (the browser's fetch does not).
+    bool reportsProgress = true;
 
     void respond(const QByteArray &method, const QString &path, const QJsonObject &json,
                  int status = 200, const QString &code = {})
@@ -59,8 +61,8 @@ public:
         Client::Reply reply;
         reply.ok = true;
         reply.status = 200;
-        QTimer::singleShot(delayMs, this, [done, progress, reply, bytes] {
-            if (progress) progress(bytes.size(), bytes.size());
+        QTimer::singleShot(delayMs, this, [this, done, progress, reply, bytes] {
+            if (progress && reportsProgress) progress(bytes.size(), bytes.size());
             done(reply);
         });
     }
