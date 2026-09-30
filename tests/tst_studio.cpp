@@ -2,6 +2,7 @@
 #include "Session.h"
 #include "Theme.h"
 #include "Wiring.h"
+#include "references/AssetImages.h"
 
 #include <QAccessible>
 #include <QDesktopServices>
@@ -77,6 +78,7 @@ private slots:
     void cornersFollowTheSystem();
     void keyboardDrivesTheExplorer();
     void tabReachesEveryRegion();
+    void explorerOpensDocumentsOnlyWhenAsked();
     void f6CyclesRegions();
     void keyboardWalksTheTree();
     void keyboardOpensSheetKeymapAndUpload();
@@ -178,6 +180,9 @@ void TestStudio::initTestCase()
     QSettings().setValue(QStringLiteral("theme/language"), QStringLiteral("en"));
     QDesktopServices::setUrlHandler(QStringLiteral("file"), this, "openFile");
     m_engine = new QQmlApplicationEngine;
+    // As main() does: the images Markdown links come from this provider.
+    matome::installAssetImages(*m_engine, *m_engine->singletonInstance<Session *>(QStringLiteral("matome"),
+                                                                                   QStringLiteral("Session")));
     m_engine->load(QUrl(QStringLiteral("qrc:/qml/Main.qml")));
     QVERIFY(!m_engine->rootObjects().isEmpty());
     m_theme = m_engine->singletonInstance<Theme *>(QStringLiteral("matome"),
@@ -1096,12 +1101,16 @@ void TestStudio::keyboardDrivesTheExplorer()
     QTRY_COMPARE(regionOf(window()->activeFocusItem()), QStringLiteral("entryPane"));
     QCOMPARE(m_session->currentFolderId(), contracts);
 
+    // The menu opens on its first command, under the row's heading; the
+    // arrows step over headings.
     key(Qt::Key_Menu);
-    QTRY_VERIFY(menuOpen() && focusName().startsWith(u"menu_"));
+    QTRY_COMPARE(focusName(), QStringLiteral("menu_open"));
     key(Qt::Key_Down);
-    QCOMPARE(propertyOf(QStringLiteral("contextMenuList"), "currentIndex").toInt(), 1);
+    QTRY_COMPARE(focusName(), QStringLiteral("menu_download"));
     key(Qt::Key_Home);
-    QTRY_VERIFY(itemNamed(QStringLiteral("menu_download")));
+    QTRY_COMPARE(focusName(), QStringLiteral("menu_open"));
+    key(Qt::Key_Down);
+    QTRY_COMPARE(focusName(), QStringLiteral("menu_download"));
     key(Qt::Key_Return);
     QTRY_VERIFY(!m_opened.isEmpty() && m_opened.constLast().toLocalFile().startsWith(m_home.path()));
 
@@ -1113,6 +1122,31 @@ void TestStudio::keyboardDrivesTheExplorer()
     QVERIFY(waitIdle());
     key(Qt::Key_Escape);
     QTRY_COMPARE(m_session->level(), QStringLiteral("orgs"));
+}
+
+// Entering a folder lands the cursor on its first row and the arrows move
+// it; only Enter (or a double click, or a tap) opens the document screen.
+void TestStudio::explorerOpensDocumentsOnlyWhenAsked()
+{
+    openSpace(QStringLiteral("Inbox"));
+    addFolder(QStringLiteral("Contracts"));
+    const QString folder = entryId(QStringLiteral("Contracts"));
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("notes.md"), folder, QByteArray("# Notes\n"));
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("plan.md"), folder, QByteArray("# Plan\n"));
+    m_session->navigate(QStringLiteral("folder"), folder);
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(itemNamed(QStringLiteral("entryRow1")));
+    settle();
+    QVERIFY(!m_session->documentView()->active());
+    QMetaObject::invokeMethod(itemNamed(QStringLiteral("explorer")), "focusDefault");
+    key(Qt::Key_Down);
+    settle();
+    QVERIFY(!m_session->documentView()->active());
+    key(Qt::Key_Return);
+    QTRY_VERIFY(m_session->documentView()->active());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->documentView()->active());
+    QTRY_VERIFY(itemNamed(QStringLiteral("explorer"))->isVisible());
 }
 
 void TestStudio::tabReachesEveryRegion()
@@ -2220,13 +2254,18 @@ void TestStudio::settingsSelectsPackagesAndRespectsBillingRoles()
     QCOMPARE(propertyOf(QStringLiteral("billingPackageTitle_professional_1"), "text").toString(),
              QStringLiteral("Professional · version 1"));
     const int hits = m_core.hits();
+    // A package is selected first; the bar's Subscribe asks to confirm it.
+    QVERIFY(!propertyOf(QStringLiteral("subscribePackageButton"), "usable").toBool());
     clickItem(waitItem(QStringLiteral("billingPackage_professional_2")));
+    QVERIFY(!shown(QStringLiteral("orgCommerceConfirm")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("subscribePackageButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("subscribePackageButton")));
     QTRY_VERIFY(shown(QStringLiteral("orgCommerceConfirm")));
     QCOMPARE(m_core.hits(), hits);
     clickItem(waitItem(QStringLiteral("confirmCancel")));
     QTRY_VERIFY(!shown(QStringLiteral("orgCommerceConfirm")));
     QCOMPARE(m_core.hits(), hits);
-    clickItem(waitItem(QStringLiteral("billingPackage_professional_2")));
+    clickItem(waitItem(QStringLiteral("subscribePackageButton")));
     QTRY_VERIFY(shown(QStringLiteral("orgCommerceConfirm")));
     clickItem(waitItem(QStringLiteral("confirmAccept")));
     QTRY_VERIFY(!m_session->orgBilling()->busy());
@@ -2260,7 +2299,8 @@ void TestStudio::settingsSelectsPackagesAndRespectsBillingRoles()
     QTRY_VERIFY(!drawer->property("visible").toBool());
     QTRY_COMPARE(propertyOf(QStringLiteral("settingsScreen"), "section").toString(), QStringLiteral("billing"));
     QVERIFY(!shown(QStringLiteral("billingPortalButton")));
-    QVERIFY(!shown(QStringLiteral("billingPackage_professional_2")));
+    // Packages stay readable; only a billing manager may subscribe.
+    QVERIFY(!shown(QStringLiteral("subscribePackageButton")));
     QVERIFY(!m_session->orgBilling()->canManage());
     key(Qt::Key_Escape);
     QTRY_VERIFY(!m_session->settingsActive());
@@ -2419,10 +2459,10 @@ void TestStudio::accountMenuChoosesALanguage()
     focusOn(itemNamed(QStringLiteral("accountButton")));
     key(Qt::Key_Return);
     QTRY_VERIFY(menuOpen());
-    QQuickItem *portuguese = waitItem(QStringLiteral("menu_lang-pt-BR"));
-    QVERIFY(portuguese);
-    for (int i = 0; i < portuguese->property("index").toInt(); ++i)
+    QVERIFY(waitItem(QStringLiteral("menu_lang-pt-BR")));
+    for (int i = 0; i < 20 && focusName() != QLatin1String("menu_lang-pt-BR"); ++i)
         key(Qt::Key_Down);
+    QCOMPARE(focusName(), QStringLiteral("menu_lang-pt-BR"));
     key(Qt::Key_Return);
     QTRY_VERIFY(!menuOpen());
     QCOMPARE(m_theme->language(), QStringLiteral("pt-BR"));

@@ -57,7 +57,8 @@ public:
     /// Lists again; a list that lands then reports `settled` (nothing when empty).
     void reload(const QString &settled = QString());
     void select(const QString &documentId);
-    void download(const QString &documentId);
+    /// Saves the current version of the document, or `versionId` of it.
+    void download(const QString &documentId, const QString &versionId = {});
     void move(const QString &documentId, const QString &folderId, int revision);
     void rename(const QString &documentId, const QString &title, int revision);
     void trash(const QString &documentId, int revision);

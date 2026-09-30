@@ -121,7 +121,7 @@ void DocumentModel::select(const QString &documentId)
     emit changed();
 }
 
-void DocumentModel::download(const QString &documentId)
+void DocumentModel::download(const QString &documentId, const QString &versionId)
 {
     if (m_busy || documentId.isEmpty() || !m_session.inSpace())
         return;
@@ -129,7 +129,9 @@ void DocumentModel::download(const QString &documentId)
     const QString title = titleOf(documentId);
     const int generation = ++m_generation;
     setBusy();
-    const QString path = m_session.spacePath(QStringLiteral("documents/%1/download").arg(documentId));
+    QString path = m_session.spacePath(QStringLiteral("documents/%1/download").arg(documentId));
+    if (!versionId.isEmpty())
+        path += QStringLiteral("?version_id=") + versionId;
     m_session.authedGet(path, [this, generation, title](const Client::Reply &reply) {
         if (generation != m_generation)
             return;

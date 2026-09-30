@@ -222,7 +222,7 @@ const QList<Session::Command> &Session::commands()
     const auto signedIn = [](const Session &s) { return s.m_signedIn; };
     // The explorer is the screen: neither settings nor document reviews cover it.
     static const auto explorer = [](const Session &s) {
-        return s.m_signedIn && !s.m_settingsActive && !s.m_controlledDocs.active();
+        return s.m_signedIn && !s.m_settingsActive && !s.m_documentView.active();
     };
     // Only inside a space: files, folders, uploads, the clipboard.
     static const auto inFiles = [](const Session &s) { return explorer(s) && s.inSpace(); };
@@ -251,7 +251,7 @@ const QList<Session::Command> &Session::commands()
                  [](const Session &s) { return explorer(s) && s.where() != Level::Orgs; },
                  [](Session &s) { s.goUp(); }},
                 {"refresh", QT_TR_NOOP("Refresh"),
-                 [](const Session &s) { return explorer(s) || s.m_controlledDocs.active(); },
+                 [](const Session &s) { return explorer(s) || s.m_documentView.active(); },
                  [](Session &s) { s.refreshLocation(); }},
                 {"filter", QT_TR_NOOP("Filter"),
                  explorer, [](Session &s) { emit s.focusFilter(); }},
@@ -267,18 +267,10 @@ const QList<Session::Command> &Session::commands()
                      if (entry.kind == QLatin1String("document"))
                          s.m_documents.download(entry.id);
                  }},
-                {"controlled-docs", QT_TR_NOOP("Document reviews"), inFiles, [](Session &s) {
-                    const Entry entry = s.focusedEntry();
-                    s.m_controlledDocs.open(entry.kind == QLatin1String("document") ? entry.id : QString());
-                }},
-                {"toggle-document-control", nullptr,
-                 [](const Session &s) {
-                     if (!inFiles(s) || s.focusedEntry().kind != QLatin1String("document")) return false;
-                     const QString id = s.focusedEntry().id;
-                     return s.m_documents.controlledOf(id)
-                             || s.m_documents.titleOf(id).endsWith(QLatin1String(".md"), Qt::CaseInsensitive);
-                 },
-                 [](Session &s) { s.m_controlledDocs.open(s.focusedEntry().id, QStringLiteral("control")); }},
+                {"open", QT_TR_NOOP("Open"), focused, [](Session &s) {
+                     const Entry entry = s.focusedEntry();
+                     s.openEntry(entry.kind, entry.id);
+                 }, "forward"},
                 {"rename", QT_TR_NOOP("Rename"),
                  focused, [](Session &s) { s.promptRenameFocused(); }},
                 {"trash", nullptr,
@@ -300,32 +292,42 @@ const QList<Session::Command> &Session::commands()
                 {"theme-dark", QT_TR_NOOP("Theme dark"), always, nullptr},
                 {"theme-system", QT_TR_NOOP("Theme system"), always, nullptr},
         };
-        // The document reviews screen's verbs: ControlledDocs decides when
-        // each can run and runs it, or asks the screen to.
+        // The document screen's verbs: DocumentView decides when each can
+        // run and runs it, or asks the screen to.
+        static const struct {
+            const char *id;
+            const char *title;
+            const char *icon;
+        } viewing[] = {
+                {"view-tab", QT_TR_NOOP("Preview"), "document"},
+                {"edit-tab", QT_TR_NOOP("Edit"), "rename"},
+                {"versions-tab", QT_TR_NOOP("Versions"), "restore"},
+                {"reviews-tab", QT_TR_NOOP("Reviews"), "controlled-docs"},
+                {"download-version", QT_TR_NOOP("Download"), "download"},
+                {"insert-image", QT_TR_NOOP("Insert image"), "image"},
+                {"discard-changes", QT_TR_NOOP("Discard changes"), "restore"},
+                {"save-document", QT_TR_NOOP("Save"), "check"},
+        };
+        for (const auto &action : viewing) {
+            const QByteArray id(action.id);
+            rows.append({id, action.title,
+                         [id](const Session &s) { return s.m_documentView.allows(id); },
+                         [id](Session &s) { s.m_documentView.perform(id); }, action.icon});
+        }
+        // The controlled-documents add-on's verbs on the open document.
         static const struct {
             const char *id;
             const char *title;
             const char *icon;
         } reviewing[] = {
-                {"reviews-section", QT_TR_NOOP("Reviews"), "controlled-docs"},
-                {"edit-section", QT_TR_NOOP("Edit document"), "rename"},
-                {"control-section", QT_TR_NOOP("Control"), "settings"},
-                {"access-section", QT_TR_NOOP("Review access"), "user"},
+                {"open-review", QT_TR_NOOP("Open review"), "forward"},
+                {"close-review", QT_TR_NOOP("Back to reviews"), "back"},
                 {"download-candidate", QT_TR_NOOP("Download candidate"), "download"},
                 {"approve-review", QT_TR_NOOP("Approve"), "check"},
                 {"reject-review", QT_TR_NOOP("Reject"), "close"},
                 {"cancel-review", QT_TR_NOOP("Cancel review"), "cancel"},
-                {"discard-changes", QT_TR_NOOP("Discard changes"), "restore"},
-                {"insert-image", QT_TR_NOOP("Insert image"), "image"},
-                {"submit-proposal", QT_TR_NOOP("Submit for review"), "upload"},
-                {"activate-rule", QT_TR_NOOP("Activate space rule"), "check"},
-                {"pause-rule", QT_TR_NOOP("Pause space rule"), "pause"},
-                {"remove-rule", QT_TR_NOOP("Remove space rule"), "trash"},
-                {"manage-document", QT_TR_NOOP("Manage document"), "controlled-docs"},
-                {"unmanage-document", QT_TR_NOOP("Unmanage document"), "document"},
-                {"grant-access", QT_TR_NOOP("Grant access"), "new"},
-                {"grant-self-management", QT_TR_NOOP("Grant me management access"), "user"},
-                {"revoke-access", QT_TR_NOOP("Revoke access"), "close"},
+                {"manage-document", QT_TR_NOOP("Manage with reviews"), "controlled-docs"},
+                {"unmanage-document", QT_TR_NOOP("Stop managing"), "document"},
         };
         for (const auto &action : reviewing) {
             const QByteArray id(action.id);
@@ -384,13 +386,14 @@ const struct {
         {Qt::Key_N, Qt::ControlModifier | Qt::ShiftModifier, true, "new", "Ctrl+Shift+N"},
         {Qt::Key_U, 0, false, "upload", "U"},
         {Qt::Key_D, 0, false, "download", "D"},
-        {Qt::Key_D, 0, false, "download-candidate", "D"},
-        {Qt::Key_1, 0, false, "reviews-section", "1"},
-        {Qt::Key_2, 0, false, "edit-section", "2"},
-        {Qt::Key_3, 0, false, "control-section", "3"},
-        {Qt::Key_4, 0, false, "access-section", "4"},
-        {Qt::Key_Return, Qt::ControlModifier, true, "submit-proposal", "Ctrl+Enter"},
-        {Qt::Key_Enter, Qt::ControlModifier, true, "submit-proposal", ""},
+        {Qt::Key_D, 0, false, "download-version", "D"},
+        {Qt::Key_1, 0, false, "view-tab", "1"},
+        {Qt::Key_2, 0, false, "edit-tab", "2"},
+        {Qt::Key_3, 0, false, "versions-tab", "3"},
+        {Qt::Key_4, 0, false, "reviews-tab", "4"},
+        {Qt::Key_S, Qt::ControlModifier, true, "save-document", "Ctrl+S"},
+        {Qt::Key_Return, Qt::ControlModifier, true, "save-document", "Ctrl+Enter"},
+        {Qt::Key_Enter, Qt::ControlModifier, true, "save-document", ""},
         {Qt::Key_F2, 0, false, "rename", "F2"},
         {Qt::Key_Delete, 0, false, "trash", "Del"},
         {Qt::Key_Z, Qt::ControlModifier, false, "restore", "Ctrl+Z"},
@@ -424,11 +427,6 @@ QVariantList Session::commandList() const
 
 Session::Face Session::faceOf(const Command &row) const
 {
-    if (row.id == "toggle-document-control") {
-        const bool controlled = m_documents.controlledOf(focusedEntry().id);
-        return {controlled ? QT_TR_NOOP("Unmanage document") : QT_TR_NOOP("Manage document"),
-                "controlled-docs"};
-    }
     if (row.title)
         return {row.title, row.icon ? row.icon : row.id.constData()};
     if (row.id == "trash") {
@@ -448,7 +446,8 @@ void Session::runCommand(const QString &id)
 
 void Session::refreshLocation()
 {
-    if (m_controlledDocs.active()) {
+    if (m_documentView.active()) {
+        m_documentView.refresh();
         m_controlledDocs.refresh();
         return;
     }

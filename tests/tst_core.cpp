@@ -106,10 +106,15 @@ private slots:
     void settingsSelectsOrganizationsAndDiscardsReplies();
     void addOnsUseMockBackend();
     void addOnsDiscardStaleMockReplies();
-    void controlledDocsUseMockBackend();
+    void documentViewPreviewsAndSaves();
+    void controlledDocsExtendDocumentView();
+    void spaceSettingsManageAccessAndRule();
     void markdownReferencesFollowAssetLinks();
+    void assetsSearchFindsFilesByName();
+    void assetsResolvePathLinks();
     void assetsUploadIntoAssetsFolder();
     void assetsSignThroughViaVersion();
+    void uploadsFillBeforeCompleting();
     void orgBillingPermissionsAndStaleReplies();
     void orgBillingPreservesPurchasesAndGrants();
     void orgBillingConfiguresInstallation();
@@ -1720,7 +1725,6 @@ void TestCore::keysReachEveryCommand()
     session.runCommand(QStringLiteral("refresh"));
     QVERIFY(waitFor(&session));
     const QString a = entry(session, 0, EntryModel::EntryIdRole);
-    const QString doc = entry(session, 1, EntryModel::EntryIdRole);
 
     QSignalSpy keymap(&session, &Session::showKeymap);
     QSignalSpy sheet(&session, &Session::showSheet);
@@ -1765,12 +1769,13 @@ void TestCore::keysReachEveryCommand()
     QVERIFY(waitFor(&session));
 
     QVERIFY(!session.handleKey(Qt::Key_D, Qt::NoModifier, false));
-    session.openEntry(QStringLiteral("document"), doc);
+    session.setFocusPayload(entry(session, 1, EntryModel::PayloadRole));
     QVERIFY(session.handleKey(Qt::Key_D, Qt::NoModifier, false));
     QVERIFY(waitFor(&session));
     QCOMPARE(saved.size(), 1);
     QVERIFY(saved.at(0).at(0).toUrl().isLocalFile());
 
+    session.setFocusPayload(QString());
     QVERIFY(!session.handleKey(Qt::Key_F2, Qt::NoModifier, false));
     session.setFocusPayload(entry(session, 0, EntryModel::PayloadRole));
     QVERIFY(session.handleKey(Qt::Key_F2, Qt::NoModifier, false));
@@ -1865,22 +1870,20 @@ void TestCore::commandsFollowTheLevel()
     QVERIFY(usable(session, QStringLiteral("upload")));
     for (const char *id : {"download", "cut", "paste", "rename", "trash"})
         QVERIFY(!usable(session, QString::fromLatin1(id)));
-    session.openEntry(QStringLiteral("document"), entry(session, 0, EntryModel::EntryIdRole));
+    session.setFocusPayload(entry(session, 0, EntryModel::PayloadRole));
     QVERIFY(usable(session, QStringLiteral("download")));
-    QVERIFY(usable(session, QStringLiteral("toggle-document-control")));
-    QCOMPARE(command(session, QStringLiteral("toggle-document-control")).value(QStringLiteral("title")).toString(),
-             QStringLiteral("Manage document"));
+    QVERIFY(usable(session, QStringLiteral("open")));
     QVERIFY(usable(session, QStringLiteral("trash")));
     QCOMPARE(command(session, QStringLiteral("trash")).value(QStringLiteral("title")).toString(),
              QStringLiteral("Move to trash"));
     QCOMPARE(command(session, QStringLiteral("trash")).value(QStringLiteral("icon")).toString(),
              QStringLiteral("trash"));
-    QVERIFY(!usable(session, QStringLiteral("cut")));
-    // A focused folder has nothing to download, even with a document open,
-    // and no trash: it is deleted for good.
+    QVERIFY(usable(session, QStringLiteral("cut")));
+    // A focused folder opens but has nothing to download, and no trash: it
+    // is deleted for good.
     session.setFocusPayload(QStringLiteral("folder:1:1"));
     QVERIFY(!usable(session, QStringLiteral("download")));
-    QVERIFY(!usable(session, QStringLiteral("toggle-document-control")));
+    QVERIFY(usable(session, QStringLiteral("open")));
     QVERIFY(usable(session, QStringLiteral("trash")));
     QCOMPARE(command(session, QStringLiteral("trash")).value(QStringLiteral("title")).toString(),
              QStringLiteral("Delete folder"));
@@ -1929,7 +1932,7 @@ void TestCore::renamesTrashesRestoresAndPurges()
     session.runCommand(QStringLiteral("trash"));
     QVERIFY(session.lastTrashedId().isEmpty());
     QVERIFY(waitFor(&session));
-    session.openEntry(QStringLiteral("document"), entry(session, 1, EntryModel::EntryIdRole));
+    session.setFocusPayload(entry(session, 1, EntryModel::PayloadRole));
     session.runCommand(QStringLiteral("trash"));
     QVERIFY(waitFor(&session));
     QCOMPARE(session.documents()->rowCount(), 0);
@@ -2992,7 +2995,133 @@ void TestCore::addOnsDiscardStaleMockReplies()
     QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space")).value(QStringLiteral("known")).toBool());
 }
 
-void TestCore::controlledDocsUseMockBackend()
+namespace {
+
+QJsonObject markdownVersion(const QString &id, int number, bool current, const QByteArray &bytes)
+{
+    return {{QStringLiteral("id"), id}, {QStringLiteral("version_number"), number}, {QStringLiteral("current"), current},
+            {QStringLiteral("publication_state"), QStringLiteral("published")},
+            {QStringLiteral("filename"), QStringLiteral("procedure.md")}, {QStringLiteral("content_type"), QStringLiteral("text/markdown")},
+            {QStringLiteral("byte_size"), bytes.size()}};
+}
+
+// A document with its versions and each version's text, as Core serves them.
+void serveDocument(matome::test::MockAddOnBackend &backend, const QString &doc, const QJsonObject &document,
+                   const QList<QPair<QJsonObject, QByteArray>> &versions)
+{
+    backend.respond("GET", doc, {{QStringLiteral("document"), document}});
+    QJsonArray rows;
+    for (const auto &[version, bytes] : versions) {
+        rows.append(version);
+        const QString id = version.value(QStringLiteral("id")).toString();
+        const QString url = QStringLiteral("https://storage.invalid/") + id;
+        backend.respond("GET", doc + QStringLiteral("/download?version_id=") + id,
+                        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), url}}}});
+        backend.file(QUrl(url), bytes);
+    }
+    backend.respond("GET", doc + QStringLiteral("/versions"), {{QStringLiteral("data"), rows}});
+}
+
+} // namespace
+
+void TestCore::documentViewPreviewsAndSaves()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString doc = matome::contentPath(org, space, QStringLiteral("documents/41"));
+    const QByteArray current("# Current\n"), older("# Older\n");
+    QJsonObject candidate = markdownVersion(QStringLiteral("candidate"), 3, false, "# Candidate\n");
+    candidate.insert(QStringLiteral("publication_state"), QStringLiteral("candidate"));
+    serveDocument(backend, doc, {{QStringLiteral("id"), 41}, {QStringLiteral("title"), QStringLiteral("procedure.md")}},
+                  {{markdownVersion(QStringLiteral("older"), 1, false, older), older},
+                   {markdownVersion(QStringLiteral("base"), 2, true, current), current},
+                   {candidate, "# Candidate\n"}});
+    auto *view = session.documentView();
+    QSignalSpy opened(view, &matome::DocumentView::opened);
+    session.openEntry(QStringLiteral("document"), QStringLiteral("41"));
+    QCOMPARE(opened.size(), 1);
+    QVERIFY(view->active());
+    QVERIFY(!usable(session, QStringLiteral("new")));
+    QTRY_VERIFY(!view->busy());
+    QCOMPARE(view->title(), QStringLiteral("procedure.md"));
+    QCOMPARE(view->versions().size(), 2);
+    QCOMPARE(view->versions().constFirst().toMap().value(QStringLiteral("version_number")).toInt(), 2);
+    QCOMPARE(view->kind(), QStringLiteral("markdown"));
+    QCOMPARE(view->text(), QString::fromUtf8(current));
+    QVERIFY(view->latest());
+    QVERIFY(view->editable());
+    QVERIFY(usable(session, QStringLiteral("edit-tab")));
+    QVERIFY(!usable(session, QStringLiteral("reviews-tab")));
+    view->selectVersion(QStringLiteral("older"));
+    QTRY_VERIFY(!view->busy());
+    QCOMPARE(view->text(), QString::fromUtf8(older));
+    QVERIFY(!view->latest());
+    QVERIFY(!view->editable());
+    view->selectVersion(QStringLiteral("base"));
+    QTRY_VERIFY(!view->busy());
+    session.runCommand(QStringLiteral("edit-tab"));
+    QCOMPARE(view->tab(), QStringLiteral("edit"));
+    QVERIFY(usable(session, QStringLiteral("save-document")));
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("upload_id"), QStringLiteral("next")},
+            {QStringLiteral("generation"), 1}, {QStringLiteral("request"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/next")}}}}}});
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/next/complete")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("version"), QJsonObject{{QStringLiteral("id"), QStringLiteral("next-version")}}},
+                                              {QStringLiteral("review"), QJsonValue::Null}}}});
+    QSignalSpy saved(view, &matome::DocumentView::saved);
+    const QString image = QStringLiteral("0b6f0c2e-3f7a-4c55-9d3e-8a1b2c3d4e5f");
+    view->save(QStringLiteral("# Current\n\n![logo](matome:asset/7?version=%1)\n").arg(image), QStringLiteral("  "));
+    QTRY_COMPARE(saved.size(), 1);
+    QCOMPARE(view->notice(), QStringLiteral("version_published"));
+    bool uploaded = false;
+    for (const auto &call : backend.calls) if (call.method == "POST" && call.path.endsWith(QLatin1String("/uploads"))) {
+        QCOMPARE(call.body.value(QStringLiteral("document_id")).toString(), QStringLiteral("41"));
+        QCOMPARE(call.body.value(QStringLiteral("filename")).toString(), QStringLiteral("procedure.md"));
+        QVERIFY(!call.body.contains(QStringLiteral("reason")));
+        const QJsonArray references = call.body.value(QStringLiteral("references")).toArray();
+        QCOMPARE(references.size(), 1);
+        QCOMPARE(references.at(0).toObject().value(QStringLiteral("document_id")).toInteger(), 7);
+        QCOMPARE(references.at(0).toObject().value(QStringLiteral("version_id")).toString(), image);
+        uploaded = true;
+    }
+    QVERIFY(uploaded);
+    QTRY_VERIFY(!view->busy());
+    session.runCommand(QStringLiteral("edit-tab"));
+    Client::Reply refused;
+    refused.status = 422;
+    refused.code = QStringLiteral("reference_not_found");
+    refused.json = {{QStringLiteral("details"), QJsonObject{{QStringLiteral("index"), 0}}}};
+    backend.queue("POST", matome::orgPath(org, QStringLiteral("uploads")), refused);
+    view->save(QStringLiteral("![gone](matome:asset/8?version=%1)").arg(image), QStringLiteral("Swap"));
+    QTRY_COMPARE(view->errorCode(), QStringLiteral("reference_not_found"));
+    QCOMPARE(view->errorIndex(), 0);
+    const QString pdf = matome::contentPath(org, space, QStringLiteral("documents/42"));
+    QJsonObject manual{{QStringLiteral("id"), QStringLiteral("manual")}, {QStringLiteral("version_number"), 1},
+                       {QStringLiteral("current"), true}, {QStringLiteral("publication_state"), QStringLiteral("published")},
+                       {QStringLiteral("filename"), QStringLiteral("manual.pdf")}, {QStringLiteral("content_type"), QStringLiteral("application/pdf")},
+                       {QStringLiteral("byte_size"), 2048}};
+    serveDocument(backend, pdf, {{QStringLiteral("id"), 42}, {QStringLiteral("title"), QStringLiteral("manual.pdf")}}, {{manual, "%PDF"}});
+    session.openEntry(QStringLiteral("document"), QStringLiteral("42"));
+    QTRY_VERIFY(!view->busy());
+    QCOMPARE(view->kind(), QStringLiteral("none"));
+    QVERIFY(!view->textLoaded());
+    QVERIFY(!usable(session, QStringLiteral("edit-tab")));
+    QVERIFY(usable(session, QStringLiteral("download-version")));
+    manual.insert(QStringLiteral("detected_content_type"), QStringLiteral("image/png"));
+    serveDocument(backend, pdf, {{QStringLiteral("id"), 42}, {QStringLiteral("title"), QStringLiteral("photo.png")}}, {{manual, "\x89PNG"}});
+    view->refresh();
+    QTRY_VERIFY(!view->busy());
+    QCOMPARE(view->kind(), QStringLiteral("image"));
+    view->close();
+    QVERIFY(!view->active());
+    QVERIFY(usable(session, QStringLiteral("new")));
+}
+
+void TestCore::controlledDocsExtendDocumentView()
 {
     FakeCore core;
     QVERIFY(core.listen());
@@ -3002,27 +3131,19 @@ void TestCore::controlledDocsUseMockBackend()
     const QString org = session.currentOrgId(), space = session.currentSpaceId();
     const QString doc = matome::contentPath(org, space, QStringLiteral("documents/41"));
     const QString reviewPath = matome::orgPath(org, QStringLiteral("reviews/review-one"));
-    QJsonObject document{{QStringLiteral("id"), 41}, {QStringLiteral("title"), QStringLiteral("procedure.md")},
-        {QStringLiteral("revision"), 3}, {QStringLiteral("controlled_docs_enabled"), true},
-        {QStringLiteral("current_version"), QJsonObject{{QStringLiteral("id"), QStringLiteral("base")},
-            {QStringLiteral("filename"), QStringLiteral("procedure.md")}, {QStringLiteral("content_type"), QStringLiteral("text/markdown")}}}};
+    const QByteArray current("# Current\n");
+    serveDocument(backend, doc, {{QStringLiteral("id"), 41}, {QStringLiteral("title"), QStringLiteral("procedure.md")},
+                                 {QStringLiteral("revision"), 3}, {QStringLiteral("controlled_docs_enabled"), true}},
+                  {{markdownVersion(QStringLiteral("base"), 1, true, current), current}});
     QJsonObject review{{QStringLiteral("id"), QStringLiteral("review-one")}, {QStringLiteral("revision"), 5},
         {QStringLiteral("status"), QStringLiteral("open")}, {QStringLiteral("author_membership_id"), QStringLiteral("author")},
         {QStringLiteral("candidate_version_id"), QStringLiteral("candidate")}};
-    backend.respond("GET", QStringLiteral("/api/v1/add-ons"), {{QStringLiteral("products"), QJsonArray()}});
-    backend.respond("GET", matome::orgPath(org, QStringLiteral("add-ons")), {}, 403, QStringLiteral("forbidden"));
-    backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
-        {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject{{QStringLiteral("addon.controlled_docs"), true}}}}}});
-    backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")), {{QStringLiteral("spaces"), QJsonArray()}});
-    backend.respond("GET", doc, {{QStringLiteral("document"), document}});
     backend.respond("GET", matome::contentPath(org, space, QStringLiteral("controlled-docs-rule")),
                     {{QStringLiteral("data"), QJsonObject{{QStringLiteral("active"), true}, {QStringLiteral("revision"), 2}}}});
     backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{review}}});
     backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
                     {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("author")},
                         {QStringLiteral("email"), session.email()}}}}});
-    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray()}});
-    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray()}});
     const QJsonObject changedImage{{QStringLiteral("document_id"), 7}, {QStringLiteral("from_version_id"), QStringLiteral("before")},
                                    {QStringLiteral("to_version_id"), QStringLiteral("after")}};
     backend.respond("GET", reviewPath + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QStringLiteral("-old\n+new")},
@@ -3030,11 +3151,30 @@ void TestCore::controlledDocsUseMockBackend()
                                                    {QStringLiteral("changed"), QJsonArray{changedImage}}}}}}});
     backend.respond("GET", reviewPath + QStringLiteral("/candidate/download"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/candidate")}}}});
     backend.file(QUrl(QStringLiteral("https://storage.invalid/candidate")), QByteArray("# Candidate\n"));
+    auto *view = session.documentView();
     auto *control = session.controlledDocs();
-    control->open(QStringLiteral("41"));
+    session.openEntry(QStringLiteral("document"), QStringLiteral("41"));
+    QTRY_VERIFY(!view->busy());
+    QTRY_VERIFY(control->active());
     QTRY_VERIFY(!control->busy());
-    control->selectReview(QStringLiteral("review-one"));
+    QVERIFY(control->controlled());
+    QVERIFY(control->reviewOpen());
+    QVERIFY(usable(session, QStringLiteral("reviews-tab")));
+    QVERIFY(!usable(session, QStringLiteral("manage-document")));
+    QVERIFY(usable(session, QStringLiteral("unmanage-document")));
+    // The list selects the first review; only opening it loads it and
+    // brings its decisions.
+    QCOMPARE(control->selectedReviewId(), QStringLiteral("review-one"));
+    QVERIFY(control->review().isEmpty());
+    QVERIFY(!usable(session, QStringLiteral("open-review")));
+    QVERIFY(!usable(session, QStringLiteral("cancel-review")));
+    session.runCommand(QStringLiteral("reviews-tab"));
+    QVERIFY(usable(session, QStringLiteral("open-review")));
+    session.runCommand(QStringLiteral("open-review"));
     QTRY_VERIFY(!control->busy());
+    QVERIFY(usable(session, QStringLiteral("close-review")));
+    QVERIFY(usable(session, QStringLiteral("cancel-review")));
+    QVERIFY(!usable(session, QStringLiteral("open-review")));
     QCOMPARE(control->diff(), QStringLiteral("-old\n+new"));
     QCOMPARE(control->candidate(), QStringLiteral("# Candidate\n"));
     QCOMPARE(control->diffReferences().value(QStringLiteral("changed")).toList().constFirst().toMap()
@@ -3048,118 +3188,112 @@ void TestCore::controlledDocsUseMockBackend()
                         {QStringLiteral("email"), session.email()}}}}});
     control->refresh();
     QTRY_VERIFY(!control->busy());
-    control->selectReview(QStringLiteral("review-one"));
-    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->review().value(QStringLiteral("id")).toString(), QStringLiteral("review-one"));
+    QCOMPARE(control->candidate(), QStringLiteral("# Candidate\n"));
     QVERIFY(control->canDecide());
     backend.respond("POST", reviewPath + QStringLiteral("/approve"), {}, 409, QStringLiteral("review_closed"));
     control->decide(QStringLiteral("approve"), QStringLiteral("checked"));
     const auto decision = backend.calls.constLast();
     QCOMPARE(decision.body.value(QStringLiteral("candidate_version_id")).toString(), QStringLiteral("candidate"));
     QCOMPARE(decision.headers.first().second, QByteArray("5"));
-    QVERIFY(decision.headers.size() == 2);
     QTRY_VERIFY(!control->busy());
     QCOMPARE(control->errorCode(), QStringLiteral("review_closed"));
-    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray()}});
-    control->refresh();
+    session.runCommand(QStringLiteral("close-review"));
+    QVERIFY(control->review().isEmpty());
+    QVERIFY(control->candidate().isEmpty());
+    session.runCommand(QStringLiteral("open-review"));
     QTRY_VERIFY(!control->busy());
-    QVERIFY(control->canSubmit());
-    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads")),
-        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("upload_id"), QStringLiteral("upload-one")},
-            {QStringLiteral("generation"), 1}, {QStringLiteral("request"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/file")}}}}}});
-    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/upload-one/complete")),
-        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("review"), review}}}});
-    const QString image = QStringLiteral("0b6f0c2e-3f7a-4c55-9d3e-8a1b2c3d4e5f");
-    control->submit(QStringLiteral("# Updated\n\n![logo](matome:asset/7?version=%1)\n").arg(image), QStringLiteral("Update procedure"));
-    QTRY_VERIFY(!control->busy());
-    QCOMPARE(control->notice(), QStringLiteral("review_requested"));
-    bool uploaded = false;
-    for (const auto &call : backend.calls) if (call.method == "POST" && call.path.endsWith(QLatin1String("/uploads"))) {
-        QCOMPARE(call.body.value(QStringLiteral("document_id")).toString(), QStringLiteral("41"));
-        QCOMPARE(call.body.value(QStringLiteral("content_type")).toString(), QStringLiteral("text/markdown"));
-        QCOMPARE(call.body.value(QStringLiteral("reason")).toString(), QStringLiteral("Update procedure"));
-        QCOMPARE(call.body.value(QStringLiteral("checksum_sha256")).toString().size(), 64);
-        const QJsonArray references = call.body.value(QStringLiteral("references")).toArray();
-        QCOMPARE(references.size(), 1);
-        QCOMPARE(references.at(0).toObject().value(QStringLiteral("document_id")).toInteger(), 7);
-        QCOMPARE(references.at(0).toObject().value(QStringLiteral("version_id")).toString(), image);
-        uploaded = true;
-    }
-    QVERIFY(uploaded);
-    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/upload-one/complete")), {}, 409, QStringLiteral("controlled_docs_unavailable"));
-    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/upload-one/abort")), {});
-    control->submit(QStringLiteral("# Retry\n"), QStringLiteral("Retry proposal"));
-    QTRY_VERIFY(!control->busy());
-    QCOMPARE(control->errorCode(), QStringLiteral("controlled_docs_unavailable"));
-    bool aborted = false;
-    for (const auto &call : backend.calls) aborted |= call.path.endsWith(QLatin1String("/upload-one/abort"));
-    QVERIFY(aborted);
-    const QByteArray published("# Published\n");
-    auto version = document.value(QStringLiteral("current_version")).toObject();
-    version.insert(QStringLiteral("checksum_sha256"), QString::fromLatin1(QCryptographicHash::hash(published, QCryptographicHash::Sha256).toHex()));
-    version.insert(QStringLiteral("byte_size"), published.size());
-    document.insert(QStringLiteral("current_version"), version);
-    backend.respond("GET", doc, {{QStringLiteral("document"), document}});
-    backend.respond("GET", doc + QStringLiteral("/download"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/published")}}}});
-    backend.file(QUrl(QStringLiteral("https://storage.invalid/published")), published);
-    control->refresh();
-    QTRY_VERIFY(!control->busy());
-    control->loadPublished();
-    QTRY_VERIFY(!control->busy());
-    QCOMPARE(control->source(), QString::fromUtf8(published));
-    QVERIFY(!control->draftStale());
-    version.insert(QStringLiteral("id"), QStringLiteral("new-base"));
-    document.insert(QStringLiteral("current_version"), version);
-    backend.respond("GET", doc, {{QStringLiteral("document"), document}});
-    control->refresh();
-    QTRY_VERIFY(!control->busy());
-    QVERIFY(control->draftStale());
-    QVERIFY(!control->canSubmit());
-    QCOMPARE(control->source(), QString::fromUtf8(published));
-    control->loadPublished();
-    QTRY_VERIFY(!control->busy());
-    QVERIFY(!control->draftStale());
-    QJsonObject role{{QStringLiteral("id"), QStringLiteral("management-role")},
-        {QStringLiteral("name"), QStringLiteral("Document control managers")},
+    // Leaving the Reviews tab closes the review.
+    session.runCommand(QStringLiteral("view-tab"));
+    QVERIFY(control->review().isEmpty());
+    view->close();
+    QVERIFY(!control->active());
+    QVERIFY(control->reviews().isEmpty());
+    const QString plain = matome::contentPath(org, space, QStringLiteral("documents/43"));
+    serveDocument(backend, plain, {{QStringLiteral("id"), 43}, {QStringLiteral("title"), QStringLiteral("notes.md")}},
+                  {{markdownVersion(QStringLiteral("notes"), 1, true, current), current}});
+    session.openEntry(QStringLiteral("document"), QStringLiteral("43"));
+    QTRY_VERIFY(!view->busy());
+    QVERIFY(!control->active());
+    QVERIFY(!usable(session, QStringLiteral("reviews-tab")));
+}
+
+void TestCore::spaceSettingsManageAccessAndRule()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString rule = matome::contentPath(org, space, QStringLiteral("controlled-docs-rule"));
+    const QJsonObject owner{{QStringLiteral("id"), QStringLiteral("owner-role")}, {QStringLiteral("key"), QStringLiteral("owner")},
+                            {QStringLiteral("name"), QStringLiteral("Owner")}};
+    const QJsonObject editor{{QStringLiteral("id"), QStringLiteral("editor-role")}, {QStringLiteral("key"), QStringLiteral("space_editor")},
+                             {QStringLiteral("name"), QStringLiteral("Space editor")}};
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray{owner, editor}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
+                    {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("me")},
+                        {QStringLiteral("email"), session.email()}}}}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("grants")),
+                    {{QStringLiteral("grants"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("grant-one")},
+                        {QStringLiteral("role_id"), QStringLiteral("editor-role")}, {QStringLiteral("organization_membership_id"), QStringLiteral("me")}}}}});
+    auto *access = session.spaceAccess();
+    access->open(space);
+    QTRY_VERIFY(!access->busy());
+    QCOMPARE(access->roles().size(), 1);
+    QCOMPARE(access->roles().constFirst().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Space editor"));
+    QCOMPARE(access->grants().constFirst().toMap().value(QStringLiteral("email")).toString(), session.email());
+    QCOMPARE(access->grants().constFirst().toMap().value(QStringLiteral("roleName")).toString(), QStringLiteral("Space editor"));
+    backend.respond("POST", matome::contentPath(org, space, QStringLiteral("grants")), {}, 201);
+    access->grant(QStringLiteral("me"), QStringLiteral("editor-role"));
+    QTRY_COMPARE(access->notice(), QStringLiteral("access_saved"));
+    QCOMPARE(backend.calls.constLast().method, QByteArray("GET"));
+    backend.respond("DELETE", matome::contentPath(org, space, QStringLiteral("grants/grant-one")), {});
+    QTRY_VERIFY(!access->busy());
+    access->revoke(QStringLiteral("grant-one"));
+    QTRY_COMPARE(access->notice(), QStringLiteral("access_removed"));
+
+    backend.respond("GET", rule, {}, 403, QStringLiteral("forbidden"));
+    auto *controlled = session.controlledRule();
+    controlled->open(space);
+    QTRY_VERIFY(!controlled->busy());
+    QVERIFY(!controlled->readable());
+    QVERIFY(controlled->rolesMissing());
+    QVERIFY(controlled->canGrantSelf());
+    const QJsonObject manager{{QStringLiteral("id"), QStringLiteral("manager-role")}, {QStringLiteral("name"), QStringLiteral("Document control managers")},
         {QStringLiteral("actions"), QJsonArray{QStringLiteral("document.review_read"),
             QStringLiteral("document.controlled_docs_manage"), QStringLiteral("space.controlled_docs_manage")}}};
-    backend.respond("POST", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("role"), role}}, 201);
-    backend.respond("POST", matome::contentPath(org, space, QStringLiteral("grants")), {}, 201);
-    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray{role}}});
-    QJsonObject grant{{QStringLiteral("id"), QStringLiteral("grant-one")},
-        {QStringLiteral("role_id"), QStringLiteral("management-role")},
-        {QStringLiteral("organization_membership_id"), QStringLiteral("reviewer")}};
-    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray{grant}}});
-    QVERIFY(control->canAssign());
-    control->grantAccess(QStringLiteral("reviewer"), true);
-    QTRY_VERIFY(!control->busy());
-    QCOMPARE(control->notice(), QStringLiteral("access_saved"));
-    QCOMPARE(control->grants().size(), 1);
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("role"), manager}}, 201);
+    backend.respond("GET", rule, {{QStringLiteral("data"), QJsonObject{{QStringLiteral("active"), false}, {QStringLiteral("revision"), 4},
+        {QStringLiteral("id"), QStringLiteral("rule")}, {QStringLiteral("require_version_references"), true}}}});
+    QSignalSpy accessChanged(controlled, &matome::ControlledRule::accessChanged);
+    controlled->grantSelf();
+    QTRY_COMPARE(accessChanged.size(), 1);
+    QTRY_VERIFY(!controlled->busy());
     bool granted = false;
-    for (const auto &call : backend.calls) if (call.method == "POST" && call.path.endsWith(QLatin1String("/grants"))) {
-        QCOMPARE(call.body.value(QStringLiteral("role_id")).toString(), QStringLiteral("management-role"));
-        QCOMPARE(call.body.value(QStringLiteral("organization_membership_id")).toString(), QStringLiteral("reviewer"));
+    for (const auto &call : backend.calls) if (call.method == "POST" && call.path.endsWith(QLatin1String("/grants"))
+                                               && call.body.value(QStringLiteral("role_id")).toString() == QLatin1String("manager-role")) {
+        QCOMPARE(call.body.value(QStringLiteral("organization_membership_id")).toString(), QStringLiteral("me"));
         granted = true;
     }
     QVERIFY(granted);
-    backend.respond("DELETE", matome::contentPath(org, space, QStringLiteral("grants/grant-one")), {});
-    control->revokeAccess(QStringLiteral("grant-one"));
-    QTRY_VERIFY(!control->busy());
-    QCOMPARE(control->notice(), QStringLiteral("access_removed"));
-    QJsonObject paused{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
-        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
-        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
-        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("paused")}, {QStringLiteral("space_ids"), QJsonArray()}}}};
-    backend.respond("GET", matome::orgPath(org, QStringLiteral("add-ons")), {{QStringLiteral("products"), QJsonArray{paused}}});
-    session.addOns()->refresh();
-    QTRY_VERIFY(!session.addOns()->busy());
-    QVERIFY(!control->canSubmit());
-    backend.delayMs = 25;
-    control->refresh();
-    control->close();
-    QTest::qWait(60);
-    QVERIFY(!control->active());
-    QVERIFY(control->reviews().isEmpty());
-    QVERIFY(control->diff().isEmpty());
+    QVERIFY(controlled->readable());
+    backend.respond("PUT", rule, {});
+    controlled->save(true, controlled->rule().value(QStringLiteral("require_version_references")).toBool());
+    QTRY_COMPARE(controlled->notice(), QStringLiteral("rule_saved"));
+    for (const auto &call : backend.calls) if (call.method == "PUT" && call.path == rule) {
+        QVERIFY(call.body.value(QStringLiteral("active")).toBool());
+        QVERIFY(call.body.value(QStringLiteral("require_version_references")).toBool());
+    }
+    QTRY_VERIFY(!controlled->busy());
+    const int calls = backend.calls.size();
+    controlled->remove(QStringLiteral("  "));
+    QCOMPARE(controlled->errorCode(), QStringLiteral("reason_required"));
+    QCOMPARE(backend.calls.size(), calls);
+    controlled->close();
+    access->close();
+    QVERIFY(!controlled->active() && !access->active());
 }
 
 void TestCore::orgBillingPermissionsAndStaleReplies()
@@ -3434,10 +3568,96 @@ void TestCore::markdownReferencesFollowAssetLinks()
                     .contains(QStringLiteral("![web](https://example.com/x.png)")));
     QVERIFY(assets->render(markdown, QStringLiteral("org"), QStringLiteral("space"), {}, 480, true)
                     .contains(QStringLiteral("image://asset/org/space/-/4/")));
+    const QString doc = QStringLiteral("See [plan](matome:doc/9) and [pinned](matome:doc/9?version=%1), [plan](matome:doc/9).").arg(b);
+    const QJsonArray docs = matome::Assets::references(doc);
+    QCOMPARE(docs.size(), 2);
+    QVERIFY(!docs.at(0).toObject().contains(QStringLiteral("version_id")));
+    QCOMPARE(docs.at(0).toObject().value(QStringLiteral("document_id")).toInteger(), 9);
+    QCOMPARE(docs.at(1).toObject().value(QStringLiteral("version_id")).toString(), b);
+    QCOMPARE(assets->referenceAt(doc, 1).value(QStringLiteral("start")).toInt(), doc.indexOf(QStringLiteral("](matome:doc/9?version")));
+    QCOMPARE(matome::Assets::markdownLink(QStringLiteral("a [b].png"), QStringLiteral("3"), a, true),
+             QStringLiteral("![a b.png](matome:asset/3?version=%1)").arg(a));
+    QCOMPARE(matome::Assets::markdownLink(QStringLiteral("plan.md"), QStringLiteral("9"), {}, false),
+             QStringLiteral("[plan.md](matome:doc/9)"));
+    QCOMPARE(matome::Assets::markdownLink(QStringLiteral("plan.md"), QStringLiteral("9"), b, false),
+             QStringLiteral("[plan.md](matome:doc/9?version=%1)").arg(b));
+    QCOMPARE(matome::Assets::pathLink(QStringLiteral("plan [v2].md"), QStringLiteral("/Specs (old)/plan [v2].md")),
+             QStringLiteral("[plan v2.md](/Specs%20%28old%29/plan%20%5Bv2%5D.md)"));
+    QVERIFY(matome::Assets::references(QStringLiteral("[plan.md](/Specs/plan.md)")).isEmpty());
     const QVariantMap at = assets->referenceAt(markdown, 1);
     QCOMPARE(markdown.mid(at.value(QStringLiteral("start")).toInt(), at.value(QStringLiteral("length")).toInt()),
              QStringLiteral("](matome:asset/4?version=%1)").arg(b));
     QVERIFY(assets->referenceAt(markdown, 2).isEmpty());
+}
+
+void TestCore::assetsSearchFindsFilesByName()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const auto document = [](int id, const QString &title, const QString &folder, const QString &detected) {
+        QJsonObject version{{QStringLiteral("id"), QStringLiteral("v%1").arg(id)}};
+        if (!detected.isEmpty())
+            version.insert(QStringLiteral("detected_content_type"), detected);
+        return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("title"), title},
+                           {QStringLiteral("folder_id"), folder.isEmpty() ? QJsonValue() : QJsonValue(folder)},
+                           {QStringLiteral("current_version"), version}};
+    };
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("documents?limit=25&q=plan")),
+                    {{QStringLiteral("documents"), QJsonArray{document(1, QStringLiteral("Old plan.md"), {}, {}),
+                        document(2, QStringLiteral("plan.png"), {}, QStringLiteral("image/png")),
+                        document(3, QStringLiteral("Travel plan.md"), QStringLiteral("near"), {}),
+                        document(4, QStringLiteral("plan.md"), {}, {})}}});
+    auto *assets = session.assets();
+    QSignalSpy found(assets, &matome::Assets::found);
+    assets->search(QStringLiteral("plan"), QStringLiteral("near"), QStringLiteral("4"));
+    QTRY_COMPARE(found.size(), 1);
+    QCOMPARE(found.constFirst().at(0).toString(), QStringLiteral("plan"));
+    const QVariantList files = found.constFirst().at(1).toList();
+    QStringList titles;
+    for (const QVariant &file : files) titles.append(file.toMap().value(QStringLiteral("title")).toString());
+    QCOMPARE(titles, (QStringList{QStringLiteral("Travel plan.md"), QStringLiteral("plan.png"), QStringLiteral("Old plan.md")}));
+    QVERIFY(files.at(1).toMap().value(QStringLiteral("image")).toBool());
+    QCOMPARE(files.at(1).toMap().value(QStringLiteral("versionId")).toString(), QStringLiteral("v2"));
+    QCOMPARE(files.at(2).toMap().value(QStringLiteral("place")).toString(), session.spaces()->nameOf(space));
+    QCOMPARE(files.at(2).toMap().value(QStringLiteral("path")).toString(), QStringLiteral("/Old plan.md"));
+}
+
+void TestCore::assetsResolvePathLinks()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    session.folders()->create(QStringLiteral("Specs (old)"));
+    QTRY_COMPARE(session.folders()->rowCount(), 1);
+    const QString folder = session.folders()->data(session.folders()->index(0), FolderModel::FolderIdRole).toString();
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("documents?limit=100&folder_id=%1&q=plan%20v2.md").arg(folder)),
+                    {{QStringLiteral("documents"), QJsonArray{
+                        QJsonObject{{QStringLiteral("id"), 7}, {QStringLiteral("title"), QStringLiteral("old plan v2.md")}},
+                        QJsonObject{{QStringLiteral("id"), 8}, {QStringLiteral("title"), QStringLiteral("plan v2.md")}}}}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("documents?limit=100&folder_id=root&q=gone.md")),
+                    {{QStringLiteral("documents"), QJsonArray()}});
+    auto *assets = session.assets();
+    QSignalSpy resolved(assets, &matome::Assets::resolved);
+    const QString link = matome::Assets::pathLink(QStringLiteral("plan v2.md"), QStringLiteral("/Specs (old)/plan v2.md"))
+            .section(QLatin1Char('('), 1).chopped(1);
+    QCOMPARE(link, QStringLiteral("/Specs%20%28old%29/plan%20v2.md"));
+    assets->resolve(link);
+    QTRY_COMPARE(resolved.size(), 1);
+    QCOMPARE(resolved.at(0), (QVariantList{link, QStringLiteral("8")}));
+    assets->resolve(QStringLiteral("/gone.md"));
+    QTRY_COMPARE(resolved.size(), 2);
+    QCOMPARE(resolved.at(1), (QVariantList{QStringLiteral("/gone.md"), QString()}));
+    // A folder the space does not have answers at once, asking nothing.
+    assets->resolve(QStringLiteral("/Nowhere/plan.md"));
+    QCOMPARE(resolved.size(), 3);
+    QCOMPARE(resolved.at(2), (QVariantList{QStringLiteral("/Nowhere/plan.md"), QString()}));
 }
 
 void TestCore::assetsUploadIntoAssetsFolder()
@@ -3474,7 +3694,6 @@ void TestCore::assetsUploadIntoAssetsFolder()
     QCOMPARE(queued.size(), 1);
     QCOMPARE(queued.constFirst().at(1).toString(), QStringLiteral("logo.png"));
     QTRY_COMPARE(uploaded.size(), 1);
-    QCOMPARE(uploaded.constFirst().at(1).toString(), QStringLiteral("matome:asset/77?version=image-version"));
     QCOMPARE(failed.size(), 0);
     QStringList titles;
     for (const auto &call : backend.calls) {
@@ -3490,17 +3709,42 @@ void TestCore::assetsUploadIntoAssetsFolder()
     QCOMPARE(titles.size(), 2);
     QCOMPARE(titles.constFirst(), QStringLiteral("logo.png"));
     QVERIFY(titles.constLast().startsWith(QLatin1String("logo-")) && titles.constLast().endsWith(QLatin1String(".png")));
+    QCOMPARE(uploaded.constFirst().at(1).toString(), QStringLiteral("![%1](matome:asset/77?version=image-version)").arg(titles.constLast()));
     backend.respond("GET", matome::contentPath(org, space, QStringLiteral("documents?checksum_sha256=") + checksum),
                     {{QStringLiteral("documents"), QJsonArray{QJsonObject{{QStringLiteral("id"), 77},
                         {QStringLiteral("current_version"), QJsonObject{{QStringLiteral("id"), QStringLiteral("image-version")}}}}}}});
     const int calls = backend.calls.size();
     assets->uploadImage({}, png);
     QTRY_COMPARE(uploaded.size(), 2);
-    QCOMPARE(uploaded.constLast().at(1).toString(), QStringLiteral("matome:asset/77?version=image-version"));
+    QVERIFY(uploaded.constLast().at(1).toString().startsWith(QLatin1String("![image-")));
+    QVERIFY(uploaded.constLast().at(1).toString().endsWith(QLatin1String("](matome:asset/77?version=image-version)")));
     QCOMPARE(backend.calls.size(), calls + 1);
     assets->uploadImage(QStringLiteral("notes.txt"), QByteArray("plain text"));
     QCOMPARE(failed.size(), 1);
     QCOMPARE(failed.constFirst().at(1).toString(), QStringLiteral("unsupported_image"));
+}
+
+// A stored transfer counts as all its bytes before the upload completes,
+// even when the transfer itself said nothing of its progress.
+void TestCore::uploadsFillBeforeCompleting()
+{
+    matome::test::MockAddOnBackend backend;
+    backend.reportsProgress = false;
+    const QString org = QStringLiteral("org");
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads")),
+        {{QStringLiteral("data"), QJsonObject{{QStringLiteral("upload_id"), QStringLiteral("up")},
+            {QStringLiteral("generation"), 1}, {QStringLiteral("request"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/up")}}}}}});
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("uploads/up/complete")), {});
+    QList<QPair<qint64, qint64>> reported;
+    int callsAtProgress = -1;
+    bool finished = false;
+    backend.upload(org, {}, QByteArray("five!"), [] { return true; },
+                   [&finished](const Client::Reply &reply) { finished = reply.ok; },
+                   [&](qint64 sent, qint64 total) { reported.append({sent, total}); callsAtProgress = backend.calls.size(); });
+    QTRY_VERIFY(finished);
+    QCOMPARE(reported, (QList<QPair<qint64, qint64>>{{5, 5}}));
+    QCOMPARE(backend.calls.at(callsAtProgress - 1).method, QByteArray("PUTFILE"));
+    QCOMPARE(backend.calls.constLast().path, matome::orgPath(org, QStringLiteral("uploads/up/complete")));
 }
 
 void TestCore::assetsSignThroughViaVersion()

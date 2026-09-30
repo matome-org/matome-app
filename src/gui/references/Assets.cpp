@@ -9,10 +9,13 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonObject>
-#include <QSet>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QSet>
 #include <QTimer>
+#include <QUrl>
+
+#include <algorithm>
 
 namespace matome {
 
@@ -47,11 +50,33 @@ QString titleFor(const QString &name, const QString &type)
     return title;
 }
 
+// A title as a link's text: without the brackets that would end it.
+QString linkText(const QString &title)
+{
+    QString text = title;
+    return text.remove(QLatin1Char('[')).remove(QLatin1Char(']'));
+}
+
 // `![alt](matome:asset/<document>?version=<version>)`; the alt text is free.
 const QRegularExpression &assetLink()
 {
     static const QRegularExpression link(QStringLiteral(R"(\]\(matome:asset/(\d+)\?version=([0-9A-Fa-f-]{36})\))"));
     return link;
+}
+
+// Any file a document links: `](matome:asset/<document>?version=<version>)`
+// or `](matome:doc/<document>)`, the version optional for a document link.
+const QRegularExpression &fileLink()
+{
+    static const QRegularExpression link(QStringLiteral(R"(\]\(matome:(asset|doc)/(\d+)(?:\?version=([0-9A-Fa-f-]{36}))?\))"));
+    return link;
+}
+
+// What identifies a link among the references: its document, and its
+// version when it pins one.
+QString referenceKey(const QRegularExpressionMatch &match)
+{
+    return match.captured(2) + QLatin1Char('@') + match.captured(3);
 }
 
 // An image linked from anywhere else: `![alt](http…)`.
@@ -62,10 +87,6 @@ const QRegularExpression &externalImage()
     return image;
 }
 
-QString linkFor(const QString &documentId, const QString &versionId)
-{
-    return QStringLiteral("matome:asset/%1?version=%2").arg(documentId, versionId);
-}
 
 } // namespace
 
@@ -73,15 +94,34 @@ QJsonArray Assets::references(const QString &markdown)
 {
     QJsonArray list;
     QSet<QString> seen;
-    for (auto it = assetLink().globalMatch(markdown); it.hasNext();) {
+    for (auto it = fileLink().globalMatch(markdown); it.hasNext();) {
         const auto match = it.next();
-        if (seen.contains(match.captured(2)))
+        if (seen.contains(referenceKey(match)))
             continue;
-        seen.insert(match.captured(2));
-        list.append(QJsonObject{{QStringLiteral("document_id"), match.captured(1).toLongLong()},
-                                {QStringLiteral("version_id"), match.captured(2)}});
+        seen.insert(referenceKey(match));
+        QJsonObject reference{{QStringLiteral("document_id"), match.captured(2).toLongLong()}};
+        if (!match.captured(3).isEmpty())
+            reference.insert(QStringLiteral("version_id"), match.captured(3));
+        list.append(reference);
     }
     return list;
+}
+
+QString Assets::markdownLink(const QString &title, const QString &documentId, const QString &versionId, bool image)
+{
+    const QString text = linkText(title);
+    if (image)
+        return QStringLiteral("![%1](matome:asset/%2?version=%3)").arg(text, documentId, versionId);
+    return versionId.isEmpty() ? QStringLiteral("[%1](matome:doc/%2)").arg(text, documentId)
+                               : QStringLiteral("[%1](matome:doc/%2?version=%3)").arg(text, documentId, versionId);
+}
+
+QString Assets::pathLink(const QString &title, const QString &path)
+{
+    QStringList segments;
+    for (const QString &segment : path.split(QLatin1Char('/'), Qt::SkipEmptyParts))
+        segments.append(QString::fromLatin1(QUrl::toPercentEncoding(segment)));
+    return QStringLiteral("[%1](/%2)").arg(linkText(title), segments.join(QLatin1Char('/')));
 }
 
 QString Assets::render(const QString &markdown, const QString &orgId, const QString &spaceId,
@@ -108,10 +148,12 @@ QVariantMap Assets::referenceAt(const QString &markdown, int index) const
     const QJsonArray list = references(markdown);
     if (index < 0 || index >= list.size())
         return {};
-    const QString version = list.at(index).toObject().value(QStringLiteral("version_id")).toString();
-    for (auto it = assetLink().globalMatch(markdown); it.hasNext();) {
+    const QJsonObject wanted = list.at(index).toObject();
+    const QString key = QString::number(wanted.value(QStringLiteral("document_id")).toInteger()) + QLatin1Char('@')
+            + wanted.value(QStringLiteral("version_id")).toString();
+    for (auto it = fileLink().globalMatch(markdown); it.hasNext();) {
         const auto match = it.next();
-        if (match.captured(2) == version)
+        if (referenceKey(match) == key)
             return {{QStringLiteral("start"), match.capturedStart()}, {QStringLiteral("length"), match.capturedLength()}};
     }
     return {};
@@ -173,6 +215,97 @@ void Assets::pickImages()
 #endif
 }
 
+void Assets::search(const QString &text, const QString &folderId, const QString &excludeId)
+{
+    if (!m_session.inSpace())
+        return;
+    const int generation = m_generation;
+    const int search = ++m_searches;
+    const QString orgId = m_session.currentOrgId(), spaceId = m_session.currentSpaceId();
+    const QString path = contentPath(orgId, spaceId, QStringLiteral("documents?limit=25&q="))
+            + QString::fromLatin1(QUrl::toPercentEncoding(text.trimmed()));
+    m_backend.request("GET", path, {}, {}, [this, generation, search, text, folderId, excludeId, spaceId](const Client::Reply &reply) {
+        // Only the latest search answers: typing on overtakes the rest.
+        if (!live(generation) || search != m_searches) return;
+        const auto *folders = m_session.folders();
+        const QString space = m_session.spaces()->nameOf(spaceId);
+        QList<QVariantMap> files;
+        for (const auto &row : reply.json.value(QStringLiteral("documents")).toArray()) {
+            const auto document = row.toObject();
+            const QString id = jsonId(document.value(QStringLiteral("id")));
+            if (id.isEmpty() || id == excludeId) continue;
+            const auto version = document.value(QStringLiteral("current_version")).toObject();
+            const QString folder = jsonId(document.value(QStringLiteral("folder_id")));
+            const QString title = document.value(QStringLiteral("title")).toString();
+            const QStringList names = folders->namesTo(folder);
+            files.append({{QStringLiteral("documentId"), id},
+                          {QStringLiteral("versionId"), jsonId(version.value(QStringLiteral("id")))},
+                          {QStringLiteral("title"), title},
+                          {QStringLiteral("folderId"), folder},
+                          {QStringLiteral("place"), (QStringList{space} + names).join(QStringLiteral(" › "))},
+                          {QStringLiteral("path"), QLatin1Char('/') + (names + QStringList{title}).join(QLatin1Char('/'))},
+                          {QStringLiteral("image"), version.value(QStringLiteral("detected_content_type")).toString()
+                                                            .startsWith(QLatin1String("image/"))}});
+        }
+        const QString needle = text.trimmed();
+        std::stable_sort(files.begin(), files.end(), [&](const QVariantMap &a, const QVariantMap &b) {
+            const auto rank = [&](const QVariantMap &file) {
+                return (file.value(QStringLiteral("folderId")).toString() == folderId ? 0 : 2)
+                        + (file.value(QStringLiteral("title")).toString().startsWith(needle, Qt::CaseInsensitive) ? 0 : 1);
+            };
+            if (rank(a) != rank(b)) return rank(a) < rank(b);
+            return a.value(QStringLiteral("title")).toString().compare(b.value(QStringLiteral("title")).toString(),
+                                                                       Qt::CaseInsensitive) < 0;
+        });
+        QVariantList list;
+        for (const QVariantMap &file : std::as_const(files)) list.append(file);
+        emit found(text, list);
+    });
+}
+
+// Walks the folders the space lists down to the link's last folder, then
+// asks for the documents there titled like its last segment.
+void Assets::resolve(const QString &link)
+{
+    QStringList names;
+    for (const QString &segment : link.split(QLatin1Char('/'), Qt::SkipEmptyParts))
+        names.append(QUrl::fromPercentEncoding(segment.toUtf8()));
+    if (!m_session.inSpace() || !link.startsWith(QLatin1Char('/')) || names.isEmpty()) {
+        emit resolved(link, {});
+        return;
+    }
+    const QString title = names.takeLast();
+    const auto &all = m_session.folders()->all();
+    QString folderId;
+    for (const QString &name : std::as_const(names)) {
+        const auto row = std::find_if(all.begin(), all.end(), [&](const FolderRow &folder) {
+            return folder.parentId == folderId && folder.name == name;
+        });
+        if (row == all.end()) {
+            emit resolved(link, {});
+            return;
+        }
+        folderId = row->id;
+    }
+    const int generation = m_generation;
+    const QString path = contentPath(m_session.currentOrgId(), m_session.currentSpaceId(),
+                                     QStringLiteral("documents?limit=100&folder_id=%1&q=")
+                                             .arg(folderId.isEmpty() ? QStringLiteral("root") : folderId))
+            + QString::fromLatin1(QUrl::toPercentEncoding(title));
+    m_backend.request("GET", path, {}, {}, [this, generation, link, title](const Client::Reply &reply) {
+        if (!live(generation)) return;
+        QString documentId;
+        for (const auto &row : reply.json.value(QStringLiteral("documents")).toArray()) {
+            const auto document = row.toObject();
+            if (document.value(QStringLiteral("title")).toString() == title) {
+                documentId = jsonId(document.value(QStringLiteral("id")));
+                break;
+            }
+        }
+        emit resolved(link, documentId);
+    });
+}
+
 void Assets::clear()
 {
     if (m_uploads.isEmpty() && m_images.isEmpty() && m_folders.isEmpty() && m_pending.isEmpty())
@@ -203,7 +336,7 @@ void Assets::next()
             const auto document = row.toObject();
             const QString version = jsonId(document.value(QStringLiteral("current_version")).toObject().value(QStringLiteral("id")));
             if (!version.isEmpty()) {
-                finish(linkFor(jsonId(document.value(QStringLiteral("id"))), version), {});
+                finish(markdownLink(upload.name, jsonId(document.value(QStringLiteral("id"))), version, true), {});
                 return;
             }
         }
@@ -279,10 +412,10 @@ void Assets::store(const Upload &upload, const QString &folderId, const QString 
                          {{QStringLiteral("space_id"), upload.spaceId}, {QStringLiteral("document_id"), documentId},
                           {QStringLiteral("filename"), title}, {QStringLiteral("content_type"), rasterType(upload.bytes)}},
                          upload.bytes, [this, generation] { return live(generation); },
-                         [this, documentId](const Client::Reply &reply) {
+                         [this, documentId, title](const Client::Reply &reply) {
             const QString version = jsonId(reply.json.value(QStringLiteral("data")).toObject()
                                                    .value(QStringLiteral("version")).toObject().value(QStringLiteral("id")));
-            if (reply.ok && !version.isEmpty()) finish(linkFor(documentId, version), {});
+            if (reply.ok && !version.isEmpty()) finish(markdownLink(title, documentId, version, true), {});
             else finish({}, reply.ok ? QStringLiteral("invalid_request") : failCode(reply));
         });
     });

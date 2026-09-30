@@ -48,6 +48,13 @@ public:
     Q_INVOKABLE void uploadUrls(const QList<QUrl> &urls);
     /// Opens the platform's picker for images to upload.
     Q_INVOKABLE void pickImages();
+    /// Looks up the open space's documents whose title holds `text`, to link
+    /// from the document `excludeId` in `folderId`: its folder's files come
+    /// first, then titles that start with `text`. `found` answers.
+    Q_INVOKABLE void search(const QString &text, const QString &folderId, const QString &excludeId);
+    /// Finds the document of the open space at a path link's `link`;
+    /// `resolved` answers.
+    Q_INVOKABLE void resolve(const QString &link);
     /// Drops queued uploads and cached images (sign-out, another space).
     void clear();
     void fetch(const Target &target, Fetched done);
@@ -60,6 +67,14 @@ public:
     /// remote images become a line naming them unless `external`.
     Q_INVOKABLE QString render(const QString &markdown, const QString &orgId, const QString &spaceId,
                                const QString &viaVersionId, int width, bool external) const;
+    /// The Markdown that links a file of the space: an embedded `image`
+    /// pinned at `versionId`, or a link to a document, pinned when
+    /// `versionId` is set and following its current version otherwise.
+    Q_INVOKABLE static QString markdownLink(const QString &title, const QString &documentId,
+                                            const QString &versionId, bool image);
+    /// The Markdown that links a file of the space by its `path` from the
+    /// space root: plain Markdown, no reference Core keeps.
+    Q_INVOKABLE static QString pathLink(const QString &title, const QString &path);
     /// The image provider source of one pinned image, signed through
     /// `viaVersionId` (empty: a draft no version pins) and no wider than `width`.
     Q_INVOKABLE static QString source(const QString &orgId, const QString &spaceId, const QString &viaVersionId,
@@ -74,9 +89,15 @@ signals:
     void changed();
     /// An upload took `token`; the editor shows a placeholder for it.
     void queued(const QString &token, const QString &name);
-    /// The image is stored: `link` is the Markdown target to write.
-    void uploaded(const QString &token, const QString &link);
+    /// The image is stored: `markdown` embeds it where the placeholder was.
+    void uploaded(const QString &token, const QString &markdown);
     void failed(const QString &token, const QString &code);
+    /// The files matching `text`, each `{documentId, versionId, title,
+    /// place, path, image}`; `place` names its folder path, `path` is the
+    /// file's own from the space root.
+    void found(const QString &text, const QVariantList &files);
+    /// The document at `link`, empty when the space has none there.
+    void resolved(const QString &link, const QString &documentId);
     /// The desktop and Android picker lives in QML.
     void promptPick();
 
@@ -105,6 +126,7 @@ private:
     AddOnBackend &m_backend;
     int m_generation = 0;
     int m_tokens = 0;
+    int m_searches = 0;
     QQueue<Upload> m_uploads;
     QHash<QString, QString> m_folders;
     QHash<QString, QByteArray> m_images;

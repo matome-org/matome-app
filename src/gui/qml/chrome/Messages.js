@@ -206,24 +206,30 @@ function controlledFailure(code) {
     case "forbidden": return qsTr("You do not have permission for this document, review, or space operation.")
     case "not_found": return qsTr("This document, review, or rule is no longer available to you. Refresh the current space.")
     case "controlled_docs_unavailable": return qsTr("Document control is unavailable. Refresh after the administrator resumes the add-on or restores access.")
-    case "review_open": return qsTr("An open review blocks this operation. Resolve or cancel it first.")
     case "review_closed": return qsTr("This review was already decided. Refresh to see the result.")
     case "stale_base": return qsTr("The published version changed. Refresh before proposing or deciding again.")
     case "stale_rule": return qsTr("The space rule changed. Refresh before deciding again.")
     case "revision_conflict": return qsTr("The document, rule, or review changed. Refresh and inspect the current state before trying again.")
     case "revision_required": return qsTr("Refresh to obtain the current revision before saving.")
-    case "reason_required":
-    case "invalid_reason": return qsTr("Enter a reason of up to 500 characters.")
-    case "invalid_markdown":
-    case "unsupported_media_type":
-    case "invalid_encoding":
-    case "invalid_media_type":
-    case "media_too_large": return qsTr("Use a published .md file with valid UTF-8 Markdown, no NUL characters, and at most 1 MiB.")
     case "published_version_required": return qsTr("Upload and publish a Markdown version before enabling document control.")
     case "diff_too_large": return qsTr("This diff exceeds the server limit. Download the candidate to inspect it.")
     case "candidate_unavailable": return qsTr("The candidate is unavailable. Refresh this review.")
     case "invalid_comment": return qsTr("Use a decision comment of at most 2,000 characters without NUL characters.")
     case "incompatible_publication_subscriptions": return qsTr("Pause incompatible readiness automations or processing subscriptions before enabling control.")
+    default: return documentFailure(code)
+    }
+}
+
+function documentFailure(code) {
+    switch (code) {
+    case "invalid_markdown":
+    case "invalid_encoding": return qsTr("This file is not valid UTF-8 text, so it cannot be shown or edited here.")
+    case "unsupported_media_type":
+    case "invalid_media_type":
+    case "media_too_large": return qsTr("A managed document must stay valid UTF-8 Markdown of at most 1 MiB.")
+    case "review_open": return qsTr("A review of this document is open. Decide or cancel it before submitting more changes.")
+    case "reason_required":
+    case "invalid_reason": return qsTr("Enter a reason of up to 500 characters.")
     case "invalid_references":
     case "invalid_reference_path": return qsTr("The selected image link is malformed. Remove it or insert the image again.")
     case "reference_not_found": return qsTr("The selected image was removed or its version is no longer published. Insert it again.")
@@ -233,6 +239,14 @@ function controlledFailure(code) {
     case "too_many_references": return qsTr("A document can link at most 200 images and files.")
     case "reference_mode_not_allowed": return qsTr("This space requires links that pin a version. Insert the selected image again.")
     default: return adminFailure(code)
+    }
+}
+
+function documentNotice(code) {
+    switch (code) {
+    case "version_published": return qsTr("New version saved.")
+    case "review_requested": return qsTr("Changes submitted for review. The published version stays available until approval.")
+    default: return controlledNotice(code)
     }
 }
 
@@ -253,13 +267,12 @@ function controlledNotice(code) {
     case "rule_removed": return qsTr("Space rule removed. Existing document gates remain.")
     case "control_enabled": return qsTr("Document control enabled.")
     case "control_removed": return qsTr("Document control removed. Open reviews were cancelled.")
-    case "review_requested": return qsTr("Proposal submitted for review. The published version remains available.")
-    case "version_published": return qsTr("The server published this version.")
     case "review_approve": return qsTr("Proposal approved and published.")
     case "review_reject": return qsTr("Proposal rejected. The published version remains available.")
     case "review_cancel": return qsTr("Review cancelled. The published version remains available.")
     case "access_saved": return qsTr("Space access granted.")
     case "access_removed": return qsTr("Space access grant revoked.")
+    case "roles_added": return qsTr("Review roles added. Grant them under Access.")
     default: return ""
     }
 }

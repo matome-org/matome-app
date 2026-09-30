@@ -4,6 +4,7 @@ import QtQuick
 import matome
 import "screens"
 import "explorer"
+import "documents"
 import "chrome"
 import "chrome/Commands.js" as Commands
 
@@ -20,7 +21,7 @@ Window {
     onActiveChanged: if (win.active) {
         Session.refreshOrganizations()
         Session.addOns.refresh()
-        if (Session.controlledDocs.active) Session.controlledDocs.refresh()
+        if (Session.documentView.active) Session.runCommand("refresh")
     }
 
     readonly property bool inField: {
@@ -29,8 +30,8 @@ Window {
     }
 
     function restoreFocus() {
-        if (controlledScreen.visible)
-            controlledScreen.focusDefault()
+        if (documentScreen.visible)
+            documentScreen.focusDefault()
         else if (settingsScreen.visible)
             settingsScreen.focusDefault()
         else if (explorer.visible)
@@ -65,8 +66,8 @@ Window {
         focus: true
 
         Keys.onPressed: function (event) {
-            if (event.key === Qt.Key_Escape && controlledScreen.visible) {
-                controlledScreen.dismiss()
+            if (event.key === Qt.Key_Escape && documentScreen.visible) {
+                documentScreen.dismiss()
                 event.accepted = true
             } else if (event.key === Qt.Key_Escape && settingsScreen.visible) {
                 settingsScreen.dismiss()
@@ -100,7 +101,7 @@ Window {
             id: explorer
             objectName: "explorer"
             anchors.fill: parent
-            visible: Session.signedIn && !Session.settingsActive && !Session.controlledDocs.active
+            visible: Session.signedIn && !Session.settingsActive && !Session.documentView.active
             enabled: explorer.visible
             onCommandChosen: function (id) { win.perform(id) }
         }
@@ -115,11 +116,11 @@ Window {
             onVisibleChanged: if (!settingsScreen.visible && explorer.visible) explorer.focusDefault()
         }
 
-        ControlledDocuments {
-            id: controlledScreen
-            objectName: "controlledDocumentsScreen"
+        DocumentScreen {
+            id: documentScreen
+            objectName: "documentScreen"
             anchors.fill: parent
-            visible: Session.signedIn && Session.controlledDocs.active
+            visible: Session.signedIn && !Session.settingsActive && Session.documentView.active
             enabled: visible
             onVisibleChanged: if (!visible && explorer.visible) explorer.focusDefault()
         }

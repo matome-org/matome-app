@@ -21,11 +21,13 @@ FocusScope {
     readonly property string sectionError: settings.section === "general" ? Session.orgAdmin.generalError
                                           : settings.section === "members" ? Session.orgAdmin.membersError
                                           : settings.section === "invitations" ? Session.orgAdmin.invitationsError
-                                          : settings.section === "usage" ? Session.orgBilling.usageError : ""
+                                          : settings.section === "usage" ? Session.orgBilling.usageError
+                                          : settings.section === "spaces" ? Session.spaceAccess.errorCode : ""
     readonly property var sections: [
         { value: "general", label: qsTr("General"), icon: "settings" },
         { value: "members", label: qsTr("Members"), icon: "user" },
         { value: "invitations", label: qsTr("Invitations"), icon: "new" },
+        { value: "spaces", label: qsTr("Spaces"), icon: "space" },
         { value: "usage", label: qsTr("Usage"), icon: "space", billing: true },
         { value: "billing", label: qsTr("Plan and billing"), icon: "settings", billing: true },
         { value: "addons", label: qsTr("Add-ons"), icon: "new", billing: true }
@@ -64,20 +66,36 @@ FocusScope {
             roleDialog.close()
         else if (inviteDialog.visible)
             inviteDialog.close()
+        else if (grantDialog.visible)
+            grantDialog.close()
         else
             Session.closeSettings()
     }
     function ask(action, id, email) {
         settings.targetId = id
         settings.targetAction = action
-        confirm.title = action === "remove" ? qsTr("Remove %1?").arg(email) : qsTr("Cancel invitation for %1?").arg(email)
+        confirm.title = action === "remove" ? qsTr("Remove %1?").arg(email)
+                      : action === "cancel" ? qsTr("Cancel invitation for %1?").arg(email)
+                      : action === "revoke" ? qsTr("Revoke this access grant?")
+                      : qsTr("Remove this space rule?")
         confirm.detail = action === "remove" ? qsTr("This person will lose access to the organization.")
-                                             : qsTr("The invitation link will stop working.")
-        confirm.action = action === "remove" ? qsTr("Remove") : qsTr("Cancel invitation")
+                       : action === "cancel" ? qsTr("The invitation link will stop working.")
+                       : action === "revoke" ? qsTr("%1 loses what this role allows in the space. Access from other grants is preserved.").arg(email)
+                       : qsTr("Existing controlled documents will remain blocked until the rule is reactivated or their control is removed.")
+        confirm.reasonLabel = action === "remove-rule" ? qsTr("Reason for removing the space rule") : ""
+        confirm.action = action === "remove" ? qsTr("Remove")
+                       : action === "cancel" ? qsTr("Cancel invitation")
+                       : action === "revoke" ? qsTr("Revoke") : qsTr("Remove rule")
         confirm.open()
+    }
+    // Space settings follow the space picked in the Spaces section.
+    function openSpace(id) {
+        Session.spaceAccess.open(id)
+        Session.controlledRule.open(id)
     }
     function closeDialogs() {
         confirm.close()
+        grantDialog.close()
         renameDialog.close()
         roleDialog.close()
         inviteDialog.close()
@@ -97,9 +115,18 @@ FocusScope {
     } else {
         navigationDrawer.close()
         settings.closeDialogs()
+        Session.spaceAccess.close()
+        Session.controlledRule.close()
     }
 
     onNarrowChanged: if (!settings.narrow) navigationDrawer.close()
+    onSectionChanged: if (settings.section === "spaces") {
+        if (spacePicker.currentValue)
+            settings.openSpace(spacePicker.currentValue)
+    } else {
+        Session.spaceAccess.close()
+        Session.controlledRule.close()
+    }
 
     Connections {
         target: Session.orgAdmin
@@ -109,6 +136,11 @@ FocusScope {
                 settings.closeDialogs()
             }
         }
+    }
+
+    Connections {
+        target: Session.controlledRule
+        function onAccessChanged() { Session.spaceAccess.refresh() }
     }
 
     Connections {
@@ -319,6 +351,75 @@ FocusScope {
                     }
 
                     ActionButton {
+                        visible: settings.section === "spaces" && Session.controlledRule.rolesMissing
+                        text: qsTr("Add review roles")
+                        icon: "new"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.controlledRule.busy
+                        onActivated: Session.controlledRule.addRoles()
+                    }
+                    ActionButton {
+                        visible: settings.section === "spaces" && Session.controlledRule.readable
+                        text: Session.controlledRule.rule.require_version_references === true
+                              ? qsTr("Let links follow new versions") : qsTr("Require pinned versions")
+                        icon: "image"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.controlledRule.busy && Session.controlledRule.rule.id !== undefined
+                        onActivated: Session.controlledRule.save(Session.controlledRule.rule.active === true,
+                                                                 Session.controlledRule.rule.require_version_references !== true)
+                    }
+                    ActionButton {
+                        visible: settings.section === "spaces" && Session.controlledRule.readable && Session.controlledRule.rule.id !== undefined
+                        text: qsTr("Remove space rule")
+                        icon: "trash"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.controlledRule.busy
+                        onActivated: settings.ask("remove-rule", "", "")
+                    }
+                    ActionButton {
+                        visible: settings.section === "spaces" && Session.controlledRule.readable
+                        text: Session.controlledRule.rule.active === true ? qsTr("Pause space rule") : qsTr("Activate space rule")
+                        icon: Session.controlledRule.rule.active === true ? "pause" : "check"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.controlledRule.busy
+                        onActivated: Session.controlledRule.save(Session.controlledRule.rule.active !== true,
+                                                                 Session.controlledRule.rule.require_version_references === true)
+                    }
+                    ActionButton {
+                        visible: settings.section === "spaces" && Session.controlledRule.canGrantSelf
+                        text: qsTr("Grant me management access")
+                        icon: "user"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.controlledRule.busy
+                        onActivated: Session.controlledRule.grantSelf()
+                    }
+                    BarRule { visible: settings.section === "spaces" && Session.controlledRule.installed }
+                    ActionButton {
+                        objectName: "revokeSpaceAccessButton"
+                        visible: settings.section === "spaces"
+                        text: qsTr("Revoke access")
+                        icon: "close"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.spaceAccess.busy && grants.currentGrant !== null
+                        onActivated: settings.ask("revoke", grants.currentGrant.id, grants.currentGrant.email || qsTr("This group"))
+                    }
+                    ActionButton {
+                        objectName: "grantSpaceAccessButton"
+                        visible: settings.section === "spaces"
+                        text: qsTr("Grant access")
+                        icon: "new"
+                        primary: true
+                        usable: Session.spaceAccess.active && !Session.spaceAccess.busy && Session.spaceAccess.roles.length > 0
+                        onActivated: grantDialog.open()
+                    }
+
+                    ActionButton {
                         objectName: "openBillingPortalButton"
                         visible: settings.section === "billing" && Session.orgBilling.paymentUrl !== ""
                         text: Session.orgBilling.notice === "checkout" ? qsTr("Continue to checkout") : qsTr("Open Stripe portal")
@@ -392,6 +493,17 @@ FocusScope {
                     objectName: "orgAdminError"
                     visible: (settings.organizationSection && !settings.commerceSection && Session.orgAdmin.errorCode !== "") || settings.sectionError !== ""
                     text: Messages.adminFailure((settings.organizationSection && !settings.commerceSection ? Session.orgAdmin.errorCode : "") || settings.sectionError)
+                    color: Theme.failed
+                    Accessible.role: Accessible.AlertMessage
+                }
+                Label {
+                    visible: settings.section === "spaces" && (Session.spaceAccess.notice !== "" || Session.controlledRule.notice !== "")
+                    text: Messages.controlledNotice(Session.controlledRule.notice || Session.spaceAccess.notice)
+                    color: Theme.accentText
+                }
+                Label {
+                    visible: settings.section === "spaces" && Session.controlledRule.errorCode !== ""
+                    text: Messages.controlledFailure(Session.controlledRule.errorCode)
                     color: Theme.failed
                     Accessible.role: Accessible.AlertMessage
                 }
@@ -491,6 +603,89 @@ FocusScope {
                              && ((settings.section === "members" && members.count === 0)
                                  || (settings.section === "invitations" && invitations.count === 0))
                     text: settings.section === "members" ? qsTr("No members to display.") : qsTr("No invitations yet. Use Invite member to send one.")
+                }
+
+                Page {
+                    objectName: "spacesPage"
+                    visible: settings.section === "spaces"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Label { text: qsTr("Who may do what in a space, and the add-ons that work there. Pick the space to manage.") }
+                    Picker {
+                        id: spacePicker
+                        objectName: "spacePicker"
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: Theme.column * 2
+                        model: Session.spaceAccess.spaces
+                        value: Session.currentSpaceId !== "" ? Session.currentSpaceId : (Session.spaceAccess.spaces[0]?.value ?? "")
+                        Accessible.name: qsTr("Space")
+                        onCurrentValueChanged: if (settings.section === "spaces" && spacePicker.currentValue)
+                            settings.openSpace(spacePicker.currentValue)
+                    }
+                    Caption { Layout.fillWidth: true; Layout.topMargin: Theme.gapM; text: qsTr("Access") }
+                    Label {
+                        visible: Session.spaceAccess.active && !Session.spaceAccess.busy && grants.count === 0
+                        text: qsTr("Nobody has a role in this space yet. Organization owners and administrators still manage it.")
+                    }
+                    CursorList {
+                        id: grants
+                        readonly property var currentGrant: grants.currentIndex >= 0 ? Session.spaceAccess.grants[grants.currentIndex] ?? null : null
+                        objectName: "spaceGrantList"
+                        visible: grants.count > 0
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: grants.contentHeight
+                        interactive: false
+                        activeFocusOnTab: true
+                        spacing: Theme.gapS
+                        rowHeight: settings.narrow ? Theme.rowTouch : Theme.controlM
+                        model: Session.spaceAccess.grants
+                        Accessible.role: Accessible.List
+                        Accessible.name: qsTr("Access")
+                        delegate: ListRow {
+                            id: grantRow
+                            required property var modelData
+                            required property int index
+                            view: grants
+                            touch: settings.narrow
+                            cursor: grants.currentIndex === grantRow.index
+                            selected: grantRow.cursor
+                            title: grantRow.modelData.email || qsTr("Group")
+                            detail: grantRow.modelData.roleName
+                            onClicked: grants.currentIndex = grantRow.index
+                            onActivated: grants.currentIndex = grantRow.index
+                        }
+                    }
+                    Card {
+                        objectName: "controlledSpaceCard"
+                        visible: Session.controlledRule.installed
+                        Layout.topMargin: Theme.gapM
+                        Caption { Layout.fillWidth: true; text: qsTr("Controlled documents") }
+                        Text {
+                            Layout.fillWidth: true
+                            text: Session.controlledRule.canGrantSelf || Session.controlledRule.ruleError === "forbidden"
+                                  ? qsTr("You need management access")
+                                  : Session.controlledRule.rule.active === true ? qsTr("Space rule active") : qsTr("Space rule inactive or absent")
+                            font: Theme.heading
+                            color: Theme.textPrimary
+                            wrapMode: Text.Wrap
+                        }
+                        Label {
+                            visible: Session.controlledRule.ruleError === "forbidden"
+                            text: Session.controlledRule.canGrantSelf
+                                  ? qsTr("Organization administrators manage document control only through an explicit grant: use Grant me management access above.")
+                                  : qsTr("Ask an organization administrator to grant you the Document control managers role here.")
+                        }
+                        Label {
+                            visible: Session.controlledRule.readable
+                            text: Session.controlledRule.rule.require_version_references === true
+                                  ? qsTr("Images and linked files must pin a version, so an approved document shows exactly what was reviewed.")
+                                  : qsTr("Images and linked files may follow later versions of their files.")
+                        }
+                        Label {
+                            visible: Session.controlledRule.rolesMissing
+                            text: qsTr("Add review roles to grant reviewer and manager access under Access.")
+                        }
+                    }
                 }
 
                 Page {
@@ -614,6 +809,31 @@ FocusScope {
         }
     }
 
+    Dialog {
+        id: grantDialog
+        objectName: "grantSpaceAccessDialog"
+        anchors.fill: parent
+        title: qsTr("Grant access to %1").arg(spacePicker.currentText)
+        action: qsTr("Grant")
+        ready: grantMember.currentIndex >= 0 && grantRole.currentIndex >= 0
+        initialFocus: grantMember
+        onAccepted: Session.spaceAccess.grant(grantMember.currentValue, grantRole.currentValue)
+        Label { text: qsTr("Member") }
+        Picker {
+            id: grantMember
+            Layout.fillWidth: true
+            model: Session.spaceAccess.members
+            Accessible.name: qsTr("Member")
+        }
+        Label { text: qsTr("Role in this space") }
+        Picker {
+            id: grantRole
+            Layout.fillWidth: true
+            model: Session.spaceAccess.roles
+            Accessible.name: qsTr("Role in this space")
+        }
+    }
+
     Confirm {
         id: confirm
         objectName: "orgAdminConfirm"
@@ -621,8 +841,12 @@ FocusScope {
         onAccepted: {
             if (settings.targetAction === "remove")
                 Session.orgAdmin.removeMember(settings.targetId)
-            else
+            else if (settings.targetAction === "cancel")
                 Session.orgAdmin.cancelInvitation(settings.targetId)
+            else if (settings.targetAction === "revoke")
+                Session.spaceAccess.revoke(settings.targetId)
+            else
+                Session.controlledRule.remove(confirm.reason)
         }
         onVisibleChanged: if (!confirm.visible && settings.visible) settings.focusDefault()
     }

@@ -17,7 +17,6 @@ CommandBar {
 
     BarRule { visible: toolbar.files }
     CommandButton { commandId: "upload"; visible: toolbar.files; showLabel: false }
-    CommandButton { commandId: "controlled-docs"; visible: toolbar.files }
     CommandButton { commandId: "download"; visible: toolbar.files; showLabel: false }
     CommandButton { commandId: "rename"; visible: toolbar.files; showLabel: false }
     CommandButton { commandId: "trash"; visible: toolbar.files; showLabel: false }

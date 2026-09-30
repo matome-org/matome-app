@@ -197,8 +197,8 @@ FocusScope {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     touch: explorer.touch
-                    onMenuRequested: function (ids, item, x, y) {
-                        menu.show(ids, item, x, y, list.listView)
+                    onMenuRequested: function (groups, item, x, y) {
+                        menu.show(groups, item, x, y, list.listView)
                     }
                 }
             }
@@ -216,7 +216,7 @@ FocusScope {
                 icon: "new"
                 text: qsTr("New or upload")
                 showLabel: false
-                onActivated: menu.show(["new", "upload", "controlled-docs", "paste"], fab, 0, 0, list.listView)
+                onActivated: menu.show([{ title: "", ids: ["new", "upload", "paste"] }], fab, 0, 0, list.listView)
             }
 
             Rectangle {
@@ -239,8 +239,11 @@ FocusScope {
             touch: explorer.touch
             errorText: Session.entryCount > 0 ? list.errorText : ""
             onAccountMenuRequested: function (item) {
-                menu.show(["settings", "theme-light", "theme-dark", "theme-system"]
-                          .concat(Commands.languageIds(Theme.languages), ["keymap", "sheet", "sign-out"]),
+                menu.show([{ title: Session.email, ids: ["settings"] },
+                           { title: qsTr("Theme"), ids: ["theme-light", "theme-dark", "theme-system"] },
+                           { title: qsTr("Language"), ids: Commands.languageIds(Theme.languages) },
+                           { title: qsTr("Keyboard"), ids: ["keymap", "sheet"] },
+                           { title: "", ids: ["sign-out"] }],
                           item, 0, 0, item)
             }
         }

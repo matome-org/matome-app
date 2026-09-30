@@ -41,6 +41,8 @@ public:
     const QVector<FolderRow> &all() const { return m_all; }
     QVector<FolderRow> path() const;
     QString nameOf(const QString &folderId) const;
+    /// The names from the space root down to `folderId`, as far as they are known.
+    QStringList namesTo(const QString &folderId) const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role) const override;

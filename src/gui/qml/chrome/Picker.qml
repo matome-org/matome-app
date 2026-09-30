@@ -33,6 +33,8 @@ C.ComboBox {
     palette.window: Theme.surface
     palette.highlight: Theme.accentSoft
     palette.highlightedText: Theme.textPrimary
+    palette.light: Theme.accentSoft
+    palette.midlight: Theme.subtleFillStrong
 
     background: Rectangle {
         color: Theme.surface

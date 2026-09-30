@@ -11,16 +11,36 @@ ListView {
     id: view
 
     property real rowHeight: Theme.rowDense
+    // Whether the cursor may rest on row `index`; every row when unset.
+    property var selectable: null
 
     // The cursor moved by key or by `moveCursor`.
     signal moved()
     // Menu or Shift+F10 on the list or the row under the cursor.
     signal menuRequested()
 
+    function rests(index) {
+        return view.selectable === null || view.selectable(index)
+    }
+
+    // Puts the cursor on `index`, or on the nearest row past it (in the
+    // direction it moves) where the cursor may rest.
     function moveCursor(index) {
         if (view.count === 0)
             return
-        view.currentIndex = Math.max(0, Math.min(view.count - 1, index))
+        const target = Math.max(0, Math.min(view.count - 1, index))
+        const step = target < view.currentIndex ? -1 : 1
+        let at = target
+        while (at >= 0 && at < view.count && !view.rests(at))
+            at += step
+        if (at < 0 || at >= view.count) {
+            at = target
+            while (at >= 0 && at < view.count && !view.rests(at))
+                at -= step
+        }
+        if (at < 0 || at >= view.count)
+            return
+        view.currentIndex = at
         view.moved()
     }
 

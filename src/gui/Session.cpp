@@ -23,7 +23,10 @@ Session::Session(QObject *parent, AddOnBackend *backend)
     , m_coreAddOnBackend(*this)
     , m_addOns(backend ? *backend : m_coreAddOnBackend, this)
     , m_assets(*this, m_addOns.backend())
-    , m_controlledDocs(*this)
+    , m_documentView(*this, m_addOns.backend())
+    , m_controlledDocs(*this, m_documentView)
+    , m_spaceAccess(*this, m_addOns.backend())
+    , m_controlledRule(*this)
     , m_orgs(*this)
     , m_orgAdmin(*this)
     , m_orgBilling(*this)
@@ -74,6 +77,9 @@ Session::Session(QObject *parent, AddOnBackend *backend)
     // Commands follow the screen shown and the review in hand, not only the location.
     connect(this, &Session::changed, this, &Session::commandsChanged);
     connect(this, &Session::settingsChanged, this, &Session::commandsChanged);
+    connect(&m_documentView, &DocumentView::changed, this, &Session::commandsChanged);
+    // Space settings list the organization's spaces.
+    connect(&m_spaces, &SpaceModel::changed, &m_spaceAccess, &SpaceAccess::changed);
     connect(&m_controlledDocs, &ControlledDocs::changed, this, &Session::commandsChanged);
     connect(&m_documents, &DocumentModel::downloadReady, this, &Session::downloadReady);
     connect(&m_documents, &DocumentModel::trashed, this, [this](const QString &id, int revision) {
@@ -237,11 +243,16 @@ QVariantList Session::buildTrail() const
     return crumbs;
 }
 
+void Session::selectDocument(const QString &id)
+{
+    m_documents.select(id);
+}
+
 void Session::openEntry(const QString &kind, const QString &id)
 {
     if (kind == QLatin1String("document")) {
         m_documents.select(id);
-        if (m_documents.controlledOf(id)) m_controlledDocs.open(id);
+        m_documentView.open(id);
     } else
         navigate(kind, id);
 }

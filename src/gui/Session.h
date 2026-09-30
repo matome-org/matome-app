@@ -11,7 +11,10 @@
 #include "SpaceModel.h"
 #include "addons/AddOnManager.h"
 #include "controlled_docs/ControlledDocs.h"
+#include "controlled_docs/ControlledRule.h"
+#include "documents/DocumentView.h"
 #include "references/Assets.h"
+#include "spaces/SpaceAccess.h"
 
 #include <QAbstractListModel>
 #include <QJsonArray>
@@ -51,6 +54,9 @@ class Session : public QObject
     Q_PROPERTY(matome::OrgBilling *orgBilling READ orgBilling CONSTANT)
     Q_PROPERTY(matome::AddOnManager *addOns READ addOns CONSTANT)
     Q_PROPERTY(matome::Assets *assets READ assets CONSTANT)
+    Q_PROPERTY(matome::DocumentView *documentView READ documentView CONSTANT)
+    Q_PROPERTY(matome::SpaceAccess *spaceAccess READ spaceAccess CONSTANT)
+    Q_PROPERTY(matome::ControlledRule *controlledRule READ controlledRule CONSTANT)
     Q_PROPERTY(matome::ControlledDocs *controlledDocs READ controlledDocs CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
@@ -103,6 +109,9 @@ public:
     OrgBilling *orgBilling() { return &m_orgBilling; }
     AddOnManager *addOns() { return &m_addOns; }
     Assets *assets() { return &m_assets; }
+    DocumentView *documentView() { return &m_documentView; }
+    SpaceAccess *spaceAccess() { return &m_spaceAccess; }
+    ControlledRule *controlledRule() { return &m_controlledRule; }
     ControlledDocs *controlledDocs() { return &m_controlledDocs; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }
@@ -172,6 +181,8 @@ public:
     /// Files go one at a time; one that fails is reported and the rest go on.
     void upload(const QString &name, const QByteArray &bytes);
     Q_INVOKABLE void openEntry(const QString &kind, const QString &id);
+    /// Marks the document under the explorer's cursor, without opening it.
+    Q_INVOKABLE void selectDocument(const QString &id);
     Q_INVOKABLE void navigate(const QString &kind, const QString &id);
     Q_INVOKABLE void createHere(const QString &name);
     Q_INVOKABLE void toggleFolder(const QString &folderId);
@@ -330,7 +341,10 @@ private:
     CoreAddOnBackend m_coreAddOnBackend;
     AddOnManager m_addOns;
     Assets m_assets;
+    DocumentView m_documentView;
     ControlledDocs m_controlledDocs;
+    SpaceAccess m_spaceAccess;
+    ControlledRule m_controlledRule;
     OrgModel m_orgs;
     OrgAdmin m_orgAdmin;
     OrgBilling m_orgBilling;

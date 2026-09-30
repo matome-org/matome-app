@@ -51,7 +51,6 @@
         <file>qml/screens/Auth.qml</file>
         <file>qml/screens/Settings.qml</file>
         <file>qml/screens/OrgCommerce.qml</file>
-        <file>qml/screens/ControlledDocuments.qml</file>
         <file>qml/screens/OrgAdminPeople.qml</file>
         <file>qml/chrome/RolePicker.qml</file>
         <file>qml/chrome/Card.qml</file>
@@ -69,5 +68,14 @@
         <file>qml/chrome/SectionHead.qml</file>
         <file>qml/chrome/Tile.qml</file>
         <file>qml/chrome/TileGrid.qml</file>
+        <file>qml/chrome/ViewTab.qml</file>
+        <file>qml/documents/DocumentScreen.qml</file>
+        <file>qml/documents/DiffView.qml</file>
+        <file>qml/documents/MarkdownEditor.qml</file>
+        <file>qml/documents/MarkdownView.qml</file>
+        <file>qml/documents/PinnedImage.qml</file>
+        <file>qml/documents/LinkSuggestions.qml</file>
+        <file>qml/controlled_docs/ReviewList.qml</file>
+        <file>qml/controlled_docs/ReviewPage.qml</file>
     </qresource>
 </RCC>
