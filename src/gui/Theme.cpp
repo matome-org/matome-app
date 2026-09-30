@@ -165,7 +165,8 @@ Theme::Palette blend(const Theme::Palette &from, const Theme::Palette &to, qreal
             mix(from.textMuted, to.textMuted, amount),
             mix(from.subtleFill, to.subtleFill, amount),
             mix(from.subtleFillStrong, to.subtleFillStrong, amount),
-            mix(from.failed, to.failed, amount)};
+            mix(from.failed, to.failed, amount),
+            mix(from.added, to.added, amount)};
 }
 
 constexpr char kLanguageKey[] = "theme/language";
@@ -420,6 +421,7 @@ void Theme::applyEvaLight()
     p.subtleFill = mix(p.background, p.textPrimary, 0.08);
     p.subtleFillStrong = mix(p.background, p.textPrimary, 0.14);
     p.failed = QColor(0xB2, 0x3A, 0x2E);
+    p.added = QColor(0x2F, 0x7D, 0x4A);
 }
 
 void Theme::applyEvaDark()
@@ -440,6 +442,7 @@ void Theme::applyEvaDark()
     p.subtleFill = mix(p.background, p.textPrimary, 0.10);
     p.subtleFillStrong = mix(p.background, p.textPrimary, 0.16);
     p.failed = QColor(0xFF, 0x6B, 0x75);
+    p.added = QColor(0x7B, 0xD8, 0x8F);
 }
 
 void Theme::applyOmarchy(const QHash<QString, QString> &values)
@@ -479,6 +482,9 @@ void Theme::applyOmarchy(const QHash<QString, QString> &values)
 
     const QColor evaFailed = m_dark ? QColor(0xFF, 0x6B, 0x75) : QColor(0xB2, 0x3A, 0x2E);
     p.failed = contrast(omUrgent, p.background) >= kReadableContrast ? omUrgent : evaFailed;
+    const QColor omGreen = colourOr(values, QStringLiteral("green"), QColor(0x7B, 0xD8, 0x8F));
+    const QColor evaAdded = m_dark ? QColor(0x7B, 0xD8, 0x8F) : QColor(0x2F, 0x7D, 0x4A);
+    p.added = contrast(omGreen, p.background) >= kReadableContrast ? omGreen : evaAdded;
 }
 
 QString Theme::resolveLanguage(const QString &saved, const QStringList &preferred)
@@ -579,6 +585,13 @@ QFont Theme::body() const
 QFont Theme::bodyLarge() const
 {
     return font(sans(), 16, QFont::Normal);
+}
+
+QFont Theme::mono() const
+{
+    QFont made = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    made.setPixelSize(13);
+    return made;
 }
 
 QFont Theme::button() const
