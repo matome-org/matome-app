@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/matome-org/matome-app/compare/v0.6.0...v0.7.0) (2026-09-30)
+
+
+### Features
+
+* **documents:** open every document in a view screen ([#58](https://github.com/matome-org/matome-app/issues/58)) ([7799712](https://github.com/matome-org/matome-app/commit/779971232be70b9abf7a45fd1b816c9606eaedc4))
+
 ## [0.6.0](https://github.com/matome-org/matome-app/compare/v0.5.0...v0.6.0) (2026-09-29)
 
 
