@@ -2872,11 +2872,13 @@ void TestCore::orgAdminClosesWhenAdminAccessIsLost()
     admin->changeRole(id, QStringLiteral("member"));
     QTRY_VERIFY(!admin->active());
     QVERIFY(!admin->available());
-    QVERIFY(usable(session, QStringLiteral("settings")));
     QVERIFY(session.settingsActive());
+    QVERIFY(!usable(session, QStringLiteral("settings")));
     QCOMPARE(admin->members()->rowCount(), 0);
     admin->open();
     QVERIFY(!admin->active());
+    session.closeSettings();
+    QVERIFY(usable(session, QStringLiteral("settings")));
 }
 
 void TestCore::orgAdminRestrictsEntryAndPaginates()
