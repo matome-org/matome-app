@@ -8,29 +8,32 @@ document under control.
 
 ## Configure
 
-1. In Settings, expand the organization and select Add-ons. Install or resume
-   Controlled documents and select its spaces. No selection covers all spaces.
-2. Open a space and choose Document reviews in the toolbar or command sheet.
-   On a phone, the floating menu includes the command.
-3. In Control, use Review access for this space to grant management access
-   explicitly, including to an organization administrator who needs it.
-   The profile grants `space.controlled_docs_manage`,
-   `document.controlled_docs_manage` and `document.review_read`.
-4. Activate the space rule. Existing incompatible readiness automations and
-   trusted processing subscriptions must be paused or configured for publication
-   before Core accepts the rule.
-5. Upload a `.md` document. The app labels it `text/markdown`. The explorer
-   shows "Not managed" beside it. Choose "Manage document" in that document's
-   menu, then use the Control tab to opt it in. The row changes to "Managed".
-   "Unmanage document" in the same menu opens the Control tab to request a
-   reason and confirm opt-out. Core requires a published
-   Markdown version, valid UTF-8 without NUL characters, of at most 1 MiB.
-6. Grant reviewer access to another member of the organization. This profile
-   grants `document.review_read` and `document.approve` for the space. Use normal
-   space membership or resource grants to provide their explorer visibility.
+1. In Settings, expand the organization and select Add-ons. Select Controlled
+   documents, then install or resume it from the command bar and choose its
+   spaces. No selection covers all spaces.
+2. In Settings, select Spaces and pick the space. **Add review roles** creates
+   the reviewer and manager roles when the organization lacks them. An
+   organization administrator still needs an explicit grant: **Grant me
+   management access** adds it. Management grants
+   `space.controlled_docs_manage`, `document.controlled_docs_manage` and
+   `document.review_read`.
+3. In the Controlled documents card, activate the space rule. **Require pinned
+   versions** makes every image and linked file of a managed document pin a
+   version, so an approved document shows exactly what was reviewed. Existing
+   incompatible readiness automations and trusted processing subscriptions
+   must be paused or configured for publication before Core accepts the rule.
+4. Grant reviewer access under Access with **Grant access**, choosing the
+   member and the role. The reviewer role grants `document.review_read` and
+   `document.approve` for the space. Use normal space membership or resource
+   grants to provide their explorer visibility.
+5. Open a Markdown document of the space and choose **Manage with reviews**
+   on its Preview tab. The explorer shows "Managed" beside it. **Stop
+   managing** asks for a reason and cancels open reviews. Core requires a
+   published Markdown version, valid UTF-8 without NUL characters, of at most
+   1 MiB.
 
 Management and reviewer profiles reuse an existing role with the exact action
-set, or create one through Core. Space grant revocation requires confirmation.
+set, or create one through Core. Revoking a space grant requires confirmation.
 Other grants and controlled-tag restrictions still apply. Organization roles
 do not substitute for the dedicated resource grants, and authors cannot approve
 their own proposals. Core remains the authorization authority for every action.
@@ -42,26 +45,31 @@ grant commercial allowances.
 
 ## Propose and review
 
-Controlled documents carry a Controlled label in the explorer. Opening one
-shows its review screen. For ordinary documents, select the document and choose
-Document reviews to configure its control.
+A managed document opens in the same document screen as any other file (see
+[Documents](documents.md)). Editing it and choosing **Submit for review**
+asks for a summary and uploads the text as a candidate. The published version
+stays available until approval, and a second proposal waits until the open
+review is decided or cancelled.
 
-Propose changes loads the published Markdown into the editor after checking its
-checksum. Enter a reason and submit the proposal. The upload targets the
-existing document and keeps its published version available. Unsent text stays
-in the editor through errors and refreshes; leaving the screen asks before
-discarding changes. Drafts are held in memory, not persisted across sign-out
-or application shutdown.
-A refresh that finds a different published base blocks submission of a loaded
-draft. Copy the edits before confirming a reload of the published Markdown.
+The Reviews tab lists the document's reviews, newest first, with their
+summary, status, author and date. It only lists them: select one and choose
+**Open review**, or press Enter, double-click, or double-tap it.
 
-Reviews shows the paginated authorized history, reason, outcome and decision
-comment. Select a review to fetch the server's unified diff or download its
-exact candidate. Approve publishes that candidate; reject and cancel retain
-the published base. Decisions carry the expected review revision, candidate
-identifier and an idempotency key. Conflicts refresh the records and preserve
-the explanation. Large diffs use a separate bounded JSON response allowance;
-other API responses retain their ordinary limit.
+An opened review takes the screen one level below the document. The header
+reads `space › document › Reviews` over the review's summary, and **Back to
+reviews** or Escape returns to the list. The page shows who submitted it,
+when, the version it changes, and any decision with its comment. Document
+renders the candidate, images included; Changes shows the server's unified
+diff and the images and linked files it adds, removes, or changes. The
+command bar offers **Download candidate** and, while the review is open,
+**Cancel review**, **Reject** and **Approve**. The page explains when the
+reader cannot decide, for example on their own proposal.
+
+Approve publishes that exact candidate; reject and cancel keep the published
+version. Decisions carry the expected review revision, candidate identifier
+and an idempotency key. After a decision the review stays open on screen with
+its new status. Conflicts refresh the records and keep the explanation.
+Leaving the Reviews tab closes the review.
 
 ## Disable, resume and remove
 
@@ -83,8 +91,9 @@ document and containing folders from moving, being trashed or being purged.
 
 ## Screen review
 
-Start the desktop app with `mise run studio`. Inspect Add-ons and the Reviews,
-Propose changes and Control tabs at desktop and narrow window widths. Use
-distinct author and reviewer accounts for the publication workflow. Validate
-pause/resume, missing grants, cancelled reviews and conflicts before the final
-`mise run verify` and platform e2e cycle.
+Start the desktop app with `mise run studio`. Inspect Settings › Add-ons,
+Settings › Spaces, and a managed document's Reviews tab and review page at
+desktop and narrow window widths. Use distinct author and reviewer accounts
+for the publication workflow. Validate pause/resume, missing grants,
+cancelled reviews and conflicts before the final `mise run verify` and
+platform e2e cycle.
