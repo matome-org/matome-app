@@ -1,12 +1,10 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls.Basic as C
 import QtQuick.Layouts
 import matome
 import "../chrome"
 import "../chrome/Messages.js" as Messages
-import "../chrome/Commands.js" as Commands
 
 FocusScope {
     id: settings
@@ -19,7 +17,6 @@ FocusScope {
     readonly property bool commerceSection: section === "billing" || section === "addons"
     readonly property bool organizationSection: section !== "appearance"
     property string targetId
-    property string targetRole
     property string targetAction
     readonly property string sectionError: settings.section === "general" ? Session.orgAdmin.generalError
                                           : settings.section === "members" ? Session.orgAdmin.membersError
@@ -53,7 +50,7 @@ FocusScope {
         Session.closeSettings()
         Session.navigate(id === "" ? "root" : "org", id)
     }
-    function focusDefault() { back.forceActiveFocus() }
+    function focusDefault() { header.backButton.forceActiveFocus() }
     function dismiss() {
         if (navigationDrawer.visible)
             navigationDrawer.close()
@@ -61,22 +58,35 @@ FocusScope {
             return
         else if (confirm.visible)
             confirm.close()
+        else if (renameDialog.visible)
+            renameDialog.close()
+        else if (roleDialog.visible)
+            roleDialog.close()
+        else if (inviteDialog.visible)
+            inviteDialog.close()
         else
             Session.closeSettings()
     }
-    function ask(action, id, email, role) {
+    function ask(action, id, email) {
         settings.targetId = id
-        settings.targetRole = role
         settings.targetAction = action
-        confirm.title = action === "remove" ? qsTr("Remove %1?").arg(email)
-                      : action === "cancel" ? qsTr("Cancel invitation for %1?").arg(email)
-                      : qsTr("Change the role of %1?").arg(email)
+        confirm.title = action === "remove" ? qsTr("Remove %1?").arg(email) : qsTr("Cancel invitation for %1?").arg(email)
         confirm.detail = action === "remove" ? qsTr("This person will lose access to the organization.")
-                       : action === "cancel" ? qsTr("The invitation link will stop working.")
-                       : qsTr("Their organization permissions will change.")
-        confirm.action = action === "remove" ? qsTr("Remove")
-                       : action === "cancel" ? qsTr("Cancel invitation") : qsTr("Change role")
+                                             : qsTr("The invitation link will stop working.")
+        confirm.action = action === "remove" ? qsTr("Remove") : qsTr("Cancel invitation")
         confirm.open()
+    }
+    function closeDialogs() {
+        confirm.close()
+        renameDialog.close()
+        roleDialog.close()
+        inviteDialog.close()
+    }
+    function openRole() {
+        if (members.currentId === "" || Session.orgAdmin.busy)
+            return
+        memberRole.value = members.currentRole
+        roleDialog.open()
     }
 
     onVisibleChanged: if (settings.visible) {
@@ -86,8 +96,7 @@ FocusScope {
         settings.focusDefault()
     } else {
         navigationDrawer.close()
-        confirm.close()
-        invitationEmail.clear()
+        settings.closeDialogs()
     }
 
     onNarrowChanged: if (!settings.narrow) navigationDrawer.close()
@@ -97,11 +106,9 @@ FocusScope {
         function onChanged() {
             if (!Session.orgAdmin.active && settings.organizationSection && !settings.commerceSection && settings.section !== "usage") {
                 settings.section = "appearance"
-                confirm.close()
-                invitationEmail.clear()
+                settings.closeDialogs()
             }
         }
-        function onInvitationSent() { invitationEmail.clear() }
     }
 
     Connections {
@@ -112,167 +119,102 @@ FocusScope {
         }
     }
 
-    component Label: Text {
-        Layout.fillWidth: true
-        font: Theme.body
-        color: Theme.textSecondary
-        wrapMode: Text.Wrap
-    }
-
-    component NavigationRow: FocusableControl {
-        id: row
-        property string text
-        property string icon
-        property bool selected: false
-        property bool checkable: false
-        property bool indented: false
-        property bool strong: false
-        property bool expandable: false
-        property bool expanded: false
-        Layout.fillWidth: true
-        implicitHeight: settings.narrow ? Theme.rowTouch : Theme.controlM
-        color: row.selected ? Theme.accentSoft : "transparent"
-        radius: Theme.rounding
-        Accessible.role: Accessible.Button
-        Accessible.name: row.expandable ? (row.expanded ? qsTr("Collapse %1") : qsTr("Expand %1")).arg(row.text)
-                                        : row.text
-        Accessible.checkable: row.checkable || row.expandable
-        Accessible.checked: row.expandable ? row.expanded : row.selected
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: row.indented ? 2 * Theme.gapM : Theme.gapM
-            anchors.rightMargin: Theme.gapM
-            spacing: Theme.gapS
-            Icon { name: row.icon; color: row.selected ? Theme.accentText : Theme.textSecondary }
-            Text {
-                Layout.fillWidth: true
-                text: row.text
-                font: row.strong ? Theme.strong(Theme.body) : Theme.body
-                color: row.selected ? Theme.accentText : Theme.textPrimary
-                elide: Text.ElideRight
-            }
-            Icon {
-                objectName: "organizationExpansionArrow"
-                visible: row.expandable
-                name: "chevron"
-                color: Theme.textSecondary
-                rotation: row.expanded ? 90 : 0
-                Behavior on rotation { Ease {} }
-            }
-        }
-    }
-
-    component Navigation: Flickable {
-        id: navigation
-        clip: true
-        contentHeight: navigationColumn.implicitHeight + 2 * Theme.gapM
-        boundsBehavior: Flickable.StopAtBounds
-        C.ScrollBar.vertical: ThinScrollBar {}
+    component Navigation: Page {
+        topMargin: Theme.gapM
+        bottomMargin: Theme.gapM
+        leftMargin: Theme.gapS
+        rightMargin: Theme.gapS
+        spacing: Theme.gapXs
         Component.onCompleted: if (settings.narrow) appearanceNavigation.forceActiveFocus()
 
-        function reveal(item) {
-            const top = item.mapToItem(navigationColumn, 0, 0).y + Theme.gapM
-            if (top < contentY)
-                contentY = top
-            else if (top + item.height > contentY + height)
-                contentY = top + item.height - height
+        NavigationRow {
+            id: appearanceNavigation
+            touch: settings.narrow
+            objectName: "settingsAppearanceNavigation"
+            checkable: true
+            text: qsTr("Appearance")
+            icon: "settings"
+            selected: settings.section === "appearance"
+            onActivated: settings.chooseSection("", "appearance")
         }
-
-        ColumnLayout {
-            id: navigationColumn
-            x: Theme.gapS
-            y: Theme.gapM
-            width: navigation.width - 2 * Theme.gapS
-            spacing: Theme.gapXs
-            NavigationRow {
-                id: appearanceNavigation
-                objectName: "settingsAppearanceNavigation"
-                checkable: true
-                text: qsTr("Appearance")
-                icon: "settings"
-                selected: settings.section === "appearance"
-                onActivated: settings.chooseSection("", "appearance")
-                onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
-            }
-            Caption {
+        Caption {
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.gapM
+            Layout.leftMargin: Theme.gapM
+            text: qsTr("Organizations")
+        }
+        Label {
+            Layout.margins: Theme.gapS
+            visible: Session.organizationsBusy || Session.organizationsError !== ""
+            text: Session.organizationsError !== "" ? Messages.adminFailure(Session.organizationsError)
+                                                   : qsTr("Working…")
+            color: Session.organizationsError !== "" ? Theme.failed : Theme.textSecondary
+        }
+        Repeater {
+            id: organizationGroups
+            model: Session.organizations
+            delegate: ColumnLayout {
+                id: organization
+                required property string orgId
+                required property string name
+                required property bool canAdminister
+                required property bool canReadBilling
+                readonly property bool expanded: settings.expandedOrganizations[orgId] === true
                 Layout.fillWidth: true
-                Layout.topMargin: Theme.gapM
-                Layout.leftMargin: Theme.gapM
-                text: qsTr("Organizations")
-            }
-            Label {
-                Layout.margins: Theme.gapS
-                visible: Session.organizationsBusy || Session.organizationsError !== ""
-                text: Session.organizationsError !== "" ? Messages.adminFailure(Session.organizationsError)
-                                                       : qsTr("Working…")
-                color: Session.organizationsError !== "" ? Theme.failed : Theme.textSecondary
-            }
-            Repeater {
-                id: organizationGroups
-                model: Session.organizations
-                delegate: ColumnLayout {
-                    id: organization
-                    required property string orgId
-                    required property string name
-                    required property bool canAdminister
-                    required property bool canReadBilling
-                    readonly property bool expanded: settings.expandedOrganizations[orgId] === true
-                    Layout.fillWidth: true
-                    Layout.topMargin: Theme.gapS
-                    spacing: Theme.gapXs
-                    NavigationRow {
-                        objectName: "settingsOrganization_" + organization.orgId
-                        text: organization.name
-                        icon: "org"
-                        strong: true
-                        expandable: true
-                        expanded: organization.expanded
-                        selected: Session.currentOrgId === organization.orgId && settings.organizationSection
-                                  && !organization.expanded
-                        onActivated: settings.setOrganizationExpanded(organization.orgId, !organization.expanded)
-                        Keys.onRightPressed: settings.setOrganizationExpanded(organization.orgId, true)
-                        Keys.onLeftPressed: settings.setOrganizationExpanded(organization.orgId, false)
-                        onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
+                Layout.topMargin: Theme.gapS
+                spacing: Theme.gapXs
+                NavigationRow {
+                    objectName: "settingsOrganization_" + organization.orgId
+                    touch: settings.narrow
+                    text: organization.name
+                    icon: "org"
+                    strong: true
+                    expandable: true
+                    expanded: organization.expanded
+                    selected: Session.currentOrgId === organization.orgId && settings.organizationSection
+                              && !organization.expanded
+                    onActivated: settings.setOrganizationExpanded(organization.orgId, !organization.expanded)
+                    Keys.onRightPressed: settings.setOrganizationExpanded(organization.orgId, true)
+                    Keys.onLeftPressed: settings.setOrganizationExpanded(organization.orgId, false)
                     }
-                    Repeater {
-                        model: organization.expanded ? settings.sections.filter(function (s) {
-                            return s.billing === true ? organization.canReadBilling : organization.canAdminister
-                        }) : []
-                        delegate: NavigationRow {
-                            required property var modelData
-                            checkable: true
-                            objectName: "settingsOrganization_" + organization.orgId + "_" + modelData.value
-                            text: modelData.label
-                            icon: modelData.icon
-                            indented: true
-                            selected: Session.currentOrgId === organization.orgId && settings.section === modelData.value
-                            onActivated: settings.chooseSection(organization.orgId, modelData.value)
-                            onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
-                        }
-                    }
-                    NavigationRow {
-                        visible: organization.expanded
-                        text: qsTr("Open organization")
-                        icon: "forward"
+                Repeater {
+                    model: organization.expanded ? settings.sections.filter(function (s) {
+                        return s.billing === true ? organization.canReadBilling : organization.canAdminister
+                    }) : []
+                    delegate: NavigationRow {
+                        required property var modelData
+                        touch: settings.narrow
+                        checkable: true
+                        objectName: "settingsOrganization_" + organization.orgId + "_" + modelData.value
+                        text: modelData.label
+                        icon: modelData.icon
                         indented: true
-                        onActivated: settings.openOrganizations(organization.orgId)
-                        onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
-                    }
+                        selected: Session.currentOrgId === organization.orgId && settings.section === modelData.value
+                        onActivated: settings.chooseSection(organization.orgId, modelData.value)
+                            }
                 }
+                NavigationRow {
+                    visible: organization.expanded
+                    touch: settings.narrow
+                    text: qsTr("Open organization")
+                    icon: "forward"
+                    indented: true
+                    onActivated: settings.openOrganizations(organization.orgId)
+                    }
             }
-            Label {
-                Layout.margins: Theme.gapM
-                visible: organizationGroups.count === 0 && !Session.organizationsBusy
-                         && Session.organizationsError === ""
-                text: qsTr("No organizations yet.")
-            }
-            NavigationRow {
-                Layout.topMargin: Theme.gapM
-                text: qsTr("Open organizations")
-                icon: "org"
-                onActivated: settings.openOrganizations("")
-                onActiveFocusChanged: if (activeFocus) navigation.reveal(this)
-            }
+        }
+        Label {
+            Layout.margins: Theme.gapM
+            visible: organizationGroups.count === 0 && !Session.organizationsBusy
+                     && Session.organizationsError === ""
+            text: qsTr("No organizations yet.")
+        }
+        NavigationRow {
+            Layout.topMargin: Theme.gapM
+            touch: settings.narrow
+            text: qsTr("Open organizations")
+            icon: "org"
+            onActivated: settings.openOrganizations("")
         }
     }
 
@@ -280,67 +222,24 @@ FocusScope {
         anchors.fill: parent
         spacing: 0
 
-        Rectangle {
+        ScreenHeader {
+            id: header
             Layout.fillWidth: true
-            implicitHeight: header.implicitHeight + 2 * Theme.gapM
-            color: Theme.background
-            RowLayout {
-                id: header
-                anchors.fill: parent
-                anchors.margins: Theme.gapM
-                spacing: Theme.gapM
-                ActionButton {
-                    id: navigationToggle
-                    objectName: "settingsNavigationButton"
-                    visible: settings.narrow
-                    text: qsTr("Navigation")
-                    icon: "menu"
-                    showLabel: false
-                    tip: text
-                    onActivated: navigationDrawer.open()
-                }
-                ActionButton {
-                    id: back
-                    objectName: "closeSettingsButton"
-                    text: qsTr("Back to files")
-                    icon: "back"
-                    showLabel: !settings.narrow
-                    tip: text
-                    onActivated: Session.closeSettings()
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.gapXs
-                    Caption {
-                        Layout.fillWidth: true
-                        text: settings.organizationSection ? Session.orgBilling.name : Session.email
-                        color: Theme.accentText
-                        elide: Text.ElideRight
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: qsTr("Settings")
-                        color: Theme.textPrimary
-                        font: Theme.title
-                        elide: Text.ElideRight
-                        Accessible.role: Accessible.Heading
-                    }
-                }
-                ActionButton {
-                    objectName: "refreshOrgAdminButton"
-                    text: qsTr("Refresh")
-                    icon: "refresh"
-                    showLabel: false
-                    tip: text
-                    usable: settings.commerceSection || settings.section === "usage" ? !Session.orgBilling.busy
-                            : settings.organizationSection ? !Session.orgAdmin.busy : !Session.organizationsBusy
-                    onActivated: if (settings.commerceSection || settings.section === "usage") Session.orgBilling.refresh()
-                                 else if (settings.organizationSection) Session.orgAdmin.refresh()
-                                 else Session.refreshOrganizations()
-                }
-            }
+            narrow: settings.narrow
+            caption: settings.organizationSection ? Session.orgBilling.name : Session.email
+            title: qsTr("Settings")
+            backText: qsTr("Back to files")
+            navigationName: "settingsNavigationButton"
+            backName: "closeSettingsButton"
+            refreshName: "refreshOrgAdminButton"
+            refreshUsable: settings.commerceSection || settings.section === "usage" ? !Session.orgBilling.busy
+                           : settings.organizationSection ? !Session.orgAdmin.busy : !Session.organizationsBusy
+            onNavigationRequested: navigationDrawer.open()
+            onBackRequested: Session.closeSettings()
+            onRefreshRequested: if (settings.commerceSection || settings.section === "usage") Session.orgBilling.refresh()
+                                else if (settings.organizationSection) Session.orgAdmin.refresh()
+                                else Session.refreshOrganizations()
         }
-        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
 
         RowLayout {
             Layout.fillWidth: true
@@ -364,13 +263,130 @@ FocusScope {
                 Layout.margins: settings.narrow ? Theme.gapM : Theme.gapXl
                 spacing: Theme.gapM
 
-                Text {
-                    Layout.fillWidth: true
-                    text: settings.section === "appearance" ? qsTr("Appearance")
-                          : settings.sections.find(function (s) { return s.value === settings.section })?.label ?? ""
-                    font: Theme.heading
-                    color: Theme.textPrimary
-                    Accessible.role: Accessible.Heading
+                SectionHead {
+                    title: settings.section === "appearance" ? qsTr("Appearance")
+                           : settings.sections.find(function (s) { return s.value === settings.section })?.label ?? ""
+
+                    ActionButton {
+                        objectName: "renameOrganizationButton"
+                        visible: settings.section === "general"
+                        text: qsTr("Rename organization")
+                        icon: "rename"
+                        primary: true
+                        usable: !Session.orgAdmin.busy && settings.sectionError === ""
+                        onActivated: renameDialog.open()
+                    }
+
+                    ActionButton {
+                        objectName: "changeRoleButton"
+                        visible: settings.section === "members"
+                        text: qsTr("Change role")
+                        icon: "user"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.orgAdmin.busy && members.currentId !== ""
+                        onActivated: settings.openRole()
+                    }
+                    ActionButton {
+                        objectName: "removeMemberButton"
+                        visible: settings.section === "members"
+                        text: qsTr("Remove member")
+                        icon: "trash"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.orgAdmin.busy && members.currentId !== ""
+                        onActivated: settings.ask("remove", members.currentId, members.currentEmail)
+                    }
+
+                    ActionButton {
+                        objectName: "cancelInvitationButton"
+                        visible: settings.section === "invitations"
+                        text: qsTr("Cancel invitation")
+                        icon: "close"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !Session.orgAdmin.busy && invitations.currentStatus === "pending"
+                        onActivated: settings.ask("cancel", invitations.currentId, invitations.currentEmail)
+                    }
+                    ActionButton {
+                        objectName: "sendInvitationButton"
+                        visible: settings.section === "invitations"
+                        text: qsTr("Invite member")
+                        icon: "new"
+                        primary: true
+                        usable: !Session.orgAdmin.busy && settings.sectionError === ""
+                        onActivated: inviteDialog.open()
+                    }
+
+                    ActionButton {
+                        objectName: "openBillingPortalButton"
+                        visible: settings.section === "billing" && Session.orgBilling.paymentUrl !== ""
+                        text: Session.orgBilling.notice === "checkout" ? qsTr("Continue to checkout") : qsTr("Open Stripe portal")
+                        icon: "forward"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !commerce.busy && Session.orgBilling.canManage
+                        onActivated: Qt.openUrlExternally(Session.orgBilling.paymentUrl)
+                    }
+                    ActionButton {
+                        objectName: "billingPortalButton"
+                        visible: settings.section === "billing" && Session.orgBilling.canManage
+                        text: qsTr("Manage billing")
+                        icon: "settings"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: !commerce.busy
+                        onActivated: Session.orgBilling.createPortal()
+                    }
+                    ActionButton {
+                        objectName: "subscribePackageButton"
+                        visible: settings.section === "billing" && Session.orgBilling.canManage
+                        text: commerce.liveSubscription ? qsTr("Switch package") : qsTr("Subscribe")
+                        icon: "check"
+                        primary: true
+                        usable: commerce.canSubscribe
+                        onActivated: commerce.subscribe()
+                    }
+
+                    ActionButton {
+                        objectName: "changeQuantityButton"
+                        visible: settings.section === "addons" && Session.orgBilling.canManage
+                        text: qsTr("Change quantity")
+                        icon: "rename"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: commerce.canChangeQuantity
+                        onActivated: commerce.changeQuantity()
+                    }
+                    ActionButton {
+                        objectName: "pauseAddonButton"
+                        visible: settings.section === "addons" && Session.addOns.canInstall
+                        text: qsTr("Pause installation")
+                        icon: "pause"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: commerce.canPause
+                        onActivated: commerce.pause()
+                    }
+                    ActionButton {
+                        objectName: "uninstallAddonButton"
+                        visible: settings.section === "addons" && Session.addOns.canInstall
+                        text: qsTr("Uninstall")
+                        icon: "trash"
+                        showLabel: !settings.narrow
+                        tip: text
+                        usable: commerce.canUninstall
+                        onActivated: commerce.uninstall()
+                    }
+                    ActionButton {
+                        objectName: "installAddonButton"
+                        visible: settings.section === "addons" && Session.addOns.canInstall
+                        text: commerce.installLabel
+                        icon: "check"
+                        primary: true
+                        usable: commerce.canInstall
+                        onActivated: commerce.install()
+                    }
                 }
                 Label {
                     objectName: "orgAdminError"
@@ -397,184 +413,124 @@ FocusScope {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     billing: settings.section === "billing"
+                    narrow: settings.narrow
                 }
 
-                Flickable {
+                Page {
                     visible: settings.section === "appearance"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    contentHeight: appearance.implicitHeight
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    C.ScrollBar.vertical: ThinScrollBar {}
-                    ColumnLayout {
-                        id: appearance
-                        width: Math.min(parent.width, Theme.measure)
-                        spacing: Theme.gapM
-                        Label { text: qsTr("Theme") }
-                        Repeater {
-                            model: ["theme-light", "theme-dark", "theme-system"]
-                            delegate: ActionButton {
-                                required property string modelData
-                                Layout.fillWidth: true
-                                objectName: "settings_" + modelData
-                                text: Commands.find(Session.commandList, modelData).title
-                                primary: Theme.mode === Commands.themeMode(modelData)
-                                onActivated: settings.commandChosen(modelData)
-                            }
-                        }
-                        Label { text: qsTr("Language") }
-                        Repeater {
-                            model: Theme.languages
-                            delegate: ActionButton {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                objectName: "settings_lang-" + modelData.code
-                                text: modelData.name
-                                primary: Theme.language === modelData.code
-                                onActivated: settings.commandChosen("lang-" + modelData.code)
-                            }
-                        }
+                    measure: Theme.measure
+                    Label { text: qsTr("Theme") }
+                    Picker {
+                        id: themePicker
+                        objectName: "themePicker"
+                        Layout.fillWidth: true
+                        model: [{ value: "light", label: qsTr("Light") },
+                                { value: "dark", label: qsTr("Dark") },
+                                { value: "system", label: qsTr("Same as the system") }]
+                        value: Theme.mode
+                        Accessible.name: qsTr("Theme")
+                        onActivated: settings.commandChosen("theme-" + themePicker.currentValue)
+                    }
+                    Label { text: qsTr("Language") }
+                    Picker {
+                        id: languagePicker
+                        objectName: "languagePicker"
+                        Layout.fillWidth: true
+                        model: Theme.languages.map(function (choice) { return { value: choice.code, label: choice.name } })
+                        value: Theme.language
+                        Accessible.name: qsTr("Language")
+                        onActivated: settings.commandChosen("lang-" + languagePicker.currentValue)
                     }
                 }
 
-                Flickable {
+                Page {
                     visible: settings.section === "general" && settings.sectionError === ""
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    contentHeight: general.implicitHeight
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    C.ScrollBar.vertical: ThinScrollBar {}
-                    ColumnLayout {
-                        id: general
-                        width: Math.min(parent.width, Theme.measure)
-                        spacing: Theme.gapM
-                        Label { text: qsTr("Organization name") }
-                        Field {
-                            id: organizationName
-                            objectName: "organizationNameField"
-                            text: Session.orgAdmin.name
-                            placeholderText: qsTr("Organization name")
-                            enabled: !Session.orgAdmin.busy
-                            onAccepted: if (saveName.usable) Session.orgAdmin.rename(text)
-                        }
-                        ActionButton {
-                            id: saveName
-                            objectName: "saveOrganizationButton"
-                            text: qsTr("Save changes")
-                            primary: true
-                            usable: !Session.orgAdmin.busy && organizationName.text.trim() !== ""
-                                    && organizationName.text.trim() !== Session.orgAdmin.name
-                            onActivated: Session.orgAdmin.rename(organizationName.text)
+                    TileGrid {
+                        Card {
+                            Layout.alignment: Qt.AlignTop
+                            Caption { Layout.fillWidth: true; text: qsTr("Organization name") }
+                            Text {
+                                objectName: "organizationName"
+                                Layout.fillWidth: true
+                                text: Session.orgAdmin.name
+                                font: Theme.heading
+                                color: Theme.textPrimary
+                                wrapMode: Text.Wrap
+                                textFormat: Text.PlainText
+                            }
                         }
                     }
                 }
 
-                ColumnLayout {
-                    visible: settings.section === "invitations" && settings.sectionError === ""
-                    Layout.fillWidth: true
-                    spacing: Theme.gapS
-                    Field {
-                        id: invitationEmail
-                        objectName: "invitationEmailField"
-                        placeholderText: qsTr("Email address")
-                        inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase
-                        enabled: !Session.orgAdmin.busy
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.gapS
-                        RolePicker { id: invitationRole; Layout.fillWidth: true; allowOwner: false; enabled: !Session.orgAdmin.busy }
-                        ActionButton {
-                            objectName: "sendInvitationButton"
-                            primary: true
-                            text: qsTr("Invite")
-                            usable: !Session.orgAdmin.busy && invitationEmail.text.trim() !== ""
-                            onActivated: Session.orgAdmin.invite(invitationEmail.text, invitationRole.currentValue)
-                        }
-                    }
-                }
                 OrgAdminPeople {
                     id: members
-                    visible: settings.section === "members" && settings.sectionError === ""
+                    visible: settings.section === "members" && settings.sectionError === "" && members.count > 0
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    narrow: settings.narrow
-                    onRoleRequested: function (id, email, role) { settings.ask("role", id, email, role) }
-                    onRemovalRequested: function (id, email) { settings.ask("remove", id, email, "") }
+                    touch: settings.narrow
+                    onOpened: settings.openRole()
                 }
                 OrgAdminPeople {
                     id: invitations
-                    visible: settings.section === "invitations" && settings.sectionError === ""
+                    visible: settings.section === "invitations" && settings.sectionError === "" && invitations.count > 0
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     invitations: true
-                    narrow: settings.narrow
-                    onCancellationRequested: function (id, email) { settings.ask("cancel", id, email, "") }
+                    touch: settings.narrow
+                    onOpened: if (invitations.currentStatus === "pending")
+                        settings.ask("cancel", invitations.currentId, invitations.currentEmail)
                 }
                 Label {
+                    Layout.fillHeight: true
+                    verticalAlignment: Text.AlignTop
                     visible: !Session.orgAdmin.busy && settings.sectionError === ""
                              && ((settings.section === "members" && members.count === 0)
                                  || (settings.section === "invitations" && invitations.count === 0))
-                    text: settings.section === "members" ? qsTr("No members to display.") : qsTr("No invitations yet.")
+                    text: settings.section === "members" ? qsTr("No members to display.") : qsTr("No invitations yet. Use Invite member to send one.")
                 }
 
-                Flickable {
+                Page {
                     visible: settings.section === "usage" && settings.sectionError === ""
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    contentHeight: usage.implicitHeight
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    C.ScrollBar.vertical: ThinScrollBar {}
-                    ColumnLayout {
-                        id: usage
-                        width: parent.width
-                        spacing: Theme.gapM
-                        Label { text: qsTr("Plan: %1").arg(Session.orgBilling.plan) }
+                    Label { text: qsTr("Plan: %1").arg(Session.orgBilling.plan) }
+                    TileGrid {
                         Repeater {
                             model: Session.orgBilling.usage
-                            delegate: Rectangle {
+                            delegate: Card {
                                 id: metric
                                 required property var modelData
-                                Layout.fillWidth: true
-                                implicitHeight: amount.implicitHeight + 2 * Theme.gapM
-                                color: Theme.surface
-                                border.color: Theme.border
-                                radius: Theme.rounding
-                                ColumnLayout {
-                                    id: amount
-                                    anchors.fill: parent
-                                    anchors.margins: Theme.gapM
-                                    spacing: Theme.gapS
-                                    Label { text: Messages.usageName(metric.modelData.dimension) }
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: Messages.usageAmount(metric.modelData.used, metric.modelData.dimension)
-                                              + " / " + (metric.modelData.limit === null || metric.modelData.limit === undefined
-                                                         ? qsTr("Unlimited")
-                                                         : Messages.usageAmount(metric.modelData.limit, metric.modelData.dimension))
-                                        color: Theme.textPrimary
-                                        font: Theme.heading
-                                        wrapMode: Text.Wrap
-                                    }
-                                    Label {
-                                        visible: metric.modelData.reserved > 0
-                                        text: qsTr("Reserved: %1").arg(Messages.usageAmount(metric.modelData.reserved, metric.modelData.dimension))
-                                    }
+                                Layout.alignment: Qt.AlignTop
+                                Label { text: Messages.usageName(metric.modelData.dimension) }
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: Messages.usageAmount(metric.modelData.used, metric.modelData.dimension)
+                                          + " / " + (metric.modelData.limit === null || metric.modelData.limit === undefined
+                                                     ? qsTr("Unlimited")
+                                                     : Messages.usageAmount(metric.modelData.limit, metric.modelData.dimension))
+                                    color: Theme.textPrimary
+                                    font: Theme.heading
+                                    wrapMode: Text.Wrap
+                                }
+                                Label {
+                                    visible: metric.modelData.reserved > 0
+                                    text: qsTr("Reserved: %1").arg(Messages.usageAmount(metric.modelData.reserved, metric.modelData.dimension))
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: Theme.gapXs
+                                    visible: metric.modelData.limit > 0
+                                    color: Theme.border
+                                    radius: Theme.rounding
                                     Rectangle {
-                                        Layout.fillWidth: true
-                                        implicitHeight: Theme.gapXs
-                                        visible: metric.modelData.limit > 0
-                                        color: Theme.border
-                                        radius: Theme.rounding
-                                        Rectangle {
-                                            height: parent.height
-                                            width: parent.width * Math.min(1, (metric.modelData.used + metric.modelData.reserved) / metric.modelData.limit)
-                                            color: Theme.accent
-                                            radius: parent.radius
-                                        }
+                                        height: parent.height
+                                        width: parent.width * Math.min(1, (metric.modelData.used + metric.modelData.reserved) / metric.modelData.limit)
+                                        color: Theme.accent
+                                        radius: parent.radius
                                     }
                                 }
                             }
@@ -586,24 +542,76 @@ FocusScope {
         }
     }
 
-    C.Drawer {
+    NavigationDrawer {
         id: navigationDrawer
         objectName: "settingsNavigationDrawer"
-        width: Math.min(Theme.column + 2 * Theme.gapM, settings.width - Theme.gapXl)
-        height: settings.height
-        edge: Qt.LeftEdge
-        modal: true
-        focus: true
-        padding: 0
-        background: Rectangle { color: Theme.surface }
-        C.Overlay.modal: Rectangle {
-            color: Theme.dark ? Theme.fill(Theme.background, 0.66) : Theme.fill(Theme.textPrimary, 0.32)
+        navigation: Navigation {}
+        onClosed: if (settings.visible && settings.narrow) header.navigationButton.forceActiveFocus()
+    }
+
+    Dialog {
+        id: renameDialog
+        objectName: "renameOrganizationDialog"
+        anchors.fill: parent
+        title: qsTr("Rename organization")
+        action: qsTr("Save changes")
+        ready: organizationName.text.trim() !== "" && organizationName.text.trim() !== Session.orgAdmin.name
+        initialFocus: organizationName
+        onVisibleChanged: if (renameDialog.visible) {
+            organizationName.text = Session.orgAdmin.name
+            organizationName.selectAll()
         }
-        contentItem: Loader {
-            active: navigationDrawer.visible
-            sourceComponent: Navigation {}
+        onAccepted: Session.orgAdmin.rename(organizationName.text)
+        Field {
+            id: organizationName
+            objectName: "organizationNameField"
+            placeholderText: qsTr("Organization name")
+            onAccepted: renameDialog.accept()
         }
-        onClosed: if (settings.visible && settings.narrow) navigationToggle.forceActiveFocus()
+    }
+
+    Dialog {
+        id: roleDialog
+        objectName: "changeRoleDialog"
+        anchors.fill: parent
+        title: qsTr("Change the role of %1").arg(members.currentEmail)
+        action: qsTr("Change role")
+        ready: memberRole.currentIndex >= 0 && memberRole.currentValue !== members.currentRole
+        initialFocus: memberRole
+        onAccepted: Session.orgAdmin.changeRole(members.currentId, memberRole.currentValue)
+        Label { text: qsTr("Their organization permissions will change.") }
+        RolePicker {
+            id: memberRole
+            Layout.fillWidth: true
+        }
+    }
+
+    Dialog {
+        id: inviteDialog
+        objectName: "inviteDialog"
+        anchors.fill: parent
+        title: qsTr("Invite member")
+        action: qsTr("Send invitation")
+        ready: invitationEmail.text.trim() !== "" && invitationRole.currentIndex >= 0
+        initialFocus: invitationEmail
+        onVisibleChanged: if (inviteDialog.visible) {
+            invitationEmail.clear()
+            invitationRole.value = "member"
+        }
+        onAccepted: Session.orgAdmin.invite(invitationEmail.text, invitationRole.currentValue)
+        Label { text: qsTr("They receive an email with a link to join this organization.") }
+        Field {
+            id: invitationEmail
+            objectName: "invitationEmailField"
+            placeholderText: qsTr("Email address")
+            inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase
+            onAccepted: inviteDialog.accept()
+        }
+        RolePicker {
+            id: invitationRole
+            Layout.fillWidth: true
+            allowOwner: false
+        }
     }
 
     Confirm {
@@ -613,10 +621,8 @@ FocusScope {
         onAccepted: {
             if (settings.targetAction === "remove")
                 Session.orgAdmin.removeMember(settings.targetId)
-            else if (settings.targetAction === "cancel")
-                Session.orgAdmin.cancelInvitation(settings.targetId)
             else
-                Session.orgAdmin.changeRole(settings.targetId, settings.targetRole)
+                Session.orgAdmin.cancelInvitation(settings.targetId)
         }
         onVisibleChanged: if (!confirm.visible && settings.visible) settings.focusDefault()
     }

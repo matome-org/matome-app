@@ -54,5 +54,20 @@
         <file>qml/screens/ControlledDocuments.qml</file>
         <file>qml/screens/OrgAdminPeople.qml</file>
         <file>qml/chrome/RolePicker.qml</file>
+        <file>qml/chrome/Card.qml</file>
+        <file>qml/chrome/Label.qml</file>
+        <file>qml/chrome/NavigationDrawer.qml</file>
+        <file>qml/chrome/NavigationRow.qml</file>
+        <file>qml/chrome/Page.qml</file>
+        <file>qml/chrome/Picker.qml</file>
+        <file>qml/chrome/ScreenHeader.qml</file>
+        <file>qml/chrome/Scroll.js</file>
+        <file>qml/chrome/BarRule.qml</file>
+        <file>qml/chrome/CommandBar.qml</file>
+        <file>qml/chrome/Dialog.qml</file>
+        <file>qml/chrome/ListRow.qml</file>
+        <file>qml/chrome/SectionHead.qml</file>
+        <file>qml/chrome/Tile.qml</file>
+        <file>qml/chrome/TileGrid.qml</file>
     </qresource>
 </RCC>

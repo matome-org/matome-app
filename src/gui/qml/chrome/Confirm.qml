@@ -5,52 +5,41 @@ import QtQuick.Layouts
 import matome
 
 // Asks before a step that cannot be undone: the question as the title, a
-// line on what follows, then Cancel, which has focus, and the step. Esc or a
-// click on the scrim cancels. Keys other than Tab stay here, so none reaches
-// the window's commands while it asks.
-Overlay {
+// line on what follows, then Cancel, which has focus, and the step. With a
+// `reasonLabel`, a reason field comes first and has focus; the step waits
+// for it unless `reasonRequired` is false. Enter there takes the step.
+Dialog {
     id: confirm
 
     property string detail
-    property string action
+    property string reasonLabel
+    property bool reasonRequired: true
+    property int reasonLength: 500
+    readonly property string reason: reasonField.text.trim()
 
-    signal accepted()
+    ready: confirm.reasonLabel === "" || !confirm.reasonRequired || confirm.reason !== ""
+    initialFocus: confirm.reasonLabel !== "" ? reasonField : null
 
     onVisibleChanged: if (confirm.visible)
-        cancel.forceActiveFocus()
-
-    Keys.onPressed: function (event) {
-        event.accepted = event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab
-    }
+        reasonField.clear()
 
     Text {
         objectName: "confirmDetail"
         Layout.fillWidth: true
+        visible: confirm.detail !== ""
         text: confirm.detail
         color: Theme.textSecondary
         font: Theme.body
         wrapMode: Text.Wrap
     }
 
-    RowLayout {
-        Layout.alignment: Qt.AlignRight
+    Field {
+        id: reasonField
+        objectName: "confirmReason"
+        visible: confirm.reasonLabel !== ""
         Layout.topMargin: Theme.gapS
-        spacing: Theme.gapS
-
-        ActionButton {
-            id: cancel
-            objectName: "confirmCancel"
-            text: qsTr("Cancel")
-            onActivated: confirm.close()
-        }
-        ActionButton {
-            objectName: "confirmAccept"
-            primary: true
-            text: confirm.action
-            onActivated: {
-                confirm.close()
-                confirm.accepted()
-            }
-        }
+        placeholderText: confirm.reasonLabel
+        maximumLength: confirm.reasonLength
+        onAccepted: confirm.accept()
     }
 }
