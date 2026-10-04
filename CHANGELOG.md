@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0](https://github.com/matome-org/matome-app/compare/v0.7.0...v0.8.0) (2026-10-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* **access:** requires matome-core with the identifier login, roles lists and per-space add-on activation (PRs #14-#18); the remembered sign-in moves from session/email to session/identifier.
+
+### Features
+
+* **access:** manage access in tables and panels ([#60](https://github.com/matome-org/matome-app/issues/60)) ([bc65c4f](https://github.com/matome-org/matome-app/commit/bc65c4ff05319d033f654c67d534fdb4fa0f15db))
+
 ## [0.7.0](https://github.com/matome-org/matome-app/compare/v0.6.0...v0.7.0) (2026-09-30)
 
 
