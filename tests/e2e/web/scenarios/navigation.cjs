@@ -56,13 +56,15 @@ module.exports = (scenario) => {
       assert.equal(await studio.prop("newButton", "text"), "New space");
 
       await studio.click("newButton");
-      await studio.untilFocus("rowEditor");
+      await studio.untilFocus("newSpaceName");
       await studio.type("Inbox");
       await studio.press("Enter");
       await studio.untilLevel("files");
       await studio.untilHere("Inbox");
-      assert.ok((await core.state()).spaces.some((space) => space.name === "Inbox"));
+      assert.ok((await core.state()).spaces.some((space) => space.name === "Inbox" && space.visibility === "private"));
 
+      // A folder is created once the new space's level has loaded.
+      await studio.untilIdle();
       await studio.press("n");
       await studio.untilFocus("rowEditor");
       await studio.type("Contracts");

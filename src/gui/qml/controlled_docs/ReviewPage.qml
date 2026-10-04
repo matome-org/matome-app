@@ -22,7 +22,7 @@ ColumnLayout {
     property string shown: "document"
 
     function memberEmail(id) {
-        return panel.control.members.find(function (member) { return String(member.id) === String(id) })?.email ?? ""
+        return panel.control.members.find(function (member) { return String(member.id) === String(id) })?.label ?? ""
     }
     function when(time) {
         return time ? new Date(time).toLocaleString(Qt.locale(), Locale.ShortFormat) : ""
@@ -84,7 +84,7 @@ ColumnLayout {
             objectName: "reviewDecisionAdvice"
             visible: panel.open && !panel.control.busy && text !== ""
             text: panel.control.approved
-                  ? qsTr("You approved this version. It is published once %n more reviewer(s) approve it.", "",
+                  ? qsTr("You approved this proposal. It is published once %n more reviewer(s) approve it.", "",
                          Math.max(1, panel.control.requiredApprovals - panel.control.approvals))
                   : panel.control.authored && panel.control.authorMayApprove
                   ? qsTr("You submitted this review. This space lets authors approve their own reviews, but only another reviewer can reject it.")

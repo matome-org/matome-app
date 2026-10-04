@@ -70,7 +70,7 @@ module.exports = (scenario) => {
       await studio.enter("Acme", "Docs");
       await studio.openMenu("Notes");
       // The row's commands under its name, then the folder's under a divider.
-      assert.deepEqual(await studio.menuIds(), ["open", "download", "rename", "cut", "trash", "new", "upload", "refresh"]);
+      assert.deepEqual(await studio.menuIds(), ["open", "download", "rename", "access", "cut", "trash", "new", "upload", "refresh"]);
       assert.equal(await studio.focusName(), "menu_open");
       await studio.press("Escape");
       await studio.untilShown("contextMenuList", false);
@@ -221,7 +221,7 @@ module.exports = (scenario) => {
         "Show the Core server address", "Português", "English", "日本語", "Theme: System. Switch theme"])
         assert.ok(signIn.has(name), `${name} in ${[...signIn]}`);
       const email = await studio.item("emailField");
-      assert.deepEqual([email.a11y.name, email.a11y.role], ["Email", "EditableText"]);
+      assert.deepEqual([email.a11y.name, email.a11y.role], ["Email or username", "EditableText"]);
 
       await studio.enter("Acme", "Docs");
       await studio.until(async () => (await labels(page)).has(`Account, theme, and language: ${EMAIL}`),

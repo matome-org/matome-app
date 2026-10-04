@@ -1,4 +1,5 @@
 #include "ControlledDocs.h"
+#include "addons/AddOnActivations.h"
 #include "Session.h"
 #include "JsonList.h"
 #include "documents/DocumentView.h"
@@ -8,6 +9,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <utility>
 
 namespace matome {
 ControlledDocs::ControlledDocs(Session &session, DocumentView &view)
@@ -35,6 +37,7 @@ ControlledDocs::ControlledDocs(Session &session, DocumentView &view)
         attach();
         emit changed();
     });
+    connect(session.permissions(), &Permissions::changed, this, &ControlledDocs::attach);
 }
 
 bool ControlledDocs::live(int generation) const { return m_active && generation == m_generation; }
@@ -46,7 +49,7 @@ AddOnBackend::Live ControlledDocs::guard() const
 }
 QVariantMap ControlledDocs::availability() const
 {
-    return m_addOns.state(QStringLiteral("controlled_docs"), m_session.currentSpaceId());
+    return m_addOns.state(QStringLiteral("controlled_docs"));
 }
 bool ControlledDocs::unavailable() const
 {
@@ -125,9 +128,10 @@ bool ControlledDocs::authored() const
             && m_review.value(QStringLiteral("author_membership_id")).toString() == m_membershipId;
 }
 
-// The rule's effective settings are readable by managers only. Anyone else
-// pins when an open review's settings or the organization's require it:
-// a pinned link is always accepted, a following one only when allowed.
+// The space's effective settings are readable where this person may turn
+// the add-on on. Anyone else pins when an open review's settings or the
+// organization's require it: a pinned link is always accepted, a following
+// one only when allowed.
 bool ControlledDocs::pinsLinks() const
 {
     if (!m_active || !controlled()) return false;
@@ -180,8 +184,11 @@ QString ControlledDocs::reviewPath(const QString &suffix) const
 void ControlledDocs::attach()
 {
     // Only Markdown can be managed: other files never bring the add-on in.
-    if (m_active || !m_view.active()
-            || !(controlled() || (installed() && m_view.kind() == QLatin1String("markdown")))) return;
+    // Whoever may not read the add-on's installation may still hold its
+    // managing action in the space.
+    const bool offered = installed()
+            || m_session.permissions()->spaceGrants(m_session.currentSpaceId(), QStringLiteral("addon.controlled_docs.document_manage"));
+    if (m_active || !m_view.active() || !(controlled() || (offered && m_view.kind() == QLatin1String("markdown")))) return;
     m_active = true;
     m_orgId = m_session.currentOrgId();
     m_spaceId = m_session.currentSpaceId();
@@ -192,10 +199,11 @@ void ControlledDocs::attach()
 
 void ControlledDocs::detach()
 {
+    m_after.clear();
     if (!m_active) return;
     ++m_generation;
     ++m_reviewGeneration;
-    m_active = m_saving = m_ruleRead = false;
+    m_active = m_saving = false;
     m_pending = m_reviewPending = 0;
     m_orgId.clear(); m_spaceId.clear(); m_documentId.clear(); m_membershipId.clear(); m_selectedId.clear();
     m_draftReviewId.clear(); m_draftBaseId.clear();
@@ -224,10 +232,9 @@ bool ControlledDocs::allows(QByteArrayView id) const
     if (id == "update-review") return mine && mergeState("behind");
     if (id == "resolve-conflicts") return mine && m_view.editable() && mergeState("dirty");
     if (id == "edit-proposal") return mine && m_view.editable() && !mergeState("dirty");
-    if (id == "manage-document")
-        return idle && !controlled() && !unavailable() && m_rule.value(QStringLiteral("active")).toBool()
-                && m_view.kind() == QLatin1String("markdown");
-    if (id == "unmanage-document") return idle && controlled() && m_ruleRead;
+    // Usable while anything blocks it too, so the screen can say why.
+    if (id == "manage-document") return idle && !controlled() && m_view.kind() == QLatin1String("markdown");
+    if (id == "unmanage-document") return idle && controlled();
     return false;
 }
 
@@ -243,6 +250,20 @@ void ControlledDocs::perform(QByteArrayView id)
     else emit requested(QString::fromLatin1(id));
 }
 
+void ControlledDocs::performWhenLoaded(QByteArrayView id)
+{
+    m_after = id.toByteArray();
+}
+
+void ControlledDocs::settle()
+{
+    --m_pending;
+    emit changed();
+    if (m_pending > 0 || m_after.isEmpty()) return;
+    const QByteArray id = std::exchange(m_after, {});
+    if (allows(id)) perform(id);
+}
+
 void ControlledDocs::refresh()
 {
     if (!m_active || busy()) return;
@@ -250,26 +271,20 @@ void ControlledDocs::refresh()
     load();
 }
 
-// The space rule (readable by managers only: it decides whether this
-// person may manage the document), the reviews, open ones first, and the
-// members who wrote or decide them. The opened review stays open with its
+// The space's activation where this person may read it, the reviews, open
+// ones first, and the members who wrote or decide them. The opened review stays open with its
 // new state, and loads again when its author replaced its candidate.
 void ControlledDocs::load()
 {
     const int generation = ++m_generation;
     m_pending = 3;
-    m_ruleRead = false;
     m_errorCode.clear(); m_reviewsError.clear();
     emit changed();
     const QPointer<ControlledDocs> self(this);
     const auto live = [self, generation] { return self && self->live(generation); };
-    m_backend.request("GET", contentPath(m_orgId, m_spaceId, QStringLiteral("controlled-docs-rule")), {}, {},
-            [this, live](const Client::Reply &reply) {
-        if (!live()) return;
-        m_rule = reply.ok ? reply.json.value(QStringLiteral("data")).toObject() : QJsonObject();
-        m_ruleRead = reply.ok || reply.status == 404;
-        --m_pending;
-        emit changed();
+    AddOnActivations::read(m_backend, m_orgId, m_spaceId, QStringLiteral("controlled_docs"), live, [this](const QJsonObject &rule, const QString &) {
+        m_rule = rule;
+        settle();
     });
     m_backend.list(documentPath(QStringLiteral("/reviews")), QStringLiteral("reviews"), live,
             [this, live](const Client::Reply &reply, const QJsonArray &rows) {
@@ -299,21 +314,14 @@ void ControlledDocs::load()
             else if (candidate(open) != candidate(m_review)) { m_review = open; loadReview(); }
             else m_review = open;
         }
-        --m_pending;
-        emit changed();
+        settle();
     });
     m_backend.list(orgPath(m_orgId, QStringLiteral("members")), QStringLiteral("members"), live,
             [this, live](const Client::Reply &reply, const QJsonArray &rows) {
         if (!live()) return;
         m_members = reply.ok ? rows : QJsonArray();
-        m_membershipId.clear();
-        for (const auto &value : std::as_const(m_members)) {
-            const auto row = value.toObject();
-            if (row.value(QStringLiteral("email")).toString().compare(m_session.email(), Qt::CaseInsensitive) == 0)
-                m_membershipId = jsonId(row.value(QStringLiteral("id")));
-        }
-        --m_pending;
-        emit changed();
+        m_membershipId = membershipOf(m_members, m_session.userId());
+        settle();
     });
 }
 
@@ -417,12 +425,23 @@ void ControlledDocs::resubmit(const QString &text, const QString &baseVersionId)
 
 void ControlledDocs::setControlled(bool enabled, const QString &reason)
 {
-    if (!m_active || (enabled && unavailable())) return;
+    if (!m_active) return;
     if (!enabled && !validReason(reason)) { m_errorCode = QStringLiteral("reason_required"); emit changed(); return; }
-    QString path = documentPath(QStringLiteral("/controlled-docs"));
-    if (!enabled) path += QStringLiteral("?reason=") + QString::fromLatin1(QUrl::toPercentEncoding(reason.trimmed()));
-    mutation(enabled ? "PUT" : "DELETE", path, {}, m_view.document().value(QStringLiteral("revision")).toInt(),
+    const QJsonObject body = enabled ? QJsonObject() : QJsonObject{{QStringLiteral("reason"), reason.trimmed()}};
+    mutation(enabled ? "PUT" : "DELETE", documentPath(QStringLiteral("/controlled-docs")), body,
+             m_view.document().value(QStringLiteral("revision")).toInt(),
              enabled ? QStringLiteral("control_enabled") : QStringLiteral("control_removed"));
+}
+
+QVariantList ControlledDocs::members() const
+{
+    QVariantList list;
+    for (const auto &value : m_members) {
+        QVariantMap member = value.toObject().toVariantMap();
+        member.insert(QStringLiteral("label"), memberLabel(value.toObject()));
+        list.append(member);
+    }
+    return list;
 }
 
 void ControlledDocs::selectReview(const QString &id)

@@ -6,17 +6,25 @@
 #include "FolderModel.h"
 #include "FolderTreeModel.h"
 #include "OrgModel.h"
+#include "access/AccessDirectory.h"
+#include "access/AccessGrants.h"
+#include "access/PlaceNames.h"
+#include "access/PrincipalAccess.h"
+#include "access/RoleHolders.h"
+#include "access/ApiTokens.h"
+#include "access/Permissions.h"
 #include "OrgAdmin.h"
 #include "OrgBilling.h"
 #include "SpaceModel.h"
+#include "addons/AddOnAccess.h"
+#include "addons/AddOnActivations.h"
 #include "addons/AddOnManager.h"
 #include "controlled_docs/ControlledDocs.h"
-#include "controlled_docs/ControlledRule.h"
 #include "documents/DocumentView.h"
 #include "references/Assets.h"
-#include "spaces/SpaceAccess.h"
 
 #include <QAbstractListModel>
+#include <QDateTime>
 #include <QJsonArray>
 #include <QList>
 #include <QObject>
@@ -45,7 +53,7 @@ class Session : public QObject
     Q_PROPERTY(bool resetSent READ resetSent NOTIFY changed)
     Q_PROPERTY(QString errorCode READ errorCode NOTIFY changed)
     Q_PROPERTY(QStringList errorFields READ errorFields NOTIFY changed)
-    Q_PROPERTY(QString email READ email NOTIFY changed)
+    Q_PROPERTY(QString identifier READ identifier NOTIFY changed)
     Q_PROPERTY(QString apiBaseUrl READ apiBaseUrl WRITE setApiBaseUrl NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *organizations READ orgList CONSTANT)
     Q_PROPERTY(bool organizationsBusy READ organizationsBusy NOTIFY changed)
@@ -53,10 +61,16 @@ class Session : public QObject
     Q_PROPERTY(matome::OrgAdmin *orgAdmin READ orgAdmin CONSTANT)
     Q_PROPERTY(matome::OrgBilling *orgBilling READ orgBilling CONSTANT)
     Q_PROPERTY(matome::AddOnManager *addOns READ addOns CONSTANT)
+    Q_PROPERTY(matome::AddOnAccess *addOnAccess READ addOnAccess CONSTANT)
+    Q_PROPERTY(matome::Permissions *permissions READ permissions CONSTANT)
     Q_PROPERTY(matome::Assets *assets READ assets CONSTANT)
     Q_PROPERTY(matome::DocumentView *documentView READ documentView CONSTANT)
-    Q_PROPERTY(matome::SpaceAccess *spaceAccess READ spaceAccess CONSTANT)
-    Q_PROPERTY(matome::ControlledRule *controlledRule READ controlledRule CONSTANT)
+    Q_PROPERTY(matome::AccessDirectory *accessDirectory READ accessDirectory CONSTANT)
+    Q_PROPERTY(matome::AccessGrants *accessGrants READ accessGrants CONSTANT)
+    Q_PROPERTY(matome::PrincipalAccess *principalAccess READ principalAccess CONSTANT)
+    Q_PROPERTY(matome::RoleHolders *roleHolders READ roleHolders CONSTANT)
+    Q_PROPERTY(matome::ApiTokens *apiTokens READ apiTokens CONSTANT)
+    Q_PROPERTY(matome::AddOnActivations *addOnActivations READ addOnActivations CONSTANT)
     Q_PROPERTY(matome::ControlledDocs *controlledDocs READ controlledDocs CONSTANT)
     Q_PROPERTY(QString currentOrgId READ currentOrgId NOTIFY changed)
     Q_PROPERTY(QAbstractListModel *spaces READ spaceList CONSTANT)
@@ -69,6 +83,8 @@ class Session : public QObject
     Q_PROPERTY(int uploadCount READ uploadCount NOTIFY changed)
     Q_PROPERTY(QString uploadError READ uploadError NOTIFY changed)
     Q_PROPERTY(QString uploadErrorName READ uploadErrorName NOTIFY changed)
+    Q_PROPERTY(bool uploadLanded READ uploadLanded NOTIFY changed)
+    Q_PROPERTY(int reviewUploads READ reviewUploads NOTIFY changed)
     Q_PROPERTY(QString lastTrashedId READ lastTrashedId NOTIFY changed)
     Q_PROPERTY(QVariantList commandList READ commandList NOTIFY commandsChanged)
     Q_PROPERTY(QString childKind READ childKind NOTIFY changed)
@@ -89,6 +105,7 @@ public:
 
     bool signedIn() const { return m_signedIn; }
     bool settingsActive() const { return m_settingsActive; }
+    /// The account `identifier` names waits on its email's confirmation link.
     bool confirmationPending() const { return m_confirmationPending; }
     bool confirmationResent() const { return m_confirmationResent; }
     bool busy() const { return m_busy; }
@@ -96,7 +113,11 @@ public:
     QString errorCode() const { return m_errorCode; }
     /// The fields Core named in the last auth failure's `details`.
     QStringList errorFields() const { return m_errorFields; }
-    QString email() const { return m_email; }
+    /// What the person signs in with: an email, or `org-slug/username` for
+    /// an account an organization manages.
+    QString identifier() const { return m_identifier; }
+    /// The signed-in account's id, which Core's member rows name as `user_id`.
+    QString userId() const { return m_userId; }
     QString apiBaseUrl() const { return m_apiBaseUrl; }
     void setApiBaseUrl(const QString &url);
     QString lastOrgId() const { return m_lastOrgId; }
@@ -108,10 +129,22 @@ public:
     OrgAdmin *orgAdmin() { return &m_orgAdmin; }
     OrgBilling *orgBilling() { return &m_orgBilling; }
     AddOnManager *addOns() { return &m_addOns; }
+    AddOnAccess *addOnAccess() { return &m_addOnAccess; }
+    Permissions *permissions() { return &m_permissions; }
     Assets *assets() { return &m_assets; }
     DocumentView *documentView() { return &m_documentView; }
-    SpaceAccess *spaceAccess() { return &m_spaceAccess; }
-    ControlledRule *controlledRule() { return &m_controlledRule; }
+    AccessDirectory *accessDirectory() { return &m_accessDirectory; }
+    AccessGrants *accessGrants() { return &m_accessGrants; }
+    PrincipalAccess *principalAccess() { return &m_principalAccess; }
+    RoleHolders *roleHolders() { return &m_roleHolders; }
+    ApiTokens *apiTokens() { return &m_apiTokens; }
+    /// Signed in with a password recently enough for Core's sensitive
+    /// routes, which refuse a session older than 15 minutes.
+    bool recentlySignedIn() const;
+    /// Signs this account in again with `password`, replacing the session's
+    /// credentials in place; `done` receives the failure code, empty on success.
+    void reauthenticate(const QString &password, const std::function<void(const QString &)> &done);
+    AddOnActivations *addOnActivations() { return &m_addOnActivations; }
     ControlledDocs *controlledDocs() { return &m_controlledDocs; }
     QAbstractListModel *orgList() { return &m_orgs; }
     QString currentOrgId() const { return m_orgs.currentOrgId(); }
@@ -141,6 +174,10 @@ public:
     /// code), and its name. Cleared when a new batch starts or on moving.
     QString uploadError() const { return m_uploadError; }
     QString uploadErrorName() const { return m_uploadErrorName; }
+    /// That file landed, but managing it with reviews failed with `uploadError`.
+    bool uploadLanded() const { return m_uploadLanded; }
+    /// The Markdown files waiting on whether to manage them with reviews.
+    int reviewUploads() const { return int(m_staged.size()); }
     QString lastTrashedId() const { return m_lastTrashed.id; }
     QVariantList commandList() const;
 
@@ -161,10 +198,17 @@ public:
     bool canGoBack() const { return m_historyIndex > 0; }
     bool canGoForward() const { return m_historyIndex + 1 < m_history.size(); }
 
-    Q_INVOKABLE void signIn(const QString &email, const QString &password,
+    Q_INVOKABLE void signIn(const QString &identifier, const QString &password,
                             const QString &apiBaseUrl);
+    /// Creates a personal account; Core emails a confirmation link and
+    /// starts no session, so the account signs in once it is confirmed.
     Q_INVOKABLE void registerAccount(const QString &email, const QString &password,
                                      const QString &apiBaseUrl);
+    /// Finishes a managed account with the one-time setup code an
+    /// administrator gave, setting its password, and signs it in.
+    Q_INVOKABLE void setUpAccount(const QString &identifier, const QString &code, const QString &password,
+                                  const QString &apiBaseUrl);
+    /// Emails a new confirmation link to the address awaiting confirmation.
     Q_INVOKABLE void resendConfirmation();
     Q_INVOKABLE void signOut();
     Q_INVOKABLE void requestPasswordReset(const QString &email, const QString &apiBaseUrl);
@@ -179,12 +223,21 @@ public:
     Q_INVOKABLE void uploadUrls(const QList<QUrl> &urls);
     /// The one upload entry point: queues a file into the open folder.
     /// Files go one at a time; one that fails is reported and the rest go on.
+    /// A Markdown file waits first on whether to manage it with reviews
+    /// where its space requires them.
     void upload(const QString &name, const QByteArray &bytes);
+    /// Queues the waiting Markdown files, each managed with reviews once it
+    /// lands when `manage`.
+    Q_INVOKABLE void uploadStaged(bool manage);
+    /// Drops the waiting Markdown files.
+    Q_INVOKABLE void cancelStaged();
     Q_INVOKABLE void openEntry(const QString &kind, const QString &id);
     /// Marks the document under the explorer's cursor, without opening it.
     Q_INVOKABLE void selectDocument(const QString &id);
     Q_INVOKABLE void navigate(const QString &kind, const QString &id);
-    Q_INVOKABLE void createHere(const QString &name);
+    /// Creates the level's entry named `name`; a space is `visibility`
+    /// ("public" or "private").
+    Q_INVOKABLE void createHere(const QString &name, const QString &visibility = {});
     Q_INVOKABLE void toggleFolder(const QString &folderId);
     Q_INVOKABLE void openSettings();
     Q_INVOKABLE void closeSettings();
@@ -200,7 +253,8 @@ public:
                    Client::Done done);
     void authedPatch(const QString &path, const QJsonObject &body, const Client::Headers &headers,
                      Client::Done done);
-    void authedDelete(const QString &path, const Client::Headers &headers, Client::Done done);
+    void authedDelete(const QString &path, const Client::Headers &headers, Client::Done done,
+                      const QJsonObject &body = {});
     /// Whether the load that asked for a list still wants its pages.
     using Live = std::function<bool()>;
     /// A whole collection: the entries of every page, or the reply that failed
@@ -223,7 +277,11 @@ signals:
     void downloadReady(const QUrl &file);
     void promptRename(const QString &currentName);
     void promptDelete(const QString &folderName);
+    /// The focused folder or document's grants are open in `accessGrants`.
+    void promptAccess();
     void promptUpload();
+    /// Markdown files wait on whether to manage them with reviews.
+    void promptUploadReviews();
     void promptNew();
     void focusFilter();
     void commandsChanged();
@@ -236,15 +294,19 @@ private:
     /// all read it. Titles are English and translated when read; a null
     /// title depends on where the session stands (`faceOf`); a null run is a
     /// command the window carries out (themes, languages). A null icon is
-    /// the id.
+    /// the id. `action` names what the open space's catalog must allow, empty
+    /// for nothing; a null one needs nothing.
     struct Command {
         QByteArray id;
         const char *title;
         std::function<bool(const Session &)> usable;
         std::function<void(Session &)> run;
         const char *icon = nullptr;
+        std::function<QString(const Session &)> action = nullptr;
     };
     static const QList<Command> &commands();
+    /// Whether `row` can run now: its own condition and the action it needs.
+    bool usable(const Command &row) const;
     /// The title and icon a command shows now.
     struct Face {
         const char *title;
@@ -301,14 +363,15 @@ private:
     void settleLastTrashed(const char *action, bool refills);
     void requestUpload();
     void startUpload();
-    void finishUpload(const QString &code);
-    void setUploadError(const QString &code = QString(), const QString &name = QString());
-    void reportUpload(const QString &code, const QString &name);
+    void setUploadError(const QString &code = QString(), const QString &name = QString(), bool landed = false);
+    void reportUpload(const QString &code, const QString &name, bool landed = false);
     /// The Core this build reaches from where it runs.
     static QString defaultApiBaseUrl();
     bool bindOrigin(const QString &apiBaseUrl);
-    bool requireEmailPassword(const QString &email, const QString &password,
-                              const QString &apiBaseUrl);
+    /// Binds `apiBaseUrl` and remembers `identifier` when both it and
+    /// `secret` are given; fails the form otherwise.
+    bool requireCredentials(const QString &identifier, const QString &secret,
+                            const QString &apiBaseUrl);
     void postAuth(const QString &path, const QJsonObject &body);
     void load();
     void persistIdentity();
@@ -316,7 +379,6 @@ private:
     void fail(const QString &code, const QStringList &fields = {});
     /// Fails with Core's code and the fields its `details` name.
     void failReply(const Client::Reply &reply);
-    void failConfirmation(const Client::Reply &reply);
     void clearError();
     void clearTokens();
     void clearContent();
@@ -333,6 +395,7 @@ private:
     void refreshLocation();
     QVariantList buildTrail() const;
     void promptRenameFocused();
+    void openFocusedAccess();
     Location location() const;
     void go(const Location &to);
     void enter(const Location &to);
@@ -340,11 +403,18 @@ private:
     Client m_client;
     CoreAddOnBackend m_coreAddOnBackend;
     AddOnManager m_addOns;
+    Permissions m_permissions;
+    AddOnAccess m_addOnAccess;
     Assets m_assets;
     DocumentView m_documentView;
     ControlledDocs m_controlledDocs;
-    SpaceAccess m_spaceAccess;
-    ControlledRule m_controlledRule;
+    AccessDirectory m_accessDirectory;
+    PlaceNames m_placeNames;
+    AccessGrants m_accessGrants;
+    PrincipalAccess m_principalAccess;
+    RoleHolders m_roleHolders;
+    ApiTokens m_apiTokens;
+    AddOnActivations m_addOnActivations;
     OrgModel m_orgs;
     OrgAdmin m_orgAdmin;
     OrgBilling m_orgBilling;
@@ -367,19 +437,34 @@ private:
         QString name;
         QByteArray bytes;
         Location to;
+        /// Managed with reviews once it lands.
+        bool manage = false;
     };
+    void enqueue(const Upload &file);
+    void stage(const Upload &file);
+    /// Manages the landed document `documentId` with reviews, as the
+    /// document screen's Manage with reviews does, then finishes the file.
+    void manageUploaded(const Location &to, const QString &documentId);
+    /// The file at the head of the queue is done: it landed unless `code`
+    /// says why not, or, when `landed`, it landed but was not managed.
+    void finishUpload(const QString &code, bool landed = false);
     QList<Upload> m_uploads;
+    /// Markdown files waiting on whether to manage them with reviews.
+    QList<Upload> m_staged;
     int m_uploadDone = 0;
     // Bumped when the queue is dropped, so late replies are ignored.
     int m_uploadRun = 0;
     double m_uploadProgress = 0;
     QString m_uploadError;
     QString m_uploadErrorName;
+    bool m_uploadLanded = false;
     QString m_errorCode;
     QStringList m_errorFields;
-    QString m_email;
+    QString m_identifier;
+    QString m_userId;
     QString m_apiBaseUrl = defaultApiBaseUrl();
     QString m_refreshToken;
+    QDateTime m_signedInAt;
     QString m_lastOrgId;
     Entry m_clip;
     QString m_focusPayload;

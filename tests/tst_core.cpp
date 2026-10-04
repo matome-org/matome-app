@@ -38,11 +38,13 @@ private slots:
     void initTestCase();
     void init();
     void rejectsABadOrigin();
+    void deleteCarriesItsBody();
     void logsInAgainstCore();
     void mapsWrongPassword();
     void registersAnAccount();
     void logsInWithUnconfirmedEmail();
     void carriesTheFieldsCoreRefused();
+    void setsUpAManagedAccount();
     void sendsAResetAndSignsInWithNewPassword();
     void showsAnAcceptedInvitationAfterRefresh();
     void logsOut();
@@ -50,6 +52,7 @@ private slots:
     void mapsNotFound();
     void mapsForcedCoreErrors();
     void timesOutAHungCall();
+    void retriesAShortRateLimit();
     void treatsAHugeBodyAsInvalid();
     void persistsEmailWithoutTokens();
     void rejectsEmptyCredentials();
@@ -111,7 +114,19 @@ private slots:
     void controlledDocsExtendDocumentView();
     void controlledDocsRunParallelReviews();
     void controlledDocsCountApprovals();
+    void controlledDocsSayCoreRefusals();
+    void controlledDocsManageFromTheExplorer();
+    void uploadsManagedWithReviews();
     void spaceSettingsManageAccessAndRule();
+    void addOnAccessCountsRoleHolders();
+    void accessDirectoryManagesGroupsRolesTagsAndSpaces();
+    void accessGrantsCoverFoldersDocumentsAndTags();
+    void accessGrantsStopInheritingAndExplain();
+    void principalAccessListsPlacesAndRoles();
+    void roleHoldersListAndAddPeople();
+    void explorerFollowsTheSpaceCatalog();
+    void permissionsExplainRefusals();
+    void accessGrantsCountRestrictedTags();
     void markdownReferencesFollowAssetLinks();
     void assetsSearchFindsFilesByName();
     void assetsResolvePathLinks();
@@ -126,12 +141,60 @@ private slots:
     void orgBillingReportsPackageFailures();
     void orgAdminLoadsAndPreservesLocation();
     void orgAdminMutatesMembersAndInvitations();
+    void orgAdminCreatesManagedMembers();
     void orgAdminGuardsLastOwnerAndReportsErrors();
     void orgAdminDiscardsStaleReplies();
     void orgAdminClosesWhenAdminAccessIsLost();
     void orgAdminRestrictsEntryAndPaginates();
 
 private:
+    // The directory of `org`: two members, a group holding the second, the
+    // owner, space viewer and one custom role, a restricted tag, and a catalog
+    // with one reserved action.
+    static void seedDirectory(matome::test::MockAddOnBackend &backend, const QString &org)
+    {
+        const auto row = [](std::initializer_list<std::pair<QString, QJsonValue>> fields) {
+            QJsonObject object;
+            for (const auto &[key, value] : fields) object.insert(key, value);
+            return object;
+        };
+        backend.respond("GET", matome::orgPath(org, QStringLiteral("members")), {{QStringLiteral("members"), QJsonArray{
+            row({{QStringLiteral("id"), QStringLiteral("m1")}, {QStringLiteral("email"), QStringLiteral("ana@example.com")}, {QStringLiteral("roles"), QJsonArray{QStringLiteral("owner")}}}),
+            row({{QStringLiteral("id"), QStringLiteral("m2")}, {QStringLiteral("email"), QStringLiteral("bo@example.com")}, {QStringLiteral("roles"), QJsonArray{QStringLiteral("member")}}})}}});
+        backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray{
+            row({{QStringLiteral("id"), QStringLiteral("owner-role")}, {QStringLiteral("key"), QStringLiteral("owner")}, {QStringLiteral("name"), QStringLiteral("Owner")},
+                 {QStringLiteral("origin"), QStringLiteral("system")}, {QStringLiteral("actions"), QJsonArray{QStringLiteral("role.read")}}}),
+            row({{QStringLiteral("id"), QStringLiteral("viewer-role")}, {QStringLiteral("key"), QStringLiteral("content_reader")}, {QStringLiteral("name"), QStringLiteral("Content reader")},
+                 {QStringLiteral("origin"), QStringLiteral("system")}, {QStringLiteral("actions"), QJsonArray{QStringLiteral("content.download")}}}),
+            row({{QStringLiteral("id"), QStringLiteral("custom-role")}, {QStringLiteral("key"), QStringLiteral("custom-1")}, {QStringLiteral("name"), QStringLiteral("Reviewers")},
+                 {QStringLiteral("origin"), QStringLiteral("organization")},
+                 {QStringLiteral("actions"), QJsonArray{QStringLiteral("addon.controlled_docs.review_read"), QStringLiteral("role.read")}}})}}});
+        backend.respond("GET", matome::orgPath(org, QStringLiteral("tags")), {{QStringLiteral("tags"), QJsonArray{
+            row({{QStringLiteral("id"), QStringLiteral("t1")}, {QStringLiteral("name"), QStringLiteral("Secret")}, {QStringLiteral("access_controlled"), true},
+                 {QStringLiteral("revision"), 1}})}}});
+        backend.respond("GET", matome::orgPath(org, QStringLiteral("action-catalog")), {{QStringLiteral("actions"), QJsonArray{
+            row({{QStringLiteral("key"), QStringLiteral("content.download")}, {QStringLiteral("axis"), QStringLiteral("space")}, {QStringLiteral("system_only"), false}}),
+            row({{QStringLiteral("key"), QStringLiteral("addon.controlled_docs.review_read")}, {QStringLiteral("axis"), QStringLiteral("space")}, {QStringLiteral("system_only"), false},
+                 {QStringLiteral("product_key"), QStringLiteral("controlled_docs")}}),
+            row({{QStringLiteral("key"), QStringLiteral("role.read")}, {QStringLiteral("axis"), QStringLiteral("organization")}, {QStringLiteral("system_only"), false}}),
+            row({{QStringLiteral("key"), QStringLiteral("organization.transfer_ownership")}, {QStringLiteral("axis"), QStringLiteral("organization")},
+                 {QStringLiteral("system_only"), true}})}}});
+        backend.respond("GET", matome::orgPath(org, QStringLiteral("groups")), {{QStringLiteral("groups"), QJsonArray{
+            row({{QStringLiteral("id"), QStringLiteral("g1")}, {QStringLiteral("name"), QStringLiteral("Legal")}, {QStringLiteral("revision"), 1}})}}});
+        backend.respond("GET", matome::orgPath(org, QStringLiteral("groups/g1/members")), {{QStringLiteral("members"), QJsonArray{
+            row({{QStringLiteral("id"), QStringLiteral("gm1")}, {QStringLiteral("group_id"), QStringLiteral("g1")},
+                 {QStringLiteral("organization_membership_id"), QStringLiteral("m2")}})}}});
+    }
+
+    // The last call `method` made to `path`.
+    static matome::test::MockAddOnBackend::Call lastCall(const matome::test::MockAddOnBackend &backend,
+                                                         const QByteArray &method, const QString &path)
+    {
+        for (auto at = backend.calls.size() - 1; at >= 0; --at)
+            if (backend.calls.at(at).method == method && backend.calls.at(at).path == path) return backend.calls.at(at);
+        return {};
+    }
+
     // Signs in, opens the first organization and creates the Inbox space.
     bool openInbox(FakeCore &core, Session &session)
     {
@@ -141,7 +204,7 @@ private:
         session.openEntry(QStringLiteral("org"), entry(session, 0, EntryModel::EntryIdRole));
         if (!waitFor(&session))
             return false;
-        session.createHere(QStringLiteral("Inbox"));
+        session.createHere(QStringLiteral("Inbox"), QStringLiteral("private"));
         return waitFor(&session) && session.level() == QLatin1String("files");
     }
 
@@ -213,6 +276,27 @@ void TestCore::rejectsABadOrigin()
     QVERIFY(!reply.ok);
 }
 
+// Core reads a removal's reason from the DELETE body and refuses query
+// parameters its routes do not declare.
+void TestCore::deleteCarriesItsBody()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Client client;
+    client.setBaseUrl(core.url());
+    bool finished = false;
+    const auto done = [&finished](const Client::Reply &) { finished = true; };
+    client.del(QStringLiteral("/api/v1/anything"), done, {}, {{QStringLiteral("reason"), QStringLiteral("Retire")}});
+    QTRY_VERIFY(finished);
+    QCOMPARE(core.lastPath(), QStringLiteral("/api/v1/anything"));
+    QCOMPARE(QJsonDocument::fromJson(core.lastBody()).object().value(QStringLiteral("reason")).toString(),
+             QStringLiteral("Retire"));
+    finished = false;
+    client.del(QStringLiteral("/api/v1/anything"), done);
+    QTRY_VERIFY(finished);
+    QVERIFY(core.lastBody().isEmpty());
+}
+
 void TestCore::logsInAgainstCore()
 {
     FakeCore core;
@@ -221,7 +305,7 @@ void TestCore::logsInAgainstCore()
     session.signIn(QStringLiteral("ok@localhost"), QStringLiteral("secret12"), core.url());
     QVERIFY(waitFor(&session));
     QVERIFY(session.signedIn());
-    QCOMPARE(session.email(), QStringLiteral("ok@localhost"));
+    QCOMPARE(session.identifier(), QStringLiteral("ok@localhost"));
     QVERIFY(core.lastPath().startsWith(QStringLiteral("/api/v1/organizations")));
     bool finished = false;
     Client::Reply me;
@@ -242,8 +326,12 @@ void TestCore::mapsWrongPassword()
     QVERIFY(waitFor(&session));
     QVERIFY(!session.signedIn());
     QCOMPARE(session.errorCode(), QStringLiteral("unauthenticated"));
+    QCOMPARE(QJsonDocument::fromJson(core.lastBody()).object(),
+             (QJsonObject{{QStringLiteral("identifier"), QStringLiteral("ok@localhost")}, {QStringLiteral("password"), QStringLiteral("nope")}}));
 }
 
+// Registering starts no session: the person confirms the emailed link, which
+// a new one may replace, then signs in.
 void TestCore::registersAnAccount()
 {
     FakeCore core;
@@ -252,6 +340,7 @@ void TestCore::registersAnAccount()
     session.registerAccount(QStringLiteral("new@localhost"), QStringLiteral("secret12"),
                             core.url());
     QVERIFY(waitFor(&session));
+    QCOMPARE(core.lastPath(), QStringLiteral("/api/auth/register"));
     QVERIFY(session.confirmationPending());
     QVERIFY(!session.signedIn());
     QCOMPARE(session.organizations()->rowCount(), 0);
@@ -259,6 +348,16 @@ void TestCore::registersAnAccount()
     session.resendConfirmation();
     QVERIFY(waitFor(&session));
     QVERIFY(session.confirmationResent());
+    QCOMPARE(core.lastPath(), QStringLiteral("/api/auth/resend-confirmation"));
+    QCOMPARE(QJsonDocument::fromJson(core.lastBody()).object(),
+             (QJsonObject{{QStringLiteral("email"), QStringLiteral("new@localhost")}}));
+
+    core.failNext(QStringLiteral("POST"), QStringLiteral("^/api/auth/resend-confirmation$"), 1,
+                  FakeCore::FaultMode::Status, 429, QStringLiteral("rate_limited"));
+    session.resendConfirmation();
+    QVERIFY(waitFor(&session));
+    QVERIFY(!session.confirmationResent());
+    QCOMPARE(session.errorCode(), QStringLiteral("rate_limited"));
 
     QVERIFY(core.confirmEmailInBrowser(QStringLiteral("new@localhost")));
     QVERIFY(session.confirmationPending());
@@ -286,6 +385,7 @@ void TestCore::logsInWithUnconfirmedEmail()
     QVERIFY(waitFor(&session));
     QVERIFY(session.confirmationPending());
     QVERIFY(!session.signedIn());
+    QVERIFY(session.errorCode().isEmpty());
 
     QVERIFY(core.confirmEmailInBrowser(QStringLiteral("new@localhost")));
     session.signOut();
@@ -306,6 +406,37 @@ void TestCore::carriesTheFieldsCoreRefused()
     QCOMPARE(session.errorCode(), QStringLiteral("invalid_request"));
     QCOMPARE(session.errorFields(), (QStringList{QStringLiteral("email"), QStringLiteral("password")}));
 
+}
+
+// An account an organization made signs in as `org-slug/username`, first
+// with the setup code an administrator gave, which then sets its password.
+void TestCore::setsUpAManagedAccount()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    core.seedOrganization(QStringLiteral("Acme"), QStringLiteral("owner"));
+    const QString identifier = core.seedManagedMember(QStringLiteral("org-1"), QStringLiteral("bo"), QStringLiteral("member"),
+                                                      QStringLiteral("mst_code"));
+    Session session;
+    session.setUpAccount(identifier, QStringLiteral(" "), QStringLiteral("fresh-pass1"), core.url());
+    QCOMPARE(session.errorCode(), QStringLiteral("invalid_request"));
+    session.setUpAccount(identifier, QStringLiteral("mst_wrong"), QStringLiteral("fresh-pass1"), core.url());
+    QVERIFY(waitFor(&session));
+    QCOMPARE(session.errorCode(), QStringLiteral("invalid_setup_code"));
+    QVERIFY(!session.signedIn());
+
+    session.setUpAccount(identifier, QStringLiteral(" mst_code "), QStringLiteral("fresh-pass1"), core.url());
+    QVERIFY(waitFor(&session));
+    QVERIFY(session.signedIn());
+    QCOMPARE(session.identifier(), identifier);
+    QCOMPARE(session.organizations()->rowCount(), 1);
+    QCOMPARE(session.organizations()->data(session.organizations()->index(0), OrgModel::RolesRole).toStringList(),
+             QStringList{QStringLiteral("member")});
+
+    session.signOut();
+    session.signIn(identifier.toUpper(), QStringLiteral("fresh-pass1"), core.url());
+    QVERIFY(waitFor(&session));
+    QVERIFY(session.signedIn());
 }
 
 void TestCore::sendsAResetAndSignsInWithNewPassword()
@@ -444,6 +575,48 @@ void TestCore::timesOutAHungCall()
     QCOMPARE(reply.code, QStringLiteral("network"));
 }
 
+// A rate limit asking for a short wait is waited out twice at most; a long
+// one is answered at once.
+void TestCore::retriesAShortRateLimit()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    core.retryAfter = 1;
+    Client client;
+    client.setBaseUrl(QUrl(core.url()));
+    Client::Reply reply;
+    bool finished = false;
+    const auto me = [&] {
+        finished = false;
+        client.get(QStringLiteral("/api/auth/me"), [&](const Client::Reply &value) {
+            finished = true;
+            reply = value;
+        });
+    };
+    QVERIFY(core.failNext(QStringLiteral("GET"), QStringLiteral("^/api/auth/me$"), 2,
+                          FakeCore::FaultMode::Status, 429, QStringLiteral("rate_limited")));
+    int hits = core.hits();
+    me();
+    QTRY_VERIFY_WITH_TIMEOUT(finished, 5000);
+    QVERIFY(reply.ok);
+    QCOMPARE(core.hits() - hits, 3);
+    QVERIFY(core.failNext(QStringLiteral("GET"), QStringLiteral("^/api/auth/me$"), 3,
+                          FakeCore::FaultMode::Status, 429, QStringLiteral("rate_limited")));
+    hits = core.hits();
+    me();
+    QTRY_VERIFY_WITH_TIMEOUT(finished, 5000);
+    QCOMPARE(reply.code, QStringLiteral("rate_limited"));
+    QCOMPARE(core.hits() - hits, 3);
+    core.retryAfter = 30;
+    QVERIFY(core.failNext(QStringLiteral("GET"), QStringLiteral("^/api/auth/me$"), 1,
+                          FakeCore::FaultMode::Status, 429, QStringLiteral("rate_limited")));
+    hits = core.hits();
+    me();
+    QTRY_VERIFY(finished);
+    QCOMPARE(reply.code, QStringLiteral("rate_limited"));
+    QCOMPARE(core.hits() - hits, 1);
+}
+
 void TestCore::treatsAHugeBodyAsInvalid()
 {
     FakeCore core;
@@ -473,7 +646,7 @@ void TestCore::persistsEmailWithoutTokens()
         session.runCommand(QStringLiteral("sign-out"));
     }
     Session again;
-    QCOMPARE(again.email(), QStringLiteral("ok@localhost"));
+    QCOMPARE(again.identifier(), QStringLiteral("ok@localhost"));
     QVERIFY(!again.signedIn());
     QVERIFY(again.apiBaseUrl().startsWith(QStringLiteral("http://127.0.0.1:")));
 }
@@ -504,8 +677,7 @@ void TestCore::listsOrganizationsAfterLogin()
     QCOMPARE(orgs->rowCount(), 1);
     QCOMPARE(orgs->data(orgs->index(0), OrgModel::NameRole).toString(),
              QStringLiteral("ok organization"));
-    QCOMPARE(orgs->data(orgs->index(0), OrgModel::RoleNameRole).toString(),
-             QStringLiteral("owner"));
+    QCOMPARE(orgs->data(orgs->index(0), OrgModel::RolesRole).toStringList(), QStringList{QStringLiteral("owner")});
     QVERIFY(!orgs->data(orgs->index(0), OrgModel::OrgIdRole).toString().isEmpty());
     QCOMPARE(orgs->data(orgs->index(0), Qt::DisplayRole), QVariant());
     QCOMPARE(orgs->rowCount(orgs->index(0)), 0);
@@ -616,7 +788,7 @@ void TestCore::createsASpace()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     QCOMPARE(session.spaces()->rowCount(), 1);
     QVERIFY(!core.lastIdempotency().isEmpty());
@@ -640,7 +812,7 @@ void TestCore::rejectsAnEmptySpaceName()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("  "));
+    session.spaces()->create(QStringLiteral("  "), QStringLiteral("private"));
     QCOMPARE(session.spaces()->errorCode(), QStringLiteral("invalid_request"));
 }
 
@@ -656,7 +828,7 @@ void TestCore::leavingAnOrganizationDropsSpaces()
                     .toString();
     session.openEntry(QStringLiteral("org"), orgId);
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.navigate(QStringLiteral("root"), QString());
     QVERIFY(session.currentOrgId().isEmpty());
@@ -693,7 +865,7 @@ void TestCore::spaceSelectIgnoresUnknownIds()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     const QString id = session.currentSpaceId();
     session.navigate(QStringLiteral("space"), QStringLiteral("missing"));
@@ -715,7 +887,7 @@ void TestCore::listsFoldersAndDocumentsInASpace()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     core.seedDocument(session.currentSpaceId(), QStringLiteral("Notes"), {}, QByteArray("hello world"));
     core.seedDocument(session.currentSpaceId(), QStringLiteral("Draft"));
@@ -751,7 +923,7 @@ void TestCore::createsAFolderAndOpensIt()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.folders()->create(QStringLiteral("Contracts"));
     QVERIFY(waitFor(&session));
@@ -778,7 +950,7 @@ void TestCore::rejectsAnEmptyFolderName()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.folders()->create(QStringLiteral("  "));
     QCOMPARE(session.folders()->errorCode(), QStringLiteral("invalid_request"));
@@ -795,7 +967,7 @@ void TestCore::downloadsTheCurrentDocument()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     core.seedDocument(session.currentSpaceId(), QStringLiteral("Notes"));
     session.documents()->reload();
@@ -822,7 +994,7 @@ void TestCore::movesADocumentIntoAFolder()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.folders()->create(QStringLiteral("Contracts"));
     QVERIFY(waitFor(&session));
@@ -858,7 +1030,7 @@ void TestCore::keyboardPayloadMovesAFolder()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.folders()->create(QStringLiteral("A"));
     QVERIFY(waitFor(&session));
@@ -899,7 +1071,7 @@ void TestCore::retriesFilesAfter401()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     core.failNext(QString(), QStringLiteral("^/api/v1/"), 1, FakeCore::FaultMode::Expire);
     session.folders()->reload();
@@ -919,7 +1091,7 @@ void TestCore::leavingASpaceDropsFiles()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.folders()->create(QStringLiteral("A"));
     QVERIFY(waitFor(&session));
@@ -943,7 +1115,7 @@ void TestCore::walksUpAFolderTree()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.folders()->create(QStringLiteral("A"));
     QVERIFY(waitFor(&session));
@@ -979,7 +1151,7 @@ void TestCore::rejectsAFolderCycleOnMove()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.folders()->create(QStringLiteral("A"));
     QVERIFY(waitFor(&session));
@@ -1007,7 +1179,7 @@ void TestCore::downloadWithoutAReadyUrlFails()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     core.forcedStatus = 404;
     core.forcedError = QStringLiteral("not_found");
@@ -1020,7 +1192,7 @@ void TestCore::filesNeedASpace()
 {
     Session session;
     session.folders()->create(QStringLiteral("A"));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     session.folders()->reload();
     session.documents()->reload();
     QCOMPARE(session.folders()->rowCount(), 0);
@@ -1040,7 +1212,7 @@ void TestCore::pasteAndDropIgnoreBadPayloads()
             session.organizations()->data(session.organizations()->index(0), OrgModel::OrgIdRole)
                     .toString());
     QVERIFY(waitFor(&session));
-    session.spaces()->create(QStringLiteral("Inbox"));
+    session.spaces()->create(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     session.setFocusPayload(QStringLiteral("nope"));
     session.runCommand(QStringLiteral("cut"));
@@ -1076,7 +1248,7 @@ void TestCore::entriesFollowTheLocation()
     QVERIFY(waitFor(&session));
     QCOMPARE(session.level(), QStringLiteral("spaces"));
     QCOMPARE(session.entryCount(), 0);
-    session.createHere(QStringLiteral("Inbox"));
+    session.createHere(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     const QString spaceId = session.currentSpaceId();
     session.runCommand(QStringLiteral("up"));
@@ -1095,7 +1267,7 @@ void TestCore::entriesFollowTheLocation()
     session.openEntry(QStringLiteral("org"), orgId);
     session.openEntry(QStringLiteral("space"), spaceId);
     QVERIFY(waitFor(&session));
-    session.createHere(QStringLiteral("Contracts"));
+    session.createHere(QStringLiteral("Contracts"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     core.seedDocument(spaceId, QStringLiteral("Notes"), {}, QByteArray("hello world\n"));
     session.runCommand(QStringLiteral("refresh"));
@@ -1134,7 +1306,7 @@ void TestCore::entryFilterMatchesNamesAndClearsOnMove()
     QVERIFY(core.listen());
     Session session;
     QVERIFY(openInbox(core, session));
-    session.createHere(QStringLiteral("Contracts"));
+    session.createHere(QStringLiteral("Contracts"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     core.seedDocument(session.currentSpaceId(), QStringLiteral("Notes"));
     session.runCommand(QStringLiteral("refresh"));
@@ -1216,7 +1388,7 @@ void TestCore::locationReportsLoadingAndErrors()
     QCOMPARE(session.locationError(), QString());
     session.createHere(QStringLiteral(" "));
     QCOMPARE(session.locationError(), QStringLiteral("invalid_request"));
-    session.createHere(QStringLiteral("Inbox"));
+    session.createHere(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(session.loading());
     QVERIFY(waitFor(&session));
     QVERIFY(!session.loading());
@@ -1447,7 +1619,7 @@ void TestCore::trailNamesEveryCrumbAndNavigates()
     session.setFilter(QStringLiteral("x"));
     session.setFilter(QString());
     QCOMPARE(moved.size(), crumbs);
-    session.createHere(QStringLiteral("Inbox"));
+    session.createHere(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     const QString spaceId = session.currentSpaceId();
     session.createHere(QStringLiteral("A"));
@@ -1656,7 +1828,7 @@ void TestCore::createHereFollowsTheLevel()
     QCOMPARE(session.childKind(), QStringLiteral("space"));
     QCOMPARE(command(session, QStringLiteral("new")).value(QStringLiteral("title")).toString(),
              QStringLiteral("New space"));
-    session.createHere(QStringLiteral("Inbox"));
+    session.createHere(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     QCOMPARE(session.spaces()->rowCount(), 1);
     QCOMPARE(session.level(), QStringLiteral("files"));
@@ -1862,7 +2034,7 @@ void TestCore::commandsFollowTheLevel()
     session.setFocusPayload(QStringLiteral("folder:1:1"));
     QVERIFY(!usable(session, QStringLiteral("rename")));
 
-    session.createHere(QStringLiteral("Inbox"));
+    session.createHere(QStringLiteral("Inbox"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     core.seedDocument(session.currentSpaceId(), QStringLiteral("Notes.md"));
     session.setFocusPayload(QString());
@@ -2181,7 +2353,7 @@ void TestCore::fakeCoreTakesControlOverHttp()
                  {{QStringLiteral("path"), QStringLiteral("^/api/auth/login$")},
                   {QStringLiteral("mode"), QStringLiteral("drop")}}));
     QCOMPARE(reply.json.value(QStringLiteral("faults")).toArray().size(), 1);
-    const QJsonObject ada{{QStringLiteral("email"), QStringLiteral("ada@localhost")},
+    const QJsonObject ada{{QStringLiteral("identifier"), QStringLiteral("ada@localhost")},
                           {QStringLiteral("password"), QStringLiteral("lovelace1")}};
     QVERIFY(call("POST", QStringLiteral("/api/auth/login"), ada));
     QCOMPARE(reply.code, QStringLiteral("network"));
@@ -2567,7 +2739,7 @@ void TestCore::modelsReportFailures()
     session.documents()->reload();
     QVERIFY(waitFor(&session));
     QCOMPARE(session.documents()->errorCode(), QStringLiteral("server"));
-    session.spaces()->create(QStringLiteral("C"));
+    session.spaces()->create(QStringLiteral("C"), QStringLiteral("private"));
     QVERIFY(waitFor(&session));
     QCOMPARE(session.spaces()->errorCode(), QStringLiteral("server"));
     session.spaces()->reload();
@@ -2703,9 +2875,12 @@ void TestCore::settingsSelectsOrganizationsAndDiscardsReplies()
     const QString first = orgs->index(0).data(OrgModel::OrgIdRole).toString();
     const QString second = orgs->index(1).data(OrgModel::OrgIdRole).toString();
     const QString guest = orgs->index(2).data(OrgModel::OrgIdRole).toString();
-    QVERIFY(orgs->index(0).data(OrgModel::CanAdministerRole).toBool());
-    QVERIFY(orgs->index(1).data(OrgModel::CanAdministerRole).toBool());
-    QVERIFY(!orgs->index(2).data(OrgModel::CanAdministerRole).toBool());
+    // Each organization's catalog decides the sections it opens.
+    auto *permissions = session.permissions();
+    QTRY_VERIFY(permissions->known(first) && permissions->known(second) && permissions->known(guest));
+    QVERIFY(permissions->sections(first).contains(QStringLiteral("members")));
+    QVERIFY(permissions->sections(second).contains(QStringLiteral("members")));
+    QVERIFY(permissions->sections(guest).isEmpty());
     session.openSettings();
     QVERIFY(session.settingsActive());
     auto *admin = session.orgAdmin();
@@ -2777,13 +2952,62 @@ void TestCore::orgAdminMutatesMembersAndInvitations()
     admin->open();
     QTRY_VERIFY(!admin->busy());
     QCOMPARE(admin->members()->rowCount(), 2);
-    admin->changeRole(id, QStringLiteral("admin"));
+    QCOMPARE(admin->members()->index(1).data(matome::OrgPeopleModel::LabelRole).toString(), QStringLiteral("colleague@example.com"));
+    // Organization roles, built-in ones included, are principal roles: Save
+    // grants the checked ones before taking back the others.
+    auto *directory = session.accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    auto *held = session.principalAccess();
+    held->open(QStringLiteral("user:") + id);
+    QTRY_VERIFY(!held->busy());
+    QCOMPARE(held->roleIds(), QStringList{QStringLiteral("role-member")});
+    held->setRoles({QStringLiteral("role-admin"), QStringLiteral("role-billing")});
+    QTRY_VERIFY(!held->busy());
+    QVERIFY(held->errorCode().isEmpty());
+    QCOMPARE(held->notice(), QStringLiteral("roles_saved"));
+    QCOMPARE(held->roleIds(), (QStringList{QStringLiteral("role-admin"), QStringLiteral("role-billing")}));
+    QTRY_COMPARE(admin->members()->index(1).data(matome::OrgPeopleModel::RolesRole).toStringList(),
+                 (QStringList{QStringLiteral("admin"), QStringLiteral("billing")}));
+    // The reload the role change asked for ends before the next change.
     QTRY_VERIFY(!admin->busy());
-    QCOMPARE(admin->members()->index(1).data(matome::OrgPeopleModel::RoleNameRole).toString(), QStringLiteral("admin"));
-    admin->invite(QStringLiteral(" invitee@example.com "), QStringLiteral("member"));
+    admin->invite(QStringLiteral(" invitee@example.com "), {QStringLiteral("member"), QStringLiteral("billing")});
     QTRY_VERIFY(!admin->busy());
     QCOMPARE(admin->invitations()->rowCount(), 1);
+    QCOMPARE(admin->invitations()->index(0).data(matome::OrgPeopleModel::RolesRole).toStringList(),
+             (QStringList{QStringLiteral("member"), QStringLiteral("billing")}));
+    admin->invite(QStringLiteral("owner@example.com"), {QStringLiteral("owner")});
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->errorCode(), QStringLiteral("invalid_role"));
     QCOMPARE(admin->invitations()->index(0).data(matome::OrgPeopleModel::StatusRole).toString(), QStringLiteral("pending"));
+    QVERIFY(admin->invitations()->index(0).data(matome::OrgPeopleModel::SpacesRole).toStringList().isEmpty());
+    // An invitation offers access to spaces, each named on its row; Core
+    // refuses a space it does not have or one named twice.
+    const QString space = session.currentSpaceId();
+    const QVariantMap offer{{QStringLiteral("space_id"), space}, {QStringLiteral("role_ids"), QStringList{QStringLiteral("role-content_reader")}}};
+    admin->invite(QStringLiteral("gone@example.com"), {QStringLiteral("member")},
+                  {QVariantMap{{QStringLiteral("space_id"), QStringLiteral("space-404")},
+                               {QStringLiteral("role_ids"), QStringList{QStringLiteral("role-content_reader")}}}});
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->errorCode(), QStringLiteral("not_found"));
+    admin->invite(QStringLiteral("twice@example.com"), {QStringLiteral("member")}, {offer, offer});
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->errorCode(), QStringLiteral("invalid_request"));
+    admin->invite(QStringLiteral("offered@example.com"), {QStringLiteral("member")}, {offer});
+    QTRY_VERIFY(!admin->busy());
+    QVERIFY(admin->errorCode().isEmpty());
+    QCOMPARE(admin->invitations()->rowCount(), 2);
+    QCOMPARE(admin->invitations()->index(1).data(matome::OrgPeopleModel::SpacesRole).toStringList(), QStringList{QStringLiteral("Inbox")});
+    // An invitation's page names the roles it gives in each space.
+    const QVariantMap offered = admin->invitation(admin->invitations()->index(1).data(matome::OrgPeopleModel::PersonIdRole).toString());
+    QCOMPARE(offered.value(QStringLiteral("label")).toString(), QStringLiteral("offered@example.com"));
+    QCOMPARE(offered.value(QStringLiteral("status")).toString(), QStringLiteral("pending"));
+    QCOMPARE(offered.value(QStringLiteral("roles")).toStringList(), QStringList{QStringLiteral("member")});
+    const QVariantMap spaceOffer = offered.value(QStringLiteral("spaces")).toList().constFirst().toMap();
+    QCOMPARE(spaceOffer.value(QStringLiteral("spaceId")).toString(), space);
+    QCOMPARE(spaceOffer.value(QStringLiteral("name")).toString(), QStringLiteral("Inbox"));
+    QCOMPARE(spaceOffer.value(QStringLiteral("roleIds")).toStringList(), QStringList{QStringLiteral("role-content_reader")});
+    QVERIFY(admin->invitation(QStringLiteral("missing")).isEmpty());
     const QString invitationId = admin->invitations()->index(0).data(matome::OrgPeopleModel::PersonIdRole).toString();
     admin->cancelInvitation(invitationId);
     QTRY_VERIFY(!admin->busy());
@@ -2791,6 +3015,64 @@ void TestCore::orgAdminMutatesMembersAndInvitations()
     admin->removeMember(id);
     QTRY_VERIFY(!admin->busy());
     QCOMPARE(admin->members()->rowCount(), 1);
+}
+
+// An account the organization manages is created with a username, its
+// roles, and a password or a one-time setup code; a new code replaces it,
+// and Core's refusals are kept as given.
+void TestCore::orgAdminCreatesManagedMembers()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(openInbox(core, session));
+    auto *admin = session.orgAdmin();
+    admin->open();
+    QTRY_VERIFY(!admin->busy());
+    QVERIFY(!admin->slug().isEmpty());
+    QSignalSpy saved(admin, &matome::OrgAdmin::changeSaved);
+    admin->createMember(QStringLiteral("Ana.Lima"), QStringLiteral(" Ana Lima "), {QStringLiteral("member")}, {});
+    QTRY_COMPARE(saved.size(), 1);
+    QCOMPARE(saved.constLast().at(0).toString(), QStringLiteral("member_created"));
+    QVERIFY(admin->setupCode().value(QStringLiteral("code")).toString().startsWith(QLatin1String("mst_")));
+    QVERIFY(!admin->setupCode().value(QStringLiteral("expiresAt")).toString().isEmpty());
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->members()->rowCount(), 2);
+    QCOMPARE(admin->members()->index(1).data(matome::OrgPeopleModel::LabelRole).toString(), QStringLiteral("Ana Lima"));
+    // The code shows until cleared; a password leaves none.
+    admin->clearSetupCode();
+    QVERIFY(admin->setupCode().isEmpty());
+    admin->createMember(QStringLiteral("robot"), {}, {QStringLiteral("admin"), QStringLiteral("billing")}, QStringLiteral("long-secret"));
+    QTRY_COMPARE(saved.size(), 2);
+    QVERIFY(admin->setupCode().isEmpty());
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->members()->index(2).data(matome::OrgPeopleModel::RolesRole).toStringList(),
+             (QStringList{QStringLiteral("admin"), QStringLiteral("billing")}));
+    // Refusals: a taken or invalid username, a short password.
+    admin->createMember(QStringLiteral("ana.lima"), {}, {QStringLiteral("member")}, {});
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->errorCode(), QStringLiteral("username_taken"));
+    admin->createMember(QStringLiteral("a"), {}, {QStringLiteral("member")}, {});
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->errorCode(), QStringLiteral("invalid_username"));
+    admin->createMember(QStringLiteral("short"), {}, {QStringLiteral("member")}, QStringLiteral("abc"));
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->errorCode(), QStringLiteral("invalid_request"));
+    QCOMPARE(saved.size(), 2);
+    // A new code for a managed account; a personal one has none.
+    const QString ana = admin->members()->index(1).data(matome::OrgPeopleModel::PersonIdRole).toString();
+    admin->issueSetupCode(ana);
+    QTRY_COMPARE(saved.size(), 3);
+    QCOMPARE(saved.constLast().at(0).toString(), QStringLiteral("setup_code_issued"));
+    QVERIFY(admin->setupCode().value(QStringLiteral("code")).toString().startsWith(QLatin1String("mst_")));
+    QTRY_VERIFY(!admin->busy());
+    admin->clearSetupCode();
+    admin->issueSetupCode(admin->members()->index(0).data(matome::OrgPeopleModel::PersonIdRole).toString());
+    QTRY_VERIFY(!admin->busy());
+    QCOMPARE(admin->errorCode(), QStringLiteral("not_managed"));
+    QVERIFY(admin->setupCode().isEmpty());
+    admin->close();
+    QVERIFY(admin->setupCode().isEmpty());
 }
 
 void TestCore::orgAdminGuardsLastOwnerAndReportsErrors()
@@ -2806,11 +3088,18 @@ void TestCore::orgAdminGuardsLastOwnerAndReportsErrors()
     admin->removeMember(owner);
     QTRY_VERIFY(!admin->busy());
     QCOMPARE(admin->errorCode(), QStringLiteral("last_owner"));
-    admin->changeRole(owner, QStringLiteral("member"));
+    session.accessDirectory()->open();
+    QTRY_VERIFY(!session.accessDirectory()->busy());
+    auto *held = session.principalAccess();
+    held->open(QStringLiteral("user:") + owner);
+    QTRY_VERIFY(!held->busy());
+    held->setRoles({QStringLiteral("role-member")});
+    QTRY_VERIFY(!held->busy());
+    QCOMPARE(held->errorCode(), QStringLiteral("last_owner"));
+    QCOMPARE(held->roleIds(), (QStringList{QStringLiteral("role-owner"), QStringLiteral("role-member")}));
     QTRY_VERIFY(!admin->busy());
-    QCOMPARE(admin->errorCode(), QStringLiteral("last_owner"));
     const int hits = core.hits();
-    admin->invite(QStringLiteral("bad"), QStringLiteral("member"));
+    admin->invite(QStringLiteral("bad"), {QStringLiteral("member")});
     QCOMPARE(admin->errorCode(), QStringLiteral("invalid_email"));
     admin->rename(QStringLiteral(" "));
     QCOMPARE(admin->errorCode(), QStringLiteral("invalid_request"));
@@ -2878,7 +3167,11 @@ void TestCore::orgAdminClosesWhenAdminAccessIsLost()
     session.openSettings();
     QTRY_VERIFY(!admin->busy());
     const QString id = admin->members()->index(0).data(matome::OrgPeopleModel::PersonIdRole).toString();
-    admin->changeRole(id, QStringLiteral("member"));
+    session.accessDirectory()->open();
+    QTRY_VERIFY(!session.accessDirectory()->busy());
+    session.principalAccess()->open(QStringLiteral("user:") + id);
+    QTRY_VERIFY(!session.principalAccess()->busy());
+    session.principalAccess()->setRoles({QStringLiteral("role-member")});
     QTRY_VERIFY(!admin->active());
     QVERIFY(!admin->available());
     QVERIFY(session.settingsActive());
@@ -2910,7 +3203,7 @@ void TestCore::orgAdminRestrictsEntryAndPaginates()
     QVERIFY(!admin->available());
     const int hits = core.hits();
     admin->open();
-    admin->invite(QStringLiteral("person@example.com"), QStringLiteral("admin"));
+    admin->invite(QStringLiteral("person@example.com"), {QStringLiteral("admin")});
     QVERIFY(!admin->active());
     QCOMPARE(core.hits(), hits);
 }
@@ -2922,8 +3215,7 @@ void TestCore::addOnsUseMockBackend()
     const QString org = QStringLiteral("org-mock");
     const QString path = matome::orgPath(org, QStringLiteral("add-ons"));
     QJsonObject installation{{QStringLiteral("status"), QStringLiteral("active")},
-        {QStringLiteral("revision"), 7}, {QStringLiteral("space_ids"), QJsonArray{QStringLiteral("space-a")}},
-        {QStringLiteral("settings"), QJsonObject{{QStringLiteral("keep"), true}}}};
+        {QStringLiteral("revision"), 7}, {QStringLiteral("settings"), QJsonObject{{QStringLiteral("keep"), true}}}};
     const auto product = [&installation] {
         return QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
             {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
@@ -2935,61 +3227,131 @@ void TestCore::addOnsUseMockBackend()
     backend.respond("GET", path, {{QStringLiteral("products"), QJsonArray{product()}}});
     backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")),
                     {{QStringLiteral("spaces"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("space-a")}}}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("members")), {{QStringLiteral("members"), QJsonArray{
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("m1")}, {QStringLiteral("email"), QStringLiteral("ana@example.com")},
+                    {QStringLiteral("status"), QStringLiteral("active")}},
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("m2")}, {QStringLiteral("email"), QStringLiteral("bo@example.com")},
+                    {QStringLiteral("status"), QStringLiteral("removed")}},
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("m3")}, {QStringLiteral("email"), QJsonValue::Null},
+                    {QStringLiteral("username"), QStringLiteral("robot")}, {QStringLiteral("status"), QStringLiteral("active")}}}}});
     backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
         {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject{{QStringLiteral("addon.controlled_docs"), true}}}}}});
     manager.setContext(org, true, true);
     manager.refresh();
     QTRY_VERIFY(!manager.busy());
-    QVERIFY(manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space-a")).value(QStringLiteral("available")).toBool());
-    QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space-b")).value(QStringLiteral("available")).toBool());
+    QVERIFY(manager.state(QStringLiteral("controlled_docs")).value(QStringLiteral("available")).toBool());
+    // Only active memberships may answer for an installation; a managed
+    // account reads as its username.
+    QCOMPARE(manager.members().size(), 2);
+    QCOMPARE(manager.members().constFirst().toMap().value(QStringLiteral("value")).toString(), QStringLiteral("m1"));
+    QCOMPARE(manager.members().constLast().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("robot"));
+    // A refresh asked for while one loads, such as after a new space, loads once more after it.
+    const auto loads = [&backend, &path] {
+        return std::count_if(backend.calls.cbegin(), backend.calls.cend(),
+                             [&path](const auto &call) { return call.method == "GET" && call.path == path; });
+    };
+    const auto loaded = loads();
+    manager.refresh();
+    QVERIFY(manager.busy());
+    manager.refresh();
+    manager.refresh();
+    QTRY_COMPARE(loads(), loaded + 2);
+    QTRY_VERIFY(!manager.busy());
+    QCOMPARE(loads(), loaded + 2);
     backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
         {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject{{QStringLiteral("addon.controlled_docs"), false}}}}}});
     manager.refresh();
     QTRY_VERIFY(!manager.busy());
-    QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space-a")).value(QStringLiteral("entitled")).toBool());
+    QVERIFY(!manager.state(QStringLiteral("controlled_docs")).value(QStringLiteral("entitled")).toBool());
     const int forbiddenCalls = backend.calls.size();
-    manager.install(QStringLiteral("controlled_docs"), {});
+    manager.install(QStringLiteral("controlled_docs"));
     QCOMPARE(backend.calls.size(), forbiddenCalls);
     backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
         {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject{{QStringLiteral("addon.controlled_docs"), true}}}}}});
     manager.refresh();
     QTRY_VERIFY(!manager.busy());
-    const int calls = backend.calls.size();
-    manager.install(QStringLiteral("controlled_docs"), {QStringLiteral("unknown-space")});
-    QCOMPARE(backend.calls.size(), calls);
     backend.respond("POST", path + QStringLiteral("/controlled_docs/installation/pause"), {});
     installation.insert(QStringLiteral("status"), QStringLiteral("paused"));
     backend.respond("GET", path, {{QStringLiteral("products"), QJsonArray{product()}}});
     manager.pause(QStringLiteral("controlled_docs"));
     QTRY_VERIFY(!manager.busy());
-    QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space-a")).value(QStringLiteral("available")).toBool());
+    QVERIFY(!manager.state(QStringLiteral("controlled_docs")).value(QStringLiteral("available")).toBool());
     QCOMPARE(manager.notice(), QStringLiteral("installation_paused"));
     backend.respond("PUT", path + QStringLiteral("/controlled_docs/installation"), {});
-    manager.install(QStringLiteral("controlled_docs"), {});
+    // Resuming sends the saved settings back unchanged.
+    manager.resume(QStringLiteral("controlled_docs"));
     const auto resume = backend.calls.constLast();
     QCOMPARE(resume.method, QByteArray("PUT"));
-    QVERIFY(resume.body.value(QStringLiteral("settings")).toObject().value(QStringLiteral("keep")).toBool());
-    QVERIFY(resume.body.value(QStringLiteral("space_ids")).toArray().isEmpty());
+    QCOMPARE(resume.body, (QJsonObject{{QStringLiteral("settings"), QJsonObject{{QStringLiteral("keep"), true}}}}));
     QVERIFY(!resume.headers.isEmpty());
     QTRY_VERIFY(!manager.busy());
+    QCOMPARE(manager.notice(), QStringLiteral("installation_resumed"));
+    installation.insert(QStringLiteral("status"), QStringLiteral("active"));
+    backend.respond("GET", path, {{QStringLiteral("products"), QJsonArray{product()}}});
+    manager.refresh();
+    QTRY_VERIFY(!manager.busy());
+    const int active = backend.calls.size();
+    manager.resume(QStringLiteral("controlled_docs"));
+    QCOMPARE(backend.calls.size(), active);
     backend.respond("PATCH", path + QStringLiteral("/controlled_docs/installation"), {});
     manager.saveSettings(QStringLiteral("controlled_docs"), {{QStringLiteral("required_approvals"), 3}});
     const auto patch = backend.calls.constLast();
     QCOMPARE(patch.method, QByteArray("PATCH"));
     QCOMPARE(patch.body.value(QStringLiteral("settings")).toObject().value(QStringLiteral("required_approvals")).toInt(), 3);
-    QVERIFY(!patch.body.contains(QStringLiteral("space_ids")));
     QTRY_VERIFY(!manager.busy());
     QCOMPARE(manager.notice(), QStringLiteral("settings_saved"));
-    manager.install(QStringLiteral("controlled_docs"), {QStringLiteral("space-a")}, {{QStringLiteral("required_approvals"), 2}});
-    const auto configured = backend.calls.constLast().body.value(QStringLiteral("settings")).toObject();
-    QVERIFY(configured.value(QStringLiteral("keep")).toBool());
-    QCOMPARE(configured.value(QStringLiteral("required_approvals")).toInt(), 2);
+    manager.install(QStringLiteral("controlled_docs"), {{QStringLiteral("required_approvals"), 2}});
+    const auto configured = backend.calls.constLast().body;
+    QCOMPARE(configured.keys(), QStringList{QStringLiteral("settings")});
+    QVERIFY(configured.value(QStringLiteral("settings")).toObject().value(QStringLiteral("keep")).toBool());
+    QCOMPARE(configured.value(QStringLiteral("settings")).toObject().value(QStringLiteral("required_approvals")).toInt(), 2);
+    QTRY_VERIFY(!manager.busy());
+    // Reassigning sends only the membership; a refusal says Core's reason.
+    backend.respond("PATCH", path + QStringLiteral("/controlled_docs/installation"), {}, 422, QStringLiteral("invalid_responsible_membership"));
+    manager.assign(QStringLiteral("controlled_docs"), QStringLiteral("m1"));
+    const auto assigned = backend.calls.constLast();
+    QCOMPARE(assigned.method, QByteArray("PATCH"));
+    QCOMPARE(assigned.body, (QJsonObject{{QStringLiteral("responsible_membership_id"), QStringLiteral("m1")}}));
+    QTRY_VERIFY(!manager.busy());
+    QCOMPARE(manager.errorCode(), QStringLiteral("invalid_responsible_membership"));
+    installation.insert(QStringLiteral("responsible_membership_id"), QStringLiteral("m1"));
+    backend.respond("GET", path, {{QStringLiteral("products"), QJsonArray{product()}}});
+    manager.refresh();
+    QTRY_VERIFY(!manager.busy());
+    const int unchanged = backend.calls.size();
+    manager.assign(QStringLiteral("controlled_docs"), QStringLiteral("m1"));
+    QCOMPARE(backend.calls.size(), unchanged);
+    // Uninstalling sends the reason; Core marks the installation
+    // uninstalled, which reads as not installed.
+    installation.insert(QStringLiteral("status"), QStringLiteral("uninstalled"));
+    backend.respond("DELETE", path + QStringLiteral("/controlled_docs/installation"),
+                    {{QStringLiteral("installation"), installation}});
+    backend.respond("GET", path, {{QStringLiteral("products"), QJsonArray{product()}}});
+    manager.uninstall(QStringLiteral("controlled_docs"), QStringLiteral(" Retire "));
+    const auto removal = backend.calls.constLast();
+    QCOMPARE(removal.method, QByteArray("DELETE"));
+    QCOMPARE(removal.path, path + QStringLiteral("/controlled_docs/installation"));
+    QCOMPARE(removal.body.value(QStringLiteral("reason")).toString(), QStringLiteral("Retire"));
+    QTRY_VERIFY(!manager.busy());
+    QCOMPARE(manager.notice(), QStringLiteral("installation_removed"));
+    QVERIFY(manager.state(QStringLiteral("controlled_docs")).value(QStringLiteral("status")).toString().isEmpty());
+    QVERIFY(manager.product(QStringLiteral("controlled_docs")).value(QStringLiteral("installation")).isNull());
+    // Uninstalled, nothing is uninstalled again, resumed, or changed, and
+    // installing again names no space and no responsible member: Core makes
+    // it available everywhere and answers for the installer.
+    const int absent = backend.calls.size();
+    manager.resume(QStringLiteral("controlled_docs"));
+    manager.uninstall(QStringLiteral("controlled_docs"), QStringLiteral("Again"));
+    manager.saveSettings(QStringLiteral("controlled_docs"), {{QStringLiteral("required_approvals"), 2}});
+    QCOMPARE(backend.calls.size(), absent);
+    manager.install(QStringLiteral("controlled_docs"));
+    QCOMPARE(backend.calls.constLast().body, (QJsonObject{{QStringLiteral("settings"), QJsonObject()}}));
     QTRY_VERIFY(!manager.busy());
     manager.setContext(org, true, false);
     manager.refresh();
     QTRY_VERIFY(!manager.busy());
     const int readonlyCalls = backend.calls.size();
-    manager.install(QStringLiteral("controlled_docs"), {});
+    manager.install(QStringLiteral("controlled_docs"));
     manager.pause(QStringLiteral("controlled_docs"));
     manager.saveSettings(QStringLiteral("controlled_docs"), {{QStringLiteral("required_approvals"), 2}});
     QCOMPARE(backend.calls.size(), readonlyCalls);
@@ -3009,7 +3371,7 @@ void TestCore::addOnsDiscardStaleMockReplies()
     QVERIFY(!manager.busy());
     QVERIFY(manager.products().isEmpty());
     QVERIFY(manager.errorCode().isEmpty());
-    QVERIFY(!manager.state(QStringLiteral("controlled_docs"), QStringLiteral("space")).value(QStringLiteral("known")).toBool());
+    QVERIFY(!manager.state(QStringLiteral("controlled_docs")).value(QStringLiteral("known")).toBool());
 }
 
 namespace {
@@ -3037,6 +3399,67 @@ void serveDocument(matome::test::MockAddOnBackend &backend, const QString &doc, 
         backend.file(QUrl(url), bytes);
     }
     backend.respond("GET", doc + QStringLiteral("/versions"), {{QStringLiteral("data"), rows}});
+}
+
+// The controlled-documents add-on installed in `org`.
+// Reads the organization's catalog again, and waits until the add-ons
+// follow what it allows.
+bool followCatalog(Session &session)
+{
+    session.permissions()->reload();
+    return QTest::qWaitFor([&session] { return session.addOns()->canInstall(); });
+}
+
+void serveControlledDocs(matome::test::MockAddOnBackend &backend, const QString &org,
+                         const QString &status = QStringLiteral("active"))
+{
+    // An owner reads and installs add-ons.
+    const auto allowed = [](const QString &key) {
+        return QJsonObject{{QStringLiteral("key"), key}, {QStringLiteral("axis"), QStringLiteral("organization")},
+                           {QStringLiteral("token_scope"), QStringLiteral("organization")}, {QStringLiteral("allowed"), true}};
+    };
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("action-catalog")),
+                    {{QStringLiteral("actions"), QJsonArray{allowed(QStringLiteral("add_on.read")), allowed(QStringLiteral("add_on.install"))}}});
+    const QJsonObject product{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), status}, {QStringLiteral("revision"), 1}}}};
+    backend.respond("GET", QStringLiteral("/api/v1/add-ons"), {{QStringLiteral("products"), QJsonArray{product}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("add-ons")), {{QStringLiteral("products"), QJsonArray{product}}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")), {{QStringLiteral("spaces"), QJsonArray()}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("members")), {{QStringLiteral("members"), QJsonArray()}});
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
+        {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"),
+            QJsonObject{{QStringLiteral("addon.controlled_docs"), true}}}}}});
+}
+
+// The space's add-ons as `GET …/add-ons` lists them: controlled documents,
+// turned on there when `active`, with the space's `settings` overrides
+// in effect.
+QJsonObject spaceAddOns(bool active, const QJsonObject &settings = {}, const QJsonValue &revision = 2)
+{
+    return {{QStringLiteral("add_ons"), QJsonArray{QJsonObject{
+        {QStringLiteral("product_key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("installation_status"), QStringLiteral("active")},
+        {QStringLiteral("status"), active ? QStringLiteral("active") : QStringLiteral("inactive")}, {QStringLiteral("active"), active},
+        {QStringLiteral("settings"), settings}, {QStringLiteral("effective_settings"), settings},
+        {QStringLiteral("revision"), revision}}}}};
+}
+
+Client::Reply refusal(int status, const QString &code)
+{
+    Client::Reply reply;
+    reply.status = status;
+    reply.code = code;
+    return reply;
+}
+
+// The first call to `path` with `method` from `from` on, or -1.
+qsizetype callAt(const matome::test::MockAddOnBackend &backend, const QByteArray &method, const QString &path,
+                 qsizetype from = 0)
+{
+    for (auto at = from; at < backend.calls.size(); ++at)
+        if (backend.calls.at(at).method == method && backend.calls.at(at).path == path) return at;
+    return -1;
 }
 
 } // namespace
@@ -3245,12 +3668,11 @@ void TestCore::controlledDocsExtendDocumentView()
     QJsonObject review{{QStringLiteral("id"), QStringLiteral("review-one")}, {QStringLiteral("revision"), 5},
         {QStringLiteral("status"), QStringLiteral("open")}, {QStringLiteral("author_membership_id"), QStringLiteral("author")},
         {QStringLiteral("candidate_version_id"), QStringLiteral("candidate")}};
-    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("controlled-docs-rule")),
-                    {{QStringLiteral("data"), QJsonObject{{QStringLiteral("active"), true}, {QStringLiteral("revision"), 2}}}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("add-ons")), spaceAddOns(true));
     backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{review}}});
     backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
                     {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("author")},
-                        {QStringLiteral("email"), session.email()}}}}});
+                        {QStringLiteral("email"), session.identifier()}, {QStringLiteral("user_id"), session.userId()}}}}});
     const QJsonObject changedImage{{QStringLiteral("document_id"), 7}, {QStringLiteral("from_version_id"), QStringLiteral("before")},
                                    {QStringLiteral("to_version_id"), QStringLiteral("after")}};
     backend.respond("GET", reviewPath + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QStringLiteral("-old\n+new")},
@@ -3292,7 +3714,7 @@ void TestCore::controlledDocsExtendDocumentView()
     QCOMPARE(backend.calls.size(), hits);
     backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
                     {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("reviewer")},
-                        {QStringLiteral("email"), session.email()}}}}});
+                        {QStringLiteral("email"), session.identifier()}, {QStringLiteral("user_id"), session.userId()}}}}});
     control->refresh();
     QTRY_VERIFY(!control->busy());
     QCOMPARE(control->review().value(QStringLiteral("id")).toString(), QStringLiteral("review-one"));
@@ -3338,6 +3760,15 @@ void TestCore::controlledDocsExtendDocumentView()
     session.runCommand(QStringLiteral("open-review"));
     QCOMPARE(control->review().value(QStringLiteral("id")).toString(), QStringLiteral("review-two"));
     session.runCommand(QStringLiteral("close-review"));
+    QTRY_VERIFY(!control->busy());
+    backend.respond("DELETE", doc + QStringLiteral("/controlled-docs"), {});
+    control->setControlled(false, QStringLiteral(" Retire "));
+    const auto unmanaged = backend.calls.constLast();
+    QCOMPARE(unmanaged.method, QByteArray("DELETE"));
+    QCOMPARE(unmanaged.path, doc + QStringLiteral("/controlled-docs"));
+    QCOMPARE(unmanaged.body.value(QStringLiteral("reason")).toString(), QStringLiteral("Retire"));
+    QVERIFY(unmanaged.headers.contains(qMakePair(QByteArrayLiteral("If-Match"), QByteArrayLiteral("3"))));
+    QTRY_VERIFY(!control->busy());
     view->close();
     QVERIFY(!control->active());
     QVERIFY(control->reviews().isEmpty());
@@ -3374,18 +3805,17 @@ void TestCore::controlledDocsRunParallelReviews()
                            {QStringLiteral("base_version_id"), QStringLiteral("v1")},
                            {QStringLiteral("candidate_version_id"), id + QStringLiteral("-candidate")}};
     };
-    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("controlled-docs-rule")),
-                    {{QStringLiteral("data"), QJsonObject{{QStringLiteral("active"), true}, {QStringLiteral("revision"), 2}}}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("add-ons")), spaceAddOns(true));
     backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{
         reviewRow(QStringLiteral("done"), QStringLiteral("approved"), QStringLiteral("clean")),
         reviewRow(QStringLiteral("behind"), QStringLiteral("open"), QStringLiteral("behind")),
         reviewRow(QStringLiteral("dirty"), QStringLiteral("open"), QStringLiteral("dirty"))}}});
     const auto member = [&backend, &session, org](const QString &id) {
         backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
-                        {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("email"), session.email()}}}}});
+                        {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("email"), session.identifier()}, {QStringLiteral("user_id"), session.userId()}}}}});
     };
     member(QStringLiteral("author"));
-    for (const QString id : {QStringLiteral("behind"), QStringLiteral("dirty")}) {
+    for (const QString &id : {QStringLiteral("behind"), QStringLiteral("dirty")}) {
         const QString path = matome::orgPath(org, QStringLiteral("reviews/") + id);
         backend.respond("GET", path + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QString()}}}});
         backend.respond("GET", path + QStringLiteral("/candidate/download"),
@@ -3524,12 +3954,13 @@ void TestCore::controlledDocsCountApprovals()
     };
     const QJsonArray approvedByAuthor{QJsonObject{{QStringLiteral("id"), QStringLiteral("approval")},
         {QStringLiteral("approving_membership_id"), QStringLiteral("author")}, {QStringLiteral("candidate_version_id"), QStringLiteral("candidate")}}};
-    // The rule is for managers only: the open review says links must pin.
-    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("controlled-docs-rule")), {}, 403, QStringLiteral("forbidden"));
+    // The space's settings are for who may turn the add-on on: the open
+    // review says links must pin.
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("add-ons")), {}, 403, QStringLiteral("forbidden"));
     backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray{review(true, {})}}});
     backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
                     {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("author")},
-                        {QStringLiteral("email"), session.email()}}}}});
+                        {QStringLiteral("email"), session.identifier()}, {QStringLiteral("user_id"), session.userId()}}}}});
     backend.respond("GET", path + QStringLiteral("/diff"), {{QStringLiteral("data"), QJsonObject{{QStringLiteral("diff"), QString()}}}});
     backend.respond("GET", path + QStringLiteral("/candidate/download"),
                     {{QStringLiteral("data"), QJsonObject{{QStringLiteral("url"), QStringLiteral("https://storage.invalid/pending")}}}});
@@ -3574,6 +4005,1180 @@ void TestCore::controlledDocsCountApprovals()
     QVERIFY(!control->canReject());
 }
 
+void TestCore::accessDirectoryManagesGroupsRolesTagsAndSpaces()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId();
+    seedDirectory(backend, org);
+    auto *directory = session.accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    QCOMPARE(directory->errorCode(), QString());
+    // The reserved action never reaches the editor; areas come from the key.
+    QCOMPARE(directory->catalog().size(), 3);
+    QCOMPARE(directory->catalog().constFirst().toMap().value(QStringLiteral("area")).toString(), QStringLiteral("content"));
+    QCOMPARE(directory->catalog().at(1).toMap().value(QStringLiteral("area")).toString(), QStringLiteral("addon.controlled_docs"));
+    // A role applies to the organization when built in for it or holding an
+    // organization action; only built-in space roles are never assigned.
+    const auto field = [directory](const QString &id, const QString &name) {
+        for (const auto &role : directory->roles())
+            if (role.toMap().value(QStringLiteral("id")) == id) return role.toMap().value(name);
+        return QVariant();
+    };
+    QCOMPARE(field(QStringLiteral("owner-role"), QStringLiteral("appliesTo")).toString(), QStringLiteral("organization"));
+    QCOMPARE(field(QStringLiteral("viewer-role"), QStringLiteral("appliesTo")).toString(), QStringLiteral("space"));
+    QCOMPARE(field(QStringLiteral("custom-role"), QStringLiteral("appliesTo")).toString(), QStringLiteral("organization"));
+    QVERIFY(field(QStringLiteral("owner-role"), QStringLiteral("assignable")).toBool());
+    QVERIFY(!field(QStringLiteral("viewer-role"), QStringLiteral("assignable")).toBool());
+    QVERIFY(field(QStringLiteral("custom-role"), QStringLiteral("assignable")).toBool());
+    QCOMPARE(directory->members().constFirst().toMap().value(QStringLiteral("email")).toString(), QStringLiteral("ana@example.com"));
+    QVERIFY(!directory->members().constFirst().toMap().value(QStringLiteral("managed")).toBool());
+    // Built-in organization roles and custom ones are given across the organization.
+    QCOMPARE(directory->assignableRoles().size(), 2);
+    // Grants carry every role but those that apply only across the organization.
+    QStringList grantable;
+    for (const auto &role : directory->grantableRoles()) grantable.append(role.toMap().value(QStringLiteral("id")).toString());
+    QCOMPARE(grantable, (QStringList{QStringLiteral("viewer-role"), QStringLiteral("custom-role")}));
+    const auto legal = directory->groups().constFirst().toMap();
+    QCOMPARE(legal.value(QStringLiteral("members")).toList().constFirst().toMap().value(QStringLiteral("label")).toString(),
+             QStringLiteral("bo@example.com"));
+    QCOMPARE(directory->principals(false).size(), 3);
+    QCOMPARE(directory->principals(true).size(), 6);
+    QCOMPARE(directory->principalName(QStringLiteral("group:g1")), QStringLiteral("Legal"));
+
+    // A reload that reads the same rows does not say the lists changed.
+    QSignalSpy listed(directory, &matome::AccessDirectory::listsChanged);
+    directory->open();
+    QVERIFY(directory->busy());
+    QTRY_VERIFY(!directory->busy());
+    QCOMPARE(listed.size(), 0);
+
+    QSignalSpy saved(directory, &matome::AccessDirectory::saved);
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("groups")),
+                    {{QStringLiteral("group"), QJsonObject{{QStringLiteral("id"), QStringLiteral("g2")}}}}, 201);
+    directory->createGroup(QStringLiteral("  Ops "));
+    QTRY_COMPARE(saved.size(), 1);
+    QCOMPARE(saved.constLast().at(0).toString(), QStringLiteral("group_created"));
+    QCOMPARE(saved.constLast().at(1).toString(), QStringLiteral("g2"));
+    const auto created = lastCall(backend, "POST", matome::orgPath(org, QStringLiteral("groups")));
+    QCOMPARE(created.body.value(QStringLiteral("name")).toString(), QStringLiteral("Ops"));
+    QVERIFY(!created.headers.isEmpty() && created.headers.constFirst().first == QByteArrayLiteral("Idempotency-Key"));
+    QTRY_VERIFY(!directory->busy());
+
+    // A group's members are set by what changes: Ana joins Legal and Bo,
+    // already in it, stays; then Bo leaves.
+    const QString groupMembers = matome::orgPath(org, QStringLiteral("groups/g1/members"));
+    backend.respond("POST", groupMembers, {}, 201);
+    auto sent = backend.calls.size();
+    directory->setGroupMembers(QStringLiteral("g1"), {QStringLiteral("m1"), QStringLiteral("m2"), QStringLiteral("gone")});
+    QTRY_COMPARE(directory->notice(), QStringLiteral("group_members_saved"));
+    QCOMPARE(lastCall(backend, "POST", groupMembers).body.value(QStringLiteral("organization_membership_id")).toString(), QStringLiteral("m1"));
+    QCOMPARE(callAt(backend, "POST", groupMembers, callAt(backend, "POST", groupMembers, sent) + 1), -1);
+    QCOMPARE(callAt(backend, "DELETE", groupMembers + QStringLiteral("/m2"), sent), -1);
+    QTRY_VERIFY(!directory->busy());
+    backend.respond("DELETE", groupMembers + QStringLiteral("/m2"), {});
+    sent = backend.calls.size();
+    directory->setGroupMembers(QStringLiteral("g1"), {});
+    QTRY_COMPARE(directory->notice(), QStringLiteral("group_members_saved"));
+    QVERIFY(callAt(backend, "DELETE", groupMembers + QStringLiteral("/m2"), sent) >= 0);
+    QTRY_VERIFY(!directory->busy());
+    // A member's groups are set by what changes: Bo leaves Legal, Ana joins it.
+    sent = backend.calls.size();
+    directory->setMemberGroups(QStringLiteral("m2"), {QStringLiteral("g1")});
+    QCOMPARE(backend.calls.size(), sent);
+    directory->setMemberGroups(QStringLiteral("m2"), {});
+    QTRY_COMPARE(directory->notice(), QStringLiteral("groups_saved"));
+    QVERIFY(callAt(backend, "DELETE", groupMembers + QStringLiteral("/m2"), sent) >= 0);
+    QTRY_VERIFY(!directory->busy());
+    // A refusal says why and names no notice; whatever landed reloads.
+    backend.respond("POST", groupMembers, {}, 404, QStringLiteral("not_found"));
+    sent = backend.calls.size();
+    directory->setMemberGroups(QStringLiteral("m1"), {QStringLiteral("g1")});
+    QTRY_COMPARE(directory->errorCode(), QStringLiteral("not_found"));
+    QVERIFY(directory->notice().isEmpty());
+    QTRY_VERIFY(callAt(backend, "GET", groupMembers, sent) >= 0);
+    QTRY_VERIFY(!directory->busy());
+
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("roles")),
+                    {{QStringLiteral("role"), QJsonObject{{QStringLiteral("id"), QStringLiteral("r2")}}}}, 201);
+    directory->createRole(QStringLiteral("Auditors"), {QStringLiteral("content.download")});
+    QTRY_COMPARE(directory->notice(), QStringLiteral("role_created"));
+    const auto role = lastCall(backend, "POST", matome::orgPath(org, QStringLiteral("roles"))).body;
+    QVERIFY(role.value(QStringLiteral("key")).toString().startsWith(QLatin1String("custom-")));
+    QCOMPARE(role.value(QStringLiteral("actions")).toArray(), QJsonArray{QStringLiteral("content.download")});
+    QTRY_VERIFY(!directory->busy());
+    // Built-in roles do not change.
+    const auto before = backend.calls.size();
+    directory->updateRole(QStringLiteral("viewer-role"), QStringLiteral("Viewers"), {QStringLiteral("content.download")});
+    directory->archiveRole(QStringLiteral("viewer-role"));
+    QCOMPARE(backend.calls.size(), before);
+    backend.respond("PATCH", matome::orgPath(org, QStringLiteral("roles/custom-role")), {});
+    directory->updateRole(QStringLiteral("custom-role"), QStringLiteral("Reviewers"), {QStringLiteral("addon.controlled_docs.review_read")});
+    QTRY_COMPARE(directory->notice(), QStringLiteral("role_saved"));
+    QTRY_VERIFY(!directory->busy());
+
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("tags")),
+                    {{QStringLiteral("tag"), QJsonObject{{QStringLiteral("id"), QStringLiteral("t2")}}}}, 201);
+    directory->createTag(QStringLiteral("Draft"), false);
+    QTRY_COMPARE(directory->notice(), QStringLiteral("tag_created"));
+    QCOMPARE(lastCall(backend, "POST", matome::orgPath(org, QStringLiteral("tags"))).body.value(QStringLiteral("access_controlled")), QJsonValue(false));
+    QTRY_VERIFY(!directory->busy());
+    // Lifting a restriction sends the `false` rather than leaving it out.
+    backend.respond("PATCH", matome::orgPath(org, QStringLiteral("tags/t1")), {});
+    directory->updateTag(QStringLiteral("t1"), QStringLiteral("Secret"), false);
+    QTRY_COMPARE(directory->notice(), QStringLiteral("tag_opened"));
+    const auto lifted = lastCall(backend, "PATCH", matome::orgPath(org, QStringLiteral("tags/t1"))).body;
+    QVERIFY(lifted.contains(QStringLiteral("access_controlled")));
+    QVERIFY(!lifted.value(QStringLiteral("access_controlled")).toBool());
+    QTRY_VERIFY(!directory->busy());
+    for (const auto &[leaf, archive] : {std::pair{QStringLiteral("tags/t1/archive"), &matome::AccessDirectory::archiveTag},
+                                        std::pair{QStringLiteral("groups/g1/archive"), &matome::AccessDirectory::archiveGroup},
+                                        std::pair{QStringLiteral("roles/custom-role/archive"), &matome::AccessDirectory::archiveRole}}) {
+        backend.respond("POST", matome::orgPath(org, leaf), {});
+        (directory->*archive)(leaf.section(QLatin1Char('/'), 1, 1));
+        QTRY_VERIFY(directory->notice().endsWith(QLatin1String("_archived")));
+        QVERIFY(!lastCall(backend, "POST", matome::orgPath(org, leaf)).method.isEmpty());
+        QTRY_VERIFY(!directory->busy());
+    }
+
+    // A space is renamed, trimmed, and archived on Core's space routes.
+    backend.respond("PATCH", matome::orgPath(org, QStringLiteral("spaces/s1")), {});
+    directory->renameSpace(QStringLiteral("s1"), QStringLiteral("  Agreements "));
+    QTRY_COMPARE(directory->notice(), QStringLiteral("space_renamed"));
+    QCOMPARE(lastCall(backend, "PATCH", matome::orgPath(org, QStringLiteral("spaces/s1"))).body,
+             (QJsonObject{{QStringLiteral("name"), QStringLiteral("Agreements")}}));
+    QTRY_VERIFY(!directory->busy());
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("spaces/s1/archive")), {});
+    directory->archiveSpace(QStringLiteral("s1"));
+    QTRY_COMPARE(directory->notice(), QStringLiteral("space_archived"));
+    QVERIFY(!lastCall(backend, "POST", matome::orgPath(org, QStringLiteral("spaces/s1/archive"))).method.isEmpty());
+    QTRY_VERIFY(!directory->busy());
+    // No name, or no space, sends nothing.
+    const auto unnamed = backend.calls.size();
+    directory->renameSpace(QStringLiteral("s1"), QStringLiteral("  "));
+    directory->archiveSpace(QString());
+    QCOMPARE(backend.calls.size(), unnamed);
+
+    saved.clear();
+    backend.respond("POST", matome::orgPath(org, QStringLiteral("groups")), {}, 409, QStringLiteral("already_exists"));
+    directory->createGroup(QStringLiteral("Legal"));
+    QTRY_COMPARE(directory->errorCode(), QStringLiteral("already_exists"));
+    QVERIFY(saved.isEmpty());
+
+    // Another organization closes the directory.
+    directory->close();
+    QVERIFY(!directory->active());
+    QVERIFY(directory->groups().isEmpty());
+}
+
+// The explorer offers what the current space's action catalog allows once
+// it speaks for the space; access held only below the space leaves Core to
+// decide.
+void TestCore::explorerFollowsTheSpaceCatalog()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString catalog = matome::orgPath(org, QStringLiteral("action-catalog?space_id=") + space);
+    QTRY_VERIFY(callAt(backend, "GET", catalog) >= 0);
+    QVERIFY(usable(session, QStringLiteral("upload")));
+    const auto allowing = [](const QStringList &keys) {
+        QJsonArray actions;
+        for (const QString &key : {QStringLiteral("content.list"), QStringLiteral("content.download"),
+                                   QStringLiteral("upload.create"), QStringLiteral("folder.create")})
+            actions.append(QJsonObject{{QStringLiteral("key"), key}, {QStringLiteral("allowed"), keys.contains(key)}});
+        return QJsonObject{{QStringLiteral("actions"), actions}};
+    };
+    // Read in the space: no uploads and no new folders.
+    backend.respond("GET", catalog, allowing({QStringLiteral("content.list"), QStringLiteral("content.download")}));
+    session.runCommand(QStringLiteral("refresh"));
+    QTRY_VERIFY(!usable(session, QStringLiteral("upload")));
+    QVERIFY(!usable(session, QStringLiteral("new")));
+    QVERIFY(usable(session, QStringLiteral("refresh")));
+    // Edit there brings them back.
+    backend.respond("GET", catalog, allowing({QStringLiteral("content.list"), QStringLiteral("upload.create"),
+                                              QStringLiteral("folder.create")}));
+    session.runCommand(QStringLiteral("refresh"));
+    QTRY_VERIFY(usable(session, QStringLiteral("upload")));
+    QVERIFY(usable(session, QStringLiteral("new")));
+    // Without listing the space, the catalog does not speak for it.
+    backend.respond("GET", catalog, allowing({}));
+    session.runCommand(QStringLiteral("refresh"));
+    const auto read = backend.calls.size();
+    QTRY_VERIFY(callAt(backend, "GET", catalog, read - 1) >= 0);
+    QTest::qWait(10);
+    QVERIFY(usable(session, QStringLiteral("upload")));
+    QVERIFY(usable(session, QStringLiteral("new")));
+}
+
+// A refusal says what is missing, from the space's catalog, the add-on's
+// state, and the roles that hold the action, and names the command that
+// fixes it, usable by whoever may carry it out from Settings. Roles made of
+// grant-bound space actions are offered only on places.
+void TestCore::permissionsExplainRefusals()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString manage = QStringLiteral("addon.controlled_docs.document_manage");
+    const auto action = [](const QString &key, const QString &axis, bool allowed, bool bound = false, const QString &product = {}) {
+        QJsonObject row{{QStringLiteral("key"), key}, {QStringLiteral("axis"), axis}, {QStringLiteral("allowed"), allowed},
+                        {QStringLiteral("resource_grant"), bound}};
+        if (!product.isEmpty()) row.insert(QStringLiteral("product_key"), product);
+        return row;
+    };
+    serveControlledDocs(backend, org);
+    // The organization: add-ons read and installed, grants read, no billing.
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("action-catalog")), {{QStringLiteral("actions"), QJsonArray{
+        action(QStringLiteral("add_on.read"), QStringLiteral("organization"), true),
+        action(QStringLiteral("add_on.install"), QStringLiteral("organization"), true),
+        action(QStringLiteral("billing.manage"), QStringLiteral("organization"), false),
+        action(QStringLiteral("role.read"), QStringLiteral("organization"), true),
+        action(QStringLiteral("resource_grant.read"), QStringLiteral("space"), true),
+        action(QStringLiteral("content.list"), QStringLiteral("space"), false, true),
+        action(QStringLiteral("upload.create"), QStringLiteral("space"), false, true),
+        action(manage, QStringLiteral("space"), false, true, QStringLiteral("controlled_docs"))}}});
+    const auto role = [](const QString &id, const QString &key, const QString &origin, const QStringList &actions) {
+        return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("key"), key}, {QStringLiteral("name"), key},
+                           {QStringLiteral("origin"), origin}, {QStringLiteral("actions"), QJsonArray::fromStringList(actions)}};
+    };
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray{
+        role(QStringLiteral("r-member"), QStringLiteral("member"), QStringLiteral("system"), {QStringLiteral("content.list"), QStringLiteral("role.read")}),
+        role(QStringLiteral("r-billing"), QStringLiteral("billing"), QStringLiteral("system"), {QStringLiteral("billing.manage")}),
+        role(QStringLiteral("r-owner"), QStringLiteral("owner"), QStringLiteral("system"), {QStringLiteral("billing.manage"), QStringLiteral("role.read")}),
+        role(QStringLiteral("r-manager"), QStringLiteral("content_manager"), QStringLiteral("system"),
+             {QStringLiteral("content.list"), QStringLiteral("upload.create"), QStringLiteral("document.purge")}),
+        role(QStringLiteral("r-contributor"), QStringLiteral("content_contributor"), QStringLiteral("system"),
+             {QStringLiteral("content.list"), QStringLiteral("upload.create")}),
+        role(QStringLiteral("r-docs"), QStringLiteral("addon.controlled_docs.manager"), QStringLiteral("add_on"), {manage}),
+        role(QStringLiteral("r-mixed"), QStringLiteral("custom-mixed"), QStringLiteral("organization"), {manage, QStringLiteral("role.read")})}}});
+    QVERIFY(followCatalog(session));
+    auto *permissions = session.permissions();
+    QVERIFY(permissions->known(org));
+    QVERIFY(!permissions->known(QStringLiteral("elsewhere")));
+    QCOMPARE(permissions->sections(org), (QStringList{QStringLiteral("spaces"), QStringLiteral("addons")}));
+    auto *directory = session.accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+    // Grant-bound space actions alone: given on places only.
+    const auto row = [directory](const QString &id) {
+        for (const auto &value : directory->roles())
+            if (value.toMap().value(QStringLiteral("id")) == id) return value.toMap();
+        return QVariantMap();
+    };
+    QVERIFY(row(QStringLiteral("r-docs")).value(QStringLiteral("placeOnly")).toBool());
+    QVERIFY(!row(QStringLiteral("r-docs")).value(QStringLiteral("assignable")).toBool());
+    QVERIFY(!row(QStringLiteral("r-mixed")).value(QStringLiteral("placeOnly")).toBool());
+    QVERIFY(row(QStringLiteral("r-mixed")).value(QStringLiteral("assignable")).toBool());
+    QVERIFY(!row(QStringLiteral("r-member")).value(QStringLiteral("placeOnly")).toBool());
+    QVERIFY(directory->placeOnly(QStringLiteral("r-docs")));
+
+    // The space lists content, nothing more.
+    const QString catalog = matome::orgPath(org, QStringLiteral("action-catalog?space_id=") + space);
+    const auto spaceCatalog = [&](const QStringList &allowed) {
+        QJsonArray actions;
+        for (const QString &key : {QStringLiteral("content.list"), QStringLiteral("upload.create"), manage,
+                                   QStringLiteral("resource_grant.create"), QStringLiteral("add_on.space_activate")})
+            actions.append(QJsonObject{{QStringLiteral("key"), key}, {QStringLiteral("allowed"), allowed.contains(key)}});
+        backend.respond("GET", catalog, {{QStringLiteral("actions"), actions}});
+    };
+    spaceCatalog({QStringLiteral("content.list")});
+    permissions->reload();
+    QTRY_VERIFY(permissions->explain(QStringLiteral("upload.create"), space).value(QStringLiteral("known")).toBool());
+    QVariantMap answer = permissions->explain(QStringLiteral("upload.create"), space);
+    QCOMPARE(answer.value(QStringLiteral("reason")).toString(), QStringLiteral("grant"));
+    QCOMPARE(answer.value(QStringLiteral("fix")).toString(), QStringLiteral("grant"));
+    QVERIFY(!answer.value(QStringLiteral("canFix")).toBool());
+    QVERIFY(answer.value(QStringLiteral("listed")).toBool());
+    QCOMPARE(answer.value(QStringLiteral("spaceName")).toString(), QStringLiteral("Inbox"));
+    const QVariantList roles = answer.value(QStringLiteral("roles")).toList();
+    QCOMPARE(roles.size(), 2);
+    QCOMPARE(roles.first().toMap().value(QStringLiteral("id")).toString(), QStringLiteral("r-contributor"));
+    QCOMPARE(roles.last().toMap().value(QStringLiteral("id")).toString(), QStringLiteral("r-manager"));
+    // The command says the same.
+    QVERIFY(!usable(session, QStringLiteral("upload")));
+    QCOMPARE(command(session, QStringLiteral("upload")).value(QStringLiteral("refusal")).toMap().value(QStringLiteral("reason")).toString(),
+             QStringLiteral("grant"));
+    QVERIFY(!command(session, QStringLiteral("refresh")).contains(QStringLiteral("refusal")));
+    // The add-on's activation there is not readable: it may be off too.
+    answer = permissions->explain(manage, space);
+    QCOMPARE(answer.value(QStringLiteral("reason")).toString(), QStringLiteral("grant"));
+    QVERIFY(answer.value(QStringLiteral("unsure")).toBool());
+    QCOMPARE(answer.value(QStringLiteral("product")).toString(), QStringLiteral("controlled_docs"));
+    QCOMPARE(answer.value(QStringLiteral("roles")).toList().first().toMap().value(QStringLiteral("id")).toString(), QStringLiteral("r-docs"));
+    QVERIFY(permissions->explain(QStringLiteral("content.list"), space).value(QStringLiteral("allowed")).toBool());
+
+    // Where the person manages access and add-ons, the add-on off there says
+    // so, and both fixes are theirs.
+    spaceCatalog({QStringLiteral("content.list"), QStringLiteral("resource_grant.create"), QStringLiteral("add_on.space_activate")});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("add-ons")), spaceAddOns(false));
+    permissions->reload();
+    QTRY_COMPARE(permissions->explain(manage, space).value(QStringLiteral("reason")).toString(), QStringLiteral("inactive"));
+    answer = permissions->explain(manage, space);
+    QCOMPARE(answer.value(QStringLiteral("fix")).toString(), QStringLiteral("activate"));
+    QVERIFY(answer.value(QStringLiteral("canFix")).toBool());
+    QVERIFY(permissions->explain(QStringLiteral("upload.create"), space).value(QStringLiteral("canFix")).toBool());
+    // Paused in the organization: resumed from its page.
+    serveControlledDocs(backend, org, QStringLiteral("paused"));
+    session.addOns()->refresh();
+    QTRY_COMPARE(permissions->explain(manage, space).value(QStringLiteral("reason")).toString(), QStringLiteral("paused"));
+    QCOMPARE(permissions->explain(manage, space).value(QStringLiteral("fix")).toString(), QStringLiteral("resume"));
+    QVERIFY(permissions->explain(manage, space).value(QStringLiteral("canFix")).toBool());
+    // Uninstalled: installed again from its page.
+    serveControlledDocs(backend, org, QStringLiteral("uninstalled"));
+    session.addOns()->refresh();
+    QTRY_COMPARE(permissions->explain(manage, space).value(QStringLiteral("reason")).toString(), QStringLiteral("uninstalled"));
+    QCOMPARE(permissions->explain(manage, space).value(QStringLiteral("fix")).toString(), QStringLiteral("install"));
+    // Not in the plan: only a billing manager opens the plan.
+    serveControlledDocs(backend, org);
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("entitlements")),
+                    {{QStringLiteral("entitlements"), QJsonObject{{QStringLiteral("capabilities"), QJsonObject()}}}});
+    session.addOns()->refresh();
+    QTRY_COMPARE(permissions->explain(manage, space).value(QStringLiteral("reason")).toString(), QStringLiteral("plan"));
+    QCOMPARE(permissions->explain(manage, space).value(QStringLiteral("fix")).toString(), QStringLiteral("plan"));
+    QVERIFY(!permissions->explain(manage, space).value(QStringLiteral("canFix")).toBool());
+
+    // Across the organization: the roles given there that hold it.
+    answer = permissions->explain(QStringLiteral("billing.manage"), QString());
+    QVERIFY(answer.value(QStringLiteral("known")).toBool());
+    QCOMPARE(answer.value(QStringLiteral("reason")).toString(), QStringLiteral("grant"));
+    QVERIFY(answer.value(QStringLiteral("fix")).toString().isEmpty());
+    QCOMPARE(answer.value(QStringLiteral("roles")).toList().first().toMap().value(QStringLiteral("key")).toString(), QStringLiteral("billing"));
+    QVERIFY(permissions->explain(QStringLiteral("add_on.read"), QString()).value(QStringLiteral("allowed")).toBool());
+}
+
+// Check access on a document counts its restricted tags: a member no grant
+// on such a tag reaches can do nothing there, and the reason names it.
+void TestCore::accessGrantsCountRestrictedTags()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    Session session;
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    session.upload(QStringLiteral("secret.md"), "# Secret\n");
+    QTRY_VERIFY(!core.landed(QStringLiteral("secret.md")).isEmpty());
+    QTRY_VERIFY(!session.uploadBusy());
+    QVERIFY(waitFor(&session));
+    QString payload;
+    for (int at = 0; at < session.entries()->rowCount(); ++at)
+        if (entry(session, at, EntryModel::NameRole) == QLatin1String("secret.md")) payload = entry(session, at, EntryModel::PayloadRole);
+    const QString document = payload.section(QLatin1Char(':'), 1, 1);
+    const QString bo = core.seedMember(org, QStringLiteral("bo@example.com"), QStringLiteral("member"));
+    const QString tag = core.seedTag(org, QStringLiteral("Confidential"), true);
+    core.seedDocumentTag(org, space, QStringLiteral("secret.md"), tag);
+    auto *directory = session.accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    auto *grants = session.accessGrants();
+    grants->open(QStringLiteral("space"), space, space, QStringLiteral("Inbox"));
+    QTRY_VERIFY(!grants->busy());
+    grants->setRoles(QStringLiteral("user:") + bo, {QStringLiteral("role-content_reader")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    grants->open(QStringLiteral("document"), space, document, QStringLiteral("secret.md"));
+    QTRY_VERIFY(!grants->busy());
+    grants->check(bo);
+    QTRY_VERIFY(!grants->busy());
+    // Read from the space, but hidden by the tag.
+    QVariantMap answer = grants->explain(bo);
+    QVERIFY(answer.value(QStringLiteral("actions")).toStringList().isEmpty());
+    const auto tagReason = [](const QVariantMap &found) {
+        for (const auto &reason : found.value(QStringLiteral("reasons")).toList())
+            if (reason.toMap().value(QStringLiteral("kind")) == QLatin1String("tag")) return reason.toMap();
+        return QVariantMap();
+    };
+    QCOMPARE(tagReason(answer).value(QStringLiteral("sourceName")).toString(), QStringLiteral("Confidential"));
+    QVERIFY(!tagReason(answer).value(QStringLiteral("held")).toBool());
+    // Given the tag through a role Bo holds, the document reads again.
+    grants->open(QStringLiteral("tag"), {}, tag, QStringLiteral("Confidential"));
+    QTRY_VERIFY(!grants->busy());
+    grants->setRoles(QStringLiteral("role:role-member"), {QStringLiteral("role-content_reader")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    grants->open(QStringLiteral("document"), space, document, QStringLiteral("secret.md"));
+    QTRY_VERIFY(!grants->busy());
+    grants->check(bo);
+    QTRY_VERIFY(!grants->busy());
+    answer = grants->explain(bo);
+    QVERIFY(answer.value(QStringLiteral("actions")).toStringList().contains(QStringLiteral("content.download")));
+    QVERIFY(tagReason(answer).value(QStringLiteral("held")).toBool());
+    grants->close();
+}
+
+void TestCore::accessGrantsCoverFoldersDocumentsAndTags()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    seedDirectory(backend, org);
+    const auto grant = [](const QString &id, const QString &kind, const QString &principal, const QString &role, const QString &key) {
+        return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("principal_kind"), kind},
+            {kind == QLatin1String("group") ? QStringLiteral("group_id") : kind == QLatin1String("role") ? QStringLiteral("role_principal_id")
+                                                                         : QStringLiteral("organization_membership_id"), principal},
+            {QStringLiteral("role_id"), role}, {QStringLiteral("role_key"), key}, {QStringLiteral("status"), QStringLiteral("active")}};
+    };
+    const auto from = [](QJsonObject row, const QString &kind, const QString &id, bool inherited) {
+        row.insert(QStringLiteral("source"), QJsonObject{{QStringLiteral("kind"), kind}, {QStringLiteral("id"), id}});
+        row.insert(QStringLiteral("inherited"), inherited);
+        return row;
+    };
+    // A folder's access: what it inherits from its space and the folder
+    // above it, then its own grants.
+    const QString access = matome::contentPath(org, space, QStringLiteral("folders/f1/access"));
+    const QString folder = matome::contentPath(org, space, QStringLiteral("folders/f1/grants"));
+    backend.respond("GET", access, {{QStringLiteral("access"), QJsonArray{
+        from(grant(QStringLiteral("i1"), QStringLiteral("user"), QStringLiteral("m1"), QStringLiteral("viewer-role"), QStringLiteral("content_reader")),
+             QStringLiteral("space"), space, true),
+        from(grant(QStringLiteral("i2"), QStringLiteral("group"), QStringLiteral("g1"), QStringLiteral("custom-role"), QStringLiteral("custom-1")),
+             QStringLiteral("folder"), QStringLiteral("f0"), true),
+        from(grant(QStringLiteral("x1"), QStringLiteral("group"), QStringLiteral("g1"), QStringLiteral("viewer-role"), QStringLiteral("content_reader")),
+             QStringLiteral("folder"), QStringLiteral("f1"), false)}}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("folders/f0")),
+                    {{QStringLiteral("folder"), QJsonObject{{QStringLiteral("id"), QStringLiteral("f0")}, {QStringLiteral("name"), QStringLiteral("Plans")}}}});
+    auto *grants = session.accessGrants();
+    grants->open(QStringLiteral("folder"), space, QStringLiteral("f1"), QStringLiteral("Drafts"));
+    QVERIFY(grants->active());
+    QCOMPARE(grants->spaceId(), space);
+    QVERIFY(session.accessDirectory()->active());
+    QTRY_VERIFY(!grants->busy());
+    QCOMPARE(grants->holders().size(), 1);
+    const auto holder = grants->holders().constFirst().toMap();
+    QCOMPARE(holder.value(QStringLiteral("principal")).toString(), QStringLiteral("group:g1"));
+    QCOMPARE(holder.value(QStringLiteral("principalName")).toString(), QStringLiteral("Legal"));
+    QCOMPARE(holder.value(QStringLiteral("roleIds")).toStringList(), QStringList{QStringLiteral("viewer-role")});
+    QCOMPARE(holder.value(QStringLiteral("roles")).toList().constFirst().toMap().value(QStringLiteral("key")).toString(),
+             QStringLiteral("content_reader"));
+    QCOMPARE(grants->inherited().size(), 2);
+    const auto fromSpace = grants->inherited().constFirst().toMap();
+    QCOMPARE(fromSpace.value(QStringLiteral("principalName")).toString(), QStringLiteral("ana@example.com"));
+    QCOMPARE(fromSpace.value(QStringLiteral("roleIds")).toStringList(), QStringList{QStringLiteral("viewer-role")});
+    QCOMPARE(fromSpace.value(QStringLiteral("sourceKind")).toString(), QStringLiteral("space"));
+    QCOMPARE(fromSpace.value(QStringLiteral("sourceName")).toString(), QStringLiteral("Inbox"));
+    QCOMPARE(grants->inherited().at(1).toMap().value(QStringLiteral("roleIds")).toStringList(), QStringList{QStringLiteral("custom-role")});
+    QTRY_COMPARE(grants->inherited().at(1).toMap().value(QStringLiteral("sourceName")).toString(), QStringLiteral("Plans"));
+    QCOMPARE(callAt(backend, "GET", matome::contentPath(org, space, QStringLiteral("folders/f0")),
+                    callAt(backend, "GET", matome::contentPath(org, space, QStringLiteral("folders/f0"))) + 1), -1);
+    QCOMPARE(grants->principals().size(), 3);
+
+    // A holder's checked roles replace theirs here in one request, whose
+    // answer takes the place of the holder's rows.
+    backend.respond("PUT", folder, {{QStringLiteral("grants"), QJsonArray{
+        grant(QStringLiteral("x1"), QStringLiteral("group"), QStringLiteral("g1"), QStringLiteral("viewer-role"), QStringLiteral("content_reader")),
+        grant(QStringLiteral("x3"), QStringLiteral("group"), QStringLiteral("g1"), QStringLiteral("custom-role"), QStringLiteral("custom-1"))}}});
+    const auto before = backend.calls.size();
+    grants->setRoles(QStringLiteral("group:g1"), {QStringLiteral("viewer-role"), QStringLiteral("custom-role")});
+    QVERIFY(grants->busy());
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    QVERIFY(!grants->busy());
+    const auto put = callAt(backend, "PUT", folder, before);
+    QVERIFY(put >= 0);
+    QCOMPARE(backend.calls.at(put).body, (QJsonObject{{QStringLiteral("group_id"), QStringLiteral("g1")},
+                                                       {QStringLiteral("role_ids"), QJsonArray{QStringLiteral("viewer-role"),
+                                                                                                QStringLiteral("custom-role")}}}));
+    QVERIFY(!backend.calls.at(put).headers.isEmpty()
+            && backend.calls.at(put).headers.constFirst().first == QByteArrayLiteral("Idempotency-Key"));
+    QCOMPARE(backend.calls.size(), before + 1);
+    QCOMPARE(grants->holders().size(), 1);
+    QCOMPARE(grants->holders().constFirst().toMap().value(QStringLiteral("roleIds")).toStringList(),
+             (QStringList{QStringLiteral("viewer-role"), QStringLiteral("custom-role")}));
+    QCOMPARE(grants->inherited().size(), 2);
+    // The roles held already in any order, an unknown role, or a role
+    // principal off a tag send nothing.
+    const auto settled = backend.calls.size();
+    grants->setRoles(QStringLiteral("group:g1"), {QStringLiteral("custom-role"), QStringLiteral("viewer-role"), QStringLiteral("gone")});
+    grants->setRoles(QStringLiteral("role:custom-role"), {QStringLiteral("viewer-role")});
+    grants->setRoles(QStringLiteral("user:m2"), {});
+    grants->add({QStringLiteral("group:g1")}, {QStringLiteral("viewer-role")});
+    QCOMPARE(backend.calls.size(), settled);
+    // Adding gives each person or group the checked roles beside theirs, one
+    // request per principal that lacks one.
+    const auto adding = backend.calls.size();
+    backend.respond("PUT", folder, {{QStringLiteral("grants"), QJsonArray{
+        grant(QStringLiteral("x4"), QStringLiteral("user"), QStringLiteral("m1"), QStringLiteral("viewer-role"), QStringLiteral("content_reader"))}}});
+    grants->add({QStringLiteral("group:g1"), QStringLiteral("user:m1")}, {QStringLiteral("viewer-role")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_added"));
+    QCOMPARE(backend.calls.size(), adding + 1);
+    QCOMPARE(lastCall(backend, "PUT", folder).body, (QJsonObject{{QStringLiteral("organization_membership_id"), QStringLiteral("m1")},
+                                                                {QStringLiteral("role_ids"), QJsonArray{QStringLiteral("viewer-role")}}}));
+    QCOMPARE(grants->holders().size(), 2);
+    backend.respond("PUT", folder, {{QStringLiteral("grants"), QJsonArray{
+        grant(QStringLiteral("x5"), QStringLiteral("user"), QStringLiteral("m1"), QStringLiteral("viewer-role"), QStringLiteral("content_reader")),
+        grant(QStringLiteral("x6"), QStringLiteral("user"), QStringLiteral("m1"), QStringLiteral("custom-role"), QStringLiteral("custom-1"))}}});
+    grants->add({QStringLiteral("user:m1")}, {QStringLiteral("custom-role")});
+    QTRY_VERIFY(!grants->busy());
+    QCOMPARE(lastCall(backend, "PUT", folder).body.value(QStringLiteral("role_ids")).toArray(),
+             (QJsonArray{QStringLiteral("viewer-role"), QStringLiteral("custom-role")}));
+    // A refusal changes nothing and says why.
+    backend.respond("PUT", folder, {}, 403, QStringLiteral("forbidden"));
+    grants->setRoles(QStringLiteral("group:g1"), {QStringLiteral("viewer-role")});
+    QTRY_COMPARE(grants->errorCode(), QStringLiteral("forbidden"));
+    QVERIFY(!grants->busy());
+    QVERIFY(grants->notice().isEmpty());
+    QCOMPARE(grants->holders().constFirst().toMap().value(QStringLiteral("roleIds")).toStringList().size(), 2);
+    // No roles at all removes the holder's access here.
+    backend.respond("PUT", folder, {{QStringLiteral("grants"), QJsonArray()}});
+    grants->setRoles(QStringLiteral("group:g1"), {});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_removed"));
+    QCOMPARE(lastCall(backend, "PUT", folder).body.value(QStringLiteral("role_ids")).toArray(), QJsonArray());
+    QCOMPARE(grants->holders().size(), 1);
+    QVERIFY(grants->errorCode().isEmpty());
+
+    const QString document = matome::contentPath(org, space, QStringLiteral("documents/42/access"));
+    backend.respond("GET", document, {{QStringLiteral("access"), QJsonArray()}});
+    grants->open(QStringLiteral("document"), space, QStringLiteral("42"), QStringLiteral("Contract"));
+    QTRY_VERIFY(!grants->busy());
+    QCOMPARE(grants->name(), QStringLiteral("Contract"));
+    QVERIFY(grants->notice().isEmpty());
+    QVERIFY(grants->inherited().isEmpty());
+    QVERIFY(!lastCall(backend, "GET", document).method.isEmpty());
+
+    // A tag lists its grants, those of archived roles too: they still grant
+    // the tag and stay untouched.
+    const QString tag = matome::orgPath(org, QStringLiteral("tags/t1/grants"));
+    backend.respond("GET", tag, {{QStringLiteral("grants"), QJsonArray{
+        grant(QStringLiteral("y1"), QStringLiteral("role"), QStringLiteral("custom-role"), QStringLiteral("viewer-role"), QStringLiteral("content_reader")),
+        grant(QStringLiteral("y2"), QStringLiteral("group"), QStringLiteral("g1"), QStringLiteral("archived-role"),
+              QStringLiteral("addon.controlled_docs.reviewer"))}}});
+    grants->open(QStringLiteral("tag"), {}, QStringLiteral("t1"), QStringLiteral("Secret"));
+    QTRY_VERIFY(!grants->busy());
+    QVERIFY(grants->spaceId().isEmpty());
+    QCOMPARE(grants->principals().size(), 6);
+    const auto everyone = grants->holders().constFirst().toMap();
+    QCOMPARE(everyone.value(QStringLiteral("principal")).toString(), QStringLiteral("role:custom-role"));
+    QCOMPARE(everyone.value(QStringLiteral("principalName")).toString(), QStringLiteral("Reviewers"));
+    QCOMPARE(everyone.value(QStringLiteral("principalKey")).toString(), QStringLiteral("custom-1"));
+    const auto archived = grants->holders().at(1).toMap();
+    QVERIFY(archived.value(QStringLiteral("roles")).toList().isEmpty());
+    QCOMPARE(archived.value(QStringLiteral("archived")).toStringList(), QStringList{QStringLiteral("addon.controlled_docs.reviewer")});
+    const auto untouched = backend.calls.size();
+    grants->setRoles(QStringLiteral("group:g1"), {});
+    QCOMPARE(backend.calls.size(), untouched);
+    backend.respond("PUT", tag, {{QStringLiteral("grants"), QJsonArray{
+        grant(QStringLiteral("y3"), QStringLiteral("role"), QStringLiteral("custom-role"), QStringLiteral("custom-role"), QStringLiteral("custom-1"))}}});
+    grants->setRoles(QStringLiteral("role:custom-role"), {QStringLiteral("custom-role")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    QCOMPARE(lastCall(backend, "PUT", tag).body, (QJsonObject{{QStringLiteral("role_principal_id"), QStringLiteral("custom-role")},
+                                                             {QStringLiteral("role_ids"), QJsonArray{QStringLiteral("custom-role")}}}));
+    QCOMPARE(grants->holders().constFirst().toMap().value(QStringLiteral("roleIds")).toStringList(), QStringList{QStringLiteral("custom-role")});
+
+    grants->open(QStringLiteral("share"), space, QStringLiteral("x"), QStringLiteral("x"));
+    QVERIFY(grants->active());
+    grants->close();
+    grants->open(QStringLiteral("folder"), {}, QStringLiteral("f1"), QStringLiteral("Plans"));
+    QVERIFY(!grants->active());
+}
+
+// A person's or group's page reads the access that reaches them and their
+// organization roles, and reads them again when the directory changes.
+// A folder that stops inheriting says so in its summary, lists from above
+// only the grants that manage access, and inherits again on request. Check
+// access explains what a member may do there from the rows, their groups,
+// their organization roles, and an open place.
+void TestCore::accessGrantsStopInheritingAndExplain()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    seedDirectory(backend, org);
+    const auto role = [](const QString &id, const QString &key, const QJsonArray &actions) {
+        return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("key"), key}, {QStringLiteral("name"), key},
+                           {QStringLiteral("origin"), QStringLiteral("system")}, {QStringLiteral("actions"), actions}};
+    };
+    const QJsonArray managing{QStringLiteral("resource_grant.read"), QStringLiteral("resource_grant.create"),
+                              QStringLiteral("resource_grant.revoke"), QStringLiteral("access.configure")};
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray{
+        role(QStringLiteral("operator-role"), QStringLiteral("space_operator"), QJsonArray(managing) << QStringLiteral("space.update_metadata")),
+        role(QStringLiteral("owner-role"), QStringLiteral("owner"), {QStringLiteral("role.read")}),
+        role(QStringLiteral("manager-role"), QStringLiteral("access_manager"), managing),
+        role(QStringLiteral("viewer-role"), QStringLiteral("content_reader"), {QStringLiteral("content.download")})}}});
+    const auto row = [](const QString &id, const QString &kind, const QString &principal, const QString &roleId,
+                        const QJsonObject &source, bool inherited, const QString &scope) {
+        return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("principal_kind"), kind},
+            {kind == QLatin1String("group") ? QStringLiteral("group_id") : QStringLiteral("organization_membership_id"), principal},
+            {QStringLiteral("role_id"), roleId}, {QStringLiteral("source"), source}, {QStringLiteral("inherited"), inherited},
+            {QStringLiteral("scope"), scope}};
+    };
+    const QJsonObject fromSpace{{QStringLiteral("kind"), QStringLiteral("space")}, {QStringLiteral("id"), space}};
+    const QJsonObject here{{QStringLiteral("kind"), QStringLiteral("folder")}, {QStringLiteral("id"), QStringLiteral("f1")}};
+    const QJsonArray rows{row(QStringLiteral("i1"), QStringLiteral("user"), QStringLiteral("m1"), QStringLiteral("manager-role"), fromSpace, true,
+                              QStringLiteral("manage")),
+                          row(QStringLiteral("x1"), QStringLiteral("group"), QStringLiteral("g1"), QStringLiteral("viewer-role"), here, false,
+                              QStringLiteral("full"))};
+    const QString access = matome::contentPath(org, space, QStringLiteral("folders/f1/access"));
+    const auto summary = [&](const QJsonValue &inheritance, const QJsonValue &open) {
+        return QJsonObject{{QStringLiteral("access"), rows},
+                           {QStringLiteral("summary"), QJsonObject{{QStringLiteral("visibility"), QStringLiteral("private")},
+                                                                   {QStringLiteral("inheritance"), inheritance},
+                                                                   {QStringLiteral("break"), inheritance.isNull() ? QJsonValue(QJsonValue::Null) : QJsonValue(here)},
+                                                                   {QStringLiteral("open_to_members"), !open.isNull()},
+                                                                   {QStringLiteral("open_source"), open}}}};
+    };
+    backend.respond("GET", access, summary(QStringLiteral("restricted"), QJsonValue::Null));
+    auto *grants = session.accessGrants();
+    grants->open(QStringLiteral("folder"), space, QStringLiteral("f1"), QStringLiteral("Drafts"));
+    QTRY_VERIFY(!grants->busy());
+    QTRY_VERIFY(!session.accessDirectory()->busy());
+    // Grants offer the built-in space roles atomic first, then broad.
+    QStringList offered;
+    for (const auto &role : session.accessDirectory()->grantableRoles()) offered.append(role.toMap().value(QStringLiteral("key")).toString());
+    QCOMPARE(offered, (QStringList{QStringLiteral("content_reader"), QStringLiteral("access_manager"), QStringLiteral("space_operator")}));
+    const QVariantMap reach = grants->summary();
+    QCOMPARE(reach.value(QStringLiteral("inheritance")).toString(), QStringLiteral("restricted"));
+    QCOMPARE(reach.value(QStringLiteral("breakKind")).toString(), QStringLiteral("folder"));
+    QCOMPARE(reach.value(QStringLiteral("breakName")).toString(), QStringLiteral("Drafts"));
+    QVERIFY(!reach.value(QStringLiteral("openToMembers")).toBool());
+    QCOMPARE(grants->inherited().constFirst().toMap().value(QStringLiteral("scope")).toString(), QStringLiteral("manage"));
+
+    // Bo reads through Legal; Ana manages access from the space and as owner.
+    const QVariantMap bo = grants->explain(QStringLiteral("m2"));
+    QCOMPARE(bo.value(QStringLiteral("actions")).toStringList(), QStringList{QStringLiteral("content.download")});
+    QCOMPARE(bo.value(QStringLiteral("reasons")).toList().size(), 1);
+    const auto through = bo.value(QStringLiteral("reasons")).toList().constFirst().toMap();
+    QCOMPARE(through.value(QStringLiteral("kind")).toString(), QStringLiteral("grant"));
+    QCOMPARE(through.value(QStringLiteral("via")).toString(), QStringLiteral("Legal"));
+    QCOMPARE(through.value(QStringLiteral("sourceName")).toString(), QStringLiteral("Drafts"));
+    const QVariantMap ana = grants->explain(QStringLiteral("m1"));
+    QStringList held = ana.value(QStringLiteral("actions")).toStringList();
+    held.sort();
+    QCOMPARE(held, (QStringList{QStringLiteral("access.configure"), QStringLiteral("resource_grant.create"),
+                                QStringLiteral("resource_grant.read"), QStringLiteral("resource_grant.revoke")}));
+    const auto anaWhy = ana.value(QStringLiteral("reasons")).toList();
+    QCOMPARE(anaWhy.size(), 2);
+    QCOMPARE(anaWhy.at(0).toMap().value(QStringLiteral("scope")).toString(), QStringLiteral("manage"));
+    QCOMPARE(anaWhy.at(0).toMap().value(QStringLiteral("sourceName")).toString(), QStringLiteral("Inbox"));
+    QCOMPARE(anaWhy.at(1).toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("organization"));
+    QVERIFY(anaWhy.at(1).toMap().value(QStringLiteral("via")).toString().isEmpty());
+    QVERIFY(grants->explain(QStringLiteral("nobody")).value(QStringLiteral("actions")).toStringList().isEmpty());
+
+    // Legal holds Owner across the organization: once checked, Bo manages
+    // access here through it.
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("principal-roles?group_id=g1")), {{QStringLiteral("principal_roles"), QJsonArray{
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("pr1")}, {QStringLiteral("role_id"), QStringLiteral("owner-role")},
+                    {QStringLiteral("group_id"), QStringLiteral("g1")}}}}});
+    grants->check(QStringLiteral("m2"));
+    QTRY_VERIFY(!grants->busy());
+    const QVariantMap boChecked = grants->explain(QStringLiteral("m2"));
+    QVERIFY(boChecked.value(QStringLiteral("actions")).toStringList().contains(QStringLiteral("access.configure")));
+    const auto boWhy = boChecked.value(QStringLiteral("reasons")).toList();
+    QCOMPARE(boWhy.constLast().toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("organization"));
+    QCOMPARE(boWhy.constLast().toMap().value(QStringLiteral("roleKey")).toString(), QStringLiteral("owner"));
+    QCOMPARE(boWhy.constLast().toMap().value(QStringLiteral("via")).toString(), QStringLiteral("Legal"));
+    // A group read once is not read again.
+    const int checked = backend.calls.size();
+    grants->check(QStringLiteral("m2"));
+    QCOMPARE(backend.calls.size(), checked);
+
+    // Switched from restricted to open, every member except guests reads it too.
+    backend.respond("PUT", access, {{QStringLiteral("folder"), QJsonObject{{QStringLiteral("id"), QStringLiteral("f1")}}}});
+    backend.respond("GET", access, summary(QStringLiteral("open"), here));
+    const int asked = backend.calls.size();
+    grants->setInheritance(QStringLiteral("sideways"));
+    QCOMPARE(backend.calls.size(), asked);
+    grants->setInheritance(QStringLiteral("open"));
+    QVERIFY(grants->busy());
+    QTRY_COMPARE(grants->notice(), QStringLiteral("inheritance_opened"));
+    QTRY_VERIFY(!grants->busy());
+    const auto put = lastCall(backend, "PUT", access);
+    QCOMPARE(put.body, (QJsonObject{{QStringLiteral("inheritance"), QStringLiteral("open")}}));
+    QVERIFY(!put.headers.isEmpty());
+    QVERIFY(grants->summary().value(QStringLiteral("openToMembers")).toBool());
+    QCOMPARE(grants->summary().value(QStringLiteral("openName")).toString(), QStringLiteral("Drafts"));
+    const auto opened = grants->explain(QStringLiteral("m2")).value(QStringLiteral("reasons")).toList();
+    QCOMPARE(opened.size(), 2);
+    QCOMPARE(opened.at(1).toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("open"));
+
+    // Restoring inheritance clears the break; a refusal says why.
+    backend.respond("GET", access, summary(QJsonValue::Null, QJsonValue::Null));
+    grants->setInheritance(QStringLiteral("inherit"));
+    QTRY_COMPARE(grants->notice(), QStringLiteral("inheritance_restored"));
+    QTRY_VERIFY(!grants->busy());
+    QVERIFY(grants->summary().value(QStringLiteral("inheritance")).toString().isEmpty());
+    backend.respond("PUT", access, {}, 403, QStringLiteral("forbidden"));
+    grants->setInheritance(QStringLiteral("restricted"));
+    QTRY_COMPARE(grants->errorCode(), QStringLiteral("forbidden"));
+    QVERIFY(!grants->busy());
+
+    // A space has no inheritance to stop.
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("access")), summary(QJsonValue::Null, QJsonValue::Null));
+    grants->open(QStringLiteral("space"), space, space, QStringLiteral("Inbox"));
+    QTRY_VERIFY(!grants->busy());
+    const int spaceCalls = backend.calls.size();
+    grants->setInheritance(QStringLiteral("restricted"));
+    QCOMPARE(backend.calls.size(), spaceCalls);
+    // On the space, an owner holds what a space operator does.
+    QVERIFY(grants->explain(QStringLiteral("m1")).value(QStringLiteral("actions")).toStringList().contains(QStringLiteral("space.update_metadata")));
+    grants->close();
+    QVERIFY(grants->summary().isEmpty());
+}
+
+void TestCore::principalAccessListsPlacesAndRoles()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    seedDirectory(backend, org);
+    session.accessDirectory()->open();
+    QTRY_VERIFY(!session.accessDirectory()->busy());
+    const auto reached = [&](const QString &id, const QString &kind, const QString &resourceId, const QJsonValue &spaceId,
+                             const QString &via, const QString &viaId, const QString &role) {
+        return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("principal_kind"), via},
+                           {QStringLiteral("role_id"), role}, {QStringLiteral("status"), QStringLiteral("active")},
+                           {QStringLiteral("resource"), QJsonObject{{QStringLiteral("kind"), kind}, {QStringLiteral("id"), resourceId},
+                                                                    {QStringLiteral("space_id"), spaceId}}},
+                           {QStringLiteral("via"), QJsonObject{{QStringLiteral("kind"), via}, {QStringLiteral("id"), viaId}}}};
+    };
+    const QString members = matome::orgPath(org, QStringLiteral("members/m2/access"));
+    const QString roles = matome::orgPath(org, QStringLiteral("principal-roles?organization_membership_id=m2"));
+    backend.respond("GET", members, {{QStringLiteral("access"), QJsonArray{
+        reached(QStringLiteral("a1"), QStringLiteral("space"), space, space, QStringLiteral("user"), QStringLiteral("m2"), QStringLiteral("viewer-role")),
+        reached(QStringLiteral("a2"), QStringLiteral("document"), QStringLiteral("42"), space, QStringLiteral("group"), QStringLiteral("g1"),
+                QStringLiteral("custom-role")),
+        reached(QStringLiteral("a3"), QStringLiteral("tag"), QStringLiteral("t1"), QJsonValue(), QStringLiteral("role"), QStringLiteral("custom-role"),
+                QStringLiteral("viewer-role"))}},
+        {QStringLiteral("open"), QJsonArray{QJsonObject{{QStringLiteral("kind"), QStringLiteral("space")}, {QStringLiteral("id"), space},
+                                                         {QStringLiteral("space_id"), space}}}}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("documents/42")),
+                    {{QStringLiteral("document"), QJsonObject{{QStringLiteral("id"), 42}, {QStringLiteral("title"), QStringLiteral("Contract")}}}});
+    backend.respond("GET", roles, {{QStringLiteral("principal_roles"), QJsonArray{
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("pr0")}, {QStringLiteral("role_id"), QStringLiteral("member-role")},
+                    {QStringLiteral("role"), QJsonObject{{QStringLiteral("key"), QStringLiteral("member")}, {QStringLiteral("name"), QStringLiteral("Member")},
+                                                         {QStringLiteral("origin"), QStringLiteral("system")}}}},
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("pr1")}, {QStringLiteral("role_id"), QStringLiteral("custom-role")},
+                    {QStringLiteral("role"), QJsonObject{{QStringLiteral("key"), QStringLiteral("custom-1")}, {QStringLiteral("name"), QStringLiteral("Reviewers")},
+                                                         {QStringLiteral("origin"), QStringLiteral("organization")},
+                                                         {QStringLiteral("actions"), QJsonArray{QStringLiteral("role.read")}}}}}}}});
+    auto *held = session.principalAccess();
+    held->open(QStringLiteral("space:x"));
+    QVERIFY(held->principal().isEmpty());
+    held->open(QStringLiteral("user:m2"));
+    QCOMPARE(held->principal(), QStringLiteral("user:m2"));
+    QVERIFY(held->busy());
+    QTRY_VERIFY(!held->busy());
+    QVERIFY(held->errorCode().isEmpty());
+    // One row per organization role, per grant, and per place read
+    // through the organization roles.
+    const auto rows = held->rows();
+    QCOMPARE(rows.size(), 6);
+    const auto member = rows.at(0).toMap();
+    QCOMPARE(member.value(QStringLiteral("key")).toString(), QStringLiteral("assignment:pr0"));
+    QCOMPARE(member.value(QStringLiteral("placeKind")).toString(), QStringLiteral("organization"));
+    QCOMPARE(member.value(QStringLiteral("roleKey")).toString(), QStringLiteral("member"));
+    QVERIFY(member.value(QStringLiteral("direct")).toBool());
+    const auto own = rows.at(2).toMap();
+    QCOMPARE(own.value(QStringLiteral("key")).toString(), QStringLiteral("grant:a1"));
+    QCOMPARE(own.value(QStringLiteral("placeKind")).toString(), QStringLiteral("space"));
+    QCOMPARE(own.value(QStringLiteral("name")).toString(), QStringLiteral("Inbox"));
+    QCOMPARE(own.value(QStringLiteral("roleKey")).toString(), QStringLiteral("content_reader"));
+    QVERIFY(own.value(QStringLiteral("direct")).toBool());
+    const auto viaGroup = rows.at(3).toMap();
+    QCOMPARE(viaGroup.value(QStringLiteral("spaceName")).toString(), QStringLiteral("Inbox"));
+    QCOMPARE(viaGroup.value(QStringLiteral("viaName")).toString(), QStringLiteral("Legal"));
+    QVERIFY(!viaGroup.value(QStringLiteral("direct")).toBool());
+    QTRY_COMPARE(held->rows().at(3).toMap().value(QStringLiteral("name")).toString(), QStringLiteral("Contract"));
+    const auto viaRole = rows.at(4).toMap();
+    QCOMPARE(viaRole.value(QStringLiteral("name")).toString(), QStringLiteral("Secret"));
+    QCOMPARE(viaRole.value(QStringLiteral("viaKind")).toString(), QStringLiteral("role"));
+    QCOMPARE(viaRole.value(QStringLiteral("viaKey")).toString(), QStringLiteral("custom-1"));
+    QVERIFY(viaRole.value(QStringLiteral("spaceId")).toString().isEmpty());
+    const auto open = rows.at(5).toMap();
+    QCOMPARE(open.value(QStringLiteral("kind")).toString(), QStringLiteral("open"));
+    QCOMPARE(open.value(QStringLiteral("name")).toString(), QStringLiteral("Inbox"));
+    QVERIFY(!open.value(QStringLiteral("direct")).toBool());
+    QCOMPARE(held->roles().size(), 2);
+    QCOMPARE(held->roles().constFirst().toMap().value(QStringLiteral("origin")).toString(), QStringLiteral("system"));
+    const auto custom = held->roles().at(1).toMap();
+    QCOMPARE(custom.value(QStringLiteral("id")).toString(), QStringLiteral("pr1"));
+    QCOMPARE(custom.value(QStringLiteral("roleName")).toString(), QStringLiteral("Reviewers"));
+    QCOMPARE(custom.value(QStringLiteral("actions")).toStringList(), QStringList{QStringLiteral("role.read")});
+    // Built-in roles are set like the others.
+    QCOMPARE(held->roleIds(), (QStringList{QStringLiteral("member-role"), QStringLiteral("custom-role")}));
+
+    // Setting the roles gives the missing ones, then takes back the
+    // unchecked ones by their assignment, then reads both lists again.
+    const QString assign = matome::orgPath(org, QStringLiteral("principal-roles"));
+    backend.respond("DELETE", assign + QStringLiteral("/pr1"), {});
+    backend.respond("POST", assign, {{QStringLiteral("principal_role"), QJsonObject{{QStringLiteral("id"), QStringLiteral("pr2")}}}}, 201);
+    auto reading = backend.calls.size();
+    held->setRoles({QStringLiteral("member-role"), QStringLiteral("viewer-role")});
+    QVERIFY(held->busy());
+    QTRY_COMPARE(held->notice(), QStringLiteral("roles_saved"));
+    QVERIFY(callAt(backend, "DELETE", assign + QStringLiteral("/pr1"), reading) > callAt(backend, "POST", assign, reading));
+    QCOMPARE(lastCall(backend, "POST", assign).body, (QJsonObject{{QStringLiteral("organization_membership_id"), QStringLiteral("m2")},
+                                                                 {QStringLiteral("role_id"), QStringLiteral("viewer-role")}}));
+    QCOMPARE(callAt(backend, "DELETE", matome::orgPath(org, QStringLiteral("principal-roles/pr0")), reading), -1);
+    QTRY_VERIFY(callAt(backend, "GET", roles, reading) >= 0);
+    QTRY_VERIFY(callAt(backend, "GET", members, reading) >= 0);
+    QTRY_VERIFY(!held->busy());
+    // What is held already, or an unknown role, sends nothing.
+    reading = backend.calls.size();
+    held->setRoles({QStringLiteral("member-role"), QStringLiteral("custom-role"), QStringLiteral("gone")});
+    QCOMPARE(backend.calls.size(), reading);
+    // A refusal says why and names no notice.
+    backend.respond("DELETE", assign + QStringLiteral("/pr1"), {}, 403, QStringLiteral("forbidden"));
+    held->setRoles({QStringLiteral("member-role")});
+    QTRY_COMPARE(held->errorCode(), QStringLiteral("forbidden"));
+    QTRY_VERIFY(!held->busy());
+    QVERIFY(held->notice().isEmpty());
+    QCOMPARE(held->errorCode(), QStringLiteral("forbidden"));
+
+    // Remove takes back what was given to them, each by its own route;
+    // what comes through a group or the organization roles stays.
+    backend.respond("DELETE", assign + QStringLiteral("/pr1"), {});
+    const QString spaceGrant = matome::contentPath(org, space, QStringLiteral("grants/a1"));
+    backend.respond("DELETE", spaceGrant, {});
+    reading = backend.calls.size();
+    held->remove({QStringLiteral("grant:a1"), QStringLiteral("assignment:pr1"), QStringLiteral("grant:a2"),
+                  QStringLiteral("open:space:") + space});
+    QTRY_COMPARE(held->notice(), QStringLiteral("access_removed"));
+    QVERIFY(callAt(backend, "DELETE", spaceGrant, reading) >= 0);
+    QVERIFY(callAt(backend, "DELETE", assign + QStringLiteral("/pr1"), reading) >= 0);
+    QCOMPARE(callAt(backend, "DELETE", matome::contentPath(org, space, QStringLiteral("documents/42/grants/a2")), reading), -1);
+    QTRY_VERIFY(!held->busy());
+    // Grant access gives the roles not held there yet, one request each.
+    const QString tagGrants = matome::orgPath(org, QStringLiteral("tags/t1/grants"));
+    backend.respond("POST", tagGrants, {{QStringLiteral("grant"), QJsonObject{{QStringLiteral("id"), QStringLiteral("a4")}}}}, 201);
+    reading = backend.calls.size();
+    held->grant(QStringLiteral("tag"), {}, QStringLiteral("t1"), {QStringLiteral("viewer-role")});
+    QTRY_COMPARE(held->notice(), QStringLiteral("access_added"));
+    QCOMPARE(lastCall(backend, "POST", tagGrants).body, (QJsonObject{{QStringLiteral("organization_membership_id"), QStringLiteral("m2")},
+                                                                    {QStringLiteral("role_id"), QStringLiteral("viewer-role")}}));
+    QTRY_VERIFY(!held->busy());
+
+    // A group reads its own access and roles; a principal gone says so.
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("groups/g1/access")), {}, 404, QStringLiteral("not_found"));
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("principal-roles?group_id=g1")), {{QStringLiteral("principal_roles"), QJsonArray()}});
+    held->open(QStringLiteral("group:g1"));
+    QVERIFY(held->rows().isEmpty());
+    QTRY_VERIFY(!held->busy());
+    QCOMPARE(held->errorCode(), QStringLiteral("not_found"));
+    QVERIFY(held->roles().isEmpty());
+    held->close();
+    QVERIFY(held->principal().isEmpty());
+}
+
+// A role's page lists who holds it: its assignments and its grants on the
+// places they reach; Add people gives it to those not holding it yet.
+void TestCore::roleHoldersListAndAddPeople()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    seedDirectory(backend, org);
+    session.accessDirectory()->open();
+    QTRY_VERIFY(!session.accessDirectory()->busy());
+    const QString holders = matome::orgPath(org, QStringLiteral("roles/custom-role/holders"));
+    backend.respond("GET", holders, {{QStringLiteral("holders"), QJsonArray{
+        QJsonObject{{QStringLiteral("kind"), QStringLiteral("assignment")}, {QStringLiteral("id"), QStringLiteral("pr1")},
+                    {QStringLiteral("principal"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("group")}, {QStringLiteral("id"), QStringLiteral("g1")}}}},
+        QJsonObject{{QStringLiteral("kind"), QStringLiteral("grant")}, {QStringLiteral("id"), QStringLiteral("a1")},
+                    {QStringLiteral("principal"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("user")}, {QStringLiteral("id"), QStringLiteral("m2")}}},
+                    {QStringLiteral("resource"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("space")}, {QStringLiteral("id"), space},
+                                                             {QStringLiteral("space_id"), space}}}},
+        QJsonObject{{QStringLiteral("kind"), QStringLiteral("grant")}, {QStringLiteral("id"), QStringLiteral("a2")},
+                    {QStringLiteral("principal"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("role")}, {QStringLiteral("id"), QStringLiteral("viewer-role")}}},
+                    {QStringLiteral("resource"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("tag")}, {QStringLiteral("id"), QStringLiteral("t1")},
+                                                             {QStringLiteral("space_id"), QJsonValue()}}}}}}});
+    auto *role = session.roleHolders();
+    role->open(QString());
+    QVERIFY(role->roleId().isEmpty());
+    role->open(QStringLiteral("custom-role"));
+    QVERIFY(role->busy());
+    QTRY_VERIFY(!role->busy());
+    QVERIFY(role->errorCode().isEmpty());
+    const auto rows = role->holders();
+    QCOMPARE(rows.size(), 3);
+    const auto group = rows.at(0).toMap();
+    QCOMPARE(group.value(QStringLiteral("kind")).toString(), QStringLiteral("assignment"));
+    QCOMPARE(group.value(QStringLiteral("principal")).toString(), QStringLiteral("group:g1"));
+    QCOMPARE(group.value(QStringLiteral("principalName")).toString(), QStringLiteral("Legal"));
+    const auto onSpace = rows.at(1).toMap();
+    QCOMPARE(onSpace.value(QStringLiteral("principalName")).toString(), QStringLiteral("bo@example.com"));
+    QCOMPARE(onSpace.value(QStringLiteral("resourceKind")).toString(), QStringLiteral("space"));
+    QCOMPARE(onSpace.value(QStringLiteral("name")).toString(), QStringLiteral("Inbox"));
+    const auto onTag = rows.at(2).toMap();
+    QCOMPARE(onTag.value(QStringLiteral("principalKind")).toString(), QStringLiteral("role"));
+    QCOMPARE(onTag.value(QStringLiteral("principalKey")).toString(), QStringLiteral("content_reader"));
+    QCOMPARE(onTag.value(QStringLiteral("name")).toString(), QStringLiteral("Secret"));
+    QVERIFY(onTag.value(QStringLiteral("spaceId")).toString().isEmpty());
+    QCOMPARE(role->assigned(), QStringList{QStringLiteral("group:g1")});
+
+    // Only those not holding it are given it, each in its own assignment.
+    const QString assign = matome::orgPath(org, QStringLiteral("principal-roles"));
+    backend.respond("POST", assign, {{QStringLiteral("principal_role"), QJsonObject{{QStringLiteral("id"), QStringLiteral("pr2")}}}}, 201);
+    QSignalSpy given(role, &matome::RoleHolders::rolesChanged);
+    auto sent = backend.calls.size();
+    role->add({QStringLiteral("group:g1"), QStringLiteral("user:m1"), QStringLiteral("user:gone"), QStringLiteral("role:viewer-role")});
+    QVERIFY(role->busy());
+    QTRY_COMPARE(role->notice(), QStringLiteral("holders_added"));
+    QCOMPARE(lastCall(backend, "POST", assign).body, (QJsonObject{{QStringLiteral("organization_membership_id"), QStringLiteral("m1")},
+                                                                 {QStringLiteral("role_id"), QStringLiteral("custom-role")}}));
+    QCOMPARE(callAt(backend, "POST", assign, callAt(backend, "POST", assign, sent) + 1), -1);
+    QTRY_VERIFY(callAt(backend, "GET", holders, sent) >= 0);
+    QCOMPARE(given.size(), 1);
+    QTRY_VERIFY(!role->busy());
+    // Nothing new sends nothing; a refusal says why and names no notice.
+    sent = backend.calls.size();
+    role->add({QStringLiteral("group:g1")});
+    QCOMPARE(backend.calls.size(), sent);
+    backend.respond("POST", assign, {}, 409, QStringLiteral("last_owner"));
+    role->add({QStringLiteral("user:m2")});
+    QTRY_COMPARE(role->errorCode(), QStringLiteral("last_owner"));
+    QTRY_VERIFY(!role->busy());
+    QVERIFY(role->notice().isEmpty());
+    QCOMPARE(role->errorCode(), QStringLiteral("last_owner"));
+    QCOMPARE(given.size(), 1);
+    QCOMPARE(group.value(QStringLiteral("key")).toString(), QStringLiteral("assignment:pr1"));
+    QCOMPARE(onSpace.value(QStringLiteral("key")).toString(), QStringLiteral("grant:a1"));
+    // In a space, it is granted to those not holding it there yet.
+    const QString spaceGrants = matome::contentPath(org, space, QStringLiteral("grants"));
+    backend.respond("POST", spaceGrants, {{QStringLiteral("grant"), QJsonObject{{QStringLiteral("id"), QStringLiteral("a3")}}}}, 201);
+    sent = backend.calls.size();
+    role->grant({QStringLiteral("user:m2"), QStringLiteral("group:g1")}, space);
+    QTRY_COMPARE(role->notice(), QStringLiteral("holders_added"));
+    QCOMPARE(lastCall(backend, "POST", spaceGrants).body, (QJsonObject{{QStringLiteral("group_id"), QStringLiteral("g1")},
+                                                                      {QStringLiteral("role_id"), QStringLiteral("custom-role")}}));
+    QCOMPARE(callAt(backend, "POST", spaceGrants, callAt(backend, "POST", spaceGrants, sent) + 1), -1);
+    QTRY_VERIFY(!role->busy());
+    QCOMPARE(given.size(), 2);
+    // Remove takes back an assignment and the grants on their places.
+    backend.respond("DELETE", assign + QStringLiteral("/pr1"), {});
+    const QString tagGrant = matome::orgPath(org, QStringLiteral("tags/t1/grants/a2"));
+    backend.respond("DELETE", tagGrant, {});
+    sent = backend.calls.size();
+    role->remove({QStringLiteral("assignment:pr1"), QStringLiteral("grant:a2")});
+    QTRY_COMPARE(role->notice(), QStringLiteral("holders_removed"));
+    QVERIFY(callAt(backend, "DELETE", assign + QStringLiteral("/pr1"), sent) >= 0);
+    QVERIFY(callAt(backend, "DELETE", tagGrant, sent) >= 0);
+    QCOMPARE(callAt(backend, "DELETE", matome::contentPath(org, space, QStringLiteral("grants/a1")), sent), -1);
+    QTRY_VERIFY(!role->busy());
+    QCOMPARE(given.size(), 3);
+    // A role gone says so; closing forgets it.
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles/gone/holders")), {}, 404, QStringLiteral("not_found"));
+    role->open(QStringLiteral("gone"));
+    QTRY_VERIFY(!role->busy());
+    QCOMPARE(role->errorCode(), QStringLiteral("not_found"));
+    QVERIFY(role->holders().isEmpty());
+    role->close();
+    QVERIFY(role->roleId().isEmpty());
+}
+
+// Manage with reviews stays usable on a Markdown document of an
+// organization where the add-on is installed: it asks Core, which decides,
+// and its refusal is said as Core gave it.
+void TestCore::controlledDocsSayCoreRefusals()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const QString doc = matome::contentPath(org, space, QStringLiteral("documents/41"));
+    const QString manage = doc + QStringLiteral("/controlled-docs");
+    const QByteArray current("# Current\n");
+    serveControlledDocs(backend, org);
+    QVERIFY(followCatalog(session));
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+    serveDocument(backend, doc, {{QStringLiteral("id"), 41}, {QStringLiteral("title"), QStringLiteral("procedure.md")},
+                                 {QStringLiteral("revision"), 3}},
+                  {{markdownVersion(QStringLiteral("base"), 1, true, current), current}});
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray()}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("add-ons")), {}, 403, QStringLiteral("forbidden"));
+    auto *control = session.controlledDocs();
+    QSignalSpy requested(control, &matome::ControlledDocs::requested);
+
+    // Not active in the space: Core refuses, and nothing else is asked.
+    backend.queue("PUT", manage, refusal(409, QStringLiteral("controlled_docs_unavailable")));
+    session.openEntry(QStringLiteral("document"), QStringLiteral("41"));
+    QTRY_VERIFY(control->active());
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(usable(session, QStringLiteral("manage-document")));
+    session.runCommand(QStringLiteral("manage-document"));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->errorCode(), QStringLiteral("controlled_docs_unavailable"));
+    QCOMPARE(requested.size(), 0);
+    QVERIFY(lastCall(backend, "PUT", manage).headers.contains(qMakePair(QByteArrayLiteral("If-Match"), QByteArrayLiteral("3"))));
+
+    // Without the managing action there, Core's refusal is said as well.
+    backend.queue("PUT", manage, refusal(403, QStringLiteral("forbidden")));
+    session.runCommand(QStringLiteral("manage-document"));
+    QTRY_VERIFY(!control->busy());
+    QCOMPARE(control->errorCode(), QStringLiteral("forbidden"));
+
+    // Active there and held, the document is managed with no prompt.
+    backend.respond("PUT", manage, {});
+    session.runCommand(QStringLiteral("manage-document"));
+    QTRY_VERIFY(!control->busy());
+    QVERIFY(control->errorCode().isEmpty());
+    QCOMPARE(control->notice(), QStringLiteral("control_enabled"));
+    QCOMPARE(requested.size(), 0);
+}
+
+// The explorer's menu manages the focused Markdown document: it opens, and
+// the verb runs once the document has loaded.
+void TestCore::controlledDocsManageFromTheExplorer()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    session.upload(QStringLiteral("plan.md"), "# Plan\n");
+    QTRY_VERIFY(!core.landed(QStringLiteral("plan.md")).isEmpty());
+    QTRY_VERIFY(!session.uploadBusy());
+    QVERIFY(waitFor(&session));
+    QString payload;
+    for (int row = 0; row < session.entries()->rowCount(); ++row)
+        if (entry(session, row, EntryModel::NameRole) == QLatin1String("plan.md"))
+            payload = entry(session, row, EntryModel::PayloadRole);
+    QVERIFY(!payload.isEmpty());
+    const QString id = payload.section(QLatin1Char(':'), 1, 1);
+    const QString doc = matome::contentPath(org, space, QStringLiteral("documents/") + id);
+    session.setFocusPayload(payload);
+    // Without the add-on, the menu offers nothing of it.
+    QVERIFY(!usable(session, QStringLiteral("manage-document")));
+    serveControlledDocs(backend, org);
+    QVERIFY(followCatalog(session));
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+    QVERIFY(usable(session, QStringLiteral("manage-document")));
+    QVERIFY(!usable(session, QStringLiteral("unmanage-document")));
+    serveDocument(backend, doc, {{QStringLiteral("id"), id}, {QStringLiteral("title"), QStringLiteral("plan.md")},
+                                 {QStringLiteral("revision"), 1}},
+                  {{markdownVersion(QStringLiteral("v1"), 1, true, "# Plan\n"), "# Plan\n"}});
+    backend.respond("GET", doc + QStringLiteral("/reviews"), {{QStringLiteral("reviews"), QJsonArray()}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("add-ons")), spaceAddOns(true));
+    backend.respond("PUT", doc + QStringLiteral("/controlled-docs"), {});
+    session.runCommand(QStringLiteral("manage-document"));
+    QVERIFY(session.documentView()->active());
+    QTRY_VERIFY(callAt(backend, "PUT", doc + QStringLiteral("/controlled-docs")) >= 0);
+    QTRY_VERIFY(!session.controlledDocs()->busy());
+    QCOMPARE(session.controlledDocs()->notice(), QStringLiteral("control_enabled"));
+}
+
+// A Markdown file uploaded where reviews are required, which the space's
+// catalog says by granting the managing action, waits on whether to manage
+// it with reviews, asked every time; kept, each one is managed once it lands,
+// with the revision Core reads back. Other files, and spaces whose catalog
+// does not grant that action, upload as before.
+void TestCore::uploadsManagedWithReviews()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId(), space = session.currentSpaceId();
+    const auto document = [&](int id) { return matome::contentPath(org, space, QStringLiteral("documents/%1").arg(id)); };
+    const auto controls = [&](qsizetype from) {
+        for (auto at = from; at < backend.calls.size(); ++at)
+            if (backend.calls.at(at).path.endsWith(QLatin1String("/controlled-docs"))) return true;
+        return false;
+    };
+    const auto catalog = [&](bool manages) {
+        backend.respond("GET", matome::orgPath(org, QStringLiteral("action-catalog?space_id=") + space),
+                        {{QStringLiteral("actions"), QJsonArray{
+                            QJsonObject{{QStringLiteral("key"), QStringLiteral("content.list")}, {QStringLiteral("allowed"), true}},
+                            QJsonObject{{QStringLiteral("key"), QStringLiteral("upload.create")}, {QStringLiteral("allowed"), true}},
+                            QJsonObject{{QStringLiteral("key"), QStringLiteral("folder.create")}, {QStringLiteral("allowed"), manages}},
+                            QJsonObject{{QStringLiteral("key"), QStringLiteral("addon.controlled_docs.document_manage")},
+                                        {QStringLiteral("allowed"), manages}}}}});
+        session.runCommand(QStringLiteral("refresh"));
+        // Folders follow the same catalog, which shows it was read.
+        return QTest::qWaitFor([&] { return waitFor(&session) && usable(session, QStringLiteral("new")) == manages; });
+    };
+    QSignalSpy asked(&session, &Session::promptUploadReviews);
+    serveControlledDocs(backend, org);
+    QVERIFY(followCatalog(session));
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+
+    // Not active in the space: the file goes up without asking.
+    QVERIFY(catalog(false));
+    session.upload(QStringLiteral("free.md"), "# Free\n");
+    QTRY_VERIFY(!core.landed(QStringLiteral("free.md")).isEmpty());
+    QTRY_VERIFY(!session.uploadBusy());
+    QCOMPARE(asked.size(), 0);
+    QVERIFY(!controls(0));
+
+    QVERIFY(catalog(true));
+    session.upload(QStringLiteral("plan.md"), "# Plan\n");
+    session.upload(QStringLiteral("notes.txt"), "notes");
+    session.upload(QStringLiteral("guide.MD"), "# Guide\n");
+    QCOMPARE(session.reviewUploads(), 2);
+    QCOMPARE(asked.size(), 1);
+    QTRY_VERIFY(!core.landed(QStringLiteral("notes.txt")).isEmpty());
+    QVERIFY(core.landed(QStringLiteral("plan.md")).isEmpty());
+
+    // Documents 3 and 4: Core reads back each revision, then one refuses control.
+    backend.respond("GET", document(3), {{QStringLiteral("document"), QJsonObject{{QStringLiteral("id"), 3}, {QStringLiteral("revision"), 2}}}});
+    backend.respond("PUT", document(3) + QStringLiteral("/controlled-docs"), {});
+    backend.respond("GET", document(4), {{QStringLiteral("document"), QJsonObject{{QStringLiteral("id"), 4}, {QStringLiteral("revision"), 5}}}});
+    backend.queue("PUT", document(4) + QStringLiteral("/controlled-docs"),
+                  refusal(409, QStringLiteral("incompatible_publication_subscriptions")));
+    const qsizetype kept = backend.calls.size();
+    session.uploadStaged(true);
+    QCOMPARE(session.reviewUploads(), 0);
+    QTRY_VERIFY(!core.landed(QStringLiteral("guide.MD")).isEmpty());
+    QTRY_VERIFY(!session.uploadBusy());
+    QCOMPARE(core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("id")).toString(), QStringLiteral("3"));
+    QCOMPARE(core.documentTitled(QStringLiteral("guide.MD")).value(QStringLiteral("id")).toString(), QStringLiteral("4"));
+    const qsizetype read = callAt(backend, "GET", document(3), kept);
+    const qsizetype managed = callAt(backend, "PUT", document(3) + QStringLiteral("/controlled-docs"), kept);
+    QVERIFY(read >= 0 && managed > read);
+    QVERIFY(backend.calls.at(managed).headers.contains(qMakePair(QByteArrayLiteral("If-Match"), QByteArrayLiteral("2"))));
+    const qsizetype refused = callAt(backend, "PUT", document(4) + QStringLiteral("/controlled-docs"), kept);
+    QVERIFY(refused >= 0);
+    QVERIFY(backend.calls.at(refused).headers.contains(qMakePair(QByteArrayLiteral("If-Match"), QByteArrayLiteral("5"))));
+    QCOMPARE(session.uploadError(), QStringLiteral("incompatible_publication_subscriptions"));
+    QCOMPARE(session.uploadErrorName(), QStringLiteral("guide.MD"));
+    QVERIFY(session.uploadLanded());
+
+    // Unchecked, the file lands unmanaged; cancelled, it never goes up.
+    const qsizetype unchecked = backend.calls.size();
+    session.upload(QStringLiteral("loose.md"), "# Loose\n");
+    QCOMPARE(session.uploadError(), QString());
+    QVERIFY(!session.uploadLanded());
+    QCOMPARE(session.reviewUploads(), 1);
+    QCOMPARE(asked.size(), 2);
+    session.uploadStaged(false);
+    QTRY_VERIFY(!core.landed(QStringLiteral("loose.md")).isEmpty());
+    QTRY_VERIFY(!session.uploadBusy());
+    QVERIFY(!controls(unchecked));
+    session.upload(QStringLiteral("dropped.md"), "# Dropped\n");
+    QCOMPARE(session.reviewUploads(), 1);
+    QCOMPARE(asked.size(), 3);
+    session.cancelStaged();
+    QCOMPARE(session.reviewUploads(), 0);
+    QVERIFY(!session.uploadBusy());
+    QVERIFY(core.documentTitled(QStringLiteral("dropped.md")).isEmpty());
+}
+
 void TestCore::spaceSettingsManageAccessAndRule()
 {
     FakeCore core;
@@ -3582,94 +5187,204 @@ void TestCore::spaceSettingsManageAccessAndRule()
     Session session(nullptr, &backend);
     QVERIFY(openInbox(core, session));
     const QString org = session.currentOrgId(), space = session.currentSpaceId();
-    const QString rule = matome::contentPath(org, space, QStringLiteral("controlled-docs-rule"));
+    const QString addOns = matome::contentPath(org, space, QStringLiteral("add-ons"));
+    const QString activation = addOns + QStringLiteral("/controlled_docs");
     const QJsonObject owner{{QStringLiteral("id"), QStringLiteral("owner-role")}, {QStringLiteral("key"), QStringLiteral("owner")},
-                            {QStringLiteral("name"), QStringLiteral("Owner")}};
-    const QJsonObject editor{{QStringLiteral("id"), QStringLiteral("editor-role")}, {QStringLiteral("key"), QStringLiteral("space_editor")},
-                             {QStringLiteral("name"), QStringLiteral("Space editor")}};
-    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray{owner, editor}}});
+                            {QStringLiteral("name"), QStringLiteral("Owner")}, {QStringLiteral("origin"), QStringLiteral("system")}};
+    const QJsonObject editor{{QStringLiteral("id"), QStringLiteral("editor-role")}, {QStringLiteral("key"), QStringLiteral("content_contributor")},
+                             {QStringLiteral("name"), QStringLiteral("Content contributor")}, {QStringLiteral("origin"), QStringLiteral("system")}};
+    const QJsonObject manager{{QStringLiteral("id"), QStringLiteral("manager-role")}, {QStringLiteral("key"), QStringLiteral("addon.controlled_docs.manager")},
+                              {QStringLiteral("name"), QStringLiteral("Controlled documents manager")}, {QStringLiteral("origin"), QStringLiteral("add_on")},
+                              {QStringLiteral("actions"), QJsonArray{QStringLiteral("addon.controlled_docs.review_read"),
+                                  QStringLiteral("addon.controlled_docs.document_manage")}}};
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("roles"), QJsonArray{owner, editor, manager}}});
     backend.respond("GET", matome::orgPath(org, QStringLiteral("members")),
                     {{QStringLiteral("members"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("me")},
-                        {QStringLiteral("email"), session.email()}}}}});
-    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("grants")),
-                    {{QStringLiteral("grants"), QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("grant-one")},
-                        {QStringLiteral("role_id"), QStringLiteral("editor-role")}, {QStringLiteral("organization_membership_id"), QStringLiteral("me")}}}}});
-    auto *access = session.spaceAccess();
-    access->open(space);
+                        {QStringLiteral("email"), session.identifier()}, {QStringLiteral("user_id"), session.userId()}}}}});
+    const QJsonObject editing{{QStringLiteral("id"), QStringLiteral("grant-one")}, {QStringLiteral("role_id"), QStringLiteral("editor-role")},
+                              {QStringLiteral("principal_kind"), QStringLiteral("user")}, {QStringLiteral("organization_membership_id"), QStringLiteral("me")}};
+    QJsonObject own = editing;
+    own.insert(QStringLiteral("source"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("space")}, {QStringLiteral("id"), space}});
+    own.insert(QStringLiteral("inherited"), false);
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("access")), {{QStringLiteral("access"), QJsonArray{own}}});
+    backend.respond("GET", matome::contentPath(org, space, QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray{editing}}});
+    auto *access = session.accessGrants();
+    access->open(QStringLiteral("space"), space, space, QStringLiteral("Inbox"));
     QTRY_VERIFY(!access->busy());
-    QCOMPARE(access->roles().size(), 1);
-    QCOMPARE(access->roles().constFirst().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Space editor"));
-    QCOMPARE(access->grants().constFirst().toMap().value(QStringLiteral("email")).toString(), session.email());
-    QCOMPARE(access->grants().constFirst().toMap().value(QStringLiteral("roleName")).toString(), QStringLiteral("Space editor"));
-    backend.respond("POST", matome::contentPath(org, space, QStringLiteral("grants")), {}, 201);
-    access->grant(QStringLiteral("me"), QStringLiteral("editor-role"));
-    QTRY_COMPARE(access->notice(), QStringLiteral("access_saved"));
-    QCOMPARE(backend.calls.constLast().method, QByteArray("GET"));
-    backend.respond("DELETE", matome::contentPath(org, space, QStringLiteral("grants/grant-one")), {});
-    QTRY_VERIFY(!access->busy());
-    access->revoke(QStringLiteral("grant-one"));
+    // The built-in organization roles and the add-on's may be given across
+    // the organization; a space role may not.
+    QCOMPARE(session.accessDirectory()->assignableRoles().size(), 2);
+    QCOMPARE(session.accessDirectory()->assignableRoles().constFirst().toMap().value(QStringLiteral("key")).toString(),
+             QStringLiteral("owner"));
+    QCOMPARE(session.accessDirectory()->assignableRoles().constLast().toMap().value(QStringLiteral("key")).toString(),
+             QStringLiteral("addon.controlled_docs.manager"));
+    const auto held = access->holders().constFirst().toMap();
+    QCOMPARE(held.value(QStringLiteral("principal")).toString(), QStringLiteral("user:me"));
+    QCOMPARE(held.value(QStringLiteral("principalName")).toString(), session.identifier());
+    QCOMPARE(held.value(QStringLiteral("roleIds")).toStringList(), QStringList{QStringLiteral("editor-role")});
+    QVERIFY(access->inherited().isEmpty());
+    backend.respond("PUT", matome::contentPath(org, space, QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray()}});
+    access->setRoles(QStringLiteral("user:me"), {});
     QTRY_COMPARE(access->notice(), QStringLiteral("access_removed"));
-
-    backend.respond("GET", rule, {}, 403, QStringLiteral("forbidden"));
-    auto *controlled = session.controlledRule();
-    controlled->open(space);
-    QTRY_VERIFY(!controlled->busy());
-    QVERIFY(!controlled->readable());
-    QVERIFY(controlled->rolesMissing());
-    QVERIFY(controlled->canGrantSelf());
-    const QJsonObject manager{{QStringLiteral("id"), QStringLiteral("manager-role")}, {QStringLiteral("name"), QStringLiteral("Document control managers")},
-        {QStringLiteral("actions"), QJsonArray{QStringLiteral("document.review_read"),
-            QStringLiteral("document.controlled_docs_manage"), QStringLiteral("space.controlled_docs_manage")}}};
-    backend.respond("POST", matome::orgPath(org, QStringLiteral("roles")), {{QStringLiteral("role"), manager}}, 201);
-    backend.respond("GET", rule, {{QStringLiteral("data"), QJsonObject{{QStringLiteral("active"), false}, {QStringLiteral("revision"), 4},
-        {QStringLiteral("id"), QStringLiteral("rule")},
-        {QStringLiteral("settings"), QJsonObject{{QStringLiteral("allow_author_approval"), true}}},
-        {QStringLiteral("effective_settings"), QJsonObject{{QStringLiteral("allow_author_approval"), true},
-            {QStringLiteral("required_approvals"), 1}, {QStringLiteral("require_version_references"), false}}}}}});
-    QSignalSpy accessChanged(controlled, &matome::ControlledRule::accessChanged);
-    controlled->grantSelf();
-    QTRY_COMPARE(accessChanged.size(), 1);
-    QTRY_VERIFY(!controlled->busy());
-    bool granted = false;
-    for (const auto &call : backend.calls) if (call.method == "POST" && call.path.endsWith(QLatin1String("/grants"))
-                                               && call.body.value(QStringLiteral("role_id")).toString() == QLatin1String("manager-role")) {
-        QCOMPARE(call.body.value(QStringLiteral("organization_membership_id")).toString(), QStringLiteral("me"));
-        granted = true;
-    }
-    QVERIFY(granted);
-    QVERIFY(controlled->readable());
-    backend.respond("PUT", rule, {});
-    // A space overrides one setting and follows the organization again on another.
-    controlled->save(true, {{QStringLiteral("required_approvals"), 2},
-                            {QStringLiteral("allow_author_approval"), QVariant::fromValue(nullptr)}});
-    QTRY_COMPARE(controlled->notice(), QStringLiteral("rule_saved"));
-    bool saved = false;
-    for (const auto &call : backend.calls) if (call.method == "PUT" && call.path == rule) {
-        const auto settings = call.body.value(QStringLiteral("settings")).toObject();
-        QVERIFY(call.body.value(QStringLiteral("active")).toBool());
-        QVERIFY(!call.body.contains(QStringLiteral("require_version_references")));
-        QCOMPARE(settings.value(QStringLiteral("required_approvals")).toInt(), 2);
-        QVERIFY(settings.contains(QStringLiteral("allow_author_approval")));
-        QVERIFY(settings.value(QStringLiteral("allow_author_approval")).isNull());
-        QVERIFY(call.headers.contains(qMakePair(QByteArrayLiteral("If-Match"), QByteArrayLiteral("4"))));
-        saved = true;
-    }
-    QVERIFY(saved);
-    QTRY_VERIFY(!controlled->busy());
-    const auto paused = backend.calls.size();
-    controlled->save(false);
-    QCOMPARE(backend.calls.at(paused).method, QByteArray("PUT"));
-    QVERIFY(!backend.calls.at(paused).body.value(QStringLiteral("active")).toBool());
-    QVERIFY(!backend.calls.at(paused).body.contains(QStringLiteral("settings")));
-    QTRY_VERIFY(!controlled->busy());
-    QTRY_VERIFY(!controlled->busy());
-    const int calls = backend.calls.size();
-    controlled->remove(QStringLiteral("  "));
-    QCOMPARE(controlled->errorCode(), QStringLiteral("reason_required"));
-    QCOMPARE(backend.calls.size(), calls);
-    controlled->close();
+    QCOMPARE(lastCall(backend, "PUT", matome::contentPath(org, space, QStringLiteral("grants"))).body,
+             (QJsonObject{{QStringLiteral("organization_membership_id"), QStringLiteral("me")}, {QStringLiteral("role_ids"), QJsonArray()}}));
+    QTRY_VERIFY(!access->busy());
     access->close();
-    QVERIFY(!controlled->active() && !access->active());
+
+    // Reading the space's add-ons needs add_on.space_activate there: a
+    // refused space lists nothing and says why.
+    serveControlledDocs(backend, org);
+    QVERIFY(followCatalog(session));
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")), {{QStringLiteral("spaces"), QJsonArray{
+        QJsonObject{{QStringLiteral("id"), space}, {QStringLiteral("name"), QStringLiteral("Inbox")}}}}});
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+    backend.respond("GET", addOns, {}, 403, QStringLiteral("forbidden"));
+    auto *activations = session.addOnActivations();
+    activations->open();
+    QTRY_VERIFY(!activations->busy());
+    QVERIFY(activations->rows().isEmpty());
+    QCOMPARE(activations->readError(), QStringLiteral("forbidden"));
+    const int refused = backend.calls.size();
+    activations->activate(space, QStringLiteral("controlled_docs"));
+    QCOMPARE(backend.calls.size(), refused);
+
+    // Never turned on: the first activation sends no revision, and Core's
+    // answer takes the row's place.
+    backend.respond("GET", addOns, spaceAddOns(false, {}, QJsonValue::Null));
+    activations->refresh();
+    QTRY_VERIFY(!activations->busy());
+    QCOMPARE(activations->rows().size(), 1);
+    const auto row = activations->rows().constFirst().toMap();
+    QCOMPARE(row.value(QStringLiteral("space_id")).toString(), space);
+    QCOMPARE(row.value(QStringLiteral("space_name")).toString(), QStringLiteral("Inbox"));
+    QCOMPARE(row.value(QStringLiteral("status")).toString(), QStringLiteral("inactive"));
+    const int deactivating = backend.calls.size();
+    activations->deactivate(space, QStringLiteral("controlled_docs"));
+    QCOMPARE(backend.calls.size(), deactivating);
+    backend.respond("PUT", activation, {{QStringLiteral("add_on"), spaceAddOns(true, {}, 1).value(QStringLiteral("add_ons")).toArray().first()}});
+    activations->activate(space, QStringLiteral("controlled_docs"));
+    QTRY_COMPARE(activations->notice(), QStringLiteral("activated"));
+    const auto first = lastCall(backend, "PUT", activation);
+    QVERIFY(first.body.isEmpty());
+    QVERIFY(std::none_of(first.headers.begin(), first.headers.end(), [](const auto &header) { return header.first == "If-Match"; }));
+    QCOMPARE(activations->rows().constFirst().toMap().value(QStringLiteral("status")).toString(), QStringLiteral("active"));
+    QTRY_VERIFY(!activations->busy());
+
+    // On, a space overrides one setting and follows the organization again
+    // on another, at the activation's revision.
+    backend.respond("GET", addOns, spaceAddOns(true, {{QStringLiteral("allow_author_approval"), true}}, 4));
+    activations->refresh();
+    QTRY_VERIFY(!activations->busy());
+    activations->activate(space, QStringLiteral("controlled_docs"),
+                          {{QStringLiteral("required_approvals"), 2},
+                           {QStringLiteral("allow_author_approval"), QVariant::fromValue(nullptr)}});
+    QTRY_COMPARE(activations->notice(), QStringLiteral("activation_saved"));
+    const auto saved = lastCall(backend, "PUT", activation);
+    const auto settings = saved.body.value(QStringLiteral("settings")).toObject();
+    QCOMPARE(settings.value(QStringLiteral("required_approvals")).toInt(), 2);
+    QVERIFY(settings.contains(QStringLiteral("allow_author_approval")));
+    QVERIFY(settings.value(QStringLiteral("allow_author_approval")).isNull());
+    QVERIFY(saved.headers.contains(qMakePair(QByteArrayLiteral("If-Match"), QByteArrayLiteral("4"))));
+    QTRY_VERIFY(!activations->busy());
+
+    // Open reviews keep it as it is, which Core says.
+    backend.respond("GET", addOns, spaceAddOns(true, {}, 4));
+    activations->refresh();
+    QTRY_VERIFY(!activations->busy());
+    backend.queue("DELETE", activation, refusal(409, QStringLiteral("review_open")));
+    activations->deactivate(space, QStringLiteral("controlled_docs"));
+    QTRY_VERIFY(!activations->busy());
+    QCOMPARE(activations->errorCode(), QStringLiteral("review_open"));
+    backend.respond("DELETE", activation, {{QStringLiteral("add_on"), spaceAddOns(false, {}, 5).value(QStringLiteral("add_ons")).toArray().first()}});
+    activations->deactivate(space, QStringLiteral("controlled_docs"));
+    const auto off = lastCall(backend, "DELETE", activation);
+    QVERIFY(off.body.isEmpty());
+    QVERIFY(off.headers.contains(qMakePair(QByteArrayLiteral("If-Match"), QByteArrayLiteral("4"))));
+    QTRY_COMPARE(activations->notice(), QStringLiteral("deactivated"));
+    QTRY_VERIFY(!activations->busy());
+    // A pause in the organization reads every space again.
+    const int reads = std::count_if(backend.calls.cbegin(), backend.calls.cend(),
+                                    [&addOns](const auto &call) { return call.method == "GET" && call.path == addOns; });
+    serveControlledDocs(backend, org, QStringLiteral("paused"));
+    QVERIFY(followCatalog(session));
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")), {{QStringLiteral("spaces"), QJsonArray{
+        QJsonObject{{QStringLiteral("id"), space}, {QStringLiteral("name"), QStringLiteral("Inbox")}}}}});
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+    QTRY_VERIFY(std::count_if(backend.calls.cbegin(), backend.calls.cend(),
+                              [&addOns](const auto &call) { return call.method == "GET" && call.path == addOns; }) > reads);
+    activations->close();
+    access->close();
+    QVERIFY(!activations->active() && !access->active());
+}
+
+// Before a pause or an uninstall, the holders of the roles the add-on adds
+// are counted over the organization's spaces, where it is available, from
+// their grants.
+void TestCore::addOnAccessCountsRoleHolders()
+{
+    FakeCore core;
+    QVERIFY(core.listen());
+    matome::test::MockAddOnBackend backend;
+    Session session(nullptr, &backend);
+    QVERIFY(openInbox(core, session));
+    const QString org = session.currentOrgId();
+    serveControlledDocs(backend, org);
+    QVERIFY(followCatalog(session));
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")), {{QStringLiteral("spaces"), QJsonArray{
+        QJsonObject{{QStringLiteral("id"), QStringLiteral("a")}}, QJsonObject{{QStringLiteral("id"), QStringLiteral("b")}}}}});
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+    const auto grant = [](const QString &field, const QString &id, const QString &key) {
+        return QJsonObject{{QStringLiteral("principal_kind"), field == QLatin1String("group_id") ? QStringLiteral("group") : QStringLiteral("user")},
+                           {field, id}, {QStringLiteral("role_key"), key}};
+    };
+    const QString user = QStringLiteral("organization_membership_id");
+    backend.respond("GET", matome::contentPath(org, QStringLiteral("a"), QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray{
+        grant(user, QStringLiteral("me"), QStringLiteral("content_reader")),
+        grant(user, QStringLiteral("me"), QStringLiteral("addon.controlled_docs.reviewer")),
+        grant(QStringLiteral("group_id"), QStringLiteral("g"), QStringLiteral("addon.controlled_docs.approver"))}}});
+    backend.respond("GET", matome::contentPath(org, QStringLiteral("b"), QStringLiteral("grants")), {{QStringLiteral("grants"), QJsonArray{
+        grant(user, QStringLiteral("bo"), QStringLiteral("space_admin")),
+        grant(user, QStringLiteral("bo"), QStringLiteral("addon.controlled_docs.manager")),
+        grant(user, QStringLiteral("me"), QStringLiteral("addon.controlled_docs.reviewer"))}}});
+    auto *access = session.addOnAccess();
+    access->measure(QStringLiteral("controlled_docs"));
+    QVERIFY(!access->impact().value(QStringLiteral("known")).toBool());
+    QTRY_VERIFY(!access->busy());
+    const QVariantMap impact = access->impact();
+    QVERIFY(impact.value(QStringLiteral("known")).toBool());
+    QCOMPARE(impact.value(QStringLiteral("holders")).toInt(), 3);
+    QCOMPARE(impact.value(QStringLiteral("spaces")).toInt(), 2);
+    // `me` holds the reviewer role in both spaces and counts once.
+    QCOMPARE(impact.value(QStringLiteral("roles")).toMap(),
+             (QVariantMap{{QStringLiteral("addon.controlled_docs.reviewer"), 1}, {QStringLiteral("addon.controlled_docs.approver"), 1},
+                          {QStringLiteral("addon.controlled_docs.manager"), 1}}));
+    // Nobody holds the classifier's roles.
+    access->measure(QStringLiteral("classifier"));
+    QTRY_VERIFY(!access->busy());
+    QVERIFY(access->impact().value(QStringLiteral("known")).toBool());
+    QCOMPARE(access->impact().value(QStringLiteral("holders")).toInt(), 0);
+    // A space that cannot be read leaves the count unknown.
+    backend.respond("GET", matome::contentPath(org, QStringLiteral("b"), QStringLiteral("grants")), {}, 403, QStringLiteral("forbidden"));
+    access->measure(QStringLiteral("controlled_docs"));
+    QTRY_VERIFY(!access->busy());
+    QVERIFY(!access->impact().value(QStringLiteral("known")).toBool());
+    // An organization without spaces: nobody holds anything.
+    backend.respond("GET", matome::orgPath(org, QStringLiteral("spaces")), {{QStringLiteral("spaces"), QJsonArray()}});
+    session.addOns()->refresh();
+    QTRY_VERIFY(!session.addOns()->busy());
+    access->measure(QStringLiteral("classifier"));
+    QTRY_VERIFY(!access->busy());
+    QVERIFY(access->impact().value(QStringLiteral("known")).toBool());
+    QCOMPARE(access->impact().value(QStringLiteral("holders")).toInt(), 0);
+    // Another organization drops what was counted.
+    core.seedOrganization(QStringLiteral("Other"), QStringLiteral("owner"));
+    session.refreshOrganizations();
+    QVERIFY(waitFor(&session));
+    session.navigate(QStringLiteral("org"), session.organizations()->index(1).data(OrgModel::OrgIdRole).toString());
+    QTRY_VERIFY(access->impact().isEmpty());
 }
 
 void TestCore::orgBillingPermissionsAndStaleReplies()
@@ -3776,16 +5491,22 @@ void TestCore::orgBillingConfiguresInstallation()
     session.openSettings();
     auto *billing = session.orgBilling();
     QTRY_VERIFY(!billing->busy());
-    const int hits = core.hits();
-    session.addOns()->install(QStringLiteral("classifier"), {QStringLiteral("unrelated-space")});
-    QTest::qWait(20);
-    QCOMPARE(core.hits(), hits);
-    session.addOns()->install(QStringLiteral("classifier"), {spaceId});
+    session.addOns()->install(QStringLiteral("classifier"));
     QTRY_VERIFY(!billing->busy());
     const QVariantMap installation = billing->products().first().toMap().value(QStringLiteral("installation")).toMap();
     QCOMPARE(installation.value(QStringLiteral("status")).toString(), QStringLiteral("active"));
-    QCOMPARE(installation.value(QStringLiteral("space_ids")).toList(), QVariantList{spaceId});
+    QVERIFY(!installation.contains(QStringLiteral("space_ids")));
     QVERIFY(installation.value(QStringLiteral("settings")).toMap().value(QStringLiteral("rerun")).toBool());
+    // Installed, it is available in the space and active there only once
+    // the space turns it on.
+    bool listed = false;
+    session.addOns()->backend().request("GET", matome::contentPath(session.currentOrgId(), spaceId, QStringLiteral("add-ons")), {}, {},
+                                        [&listed](const Client::Reply &reply) {
+        const QJsonObject row = reply.json.value(QStringLiteral("add_ons")).toArray().first().toObject();
+        listed = row.value(QStringLiteral("product_key")).toString() == QLatin1String("classifier")
+                && row.value(QStringLiteral("status")).toString() == QLatin1String("inactive") && row.value(QStringLiteral("revision")).isNull();
+    });
+    QTRY_VERIFY(listed);
     session.addOns()->pause(QStringLiteral("classifier"));
     QTRY_VERIFY(!billing->busy());
     QCOMPARE(billing->products().first().toMap().value(QStringLiteral("installation")).toMap()

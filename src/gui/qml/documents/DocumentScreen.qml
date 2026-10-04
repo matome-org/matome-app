@@ -6,6 +6,7 @@ import QtQuick.Layouts
 import matome
 import "../chrome"
 import "../controlled_docs"
+import "../screens"
 import "../chrome/Messages.js" as Messages
 import "../chrome/Commands.js" as Commands
 
@@ -19,6 +20,9 @@ import "../chrome/Commands.js" as Commands
 // below the document. Nothing here depends on the add-on being there.
 FocusScope {
     id: screen
+
+    // Asks the window to open what fixes a refusal (Permissions' `explain`).
+    signal fixRequested(var answer)
 
     readonly property var view: Session.documentView
     readonly property var control: Session.controlledDocs
@@ -38,12 +42,24 @@ FocusScope {
     readonly property var tabs: ["view", "edit", "versions", "related", "reviews"]
     readonly property bool unrelated: view.relatedLoaded && view.incoming.length === 0 && view.outgoing.length === 0
                                       && view.hiddenCount === 0
+    // Manage with reviews in this space, as the space's catalog judges it.
+    readonly property var manageAnswer: Session.permissions.revision >= 0
+                                        ? Session.permissions.explain("addon.controlled_docs.document_manage", Session.currentSpaceId) : ({})
+    // Managing applies to Markdown where Core offers the add-on, or to a
+    // document already managed.
+    readonly property bool manageable: screen.managed || (screen.view.kind === "markdown" && screen.manageAnswer.listed === true)
     property string draftView: "write"
     property string pendingAction
     // The document selected on the Related tab, when it opens.
     property string relatedPick
 
     function command(id) { return Commands.find(Session.commandList, id) }
+    // Why Core refused `action` here with `code`, from the space's catalog
+    // when it explains it.
+    function refusal(code, action) {
+        return Messages.refused(code, Session.permissions.revision >= 0 ? Session.permissions.explain(action, Session.currentSpaceId) : ({}),
+                                Messages.controlledFailure)
+    }
     // One row of the Related tab from Core's incoming or outgoing reference.
     function relatedRow(item, incoming) {
         const join = function (parts) { return parts.filter(function (part) { return part !== "" }).join(" · ") }
@@ -59,44 +75,16 @@ FocusScope {
                  openable: ok }
     }
     function dismiss() {
-        if (confirmation.visible) confirmation.close()
+        if (panel.shown) panel.dismiss()
         else if (screen.inReview) Session.runCommand("close-review")
         else if (screen.dirty) screen.ask("close")
         else screen.view.close()
     }
+    // Asks in the side panel before `action`: "save", "discard", "close",
+    // "unmanage", or a review decision ("approve", "reject", "cancel").
     function ask(action) {
         screen.pendingAction = action
-        const review = action === "save" && screen.managed
-        if (action === "save" && screen.proposing) {
-            confirmation.title = qsTr("Update this review?")
-            confirmation.detail = qsTr("The edited text becomes the review's proposal, based on the published version. The review keeps its summary.")
-            confirmation.reasonLabel = qsTr("What changed")
-            confirmation.reasonRequired = true
-            confirmation.reasonLength = 500
-            confirmation.action = qsTr("Update review")
-            confirmation.open()
-            return
-        }
-        confirmation.title = action === "save" ? (review ? qsTr("Submit your changes for review?") : qsTr("Save a new version?"))
-                           : action === "approve" ? qsTr("Publish this proposal?")
-                           : action === "reject" ? qsTr("Reject this proposal?")
-                           : action === "cancel" ? qsTr("Cancel this review?")
-                           : action === "unmanage" ? qsTr("Stop managing this document?")
-                           : qsTr("Discard your changes?")
-        confirmation.detail = action === "save" ? (review ? qsTr("Reviewers see the edited document and its changes. The published version stays available until approval.")
-                                                          : qsTr("The edited text becomes the document's current version. Earlier versions stay under Versions."))
-                            : action === "approve" ? qsTr("The exact candidate shown in this review will become the published version.")
-                            : action === "unmanage" ? qsTr("Open reviews will be cancelled. Future versions will publish immediately.")
-                            : action === "reject" || action === "cancel" ? qsTr("The published version will remain unchanged.")
-                            : qsTr("The editor returns to the current version.")
-        confirmation.reasonLabel = action === "save" ? (review ? qsTr("Summary of the change") : qsTr("Describe the change (optional)"))
-                                 : action === "approve" || action === "reject" ? qsTr("Decision comment (optional)")
-                                 : action === "unmanage" ? qsTr("Reason for no longer managing it") : ""
-        confirmation.reasonRequired = review || action === "unmanage"
-        confirmation.reasonLength = action === "approve" || action === "reject" ? 2000 : 500
-        confirmation.action = action === "save" ? (review ? qsTr("Submit for review") : qsTr("Save"))
-                            : action === "approve" ? qsTr("Publish") : qsTr("Confirm")
-        confirmation.open()
+        panel.show(askPanel, screen.Window.activeFocusItem)
     }
     // The verbs the document screen and the add-on hand back to it.
     function perform(id) {
@@ -114,9 +102,15 @@ FocusScope {
         if (screen.inReview) screen.focusDefault()
         else reviewList.focusList()
     }
+    // Back from Settings, the space may require reviews now.
+    // The roles a refusal names come from the organization's directory.
     onVisibleChanged: if (visible) {
         screen.draftView = "write"
+        screen.control.refresh()
+        if (!Session.accessDirectory.active) Session.accessDirectory.open()
         focusDefault()
+    } else {
+        panel.close()
     }
 
     Connections {
@@ -170,6 +164,7 @@ FocusScope {
 
     ColumnLayout {
         anchors.fill: parent
+        anchors.rightMargin: panel.reserve
         spacing: 0
 
         ScreenHeader {
@@ -231,8 +226,30 @@ FocusScope {
                         Accessible.role: Accessible.ToolBar
                         Accessible.name: screen.view.title
 
-                        CommandButton { id: manage; commandId: "manage-document"; visible: screen.view.tab === "view" && manage.usable; showLabel: !screen.narrow }
-                        CommandButton { id: unmanage; commandId: "unmanage-document"; visible: screen.view.tab === "view" && unmanage.usable; showLabel: !screen.narrow }
+                        CommandButton {
+                            id: manage
+                            commandId: "manage-document"
+                            visible: screen.view.tab === "view" && screen.manageable
+                            showLabel: !screen.narrow
+                            reason: screen.managed ? qsTr("It is managed with reviews already.") : Messages.refusal(screen.manageAnswer)
+                        }
+                        ActionButton {
+                            id: fix
+                            objectName: "manageFixButton"
+                            visible: manage.visible && !screen.managed && screen.manageAnswer.canFix === true
+                            text: Messages.fixName(screen.manageAnswer.fix ?? "")
+                            icon: "settings"
+                            showLabel: !screen.narrow
+                            tip: screen.narrow ? text : ""
+                            onActivated: screen.fixRequested(screen.manageAnswer)
+                        }
+                        CommandButton {
+                            id: unmanage
+                            commandId: "unmanage-document"
+                            visible: manage.visible
+                            showLabel: !screen.narrow
+                            reason: screen.managed ? "" : qsTr("It is not managed with reviews.")
+                        }
                         CommandButton { commandId: "download-version"; visible: screen.view.tab === "view" || screen.view.tab === "versions"; showLabel: !screen.narrow }
                         ActionButton {
                             visible: screen.view.tab === "versions"
@@ -242,7 +259,6 @@ FocusScope {
                             usable: screen.command("view-tab").usable
                             onActivated: Session.runCommand("view-tab")
                         }
-                        CommandButton { id: edit; commandId: "edit-tab"; visible: screen.view.tab === "view" && edit.usable; primary: true }
                         ActionButton {
                             objectName: "openRelatedButton"
                             visible: screen.view.tab === "related"
@@ -273,9 +289,27 @@ FocusScope {
                         CommandButton { commandId: "open-review"; visible: screen.view.tab === "reviews" && !screen.inReview; primary: true }
 
                         CommandButton { commandId: "download-candidate"; visible: screen.inReview; showLabel: !screen.narrow }
-                        CommandButton { id: editProposal; commandId: "edit-proposal"; visible: screen.reviewOpen && editProposal.usable; showLabel: !screen.narrow }
-                        CommandButton { id: resolve; commandId: "resolve-conflicts"; visible: screen.reviewOpen && resolve.usable }
-                        CommandButton { id: updateReview; commandId: "update-review"; visible: screen.reviewOpen && updateReview.usable }
+                        CommandButton {
+                            commandId: "edit-proposal"
+                            visible: screen.reviewOpen
+                            showLabel: !screen.narrow
+                            reason: !screen.control.authored ? qsTr("Only its author edits it.")
+                                  : screen.control.review.merge_state === "dirty" ? qsTr("Resolve its conflicts first.") : ""
+                        }
+                        CommandButton {
+                            commandId: "resolve-conflicts"
+                            visible: screen.reviewOpen
+                            showLabel: !screen.narrow
+                            reason: !screen.control.authored ? qsTr("Only its author resolves its conflicts.")
+                                  : screen.control.review.merge_state !== "dirty" ? qsTr("It has no conflicts.") : ""
+                        }
+                        CommandButton {
+                            commandId: "update-review"
+                            visible: screen.reviewOpen
+                            showLabel: !screen.narrow
+                            reason: !screen.control.authored ? qsTr("Only its author updates it.")
+                                  : screen.control.review.merge_state !== "behind" ? qsTr("It is based on the published version.") : ""
+                        }
                         BarRule { visible: screen.reviewOpen }
                         CommandButton { commandId: "cancel-review"; visible: screen.reviewOpen; showLabel: !screen.narrow }
                         CommandButton { commandId: "reject-review"; visible: screen.reviewOpen; showLabel: !screen.narrow }
@@ -305,19 +339,21 @@ FocusScope {
                 objectName: "documentError"
                 visible: screen.view.errorCode !== ""
                 color: Theme.failed
-                text: Messages.documentFailure(screen.view.errorCode)
+                text: screen.refusal(screen.view.errorCode, "document.new_version")
                 Accessible.role: Accessible.AlertMessage
             }
             Label {
+                objectName: "controlError"
                 visible: screen.control.active && screen.control.errorCode !== ""
                 color: Theme.failed
-                text: Messages.controlledFailure(screen.control.errorCode)
+                text: screen.managed ? Messages.controlledFailure(screen.control.errorCode)
+                                     : screen.refusal(screen.control.errorCode, "addon.controlled_docs.document_manage")
                 Accessible.role: Accessible.AlertMessage
             }
-            Label {
-                visible: screen.view.notice !== "" || (screen.control.active && screen.control.notice !== "")
-                color: Theme.accentText
-                text: Messages.documentNotice(screen.view.notice !== "" ? screen.view.notice : screen.control.notice)
+            Notice {
+                code: screen.view.notice !== "" ? screen.view.notice : screen.control.active ? screen.control.notice : ""
+                place: screen.view.documentId + ":" + screen.view.tab
+                text: Messages.documentNotice(code)
             }
             Label { visible: screen.view.busy; text: qsTr("Working…") }
 
@@ -397,7 +433,7 @@ FocusScope {
                           ? qsTr("Saving opens a new review of your changes. Other open reviews stay as they are.")
                           : screen.view.kind === "markdown"
                             ? qsTr("Paste or drop images to store them in the space's assets folder. Type @ or / to link a file, # at a line's start for actions.")
-                            : qsTr("Saving publishes the edited text as the document's next version.")
+                            : qsTr("Saving makes the edited text the document's next version.")
                 }
                 Label {
                     visible: editor.assetError !== ""
@@ -582,21 +618,68 @@ FocusScope {
         }
     }
 
-    Confirm {
-        id: confirmation
-        objectName: "documentConfirm"
+    PanelHost {
+        id: panel
         anchors.fill: parent
-        onAccepted: {
-            if (screen.pendingAction === "save")
-                screen.view.save(editor.text, confirmation.reason, !screen.control.pinsLinks, screen.control.proposal())
-            else if (screen.pendingAction === "discard") {
-                editor.text = screen.view.text
-                screen.control.clearProposal()
+        narrow: screen.narrow
+        onClosed: if (screen.visible && !(panel.returnTo && panel.returnTo.visible)) screen.focusDefault()
+    }
+    Component {
+        id: askPanel
+        ConfirmPanel {
+            id: asking
+            readonly property string action: screen.pendingAction
+            readonly property bool saving: asking.action === "save"
+            readonly property bool review: asking.saving && screen.managed
+            readonly property bool decision: ["approve", "reject", "cancel"].includes(asking.action)
+            objectName: "documentAskPanel"
+            title: asking.saving && screen.proposing ? qsTr("Update this review?")
+                   : asking.saving ? (asking.review ? qsTr("Submit your changes for review?") : qsTr("Save a new version?"))
+                   : asking.action === "approve" ? qsTr("Approve this proposal?")
+                   : asking.action === "reject" ? qsTr("Reject this proposal?")
+                   : asking.action === "cancel" ? qsTr("Cancel this review?")
+                   : asking.action === "unmanage" ? qsTr("Stop managing this document?")
+                   : qsTr("Discard your changes?")
+            detail: asking.saving && screen.proposing ? qsTr("The edited text becomes the review's proposal, based on the published version. The review keeps its summary.")
+                    : asking.saving ? (asking.review ? qsTr("Reviewers see the edited document and its changes. The published version stays available until approval.")
+                                                     : qsTr("The edited text becomes the document's current version. Earlier versions stay under Versions."))
+                    : asking.action === "approve" ? qsTr("Once enough reviewers approve it, the proposal shown in this review becomes the published version.")
+                    : asking.action === "unmanage" ? qsTr("Open reviews will be cancelled. New versions will no longer wait for approval.")
+                    : asking.action === "reject" || asking.action === "cancel" ? qsTr("The published version will remain unchanged.")
+                    : qsTr("The editor returns to the current version.")
+            reasonLabel: asking.saving && screen.proposing ? qsTr("What changed")
+                         : asking.saving ? (asking.review ? qsTr("Summary of the change") : qsTr("Describe the change (optional)"))
+                         : asking.action === "approve" || asking.action === "reject" ? qsTr("Decision comment (optional)")
+                         : asking.action === "unmanage" ? qsTr("Reason for no longer managing it") : ""
+            reasonRequired: (asking.saving && (screen.proposing || asking.review)) || asking.action === "unmanage"
+            reasonLength: asking.action === "approve" || asking.action === "reject" ? 2000 : 500
+            saveText: asking.saving && screen.proposing ? qsTr("Update review")
+                      : asking.saving ? (asking.review ? qsTr("Submit for review") : qsTr("Save"))
+                      : asking.action === "approve" ? qsTr("Approve")
+                      : asking.action === "reject" ? qsTr("Reject")
+                      : asking.action === "cancel" ? qsTr("Cancel review")
+                      : asking.action === "unmanage" ? qsTr("Stop managing")
+                      : asking.action === "close" ? qsTr("Discard and close") : qsTr("Discard")
+            busy: asking.saving ? screen.view.busy : screen.control.busy
+            failure: asking.saving ? screen.refusal(screen.view.errorCode, "document.new_version")
+                     : asking.action === "unmanage" ? screen.refusal(screen.control.errorCode, "addon.controlled_docs.document_manage")
+                     : asking.action === "approve" || asking.action === "reject"
+                       ? screen.refusal(screen.control.errorCode, "addon.controlled_docs.approve")
+                     : asking.decision ? Messages.controlledFailure(screen.control.errorCode) : ""
+            onConfirmed: {
+                if (asking.saving) {
+                    screen.view.save(editor.text, asking.reason, !screen.control.pinsLinks, screen.control.proposal())
+                } else if (asking.action === "discard") {
+                    editor.text = screen.view.text
+                    screen.control.clearProposal()
+                } else if (asking.action === "close") {
+                    screen.view.close()
+                } else if (asking.action === "unmanage") {
+                    screen.control.setControlled(false, asking.reason)
+                } else {
+                    screen.control.decide(asking.action, asking.reason)
+                }
             }
-            else if (screen.pendingAction === "close") screen.view.close()
-            else if (screen.pendingAction === "unmanage") screen.control.setControlled(false, confirmation.reason)
-            else screen.control.decide(screen.pendingAction, confirmation.reason)
         }
-        onVisibleChanged: if (!visible && screen.visible) screen.focusDefault()
     }
 }

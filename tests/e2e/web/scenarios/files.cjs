@@ -258,8 +258,8 @@ module.exports = (scenario) => {
 
     await studio.select("Contracts");
     await studio.click("trashButton");
-    await studio.untilFocus("confirmCancel");
-    await studio.click("confirmAccept");
+    await studio.untilFocus("sidePanelCancel");
+    await studio.click("sidePanelSave");
     await studio.untilNames(["Archive"]);
     const { folders, trash: trashed } = await core.state();
     assert.deepEqual(folders.map((folder) => folder.name), ["Archive"]);

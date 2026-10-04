@@ -62,9 +62,11 @@ void EntryModel::refresh()
         for (int i = 0; i < orgs->rowCount(); ++i) {
             const QModelIndex at = orgs->index(i);
             const QString id = at.data(OrgModel::OrgIdRole).toString();
+            QStringList roles;
+            for (const QString &role : at.data(OrgModel::RolesRole).toStringList())
+                roles.append(detailWord(role));
             add(rows, QStringLiteral("org"), id, at.data(OrgModel::NameRole).toString(),
-                detailWord(at.data(OrgModel::RoleNameRole).toString()), -1, QString(),
-                id == m_session.lastOrgId());
+                roles.join(QStringLiteral(", ")), -1, QString(), id == m_session.lastOrgId());
         }
         break;
     }

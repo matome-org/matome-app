@@ -3,6 +3,7 @@
 #include "JsonList.h"
 #include "Session.h"
 
+#include <QJsonArray>
 #include <QJsonObject>
 
 namespace matome {
@@ -28,27 +29,17 @@ QString OrgModel::nameOf(const QString &orgId) const
     return row ? row->name : QString();
 }
 
-bool OrgModel::canAdminister(const QString &orgId) const
+QStringList OrgModel::ids() const
 {
-    const OrgRow *row = find(orgId);
-    return row && row->canAdminister();
+    QStringList ids;
+    for (const OrgRow &row : m_rows)
+        ids.append(row.id);
+    return ids;
 }
 
 int OrgModel::rowCount(const QModelIndex &parent) const
 {
     return parent.isValid() ? 0 : m_rows.size();
-}
-
-bool OrgModel::canReadBilling(const QString &orgId) const
-{
-    const OrgRow *row = find(orgId);
-    return row && row->canReadBilling();
-}
-
-bool OrgModel::canManageBilling(const QString &orgId) const
-{
-    const OrgRow *row = find(orgId);
-    return row && row->canManageBilling();
 }
 
 QVariant OrgModel::data(const QModelIndex &index, int role) const
@@ -61,14 +52,10 @@ QVariant OrgModel::data(const QModelIndex &index, int role) const
         return row.id;
     case NameRole:
         return row.name;
-    case RoleNameRole:
-        return row.role;
+    case RolesRole:
+        return row.roles;
     case RevisionRole:
         return row.revision;
-    case CanAdministerRole:
-        return row.canAdminister();
-    case CanReadBillingRole:
-        return row.canReadBilling();
     default:
         return {};
     }
@@ -78,10 +65,8 @@ QHash<int, QByteArray> OrgModel::roleNames() const
 {
     return {{OrgIdRole, "orgId"},
             {NameRole, "name"},
-            {RoleNameRole, "role"},
-            {RevisionRole, "revision"},
-            {CanAdministerRole, "canAdminister"},
-            {CanReadBillingRole, "canReadBilling"}};
+            {RolesRole, "roles"},
+            {RevisionRole, "revision"}};
 }
 
 void OrgModel::reload()
@@ -192,9 +177,13 @@ void OrgModel::applyList(const Client::Reply &reply, const QJsonArray &list)
     // The first list after sign-in reopens the remembered organization; later
     // lists (refresh at the root) leave the location alone.
     const bool first = m_rows.isEmpty();
-    beginResetModel();
-    m_rows = rows;
-    endResetModel();
+    // A reload of the same organizations keeps the delegates showing them,
+    // with their focus and any press under way.
+    if (!updateInPlace(m_rows, rows, [this](int at) { emit dataChanged(index(at), index(at)); })) {
+        beginResetModel();
+        m_rows = rows;
+        endResetModel();
+    }
 
     if (!find(m_currentOrgId)) {
         const QString remembered = first ? m_session.lastOrgId() : QString();
@@ -211,7 +200,8 @@ OrgRow OrgModel::parseRow(const QJsonObject &json)
     OrgRow row;
     row.id = json.value(QStringLiteral("id")).toString();
     row.name = json.value(QStringLiteral("name")).toString();
-    row.role = json.value(QStringLiteral("role")).toString();
+    for (const QJsonValue &role : json.value(QStringLiteral("roles")).toArray())
+        row.roles.append(role.toString());
     row.revision = json.value(QStringLiteral("revision")).toInt(1);
     return row;
 }

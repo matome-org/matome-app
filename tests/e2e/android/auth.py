@@ -78,7 +78,7 @@ def wrong_password(app: App) -> None:
     app.start(signed_in=False)
     app.form({"passwordField": "not-it", "emailField": EMAIL})
     d.enter()
-    d.label("statusMessage", "That email or password is wrong.")
+    d.label("statusMessage", "That email, username, or password is wrong.")
     fields_marked(app)
 
     app.sign_in()

@@ -11,6 +11,8 @@
 #include <QUrl>
 #include <QVariantMap>
 
+#include <utility>
+
 namespace matome {
 
 void Session::setFocusPayload(const QString &payload)
@@ -119,14 +121,56 @@ void Session::upload(const QString &name, const QByteArray &bytes)
 {
     if (!inSpace())
         return;
-    const bool idle = m_uploads.isEmpty();
-    if (idle)
+    if (m_uploads.isEmpty() && m_staged.isEmpty())
         setUploadError();
-    m_uploads.append({name, bytes, location()});
+    // Core grants the managing action in a space only where the add-on is
+    // active there, so holding it means the space requires reviews.
+    const QVariantMap addOn = m_addOns.state(QStringLiteral("controlled_docs"));
+    const bool requiresReviews = name.endsWith(QLatin1String(".md"), Qt::CaseInsensitive)
+            && m_permissions.spaceGrants(currentSpaceId(), QStringLiteral("addon.controlled_docs.document_manage"))
+            && (!addOn.value(QStringLiteral("known")).toBool() || addOn.value(QStringLiteral("available")).toBool());
+    if (requiresReviews)
+        stage({name, bytes, location()});
+    else
+        enqueue({name, bytes, location()});
+}
+
+void Session::enqueue(const Upload &file)
+{
+    const bool idle = m_uploads.isEmpty();
+    m_uploads.append(file);
     if (idle)
         startUpload();
     else
         notify();
+}
+
+// A Markdown file waits until the person says whether to manage it with
+// reviews; the files that join meanwhile wait on the same answer.
+void Session::stage(const Upload &file)
+{
+    m_staged.append(file);
+    notify();
+    if (m_staged.size() == 1)
+        emit promptUploadReviews();
+}
+
+void Session::uploadStaged(bool manage)
+{
+    const QList<Upload> files = std::exchange(m_staged, {});
+    for (Upload file : files) {
+        file.manage = manage;
+        enqueue(file);
+    }
+    notify();
+}
+
+void Session::cancelStaged()
+{
+    if (m_staged.isEmpty())
+        return;
+    m_staged.clear();
+    notify();
 }
 
 void Session::requestUpload()
@@ -158,17 +202,19 @@ void Session::startUpload()
                 step(reply);
         };
     };
-    const QString orgId = next.to.orgId;
-    const QString spaceId = next.to.spaceId;
+    const Location to = next.to;
+    const QString orgId = to.orgId;
+    const QString spaceId = to.spaceId;
     const QString name = next.name;
     const QByteArray bytes = next.bytes;
+    const bool manage = next.manage;
     QJsonObject document;
     document.insert(QStringLiteral("title"), name);
     if (!next.to.folderId.isEmpty())
         document.insert(QStringLiteral("folder_id"), next.to.folderId);
     authedPost(contentPath(orgId, spaceId, QStringLiteral("documents")), document,
                idempotencyHeader(),
-               live([this, orgId, spaceId, name, bytes, run](const Client::Reply &reply) {
+               live([this, to, orgId, spaceId, name, bytes, manage, run](const Client::Reply &reply) {
                    const QString documentId =
                            jsonId(reply.json.value(QStringLiteral("document"))
                                           .toObject()
@@ -184,35 +230,64 @@ void Session::startUpload()
                    upload.insert(QStringLiteral("content_type"), name.endsWith(QLatin1String(".md"), Qt::CaseInsensitive)
                                  ? QStringLiteral("text/markdown") : QStringLiteral("application/octet-stream"));
                    m_coreAddOnBackend.upload(orgId, upload, bytes, [this, run] { return run == m_uploadRun; },
-                           [this](const Client::Reply &done) { finishUpload(done.ok ? QString() : failCode(done)); },
+                           [this, to, documentId, manage](const Client::Reply &done) {
+                               if (!done.ok)
+                                   finishUpload(failCode(done));
+                               else if (manage)
+                                   manageUploaded(to, documentId);
+                               else
+                                   finishUpload({});
+                           },
                            [this](qint64 sent, qint64 total) {
                                if (total > 0) { m_uploadProgress = double(sent) / double(total); notify(); }
                            });
                }));
 }
 
-// The file at the head of the queue is done, landed (`code` empty) or not;
-// the next one starts.
-void Session::finishUpload(const QString &code)
+// Reads the landed document's revision, then turns its control on with it.
+void Session::manageUploaded(const Location &to, const QString &documentId)
+{
+    const int run = m_uploadRun;
+    const QString path = contentPath(to.orgId, to.spaceId, QStringLiteral("documents/") + documentId);
+    AddOnBackend &backend = m_addOns.backend();
+    backend.request("GET", path, {}, {}, [this, run, path, &backend](const Client::Reply &read) {
+        if (run != m_uploadRun)
+            return;
+        if (!read.ok) {
+            finishUpload(failCode(read), true);
+            return;
+        }
+        const int revision = read.json.value(QStringLiteral("document")).toObject().value(QStringLiteral("revision")).toInt();
+        backend.request("PUT", path + QStringLiteral("/controlled-docs"), {}, idempotentMatchHeader(revision),
+                        [this, run](const Client::Reply &reply) {
+            if (run == m_uploadRun)
+                finishUpload(reply.ok ? QString() : failCode(reply), true);
+        });
+    });
+}
+
+// The next file starts.
+void Session::finishUpload(const QString &code, bool landed)
 {
     const Upload done = m_uploads.takeFirst();
     ++m_uploadDone;
-    if (code.isEmpty())
+    if (code.isEmpty() || landed)
         m_documents.reload();
-    else
-        reportUpload(code, done.name);
+    if (!code.isEmpty())
+        reportUpload(code, done.name, landed);
     startUpload();
 }
 
-void Session::setUploadError(const QString &code, const QString &name)
+void Session::setUploadError(const QString &code, const QString &name, bool landed)
 {
     m_uploadError = code;
     m_uploadErrorName = name;
+    m_uploadLanded = landed;
 }
 
-void Session::reportUpload(const QString &code, const QString &name)
+void Session::reportUpload(const QString &code, const QString &name, bool landed)
 {
-    setUploadError(code, name);
+    setUploadError(code, name, landed);
     notify();
 }
 
@@ -227,6 +302,13 @@ const QList<Session::Command> &Session::commands()
     // Only inside a space: files, folders, uploads, the clipboard.
     static const auto inFiles = [](const Session &s) { return explorer(s) && s.inSpace(); };
     const auto focused = [](const Session &s) { return inFiles(s) && !s.m_focusPayload.isEmpty(); };
+    // The action the current space's catalog must allow on an entry of `kind`.
+    static const auto onKind = [](const QString &kind, const char *onFolder, const char *onDocument) {
+        return QString::fromLatin1(kind == QLatin1String("folder") ? onFolder : onDocument);
+    };
+    static const auto needs = [](const char *action) {
+        return [action](const Session &) { return QString::fromLatin1(action); };
+    };
     const auto trashed = [](const Session &s) {
         return explorer(s) && !s.m_lastTrashed.id.isEmpty();
     };
@@ -255,38 +337,40 @@ const QList<Session::Command> &Session::commands()
                  [](Session &s) { s.refreshLocation(); }},
                 {"filter", QT_TR_NOOP("Filter"),
                  explorer, [](Session &s) { emit s.focusFilter(); }},
-                {"new", nullptr, explorer, [](Session &s) { emit s.promptNew(); }},
-                {"upload", QT_TR_NOOP("Upload file"),
-                 inFiles, [](Session &s) { s.requestUpload(); }},
+                {"new", nullptr, explorer, [](Session &s) { emit s.promptNew(); }, nullptr,
+                 [](const Session &s) { return s.inSpace() ? QStringLiteral("folder.create") : QString(); }},
+                {"upload", QT_TR_NOOP("Upload file"), inFiles, [](Session &s) { s.requestUpload(); }, nullptr,
+                 needs("upload.create")},
                 {"download", QT_TR_NOOP("Download"),
-                 [](const Session &s) {
-                     return inFiles(s) && s.focusedEntry().kind == QLatin1String("document");
-                 },
+                 [](const Session &s) { return inFiles(s) && s.focusedEntry().kind == QLatin1String("document"); },
                  [](Session &s) {
                      const Entry entry = s.focusedEntry();
                      if (entry.kind == QLatin1String("document"))
                          s.m_documents.download(entry.id);
-                 }},
+                 }, nullptr, needs("content.download")},
                 {"open", QT_TR_NOOP("Open"), focused, [](Session &s) {
                      const Entry entry = s.focusedEntry();
                      s.openEntry(entry.kind, entry.id);
                  }, "forward"},
-                {"rename", QT_TR_NOOP("Rename"),
-                 focused, [](Session &s) { s.promptRenameFocused(); }},
+                {"rename", QT_TR_NOOP("Rename"), focused, [](Session &s) { s.promptRenameFocused(); }, nullptr,
+                 [](const Session &s) { return onKind(s.focusedEntry().kind, "folder.rename", "document.metadata_update"); }},
+                {"access", QT_TR_NOOP("Manage access"),
+                 [](const Session &s) { return inFiles(s) && !s.focusedEntry().id.isEmpty(); },
+                 [](Session &s) { s.openFocusedAccess(); }, nullptr, needs("resource_grant.read")},
                 {"trash", nullptr,
                  [](const Session &s) { return inFiles(s) && !s.focusedEntry().id.isEmpty(); },
-                 [](Session &s) { s.trashFocused(); }},
+                 [](Session &s) { s.trashFocused(); }, nullptr,
+                 [](const Session &s) { return onKind(s.focusedEntry().kind, "folder.delete", "document.trash"); }},
                 {"restore", QT_TR_NOOP("Restore last trash"),
                  trashed, [](Session &s) { s.settleLastTrashed("restore", true); }},
                 {"purge", QT_TR_NOOP("Purge last trash"),
                  trashed, [](Session &s) { s.settleLastTrashed("purge", false); }},
-                {"cut", QT_TR_NOOP("Cut"),
-                 focused, [](Session &s) { s.cutPayload(s.m_focusPayload); }},
+                {"cut", QT_TR_NOOP("Cut"), focused, [](Session &s) { s.cutPayload(s.m_focusPayload); }, nullptr,
+                 [](const Session &s) { return onKind(s.focusedEntry().kind, "folder.move", "document.move"); }},
                 {"paste", QT_TR_NOOP("Paste"),
-                 [](const Session &s) {
-                     return inFiles(s) && s.hasClipboard();
-                 },
-                 [](Session &s) { s.pasteHere(); }},
+                 [](const Session &s) { return inFiles(s) && s.hasClipboard(); },
+                 [](Session &s) { s.pasteHere(); }, nullptr,
+                 [](const Session &s) { return onKind(s.m_clip.kind, "folder.move", "document.move"); }},
                 {"sign-out", QT_TR_NOOP("Sign out"), signedIn, [](Session &s) { s.signOut(); }},
                 {"theme-light", QT_TR_NOOP("Theme light"), always, nullptr},
                 {"theme-dark", QT_TR_NOOP("Theme dark"), always, nullptr},
@@ -323,7 +407,7 @@ const QList<Session::Command> &Session::commands()
         } reviewing[] = {
                 {"open-review", QT_TR_NOOP("Open review"), "forward"},
                 {"close-review", QT_TR_NOOP("Back to reviews"), "back"},
-                {"download-candidate", QT_TR_NOOP("Download candidate"), "download"},
+                {"download-candidate", QT_TR_NOOP("Download proposal"), "download"},
                 {"approve-review", QT_TR_NOOP("Approve"), "check"},
                 {"reject-review", QT_TR_NOOP("Reject"), "close"},
                 {"cancel-review", QT_TR_NOOP("Cancel review"), "cancel"},
@@ -333,11 +417,33 @@ const QList<Session::Command> &Session::commands()
                 {"manage-document", QT_TR_NOOP("Manage with reviews"), "controlled-docs"},
                 {"unmanage-document", QT_TR_NOOP("Stop managing"), "document"},
         };
+        // Managing also acts on the explorer's focused document: it opens,
+        // and the add-on runs the verb once it has loaded.
+        static const auto fromExplorer = [](const Session &s, QByteArrayView id) {
+            const Entry entry = s.focusedEntry();
+            if (!inFiles(s) || entry.kind != QLatin1String("document")
+                || s.m_addOns.state(QStringLiteral("controlled_docs")).value(QStringLiteral("status")).toString().isEmpty())
+                return false;
+            const bool controlled = s.m_documents.controlledOf(entry.id);
+            if (id == "unmanage-document") return controlled;
+            return id == "manage-document" && !controlled
+                    && s.m_documents.titleOf(entry.id).endsWith(QLatin1String(".md"), Qt::CaseInsensitive);
+        };
         for (const auto &action : reviewing) {
             const QByteArray id(action.id);
             rows.append({id, action.title,
-                         [id](const Session &s) { return s.m_controlledDocs.allows(id); },
-                         [id](Session &s) { s.m_controlledDocs.perform(id); }, action.icon});
+                         [id](const Session &s) { return s.m_controlledDocs.allows(id) || fromExplorer(s, id); },
+                         [id](Session &s) {
+                             if (!s.usable(*s.command(QString::fromLatin1(id)))) return;
+                             if (s.m_controlledDocs.allows(id) || !fromExplorer(s, id)) {
+                                 s.m_controlledDocs.perform(id);
+                                 return;
+                             }
+                             s.openEntry(QStringLiteral("document"), s.focusedEntry().id);
+                             s.m_controlledDocs.performWhenLoaded(id);
+                         }, action.icon,
+                         id == "manage-document" ? std::function<QString(const Session &)>(needs("addon.controlled_docs.document_manage"))
+                                                 : nullptr});
         }
         // Each language by its own name, untranslated, like the switcher.
         for (const Language &language : kLanguages)
@@ -400,6 +506,7 @@ const struct {
         {Qt::Key_Return, Qt::ControlModifier, true, "save-document", "Ctrl+Enter"},
         {Qt::Key_Enter, Qt::ControlModifier, true, "save-document", ""},
         {Qt::Key_F2, 0, false, "rename", "F2"},
+        {Qt::Key_A, 0, false, "access", "A"},
         {Qt::Key_Delete, 0, false, "trash", "Del"},
         {Qt::Key_Z, Qt::ControlModifier, false, "restore", "Ctrl+Z"},
         {Qt::Key_X, Qt::ControlModifier, false, "cut", "Ctrl+X"},
@@ -424,10 +531,22 @@ QVariantList Session::commandList() const
         map.insert(QStringLiteral("title"), tr(face.title));
         map.insert(QStringLiteral("icon"), QString::fromLatin1(face.icon));
         map.insert(QStringLiteral("shortcut"), keys.join(QStringLiteral(" / ")));
-        map.insert(QStringLiteral("usable"), row.usable(*this));
+        const bool can = usable(row);
+        map.insert(QStringLiteral("usable"), can);
+        // Refused by the space's catalog: why, and what fixes it.
+        if (!can && row.action && row.usable(*this))
+            map.insert(QStringLiteral("refusal"), m_permissions.explain(row.action(*this), currentSpaceId()));
         list.append(map);
     }
     return list;
+}
+
+bool Session::usable(const Command &row) const
+{
+    if (!row.usable(*this))
+        return false;
+    const QString action = row.action ? row.action(*this) : QString();
+    return action.isEmpty() || m_permissions.spaceAllows(currentSpaceId(), action);
 }
 
 Session::Face Session::faceOf(const Command &row) const
@@ -454,6 +573,7 @@ void Session::refreshLocation()
     if (m_documentView.active()) {
         m_documentView.refresh();
         m_controlledDocs.refresh();
+        m_permissions.reload();
         return;
     }
     switch (where()) {
@@ -465,6 +585,7 @@ void Session::refreshLocation()
         break;
     case Level::Files:
         m_folders.reload();
+        m_permissions.reload();
         break;
     }
 }
@@ -477,6 +598,15 @@ void Session::promptRenameFocused()
     emit promptRename(nameOf(focused));
 }
 
+void Session::openFocusedAccess()
+{
+    const Entry focused = focusedEntry();
+    if (focused.id.isEmpty())
+        return;
+    m_accessGrants.open(focused.kind, currentSpaceId(), focused.id, nameOf(focused));
+    emit promptAccess();
+}
+
 bool Session::handleKey(int key, int modifiers, bool inField)
 {
     const int held = modifiers & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier);
@@ -487,7 +617,7 @@ bool Session::handleKey(int key, int modifiers, bool inField)
         if (binding.key != key || binding.modifiers != wanted || (inField && !binding.inField))
             continue;
         const Command *row = command(QString::fromLatin1(binding.command));
-        if (!row->usable(*this))
+        if (!usable(*row))
             continue;
         row->run(*this);
         return true;

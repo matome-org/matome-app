@@ -10,10 +10,14 @@ import matome
 // activate; a control that `tapSelects` reports the tap instead so lists can
 // select on click and open on double click. Right click and long press ask
 // for a context menu. A press on a popup over the control is the popup's.
+// An unusable control with a `reason` stays reachable by Tab and pointer,
+// says why, and does nothing.
 Item {
     id: control
 
     property bool usable: true
+    // Why it is not usable; empty when it says nothing.
+    property string reason
     property bool tabFocusable: true
     property bool handCursor: true
     property bool tapSelects: false
@@ -40,31 +44,36 @@ Item {
     readonly property Item popups: C.Overlay.overlay
 
     signal activated()
-    signal clicked(bool touch)
+    signal clicked(bool touch, int modifiers)
     signal menuRequested(point position)
 
     default property alias content: contentLayer.data
 
     implicitWidth: Theme.controlM
     implicitHeight: Theme.controlM
-    enabled: control.usable
+    enabled: control.usable || control.reason !== ""
 
     Accessible.focusable: control.tabFocusable
+    Accessible.description: control.usable ? "" : control.reason
     activeFocusOnTab: control.tabFocusable
 
-    onUsableChanged: if (!control.usable && control.activeFocus)
+    onUsableChanged: if (!control.usable && control.reason === "" && control.activeFocus)
         nextItemInFocusChain(true).forceActiveFocus()
 
+    // Space with a modifier is the list's (Ctrl+Space toggles a row).
     Keys.onSpacePressed: function (event) {
-        control.activated()
-        event.accepted = true
+        event.accepted = event.modifiers === Qt.NoModifier
+        if (event.accepted && control.usable)
+            control.activated()
     }
     Keys.onReturnPressed: function (event) {
-        control.activated()
+        if (control.usable)
+            control.activated()
         event.accepted = true
     }
     Keys.onEnterPressed: function (event) {
-        control.activated()
+        if (control.usable)
+            control.activated()
         event.accepted = true
     }
 
@@ -120,22 +129,25 @@ Item {
         id: tap
         enabled: control.tapEnabled
         popups: control.popups
-        onHit: function (position, button, touch) {
+        onHit: function (position, button, touch, modifiers) {
             control.pointerFocus.forceActiveFocus()
+            if (!control.usable)
+                return
             if (button === Qt.RightButton)
                 control.menuRequested(position)
             else if (control.tapSelects)
-                control.clicked(touch)
+                control.clicked(touch, modifiers)
             else
                 control.activated()
         }
         onDoubleHit: function (button) {
-            if (control.tapSelects && button !== Qt.RightButton)
+            if (control.usable && control.tapSelects && button !== Qt.RightButton)
                 control.activated()
         }
         onHeld: function (position) {
             control.pointerFocus.forceActiveFocus()
-            control.menuRequested(position)
+            if (control.usable)
+                control.menuRequested(position)
         }
     }
 }

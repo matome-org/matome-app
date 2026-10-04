@@ -220,7 +220,7 @@ module.exports = (scenario) => {
       await studio.pick("lang-ja");
       await studio.untilProp("locationEyebrow", "text", "組織");
       const saved = Object.keys(await page.evaluate(() => ({ ...localStorage })));
-      for (const key of ["session/email", "session/apiBaseUrl", "session/lastOrgId", "theme/mode", "theme/language"])
+      for (const key of ["session/identifier", "session/apiBaseUrl", "session/lastOrgId", "theme/mode", "theme/language"])
         assert.ok(saved.some((name) => name.endsWith(key)), `${key} in ${saved}`);
 
       await studio.reload();

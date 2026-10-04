@@ -69,6 +69,7 @@ private slots:
     void mouseSignsIn();
     void touchSignsIn();
     void keyboardCreatesAnAccount();
+    void keyboardSetsUpAnAccount();
     void keyboardForgotAndReset();
     void escapeReturnsToSignIn();
     void wrongPasswordSaysSo();
@@ -79,6 +80,7 @@ private slots:
     void keyboardDrivesTheExplorer();
     void tabReachesEveryRegion();
     void explorerOpensDocumentsOnlyWhenAsked();
+    void documentAsksInASidePanel();
     void relatedTabOpensLinkedDocuments();
     void f6CyclesRegions();
     void keyboardWalksTheTree();
@@ -90,6 +92,7 @@ private slots:
     void uploadDialogSendsTheChosenFile();
     void uploadShowsProgressPerFile();
     void uploadFailuresAreNamed();
+    void uploadOffersReviews();
     void refusedNamesSayWhy();
     void aStaleRowReloadsAndSaysWhy();
     void purgeEmptiesTheTrash();
@@ -111,6 +114,25 @@ private slots:
     void accountMenuChoosesALanguage();
     void settingsSelectsPackagesAndRespectsBillingRoles();
     void addOnPageConfiguresSettings();
+    void classifierInstallsAndTurnsOnPerSpace();
+    void addOnResumeKeepsItsSettings();
+    void addOnInstallsWithItsSettings();
+    void spacePageRequiresReviews();
+    void refusalsLeadToTheFix();
+    void settingsFollowsEffectiveActions();
+    void spaceTablesSelectManyAndFlagAddOns();
+    void inviteRefusalStaysInThePanel();
+    void addOnRolesAreReadOnly();
+    void apiTokensCreateAndRevoke();
+    void settingsManagesGroupsRolesAndAccess();
+    void renameOrganizationInAPanel();
+    void settingsNavigationIsOneTabStop();
+    void explorerManagesFolderAccess();
+    void explorerFollowsSpaceAccess();
+    void memberPageListsAccessGroupsAndRoles();
+    void peopleCreatesManagedUsers();
+    void rolePageListsHoldersAndAddsPeople();
+    void detailPagesShowOneTableAtATime();
     void emptyFieldsSayWhatIsMissing();
     void expiredTokenRefreshesMidUse();
     void relaunchRemembersTheLastSession();
@@ -122,17 +144,21 @@ private slots:
     void coreDyingMidUseSaysSo();
     void serverErrorsShowAtEveryLevel();
     void longListKeepsTheCursorInSight();
+    void wheelScrollsPagesAndPanels();
+    void aReloadKeepsTheClick();
     void longNamesElide();
 
 private:
     QQuickWindow *window() const;
     QQuickItem *itemNamed(const QString &name, QQuickWindow *in = nullptr) const;
     QQuickItem *rowTitled(const QString &prefix, const QString &title) const;
+    QQuickItem *rowWith(const QString &prefix, int column, const QString &text) const;
     QQuickItem *waitItem(const QString &name) const;
     QQuickItem *waitRow(const QString &prefix, const QString &title) const;
     QVariant rowProperty(const QString &prefix, const QString &title, const char *name) const;
     QVariant propertyOf(const QString &item, const char *name) const;
     bool shown(const QString &name) const;
+    bool panelOpen() const;
     bool rowFocused(const QString &prefix, const QString &title) const;
     void focusOn(QQuickItem *item);
     QString regionOf(QQuickItem *item) const;
@@ -145,10 +171,13 @@ private:
     void key(Qt::Key code, Qt::KeyboardModifiers mods = Qt::NoModifier);
     void type(const QString &text);
     void clicks(QQuickItem *item, const QString &text);
-    void clickItem(QQuickItem *item, Qt::MouseButton button = Qt::LeftButton);
+    void clickItem(QQuickItem *item, Qt::MouseButton button = Qt::LeftButton, Qt::KeyboardModifiers mods = Qt::NoModifier);
+    void openRow(QQuickItem *row);
+    QString cell(const QString &row, int column) const;
     void tapItem(QQuickItem *item, int holdMs = 0);
     void dropOn(QQuickItem *item, QMimeData *mime, const std::function<void()> &midDrag = {});
     void dragOnto(QQuickItem *from, QQuickItem *onto);
+    void wheelOn(QQuickItem *item);
     void settle();
     bool waitSignedIn(bool wanted);
     bool waitIdle();
@@ -262,6 +291,18 @@ QQuickItem *TestStudio::rowTitled(const QString &prefix, const QString &title) c
     return nullptr;
 }
 
+// The visible table row whose objectName starts with `prefix` and whose
+// cell `column` shows `text`.
+QQuickItem *TestStudio::rowWith(const QString &prefix, int column, const QString &text) const
+{
+    for (QQuickItem *item : descendants(window()->contentItem())) {
+        if (item->isVisible() && item->objectName().startsWith(prefix)
+            && item->property("cells").toList().value(column).toString() == text)
+            return item;
+    }
+    return nullptr;
+}
+
 // Delegates appear a frame after their rows, so the wait helpers poll `find`
 // for up to 5 s: the item it found, or null when it never did.
 template<typename Find>
@@ -297,6 +338,17 @@ bool TestStudio::shown(const QString &name) const
 {
     QQuickItem *found = itemNamed(name);
     return found && found->isVisible();
+}
+
+// The side panel shown and slid fully in at the right edge of the item it
+// sits beside; the pane lives in a popup, whose `parent` is that item.
+bool TestStudio::panelOpen() const
+{
+    QQuickItem *pane = itemNamed(QStringLiteral("sidePanel"));
+    if (!pane || !pane->isVisible() || !pane->parentItem())
+        return false;
+    const auto *area = pane->parentItem()->parent()->property("parent").value<QQuickItem *>();
+    return area && qAbs(pane->mapToScene(QPointF(pane->width(), 0)).x() - area->mapToScene(QPointF(area->width(), 0)).x()) < 0.5;
 }
 
 bool TestStudio::rowFocused(const QString &prefix, const QString &title) const
@@ -394,15 +446,32 @@ void TestStudio::clicks(QQuickItem *item, const QString &text)
     type(text);
 }
 
-void TestStudio::clickItem(QQuickItem *item, Qt::MouseButton button)
+void TestStudio::clickItem(QQuickItem *item, Qt::MouseButton button, Qt::KeyboardModifiers mods)
 {
     QVERIFY(item);
     settle();
     const QPoint scene = centreOf(item);
     QTest::mouseMove(window(), scene);
     settle();
-    QTest::mouseClick(window(), button, Qt::NoModifier, scene);
+    QTest::mouseClick(window(), button, mods, scene);
     settle();
+}
+
+// A table row opens as Enter opens it, once a click selected it.
+void TestStudio::openRow(QQuickItem *row)
+{
+    QVERIFY(row);
+    const QString name = row->objectName();
+    clickItem(row);
+    // A reload may build the row again; the cursor stays on its key.
+    QTRY_VERIFY(itemNamed(name) && itemNamed(name)->hasActiveFocus());
+    key(Qt::Key_Return);
+}
+
+// The text of cell `column` of the table row `row`.
+QString TestStudio::cell(const QString &row, int column) const
+{
+    return propertyOf(row, "cells").toList().value(column).toString();
 }
 
 void TestStudio::tapItem(QQuickItem *item, int holdMs)
@@ -457,6 +526,31 @@ void TestStudio::dragOnto(QQuickItem *from, QQuickItem *onto)
         QTest::mouseMove(window(), aside + (end - aside) * step / 10);
     QTest::mouseRelease(window(), Qt::LeftButton, Qt::NoModifier, end);
     settle();
+}
+
+// One notch-burst of the mouse wheel down over the item's centre, stamped
+// after the pointer events before it, as a real wheel would be.
+void TestStudio::wheelOn(QQuickItem *item)
+{
+    QVERIFY(item);
+    settle();
+    const QPointF centre = centreOf(item);
+    QWheelEvent wheel(centre, centre, QPoint(), QPoint(0, -360), Qt::NoButton, Qt::NoModifier,
+                      Qt::NoScrollPhase, false);
+    QTest::lastMouseTimestamp += 500;
+    wheel.setTimestamp(QTest::lastMouseTimestamp);
+    QCoreApplication::sendEvent(window(), &wheel);
+    settle();
+}
+
+// The scrolling page or panel body that holds `item`.
+static QQuickItem *flickableOf(QQuickItem *item)
+{
+    for (QQuickItem *at = item ? item->parentItem() : nullptr; at; at = at->parentItem()) {
+        if (at->inherits("QQuickFlickable"))
+            return at;
+    }
+    return nullptr;
 }
 
 // Let events run and layouts settle, so positions read after it are the
@@ -521,7 +615,7 @@ bool TestStudio::openOwnOrg()
 // it never opens or settles.
 bool TestStudio::createSpace(const QString &name)
 {
-    m_session->createHere(name);
+    m_session->createHere(name, QStringLiteral("private"));
     return QTest::qWaitFor([&] { return m_session->level() == QLatin1String("files"); })
             && waitIdle();
 }
@@ -749,7 +843,7 @@ void TestStudio::tabsEveryControlOnSignIn()
 {
     focusOn(waitItem(QStringLiteral("emailField")));
     QSet<QString> names;
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < 18; ++i) {
         names.insert(focusName());
         key(Qt::Key_Tab);
     }
@@ -758,6 +852,8 @@ void TestStudio::tabsEveryControlOnSignIn()
     QVERIFY(names.contains(QStringLiteral("submitButton")));
     QVERIFY(names.contains(QStringLiteral("registerLink")));
     QVERIFY(names.contains(QStringLiteral("forgotLink")));
+    QVERIFY(names.contains(QStringLiteral("setupLink")));
+    QVERIFY(!names.contains(QStringLiteral("setupCodeField")));
     QVERIFY(names.contains(QStringLiteral("serverToggle")));
     QVERIFY(names.contains(QStringLiteral("themeToggle")));
     QVERIFY(!names.contains(QStringLiteral("apiField")));
@@ -822,6 +918,15 @@ void TestStudio::keyboardCreatesAnAccount()
     QVERIFY(m_session->confirmationPending());
     clickItem(waitItem(QStringLiteral("resendConfirmation")));
     QTRY_VERIFY(m_session->confirmationResent());
+    // Signing in before confirming returns to the same wait.
+    clickItem(waitItem(QStringLiteral("backToSignIn")));
+    QCOMPARE(propertyOf(QStringLiteral("authScreen"), "pane").toString(), QStringLiteral("signIn"));
+    clicks(itemNamed(QStringLiteral("passwordField")), QStringLiteral("secret12"));
+    key(Qt::Key_Return);
+    QTRY_COMPARE(propertyOf(QStringLiteral("authScreen"), "pane").toString(), QStringLiteral("confirm"));
+    QVERIFY(!m_session->signedIn());
+    QTRY_COMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(),
+                 QStringLiteral("Open the confirmation link sent to new@localhost in your browser, then return to sign in."));
     QVERIFY(m_core.confirmEmailInBrowser(QStringLiteral("new@localhost")));
     focusOn(waitItem(QStringLiteral("backToSignIn")));
     key(Qt::Key_Return);
@@ -829,6 +934,34 @@ void TestStudio::keyboardCreatesAnAccount()
     clicks(itemNamed(QStringLiteral("passwordField")), QStringLiteral("secret12"));
     key(Qt::Key_Return);
     QVERIFY(waitSignedIn(true));
+}
+
+// An account an organization made is set up from the sign-in screen: its
+// identifier, the one-time code, and a new password, which signs it in.
+void TestStudio::keyboardSetsUpAnAccount()
+{
+    m_core.seedOrganization(QStringLiteral("Acme"), QStringLiteral("owner"));
+    const QString identifier = m_core.seedManagedMember(QStringLiteral("org-1"), QStringLiteral("bo"), QStringLiteral("member"),
+                                                        QStringLiteral("mst_code"));
+    focusOn(waitItem(QStringLiteral("setupLink")));
+    key(Qt::Key_Return);
+    QCOMPARE(propertyOf(QStringLiteral("authScreen"), "pane").toString(), QStringLiteral("setup"));
+    QCOMPARE(propertyOf(QStringLiteral("paneTitle"), "text").toString(), QStringLiteral("Set up account"));
+    QCOMPARE(propertyOf(QStringLiteral("emailField"), "placeholderText").toString(), QStringLiteral("Email or username"));
+    QCOMPARE(propertyOf(QStringLiteral("passwordField"), "placeholderText").toString(), QStringLiteral("New password"));
+    clicks(itemNamed(QStringLiteral("emailField")), identifier);
+    clicks(itemNamed(QStringLiteral("setupCodeField")), QStringLiteral("mst_wrong"));
+    clicks(itemNamed(QStringLiteral("passwordField")), QStringLiteral("fresh-pass1"));
+    key(Qt::Key_Return);
+    QTRY_COMPARE(m_session->errorCode(), QStringLiteral("invalid_setup_code"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(),
+                 QStringLiteral("That username or setup code is wrong, or the code was used or expired."));
+    QVERIFY(propertyOf(QStringLiteral("setupCodeField"), "invalid").toBool());
+    clicks(itemNamed(QStringLiteral("setupCodeField")), QStringLiteral("mst_code"));
+    clicks(itemNamed(QStringLiteral("passwordField")), QStringLiteral("fresh-pass1"));
+    key(Qt::Key_Return);
+    QVERIFY(waitSignedIn(true));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accountButton"), "text").toString(), identifier);
 }
 
 void TestStudio::keyboardForgotAndReset()
@@ -884,7 +1017,7 @@ void TestStudio::wrongPasswordSaysSo()
     key(Qt::Key_Return);
     QVERIFY(waitSignedIn(false));
     QTRY_COMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(),
-                 QStringLiteral("That email or password is wrong."));
+                 QStringLiteral("That email, username, or password is wrong."));
     QVERIFY(propertyOf(QStringLiteral("emailField"), "invalid").toBool());
     QVERIFY(propertyOf(QStringLiteral("passwordField"), "invalid").toBool());
     QCOMPARE(propertyOf(QStringLiteral("statusMessage"), "color").value<QColor>(), m_theme->failed());
@@ -1016,12 +1149,16 @@ void TestStudio::keyboardDrivesTheExplorer()
     QVERIFY(waitIdle());
     QTRY_VERIFY(shown(QStringLiteral("emptyState")));
 
+    // A new space asks its name and who reads it, private unless changed.
     key(Qt::Key_N);
-    QTRY_COMPARE(focusName(), QStringLiteral("rowEditor"));
+    QTRY_COMPARE(focusName(), QStringLiteral("newSpaceName"));
+    QVERIFY(propertyOf(QStringLiteral("spaceVisibility_private"), "selected").toBool());
     type(QStringLiteral("Inbox"));
     key(Qt::Key_Return);
     QTRY_COMPARE(m_session->level(), QStringLiteral("files"));
     QVERIFY(waitIdle());
+    QCOMPARE(m_core.state().value(QStringLiteral("spaces")).toArray().last().toObject()
+                     .value(QStringLiteral("visibility")).toString(), QStringLiteral("private"));
 
     key(Qt::Key_N);
     QTRY_COMPARE(focusName(), QStringLiteral("rowEditor"));
@@ -1149,6 +1286,52 @@ void TestStudio::explorerOpensDocumentsOnlyWhenAsked()
     key(Qt::Key_Escape);
     QTRY_VERIFY(!m_session->documentView()->active());
     QTRY_VERIFY(itemNamed(QStringLiteral("explorer"))->isVisible());
+}
+
+// Leaving, discarding, and saving an edit ask in a side panel beside the
+// editor; Esc steps back out of it and keeps the edit.
+void TestStudio::documentAsksInASidePanel()
+{
+    openSpace(QStringLiteral("Inbox"));
+    m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("notes.md"), {}, QByteArray("# Notes\n"));
+    key(Qt::Key_F5);
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!entryId(QStringLiteral("notes.md")).isEmpty());
+    m_session->openEntry(QStringLiteral("document"), entryId(QStringLiteral("notes.md")));
+    QTRY_VERIFY(m_session->documentView()->active());
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(m_session->documentView()->editable());
+    settle();
+    key(Qt::Key_2);
+    QTRY_COMPARE(m_session->documentView()->tab(), QStringLiteral("edit"));
+    QQuickItem *editor = waitItem(QStringLiteral("documentEditor"));
+    QTRY_VERIFY(editor->isVisible() && editor->isEnabled());
+    focusOn(editor);
+    key(Qt::Key_End, Qt::ControlModifier);
+    type(QStringLiteral("more"));
+
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(shown(QStringLiteral("documentAskPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Discard your changes?"));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Discard and close"));
+    QTRY_COMPARE(focusName(), QStringLiteral("sidePanelCancel"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("documentAskPanel")));
+    QVERIFY(m_session->documentView()->active());
+
+    key(Qt::Key_S, Qt::ControlModifier);
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Save a new version?"));
+    // The reason is optional here, and has focus.
+    QTRY_COMPARE(focusName(), QStringLiteral("confirmReason"));
+    QVERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    type(QStringLiteral("typo"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("documentAskPanel")));
+    QTRY_COMPARE(m_session->documentView()->notice(), QStringLiteral("version_published"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->documentView()->active());
 }
 
 // 4 shows what links the document and what it links; Enter on a source
@@ -1659,6 +1842,100 @@ void TestStudio::uploadFailuresAreNamed()
     QCOMPARE(statusText(), QString());
 }
 
+// Markdown going into a space that requires reviews asks first, every time,
+// from the keyboard or the pointer: Manage with reviews starts unchecked, and each file
+// is managed once it lands. Unchecked, it lands unmanaged; Esc drops it; a
+// refused control names the file that landed. Other files go up at once.
+void TestStudio::uploadOffersReviews()
+{
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    QVERIFY(createSpace(QStringLiteral("Quality")));
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    const QString spaceId = m_session->currentSpaceId();
+    m_core.seedCatalogProduct({{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("name"), QStringLiteral("Controlled documents")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
+        {QStringLiteral("skus"), QJsonArray()}});
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")},
+            {QStringLiteral("revision"), 1}}}}});
+    m_session->addOns()->refresh();
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("ok@localhost"), QStringLiteral("content_reader"));
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("ok@localhost"), QStringLiteral("addon.controlled_docs.manager"));
+    auto *activations = m_session->addOnActivations();
+    activations->open();
+    QTRY_VERIFY(!activations->rows().isEmpty());
+    QTRY_VERIFY(!activations->busy());
+    activations->activate(spaceId, QStringLiteral("controlled_docs"));
+    QTRY_COMPARE(activations->notice(), QStringLiteral("activated"));
+    activations->close();
+    // The space's catalog grants managing documents once the add-on is
+    // active there; read again, it no longer grants making folders.
+    m_session->runCommand(QStringLiteral("refresh"));
+    QTRY_VERIFY(!propertyOf(QStringLiteral("newButton"), "usable").toBool());
+    QVERIFY(waitIdle());
+
+    auto *mime = new QMimeData;
+    mime->setUrls({scratchFile(QStringLiteral("plan.md"), "# Plan\n"), scratchFile(QStringLiteral("notes.txt"), "notes")});
+    dropOn(waitItem(QStringLiteral("entryList")), mime);
+    QTRY_VERIFY(shown(QStringLiteral("reviewUploadPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Manage 1 Markdown file with reviews?"));
+    QTRY_VERIFY(!m_core.landed(QStringLiteral("notes.txt")).isEmpty());
+    QVERIFY(m_core.landed(QStringLiteral("plan.md")).isEmpty());
+    // Managing is opt-in: the choice starts off and Space turns it on.
+    QTRY_COMPARE(focusName(), QStringLiteral("manageUploadsRow"));
+    QVERIFY(!propertyOf(QStringLiteral("manageUploadsRow"), "selected").toBool());
+    key(Qt::Key_Space);
+    QTRY_VERIFY(propertyOf(QStringLiteral("manageUploadsRow"), "selected").toBool());
+    key(Qt::Key_Tab);
+    key(Qt::Key_Tab);
+    QCOMPARE(focusName(), QStringLiteral("sidePanelSave"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(!shown(QStringLiteral("reviewUploadPanel")));
+    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    QTRY_VERIFY(!m_session->uploadBusy());
+    QTRY_VERIFY(rowProperty(QStringLiteral("entryRow"), QStringLiteral("plan.md"), "controlled").toBool());
+    QVERIFY(!m_core.documentTitled(QStringLiteral("notes.txt")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    QCOMPARE(statusText(), QString());
+
+    // Asked again every time, unchecked at first.
+    m_session->uploadUrls({scratchFile(QStringLiteral("loose.md"), "# Loose\n")});
+    QTRY_VERIFY(shown(QStringLiteral("reviewUploadPanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!propertyOf(QStringLiteral("manageUploadsRow"), "selected").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!m_core.landed(QStringLiteral("loose.md")).isEmpty());
+    QTRY_VERIFY(!m_session->uploadBusy());
+    QVERIFY(!m_core.documentTitled(QStringLiteral("loose.md")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+
+    // Esc drops the files.
+    m_session->uploadUrls({scratchFile(QStringLiteral("dropped.md"), "# Dropped\n")});
+    QTRY_VERIFY(shown(QStringLiteral("reviewUploadPanel")));
+    QTRY_VERIFY(panelOpen());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("reviewUploadPanel")));
+    QCOMPARE(m_session->reviewUploads(), 0);
+    QVERIFY(m_core.documentTitled(QStringLiteral("dropped.md")).isEmpty());
+
+    QVERIFY(m_core.failNext(QStringLiteral("PUT"), QStringLiteral("/controlled-docs$"), 1, FakeCore::FaultMode::Status,
+                            409, QStringLiteral("incompatible_publication_subscriptions")));
+    m_session->uploadUrls({scratchFile(QStringLiteral("late.md"), "# Late\n")});
+    QTRY_VERIFY(shown(QStringLiteral("reviewUploadPanel")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("manageUploadsRow")));
+    QVERIFY(propertyOf(QStringLiteral("manageUploadsRow"), "selected").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_COMPARE(statusText(), QStringLiteral("Uploaded “late.md”, but it is not managed with reviews: Pause incompatible "
+                                              "readiness automations or processing subscriptions before enabling control."));
+    QCOMPARE(propertyOf(QStringLiteral("explorerStatus"), "color").value<QColor>(), m_theme->failed());
+    QTRY_VERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("late.md")));
+}
+
 // Core refuses a name the place already holds, in any case and whether a
 // folder or a document holds it, and a name no disk could hold; the window
 // says which and nothing changes.
@@ -1815,30 +2092,32 @@ void TestStudio::deletingAFolderAsksFirst()
     QTRY_COMPARE(propertyOf(QStringLiteral("trashButton"), "text").toString(), QStringLiteral("Delete folder"));
     QCOMPARE(propertyOf(QStringLiteral("trashButton"), "icon").toString(), QStringLiteral("purge"));
     key(Qt::Key_Delete);
-    QTRY_VERIFY(shown(QStringLiteral("deleteConfirm")));
-    QCOMPARE(focusName(), QStringLiteral("confirmCancel"));
-    QCOMPARE(propertyOf(QStringLiteral("overlayTitle"), "text").toString(),
+    QTRY_VERIFY(shown(QStringLiteral("deleteFolderPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_COMPARE(focusName(), QStringLiteral("sidePanelCancel"));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(),
              QStringLiteral("Delete folder \u201cDrafts\u201d?"));
     QCOMPARE(propertyOf(QStringLiteral("confirmDetail"), "text").toString(),
              QStringLiteral("This cannot be undone."));
-    // Keys that are not the dialog's run no command under it.
+    // Keys that are not the panel's run no command under it.
     key(Qt::Key_Backspace);
     QCOMPARE(m_session->level(), QStringLiteral("files"));
     key(Qt::Key_Return);
-    QTRY_VERIFY(!shown(QStringLiteral("deleteConfirm")));
+    QTRY_VERIFY(!shown(QStringLiteral("deleteFolderPanel")));
     QTRY_COMPARE(regionOf(window()->activeFocusItem()), QStringLiteral("entryPane"));
     QVERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Drafts")));
 
     clickItem(waitItem(QStringLiteral("trashButton")));
-    QTRY_VERIFY(shown(QStringLiteral("deleteConfirm")));
-    clickItem(waitItem(QStringLiteral("confirmCancel")));
-    QTRY_VERIFY(!shown(QStringLiteral("deleteConfirm")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("sidePanelCancel")));
+    QTRY_VERIFY(!shown(QStringLiteral("deleteFolderPanel")));
     QVERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Drafts")));
 
     key(Qt::Key_Delete);
-    QTRY_VERIFY(shown(QStringLiteral("deleteConfirm")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_COMPARE(focusName(), QStringLiteral("sidePanelCancel"));
     key(Qt::Key_Tab);
-    QCOMPARE(focusName(), QStringLiteral("confirmAccept"));
+    QCOMPARE(focusName(), QStringLiteral("sidePanelSave"));
     key(Qt::Key_Return);
     QTRY_VERIFY(!rowTitled(QStringLiteral("entryRow"), QStringLiteral("Drafts")));
     QVERIFY(waitIdle());
@@ -1853,8 +2132,8 @@ void TestStudio::deletingAFolderAsksFirst()
                      ->text(QAccessible::Name),
              QStringLiteral("Delete folder"));
     clickItem(waitItem(QStringLiteral("menu_trash")));
-    QTRY_VERIFY(shown(QStringLiteral("deleteConfirm")));
-    clickItem(waitItem(QStringLiteral("confirmAccept")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
     QTRY_COMPARE(statusText(), QStringLiteral("Only an empty folder can be deleted."));
     QVERIFY(waitIdle());
     QVERIFY(rowTitled(QStringLiteral("entryRow"), QStringLiteral("Plans")));
@@ -1865,7 +2144,7 @@ void TestStudio::deletingAFolderAsksFirst()
     QCOMPARE(propertyOf(QStringLiteral("trashButton"), "icon").toString(), QStringLiteral("trash"));
     key(Qt::Key_Delete);
     QTRY_VERIFY(!rowTitled(QStringLiteral("entryRow"), QStringLiteral("Memo")));
-    QVERIFY(!shown(QStringLiteral("deleteConfirm")));
+    QTRY_VERIFY(!shown(QStringLiteral("deleteFolderPanel")));
     QVERIFY(waitIdle());
     QTRY_VERIFY(shown(QStringLiteral("restoreButton")));
     clickItem(waitItem(QStringLiteral("restoreButton")));
@@ -2309,17 +2588,20 @@ void TestStudio::settingsSelectsPackagesAndRespectsBillingRoles()
     // A package is selected first; the bar's Subscribe asks to confirm it.
     QVERIFY(!propertyOf(QStringLiteral("subscribePackageButton"), "usable").toBool());
     clickItem(waitItem(QStringLiteral("billingPackage_professional_2")));
-    QVERIFY(!shown(QStringLiteral("orgCommerceConfirm")));
+    QVERIFY(!shown(QStringLiteral("selectPackagePanel")));
     QTRY_VERIFY(propertyOf(QStringLiteral("subscribePackageButton"), "usable").toBool());
     clickItem(waitItem(QStringLiteral("subscribePackageButton")));
-    QTRY_VERIFY(shown(QStringLiteral("orgCommerceConfirm")));
+    QTRY_VERIFY(shown(QStringLiteral("selectPackagePanel")));
+    QTRY_VERIFY(panelOpen());
     QCOMPARE(m_core.hits(), hits);
-    clickItem(waitItem(QStringLiteral("confirmCancel")));
-    QTRY_VERIFY(!shown(QStringLiteral("orgCommerceConfirm")));
+    clickItem(waitItem(QStringLiteral("sidePanelCancel")));
+    QTRY_VERIFY(!shown(QStringLiteral("selectPackagePanel")));
+    QTRY_COMPARE(focusName(), QStringLiteral("subscribePackageButton"));
     QCOMPARE(m_core.hits(), hits);
     clickItem(waitItem(QStringLiteral("subscribePackageButton")));
-    QTRY_VERIFY(shown(QStringLiteral("orgCommerceConfirm")));
-    clickItem(waitItem(QStringLiteral("confirmAccept")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("selectPackagePanel")));
     QTRY_VERIFY(!m_session->orgBilling()->busy());
     QTRY_VERIFY(shown(QStringLiteral("openBillingPortalButton")));
     QCOMPARE(m_core.billingRequest().value(QStringLiteral("package")).toObject()
@@ -2350,16 +2632,1091 @@ void TestStudio::settingsSelectsPackagesAndRespectsBillingRoles()
     clickItem(waitItem(QStringLiteral("settingsOrganization_%1_billing").arg(adminId)));
     QTRY_VERIFY(!drawer->property("visible").toBool());
     QTRY_COMPARE(propertyOf(QStringLiteral("settingsScreen"), "section").toString(), QStringLiteral("billing"));
-    QVERIFY(!shown(QStringLiteral("billingPortalButton")));
-    // Packages stay readable; only a billing manager may subscribe.
-    QVERIFY(!shown(QStringLiteral("subscribePackageButton")));
+    // Packages stay readable; only a billing manager may subscribe, and the
+    // commands say why, dimmed in place.
     QVERIFY(!m_session->orgBilling()->canManage());
+    for (const QString &name : {QStringLiteral("billingPortalButton"), QStringLiteral("subscribePackageButton")}) {
+        QVERIFY(shown(name));
+        QVERIFY(!propertyOf(name, "usable").toBool());
+        QVERIFY(!propertyOf(name, "reason").toString().isEmpty());
+    }
     key(Qt::Key_Escape);
     QTRY_VERIFY(!m_session->settingsActive());
 }
 
 // An add-on's tile opens its page, whose form follows the catalog's
 // settings schema; saving sends only what changed.
+// Groups, roles, space access, and tags each list their entries, open one
+// on a page of its own, and change it through the dialogs they hold.
+void TestStudio::settingsManagesGroupsRolesAndAccess()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    QVERIFY(createSpace(QStringLiteral("Contracts")));
+    const QString spaceId = m_session->currentSpaceId();
+    const QString bo = m_core.seedMember(orgId, QStringLiteral("bo@localhost"), QStringLiteral("member"));
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+
+    // New group opens a panel with focus in its name; Enter creates it and
+    // opens its page.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_groups").arg(orgId)));
+    QTRY_VERIFY(shown(QStringLiteral("accessCreateButton")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("accessCreateButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("accessCreateButton")));
+    QTRY_VERIFY(shown(QStringLiteral("groupNamePanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(waitItem(QStringLiteral("groupNameField"))->hasActiveFocus());
+    type(QStringLiteral("Legal"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("groupPage")));
+    QTRY_VERIFY(!shown(QStringLiteral("groupNamePanel")));
+    QCOMPARE(propertyOf(QStringLiteral("groupName"), "text").toString(), QStringLiteral("Legal"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Group created."));
+    QVERIFY(shown(QStringLiteral("accessNotice")));
+    QVERIFY(!shown(QStringLiteral("accessCreateButton")));
+    const QString groupId = m_session->accessDirectory()->groups().constFirst().toMap().value(QStringLiteral("id")).toString();
+    // Manage members checks people in a panel; Save makes them the members.
+    QTRY_VERIFY(propertyOf(QStringLiteral("groupManageMembersButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("groupManageMembersButton")));
+    QTRY_VERIFY(shown(QStringLiteral("groupMembersPanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("groupMember_") + bo));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("groupMembersPanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Members saved."));
+    QTRY_VERIFY(waitItem(QStringLiteral("groupManageMembersButton"))->hasActiveFocus());
+    // The Members tab lists them; switching tabs keeps the page's commands.
+    clickItem(waitItem(QStringLiteral("groupTab_members")));
+    QTRY_VERIFY(shown(QStringLiteral("groupPerson_") + bo));
+    QVERIFY(!shown(QStringLiteral("groupName")));
+    QVERIFY(shown(QStringLiteral("groupOpenMemberButton")));
+    QVERIFY(shown(QStringLiteral("groupManageMembersButton")));
+    clickItem(waitItem(QStringLiteral("groupTab_details")));
+    QTRY_VERIFY(shown(QStringLiteral("groupName")));
+    QVERIFY(!shown(QStringLiteral("groupOpenMemberButton")));
+    // Rename is a panel of its own.
+    QTRY_VERIFY(propertyOf(QStringLiteral("groupRenameButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("groupRenameButton")));
+    QTRY_VERIFY(shown(QStringLiteral("groupNamePanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Rename group"));
+    clicks(waitItem(QStringLiteral("groupNameField")), QStringLiteral("Legal team"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(!shown(QStringLiteral("groupNamePanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("groupName"), "text").toString(), QStringLiteral("Legal team"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Group renamed."));
+    QVERIFY(shown(QStringLiteral("accessNotice")));
+    // Archive asks in its panel; Esc leaves it, then the page.
+    clickItem(waitItem(QStringLiteral("groupArchiveButton")));
+    QTRY_VERIFY(shown(QStringLiteral("archiveGroupPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Archive Legal team?"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("archiveGroupPanel")));
+    QVERIFY(shown(QStringLiteral("groupPage")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("groupPage")));
+    QTRY_VERIFY(waitItem(QStringLiteral("group_") + groupId)->hasActiveFocus());
+    QCOMPARE(m_session->accessDirectory()->groups().constFirst().toMap().value(QStringLiteral("members")).toList().size(), 1);
+    // The group opens again by keyboard, and its Back button returns.
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("groupPage")));
+    QTRY_VERIFY(waitItem(QStringLiteral("groupBackButton"))->hasActiveFocus());
+    clickItem(waitItem(QStringLiteral("groupBackButton")));
+    QTRY_VERIFY(!shown(QStringLiteral("groupPage")));
+
+    // Roles are a table of their name, type, and scope; the list's commands
+    // are New role and Open, which acts on the one selected.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_roles").arg(orgId)));
+    QTRY_VERIFY(shown(QStringLiteral("role_content_reader")));
+    QCOMPARE(propertyOf(QStringLiteral("role_owner"), "cells").toStringList(),
+             (QStringList{QStringLiteral("Owner"), QStringLiteral("Built-in"), QStringLiteral("Organization")}));
+    QCOMPARE(cell(QStringLiteral("role_content_reader"), 2), QStringLiteral("Spaces"));
+    QVERIFY(!itemNamed(QStringLiteral("roleListCopyButton")) && !itemNamed(QStringLiteral("roleListArchiveButton")));
+    QVERIFY(!propertyOf(QStringLiteral("accessOpenButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("role_content_reader")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("role_content_reader"), "selected").toBool());
+    QVERIFY(!shown(QStringLiteral("rolePage")));
+    QVERIFY(propertyOf(QStringLiteral("accessOpenButton"), "usable").toBool());
+    // The arrows move the selection; one row at a time.
+    key(Qt::Key_Down);
+    QTRY_VERIFY(!propertyOf(QStringLiteral("role_content_reader"), "selected").toBool());
+    // New role opens in the panel; a created role opens its page.
+    clickItem(waitItem(QStringLiteral("accessCreateButton")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(waitItem(QStringLiteral("roleNameField"))->hasActiveFocus());
+    type(QStringLiteral("Reviewers"));
+    QVERIFY(!shown(QStringLiteral("permission_membership.list")));
+    clickItem(waitItem(QStringLiteral("permission_content.download")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePage")));
+    QTRY_VERIFY(!shown(QStringLiteral("rolePanel")));
+    QCOMPARE(propertyOf(QStringLiteral("roleKind"), "text").toString(), QStringLiteral("Custom"));
+    QCOMPARE(propertyOf(QStringLiteral("roleScope"), "text").toString(), QStringLiteral("Spaces"));
+    // Its Permissions tab is a table of what it allows, by area.
+    clickItem(waitItem(QStringLiteral("roleTab_permissions")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePermission_content.download")));
+    QCOMPARE(propertyOf(QStringLiteral("rolePermission_content.download"), "cells").toStringList(),
+             (QStringList{QStringLiteral("Files"), QStringLiteral("Download files")}));
+    QVERIFY(!panelOpen());
+    // Made of an action Core reads only from a grant on the place, the new
+    // role is given on places, never across the organization.
+    QCOMPARE(m_session->accessDirectory()->assignableRoles().size(), 5);
+    QCOMPARE(m_session->accessDirectory()->grantableRoles().constLast().toMap().value(QStringLiteral("actions")).toStringList(),
+             QStringList{QStringLiteral("content.download")});
+    // Edit permissions changes them for every holder.
+    clickItem(waitItem(QStringLiteral("roleEditButton")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Edit permissions"));
+    QVERIFY(propertyOf(QStringLiteral("permission_content.download"), "selected").toBool());
+    clickItem(waitItem(QStringLiteral("permission_content.list")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("rolePanel")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePermission_content.list")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("rolePage")));
+    // A built-in role is read only, its changes there but unusable, saying
+    // why; Copy makes a custom role from it.
+    openRow(waitItem(QStringLiteral("role_content_reader")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePage")));
+    QVERIFY(shown(QStringLiteral("roleEditButton")));
+    QVERIFY(!propertyOf(QStringLiteral("roleEditButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("roleEditButton"), "reason").toString().isEmpty());
+    QVERIFY(!propertyOf(QStringLiteral("roleArchiveButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("roleKind"), "text").toString(), QStringLiteral("Built-in"));
+    clickItem(waitItem(QStringLiteral("roleCopyButton")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("roleNameField"), "text").toString(), QStringLiteral("Copy of Content reader"));
+    QVERIFY(propertyOf(QStringLiteral("permission_content.list"), "selected").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("rolePanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("roleKind"), "text").toString(), QStringLiteral("Custom"));
+    // Archiving a custom role asks, then returns to the list.
+    clickItem(waitItem(QStringLiteral("roleArchiveButton")));
+    QTRY_VERIFY(shown(QStringLiteral("archiveRolePanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Archive Copy of Content reader?"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("rolePage")));
+    QTRY_VERIFY(!shown(QStringLiteral("archiveRolePanel")));
+    QTRY_COMPARE(m_session->accessDirectory()->grantableRoles().size(), 12);
+
+    // A space's page lists who has access, read only: selecting a row
+    // selects it, and the command bar acts on it. Grant access picks
+    // people, then several roles at once.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_spaces").arg(orgId)));
+    openRow(waitItem(QStringLiteral("accessSpace_") + spaceId));
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    QCOMPARE(propertyOf(QStringLiteral("spaceTitle"), "text").toString(), QStringLiteral("Contracts"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("spaceVisibility"), "text").toString(), QStringLiteral("Private"));
+    clickItem(waitItem(QStringLiteral("spaceTab_access")));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_empty")));
+    QVERIFY(!propertyOf(QStringLiteral("manageAccessRolesButton"), "usable").toBool());
+    QVERIFY(!shown(QStringLiteral("stopInheritingButton")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("grantAccessButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("grantAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("grantPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Grant access"));
+    const QString holder = QStringLiteral("user:") + bo;
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("grantPrincipal_") + holder));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    // Roles come on a step of their own, each checked from the keyboard:
+    // Core's space roles, atomic then broad.
+    QTRY_VERIFY(shown(QStringLiteral("grantRole_role-content_reader")));
+    QCOMPARE(propertyOf(QStringLiteral("grantRole_role-space_operator"), "text").toString(), QStringLiteral("Space operator"));
+    QCOMPARE(propertyOf(QStringLiteral("grantRole_role-space_admin"), "text").toString(), QStringLiteral("Space administrator"));
+    QVERIFY(!itemNamed(QStringLiteral("grantRole_role-owner")));
+    QVERIFY(!shown(QStringLiteral("grantPrincipal_") + holder));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSubtitle"), "text").toString(), QStringLiteral("1 picked"));
+    focusOn(waitItem(QStringLiteral("grantRole_role-content_reader")));
+    key(Qt::Key_Space);
+    focusOn(waitItem(QStringLiteral("grantRole_role-content_contributor")));
+    key(Qt::Key_Space);
+    QTRY_VERIFY(propertyOf(QStringLiteral("grantRole_role-content_contributor"), "selected").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("grantPanel")));
+    QCOMPARE(m_session->accessGrants()->holders().size(), 1);
+    QCOMPARE(m_session->accessGrants()->holders().constFirst().toMap().value(QStringLiteral("roleIds")).toStringList(),
+             (QStringList{QStringLiteral("role-content_reader"), QStringLiteral("role-content_contributor")}));
+    QTRY_VERIFY(shown(QStringLiteral("accessGrantsNotice")));
+    QCOMPARE(cell(QStringLiteral("accessHolder_") + holder, 1), QStringLiteral("Content reader, Content contributor"));
+    QCOMPARE(cell(QStringLiteral("accessHolder_") + holder, 2), QStringLiteral("Given here"));
+    // Selecting the row lets Manage roles open its roles as checkboxes;
+    // Save makes the checked ones theirs.
+    clickItem(waitItem(QStringLiteral("accessHolder_") + holder));
+    QTRY_VERIFY(propertyOf(QStringLiteral("accessHolder_") + holder, "selected").toBool());
+    QVERIFY(!panelOpen());
+    QTRY_VERIFY(propertyOf(QStringLiteral("manageAccessRolesButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("manageAccessRolesButton")));
+    QTRY_VERIFY(shown(QStringLiteral("holderRolesPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSubtitle"), "text").toString(), QStringLiteral("bo@localhost"));
+    QVERIFY(propertyOf(QStringLiteral("grantRole_role-content_reader"), "selected").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    focusOn(waitItem(QStringLiteral("grantRole_role-content_reader")));
+    key(Qt::Key_Space);
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("holderRolesPanel")));
+    QCOMPARE(m_session->accessGrants()->holders().constFirst().toMap().value(QStringLiteral("roleIds")).toStringList(),
+             QStringList{QStringLiteral("role-content_contributor")});
+    QTRY_VERIFY(waitItem(QStringLiteral("manageAccessRolesButton"))->hasActiveFocus());
+    // Check access says what Bo may do here and why.
+    clickItem(waitItem(QStringLiteral("checkAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("checkAccessPanel")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("checkAccess_") + bo));
+    QTRY_VERIFY(shown(QStringLiteral("checkAccessReason_0")));
+    QCOMPARE(propertyOf(QStringLiteral("checkAccessReason_0"), "text").toString(), QStringLiteral("Content contributor on Contracts."));
+    QVERIFY(!shown(QStringLiteral("checkAccessNone")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(shown(QStringLiteral("checkAccess_") + bo));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("checkAccessPanel")));
+    // Removing access asks in its panel, naming the roles lost.
+    QTRY_VERIFY(propertyOf(QStringLiteral("removeAccessButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("removeAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("removeAccessPanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(propertyOf(QStringLiteral("confirmDetail"), "text").toString().contains(QStringLiteral("Content contributor")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_empty")));
+    QTRY_VERIFY(!shown(QStringLiteral("removeAccessPanel")));
+    QVERIFY(!propertyOf(QStringLiteral("removeAccessButton"), "usable").toBool());
+    // Rename names the space in a panel; the page and the list follow.
+    QTRY_VERIFY(propertyOf(QStringLiteral("spaceRenameButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("spaceRenameButton")));
+    QTRY_VERIFY(shown(QStringLiteral("spaceNamePanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(waitItem(QStringLiteral("spaceNameField"))->hasActiveFocus());
+    QCOMPARE(propertyOf(QStringLiteral("spaceNameField"), "text").toString(), QStringLiteral("Contracts"));
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    type(QStringLiteral("Agreements"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(!shown(QStringLiteral("spaceNamePanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("spaceTitle"), "text").toString(), QStringLiteral("Agreements"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Space renamed."));
+    QTRY_COMPARE(m_session->accessGrants()->name(), QStringLiteral("Agreements"));
+    // Archive asks first; archived, the space reads so and refuses a rename.
+    QTRY_VERIFY(propertyOf(QStringLiteral("spaceArchiveButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("spaceArchiveButton")));
+    QTRY_VERIFY(shown(QStringLiteral("archiveSpacePanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Archive Agreements?"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("archiveSpacePanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("spaceStatus"), "text").toString(), QStringLiteral("Archived"));
+    QVERIFY(shown(QStringLiteral("spaceRenameButton")));
+    QVERIFY(!propertyOf(QStringLiteral("spaceRenameButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("spaceArchiveButton"), "reason").toString(), QStringLiteral("It is archived."));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("spacePage")));
+    QTRY_COMPARE(cell(QStringLiteral("accessSpace_") + spaceId, 1), QStringLiteral("Archived"));
+
+    // A new tag is named and restricted in the panel, then opens its page.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_tags").arg(orgId)));
+    clickItem(waitItem(QStringLiteral("accessCreateButton")));
+    QTRY_VERIFY(shown(QStringLiteral("tagEditor")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(waitItem(QStringLiteral("tagNameField"))->hasActiveFocus());
+    type(QStringLiteral("Secret"));
+    clickItem(waitItem(QStringLiteral("tagRestrictedSwitch")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(shown(QStringLiteral("tagPage")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("tagTitle"), "text").toString(), QStringLiteral("Secret"));
+    QCOMPARE(propertyOf(QStringLiteral("tagControl"), "text").toString(), QStringLiteral("Restricted"));
+    QVERIFY(m_session->accessDirectory()->tags().constFirst().toMap().value(QStringLiteral("access_controlled")).toBool());
+    QTRY_VERIFY(!shown(QStringLiteral("tagEditor")));
+    // Everyone with a role may be given the tag, through the same panel.
+    clickItem(waitItem(QStringLiteral("tagTab_access")));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_empty")));
+    QVERIFY(!shown(QStringLiteral("checkAccessButton")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("grantAccessButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("grantAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("grantPrincipal_search")));
+    QTRY_VERIFY(panelOpen());
+    clicks(waitItem(QStringLiteral("grantPrincipal_search")), QStringLiteral("content contributor"));
+    clickItem(waitItem(QStringLiteral("grantPrincipal_role:role-content_contributor")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    focusOn(waitItem(QStringLiteral("grantRole_role-content_reader")));
+    key(Qt::Key_Space);
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_COMPARE(m_session->accessGrants()->holders().size(), 1);
+    QCOMPARE(m_session->accessGrants()->holders().constFirst().toMap().value(QStringLiteral("principalKind")).toString(),
+             QStringLiteral("role"));
+    QTRY_VERIFY(!shown(QStringLiteral("grantPanel")));
+    // Edit tag renames it in its panel.
+    clickItem(waitItem(QStringLiteral("editTagButton")));
+    QTRY_VERIFY(shown(QStringLiteral("tagEditor")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!shown(QStringLiteral("tagRestrictedSwitch")));
+    clicks(waitItem(QStringLiteral("tagNameField")), QStringLiteral("Top secret"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(!shown(QStringLiteral("tagEditor")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("tagTitle"), "text").toString(), QStringLiteral("Top secret"));
+    // Stop restricting says what it changes first.
+    QCOMPARE(propertyOf(QStringLiteral("restrictTagButton"), "text").toString(), QStringLiteral("Stop restricting"));
+    clickItem(waitItem(QStringLiteral("restrictTagButton")));
+    QTRY_VERIFY(shown(QStringLiteral("restrictTagPanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(propertyOf(QStringLiteral("confirmDetail"), "text").toString().contains(QStringLiteral("visible to everyone")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("restrictTagPanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("tagControl"), "text").toString(), QStringLiteral("Open"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Tag no longer restricts."));
+    QCOMPARE(propertyOf(QStringLiteral("restrictTagButton"), "text").toString(), QStringLiteral("Restrict"));
+    // Archiving the tag asks in its panel, then returns to the list.
+    clickItem(waitItem(QStringLiteral("archiveTagButton")));
+    QTRY_VERIFY(shown(QStringLiteral("archiveTagPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Archive Top secret?"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("tagPage")));
+    QTRY_VERIFY(m_session->accessDirectory()->tags().isEmpty());
+    QVERIFY(!m_session->accessGrants()->active());
+}
+
+// Rename organization opens a side panel with the name selected; Enter
+// saves it and closes the panel, focus back on the command.
+void TestStudio::renameOrganizationInAPanel()
+{
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_general").arg(orgId)));
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    const QString before = propertyOf(QStringLiteral("organizationName"), "text").toString();
+    QTRY_VERIFY(propertyOf(QStringLiteral("renameOrganizationButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("renameOrganizationButton")));
+    QTRY_VERIFY(shown(QStringLiteral("renameOrganizationPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(waitItem(QStringLiteral("organizationNameField"))->hasActiveFocus());
+    QCOMPARE(propertyOf(QStringLiteral("organizationNameField"), "text").toString(), before);
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    type(QStringLiteral("Renamed"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(!shown(QStringLiteral("renameOrganizationPanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("organizationName"), "text").toString(), QStringLiteral("Renamed"));
+    QTRY_VERIFY(waitItem(QStringLiteral("renameOrganizationButton"))->hasActiveFocus());
+    // Escape closes the panel before it leaves Settings.
+    clickItem(waitItem(QStringLiteral("renameOrganizationButton")));
+    QTRY_VERIFY(panelOpen());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("renameOrganizationPanel")));
+    QVERIFY(m_session->settingsActive());
+}
+
+// A on a focused folder opens its access page in place of the list; its
+// command bar opens one side panel per change, and keys stay on the page.
+// A folder below lists that grant and the space's as inherited, with where
+// they come from: the folder opens here, the space in Settings. Stopping
+// inheritance says who keeps access, and Restore brings it back.
+void TestStudio::explorerManagesFolderAccess()
+{
+    window()->resize(1200, 1100);
+    openSpace(QStringLiteral("Inbox"));
+    const QString spaceId = m_session->currentSpaceId();
+    addFolder(QStringLiteral("Plans"));
+    const QString folder = entryId(QStringLiteral("Plans"));
+    QMetaObject::invokeMethod(itemNamed(QStringLiteral("explorer")), "focusDefault");
+    QTRY_VERIFY(rowFocused(QStringLiteral("entryRow"), QStringLiteral("Plans")));
+    key(Qt::Key_A);
+    QTRY_VERIFY(shown(QStringLiteral("accessPage")));
+    QVERIFY(!shown(QStringLiteral("entryPane")));
+    QVERIFY(!panelOpen());
+    QCOMPARE(m_session->accessGrants()->kind(), QStringLiteral("folder"));
+    QCOMPARE(m_session->accessGrants()->targetId(), folder);
+    QCOMPARE(propertyOf(QStringLiteral("placeTitle"), "text").toString(), QStringLiteral("Plans"));
+    QTRY_VERIFY(waitItem(QStringLiteral("placeBackButton"))->hasActiveFocus());
+    // It opens on its Access tab; inheritance and Check access are the
+    // page's own commands.
+    QVERIFY(shown(QStringLiteral("stopInheritingButton")));
+    QVERIFY(shown(QStringLiteral("checkAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_empty")));
+    QCOMPARE(propertyOf(QStringLiteral("placeInheritance"), "text").toString(), QStringLiteral("From the space"));
+    QVERIFY(m_session->accessGrants()->inherited().isEmpty());
+    QTRY_VERIFY(!m_session->accessGrants()->principals().isEmpty());
+    const QString principal = m_session->accessGrants()->principals().constFirst().toMap().value(QStringLiteral("value")).toString();
+    // Keys stay on the page: A does not reach the explorer.
+    key(Qt::Key_A);
+    QVERIFY(shown(QStringLiteral("accessPage")));
+    QVERIFY(!panelOpen());
+    QCOMPARE(m_session->accessGrants()->targetId(), folder);
+    QTRY_VERIFY(propertyOf(QStringLiteral("grantAccessButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("grantAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("grantPanel")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("grantPrincipal_") + principal));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    clickItem(waitItem(QStringLiteral("grantRole_role-content_reader")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    // The folder's own grants list the holder; the panel closes.
+    QTRY_COMPARE(m_session->accessGrants()->holders().size(), 1);
+    QTRY_VERIFY(!shown(QStringLiteral("grantPanel")));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_") + principal));
+    clickItem(waitItem(QStringLiteral("accessHolder_") + principal));
+    clickItem(waitItem(QStringLiteral("manageAccessRolesButton")));
+    QTRY_VERIFY(shown(QStringLiteral("holderRolesPanel")));
+    QTRY_VERIFY(panelOpen());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("holderRolesPanel")));
+    QTRY_VERIFY(waitItem(QStringLiteral("manageAccessRolesButton"))->hasActiveFocus());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("accessPage")));
+    QVERIFY(!m_session->accessGrants()->active());
+    QTRY_VERIFY(rowFocused(QStringLiteral("entryRow"), QStringLiteral("Plans")));
+
+    // The space gives Content reader to the same person.
+    auto *grants = m_session->accessGrants();
+    grants->open(QStringLiteral("space"), spaceId, spaceId, QStringLiteral("Inbox"));
+    QTRY_VERIFY(!grants->busy());
+    grants->setRoles(principal, {QStringLiteral("role-content_reader")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    grants->close();
+    m_session->openEntry(QStringLiteral("folder"), folder);
+    QVERIFY(waitIdle());
+    addFolder(QStringLiteral("Drafts"));
+    const QString drafts = entryId(QStringLiteral("Drafts"));
+    QMetaObject::invokeMethod(itemNamed(QStringLiteral("explorer")), "focusDefault");
+    QTRY_VERIFY(rowFocused(QStringLiteral("entryRow"), QStringLiteral("Drafts")));
+    key(Qt::Key_A);
+    QTRY_VERIFY(shown(QStringLiteral("accessPage")));
+    QTRY_VERIFY(!grants->busy());
+    QVERIFY(grants->holders().isEmpty());
+    QCOMPARE(grants->inherited().size(), 2);
+    const QString fromSpace = QStringLiteral("accessHolder_inherited:space:%1_%2").arg(spaceId, principal);
+    const QString fromFolder = QStringLiteral("accessHolder_inherited:folder:%1_%2").arg(folder, principal);
+    QTRY_VERIFY(shown(fromSpace));
+    QVERIFY(shown(fromFolder));
+    QCOMPARE(cell(fromSpace, 1), QStringLiteral("Content reader"));
+    QCOMPARE(cell(fromSpace, 2), QStringLiteral("From the space Inbox"));
+    QTRY_COMPARE(cell(fromFolder, 2), QStringLiteral("From the folder Plans"));
+    // An inherited row changes where it comes from: its roles are not
+    // managed here.
+    clickItem(waitItem(fromSpace));
+    QTRY_VERIFY(propertyOf(fromSpace, "selected").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("manageAccessRolesButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("removeAccessButton"), "usable").toBool());
+
+    // Stopping inheritance as Restricted says who loses access; Core then
+    // lists nothing from above but what manages access.
+    clickItem(waitItem(QStringLiteral("stopInheritingButton")));
+    QTRY_VERIFY(shown(QStringLiteral("inheritancePanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(propertyOf(QStringLiteral("inheritance_restricted"), "selected").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("inheritanceKept"), "text").toString(), QStringLiteral("Nobody given access here."));
+    QVERIFY(propertyOf(QStringLiteral("inheritanceLost"), "text").toString().contains(grants->inherited().constFirst().toMap()
+                                                                                      .value(QStringLiteral("principalName")).toString()));
+    clickItem(waitItem(QStringLiteral("inheritance_open")));
+    QVERIFY(propertyOf(QStringLiteral("inheritanceKept"), "text").toString().contains(QStringLiteral("Every member except guests")));
+    clickItem(waitItem(QStringLiteral("inheritance_restricted")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("inheritancePanel")));
+    QTRY_COMPARE(grants->summary().value(QStringLiteral("inheritance")).toString(), QStringLiteral("restricted"));
+    QTRY_VERIFY(!grants->busy());
+    QVERIFY(grants->inherited().isEmpty());
+    QCOMPARE(propertyOf(QStringLiteral("placeInheritance"), "text").toString(), QStringLiteral("Stopped: restricted"));
+    // Stopped, it switches straight between Restricted and Open.
+    QCOMPARE(propertyOf(QStringLiteral("stopInheritingButton"), "text").toString(), QStringLiteral("Change inheritance"));
+    clickItem(waitItem(QStringLiteral("stopInheritingButton")));
+    QTRY_VERIFY(shown(QStringLiteral("inheritancePanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Change inheritance"));
+    QVERIFY(propertyOf(QStringLiteral("inheritance_restricted"), "selected").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("inheritance_open")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("inheritancePanel")));
+    QTRY_COMPARE(grants->summary().value(QStringLiteral("inheritance")).toString(), QStringLiteral("open"));
+    QTRY_VERIFY(!grants->busy());
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessGrantsNotice"), "text").toString(),
+                 QStringLiteral("Open: every member except guests reads it now."));
+    // Restore inheritance asks, then lists what comes from above again.
+    clickItem(waitItem(QStringLiteral("restoreInheritanceButton")));
+    QTRY_VERIFY(shown(QStringLiteral("restoreInheritancePanel")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("restoreInheritancePanel")));
+    QTRY_COMPARE(grants->inherited().size(), 2);
+    QVERIFY(grants->summary().value(QStringLiteral("inheritance")).toString().isEmpty());
+    QCOMPARE(grants->targetId(), drafts);
+
+    // The folder it comes from opens here.
+    openRow(waitItem(fromFolder));
+    QTRY_COMPARE(grants->targetId(), folder);
+    QVERIFY(shown(QStringLiteral("accessPage")));
+    QTRY_VERIFY(!grants->busy());
+    QCOMPARE(grants->name(), QStringLiteral("Plans"));
+    QCOMPARE(grants->holders().size(), 1);
+    QCOMPARE(grants->inherited().size(), 1);
+    // The space's access opens in Settings.
+    QTRY_VERIFY(shown(fromSpace));
+    openRow(waitItem(fromSpace));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    QCOMPARE(propertyOf(QStringLiteral("spaceTitle"), "text").toString(), QStringLiteral("Inbox"));
+    QTRY_VERIFY(shown(QStringLiteral("accessTable")));
+    QTRY_COMPARE(grants->kind(), QStringLiteral("space"));
+}
+
+// Content reader leaves no upload or new folder in the explorer; Content
+// contributor brings them back once the location refreshes.
+void TestStudio::explorerFollowsSpaceAccess()
+{
+    openSpace(QStringLiteral("Inbox"));
+    const QString spaceId = m_session->currentSpaceId();
+    QTRY_VERIFY(propertyOf(QStringLiteral("uploadButton"), "usable").toBool());
+    auto *directory = m_session->accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    QString me;
+    for (const auto &member : directory->members())
+        if (member.toMap().value(QStringLiteral("label")) == QLatin1String("ok@localhost")) me = member.toMap().value(QStringLiteral("id")).toString();
+    QVERIFY(!me.isEmpty());
+    auto *grants = m_session->accessGrants();
+    grants->open(QStringLiteral("space"), spaceId, spaceId, QStringLiteral("Inbox"));
+    QTRY_VERIFY(!grants->busy());
+    grants->setRoles(QStringLiteral("user:") + me, {QStringLiteral("role-content_reader")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    QTRY_VERIFY(!grants->busy());
+    m_session->runCommand(QStringLiteral("refresh"));
+    QTRY_VERIFY(!propertyOf(QStringLiteral("uploadButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("newButton"), "usable").toBool());
+    QVERIFY(propertyOf(QStringLiteral("refreshButton"), "usable").toBool());
+    grants->setRoles(QStringLiteral("user:") + me, {QStringLiteral("role-content_contributor")});
+    QTRY_COMPARE(grants->holders().constFirst().toMap().value(QStringLiteral("roleIds")).toStringList(),
+                 QStringList{QStringLiteral("role-content_contributor")});
+    QTRY_VERIFY(!grants->busy());
+    grants->close();
+    key(Qt::Key_F5);
+    QTRY_VERIFY(propertyOf(QStringLiteral("uploadButton"), "usable").toBool());
+    QVERIFY(propertyOf(QStringLiteral("newButton"), "usable").toBool());
+}
+
+// Selecting a person opens their page: how they sign in, their roles,
+// groups, and where they have access, each opening that item. A folder
+// opens its access as a page and Back returns to the person; a space opens
+// at its entry. Manage roles and Manage groups are panels with checkboxes;
+// Core's refusal to drop the last owner stays in the panel, and removing
+// the person asks first, naming what they lose.
+void TestStudio::memberPageListsAccessGroupsAndRoles()
+{
+    window()->resize(1200, 1600);
+    openSpace(QStringLiteral("Contracts"));
+    addFolder(QStringLiteral("Plans"));
+    const QString orgId = m_session->currentOrgId(), spaceId = m_session->currentSpaceId();
+    const QString folder = entryId(QStringLiteral("Plans"));
+    const QString bo = m_core.seedMember(orgId, QStringLiteral("bo@localhost"), QStringLiteral("member"));
+    auto *directory = m_session->accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    directory->createGroup(QStringLiteral("Legal"));
+    QTRY_COMPARE(directory->groups().size(), 1);
+    QTRY_VERIFY(!directory->busy());
+    const QString legal = directory->groups().constFirst().toMap().value(QStringLiteral("id")).toString();
+    directory->setGroupMembers(legal, {bo});
+    QTRY_COMPARE(directory->notice(), QStringLiteral("group_members_saved"));
+    QTRY_VERIFY(!directory->busy());
+    directory->createRole(QStringLiteral("Auditors"), {QStringLiteral("membership.list")});
+    QTRY_COMPARE(directory->notice(), QStringLiteral("role_created"));
+    QTRY_VERIFY(!directory->busy());
+    QString auditors;
+    for (const auto &role : directory->assignableRoles())
+        if (role.toMap().value(QStringLiteral("name")) == QLatin1String("Auditors")) auditors = role.toMap().value(QStringLiteral("id")).toString();
+    QVERIFY(!auditors.isEmpty());
+    // Bo views Contracts; Legal edits its folder Plans.
+    auto *grants = m_session->accessGrants();
+    grants->open(QStringLiteral("space"), spaceId, spaceId, QStringLiteral("Contracts"));
+    QTRY_VERIFY(!grants->busy());
+    grants->setRoles(QStringLiteral("user:") + bo, {QStringLiteral("role-content_reader")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    grants->open(QStringLiteral("folder"), spaceId, folder, QStringLiteral("Plans"));
+    QTRY_VERIFY(!grants->busy());
+    grants->setRoles(QStringLiteral("group:") + legal, {QStringLiteral("role-content_contributor")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    grants->close();
+
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_members").arg(orgId)));
+    // People reloads on entry; the row is clicked once that load ends.
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    // Organization roles read as people name them.
+    QCOMPARE(rowProperty(QStringLiteral("member_"), QStringLiteral("ok@localhost"), "cells").toStringList().value(1), QStringLiteral("Owner"));
+    openRow(waitItem(QStringLiteral("member_") + bo));
+    QTRY_VERIFY(shown(QStringLiteral("userPage")));
+    QVERIFY(!panelOpen());
+    QVERIFY(!shown(QStringLiteral("memberList")));
+    QVERIFY(!shown(QStringLiteral("newUserButton")));
+    QTRY_VERIFY(waitItem(QStringLiteral("userBackButton"))->hasActiveFocus());
+    QCOMPARE(propertyOf(QStringLiteral("userIdentifier"), "text").toString(), QStringLiteral("bo@localhost"));
+    QCOMPARE(propertyOf(QStringLiteral("userKind"), "text").toString(), QStringLiteral("Personal"));
+    // A personal account has no setup code, and the command says so.
+    QVERIFY(!propertyOf(QStringLiteral("userSetupCodeButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("userSetupCodeButton"), "reason").toString().isEmpty());
+    clickItem(waitItem(QStringLiteral("userTab_groups")));
+    QTRY_VERIFY(shown(QStringLiteral("userGroup_") + legal));
+    // The Roles tab: each organization role and where it holds.
+    clickItem(waitItem(QStringLiteral("userTab_roles")));
+    QTRY_VERIFY(waitRow(QStringLiteral("heldRole_"), QStringLiteral("Member")));
+    QCOMPARE(rowProperty(QStringLiteral("heldRole_"), QStringLiteral("Member"), "cells").toStringList(),
+             (QStringList{QStringLiteral("Member"), QStringLiteral("Organization")}));
+    // The Access tab: every place, with the roles held there and how they
+    // reach them.
+    clickItem(waitItem(QStringLiteral("userTab_access")));
+    QQuickItem *onSpace = waitFound([&] { return rowWith(QStringLiteral("heldAccess_"), 0, QStringLiteral("Contracts")); });
+    QQuickItem *onFolder = waitFound([&] { return rowWith(QStringLiteral("heldAccess_"), 0, QStringLiteral("Plans in Contracts")); });
+    QVERIFY(onSpace && onFolder);
+    QCOMPARE(onSpace->property("cells").toStringList(),
+             (QStringList{QStringLiteral("Contracts"), QStringLiteral("Content reader"), QStringLiteral("Direct")}));
+    QCOMPARE(onFolder->property("cells").toStringList(),
+             (QStringList{QStringLiteral("Plans in Contracts"), QStringLiteral("Content contributor"), QStringLiteral("Through the group Legal")}));
+    // What comes through a group is removed from the group.
+    clickItem(onFolder);
+    QTRY_VERIFY(onFolder->property("selected").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("heldRemoveButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("heldRemoveButton"), "reason").toString().isEmpty());
+
+    // The folder opens its access as a page, with what it inherits; Back
+    // returns to the person's page.
+    focusOn(onFolder);
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("placePage")));
+    QTRY_VERIFY(!shown(QStringLiteral("userPage")));
+    QCOMPARE(propertyOf(QStringLiteral("placeTitle"), "text").toString(), QStringLiteral("Plans in Contracts"));
+    QCOMPARE(propertyOf(QStringLiteral("placeBackButton"), "text").toString(), QStringLiteral("bo@localhost"));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_group:") + legal));
+    const QString inherited = QStringLiteral("accessHolder_inherited:space:%1_user:%2").arg(spaceId, bo);
+    QTRY_VERIFY(shown(inherited));
+    QCOMPARE(cell(inherited, 2), QStringLiteral("From the space Contracts"));
+    QTRY_VERIFY(waitItem(QStringLiteral("placeBackButton"))->hasActiveFocus());
+    clickItem(waitItem(QStringLiteral("placeBackButton")));
+    QTRY_VERIFY(shown(QStringLiteral("userPage")));
+    QVERIFY(!shown(QStringLiteral("placePage")));
+
+    // Manage roles: every organization role as a checkbox, built-in ones
+    // first; Save leaves exactly the checked ones.
+    QTRY_VERIFY(propertyOf(QStringLiteral("userManageRolesButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("userManageRolesButton")));
+    QTRY_VERIFY(shown(QStringLiteral("rolesPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Manage roles"));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSubtitle"), "text").toString(), QStringLiteral("bo@localhost"));
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    QTRY_VERIFY(propertyOf(QStringLiteral("manageRole_role-member"), "selected").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("manageRole_role-owner"), "text").toString(), QStringLiteral("Owner"));
+    QVERIFY(!shown(QStringLiteral("manageRole_role-content_reader")));
+    clickItem(waitItem(QStringLiteral("manageRole_") + auditors));
+    clickItem(waitItem(QStringLiteral("manageRole_role-admin")));
+    clickItem(waitItem(QStringLiteral("manageRole_role-member")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("rolesPanel")));
+    clickItem(waitItem(QStringLiteral("userTab_roles")));
+    QTRY_VERIFY(rowTitled(QStringLiteral("heldRole_"), QStringLiteral("Auditors")));
+    QTRY_VERIFY(rowTitled(QStringLiteral("heldRole_"), QStringLiteral("Administrator")));
+    QVERIFY(!rowTitled(QStringLiteral("heldRole_"), QStringLiteral("Member")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Roles saved."));
+    QTRY_VERIFY(!directory->busy());
+    const auto rolesOf = [directory](const QString &id) {
+        for (const auto &member : directory->members())
+            if (member.toMap().value(QStringLiteral("id")) == id) return member.toMap().value(QStringLiteral("roles")).toStringList();
+        return QStringList();
+    };
+    QTRY_COMPARE(rolesOf(bo), QStringList{QStringLiteral("admin")});
+
+    // Manage groups: a checkbox per group; Save leaves exactly those.
+    QTRY_VERIFY(propertyOf(QStringLiteral("userManageGroupsButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("userManageGroupsButton")));
+    QTRY_VERIFY(shown(QStringLiteral("memberGroupsPanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(propertyOf(QStringLiteral("memberGroup_") + legal, "selected").toBool());
+    clickItem(waitItem(QStringLiteral("memberGroup_") + legal));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("memberGroupsPanel")));
+    clickItem(waitItem(QStringLiteral("userTab_groups")));
+    QTRY_VERIFY(shown(QStringLiteral("userGroup_empty")));
+    QVERIFY(!shown(QStringLiteral("userGroup_") + legal));
+    // The notice names the last change saved, and only that one.
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Groups saved."));
+    QVERIFY(directory->groups().constFirst().toMap().value(QStringLiteral("members")).toList().isEmpty());
+
+    // Removing Bo asks in a panel, naming the access and the role Bo loses.
+    QTRY_VERIFY(propertyOf(QStringLiteral("userRemoveButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("userRemoveButton")));
+    QTRY_VERIFY(shown(QStringLiteral("removeMemberPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Remove member"));
+    const QString impact = propertyOf(QStringLiteral("confirmDetail"), "text").toString();
+    QVERIFY2(impact.contains(QStringLiteral("1 place")) && !impact.contains(QStringLiteral("Legal"))
+             && impact.contains(QStringLiteral("Auditors")) && !impact.contains(QStringLiteral("Administrator")), qPrintable(impact));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("removeMemberPanel")));
+    QVERIFY(shown(QStringLiteral("userPage")));
+
+    // Removing the space access asks, naming it, then it is gone.
+    clickItem(waitItem(QStringLiteral("userTab_access")));
+    onSpace = waitFound([&] { return rowWith(QStringLiteral("heldAccess_"), 0, QStringLiteral("Contracts")); });
+    QVERIFY(onSpace);
+    clickItem(onSpace);
+    QTRY_VERIFY(propertyOf(QStringLiteral("heldRemoveButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("heldRemoveButton")));
+    QTRY_VERIFY(shown(QStringLiteral("removeHeldPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("confirmDetail"), "text").toString(), QStringLiteral("Content reader · Contracts"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("removeHeldPanel")));
+    QTRY_VERIFY(!rowWith(QStringLiteral("heldAccess_"), 0, QStringLiteral("Contracts")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(),
+                 QStringLiteral("Access removed here. Access through groups or other places stays."));
+    // Grant access picks the space, then the roles given there.
+    QTRY_VERIFY(propertyOf(QStringLiteral("heldGrantAccessButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("heldGrantAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("placeGrantPanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("pickPlace_space:") + spaceId));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    focusOn(waitItem(QStringLiteral("placeGrantRole_role-content_reader")));
+    key(Qt::Key_Space);
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("placeGrantPanel")));
+    onSpace = waitFound([&] { return rowWith(QStringLiteral("heldAccess_"), 0, QStringLiteral("Contracts")); });
+    QVERIFY(onSpace);
+
+    // The space opens at its entry.
+    openRow(onSpace);
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    QCOMPARE(propertyOf(QStringLiteral("spaceTitle"), "text").toString(), QStringLiteral("Contracts"));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_user:") + bo));
+    QVERIFY(!shown(QStringLiteral("userPage")));
+
+    // The last owner keeps Owner: Core's refusal stays in the panel.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_members").arg(orgId)));
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    openRow(waitRow(QStringLiteral("member_"), QStringLiteral("ok@localhost")));
+    QTRY_VERIFY(shown(QStringLiteral("userPage")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("userManageRolesButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("userManageRolesButton")));
+    QTRY_VERIFY(shown(QStringLiteral("rolesPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(propertyOf(QStringLiteral("manageRole_role-owner"), "selected").toBool());
+    clickItem(waitItem(QStringLiteral("manageRole_role-owner")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(shown(QStringLiteral("rolesPanelError")));
+    QCOMPARE(propertyOf(QStringLiteral("rolesPanelError"), "text").toString(), QStringLiteral("The organization must keep at least one owner."));
+    QVERIFY(shown(QStringLiteral("rolesPanel")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("rolesPanel")));
+    // Esc then leaves the page for the list.
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("userPage")));
+    QTRY_VERIFY(rowFocused(QStringLiteral("member_"), QStringLiteral("ok@localhost")));
+}
+
+// New user makes an account the organization manages; without a password
+// the panel shows its setup code once. Its page issues a new one, and a
+// taken username is refused in the panel.
+void TestStudio::peopleCreatesManagedUsers()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_members").arg(orgId)));
+    QTRY_VERIFY(propertyOf(QStringLiteral("newUserButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("newUserButton")));
+    QTRY_VERIFY(shown(QStringLiteral("newUserPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(waitItem(QStringLiteral("newUserUsernameField"))->hasActiveFocus());
+    type(QStringLiteral("A"));
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    type(QStringLiteral("na.lima"));
+    QVERIFY(propertyOf(QStringLiteral("newUserRole_member"), "selected").toBool());
+    clicks(waitItem(QStringLiteral("newUserNameField")), QStringLiteral("Ana Lima"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("setupCodeField")));
+    const QString identifier = m_session->orgAdmin()->slug() + QStringLiteral("/ana.lima");
+    QCOMPARE(propertyOf(QStringLiteral("setupIdentifierField"), "text").toString(), identifier);
+    QVERIFY(propertyOf(QStringLiteral("setupCodeField"), "text").toString().startsWith(QLatin1String("mst_")));
+    QVERIFY(!shown(QStringLiteral("sidePanelSave")));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelCancel"), "text").toString(), QStringLiteral("Close"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("newUserPanel")));
+    QVERIFY(m_session->orgAdmin()->setupCode().isEmpty());
+    QTRY_VERIFY(waitItem(QStringLiteral("newUserButton"))->hasActiveFocus());
+
+    // The account's page says how it signs in and issues a new code.
+    openRow(waitRow(QStringLiteral("member_"), QStringLiteral("Ana Lima")));
+    QTRY_VERIFY(shown(QStringLiteral("userPage")));
+    QCOMPARE(propertyOf(QStringLiteral("userIdentifier"), "text").toString(), identifier);
+    QCOMPARE(propertyOf(QStringLiteral("userKind"), "text").toString(), QStringLiteral("Managed by the organization"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("userSetupCodeButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("userSetupCodeButton")));
+    QTRY_VERIFY(shown(QStringLiteral("setupCodePanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!shown(QStringLiteral("setupCodeField")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(shown(QStringLiteral("setupCodeField")));
+    QVERIFY(propertyOf(QStringLiteral("setupCodeField"), "text").toString().startsWith(QLatin1String("mst_")));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelCancel"), "text").toString(), QStringLiteral("Close"));
+    clickItem(waitItem(QStringLiteral("sidePanelCancel")));
+    QTRY_VERIFY(!shown(QStringLiteral("setupCodePanel")));
+    clickItem(waitItem(QStringLiteral("userBackButton")));
+    QTRY_VERIFY(!shown(QStringLiteral("userPage")));
+
+    // A taken username is refused in the panel; a password leaves no code.
+    clickItem(waitItem(QStringLiteral("newUserButton")));
+    QTRY_VERIFY(shown(QStringLiteral("newUserPanel")));
+    QTRY_VERIFY(waitItem(QStringLiteral("newUserUsernameField"))->hasActiveFocus());
+    type(QStringLiteral("ana.lima"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("newUserError")));
+    QCOMPARE(propertyOf(QStringLiteral("newUserError"), "text").toString(), QStringLiteral("That username is taken in this organization."));
+    clicks(waitItem(QStringLiteral("newUserUsernameField")), QStringLiteral("robot"));
+    QVERIFY(!shown(QStringLiteral("newUserError")));
+    clicks(waitItem(QStringLiteral("newUserPasswordField")), QStringLiteral("long-secret"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(!shown(QStringLiteral("newUserPanel")));
+    QTRY_VERIFY(waitRow(QStringLiteral("member_"), QStringLiteral("robot")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("orgAdminNotice"), "text").toString(), QStringLiteral("User created."));
+}
+
+// A role's page lists who holds it, organization-wide and on places; Add
+// people gives it to several at once, and each row opens the person,
+// group, or place.
+void TestStudio::rolePageListsHoldersAndAddsPeople()
+{
+    window()->resize(1200, 1300);
+    openSpace(QStringLiteral("Contracts"));
+    const QString orgId = m_session->currentOrgId(), spaceId = m_session->currentSpaceId();
+    const QString bo = m_core.seedMember(orgId, QStringLiteral("bo@localhost"), QStringLiteral("member"));
+    const QString cy = m_core.seedMember(orgId, QStringLiteral("cy@localhost"), QStringLiteral("guest"));
+    auto *directory = m_session->accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    directory->createGroup(QStringLiteral("Legal"));
+    QTRY_COMPARE(directory->groups().size(), 1);
+    QTRY_VERIFY(!directory->busy());
+    const QString legal = directory->groups().constFirst().toMap().value(QStringLiteral("id")).toString();
+    auto *grants = m_session->accessGrants();
+    grants->open(QStringLiteral("space"), spaceId, spaceId, QStringLiteral("Contracts"));
+    QTRY_VERIFY(!grants->busy());
+    grants->setRoles(QStringLiteral("user:") + bo, {QStringLiteral("role-content_reader")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    grants->close();
+
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    // The first click after entering the section lands, while the
+    // directory reloads: the reload neither rebuilds nor moves the rows.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_roles").arg(orgId)));
+    openRow(waitItem(QStringLiteral("role_member")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePage")));
+    // Assigned to is a tab with one table: the holder, its kind, and where
+    // it holds; its commands join the role's own.
+    QVERIFY(!shown(QStringLiteral("roleAddPeopleButton")));
+    clickItem(waitItem(QStringLiteral("roleTab_holders")));
+    QTRY_VERIFY(shown(QStringLiteral("roleAddPeopleButton")));
+    QVERIFY(shown(QStringLiteral("roleCopyButton")));
+    QTRY_VERIFY(waitRow(QStringLiteral("roleHolder_"), QStringLiteral("bo@localhost")));
+    QCOMPARE(rowProperty(QStringLiteral("roleHolder_"), QStringLiteral("bo@localhost"), "cells").toStringList(),
+             (QStringList{QStringLiteral("bo@localhost"), QStringLiteral("Person"), QStringLiteral("Organization")}));
+    QVERIFY(!rowTitled(QStringLiteral("roleHolder_"), QStringLiteral("cy@localhost")));
+    QVERIFY(!propertyOf(QStringLiteral("roleRemoveHoldersButton"), "usable").toBool());
+    // Add people offers those without it; the checked ones get it.
+    QTRY_VERIFY(propertyOf(QStringLiteral("roleAddPeopleButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("roleAddPeopleButton")));
+    QTRY_VERIFY(shown(QStringLiteral("addPeoplePanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!shown(QStringLiteral("addHolder_user:") + bo));
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Add"));
+    clickItem(waitItem(QStringLiteral("addHolder_user:") + cy));
+    clickItem(waitItem(QStringLiteral("addHolder_group:") + legal));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("addPeoplePanel")));
+    QTRY_VERIFY(rowTitled(QStringLiteral("roleHolder_"), QStringLiteral("cy@localhost")));
+    QTRY_VERIFY(rowTitled(QStringLiteral("roleHolder_"), QStringLiteral("Legal")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Role given."));
+    QCOMPARE(rowProperty(QStringLiteral("roleHolder_"), QStringLiteral("Legal"), "cells").toStringList().value(1), QStringLiteral("Group"));
+    // Remove asks for the rows selected, a Ctrl click adding one, then
+    // takes the role back from them.
+    clickItem(waitRow(QStringLiteral("roleHolder_"), QStringLiteral("cy@localhost")));
+    clickItem(waitRow(QStringLiteral("roleHolder_"), QStringLiteral("bo@localhost")), Qt::LeftButton, Qt::ControlModifier);
+    QTRY_VERIFY(rowProperty(QStringLiteral("roleHolder_"), QStringLiteral("bo@localhost"), "selected").toBool());
+    QVERIFY(rowProperty(QStringLiteral("roleHolder_"), QStringLiteral("cy@localhost"), "selected").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("roleOpenHolderButton"), "usable").toBool());
+    QTRY_VERIFY(propertyOf(QStringLiteral("roleRemoveHoldersButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("roleRemoveHoldersButton")));
+    QTRY_VERIFY(shown(QStringLiteral("removeHoldersPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Take back Member from 2 holders?"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("removeHoldersPanel")));
+    QTRY_VERIFY(!rowTitled(QStringLiteral("roleHolder_"), QStringLiteral("cy@localhost")));
+    QTRY_VERIFY(!rowTitled(QStringLiteral("roleHolder_"), QStringLiteral("bo@localhost")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("accessNotice"), "text").toString(), QStringLiteral("Role taken back."));
+    // A group opens its page.
+    openRow(waitRow(QStringLiteral("roleHolder_"), QStringLiteral("Legal")));
+    QTRY_VERIFY(shown(QStringLiteral("groupPage")));
+    clickItem(waitItem(QStringLiteral("groupTab_roles")));
+    QTRY_VERIFY(waitRow(QStringLiteral("heldRole_"), QStringLiteral("Member")));
+
+    // A space role is given in a space picked after the people, and Open
+    // opens the holder selected.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_roles").arg(orgId)));
+    openRow(waitItem(QStringLiteral("role_content_reader")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePage")));
+    clickItem(waitItem(QStringLiteral("roleTab_holders")));
+    QTRY_VERIFY(waitRow(QStringLiteral("roleHolder_"), QStringLiteral("bo@localhost")));
+    QCOMPARE(rowProperty(QStringLiteral("roleHolder_"), QStringLiteral("bo@localhost"), "cells").toStringList().value(2),
+             QStringLiteral("Contracts"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("roleAddPeopleButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("roleAddPeopleButton")));
+    QTRY_VERIFY(shown(QStringLiteral("addPeoplePanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Next"));
+    clickItem(waitItem(QStringLiteral("addHolder_user:") + cy));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(shown(QStringLiteral("pickPlace_space:") + spaceId));
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("pickPlace_space:") + spaceId));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("addPeoplePanel")));
+    QTRY_VERIFY(rowTitled(QStringLiteral("roleHolder_"), QStringLiteral("cy@localhost")));
+    QCOMPARE(rowProperty(QStringLiteral("roleHolder_"), QStringLiteral("cy@localhost"), "cells").toStringList().value(2),
+             QStringLiteral("Contracts"));
+    clickItem(waitRow(QStringLiteral("roleHolder_"), QStringLiteral("bo@localhost")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("roleOpenHolderButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("roleOpenHolderButton")));
+    QTRY_VERIFY(shown(QStringLiteral("userPage")));
+    QCOMPARE(propertyOf(QStringLiteral("userTitle"), "text").toString(), QStringLiteral("bo@localhost"));
+}
+
+// The tables shown in the window: each shows its column titles once.
+static int tablesShown(QQuickItem *root)
+{
+    const QList<QQuickItem *> items = descendants(root);
+    return int(std::count_if(items.begin(), items.end(), [](QQuickItem *item) {
+        return item->objectName() == QLatin1String("tableHeader") && item->isVisible();
+    }));
+}
+
+// Every detail page heads with the way back, the item's name, and one
+// command bar, then its tabs: Details shows no table, every other tab one,
+// and its commands join the bar only while it shows. At 920 px the command
+// bar leaves the item's name whole.
+void TestStudio::detailPagesShowOneTableAtATime()
+{
+    window()->resize(920, 900);
+    openSpace(QStringLiteral("Quarterly contracts and supplier agreements"));
+    addFolder(QStringLiteral("Plans"));
+    const QString orgId = m_session->currentOrgId(), spaceId = m_session->currentSpaceId();
+    const QString bo = m_core.seedMember(orgId, QStringLiteral("bo@localhost"), QStringLiteral("member"));
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")}, {QStringLiteral("revision"), 1}}}}});
+    auto *directory = m_session->accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    directory->createGroup(QStringLiteral("Legal"));
+    QTRY_COMPARE(directory->groups().size(), 1);
+    QTRY_VERIFY(!directory->busy());
+    directory->createTag(QStringLiteral("Secret"), true);
+    QTRY_COMPARE(directory->tags().size(), 1);
+    QTRY_VERIFY(!directory->busy());
+    const QString legal = directory->groups().constFirst().toMap().value(QStringLiteral("id")).toString();
+    const QString tag = directory->tags().constFirst().toMap().value(QStringLiteral("id")).toString();
+
+    const auto check = [this](const QString &page, const QString &prefix) {
+        QQuickItem *shownPage = waitItem(page);
+        QTRY_VERIFY(shownPage->isVisible());
+        QTRY_VERIFY(!propertyOf(prefix + QStringLiteral("Title"), "text").toString().isEmpty());
+        QVERIFY2(!propertyOf(prefix + QStringLiteral("Title"), "truncated").toBool(), qPrintable(page));
+        QList<QQuickItem *> tabs;
+        for (QQuickItem *item : descendants(shownPage))
+            if (item->objectName().startsWith(prefix + QStringLiteral("Tab_")))
+                tabs.append(item);
+        QVERIFY2(tabs.size() >= 2, qPrintable(page));
+        QCOMPARE(tabs.constFirst()->objectName(), prefix + QStringLiteral("Tab_details"));
+        for (QQuickItem *tab : std::as_const(tabs)) {
+            clickItem(tab);
+            QTRY_COMPARE(tab->property("current").toString(), tab->property("view").toString());
+            settle();
+            const int tables = tablesShown(window()->contentItem());
+            QVERIFY2(tables == (tab == tabs.constFirst() ? 0 : 1), qPrintable(tab->objectName()));
+            QVERIFY(shown(prefix + QStringLiteral("BackButton")));
+        }
+        clickItem(tabs.constFirst());
+    };
+
+    m_session->runCommand(QStringLiteral("settings"));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_members").arg(orgId)));
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    QCOMPARE(tablesShown(window()->contentItem()), 1);
+    openRow(waitItem(QStringLiteral("member_") + bo));
+    check(QStringLiteral("userPage"), QStringLiteral("user"));
+    // A tab's commands show only on it; the person's own stay on every tab.
+    QVERIFY(!shown(QStringLiteral("heldGrantAccessButton")));
+    clickItem(waitItem(QStringLiteral("userTab_access")));
+    QTRY_VERIFY(shown(QStringLiteral("heldGrantAccessButton")));
+    QVERIFY(shown(QStringLiteral("userRemoveButton")));
+    QVERIFY(!shown(QStringLiteral("heldRoleRemoveButton")));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_groups").arg(orgId)));
+    openRow(waitItem(QStringLiteral("group_") + legal));
+    check(QStringLiteral("groupPage"), QStringLiteral("group"));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_roles").arg(orgId)));
+    openRow(waitItem(QStringLiteral("role_member")));
+    check(QStringLiteral("rolePage"), QStringLiteral("role"));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_spaces").arg(orgId)));
+    openRow(waitItem(QStringLiteral("accessSpace_") + spaceId));
+    check(QStringLiteral("spacePage"), QStringLiteral("space"));
+    // Too narrow for the name and the bar on one line, the bar goes below.
+    QQuickItem *title = waitItem(QStringLiteral("spaceTitle"));
+    QVERIFY(waitItem(QStringLiteral("spaceRenameButton"))->mapToScene(QPointF()).y() > title->mapToScene(QPointF(0, title->height())).y());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_tags").arg(orgId)));
+    openRow(waitItem(QStringLiteral("tag_") + tag));
+    check(QStringLiteral("tagPage"), QStringLiteral("tag"));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    openRow(waitItem(QStringLiteral("addon_controlled_docs")));
+    check(QStringLiteral("addonDetail"), QStringLiteral("addon"));
+    m_session->closeSettings();
+    QTRY_VERIFY(!m_session->settingsActive());
+    // A folder's access page, from the explorer.
+    QMetaObject::invokeMethod(itemNamed(QStringLiteral("explorer")), "focusDefault");
+    QTRY_VERIFY(rowFocused(QStringLiteral("entryRow"), QStringLiteral("Plans")));
+    key(Qt::Key_A);
+    QTRY_VERIFY(shown(QStringLiteral("accessPage")));
+    QTRY_VERIFY(!m_session->accessGrants()->busy());
+    check(QStringLiteral("placePage"), QStringLiteral("place"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("accessPage")));
+}
+
 void TestStudio::addOnPageConfiguresSettings()
 {
     window()->resize(1200, 1100);
@@ -2377,7 +3734,7 @@ void TestStudio::addOnPageConfiguresSettings()
     m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
         {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
         {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")},
-            {QStringLiteral("space_ids"), QJsonArray()}, {QStringLiteral("revision"), 1},
+            {QStringLiteral("revision"), 1},
             {QStringLiteral("settings"), QJsonObject{{QStringLiteral("allow_author_approval"), false},
                 {QStringLiteral("required_approvals"), 1}}}}}}});
     clickItem(waitItem(QStringLiteral("accountButton")));
@@ -2387,37 +3744,947 @@ void TestStudio::addOnPageConfiguresSettings()
     QTRY_VERIFY(!m_session->orgBilling()->busy());
     clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
     QTRY_VERIFY(shown(QStringLiteral("addon_controlled_docs")));
+    QCOMPARE(cell(QStringLiteral("addon_controlled_docs"), 1), QStringLiteral("Installed"));
     QVERIFY(!shown(QStringLiteral("addonDetail")));
     QVERIFY(!shown(QStringLiteral("installAddonButton")));
-    clickItem(waitItem(QStringLiteral("addon_controlled_docs")));
+    openRow(waitItem(QStringLiteral("addon_controlled_docs")));
     QTRY_VERIFY(shown(QStringLiteral("addonDetail")));
     QVERIFY(!shown(QStringLiteral("addon_controlled_docs")));
     QCOMPARE(propertyOf(QStringLiteral("addonTitle"), "text").toString(), QStringLiteral("Controlled documents"));
     QVERIFY(shown(QStringLiteral("pauseAddonButton")));
+    QVERIFY(!shown(QStringLiteral("addonResponsibleButton")));
+    // The organization settings read only on the page; Settings changes them in a panel.
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonSetting_required_approvals"), "text").toString(), QStringLiteral("1"));
+    QCOMPARE(propertyOf(QStringLiteral("addonSetting_allow_author_approval"), "text").toString(), QStringLiteral("Off"));
+    QVERIFY(!shown(QStringLiteral("addonSettingValue_organization_required_approvals")));
+    clickItem(waitItem(QStringLiteral("addonSettingsButton")));
+    QTRY_VERIFY(shown(QStringLiteral("addonSettingsPanel")));
+    QTRY_VERIFY(panelOpen());
     QVERIFY(shown(QStringLiteral("addonSettingMode_organization_allow_author_approval")));
     QVERIFY(!shown(QStringLiteral("addonSettingMode_organization_required_approvals")));
     QTRY_COMPARE(propertyOf(QStringLiteral("addonSettingValue_organization_required_approvals"), "text").toString(), QStringLiteral("1"));
-    QVERIFY(!propertyOf(QStringLiteral("saveAddonSettingsButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
     // Out of the schema's bounds, the value cannot be saved.
     clicks(waitItem(QStringLiteral("addonSettingValue_organization_required_approvals")), QStringLiteral("0"));
     QTRY_VERIFY(propertyOf(QStringLiteral("addonSettingValue_organization_required_approvals"), "invalid").toBool());
-    QVERIFY(!propertyOf(QStringLiteral("saveAddonSettingsButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
     key(Qt::Key_Backspace);
     type(QStringLiteral("3"));
-    QTRY_VERIFY(propertyOf(QStringLiteral("saveAddonSettingsButton"), "usable").toBool());
-    clickItem(waitItem(QStringLiteral("saveAddonSettingsButton")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("addonSettingsPanel")));
     QTRY_VERIFY(!m_session->addOns()->busy());
     const QJsonObject sent = m_core.addOnRequest().value(QStringLiteral("settings")).toObject();
     QCOMPARE(sent.value(QStringLiteral("required_approvals")).toInt(), 3);
     QVERIFY(!sent.contains(QStringLiteral("allow_author_approval")));
-    QTRY_COMPARE(propertyOf(QStringLiteral("addonSettingValue_organization_required_approvals"), "text").toString(), QStringLiteral("3"));
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonSetting_required_approvals"), "text").toString(), QStringLiteral("3"));
     QTRY_VERIFY(shown(QStringLiteral("addonNotice")));
-    // Escape leaves the add-on for the list before it leaves Settings.
+    QTRY_VERIFY(waitItem(QStringLiteral("addonSettingsButton"))->hasActiveFocus());
+    // Escape leaves the add-on for the list before it leaves Settings; the notice stays behind.
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(shown(QStringLiteral("addon_controlled_docs")));
+    QTRY_VERIFY(waitItem(QStringLiteral("addon_controlled_docs"))->hasActiveFocus());
+    QVERIFY(!shown(QStringLiteral("addonNotice")));
+    openRow(waitItem(QStringLiteral("addon_controlled_docs")));
+    QTRY_VERIFY(shown(QStringLiteral("addonDetail")));
+    QVERIFY(!shown(QStringLiteral("addonNotice")));
     key(Qt::Key_Escape);
     QTRY_VERIFY(shown(QStringLiteral("addon_controlled_docs")));
     QVERIFY(m_session->settingsActive());
     key(Qt::Key_Escape);
     QTRY_VERIFY(!m_session->settingsActive());
+}
+
+// An installed add-on's roles list apart, open read-only, and are given
+// only on places; one held across the organization shows as doing nothing
+// there, and is removed.
+void TestStudio::addOnRolesAreReadOnly()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    const QString membershipId = m_core.seedMember(orgId, QStringLiteral("bob@example.com"), QStringLiteral("member"));
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")},
+            {QStringLiteral("revision"), 1}}}}});
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_roles").arg(orgId)));
+    QTRY_VERIFY(shown(QStringLiteral("role_addon.controlled_docs.manager")));
+    QVERIFY(shown(QStringLiteral("role_addon.controlled_docs.reviewer")));
+    QVERIFY(shown(QStringLiteral("role_content_reader")));
+    // The add-on's roles work only granted on a place: across the
+    // organization, only the five built-in organization roles are given.
+    QTRY_COMPARE(m_session->accessDirectory()->assignableRoles().size(), 5);
+    // The space roles run past the window: the keyboard reaches the add-on's.
+    focusOn(waitItem(QStringLiteral("role_addon.controlled_docs.manager")));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("rolePage")));
+    QCOMPARE(propertyOf(QStringLiteral("roleKind"), "text").toString(), QStringLiteral("Add-on"));
+    QVERIFY(!propertyOf(QStringLiteral("roleEditButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("roleArchiveButton"), "usable").toBool());
+    // Add people gives it in a place, picked after the people.
+    clickItem(waitItem(QStringLiteral("roleTab_holders")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("roleAddPeopleButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("roleAddPeopleButton")));
+    QTRY_VERIFY(shown(QStringLiteral("addPeoplePanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Next"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("addPeoplePanel")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("rolePage")));
+    QTRY_VERIFY(!m_session->accessDirectory()->busy());
+    // Given across the organization anyway, as Core still lists it, it
+    // shows on the person's page as doing nothing there, and is removed.
+    auto *held = m_session->principalAccess();
+    held->open(QStringLiteral("user:") + membershipId);
+    QTRY_VERIFY(!held->busy());
+    held->setRoles({QStringLiteral("role-member"), QStringLiteral("role-addon.controlled_docs.manager")});
+    QTRY_COMPARE(held->roles().size(), 2);
+    held->close();
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_members").arg(orgId)));
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    openRow(waitItem(QStringLiteral("member_") + membershipId));
+    QTRY_VERIFY(shown(QStringLiteral("userPage")));
+    clickItem(waitItem(QStringLiteral("userTab_roles")));
+    QTRY_VERIFY(waitRow(QStringLiteral("heldRole_"), QStringLiteral("Controlled documents manager")));
+    QCOMPARE(rowProperty(QStringLiteral("heldRole_"), QStringLiteral("Controlled documents manager"), "cells").toStringList(),
+             (QStringList{QStringLiteral("Controlled documents manager"), QStringLiteral("Organization · no effect there")}));
+    // Manage roles does not offer it, and keeps it while it is held.
+    clickItem(waitItem(QStringLiteral("userManageRolesButton")));
+    QTRY_VERIFY(shown(QStringLiteral("rolesPanel")));
+    QVERIFY(!shown(QStringLiteral("manageRole_role-addon.controlled_docs.manager")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("rolesPanel")));
+    QQuickItem *idle = waitFound([&] { return rowWith(QStringLiteral("heldRole_"), 0, QStringLiteral("Controlled documents manager")); });
+    QVERIFY(idle);
+    clickItem(idle);
+    QTRY_VERIFY(propertyOf(QStringLiteral("heldRoleRemoveButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("heldRoleRemoveButton")));
+    QTRY_VERIFY(shown(QStringLiteral("removeHeldPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("confirmDetail"), "text").toString(),
+             QStringLiteral("Controlled documents manager · Organization · no effect there"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("removeHeldPanel")));
+    QTRY_VERIFY(!rowWith(QStringLiteral("heldRole_"), 0, QStringLiteral("Controlled documents manager")));
+    QTRY_VERIFY(rowWith(QStringLiteral("heldRole_"), 0, QStringLiteral("Member")));
+}
+
+// A required list setting holds the install until it has an entry; entries
+// are added with Enter, repeat case-insensitively nowhere, and are removed.
+// Installed, the classifier turns on per space from its page, answers for
+// the member chosen in its advanced panel, and uninstalls without a reason.
+void TestStudio::classifierInstallsAndTurnsOnPerSpace()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    const QString quality = m_core.seedSpace(orgId, QStringLiteral("Quality"));
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("classifier")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}}}});
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
+    openRow(waitItem(QStringLiteral("addon_classifier")));
+    QTRY_VERIFY(shown(QStringLiteral("addonDetail")));
+    // Installing asks only its settings, in its panel.
+    QTRY_VERIFY(propertyOf(QStringLiteral("installAddonButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("installAddonButton")));
+    QTRY_VERIFY(shown(QStringLiteral("addonSettingsPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(shown(QStringLiteral("addonSettingsMissing")));
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSave"), "text").toString(), QStringLiteral("Install"));
+    clicks(waitItem(QStringLiteral("addonSettingValue_organization_labels")), QStringLiteral("Contract"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("addonSettingRemove_organization_labels_0")));
+    QVERIFY(!shown(QStringLiteral("addonSettingsMissing")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    // A repeat in another case is refused and adds nothing.
+    type(QStringLiteral("contract"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("addonSettingValue_organization_labels"), "invalid").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("addonSettingAdd_organization_labels"), "usable").toBool());
+    key(Qt::Key_Return);
+    QVERIFY(!shown(QStringLiteral("addonSettingRemove_organization_labels_1")));
+    for (int i = 0; i < 8; ++i) key(Qt::Key_Backspace);
+    type(QStringLiteral("Invoice"));
+    clickItem(waitItem(QStringLiteral("addonSettingAdd_organization_labels")));
+    QTRY_VERIFY(shown(QStringLiteral("addonSettingRemove_organization_labels_1")));
+    clickItem(waitItem(QStringLiteral("addonSettingRemove_organization_labels_0")));
+    QTRY_VERIFY(!shown(QStringLiteral("addonSettingRemove_organization_labels_1")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("addonSettingsPanel")));
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    const QJsonObject sent = m_core.addOnRequest().value(QStringLiteral("settings")).toObject();
+    QCOMPARE(sent.value(QStringLiteral("labels")).toArray(), (QJsonArray{QStringLiteral("Invoice")}));
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonStatus"), "text").toString(), QStringLiteral("Installed"));
+
+    // Installed, it is active in no space; its Spaces tab turns it on in
+    // one through the same panel a space's page opens.
+    clickItem(waitItem(QStringLiteral("addonTab_spaces")));
+    QTRY_VERIFY(shown(QStringLiteral("addonSpace_") + quality));
+    QCOMPARE(cell(QStringLiteral("addonSpace_") + quality, 1), QStringLiteral("Inactive"));
+    QCOMPARE(propertyOf(QStringLiteral("addonSpaces"), "text").toString(), QStringLiteral("Active in 0 spaces"));
+    openRow(waitItem(QStringLiteral("addonSpace_") + quality));
+    QTRY_VERIFY(shown(QStringLiteral("activationPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelSubtitle"), "text").toString(), QStringLiteral("Quality"));
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("activationSwitch")));
+    QTRY_VERIFY(shown(QStringLiteral("addonSettingMode_space_rerun_on_new_version")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("activationPanel")));
+    QTRY_COMPARE(cell(QStringLiteral("addonSpace_") + quality, 1), QStringLiteral("Active"));
+    QCOMPARE(propertyOf(QStringLiteral("addonSpaces"), "text").toString(), QStringLiteral("Active in 1 space"));
+    QTRY_VERIFY(shown(QStringLiteral("activationNotice")));
+
+    // It calls Core itself: the member it answers for is an advanced panel.
+    QTRY_VERIFY(shown(QStringLiteral("addonResponsibleButton")));
+    const QString bo = m_core.seedMember(orgId, QStringLiteral("bo@localhost"), QStringLiteral("admin"));
+    m_session->addOns()->refresh();
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    clickItem(waitItem(QStringLiteral("addonResponsibleButton")));
+    QTRY_VERIFY(shown(QStringLiteral("responsiblePanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("responsible_") + bo));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("responsiblePanel")));
+    QCOMPARE(m_core.addOnRequest(), (QJsonObject{{QStringLiteral("responsible_membership_id"), bo}}));
+
+    // Uninstalling says what it stops; it needs no reason.
+    clickItem(waitItem(QStringLiteral("uninstallAddonButton")));
+    QTRY_VERIFY(shown(QStringLiteral("uninstallAddonPanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!shown(QStringLiteral("confirmReason")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    const QString impact = propertyOf(QStringLiteral("confirmDetail"), "text").toString();
+    QVERIFY2(impact.contains(QStringLiteral("It stops in 1 space where it is active.")) && !impact.contains(QStringLiteral("role")),
+             qPrintable(impact));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("uninstallAddonPanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonStatus"), "text").toString(), QStringLiteral("Not installed"));
+    QTRY_VERIFY(!shown(QStringLiteral("addonSpace_") + quality));
+}
+
+// Pausing and resuming keeps the settings the add-on was installed with.
+void TestStudio::addOnResumeKeepsItsSettings()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    m_core.seedCatalogProduct({{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("name"), QStringLiteral("Controlled documents")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")}, {QStringLiteral("skus"), QJsonArray()}});
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")}, {QStringLiteral("revision"), 1},
+            {QStringLiteral("settings"), QJsonObject{{QStringLiteral("required_approvals"), 2}}}}}}});
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
+    openRow(waitItem(QStringLiteral("addon_controlled_docs")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonStatus"), "text").toString(), QStringLiteral("Installed"));
+    clickItem(waitItem(QStringLiteral("pauseAddonButton")));
+    QTRY_VERIFY(shown(QStringLiteral("pauseAddonPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    QVERIFY(propertyOf(QStringLiteral("confirmDetail"), "text").toString().contains(QStringLiteral("Nobody holds")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("pauseAddonPanel")));
+    // Paused, Pause stays in place, dimmed, saying why.
+    QTRY_VERIFY(!propertyOf(QStringLiteral("pauseAddonButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("pauseAddonButton"), "reason").toString(), QStringLiteral("It is not running."));
+    QCOMPARE(propertyOf(QStringLiteral("addonStatus"), "text").toString(), QStringLiteral("Paused"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("resumeAddonButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("resumeAddonButton")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("pauseAddonButton"), "usable").toBool());
+    QCOMPARE(m_core.addOnRequest(), (QJsonObject{{QStringLiteral("settings"), QJsonObject{{QStringLiteral("required_approvals"), 2}}}}));
+    QTRY_VERIFY(shown(QStringLiteral("addonNotice")));
+}
+
+// Installing asks only the add-on's settings, with one Install: it is then
+// available in every space and active in none, the installer answering for
+// it, and the page lists the roles it adds.
+void TestStudio::addOnInstallsWithItsSettings()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    m_core.seedCatalogProduct({{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("name"), QStringLiteral("Controlled documents")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
+        {QStringLiteral("settings_schema"), QJsonObject{
+            {QStringLiteral("required_approvals"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}, {QStringLiteral("default"), 1},
+                {QStringLiteral("minimum"), 1}, {QStringLiteral("maximum"), 10}}}}},
+        {QStringLiteral("skus"), QJsonArray{QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled-docs-poc")},
+            {QStringLiteral("version"), 1}, {QStringLiteral("limits"), QJsonObject()}}}}});
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}}}});
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
+    openRow(waitItem(QStringLiteral("addon_controlled_docs")));
+    QTRY_VERIFY(shown(QStringLiteral("addonDetail")));
+    QCOMPARE(propertyOf(QStringLiteral("addonStatus"), "text").toString(), QStringLiteral("Not installed"));
+    // What was bought waits behind Plan and usage.
+    clickItem(waitItem(QStringLiteral("addonPlanButton")));
+    QTRY_VERIFY(shown(QStringLiteral("planPanel")));
+    QTRY_VERIFY(panelOpen());
+    // Without a live subscription the quantity stays as bought.
+    QVERIFY(!shown(QStringLiteral("addonQuantity")));
+    QVERIFY(!shown(QStringLiteral("sidePanelSave")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("planPanel")));
+    // Install opens a panel with only the settings: no space and no
+    // responsible member to pick.
+    QTRY_VERIFY(propertyOf(QStringLiteral("installAddonButton"), "usable").toBool());
+    focusOn(waitItem(QStringLiteral("installAddonButton")));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("addonSettingsPanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(shown(QStringLiteral("addonSettingValue_organization_required_approvals")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("addonSettingsPanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonStatus"), "text").toString(), QStringLiteral("Installed"));
+    QCOMPARE(m_core.addOnRequest(), (QJsonObject{{QStringLiteral("settings"), QJsonObject()}}));
+    QTRY_VERIFY(shown(QStringLiteral("addonNotice")));
+    QCOMPARE(propertyOf(QStringLiteral("addonNotice"), "text").toString(),
+             QStringLiteral("Installed. Turn it on in each space that uses it."));
+    clickItem(waitItem(QStringLiteral("addonTab_roles")));
+    QTRY_VERIFY(shown(QStringLiteral("addonRole_addon.controlled_docs.reviewer")));
+    QVERIFY(shown(QStringLiteral("addonRole_addon.controlled_docs.approver")));
+    QVERIFY(shown(QStringLiteral("addonRole_addon.controlled_docs.manager")));
+    // It has actions of its own: no responsible member to choose.
+    QVERIFY(!shown(QStringLiteral("addonResponsibleButton")));
+}
+
+// Manage with reviews says what is missing in place and leads to the fix:
+// the owner, without the add-on's managing role in the space, grants it from
+// the space's Grant access, that role ticked, and comes back able to manage.
+// A member who cannot manage access there reads only why.
+void TestStudio::refusalsLeadToTheFix()
+{
+    window()->resize(1200, 1400);
+    openSpace(QStringLiteral("Quality"));
+    const QString orgId = m_session->currentOrgId(), spaceId = m_session->currentSpaceId();
+    m_session->uploadUrls({scratchFile(QStringLiteral("plan.md"), "# Plan\n")});
+    QTRY_VERIFY(!m_core.landed(QStringLiteral("plan.md")).isEmpty());
+    QTRY_VERIFY(!m_session->uploadBusy());
+    const QJsonObject product{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")}, {QStringLiteral("revision"), 1}}}};
+    m_core.seedCatalogProduct({{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("name"), QStringLiteral("Controlled documents")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")}, {QStringLiteral("skus"), QJsonArray()}});
+    m_core.seedAddOns(orgId, {product});
+    m_core.seedActivation(spaceId, QStringLiteral("controlled_docs"));
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("ok@localhost"), QStringLiteral("content_contributor"));
+    m_session->addOns()->refresh();
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    m_session->runCommand(QStringLiteral("refresh"));
+    QVERIFY(waitIdle());
+    m_session->openEntry(QStringLiteral("document"), entryId(QStringLiteral("plan.md")));
+    QTRY_VERIFY(m_session->documentView()->active());
+    QTRY_VERIFY(shown(QStringLiteral("manage-documentButton")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("manage-documentButton"), "reason").toString(),
+                 QStringLiteral("You need Controlled documents manager in this space."));
+    QVERIFY(!propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
+    QTRY_VERIFY(shown(QStringLiteral("manageFixButton")));
+    QCOMPARE(propertyOf(QStringLiteral("manageFixButton"), "text").toString(), QStringLiteral("Grant access"));
+    clickItem(waitItem(QStringLiteral("manageFixButton")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    QTRY_VERIFY(shown(QStringLiteral("grantPanel")));
+    QTRY_VERIFY(panelOpen());
+    QString me;
+    for (const auto &member : m_session->accessDirectory()->members())
+        if (member.toMap().value(QStringLiteral("email")) == QLatin1String("ok@localhost")) me = member.toMap().value(QStringLiteral("id")).toString();
+    QVERIFY(!me.isEmpty());
+    clickItem(waitItem(QStringLiteral("grantPrincipal_user:") + me));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    // The narrowest role that holds it comes ticked.
+    QTRY_VERIFY(shown(QStringLiteral("grantRole_role-addon.controlled_docs.manager")));
+    QVERIFY(propertyOf(QStringLiteral("grantRole_role-addon.controlled_docs.manager"), "selected").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("grantRole_role-addon.controlled_docs.approver"), "selected").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("grantPanel")));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_user:") + me));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("spacePage")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->settingsActive());
+    // Back on the document, it is managed at once.
+    QTRY_VERIFY(m_session->documentView()->active());
+    QTRY_VERIFY(propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
+    QVERIFY(!shown(QStringLiteral("manageFixButton")));
+    clickItem(waitItem(QStringLiteral("manage-documentButton")));
+    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    QTRY_COMPARE(propertyOf(QStringLiteral("manage-documentButton"), "reason").toString(), QStringLiteral("It is managed with reviews already."));
+    QVERIFY(!propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
+    QTRY_VERIFY(propertyOf(QStringLiteral("unmanage-documentButton"), "usable").toBool());
+    m_session->documentView()->close();
+    QTRY_VERIFY(!m_session->documentView()->active());
+
+    // A member of another organization, who edits a space there, reads why
+    // and is offered no fix.
+    m_core.seedOrganization(QStringLiteral("Team"), QStringLiteral("member"));
+    m_session->refreshOrganizations();
+    QVERIFY(waitIdle());
+    QString team;
+    for (int at = 0; at < m_session->organizations()->rowCount(); ++at)
+        if (m_session->organizations()->index(at).data(matome::OrgModel::NameRole) == QLatin1String("Team"))
+            team = m_session->organizations()->index(at).data(matome::OrgModel::OrgIdRole).toString();
+    QVERIFY(!team.isEmpty());
+    const QString docs = m_core.seedSpace(team, QStringLiteral("Docs"));
+    m_core.seedSpaceGrant(team, docs, QStringLiteral("ok@localhost"), QStringLiteral("content_contributor"));
+    m_core.seedAddOns(team, {product});
+    m_core.seedActivation(docs, QStringLiteral("controlled_docs"));
+    m_core.seedDocument(docs, QStringLiteral("guide.md"), {}, QByteArray("# Guide\n"));
+    m_session->navigate(QStringLiteral("org"), team);
+    QVERIFY(waitIdle());
+    m_session->navigate(QStringLiteral("space"), docs);
+    QVERIFY(waitIdle());
+    m_session->openEntry(QStringLiteral("document"), m_core.documentTitled(QStringLiteral("guide.md")).value(QStringLiteral("id")).toString());
+    QTRY_VERIFY(m_session->documentView()->active());
+    QTRY_VERIFY(shown(QStringLiteral("manage-documentButton")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("manage-documentButton"), "reason").toString(),
+                 QStringLiteral("You need Controlled documents manager in this space, with Controlled documents active here."));
+    QVERIFY(!propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
+    QVERIFY(!shown(QStringLiteral("manageFixButton")));
+}
+
+// Settings follows what the organization's catalog lets the person do, not
+// the built-in roles held directly: a member whose group holds a custom role
+// that manages groups opens Groups there, and nothing else of the
+// organization; its commands stay, those the role lacks saying why.
+void TestStudio::settingsFollowsEffectiveActions()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    m_core.seedOrganization(QStringLiteral("Team"), QStringLiteral("member"));
+    m_session->refreshOrganizations();
+    QVERIFY(waitIdle());
+    QString team;
+    for (int at = 0; at < m_session->organizations()->rowCount(); ++at)
+        if (m_session->organizations()->index(at).data(matome::OrgModel::NameRole) == QLatin1String("Team"))
+            team = m_session->organizations()->index(at).data(matome::OrgModel::OrgIdRole).toString();
+    QVERIFY(!team.isEmpty());
+    m_core.seedGroupRole(team, QStringLiteral("Organizers"), {QStringLiteral("ok@localhost")}, QStringLiteral("Group organizer"),
+                         {QStringLiteral("group.create"), QStringLiteral("group.update")});
+    m_session->navigate(QStringLiteral("org"), team);
+    QVERIFY(waitIdle());
+    m_session->permissions()->reload();
+    QTRY_VERIFY(m_session->permissions()->sections(team) == QStringList{QStringLiteral("groups")});
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(shown(QStringLiteral("settingsOrganization_%1_groups").arg(team)));
+    QVERIFY(!shown(QStringLiteral("settingsOrganization_%1_members").arg(team)));
+    QVERIFY(!shown(QStringLiteral("settingsOrganization_%1_roles").arg(team)));
+    QVERIFY(!shown(QStringLiteral("settingsOrganization_%1_billing").arg(team)));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_groups").arg(team)));
+    QTRY_COMPARE(propertyOf(QStringLiteral("settingsScreen"), "section").toString(), QStringLiteral("groups"));
+    QTRY_VERIFY(waitRow(QStringLiteral("group_"), QStringLiteral("Organizers")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("accessCreateButton"), "usable").toBool());
+    openRow(waitRow(QStringLiteral("group_"), QStringLiteral("Organizers")));
+    QTRY_VERIFY(shown(QStringLiteral("groupArchiveButton")));
+    // The role renames groups but does not archive them, nor change members.
+    QTRY_VERIFY(propertyOf(QStringLiteral("groupRenameButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("groupArchiveButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("groupArchiveButton"), "reason").toString().isEmpty());
+    QVERIFY(!propertyOf(QStringLiteral("groupManageMembersButton"), "usable").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("groupManageMembersButton"), "reason").toString().isEmpty());
+}
+
+// A space's page lists its add-ons; controlled documents turns on there in
+// its activation panel, the space's review switch, with its space settings.
+// A document there is managed once it is on, and Core's refusal is said
+// otherwise. The add-on's page lists the space as active; pausing or
+// uninstalling it says first who loses which of its roles and where it
+// stops.
+void TestStudio::spacePageRequiresReviews()
+{
+    window()->resize(1200, 1400);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    QVERIFY(createSpace(QStringLiteral("Quality")));
+    // A created space reloads the add-ons; the seeds below land after that.
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    const QString spaceId = m_session->currentSpaceId();
+    m_core.seedSpace(orgId, QStringLiteral("Archive"));
+    m_session->uploadUrls({scratchFile(QStringLiteral("plan.md"), "# Plan\n")});
+    QTRY_VERIFY(!m_core.landed(QStringLiteral("plan.md")).isEmpty());
+    QTRY_VERIFY(!m_session->uploadBusy());
+    const QString bo = m_core.seedMember(orgId, QStringLiteral("bo@localhost"), QStringLiteral("member"));
+    m_core.seedCatalogProduct({{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("name"), QStringLiteral("Controlled documents")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
+        {QStringLiteral("settings_schema"), QJsonObject{
+            {QStringLiteral("required_approvals"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}, {QStringLiteral("default"), 1},
+                {QStringLiteral("minimum"), 1}, {QStringLiteral("maximum"), 10}}}}},
+        {QStringLiteral("skus"), QJsonArray()}});
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")}, {QStringLiteral("revision"), 1},
+            {QStringLiteral("settings"), QJsonObject{{QStringLiteral("required_approvals"), 1}}}}}}});
+    // Access is given like any other: the signed-in owner manages documents,
+    // Bo reads and approves.
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("ok@localhost"), QStringLiteral("content_contributor"));
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("ok@localhost"), QStringLiteral("addon.controlled_docs.manager"));
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("bo@localhost"), QStringLiteral("content_reader"));
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("bo@localhost"), QStringLiteral("addon.controlled_docs.approver"));
+
+    // Off in the space, Manage with reviews says so in place, and Activate
+    // leads to the space's add-on, its switch at hand.
+    m_session->addOns()->refresh();
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    m_session->runCommand(QStringLiteral("refresh"));
+    QVERIFY(waitIdle());
+    m_session->openEntry(QStringLiteral("document"), entryId(QStringLiteral("plan.md")));
+    QTRY_VERIFY(m_session->documentView()->active());
+    QTRY_VERIFY(m_session->controlledDocs()->active());
+    QTRY_VERIFY(!m_session->controlledDocs()->busy());
+    QTRY_VERIFY(shown(QStringLiteral("manage-documentButton")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("manage-documentButton"), "reason").toString(),
+                 QStringLiteral("Controlled documents is not active in this space."));
+    QVERIFY(!propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
+    QVERIFY(shown(QStringLiteral("unmanage-documentButton")));
+    QCOMPARE(propertyOf(QStringLiteral("unmanage-documentButton"), "reason").toString(), QStringLiteral("It is not managed with reviews."));
+    QTRY_VERIFY(shown(QStringLiteral("manageFixButton")));
+    QCOMPARE(propertyOf(QStringLiteral("manageFixButton"), "text").toString(), QStringLiteral("Activate"));
+    clickItem(waitItem(QStringLiteral("manageFixButton")));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    // The space lists every installed add-on that works per space.
+    QTRY_VERIFY(shown(QStringLiteral("spaceAddOn_controlled_docs")));
+    QTRY_COMPARE(cell(QStringLiteral("spaceAddOn_controlled_docs"), 1), QStringLiteral("Inactive"));
+    QTRY_VERIFY(shown(QStringLiteral("activationPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Controlled documents"));
+    QVERIFY(!propertyOf(QStringLiteral("activationSwitch"), "selected").toBool());
+    QVERIFY(!shown(QStringLiteral("addonSettingMode_space_required_approvals")));
+    // The switch turns it on from the keyboard, its space settings with it.
+    focusOn(waitItem(QStringLiteral("activationSwitch")));
+    key(Qt::Key_Space);
+    QTRY_VERIFY(propertyOf(QStringLiteral("activationSwitch"), "selected").toBool());
+    QTRY_VERIFY(shown(QStringLiteral("addonSettingMode_space_required_approvals")));
+    focusOn(waitItem(QStringLiteral("addonSettingMode_space_required_approvals")));
+    key(Qt::Key_Down);
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("activationPanel")));
+    QTRY_COMPARE(cell(QStringLiteral("spaceAddOn_controlled_docs"), 1), QStringLiteral("Active"));
+    QTRY_VERIFY(shown(QStringLiteral("activationNotice")));
+    const auto activation = [this, spaceId] {
+        for (const auto &row : m_session->addOnActivations()->rows())
+            if (row.toMap().value(QStringLiteral("space_id")) == spaceId) return row.toMap();
+        return QVariantMap();
+    };
+    QCOMPARE(activation().value(QStringLiteral("settings")).toMap().value(QStringLiteral("required_approvals")).toInt(), 1);
+    // Turning it off keeps the settings.
+    QTRY_VERIFY(!shown(QStringLiteral("activationPanel")));
+    openRow(waitItem(QStringLiteral("spaceAddOn_controlled_docs")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("activationSwitch")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_COMPARE(cell(QStringLiteral("spaceAddOn_controlled_docs"), 1), QStringLiteral("Inactive"));
+    QCOMPARE(activation().value(QStringLiteral("settings")).toMap().value(QStringLiteral("required_approvals")).toInt(), 1);
+    QTRY_VERIFY(!shown(QStringLiteral("activationPanel")));
+    openRow(waitItem(QStringLiteral("spaceAddOn_controlled_docs")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("activationSwitch")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_COMPARE(cell(QStringLiteral("spaceAddOn_controlled_docs"), 1), QStringLiteral("Active"));
+
+    // On in the space, back on the document, Manage with reviews manages it
+    // at once.
+    key(Qt::Key_Escape);
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->settingsActive());
+    QTRY_VERIFY(m_session->documentView()->active());
+    QTRY_VERIFY(m_session->controlledDocs()->active());
+    QTRY_VERIFY(!m_session->controlledDocs()->busy());
+    QTRY_VERIFY(propertyOf(QStringLiteral("manage-documentButton"), "usable").toBool());
+    QVERIFY(!shown(QStringLiteral("manageFixButton")));
+    clickItem(waitItem(QStringLiteral("manage-documentButton")));
+    QTRY_VERIFY2(m_session->controlledDocs()->notice() == QLatin1String("control_enabled"),
+                 qPrintable(m_session->controlledDocs()->errorCode()));
+    QTRY_VERIFY(m_core.documentTitled(QStringLiteral("plan.md")).value(QStringLiteral("controlled_docs_enabled")).toBool());
+    m_session->documentView()->close();
+    QTRY_VERIFY(!m_session->documentView()->active());
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+
+    // The add-on's page lists the space as active; uninstalling says who
+    // loses what and asks a reason.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
+    QTRY_COMPARE(cell(QStringLiteral("addon_controlled_docs"), 2), QStringLiteral("Active in 1 space"));
+    QCOMPARE(cell(QStringLiteral("addon_controlled_docs"), 1), QStringLiteral("Installed"));
+    openRow(waitItem(QStringLiteral("addon_controlled_docs")));
+    clickItem(waitItem(QStringLiteral("addonTab_spaces")));
+    QTRY_VERIFY(shown(QStringLiteral("addonSpace_") + spaceId));
+    QCOMPARE(cell(QStringLiteral("addonSpace_") + spaceId, 1), QStringLiteral("Active"));
+    QTRY_VERIFY(shown(QStringLiteral("uninstallAddonButton")));
+    clickItem(waitItem(QStringLiteral("uninstallAddonButton")));
+    QTRY_VERIFY(shown(QStringLiteral("uninstallAddonPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(m_session->addOnAccess()->impact().value(QStringLiteral("known")).toBool());
+    const QString detail = propertyOf(QStringLiteral("confirmDetail"), "text").toString();
+    QVERIFY2(detail.contains(QStringLiteral("Controlled documents approver: 1 · Controlled documents manager: 1")), qPrintable(detail));
+    QVERIFY(detail.contains(QStringLiteral("It stops in 1 space where it is active.")));
+    QVERIFY(detail.contains(QStringLiteral("managed with reviews again")));
+    QCOMPARE(m_session->addOnAccess()->impact().value(QStringLiteral("holders")).toInt(), 2);
+    QCOMPARE(m_session->addOnAccess()->impact().value(QStringLiteral("spaces")).toInt(), 1);
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("uninstallAddonPanel")));
+    // Pausing states its own impact, then pauses.
+    clickItem(waitItem(QStringLiteral("pauseAddonButton")));
+    QTRY_VERIFY(shown(QStringLiteral("pauseAddonPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    QVERIFY(propertyOf(QStringLiteral("confirmDetail"), "text").toString().contains(QStringLiteral("Open reviews wait")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("addonStatus"), "text").toString(), QStringLiteral("Paused"));
+    QTRY_COMPARE(cell(QStringLiteral("addonSpace_") + spaceId, 1), QStringLiteral("Paused in the organization"));
+    QTRY_VERIFY(!shown(QStringLiteral("pauseAddonPanel")));
+    // Uninstalled, it reads as not installed and installs again.
+    // Core keeps the grants of its roles for a reinstall but lists them no
+    // more: Bo views the space, and the space no longer lists the add-on.
+    QTRY_VERIFY(propertyOf(QStringLiteral("uninstallAddonButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("uninstallAddonButton")));
+    QTRY_VERIFY(shown(QStringLiteral("uninstallAddonPanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(m_session->addOnAccess()->impact().value(QStringLiteral("known")).toBool());
+    QTRY_VERIFY(waitItem(QStringLiteral("confirmReason"))->hasActiveFocus());
+    type(QStringLiteral("Audit over"));
+    key(Qt::Key_Return);
+    QTRY_COMPARE(m_session->addOns()->notice(), QStringLiteral("installation_removed"));
+    QTRY_VERIFY(!shown(QStringLiteral("uninstallAddonPanel")));
+    QTRY_VERIFY(shown(QStringLiteral("addonNotice")));
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    QCOMPARE(propertyOf(QStringLiteral("addonStatus"), "text").toString(), QStringLiteral("Not installed"));
+    // Not installed, the commands stay, only Install usable.
+    QVERIFY(!propertyOf(QStringLiteral("resumeAddonButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("uninstallAddonButton"), "reason").toString(), QStringLiteral("It is not installed."));
+    QTRY_VERIFY(propertyOf(QStringLiteral("installAddonButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("addonBackButton")));
+    QTRY_COMPARE(cell(QStringLiteral("addon_controlled_docs"), 1), QStringLiteral("Not installed"));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_spaces").arg(orgId)));
+    focusOn(waitItem(QStringLiteral("accessSpace_") + spaceId));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    QTRY_VERIFY(!m_session->accessGrants()->busy());
+    clickItem(waitItem(QStringLiteral("spaceTab_addons")));
+    QTRY_VERIFY(shown(QStringLiteral("spaceAddOn_empty")));
+    QVERIFY(!shown(QStringLiteral("spaceAddOn_controlled_docs")));
+    for (const auto &holder : m_session->accessGrants()->holders()) {
+        const auto row = holder.toMap();
+        QVERIFY(row.value(QStringLiteral("archived")).toStringList().isEmpty());
+        if (row.value(QStringLiteral("principal")) == QStringLiteral("user:") + bo)
+            QCOMPARE(row.value(QStringLiteral("roleIds")).toStringList(), QStringList{QStringLiteral("role-content_reader")});
+    }
+}
+
+// A space's Access tab selects many rows from the keyboard and removes them
+// at once; its Add-ons tab flags an active add-on whose roles nobody holds
+// there until access gives them, and opens the add-on. Commands that do not
+// apply stay, unusable, saying why.
+void TestStudio::spaceTablesSelectManyAndFlagAddOns()
+{
+    window()->resize(1200, 1400);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    QVERIFY(createSpace(QStringLiteral("Quality")));
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    const QString spaceId = m_session->currentSpaceId();
+    const QString bo = m_core.seedMember(orgId, QStringLiteral("bo@localhost"), QStringLiteral("member"));
+    const QString cy = m_core.seedMember(orgId, QStringLiteral("cy@localhost"), QStringLiteral("member"));
+    m_core.seedCatalogProduct({{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("name"), QStringLiteral("Controlled documents")},
+        {QStringLiteral("capability"), QStringLiteral("addon.controlled_docs")},
+        {QStringLiteral("settings_schema"), QJsonObject()}, {QStringLiteral("skus"), QJsonArray()}});
+    m_core.seedAddOns(orgId, {QJsonObject{{QStringLiteral("key"), QStringLiteral("controlled_docs")},
+        {QStringLiteral("assignments"), QJsonArray{QJsonObject{{QStringLiteral("quantity"), 1}}}},
+        {QStringLiteral("installation"), QJsonObject{{QStringLiteral("status"), QStringLiteral("active")}, {QStringLiteral("revision"), 1},
+            {QStringLiteral("settings"), QJsonObject()}}}}});
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("bo@localhost"), QStringLiteral("content_reader"));
+    m_core.seedSpaceGrant(orgId, spaceId, QStringLiteral("cy@localhost"), QStringLiteral("content_reader"));
+    m_session->addOns()->refresh();
+    QTRY_VERIFY(!m_session->addOns()->busy());
+    m_session->addOnActivations()->open();
+    QTRY_VERIFY(!m_session->addOnActivations()->busy());
+    m_session->addOnActivations()->activate(spaceId, QStringLiteral("controlled_docs"));
+    QTRY_COMPARE(m_session->addOnActivations()->notice(), QStringLiteral("activated"));
+
+    m_session->runCommand(QStringLiteral("settings"));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_spaces").arg(orgId)));
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!m_session->addOnActivations()->busy());
+    openRow(waitItem(QStringLiteral("accessSpace_") + spaceId));
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    QTRY_VERIFY(!m_session->accessGrants()->busy());
+    clickItem(waitItem(QStringLiteral("spaceTab_access")));
+    // Shift+Down reaches the next row; Remove asks for both.
+    const QString first = QStringLiteral("accessHolder_user:") + bo, second = QStringLiteral("accessHolder_user:") + cy;
+    QTRY_VERIFY(shown(first));
+    QTRY_VERIFY(shown(second));
+    QVERIFY(!propertyOf(QStringLiteral("removeAccessButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("removeAccessButton"), "reason").toString(), QStringLiteral("Select what to remove."));
+    clickItem(waitItem(first));
+    key(Qt::Key_Down, Qt::ShiftModifier);
+    QTRY_VERIFY(propertyOf(second, "selected").toBool());
+    QVERIFY(propertyOf(first, "selected").toBool());
+    QVERIFY(!propertyOf(QStringLiteral("manageAccessRolesButton"), "usable").toBool());
+    // A plain arrow keeps one row; Ctrl+A takes them all, Ctrl+Space drops one.
+    key(Qt::Key_Up);
+    QTRY_VERIFY(!propertyOf(second, "selected").toBool());
+    key(Qt::Key_A, Qt::ControlModifier);
+    QTRY_VERIFY(propertyOf(second, "selected").toBool());
+    key(Qt::Key_Space, Qt::ControlModifier);
+    QTRY_VERIFY(!propertyOf(first, "selected").toBool());
+    key(Qt::Key_Space, Qt::ControlModifier);
+    QTRY_VERIFY(propertyOf(first, "selected").toBool());
+    QTRY_VERIFY(propertyOf(QStringLiteral("removeAccessButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("removeAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("removeAccessPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Remove access for 2 holders?"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("removeAccessPanel")));
+    QTRY_VERIFY(m_session->accessGrants()->holders().isEmpty());
+
+    // Active with nobody holding its roles here, the add-on is flagged; its
+    // commands wait for a row.
+    clickItem(waitItem(QStringLiteral("spaceTab_addons")));
+    QTRY_COMPARE(cell(QStringLiteral("spaceAddOn_controlled_docs"), 1), QStringLiteral("Active · nobody holds its roles here"));
+    QVERIFY(!shown(QStringLiteral("grantAccessButton")));
+    QVERIFY(!propertyOf(QStringLiteral("spaceOpenAddOnButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("spaceOpenAddOnButton"), "reason").toString(), QStringLiteral("Select an add-on."));
+    clickItem(waitItem(QStringLiteral("spaceAddOn_controlled_docs")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("spaceOpenAddOnButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("spaceActivationButton"), "text").toString(), QStringLiteral("Settings"));
+    // Granting one of its roles here clears the flag.
+    clickItem(waitItem(QStringLiteral("spaceTab_access")));
+    clickItem(waitItem(QStringLiteral("grantAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("grantPanel")));
+    QTRY_VERIFY(panelOpen());
+    clickItem(waitItem(QStringLiteral("grantPrincipal_user:") + bo));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    clickItem(waitItem(QStringLiteral("grantRole_role-addon.controlled_docs.manager")));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("grantPanel")));
+    clickItem(waitItem(QStringLiteral("spaceTab_addons")));
+    QTRY_COMPARE(cell(QStringLiteral("spaceAddOn_controlled_docs"), 1), QStringLiteral("Active"));
+    // Open goes to its page under Add-ons.
+    clickItem(waitItem(QStringLiteral("spaceAddOn_controlled_docs")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("spaceOpenAddOnButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("spaceOpenAddOnButton")));
+    QTRY_VERIFY(shown(QStringLiteral("addonDetail")));
+    QCOMPARE(propertyOf(QStringLiteral("addonTitle"), "text").toString(), QStringLiteral("Controlled documents"));
+}
+
+// Invite opens the side panel with focus in the email. A refused invitation
+// keeps the panel and its input, with the reason inside; a sent one closes
+// it. An invitation offers roles in the spaces checked. Selecting an
+// invitation opens it, and cancelling it asks in the panel. People reloads
+// on entry.
+void TestStudio::inviteRefusalStaysInThePanel()
+{
+    window()->resize(1200, 1100);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    QVERIFY(createSpace(QStringLiteral("Contracts")));
+    const QString spaceId = m_session->currentSpaceId();
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_members").arg(orgId)));
+    QTRY_VERIFY(propertyOf(QStringLiteral("sendInvitationButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("sendInvitationButton")));
+    QTRY_VERIFY(shown(QStringLiteral("invitePanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(waitItem(QStringLiteral("invitationEmailField"))->hasActiveFocus());
+    type(QStringLiteral("bob"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("inviteError")));
+    QVERIFY(shown(QStringLiteral("invitePanel")));
+    QCOMPARE(propertyOf(QStringLiteral("invitationEmailField"), "text").toString(), QStringLiteral("bob"));
+    // The refusal shows once, in the panel, and goes once the address changes.
+    QVERIFY(!shown(QStringLiteral("orgAdminError")));
+    type(QStringLiteral("@"));
+    QVERIFY(!shown(QStringLiteral("inviteError")));
+    QVERIFY(!shown(QStringLiteral("orgAdminError")));
+    type(QStringLiteral("example.com"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(!shown(QStringLiteral("invitePanel")));
+    QTRY_VERIFY(waitItem(QStringLiteral("sendInvitationButton"))->hasActiveFocus());
+    QTRY_VERIFY(propertyOf(QStringLiteral("sendInvitationButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("sendInvitationButton")));
+    QTRY_VERIFY(shown(QStringLiteral("invitePanel")));
+    QTRY_VERIFY(panelOpen());
+    QVERIFY(!shown(QStringLiteral("inviteError")));
+    QTRY_VERIFY(waitItem(QStringLiteral("invitationEmailField"))->hasActiveFocus());
+    type(QStringLiteral("bob@example.com"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("inviteError")));
+    QCOMPARE(m_session->orgAdmin()->errorCode(), QStringLiteral("already_invited"));
+    QCOMPARE(propertyOf(QStringLiteral("invitationEmailField"), "text").toString(), QStringLiteral("bob@example.com"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("invitePanel")));
+    // People lists members, and on its other tab the invitations sent: one
+    // table at a time.
+    QTRY_VERIFY(shown(QStringLiteral("memberList")));
+    QVERIFY(!shown(QStringLiteral("invitationList")));
+    clickItem(waitItem(QStringLiteral("peopleTab_invitations")));
+    QTRY_VERIFY(shown(QStringLiteral("invitationList")));
+    QVERIFY(!shown(QStringLiteral("memberList")));
+    clickItem(waitItem(QStringLiteral("peopleTab_members")));
+    QTRY_VERIFY(shown(QStringLiteral("memberList")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("memberList"), "count").toInt() > 0);
+    const int members = propertyOf(QStringLiteral("memberList"), "count").toInt();
+    // Someone joins elsewhere: entering People again lists them.
+    m_core.seedMember(orgId, QStringLiteral("carol@example.com"), QStringLiteral("member"));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_groups").arg(orgId)));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_members").arg(orgId)));
+    QTRY_COMPARE(propertyOf(QStringLiteral("memberList"), "count").toInt(), members + 1);
+    // An invitation offers the roles checked in each space checked, named on its row.
+    QTRY_VERIFY(propertyOf(QStringLiteral("sendInvitationButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("sendInvitationButton")));
+    QTRY_VERIFY(shown(QStringLiteral("invitePanel")));
+    QTRY_VERIFY(panelOpen());
+    QTRY_VERIFY(waitItem(QStringLiteral("invitationEmailField"))->hasActiveFocus());
+    type(QStringLiteral("dee@example.com"));
+    const QString space = QStringLiteral("inviteSpace_") + spaceId;
+    QTRY_VERIFY(shown(space));
+    QVERIFY(!shown(QStringLiteral("inviteRole_%1_role-content_reader").arg(spaceId)));
+    clickItem(waitItem(space));
+    QTRY_VERIFY(shown(QStringLiteral("inviteRole_%1_role-content_reader").arg(spaceId)));
+    QVERIFY(!propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    // Each role is checked from the keyboard, wherever the panel scrolled.
+    focusOn(waitItem(QStringLiteral("inviteRole_%1_role-content_reader").arg(spaceId)));
+    key(Qt::Key_Space);
+    focusOn(waitItem(QStringLiteral("inviteRole_%1_role-content_contributor").arg(spaceId)));
+    key(Qt::Key_Space);
+    QTRY_VERIFY(propertyOf(QStringLiteral("sidePanelSave"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("invitePanel")));
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    auto *invitations = m_session->orgAdmin()->invitations();
+    QString dee;
+    for (int row = 0; row < invitations->rowCount(); ++row)
+        if (invitations->index(row).data(matome::OrgPeopleModel::LabelRole) == QLatin1String("dee@example.com"))
+            dee = invitations->index(row).data(matome::OrgPeopleModel::PersonIdRole).toString();
+    QVERIFY(!dee.isEmpty());
+    clickItem(waitItem(QStringLiteral("peopleTab_invitations")));
+    QTRY_COMPARE(cell(QStringLiteral("invitation_") + dee, 3), QStringLiteral("Access to Contracts"));
+    // The invitation opens its page, naming the roles it gives in each
+    // space; cancelling it asks in a panel first.
+    openRow(waitItem(QStringLiteral("invitation_") + dee));
+    QTRY_VERIFY(shown(QStringLiteral("invitationPage")));
+    QVERIFY(!panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("invitationRoles"), "text").toString(), QStringLiteral("Member"));
+    QCOMPARE(propertyOf(QStringLiteral("invitationState"), "text").toString(), QStringLiteral("Pending"));
+    clickItem(waitItem(QStringLiteral("invitationTab_spaces")));
+    QTRY_COMPARE(cell(QStringLiteral("invitationSpace_") + spaceId, 1), QStringLiteral("Content reader, Content contributor"));
+    clickItem(waitItem(QStringLiteral("cancelInvitationButton")));
+    QTRY_VERIFY(shown(QStringLiteral("cancelInvitationPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Cancel invitation for dee@example.com?"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("cancelInvitationPanel")));
+    QTRY_COMPARE(propertyOf(QStringLiteral("invitationState"), "text").toString(), QStringLiteral("Canceled"));
+    QVERIFY(!propertyOf(QStringLiteral("cancelInvitationButton"), "usable").toBool());
+    QCOMPARE(propertyOf(QStringLiteral("cancelInvitationButton"), "reason").toString(), QStringLiteral("It is no longer pending."));
+    clickItem(waitItem(QStringLiteral("invitationBackButton")));
+    QTRY_VERIFY(!shown(QStringLiteral("invitationPage")));
+    QTRY_VERIFY(cell(QStringLiteral("invitation_") + dee, 2).contains(QStringLiteral("Canceled")));
+}
+
+// A token is made from picked actions and shown once; a sign-in Core finds
+// too old asks for the password, and a token is revoked after confirming.
+void TestStudio::apiTokensCreateAndRevoke()
+{
+    // The organization's actions are many; the form stands whole in the window.
+    window()->resize(1200, 2400);
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    clickItem(waitItem(QStringLiteral("accountButton")));
+    QTRY_VERIFY(menuOpen());
+    clickItem(waitItem(QStringLiteral("menu_settings")));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsTokensNavigation")));
+    QTRY_VERIFY(shown(QStringLiteral("apiTokenList")));
+    QTRY_VERIFY(propertyOf(QStringLiteral("newApiTokenButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("newApiTokenButton")));
+    QTRY_VERIFY(shown(QStringLiteral("apiTokenForm")));
+    QVERIFY(!shown(QStringLiteral("apiTokenPasswordField")));
+    clicks(waitItem(QStringLiteral("apiTokenNameField")), QStringLiteral("Laptop"));
+    // Across the organization, space-only actions are not offered.
+    QTRY_VERIFY(shown(QStringLiteral("apiTokenAction_role.read")));
+    QVERIFY(!shown(QStringLiteral("apiTokenAction_content.download")));
+    QVERIFY(!propertyOf(QStringLiteral("createApiTokenButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("apiTokenAction_role.read")));
+    clickItem(waitItem(QStringLiteral("addApiTokenAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("removeApiTokenAccess_0")));
+    // Core finds the sign-in too old: the password signs in again and the token is made.
+    m_core.expireSignIn();
+    clickItem(waitItem(QStringLiteral("createApiTokenButton")));
+    QTRY_VERIFY(shown(QStringLiteral("apiTokenPasswordField")));
+    QVERIFY(shown(QStringLiteral("apiTokensError")));
+    clicks(waitItem(QStringLiteral("apiTokenPasswordField")), QStringLiteral("secret12"));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("apiTokenSecret")));
+    QCOMPARE(propertyOf(QStringLiteral("apiTokenSecretField"), "text").toString(), QStringLiteral("mat_secret1"));
+    const QJsonObject sent = m_core.tokenRequest();
+    QCOMPARE(sent.value(QStringLiteral("name")).toString(), QStringLiteral("Laptop"));
+    QCOMPARE(sent.value(QStringLiteral("scopes")).toArray(), (QJsonArray{QJsonObject{
+        {QStringLiteral("organization_id"), orgId}, {QStringLiteral("action"), QStringLiteral("role.read")}}}));
+    QVERIFY(QDateTime::fromString(sent.value(QStringLiteral("expires_at")).toString(), Qt::ISODate)
+            > QDateTime::currentDateTimeUtc().addDays(29));
+    clickItem(waitItem(QStringLiteral("doneApiTokenButton")));
+    QTRY_VERIFY(shown(QStringLiteral("apiToken_1")));
+    QVERIFY(m_session->apiTokens()->secret().isEmpty());
+    clickItem(waitItem(QStringLiteral("revokeApiToken_1")));
+    QTRY_VERIFY(shown(QStringLiteral("revokeApiTokenPanel")));
+    QTRY_VERIFY(panelOpen());
+    QCOMPARE(propertyOf(QStringLiteral("sidePanelTitle"), "text").toString(), QStringLiteral("Revoke Laptop?"));
+    clickItem(waitItem(QStringLiteral("sidePanelSave")));
+    QTRY_VERIFY(!shown(QStringLiteral("apiToken_1")));
+    QTRY_VERIFY(!shown(QStringLiteral("revokeApiTokenPanel")));
+    QCOMPARE(m_core.lastPath(), QStringLiteral("/api/auth/tokens"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!m_session->settingsActive());
+    QVERIFY(!m_session->apiTokens()->active());
 }
 
 // The saved choice wins, then the first system language we speak, then
@@ -2480,10 +4747,10 @@ void TestStudio::languageSwitchesLive()
     key(Qt::Key_Return);
     QVERIFY(waitSignedIn(false));
     QTRY_COMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(),
-                 QStringLiteral("E-mail ou senha incorretos."));
+                 QStringLiteral("E-mail, nome de usuário ou senha incorretos."));
     m_theme->setLanguage(QStringLiteral("en"));
     QCOMPARE(propertyOf(QStringLiteral("statusMessage"), "text").toString(),
-             QStringLiteral("That email or password is wrong."));
+             QStringLiteral("That email, username, or password is wrong."));
 
     openSpace(QStringLiteral("Inbox"));
     m_theme->setLanguage(QStringLiteral("ja"));
@@ -2677,14 +4944,14 @@ void TestStudio::relaunchRemembersTheLastSession()
         QCOMPARE(theme->mode(), QStringLiteral("dark"));
         QVERIFY(theme->dark());
         QCOMPARE(theme->language(), QStringLiteral("ja"));
-        QCOMPARE(session->email(), QStringLiteral("ok@localhost"));
+        QCOMPARE(session->identifier(), QStringLiteral("ok@localhost"));
         QCOMPARE(session->apiBaseUrl(), m_core.url());
         QCOMPARE(session->lastOrgId(), org);
         QCOMPARE(itemNamed(QStringLiteral("emailField"), relaunched)->property("text").toString(),
                  QStringLiteral("ok@localhost"));
         QCOMPARE(itemNamed(QStringLiteral("submitButton"), relaunched)->property("text").toString(),
                  QStringLiteral("サインイン"));
-        session->signIn(session->email(), QStringLiteral("secret12"), session->apiBaseUrl());
+        session->signIn(session->identifier(), QStringLiteral("secret12"), session->apiBaseUrl());
         QTRY_VERIFY(session->signedIn() && !session->loading());
         QCOMPARE(session->currentOrgId(), org);
         QCOMPARE(session->level(), QStringLiteral("spaces"));
@@ -2767,6 +5034,7 @@ void TestStudio::everyControlHasANameAndRole()
     itemNamed(QStringLiteral("authScreen"))->setProperty("pane", QStringLiteral("signIn"));
     itemNamed(QStringLiteral("authScreen"))->setProperty("serverOpen", false);
     openSpace(QStringLiteral("Inbox"));
+    const QString inbox = m_session->currentSpaceId();
     addFolder(QStringLiteral("Contracts"));
     m_core.seedDocument(m_session->currentSpaceId(), QStringLiteral("Notes"));
     m_session->runCommand(QStringLiteral("refresh"));
@@ -2791,10 +5059,68 @@ void TestStudio::everyControlHasANameAndRole()
     audit(QStringLiteral("keymap"));
     key(Qt::Key_Escape);
     clickItem(waitRow(QStringLiteral("entryRow"), QStringLiteral("Contracts")));
-    key(Qt::Key_Delete);
-    QTRY_VERIFY(shown(QStringLiteral("deleteConfirm")));
-    audit(QStringLiteral("confirm"));
+    key(Qt::Key_A);
+    QTRY_VERIFY(shown(QStringLiteral("accessPage")));
+    QTRY_VERIFY(!m_session->accessGrants()->busy());
+    audit(QStringLiteral("access page"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("grantAccessButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("grantAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("grantPanel")));
+    QTRY_VERIFY(panelOpen());
+    audit(QStringLiteral("access"));
     key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("grantPanel")));
+    clickItem(waitItem(QStringLiteral("checkAccessButton")));
+    QTRY_VERIFY(shown(QStringLiteral("checkAccessPanel")));
+    QTRY_VERIFY(panelOpen());
+    audit(QStringLiteral("check access"));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("checkAccessPanel")));
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!shown(QStringLiteral("accessPage")));
+    QTRY_VERIFY(rowFocused(QStringLiteral("entryRow"), QStringLiteral("Contracts")));
+    key(Qt::Key_Delete);
+    QTRY_VERIFY(shown(QStringLiteral("deleteFolderPanel")));
+    QTRY_VERIFY(panelOpen());
+    audit(QStringLiteral("delete folder"));
+    key(Qt::Key_Escape);
+    // People, a person's page and a panel of it, and a role's page.
+    const QString orgId = m_session->currentOrgId();
+    m_session->runCommand(QStringLiteral("settings"));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_members").arg(orgId)));
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    QTRY_VERIFY(rowTitled(QStringLiteral("member_"), QStringLiteral("ok@localhost")));
+    audit(QStringLiteral("people"));
+    openRow(waitRow(QStringLiteral("member_"), QStringLiteral("ok@localhost")));
+    QTRY_VERIFY(shown(QStringLiteral("userPage")));
+    QTRY_VERIFY(!m_session->principalAccess()->busy());
+    audit(QStringLiteral("user"));
+    QTRY_VERIFY(propertyOf(QStringLiteral("userManageRolesButton"), "usable").toBool());
+    clickItem(waitItem(QStringLiteral("userManageRolesButton")));
+    QTRY_VERIFY(panelOpen());
+    audit(QStringLiteral("roles panel"));
+    key(Qt::Key_Escape);
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_roles").arg(orgId)));
+    audit(QStringLiteral("roles"));
+    openRow(waitItem(QStringLiteral("role_owner")));
+    QTRY_VERIFY(shown(QStringLiteral("rolePage")));
+    QTRY_VERIFY(!m_session->roleHolders()->busy());
+    audit(QStringLiteral("role"));
+    clickItem(waitItem(QStringLiteral("roleTab_holders")));
+    QTRY_VERIFY(shown(QStringLiteral("roleAddPeopleButton")));
+    audit(QStringLiteral("role holders"));
+    // A space's page, and an add-on's.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_spaces").arg(orgId)));
+    openRow(waitItem(QStringLiteral("accessSpace_") + inbox));
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    QTRY_VERIFY(!m_session->accessGrants()->busy());
+    audit(QStringLiteral("space"));
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    audit(QStringLiteral("add-ons"));
+    m_session->closeSettings();
+    QTRY_VERIFY(!m_session->settingsActive());
     window()->resize(400, 800);
     tapItem(waitItem(QStringLiteral("drawerButton")));
     QTRY_COMPARE(waitItem(QStringLiteral("sidebar"))->x(), 0.0);
@@ -2976,6 +5302,7 @@ void TestStudio::serverErrorsShowAtEveryLevel()
     key(Qt::Key_F5);
     QTRY_COMPARE(propertyOf(QStringLiteral("emptyText"), "text").toString(), words);
     key(Qt::Key_N);
+    QTRY_COMPARE(focusName(), QStringLiteral("newSpaceName"));
     type(QStringLiteral("Inbox"));
     key(Qt::Key_Return);
     QTRY_COMPARE(propertyOf(QStringLiteral("emptyText"), "text").toString(), words);
@@ -3040,17 +5367,197 @@ void TestStudio::longListKeepsTheCursorInSight()
 
     key(Qt::Key_Home);
     const qreal top = list->property("contentY").toReal();
-    const QPointF centre = centreOf(list);
-    QWheelEvent wheel(centre, centre, QPoint(), QPoint(0, -360), Qt::NoButton, Qt::NoModifier,
-                      Qt::NoScrollPhase, false);
-    // Stamped after the pointer events before it, as a real wheel would be.
-    QTest::lastMouseTimestamp += 500;
-    wheel.setTimestamp(QTest::lastMouseTimestamp);
-    QCoreApplication::sendEvent(window(), &wheel);
+    wheelOn(list);
     QTRY_VERIFY(list->property("contentY").toReal() > top);
     // Rows the flick is still building would be torn down by the next sign-out.
     QTRY_VERIFY(!list->property("moving").toBool());
     settle();
+}
+
+// Tab reaches the section past one stop on the navigation, its selected
+// row; the arrows move between its rows, and Shift+Tab walks back out.
+void TestStudio::settingsNavigationIsOneTabStop()
+{
+    signInAsOk();
+    QVERIFY(openOwnOrg());
+    const QString orgId = m_session->currentOrgId();
+    m_session->runCommand(QStringLiteral("settings"));
+    QTRY_VERIFY(m_session->settingsActive());
+    QTRY_COMPARE(focusName(), QStringLiteral("closeSettingsButton"));
+    key(Qt::Key_Tab);
+    QCOMPARE(focusName(), QStringLiteral("refreshOrgAdminButton"));
+    key(Qt::Key_Tab);
+    QCOMPARE(focusName(), QStringLiteral("settingsAppearanceNavigation"));
+    QVERIFY(ringShown(QStringLiteral("settingsAppearanceNavigation")));
+    key(Qt::Key_Tab);
+    QCOMPARE(focusName(), QStringLiteral("themePicker"));
+    key(Qt::Key_Backtab);
+    QCOMPARE(focusName(), QStringLiteral("settingsAppearanceNavigation"));
+    key(Qt::Key_Backtab);
+    QCOMPARE(focusName(), QStringLiteral("refreshOrgAdminButton"));
+    key(Qt::Key_Tab);
+
+    // Down walks the rows without choosing; Enter chooses; Tab goes on.
+    key(Qt::Key_Down);
+    QCOMPARE(focusName(), QStringLiteral("settingsTokensNavigation"));
+    key(Qt::Key_Down);
+    QCOMPARE(focusName(), QStringLiteral("settingsOrganization_") + orgId);
+    key(Qt::Key_Down);
+    QCOMPARE(focusName(), QStringLiteral("settingsOrganization_%1_general").arg(orgId));
+    key(Qt::Key_Down);
+    QCOMPARE(focusName(), QStringLiteral("settingsOrganization_%1_members").arg(orgId));
+    QCOMPARE(itemNamed(QStringLiteral("settingsScreen"))->property("section").toString(), QStringLiteral("appearance"));
+    key(Qt::Key_Return);
+    QTRY_COMPARE(itemNamed(QStringLiteral("settingsScreen"))->property("section").toString(), QStringLiteral("members"));
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    QTRY_VERIFY(!m_session->organizations()->busy());
+    QCOMPARE(focusName(), QStringLiteral("settingsOrganization_%1_members").arg(orgId));
+    key(Qt::Key_Tab);
+    QCOMPARE(focusName(), QStringLiteral("newUserButton"));
+    // The stop is now the chosen row.
+    key(Qt::Key_Backtab);
+    QCOMPARE(focusName(), QStringLiteral("settingsOrganization_%1_members").arg(orgId));
+    key(Qt::Key_Home);
+    QCOMPARE(focusName(), QStringLiteral("settingsAppearanceNavigation"));
+    key(Qt::Key_End);
+    QCOMPARE(focusName(), QStringLiteral("settingsOpenOrganizations"));
+}
+
+// The wheel scrolls a space's page and the side panel beside it.
+void TestStudio::wheelScrollsPagesAndPanels()
+{
+    openSpace(QStringLiteral("Contracts"));
+    const QString orgId = m_session->currentOrgId(), spaceId = m_session->currentSpaceId();
+    QStringList people;
+    for (int i = 1; i <= 12; ++i)
+        people << QStringLiteral("user:") + m_core.seedMember(orgId, QStringLiteral("p%1@localhost").arg(i), QStringLiteral("member"));
+    auto *directory = m_session->accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    auto *grants = m_session->accessGrants();
+    grants->open(QStringLiteral("space"), spaceId, spaceId, QStringLiteral("Contracts"));
+    QTRY_VERIFY(!grants->busy());
+    grants->add(people.mid(0, 8), {QStringLiteral("role-content_reader")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_added"));
+    grants->close();
+    window()->resize(1200, 480);
+    m_session->runCommand(QStringLiteral("settings"));
+    QTRY_VERIFY(m_session->settingsActive());
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_spaces").arg(orgId)));
+    openRow(waitItem(QStringLiteral("accessSpace_") + spaceId));
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+    clickItem(waitItem(QStringLiteral("spaceTab_access")));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_") + people.first()));
+    QVERIFY(waitIdle());
+    QQuickItem *page = flickableOf(waitItem(QStringLiteral("spacePage")));
+    QVERIFY(page);
+    QVERIFY(page->property("contentHeight").toReal() > page->height());
+    const qreal top = page->property("contentY").toReal();
+    wheelOn(waitItem(QStringLiteral("accessHolder_") + people.first()));
+    QTRY_VERIFY(page->property("contentY").toReal() > top);
+
+    focusOn(waitItem(QStringLiteral("grantAccessButton")));
+    key(Qt::Key_Return);
+    QTRY_VERIFY(panelOpen());
+    QQuickItem *row = waitItem(QStringLiteral("grantPrincipal_") + people.last());
+    QQuickItem *body = flickableOf(row);
+    QVERIFY(body);
+    QTRY_VERIFY(body->property("contentHeight").toReal() > body->height());
+    const qreal start = body->property("contentY").toReal();
+    wheelOn(body);
+    QTRY_VERIFY(body->property("contentY").toReal() > start);
+    key(Qt::Key_Escape);
+    QTRY_VERIFY(!panelOpen());
+}
+
+// A reload that lands between the press and the release of a click keeps
+// the click: rows whose content did not change stay the same items.
+void TestStudio::aReloadKeepsTheClick()
+{
+    openSpace(QStringLiteral("Contracts"));
+    const QString orgId = m_session->currentOrgId(), spaceId = m_session->currentSpaceId();
+    const QString bo = QStringLiteral("user:") + m_core.seedMember(orgId, QStringLiteral("bo@localhost"), QStringLiteral("member"));
+    auto *directory = m_session->accessDirectory();
+    directory->open();
+    QTRY_VERIFY(!directory->busy());
+    auto *grants = m_session->accessGrants();
+    grants->open(QStringLiteral("space"), spaceId, spaceId, QStringLiteral("Contracts"));
+    QTRY_VERIFY(!grants->busy());
+    grants->setRoles(bo, {QStringLiteral("role-content_reader")});
+    QTRY_COMPARE(grants->notice(), QStringLiteral("access_saved"));
+    grants->close();
+    m_session->runCommand(QStringLiteral("settings"));
+    QTRY_VERIFY(m_session->settingsActive());
+    const auto clickAcrossReload = [this](QQuickItem *item, const std::function<void()> &reload) {
+        QVERIFY(item);
+        const QPoint at = centreOf(item);
+        QTest::mouseMove(window(), at);
+        settle();
+        QTest::mousePress(window(), Qt::LeftButton, Qt::NoModifier, at);
+        reload();
+        settle();
+        QTest::mouseRelease(window(), Qt::LeftButton, Qt::NoModifier, at);
+        settle();
+    };
+    // Entering People reloads the organizations, which the navigation
+    // lists: its rows stay, and so does the focus on them.
+    const QString people = QStringLiteral("settingsOrganization_%1_members").arg(orgId);
+    QPointer<QQuickItem> row = waitItem(people);
+    clickItem(row);
+    QTRY_VERIFY(!m_session->orgAdmin()->busy());
+    QTRY_VERIFY(!m_session->organizations()->busy());
+    QVERIFY(row);
+    QVERIFY(row->hasActiveFocus());
+    clickAcrossReload(waitItem(QStringLiteral("settingsOrganization_%1_spaces").arg(orgId)), [this] {
+        m_session->refreshOrganizations();
+        QTRY_VERIFY(!m_session->organizations()->busy());
+    });
+    QTRY_VERIFY(shown(QStringLiteral("accessSpace_") + spaceId));
+    openRow(waitItem(QStringLiteral("accessSpace_") + spaceId));
+    clickItem(waitItem(QStringLiteral("spaceTab_access")));
+    QTRY_VERIFY(shown(QStringLiteral("accessHolder_") + bo));
+    QVERIFY(waitIdle());
+    QTRY_VERIFY(!grants->busy());
+    clickAcrossReload(waitItem(QStringLiteral("accessHolder_") + bo), [&] {
+        grants->refresh();
+        QTRY_VERIFY(!grants->busy());
+        directory->open();
+        QTRY_VERIFY(!directory->busy());
+    });
+    QTRY_VERIFY(propertyOf(QStringLiteral("accessHolder_") + bo, "selected").toBool());
+
+    // A space row while the organizations, their spaces, and the add-on
+    // activations reload.
+    clickItem(waitItem(QStringLiteral("spaceBackButton")));
+    QTRY_VERIFY(shown(QStringLiteral("accessSpace_") + spaceId));
+    QPointer<QQuickItem> space = waitItem(QStringLiteral("accessSpace_") + spaceId);
+    clickAcrossReload(space, [&] {
+        m_session->refreshOrganizations();
+        m_session->addOnActivations()->refresh();
+        QVERIFY(waitIdle());
+        QTRY_VERIFY(!m_session->addOnActivations()->busy());
+    });
+    QVERIFY(space);
+    QTRY_VERIFY(space->property("selected").toBool());
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("spacePage")));
+
+    // An add-on row while billing and the activations reload.
+    clickItem(waitItem(QStringLiteral("settingsOrganization_%1_addons").arg(orgId)));
+    QPointer<QQuickItem> addOn = waitItem(QStringLiteral("addon_classifier"));
+    QVERIFY(addOn);
+    QTRY_VERIFY(!m_session->orgBilling()->busy());
+    QTRY_VERIFY(!m_session->addOnActivations()->busy());
+    clickAcrossReload(addOn, [&] {
+        m_session->orgBilling()->refresh();
+        m_session->addOnActivations()->refresh();
+        QTRY_VERIFY(!m_session->orgBilling()->busy());
+        QTRY_VERIFY(!m_session->addOnActivations()->busy());
+    });
+    QVERIFY(addOn);
+    QTRY_VERIFY(addOn->property("selected").toBool());
+    key(Qt::Key_Return);
+    QTRY_VERIFY(shown(QStringLiteral("addonDetail")));
 }
 
 // Very long and Japanese names end in an ellipsis inside their row and the

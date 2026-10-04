@@ -15,22 +15,21 @@ FocusScope {
     property string section: "appearance"
     property var expandedOrganizations: ({})
     readonly property bool commerceSection: section === "billing" || section === "addons"
-    readonly property bool organizationSection: section !== "appearance"
-    property string targetId
-    property string targetAction
+    readonly property bool accessSection: ["members", "groups", "roles", "spaces", "tags"].includes(section)
+    readonly property bool organizationSection: section !== "appearance" && section !== "tokens"
     readonly property string sectionError: settings.section === "general" ? Session.orgAdmin.generalError
-                                          : settings.section === "members" ? Session.orgAdmin.membersError
-                                          : settings.section === "invitations" ? Session.orgAdmin.invitationsError
-                                          : settings.section === "usage" ? Session.orgBilling.usageError
-                                          : settings.section === "spaces" ? Session.spaceAccess.errorCode : ""
+                                          : settings.section === "members" ? Session.orgAdmin.membersError || Session.orgAdmin.invitationsError
+                                          : settings.section === "usage" ? Session.orgBilling.usageError : ""
     readonly property var sections: [
         { value: "general", label: qsTr("General"), icon: "settings" },
-        { value: "members", label: qsTr("Members"), icon: "user" },
-        { value: "invitations", label: qsTr("Invitations"), icon: "new" },
-        { value: "spaces", label: qsTr("Spaces"), icon: "space" },
-        { value: "usage", label: qsTr("Usage"), icon: "space", billing: true },
-        { value: "billing", label: qsTr("Plan and billing"), icon: "settings", billing: true },
-        { value: "addons", label: qsTr("Add-ons"), icon: "new", billing: true }
+        { value: "members", label: qsTr("People"), icon: "user" },
+        { value: "groups", label: qsTr("Groups"), icon: "group" },
+        { value: "roles", label: qsTr("Roles"), icon: "role" },
+        { value: "spaces", label: qsTr("Spaces"), icon: "access" },
+        { value: "tags", label: qsTr("Tags"), icon: "tag" },
+        { value: "usage", label: qsTr("Usage"), icon: "space" },
+        { value: "billing", label: qsTr("Plan and billing"), icon: "settings" },
+        { value: "addons", label: qsTr("Add-ons"), icon: "new" }
     ]
 
     function setOrganizationExpanded(id, expanded) {
@@ -38,12 +37,23 @@ FocusScope {
         groups[id] = expanded
         settings.expandedOrganizations = groups
     }
+    // Core does not push membership changes: People reloads on entry and when
+    // the window is back in front, so an accepted invitation shows.
+    function refreshPeople() {
+        if (settings.visible && settings.section === "members")
+            Session.orgAdmin.refresh()
+    }
+    // The sections of organization `id` its catalog lets the person open.
+    function sectionsOf(id) {
+        return Session.permissions.revision >= 0 ? Session.permissions.sections(id) : []
+    }
     function chooseSection(id, value) {
         if (id !== "" && id !== Session.currentOrgId)
             Session.navigate("org", id)
-        if (id === "" || (Session.currentOrgId === id && (value === "billing" || value === "addons" || value === "usage"
-                    ? Session.orgBilling.available : Session.orgAdmin.available))) {
+        if (id === "" || (Session.currentOrgId === id && settings.sectionsOf(id).includes(value))) {
+            const entering = settings.section !== value
             settings.section = value
+            if (entering) settings.refreshPeople()
             if (id !== "") settings.setOrganizationExpanded(id, true)
         }
         navigationDrawer.close()
@@ -53,59 +63,37 @@ FocusScope {
         Session.navigate(id === "" ? "root" : "org", id)
     }
     function focusDefault() { header.backButton.forceActiveFocus() }
+    // Opens the page of entry `id` under `section`, such as a person under
+    // People, a space under Spaces, or an add-on under Add-ons, on its tab
+    // `tab` when given.
+    function openEntry(section, id, name, tab) {
+        settings.chooseSection(Session.currentOrgId, section)
+        if (settings.section === section && section === "addons")
+            commerce.open(id)
+        else if (settings.section === section)
+            accessAdmin.open(id, name, undefined, tab)
+    }
+    // Opens what fixes a refusal (Permissions' `explain`): the plan, the
+    // add-on, or the space where access is given or the add-on turned on.
+    function fix(answer) {
+        if (answer.fix === "plan")
+            settings.chooseSection(Session.currentOrgId, "billing")
+        else if (answer.fix === "install" || answer.fix === "resume")
+            settings.openEntry("addons", answer.product, Messages.productName(answer.product, answer.productName), "")
+        else {
+            settings.openEntry("spaces", answer.spaceId, answer.spaceName, "")
+            accessAdmin.fix(answer)
+        }
+    }
     function dismiss() {
         if (navigationDrawer.visible)
             navigationDrawer.close()
-        else if (commerce.dismiss())
+        else if (renamePanel.shown)
+            renamePanel.dismiss()
+        else if (commerce.dismiss() || accessAdmin.dismiss() || apiTokens.dismiss())
             return
-        else if (confirm.visible)
-            confirm.close()
-        else if (renameDialog.visible)
-            renameDialog.close()
-        else if (roleDialog.visible)
-            roleDialog.close()
-        else if (inviteDialog.visible)
-            inviteDialog.close()
-        else if (grantDialog.visible)
-            grantDialog.close()
         else
             Session.closeSettings()
-    }
-    function ask(action, id, email) {
-        settings.targetId = id
-        settings.targetAction = action
-        confirm.title = action === "remove" ? qsTr("Remove %1?").arg(email)
-                      : action === "cancel" ? qsTr("Cancel invitation for %1?").arg(email)
-                      : qsTr("Revoke this access grant?")
-        confirm.detail = action === "remove" ? qsTr("This person will lose access to the organization.")
-                       : action === "cancel" ? qsTr("The invitation link will stop working.")
-                       : qsTr("%1 loses what this role allows in the space. Access from other grants is preserved.").arg(email)
-        confirm.action = action === "remove" ? qsTr("Remove")
-                       : action === "cancel" ? qsTr("Cancel invitation") : qsTr("Revoke")
-        confirm.open()
-    }
-    // Space settings follow the space picked in the Spaces section.
-    function openSpace(id) {
-        Session.spaceAccess.open(id)
-        Session.controlledRule.open(id)
-    }
-    // Document control's own page under Add-ons, on `spaceId`'s rule.
-    function configureControl(spaceId) {
-        settings.section = "addons"
-        commerce.openProduct("controlled_docs", spaceId)
-    }
-    function closeDialogs() {
-        confirm.close()
-        grantDialog.close()
-        renameDialog.close()
-        roleDialog.close()
-        inviteDialog.close()
-    }
-    function openRole() {
-        if (members.currentId === "" || Session.orgAdmin.busy)
-            return
-        memberRole.value = members.currentRole
-        roleDialog.open()
     }
 
     onVisibleChanged: if (settings.visible) {
@@ -115,33 +103,34 @@ FocusScope {
         settings.focusDefault()
     } else {
         navigationDrawer.close()
-        settings.closeDialogs()
-        Session.spaceAccess.close()
-        Session.controlledRule.close()
+        renamePanel.close()
     }
 
     onNarrowChanged: if (!settings.narrow) navigationDrawer.close()
-    onSectionChanged: if (settings.section === "spaces") {
-        if (spacePicker.currentValue)
-            settings.openSpace(spacePicker.currentValue)
-    } else {
-        Session.spaceAccess.close()
-        Session.controlledRule.close()
-    }
 
     Connections {
         target: Session.orgAdmin
         function onChanged() {
             if (!Session.orgAdmin.active && settings.organizationSection && !settings.commerceSection && settings.section !== "usage") {
                 settings.section = "appearance"
-                settings.closeDialogs()
+                renamePanel.close()
             }
         }
     }
 
+    // A section the catalog no longer opens closes.
     Connections {
-        target: Session.controlledRule
-        function onAccessChanged() { Session.spaceAccess.refresh() }
+        target: Session.permissions
+        function onChanged() {
+            if (settings.organizationSection && Session.permissions.known(Session.currentOrgId)
+                    && !settings.sectionsOf(Session.currentOrgId).includes(settings.section))
+                settings.section = "appearance"
+        }
+    }
+
+    Connections {
+        target: settings.Window.window
+        function onActiveChanged() { if (settings.Window.window.active) settings.refreshPeople() }
     }
 
     Connections {
@@ -152,102 +141,167 @@ FocusScope {
         }
     }
 
+    // A row of the navigation, focused within it while selected.
+    component NavigationStop: NavigationRow {
+        tabFocusable: false
+        Accessible.focusable: true
+        focus: selected
+    }
+    // The navigation is one stop in the tab order, on its selected row: the
+    // arrows move between its rows, and Tab goes on to the section.
     component Navigation: Page {
+        id: navigation
         topMargin: Theme.gapM
         bottomMargin: Theme.gapM
         leftMargin: Theme.gapS
         rightMargin: Theme.gapS
-        spacing: Theme.gapXs
         Component.onCompleted: if (settings.narrow) appearanceNavigation.forceActiveFocus()
 
-        NavigationRow {
-            id: appearanceNavigation
-            touch: settings.narrow
-            objectName: "settingsAppearanceNavigation"
-            checkable: true
-            text: qsTr("Appearance")
-            icon: "settings"
-            selected: settings.section === "appearance"
-            onActivated: settings.chooseSection("", "appearance")
-        }
-        Caption {
-            Layout.fillWidth: true
-            Layout.topMargin: Theme.gapM
-            Layout.leftMargin: Theme.gapM
-            text: qsTr("Organizations")
-        }
-        Label {
-            Layout.margins: Theme.gapS
-            visible: Session.organizationsBusy || Session.organizationsError !== ""
-            text: Session.organizationsError !== "" ? Messages.adminFailure(Session.organizationsError)
-                                                   : qsTr("Working…")
-            color: Session.organizationsError !== "" ? Theme.failed : Theme.textSecondary
-        }
-        Repeater {
-            id: organizationGroups
-            model: Session.organizations
-            delegate: ColumnLayout {
-                id: organization
-                required property string orgId
-                required property string name
-                required property bool canAdminister
-                required property bool canReadBilling
-                readonly property bool expanded: settings.expandedOrganizations[orgId] === true
-                Layout.fillWidth: true
-                Layout.topMargin: Theme.gapS
-                spacing: Theme.gapXs
-                NavigationRow {
-                    objectName: "settingsOrganization_" + organization.orgId
-                    touch: settings.narrow
-                    text: organization.name
-                    icon: "org"
-                    strong: true
-                    expandable: true
-                    expanded: organization.expanded
-                    selected: Session.currentOrgId === organization.orgId && settings.organizationSection
-                              && !organization.expanded
-                    onActivated: settings.setOrganizationExpanded(organization.orgId, !organization.expanded)
-                    Keys.onRightPressed: settings.setOrganizationExpanded(organization.orgId, true)
-                    Keys.onLeftPressed: settings.setOrganizationExpanded(organization.orgId, false)
-                    }
-                Repeater {
-                    model: organization.expanded ? settings.sections.filter(function (s) {
-                        return s.billing === true ? organization.canReadBilling : organization.canAdminister
-                    }) : []
-                    delegate: NavigationRow {
-                        required property var modelData
-                        touch: settings.narrow
-                        checkable: true
-                        objectName: "settingsOrganization_" + organization.orgId + "_" + modelData.value
-                        text: modelData.label
-                        icon: modelData.icon
-                        indented: true
-                        selected: Session.currentOrgId === organization.orgId && settings.section === modelData.value
-                        onActivated: settings.chooseSection(organization.orgId, modelData.value)
-                            }
+        // Its rows, top to bottom, as they show.
+        function rows() {
+            const found = []
+            const walk = function (item) {
+                for (const child of item.children) {
+                    if (!child.visible)
+                        continue
+                    if (child instanceof NavigationStop)
+                        found.push(child)
+                    else
+                        walk(child)
                 }
-                NavigationRow {
-                    visible: organization.expanded
-                    touch: settings.narrow
-                    text: qsTr("Open organization")
-                    icon: "forward"
-                    indented: true
-                    onActivated: settings.openOrganizations(organization.orgId)
-                    }
             }
+            walk(stops)
+            return found
         }
-        Label {
-            Layout.margins: Theme.gapM
-            visible: organizationGroups.count === 0 && !Session.organizationsBusy
-                     && Session.organizationsError === ""
-            text: qsTr("No organizations yet.")
+        function step(by) {
+            const rows = navigation.rows()
+            const at = rows.indexOf(navigation.Window.activeFocusItem)
+            const next = rows[Math.max(0, Math.min(rows.length - 1, at + by))]
+            if (next)
+                next.forceActiveFocus(Qt.TabFocusReason)
         }
-        NavigationRow {
-            Layout.topMargin: Theme.gapM
-            touch: settings.narrow
-            text: qsTr("Open organizations")
-            icon: "org"
-            onActivated: settings.openOrganizations("")
+
+        FocusScope {
+            id: scope
+            objectName: "settingsNavigation"
+            Layout.fillWidth: true
+            implicitHeight: stops.implicitHeight
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Grouping
+            Accessible.name: qsTr("Settings")
+            Keys.onUpPressed: navigation.step(-1)
+            Keys.onDownPressed: navigation.step(1)
+            Keys.onPressed: function (event) {
+                if (event.key === Qt.Key_Home || event.key === Qt.Key_End) {
+                    navigation.step(event.key === Qt.Key_Home ? -navigation.rows().length : navigation.rows().length)
+                    event.accepted = true
+                }
+            }
+
+            ColumnLayout {
+                id: stops
+                width: parent.width
+                spacing: Theme.gapXs
+
+                NavigationStop {
+                    id: appearanceNavigation
+                    touch: settings.narrow
+                    objectName: "settingsAppearanceNavigation"
+                    checkable: true
+                    text: qsTr("Appearance")
+                    icon: "settings"
+                    selected: settings.section === "appearance"
+                    onActivated: settings.chooseSection("", "appearance")
+                }
+                NavigationStop {
+                    touch: settings.narrow
+                    objectName: "settingsTokensNavigation"
+                    checkable: true
+                    text: qsTr("API tokens")
+                    icon: "access"
+                    selected: settings.section === "tokens"
+                    onActivated: settings.chooseSection("", "tokens")
+                }
+                Caption {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.gapM
+                    Layout.leftMargin: Theme.gapM
+                    text: qsTr("Organizations")
+                }
+                Label {
+                    Layout.margins: Theme.gapS
+                    visible: Session.organizationsBusy || Session.organizationsError !== ""
+                    text: Session.organizationsError !== "" ? Messages.adminFailure(Session.organizationsError)
+                                                           : qsTr("Working…")
+                    color: Session.organizationsError !== "" ? Theme.failed : Theme.textSecondary
+                }
+                Repeater {
+                    id: organizationGroups
+                    model: Session.organizations
+                    delegate: ColumnLayout {
+                        id: organization
+                        required property string orgId
+                        required property string name
+                        readonly property bool expanded: settings.expandedOrganizations[orgId] === true
+                        Layout.fillWidth: true
+                        Layout.topMargin: Theme.gapS
+                        spacing: Theme.gapXs
+                        NavigationStop {
+                            objectName: "settingsOrganization_" + organization.orgId
+                            touch: settings.narrow
+                            text: organization.name
+                            icon: "org"
+                            strong: true
+                            expandable: true
+                            expanded: organization.expanded
+                            selected: Session.currentOrgId === organization.orgId && settings.organizationSection
+                                      && !organization.expanded
+                            onActivated: settings.setOrganizationExpanded(organization.orgId, !organization.expanded)
+                            Keys.onRightPressed: settings.setOrganizationExpanded(organization.orgId, true)
+                            Keys.onLeftPressed: settings.setOrganizationExpanded(organization.orgId, false)
+                        }
+                        Repeater {
+                            model: organization.expanded ? settings.sections.filter(function (s) {
+                                return settings.sectionsOf(organization.orgId).includes(s.value)
+                            }) : []
+                            delegate: NavigationStop {
+                                required property var modelData
+                                touch: settings.narrow
+                                checkable: true
+                                objectName: "settingsOrganization_" + organization.orgId + "_" + modelData.value
+                                text: modelData.label
+                                icon: modelData.icon
+                                indented: true
+                                selected: Session.currentOrgId === organization.orgId && settings.section === modelData.value
+                                onActivated: settings.chooseSection(organization.orgId, modelData.value)
+                            }
+                        }
+                        NavigationStop {
+                            objectName: "settingsOpenOrganization_" + organization.orgId
+                            visible: organization.expanded
+                            touch: settings.narrow
+                            text: qsTr("Open organization")
+                            icon: "forward"
+                            indented: true
+                            onActivated: settings.openOrganizations(organization.orgId)
+                        }
+                    }
+                }
+                Label {
+                    Layout.margins: Theme.gapM
+                    visible: organizationGroups.count === 0 && !Session.organizationsBusy
+                             && Session.organizationsError === ""
+                    text: qsTr("No organizations yet.")
+                }
+                NavigationStop {
+                    objectName: "settingsOpenOrganizations"
+                    Layout.topMargin: Theme.gapM
+                    touch: settings.narrow
+                    text: qsTr("Open organizations")
+                    icon: "org"
+                    onActivated: settings.openOrganizations("")
+                }
+            }
         }
     }
 
@@ -259,19 +313,34 @@ FocusScope {
             id: header
             Layout.fillWidth: true
             narrow: settings.narrow
-            caption: settings.organizationSection ? Session.orgBilling.name : Session.email
+            caption: settings.organizationSection ? Session.orgBilling.name : Session.identifier
             title: qsTr("Settings")
             backText: qsTr("Back to files")
             navigationName: "settingsNavigationButton"
             backName: "closeSettingsButton"
             refreshName: "refreshOrgAdminButton"
             refreshUsable: settings.commerceSection || settings.section === "usage" ? !Session.orgBilling.busy
-                           : settings.organizationSection ? !Session.orgAdmin.busy : !Session.organizationsBusy
+                           : settings.organizationSection ? !Session.orgAdmin.busy
+                           : settings.section === "tokens" ? !Session.apiTokens.busy : !Session.organizationsBusy
             onNavigationRequested: navigationDrawer.open()
             onBackRequested: Session.closeSettings()
-            onRefreshRequested: if (settings.commerceSection || settings.section === "usage") Session.orgBilling.refresh()
-                                else if (settings.organizationSection) Session.orgAdmin.refresh()
-                                else Session.refreshOrganizations()
+            onRefreshRequested: if (settings.commerceSection || settings.section === "usage") {
+                                    Session.orgBilling.refresh()
+                                    if (settings.section === "addons") Session.addOnActivations.refresh()
+                                } else if (settings.organizationSection) {
+                                    Session.orgAdmin.refresh()
+                                    if (settings.accessSection) {
+                                        Session.accessDirectory.open()
+                                        Session.accessGrants.refresh()
+                                        Session.principalAccess.refresh()
+                                        Session.roleHolders.refresh()
+                                    }
+                                    if (settings.section === "spaces") Session.addOnActivations.refresh()
+                                } else if (settings.section === "tokens") {
+                                    Session.apiTokens.refresh()
+                                } else {
+                                    Session.refreshOrganizations()
+                                }
         }
 
         RowLayout {
@@ -296,98 +365,99 @@ FocusScope {
                 Layout.margins: settings.narrow ? Theme.gapM : Theme.gapXl
                 spacing: Theme.gapM
 
+                // A detail page heads itself.
                 SectionHead {
+                    visible: !(settings.accessSection && accessAdmin.pageOpen) && !(settings.section === "addons" && commerce.selectedProduct !== null)
                     title: settings.section === "appearance" ? qsTr("Appearance")
+                           : settings.section === "tokens" ? qsTr("API tokens")
                            : settings.sections.find(function (s) { return s.value === settings.section })?.label ?? ""
 
                     ActionButton {
+                        id: renameButton
                         objectName: "renameOrganizationButton"
                         visible: settings.section === "general"
                         text: qsTr("Rename organization")
                         icon: "rename"
                         primary: true
-                        usable: !Session.orgAdmin.busy && settings.sectionError === ""
-                        onActivated: renameDialog.open()
+                        usable: !Session.orgAdmin.busy && settings.sectionError === "" && renaming.allowed
+                        reason: renaming.reason
+                        onActivated: renamePanel.openFor(renameButton)
+                        Gate { id: renaming; action: "organization.update_policy" }
                     }
 
                     ActionButton {
-                        objectName: "changeRoleButton"
-                        visible: settings.section === "members"
-                        text: qsTr("Change role")
-                        icon: "user"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.orgAdmin.busy && members.currentId !== ""
-                        onActivated: settings.openRole()
-                    }
-                    ActionButton {
-                        objectName: "removeMemberButton"
-                        visible: settings.section === "members"
-                        text: qsTr("Remove member")
-                        icon: "trash"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.orgAdmin.busy && members.currentId !== ""
-                        onActivated: settings.ask("remove", members.currentId, members.currentEmail)
+                        id: newUserButton
+                        objectName: "newUserButton"
+                        visible: settings.section === "members" && !accessAdmin.pageOpen
+                        text: qsTr("New user")
+                        icon: "new"
+                        primary: true
+                        usable: !Session.orgAdmin.busy && settings.sectionError === "" && creatingUsers.allowed
+                        reason: creatingUsers.reason
+                        onActivated: accessAdmin.newUser(newUserButton)
+                        Gate { id: creatingUsers; action: "membership.create" }
                     }
 
                     ActionButton {
-                        objectName: "cancelInvitationButton"
-                        visible: settings.section === "invitations"
-                        text: qsTr("Cancel invitation")
-                        icon: "close"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.orgAdmin.busy && invitations.currentStatus === "pending"
-                        onActivated: settings.ask("cancel", invitations.currentId, invitations.currentEmail)
-                    }
-                    ActionButton {
+                        id: inviteButton
                         objectName: "sendInvitationButton"
-                        visible: settings.section === "invitations"
-                        text: qsTr("Invite member")
-                        icon: "new"
-                        primary: true
-                        usable: !Session.orgAdmin.busy && settings.sectionError === ""
-                        onActivated: inviteDialog.open()
+                        visible: settings.section === "members" && !accessAdmin.pageOpen
+                        text: qsTr("Invite")
+                        icon: "user"
+                        usable: !Session.orgAdmin.busy && settings.sectionError === "" && inviting.allowed
+                        reason: inviting.reason
+                        onActivated: accessAdmin.invite(inviteButton)
+                        Gate { id: inviting; action: "membership.invite" }
                     }
 
                     ActionButton {
-                        visible: settings.section === "spaces" && Session.controlledRule.rolesMissing
-                        text: qsTr("Add review roles")
-                        icon: "new"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.controlledRule.busy
-                        onActivated: Session.controlledRule.addRoles()
-                    }
-                    ActionButton {
-                        visible: settings.section === "spaces" && Session.controlledRule.canGrantSelf
-                        text: qsTr("Grant me management access")
-                        icon: "user"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.controlledRule.busy
-                        onActivated: Session.controlledRule.grantSelf()
-                    }
-                    BarRule { visible: settings.section === "spaces" && Session.controlledRule.installed }
-                    ActionButton {
-                        objectName: "revokeSpaceAccessButton"
-                        visible: settings.section === "spaces"
-                        text: qsTr("Revoke access")
-                        icon: "close"
-                        showLabel: !settings.narrow
-                        tip: text
-                        usable: !Session.spaceAccess.busy && grants.currentGrant !== null
-                        onActivated: settings.ask("revoke", grants.currentGrant.id, grants.currentGrant.email || qsTr("This group"))
-                    }
-                    ActionButton {
-                        objectName: "grantSpaceAccessButton"
-                        visible: settings.section === "spaces"
-                        text: qsTr("Grant access")
+                        objectName: "newApiTokenButton"
+                        visible: settings.section === "tokens" && apiTokens.createLabel !== ""
+                        text: apiTokens.createLabel
                         icon: "new"
                         primary: true
-                        usable: Session.spaceAccess.active && !Session.spaceAccess.busy && Session.spaceAccess.roles.length > 0
-                        onActivated: grantDialog.open()
+                        usable: Session.apiTokens.active && !Session.apiTokens.busy
+                        onActivated: apiTokens.create()
+                    }
+
+                    ActionButton {
+                        id: createButton
+                        objectName: "accessCreateButton"
+                        visible: settings.accessSection && accessAdmin.createLabel !== ""
+                        text: accessAdmin.createLabel
+                        icon: "new"
+                        primary: true
+                        usable: !accessAdmin.busy && Session.accessDirectory.active && creating.allowed
+                        reason: creating.reason
+                        onActivated: accessAdmin.create(createButton)
+                        Gate {
+                            id: creating
+                            action: ({ groups: "group.create", roles: "role.create", tags: "tag.create" })[settings.section] ?? ""
+                        }
+                    }
+
+                    ActionButton {
+                        objectName: "accessOpenButton"
+                        visible: settings.accessSection && !accessAdmin.pageOpen
+                        text: qsTr("Open")
+                        icon: "forward"
+                        showLabel: !settings.narrow
+                        tip: settings.narrow ? text : ""
+                        usable: accessAdmin.selectedRow !== null
+                        reason: qsTr("Select one row.")
+                        onActivated: accessAdmin.openRow(accessAdmin.selectedRow)
+                    }
+
+                    ActionButton {
+                        objectName: "addonOpenButton"
+                        visible: settings.section === "addons" && commerce.selectedProduct === null
+                        text: qsTr("Open")
+                        icon: "forward"
+                        showLabel: !settings.narrow
+                        tip: settings.narrow ? text : ""
+                        usable: commerce.listedProduct !== null
+                        reason: qsTr("Select one row.")
+                        onActivated: commerce.open(commerce.listedProduct.key)
                     }
 
                     ActionButton {
@@ -402,52 +472,48 @@ FocusScope {
                     }
                     ActionButton {
                         objectName: "billingPortalButton"
-                        visible: settings.section === "billing" && Session.orgBilling.canManage
+                        visible: settings.section === "billing"
                         text: qsTr("Manage billing")
                         icon: "settings"
                         showLabel: !settings.narrow
                         tip: text
-                        usable: !commerce.busy
+                        usable: !commerce.busy && Session.orgBilling.canManage
+                        reason: managingBilling.reason
                         onActivated: Session.orgBilling.createPortal()
                     }
                     ActionButton {
+                        id: subscribeButton
                         objectName: "subscribePackageButton"
-                        visible: settings.section === "billing" && Session.orgBilling.canManage
+                        visible: settings.section === "billing"
                         text: commerce.liveSubscription ? qsTr("Switch package") : qsTr("Subscribe")
                         icon: "check"
                         primary: true
                         usable: commerce.canSubscribe
-                        onActivated: commerce.subscribe()
+                        reason: !Session.orgBilling.canManage ? managingBilling.reason
+                              : commerce.selectedPackage === null ? qsTr("Select a package.") : ""
+                        onActivated: commerce.subscribe(subscribeButton)
                     }
+                    Gate { id: managingBilling; action: "billing.manage" }
 
                 }
+                // A change's refusal shows in the side panel that made it.
                 Label {
                     objectName: "orgAdminError"
-                    visible: (settings.organizationSection && !settings.commerceSection && Session.orgAdmin.errorCode !== "") || settings.sectionError !== ""
-                    text: Messages.adminFailure((settings.organizationSection && !settings.commerceSection ? Session.orgAdmin.errorCode : "") || settings.sectionError)
+                    visible: settings.sectionError !== ""
+                    text: Messages.adminFailure(settings.sectionError)
                     color: Theme.failed
                     Accessible.role: Accessible.AlertMessage
                 }
-                Label {
-                    visible: settings.section === "spaces" && (Session.spaceAccess.notice !== "" || Session.controlledRule.notice !== "")
-                    text: Messages.controlledNotice(Session.controlledRule.notice || Session.spaceAccess.notice)
-                    color: Theme.accentText
-                }
-                Label {
-                    visible: settings.section === "spaces" && Session.controlledRule.errorCode !== ""
-                    text: Messages.controlledFailure(Session.controlledRule.errorCode)
-                    color: Theme.failed
-                    Accessible.role: Accessible.AlertMessage
-                }
-                Label {
+                Notice {
                     objectName: "orgAdminNotice"
-                    visible: settings.organizationSection && !settings.commerceSection && Session.orgAdmin.notice !== ""
+                    code: Session.orgAdmin.notice
+                    place: Session.currentOrgId + ":" + settings.section
                     text: Messages.adminNotice(Session.orgAdmin.notice)
-                    color: Theme.accentText
                 }
                 Label {
                     visible: settings.section === "usage" ? Session.orgBilling.busy
-                             : settings.organizationSection && !settings.commerceSection && Session.orgAdmin.busy
+                             : settings.organizationSection && !settings.commerceSection && !settings.accessSection
+                               && Session.orgAdmin.busy
                     text: qsTr("Working…")
                 }
 
@@ -458,6 +524,7 @@ FocusScope {
                     Layout.fillHeight: true
                     billing: settings.section === "billing"
                     narrow: settings.narrow
+                    onEntryRequested: function (section, id, name) { settings.openEntry(section, id, name, "") }
                 }
 
                 Page {
@@ -510,128 +577,22 @@ FocusScope {
                     }
                 }
 
-                OrgAdminPeople {
-                    id: members
-                    visible: settings.section === "members" && settings.sectionError === "" && members.count > 0
+                ApiTokens {
+                    id: apiTokens
+                    visible: settings.section === "tokens"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    touch: settings.narrow
-                    onOpened: settings.openRole()
-                }
-                OrgAdminPeople {
-                    id: invitations
-                    visible: settings.section === "invitations" && settings.sectionError === "" && invitations.count > 0
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    invitations: true
-                    touch: settings.narrow
-                    onOpened: if (invitations.currentStatus === "pending")
-                        settings.ask("cancel", invitations.currentId, invitations.currentEmail)
-                }
-                Label {
-                    Layout.fillHeight: true
-                    verticalAlignment: Text.AlignTop
-                    visible: !Session.orgAdmin.busy && settings.sectionError === ""
-                             && ((settings.section === "members" && members.count === 0)
-                                 || (settings.section === "invitations" && invitations.count === 0))
-                    text: settings.section === "members" ? qsTr("No members to display.") : qsTr("No invitations yet. Use Invite member to send one.")
+                    narrow: settings.narrow
                 }
 
-                Page {
-                    objectName: "spacesPage"
-                    visible: settings.section === "spaces"
+                AccessAdmin {
+                    id: accessAdmin
+                    visible: settings.accessSection && settings.sectionError === ""
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Label { text: qsTr("Who may do what in a space, and the add-ons that work there. Pick the space to manage.") }
-                    Picker {
-                        id: spacePicker
-                        objectName: "spacePicker"
-                        Layout.fillWidth: true
-                        Layout.maximumWidth: Theme.column * 2
-                        model: Session.spaceAccess.spaces
-                        value: Session.currentSpaceId !== "" ? Session.currentSpaceId : (Session.spaceAccess.spaces[0]?.value ?? "")
-                        Accessible.name: qsTr("Space")
-                        onCurrentValueChanged: if (settings.section === "spaces" && spacePicker.currentValue)
-                            settings.openSpace(spacePicker.currentValue)
-                    }
-                    Caption { Layout.fillWidth: true; Layout.topMargin: Theme.gapM; text: qsTr("Access") }
-                    Label {
-                        visible: Session.spaceAccess.active && !Session.spaceAccess.busy && grants.count === 0
-                        text: qsTr("Nobody has a role in this space yet. Organization owners and administrators still manage it.")
-                    }
-                    CursorList {
-                        id: grants
-                        readonly property var currentGrant: grants.currentIndex >= 0 ? Session.spaceAccess.grants[grants.currentIndex] ?? null : null
-                        objectName: "spaceGrantList"
-                        visible: grants.count > 0
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: grants.contentHeight
-                        interactive: false
-                        activeFocusOnTab: true
-                        spacing: Theme.gapS
-                        rowHeight: settings.narrow ? Theme.rowTouch : Theme.controlM
-                        model: Session.spaceAccess.grants
-                        Accessible.role: Accessible.List
-                        Accessible.name: qsTr("Access")
-                        delegate: ListRow {
-                            id: grantRow
-                            required property var modelData
-                            required property int index
-                            view: grants
-                            touch: settings.narrow
-                            cursor: grants.currentIndex === grantRow.index
-                            selected: grantRow.cursor
-                            title: grantRow.modelData.email || qsTr("Group")
-                            detail: grantRow.modelData.roleName
-                            onClicked: grants.currentIndex = grantRow.index
-                            onActivated: grants.currentIndex = grantRow.index
-                        }
-                    }
-                    Card {
-                        objectName: "controlledSpaceCard"
-                        visible: Session.controlledRule.installed
-                        Layout.topMargin: Theme.gapM
-                        Caption { Layout.fillWidth: true; text: qsTr("Controlled documents") }
-                        Text {
-                            Layout.fillWidth: true
-                            text: Session.controlledRule.canGrantSelf || Session.controlledRule.ruleError === "forbidden"
-                                  ? qsTr("You need management access")
-                                  : Session.controlledRule.rule.active === true ? qsTr("Space rule active") : qsTr("Space rule inactive or absent")
-                            font: Theme.heading
-                            color: Theme.textPrimary
-                            wrapMode: Text.Wrap
-                        }
-                        Label {
-                            visible: Session.controlledRule.ruleError === "forbidden"
-                            text: Session.controlledRule.canGrantSelf
-                                  ? qsTr("Organization administrators manage document control only through an explicit grant: use Grant me management access above.")
-                                  : qsTr("Ask an organization administrator to grant you the Document control managers role here.")
-                        }
-                        Label {
-                            visible: Session.controlledRule.readable
-                            text: Session.controlledRule.rule.effective_settings?.require_version_references === true
-                                  ? qsTr("Images and linked files must pin a version, so an approved document shows exactly what was reviewed.")
-                                  : qsTr("Images and linked files may follow later versions of their files.")
-                        }
-                        Label {
-                            visible: Session.controlledRule.readable
-                            text: qsTr("%n approval(s) publish a proposal.", "", Session.controlledRule.rule.effective_settings?.required_approvals ?? 1)
-                                  + " " + (Session.controlledRule.rule.effective_settings?.allow_author_approval === true
-                                           ? qsTr("Authors may approve their own proposals.")
-                                           : qsTr("Authors cannot approve their own proposals."))
-                        }
-                        Label {
-                            visible: Session.controlledRule.rolesMissing
-                            text: qsTr("Add review roles to grant reviewer and manager access under Access.")
-                        }
-                        ActionButton {
-                            objectName: "configureControlButton"
-                            visible: Session.orgBilling.available
-                            text: qsTr("Configure document control")
-                            icon: "settings"
-                            onActivated: settings.configureControl(spacePicker.currentValue)
-                        }
-                    }
+                    section: settings.accessSection ? settings.section : ""
+                    narrow: settings.narrow
+                    onEntryRequested: function (section, id, name, tab) { settings.openEntry(section, id, name, tab) }
                 }
 
                 Page {
@@ -690,108 +651,48 @@ FocusScope {
         onClosed: if (settings.visible && settings.narrow) header.navigationButton.forceActiveFocus()
     }
 
-    Dialog {
-        id: renameDialog
-        objectName: "renameOrganizationDialog"
-        anchors.fill: parent
-        title: qsTr("Rename organization")
-        action: qsTr("Save changes")
-        ready: organizationName.text.trim() !== "" && organizationName.text.trim() !== Session.orgAdmin.name
-        initialFocus: organizationName
-        onVisibleChanged: if (renameDialog.visible) {
+    SidePanel {
+        id: renamePanel
+        objectName: "renameOrganizationPanel"
+        property bool sent: false
+        function openFor(returnTo) {
             organizationName.text = Session.orgAdmin.name
+            renamePanel.sent = false
+            renamePanel.open(returnTo)
             organizationName.selectAll()
         }
-        onAccepted: Session.orgAdmin.rename(organizationName.text)
+        anchors.fill: parent
+        narrow: settings.narrow
+        title: qsTr("Rename organization")
+        saveText: qsTr("Save changes")
+        saveUsable: !Session.orgAdmin.busy && organizationName.text.trim() !== "" && organizationName.text.trim() !== Session.orgAdmin.name
+        initialFocus: organizationName
+        onSaveRequested: {
+            renamePanel.sent = true
+            Session.orgAdmin.rename(organizationName.text)
+        }
+
+        Connections {
+            target: Session.orgAdmin
+            function onChanged() {
+                if (renamePanel.sent && !Session.orgAdmin.busy) {
+                    renamePanel.sent = false
+                    if (Session.orgAdmin.errorCode === "") renamePanel.close()
+                }
+            }
+        }
+        Label {
+            objectName: "renameOrganizationError"
+            visible: renamePanel.sent === false && Session.orgAdmin.errorCode !== ""
+            text: Messages.adminFailure(Session.orgAdmin.errorCode)
+            color: Theme.failed
+            Accessible.role: Accessible.AlertMessage
+        }
         Field {
             id: organizationName
             objectName: "organizationNameField"
             placeholderText: qsTr("Organization name")
-            onAccepted: renameDialog.accept()
+            onAccepted: if (renamePanel.saveUsable) renamePanel.saveRequested()
         }
-    }
-
-    Dialog {
-        id: roleDialog
-        objectName: "changeRoleDialog"
-        anchors.fill: parent
-        title: qsTr("Change the role of %1").arg(members.currentEmail)
-        action: qsTr("Change role")
-        ready: memberRole.currentIndex >= 0 && memberRole.currentValue !== members.currentRole
-        initialFocus: memberRole
-        onAccepted: Session.orgAdmin.changeRole(members.currentId, memberRole.currentValue)
-        Label { text: qsTr("Their organization permissions will change.") }
-        RolePicker {
-            id: memberRole
-            Layout.fillWidth: true
-        }
-    }
-
-    Dialog {
-        id: inviteDialog
-        objectName: "inviteDialog"
-        anchors.fill: parent
-        title: qsTr("Invite member")
-        action: qsTr("Send invitation")
-        ready: invitationEmail.text.trim() !== "" && invitationRole.currentIndex >= 0
-        initialFocus: invitationEmail
-        onVisibleChanged: if (inviteDialog.visible) {
-            invitationEmail.clear()
-            invitationRole.value = "member"
-        }
-        onAccepted: Session.orgAdmin.invite(invitationEmail.text, invitationRole.currentValue)
-        Label { text: qsTr("They receive an email with a link to join this organization.") }
-        Field {
-            id: invitationEmail
-            objectName: "invitationEmailField"
-            placeholderText: qsTr("Email address")
-            inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase
-            onAccepted: inviteDialog.accept()
-        }
-        RolePicker {
-            id: invitationRole
-            Layout.fillWidth: true
-            allowOwner: false
-        }
-    }
-
-    Dialog {
-        id: grantDialog
-        objectName: "grantSpaceAccessDialog"
-        anchors.fill: parent
-        title: qsTr("Grant access to %1").arg(spacePicker.currentText)
-        action: qsTr("Grant")
-        ready: grantMember.currentIndex >= 0 && grantRole.currentIndex >= 0
-        initialFocus: grantMember
-        onAccepted: Session.spaceAccess.grant(grantMember.currentValue, grantRole.currentValue)
-        Label { text: qsTr("Member") }
-        Picker {
-            id: grantMember
-            Layout.fillWidth: true
-            model: Session.spaceAccess.members
-            Accessible.name: qsTr("Member")
-        }
-        Label { text: qsTr("Role in this space") }
-        Picker {
-            id: grantRole
-            Layout.fillWidth: true
-            model: Session.spaceAccess.roles
-            Accessible.name: qsTr("Role in this space")
-        }
-    }
-
-    Confirm {
-        id: confirm
-        objectName: "orgAdminConfirm"
-        anchors.fill: parent
-        onAccepted: {
-            if (settings.targetAction === "remove")
-                Session.orgAdmin.removeMember(settings.targetId)
-            else if (settings.targetAction === "cancel")
-                Session.orgAdmin.cancelInvitation(settings.targetId)
-            else
-                Session.spaceAccess.revoke(settings.targetId)
-        }
-        onVisibleChanged: if (!confirm.visible && settings.visible) settings.focusDefault()
     }
 }

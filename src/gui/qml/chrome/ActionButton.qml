@@ -9,7 +9,7 @@ import matome
 // landing's gold pill (the desktop's rounding on Omarchy); every other button
 // is a quiet ghost whose ink brightens under the pointer. Icon-only buttons
 // name themselves for screen readers and show `tip` (and its `key`) on hover
-// or keyboard focus.
+// or keyboard focus; an unusable one with a `reason` shows the reason there.
 FocusableControl {
     id: button
 
@@ -22,6 +22,9 @@ FocusableControl {
     property font labelFont: button.primary ? Theme.button : Theme.body
     property real horizontalPadding: Theme.gapM
 
+    // Its width with the label shown, whether or not it shows.
+    readonly property real labelledWidth: (button.icon !== "" ? glyph.implicitWidth + content.spacing : 0)
+                                          + metrics.advanceWidth + 2 * button.horizontalPadding
     readonly property color ink: button.primary
                                  ? Theme.onAccent
                                  : Qt.tint(Theme.textSecondary, Theme.fill(Theme.textPrimary, button.lit))
@@ -46,6 +49,7 @@ FocusableControl {
         spacing: Theme.gapS
 
         Icon {
+            id: glyph
             visible: button.icon !== ""
             anchors.verticalCenter: parent.verticalCenter
             name: button.icon
@@ -60,9 +64,19 @@ FocusableControl {
         }
     }
 
+    TextMetrics {
+        id: metrics
+        font: button.labelFont
+        text: button.text
+    }
+
+    readonly property string tipText: button.usable || button.reason === "" ? button.tip
+                                      : button.tip !== "" ? qsTr("%1: %2").arg(button.tip).arg(button.reason)
+                                      : button.reason
+
     C.ToolTip {
         parent: button
-        visible: button.tip !== "" && (button.hovered || (button.activeFocus && Theme.focusVisible))
+        visible: button.tipText !== "" && (button.hovered || (button.activeFocus && Theme.focusVisible))
         delay: button.hovered ? 500 : 0
         y: button.height + Theme.gapXs
         padding: Theme.gapS
@@ -71,12 +85,12 @@ FocusableControl {
             spacing: Theme.gapS
 
             Text {
-                text: button.tip
+                text: button.tipText
                 color: Theme.textPrimary
                 font: Theme.caption
             }
             KeyChip {
-                visible: button.key !== ""
+                visible: button.key !== "" && button.usable
                 text: button.key
             }
         }

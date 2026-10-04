@@ -17,7 +17,7 @@ ColumnLayout {
     property bool touch: false
 
     function memberEmail(id) {
-        return list.control.members.find(function (member) { return String(member.id) === String(id) })?.email ?? ""
+        return list.control.members.find(function (member) { return String(member.id) === String(id) })?.label ?? ""
     }
     // The published version a review changes.
     function baseVersion(id) {

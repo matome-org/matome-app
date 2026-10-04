@@ -13,7 +13,7 @@ const SPACE = {
 // Settings the studio saved on an earlier visit, dark and in Japanese with
 // Core at `apiBaseUrl` (QSettings on WASM is localStorage under this prefix).
 function savedSettings(context, apiBaseUrl) {
-  const values = { "theme/mode": "dark", "theme/language": "ja", "session/email": EMAIL,
+  const values = { "theme/mode": "dark", "theme/language": "ja", "session/identifier": EMAIL,
     "session/apiBaseUrl": apiBaseUrl };
   return context.addInitScript((entries) => {
     for (const [key, value] of Object.entries(entries))

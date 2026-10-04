@@ -17,6 +17,11 @@ struct SpaceRow {
     QString status;
     int revision = 1;
     int colorIndex = 0;
+    bool operator==(const SpaceRow &other) const
+    {
+        return id == other.id && name == other.name && status == other.status && revision == other.revision
+                && colorIndex == other.colorIndex;
+    }
 };
 
 /// Spaces of the current organization. QML binds roles; it does not parse JSON.
@@ -45,13 +50,16 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void reload();
-    void create(const QString &name);
+    /// Creates the space `name`, `visibility` "public" or "private".
+    void create(const QString &name, const QString &visibility);
     void select(const QString &spaceId);
     void clearCurrent();
     void clear();
 
 signals:
     void changed();
+    /// Core created the space `spaceId`.
+    void created(const QString &spaceId);
 
 private:
     const SpaceRow *find(const QString &spaceId) const;
