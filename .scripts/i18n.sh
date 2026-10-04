@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Refresh the translation sources from every C++ and QML string. With
-# --check, refresh copies instead and fail while any string is untranslated.
+# Refresh the translation sources from every C++ and QML string; English, the
+# source language, keeps only plural forms. With --check, refresh copies
+# instead and fail while any string is untranslated.
 set -euo pipefail
 
 # shellcheck source=lib.sh
@@ -9,16 +10,21 @@ source "$(dirname "$0")/lib.sh"
 lupdate="$("$root/.scripts/linguist.sh")/lupdate"
 sources=("$root"/src/gui/i18n/*.ts)
 targets=("${sources[@]}")
+english="$root/src/gui/i18n/matome_en.ts"
 
 if [ "${1:-}" = "--check" ]; then
   scratch="$(mktemp -d)"
   trap 'rm -rf "$scratch"' EXIT
   cp "${sources[@]}" "$scratch/"
   targets=("$scratch"/*.ts)
+  english="$scratch/matome_en.ts"
 fi
 
-"$lupdate" -silent -extensions cpp,h,qml,js -locations relative -no-obsolete \
-  "$root/src/gui" -ts "${targets[@]}"
+translated=()
+for ts in "${targets[@]}"; do [ "$ts" = "$english" ] || translated+=("$ts"); done
+options=(-silent -extensions cpp,h,qml,js -locations relative -no-obsolete "$root/src/gui")
+"$lupdate" "${options[@]}" -ts "${translated[@]}"
+"$lupdate" "${options[@]}" -pluralonly -source-language en -target-language en -ts "$english"
 
 status=0
 for ts in "${targets[@]}"; do

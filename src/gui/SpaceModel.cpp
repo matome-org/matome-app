@@ -78,7 +78,7 @@ void SpaceModel::reload()
             [this](const Client::Reply &reply, const QJsonArray &list) { applyList(reply, list); });
 }
 
-void SpaceModel::create(const QString &name)
+void SpaceModel::create(const QString &name, const QString &visibility)
 {
     const QString orgId = m_session.currentOrgId();
     if (m_busy || !m_session.signedIn() || orgId.isEmpty())
@@ -92,6 +92,7 @@ void SpaceModel::create(const QString &name)
     setBusy();
     QJsonObject body;
     body.insert(QStringLiteral("name"), trimmed);
+    body.insert(QStringLiteral("visibility"), visibility);
     Client::Headers headers = idempotencyHeader();
     const QString path = orgPath(orgId, QStringLiteral("spaces"));
     m_session.authedPost(path, body, headers, [this, generation](const Client::Reply &reply) {
@@ -106,6 +107,7 @@ void SpaceModel::create(const QString &name)
         if (!id.isEmpty())
             m_currentSpaceId = id;
         reload();
+        emit created(id);
     });
 }
 
@@ -170,9 +172,13 @@ void SpaceModel::applyList(const Client::Reply &reply, const QJsonArray &list)
             rows.append(row);
     }
 
-    beginResetModel();
-    m_rows = rows;
-    endResetModel();
+    // A reload of the same spaces keeps the delegates showing them, with
+    // their focus and any press under way.
+    if (!updateInPlace(m_rows, rows, [this](int at) { emit dataChanged(index(at), index(at)); })) {
+        beginResetModel();
+        m_rows = rows;
+        endResetModel();
+    }
 
     if (!find(m_currentSpaceId))
         m_currentSpaceId.clear();

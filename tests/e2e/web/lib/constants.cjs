@@ -20,7 +20,7 @@ const INK = "#1a1714";
 const MESSAGES = {
   unreachable: "Could not reach Core at that URL.",
   server: "Core could not complete that request.",
-  wrongPassword: "That email or password is wrong.",
+  wrongPassword: "That email, username, or password is wrong.",
 };
 
 function argb(rgb) {

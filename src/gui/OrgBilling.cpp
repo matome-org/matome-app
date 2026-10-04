@@ -14,6 +14,11 @@ OrgBilling::OrgBilling(Session &session)
     : QObject(&session), m_session(session), m_paymentExpiry(this)
 {
     connect(session.addOns(), &AddOnManager::changed, this, &OrgBilling::changed);
+    connect(this, &OrgBilling::changed, this, [this] {
+        if (changedSince(m_listed, QJsonArray{m_subscription, m_packages,
+                                              QJsonArray::fromVariantList(products()), QJsonArray::fromVariantList(usage())}))
+            emit listsChanged();
+    });
     m_paymentExpiry.setSingleShot(true);
     m_paymentExpiry.setTimerType(Qt::PreciseTimer);
     connect(&m_paymentExpiry, &QTimer::timeout, this, [this] {
@@ -22,23 +27,28 @@ OrgBilling::OrgBilling(Session &session)
         m_errorCode = QStringLiteral("checkout_expired");
         emit changed();
     });
-    connect(&session, &Session::changed, this, [this] {
+    const auto sync = [this] {
         if (m_active && (!available() || m_orgId != m_session.currentOrgId()))
             close();
         else
             emit changed();
-    });
+    };
+    connect(&session, &Session::changed, this, sync);
+    connect(session.permissions(), &Permissions::changed, this, sync);
 }
 
+// Usage, plan and billing, or add-ons, by the organization's catalog.
 bool OrgBilling::available() const
 {
-    return m_session.signedIn()
-            && m_session.organizations()->canReadBilling(m_session.currentOrgId());
+    if (!m_session.signedIn())
+        return false;
+    const QStringList open = m_session.permissions()->sections(m_session.currentOrgId());
+    return open.contains(QStringLiteral("usage")) || open.contains(QStringLiteral("billing")) || open.contains(QStringLiteral("addons"));
 }
 
 bool OrgBilling::canManage() const
 {
-    return available() && m_session.organizations()->canManageBilling(m_session.currentOrgId());
+    return available() && m_session.permissions()->allows(m_session.currentOrgId(), QStringLiteral("billing.manage"));
 }
 
 QString OrgBilling::name() const

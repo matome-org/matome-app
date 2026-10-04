@@ -7,7 +7,8 @@ import "../chrome"
 import "../chrome/Scroll.js" as Scroll
 import "../chrome/Messages.js" as Messages
 
-// Sign in, create an account, and recover a password, in the landing's voice:
+// Sign in, create an account, set up an account an organization made, and
+// recover a password, in the landing's voice:
 // the mark writes itself over the wordmark and slogan, the form is a column of
 // hairline fields under a gold pill, and everything else is a quiet link. The
 // Core URL waits behind "Server…" until it is wanted or unreachable.
@@ -28,6 +29,8 @@ FocusScope {
                 return qsTr("Creating account…")
             if (auth.pane === "confirm")
                 return qsTr("Sending confirmation…")
+            if (auth.pane === "setup")
+                return qsTr("Setting up…")
             return qsTr("Signing in…")
         }
         if (Session.errorCode !== "")
@@ -36,8 +39,8 @@ FocusScope {
             return qsTr("If that account exists, a password reset link was sent. Open it in your browser, then sign in with your new password.")
         if (auth.pane === "confirm")
             return Session.confirmationResent
-                    ? qsTr("A new confirmation link was sent to %1. Open it in your browser, then return to sign in.").arg(Session.email)
-                    : qsTr("Open the confirmation link sent to %1 in your browser, then return to sign in.").arg(Session.email)
+                    ? qsTr("A new confirmation link was sent to %1. Open it in your browser, then return to sign in.").arg(Session.identifier)
+                    : qsTr("Open the confirmation link sent to %1 in your browser, then return to sign in.").arg(Session.identifier)
         return ""
     }
     readonly property string modeName: Theme.mode === "light" ? qsTr("Light")
@@ -45,12 +48,13 @@ FocusScope {
     readonly property Item focused: auth.Window.activeFocusItem
     readonly property string errorCode: Session.errorCode
 
-    // The remembered email and server are written once when the form shows;
+    // The remembered sign-in and server are written once when the form shows;
     // a binding would put them back over what was typed on every change.
     function prefill() {
-        emailField.text = Session.email
+        emailField.text = Session.identifier
         apiField.text = Session.apiBaseUrl
         passwordField.clear()
+        codeField.clear()
         auth.pane = Session.confirmationPending ? "confirm" : "signIn"
     }
 
@@ -66,6 +70,8 @@ FocusScope {
             Session.registerAccount(emailField.text, passwordField.text, apiField.text)
         else if (auth.pane === "forgot")
             Session.requestPasswordReset(emailField.text, apiField.text)
+        else if (auth.pane === "setup")
+            Session.setUpAccount(emailField.text, codeField.text, passwordField.text, apiField.text)
         else
             Session.signIn(emailField.text, passwordField.text, apiField.text)
     }
@@ -84,7 +90,7 @@ FocusScope {
     // the ones Core named (`name` is Core's) when it refused their values,
     // else the empty ones when something required was missing.
     function invalid(field, name) {
-        if (Session.errorCode === "unauthenticated")
+        if (Session.errorCode === "unauthenticated" || Session.errorCode === "invalid_setup_code")
             return true
         if (Session.errorCode !== "invalid_request")
             return false
@@ -177,6 +183,7 @@ FocusScope {
                 text: auth.pane === "register" ? qsTr("Create account")
                     : auth.pane === "confirm" ? qsTr("Confirm your email")
                     : auth.pane === "forgot" ? qsTr("Forgot password")
+                    : auth.pane === "setup" ? qsTr("Set up account")
                     : qsTr("Sign in")
             }
 
@@ -187,9 +194,22 @@ FocusScope {
                 line: true
                 focus: auth.pane !== "confirm"
                 visible: auth.pane !== "confirm"
-                invalid: auth.invalid(emailField, "email")
-                placeholderText: qsTr("Email")
+                invalid: auth.invalid(emailField, auth.pane === "register" || auth.pane === "forgot" ? "email" : "identifier")
+                placeholderText: auth.pane === "register" || auth.pane === "forgot" ? qsTr("Email") : qsTr("Email or username")
                 inputMethodHints: Qt.ImhEmailCharactersOnly | Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                EnterKey.type: Qt.EnterKeyGo
+                Keys.onReturnPressed: auth.submit()
+                Keys.onEnterPressed: auth.submit()
+            }
+
+            Field {
+                id: codeField
+                objectName: "setupCodeField"
+                line: true
+                visible: auth.pane === "setup"
+                invalid: auth.invalid(codeField, "code")
+                placeholderText: qsTr("Setup code")
+                inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
                 EnterKey.type: Qt.EnterKeyGo
                 Keys.onReturnPressed: auth.submit()
                 Keys.onEnterPressed: auth.submit()
@@ -199,9 +219,9 @@ FocusScope {
                 id: passwordField
                 objectName: "passwordField"
                 line: true
-                visible: auth.pane === "signIn" || auth.pane === "register"
+                visible: auth.pane === "signIn" || auth.pane === "register" || auth.pane === "setup"
                 invalid: auth.invalid(passwordField, "password")
-                placeholderText: qsTr("Password")
+                placeholderText: auth.pane === "setup" ? qsTr("New password") : qsTr("Password")
                 echoMode: TextInput.Password
                 EnterKey.type: Qt.EnterKeyGo
                 Keys.onReturnPressed: auth.submit()
@@ -219,6 +239,7 @@ FocusScope {
                 usable: !Session.busy
                 text: auth.pane === "register" ? qsTr("Create account")
                     : auth.pane === "forgot" ? qsTr("Send reset")
+                    : auth.pane === "setup" ? qsTr("Set up account")
                     : qsTr("Sign in")
                 onActivated: auth.submit()
             }
@@ -252,6 +273,11 @@ FocusScope {
                     objectName: "forgotLink"
                     text: qsTr("Forgot password")
                     onActivated: auth.showPane("forgot")
+                }
+                TextLink {
+                    objectName: "setupLink"
+                    text: qsTr("Set up account")
+                    onActivated: auth.showPane("setup")
                 }
             }
 

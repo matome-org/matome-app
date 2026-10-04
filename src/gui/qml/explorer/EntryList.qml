@@ -51,7 +51,7 @@ FocusScope {
     // What acts on the row, under its name, then what acts on the open
     // location, under its own.
     function rowMenu(row, x, y) {
-        pane.menuRequested([{ title: row.title, ids: ["open", "download", "rename", "cut", "trash"] },
+        pane.menuRequested([{ title: row.title, ids: ["open", "download", "rename", "access", "manage-document", "unmanage-document", "cut", "trash"] },
                             { title: pane.here, ids: pane.hereCommands }], row, x, y)
     }
 

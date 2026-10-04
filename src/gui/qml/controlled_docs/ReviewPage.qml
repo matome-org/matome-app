@@ -8,19 +8,21 @@ import "../documents"
 import "../chrome/Messages.js" as Messages
 
 // One review of the document, opened from the Reviews tab: who proposed
-// what against which version, and what was decided, over the edited
-// document or its changes, images included. The screen's command bar
-// decides on it.
+// what against which version, how it stands against the published version,
+// and what was decided, over the edited document or its changes, images
+// included. The screen's command bar decides on it, or lets its author
+// update it.
 ColumnLayout {
     id: panel
 
     readonly property var control: Session.controlledDocs
     readonly property var review: panel.control.review
     readonly property var decision: panel.review.decision ?? null
+    readonly property bool open: panel.review.status === "open"
     property string shown: "document"
 
     function memberEmail(id) {
-        return panel.control.members.find(function (member) { return String(member.id) === String(id) })?.email ?? ""
+        return panel.control.members.find(function (member) { return String(member.id) === String(id) })?.label ?? ""
     }
     function when(time) {
         return time ? new Date(time).toLocaleString(Qt.locale(), Locale.ShortFormat) : ""
@@ -38,10 +40,17 @@ ColumnLayout {
         Text {
             objectName: "reviewStatus"
             Layout.fillWidth: true
-            text: Messages.reviewStatus(panel.review.status ?? "")
+            text: panel.open ? Messages.reviewStatus("open") + " · " + Messages.mergeState(panel.review.merge_state)
+                             : Messages.reviewStatus(panel.review.status ?? "")
             font: Theme.strong(Theme.body)
-            color: panel.review.status === "open" ? Theme.accentText : Theme.textPrimary
+            color: !panel.open ? Theme.textPrimary
+                 : (panel.review.merge_state ?? "clean") === "clean" ? Theme.accentText : Theme.failed
             textFormat: Text.PlainText
+        }
+        Label {
+            objectName: "reviewMergeAdvice"
+            visible: panel.open && text !== ""
+            text: Messages.mergeAdvice(panel.review.merge_state ?? "clean", panel.control.authored)
         }
         Label {
             text: {
@@ -61,10 +70,27 @@ ColumnLayout {
                   + ((panel.decision?.comment ?? "") !== "" ? "\n" + qsTr("Comment: %1").arg(panel.decision.comment) : "")
         }
         Label {
-            visible: panel.review.status === "open" && !panel.control.canDecide && !panel.control.busy
-            text: panel.memberEmail(panel.review.author_membership_id).toLowerCase() === Session.email.toLowerCase()
-                  ? qsTr("You submitted this review, so another reviewer must approve or reject it. You can still cancel it.")
-                  : qsTr("Approving or rejecting needs review permission in this space.")
+            objectName: "reviewApprovals"
+            visible: panel.open && (panel.control.requiredApprovals > 1 || panel.control.approvals > 0)
+            text: {
+                const names = (panel.review.approvals ?? []).map(function (approval) {
+                    return panel.memberEmail(approval.approving_membership_id) || qsTr("a reviewer")
+                })
+                return qsTr("Approvals: %1 of %2").arg(panel.control.approvals).arg(panel.control.requiredApprovals)
+                       + (names.length > 0 ? " · " + names.join(", ") : "")
+            }
+        }
+        Label {
+            objectName: "reviewDecisionAdvice"
+            visible: panel.open && !panel.control.busy && text !== ""
+            text: panel.control.approved
+                  ? qsTr("You approved this proposal. It is published once %n more reviewer(s) approve it.", "",
+                         Math.max(1, panel.control.requiredApprovals - panel.control.approvals))
+                  : panel.control.authored && panel.control.authorMayApprove
+                  ? qsTr("You submitted this review. This space lets authors approve their own reviews, but only another reviewer can reject it.")
+                  : panel.control.authored
+                  ? qsTr("You submitted this review, so another reviewer must approve or reject it. You can still edit or cancel it.")
+                  : !panel.control.canReject ? qsTr("Approving or rejecting needs review permission in this space.") : ""
         }
     }
     RowLayout {

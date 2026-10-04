@@ -5,6 +5,7 @@
 #include <QAbstractListModel>
 #include <QJsonArray>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 namespace matome {
@@ -14,17 +15,13 @@ class Session;
 struct OrgRow {
     QString id;
     QString name;
-    QString role;
+    /// The built-in organization roles the membership holds directly.
+    QStringList roles;
     int revision = 1;
 
-    bool canAdminister() const
+    bool operator==(const OrgRow &other) const
     {
-        return role == QLatin1String("owner") || role == QLatin1String("admin");
-    }
-    bool canReadBilling() const { return canAdminister() || role == QLatin1String("billing"); }
-    bool canManageBilling() const
-    {
-        return role == QLatin1String("owner") || role == QLatin1String("billing");
+        return id == other.id && name == other.name && roles == other.roles && revision == other.revision;
     }
 };
 
@@ -38,10 +35,8 @@ public:
     enum Role {
         OrgIdRole = Qt::UserRole + 1,
         NameRole,
-        RoleNameRole,
-        RevisionRole,
-        CanAdministerRole,
-        CanReadBillingRole
+        RolesRole,
+        RevisionRole
     };
 
     explicit OrgModel(Session &session);
@@ -50,9 +45,8 @@ public:
     QString errorCode() const { return m_errorCode; }
     QString currentOrgId() const { return m_currentOrgId; }
     QString nameOf(const QString &orgId) const;
-    bool canAdminister(const QString &orgId) const;
-    bool canReadBilling(const QString &orgId) const;
-    bool canManageBilling(const QString &orgId) const;
+    /// The ids of the organizations listed, in order.
+    QStringList ids() const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role) const override;

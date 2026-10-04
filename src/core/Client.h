@@ -46,7 +46,8 @@ public:
                const Headers &headers = {});
     void put(const QString &path, const QJsonObject &body, Done done,
              const Headers &headers = {});
-    void del(const QString &path, Done done, const Headers &headers = {});
+    /// A DELETE carries `body` only when it is not empty.
+    void del(const QString &path, Done done, const Headers &headers = {}, const QJsonObject &body = {});
 
     /// Signed storage PUT/GET: the URL is used as given, without the access
     /// token; a PUT sends the headers its signature names.
@@ -57,8 +58,9 @@ public:
     void abortAll();
 
 private:
+    /// A Core call; a rate limit asking for a short wait is retried `retries` times.
     void send(const QByteArray &method, const QString &path, const QJsonObject &body,
-              const Headers &headers, Done done);
+              const Headers &headers, Done done, int retries = 2);
     /// `json`: a Core call (a JSON body both ways, capped small) rather than
     /// storage bytes.
     void sendRaw(const QByteArray &method, const QUrl &url, const QByteArray &bytes,

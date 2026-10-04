@@ -16,6 +16,11 @@ It checks QML warnings and translation completeness, runs the core unit
 tests and offscreen desktop suite, and checks line coverage of every source
 listed in `.scripts/coverage.py` at a minimum of 90% per file and in total.
 
+Translation completeness covers `matome_pt_BR.ts`, `matome_ja.ts`, and
+`matome_en.ts`. English is the source language, so its file holds only the
+singular and plural forms of `qsTr("… %n …", "", count)` strings. Write such
+sources with `(s)`, then give each form in all three files.
+
 The test suites are also available individually:
 
 ```bash
@@ -36,8 +41,10 @@ without the studio, platform e2e suites, or the combined coverage gate.
 responses with their encoding headers, including API errors, and requires
 cache revalidation for JavaScript and WebAssembly assets.
 
-`test:desktop` exercises keyboard, mouse, touch, drag and drop, uploads,
-errors, and the narrow drawer against FakeCore by QML `objectName`. It then
+`test:desktop` exercises keyboard, mouse, touch, the wheel, drag and drop,
+uploads, errors, and the narrow drawer against FakeCore by QML
+`objectName`. A click is also pressed and released across a reload, so a
+list that rebuilds its rows under the pointer fails it. It then
 smokes the real `matome-studio` binary's `main.cpp` wiring through a probe
 plugin: fonts, translator, icon, saved settings, and sign-in.
 

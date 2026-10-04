@@ -64,19 +64,66 @@ const QRegularExpression &assetLink()
     return link;
 }
 
-// Any file a document links: `](matome:asset/<document>?version=<version>)`
-// or `](matome:doc/<document>)`, the version optional for a document link.
+// Any file a document links: `](matome:asset/<document>?version=<version>)`,
+// `](matome:doc/<document>)` with the version optional, or `](/<path>)` from
+// the space root with an optional title. `//host` is another site; a path
+// may hold balanced parentheses, as CommonMark allows.
 const QRegularExpression &fileLink()
 {
-    static const QRegularExpression link(QStringLiteral(R"(\]\(matome:(asset|doc)/(\d+)(?:\?version=([0-9A-Fa-f-]{36}))?\))"));
+    static const QRegularExpression link(QStringLiteral(
+            R"(\]\((?:matome:(asset|doc)/(\d+)(?:\?version=([0-9A-Fa-f-]{36}))?|(/(?:[^/\s()]|\([^\s()]*\))(?:[^\s()]|\([^\s()]*\))*)(?:\s+"[^"]*")?)\))"));
     return link;
 }
 
-// What identifies a link among the references: its document, and its
-// version when it pins one.
-QString referenceKey(const QRegularExpressionMatch &match)
+// The decoded path a `](/<path>)` link names, without its query or
+// fragment; empty when Core would refuse it (an empty segment).
+QString linkPath(const QString &link)
 {
-    return match.captured(2) + QLatin1Char('@') + match.captured(3);
+    const QString bare = link.section(QLatin1Char('#'), 0, 0).section(QLatin1Char('?'), 0, 0);
+    QStringList segments;
+    for (const QString &segment : bare.mid(1).split(QLatin1Char('/'))) {
+        const QString name = QUrl::fromPercentEncoding(segment.toUtf8());
+        if (name.trimmed().isEmpty())
+            return {};
+        segments.append(name);
+    }
+    return QLatin1Char('/') + segments.join(QLatin1Char('/'));
+}
+
+struct Link {
+    QJsonObject reference;
+    qsizetype start = 0;
+    qsizetype length = 0;
+};
+
+// The references `markdown` declares, in order and once each: a document and
+// the version it pins, or a path compared like Core's name keys.
+QList<Link> fileLinks(const QString &markdown, bool paths)
+{
+    QList<Link> links;
+    QSet<QString> seen;
+    for (auto it = fileLink().globalMatch(markdown); it.hasNext();) {
+        const auto match = it.next();
+        QJsonObject reference;
+        QString key;
+        if (match.hasCaptured(4)) {
+            const QString path = paths ? linkPath(match.captured(4)) : QString();
+            if (path.isEmpty())
+                continue;
+            reference.insert(QStringLiteral("path"), path);
+            key = QStringLiteral("path:") + path.normalized(QString::NormalizationForm_C).toCaseFolded();
+        } else {
+            reference.insert(QStringLiteral("document_id"), match.captured(2).toLongLong());
+            if (!match.captured(3).isEmpty())
+                reference.insert(QStringLiteral("version_id"), match.captured(3));
+            key = match.captured(2) + QLatin1Char('@') + match.captured(3);
+        }
+        if (seen.contains(key))
+            continue;
+        seen.insert(key);
+        links.append({reference, match.capturedStart(), match.capturedLength()});
+    }
+    return links;
 }
 
 // An image linked from anywhere else: `![alt](http…)`.
@@ -90,20 +137,11 @@ const QRegularExpression &externalImage()
 
 } // namespace
 
-QJsonArray Assets::references(const QString &markdown)
+QJsonArray Assets::references(const QString &markdown, bool paths)
 {
     QJsonArray list;
-    QSet<QString> seen;
-    for (auto it = fileLink().globalMatch(markdown); it.hasNext();) {
-        const auto match = it.next();
-        if (seen.contains(referenceKey(match)))
-            continue;
-        seen.insert(referenceKey(match));
-        QJsonObject reference{{QStringLiteral("document_id"), match.captured(2).toLongLong()}};
-        if (!match.captured(3).isEmpty())
-            reference.insert(QStringLiteral("version_id"), match.captured(3));
-        list.append(reference);
-    }
+    for (const Link &link : fileLinks(markdown, paths))
+        list.append(link.reference);
     return list;
 }
 
@@ -143,20 +181,12 @@ QString Assets::source(const QString &orgId, const QString &spaceId, const QStri
             .arg(width);
 }
 
-QVariantMap Assets::referenceAt(const QString &markdown, int index) const
+QVariantMap Assets::referenceAt(const QString &markdown, int index, bool paths) const
 {
-    const QJsonArray list = references(markdown);
-    if (index < 0 || index >= list.size())
+    const QList<Link> links = fileLinks(markdown, paths);
+    if (index < 0 || index >= links.size())
         return {};
-    const QJsonObject wanted = list.at(index).toObject();
-    const QString key = QString::number(wanted.value(QStringLiteral("document_id")).toInteger()) + QLatin1Char('@')
-            + wanted.value(QStringLiteral("version_id")).toString();
-    for (auto it = fileLink().globalMatch(markdown); it.hasNext();) {
-        const auto match = it.next();
-        if (referenceKey(match) == key)
-            return {{QStringLiteral("start"), match.capturedStart()}, {QStringLiteral("length"), match.capturedLength()}};
-    }
-    return {};
+    return {{QStringLiteral("start"), links.at(index).start}, {QStringLiteral("length"), links.at(index).length}};
 }
 
 bool Assets::linksExternal(const QString &markdown) const

@@ -22,11 +22,18 @@ Session::Session(QObject *parent, AddOnBackend *backend)
     : QObject(parent)
     , m_coreAddOnBackend(*this)
     , m_addOns(backend ? *backend : m_coreAddOnBackend, this)
+    , m_permissions(*this, m_addOns.backend())
+    , m_addOnAccess(*this, m_addOns)
     , m_assets(*this, m_addOns.backend())
     , m_documentView(*this, m_addOns.backend())
     , m_controlledDocs(*this, m_documentView)
-    , m_spaceAccess(*this, m_addOns.backend())
-    , m_controlledRule(*this)
+    , m_accessDirectory(*this, m_addOns.backend())
+    , m_placeNames(*this, m_addOns.backend())
+    , m_accessGrants(*this, m_accessDirectory, m_placeNames, m_addOns.backend())
+    , m_principalAccess(*this, m_accessDirectory, m_placeNames, m_addOns.backend())
+    , m_roleHolders(*this, m_accessDirectory, m_placeNames, m_addOns.backend())
+    , m_apiTokens(*this, m_addOns.backend())
+    , m_addOnActivations(*this, m_addOns)
     , m_orgs(*this)
     , m_orgAdmin(*this)
     , m_orgBilling(*this)
@@ -36,10 +43,15 @@ Session::Session(QObject *parent, AddOnBackend *backend)
     , m_entries(*this)
     , m_folderTree(*this)
 {
-    connect(this, &Session::changed, this, [this] {
+    // The add-ons are read and installed by whoever the organization's
+    // catalog lets.
+    const auto addOnContext = [this] {
         const QString org = signedIn() ? currentOrgId() : QString();
-        m_addOns.setContext(org, m_orgs.canReadBilling(org), m_orgs.canAdminister(org));
-    });
+        m_addOns.setContext(org, m_permissions.allows(org, QStringLiteral("add_on.read")),
+                            m_permissions.allows(org, QStringLiteral("add_on.install")));
+    };
+    connect(this, &Session::changed, this, addOnContext);
+    connect(&m_permissions, &Permissions::changed, this, addOnContext);
     connect(this, &Session::changed, this, [this] {
         if (!signedIn())
             m_assets.clear();
@@ -65,6 +77,10 @@ Session::Session(QObject *parent, AddOnBackend *backend)
         syncSpaces();
         notify();
     });
+    connect(&m_orgs, &OrgModel::changed, &m_permissions, &Permissions::readOrganizations);
+    // An explanation names roles and add-ons, which arrive on their own.
+    connect(&m_accessDirectory, &AccessDirectory::listsChanged, &m_permissions, &Permissions::changed);
+    connect(&m_addOns, &AddOnManager::changed, &m_permissions, &Permissions::changed);
     connect(&m_spaces, &SpaceModel::changed, this, [this] {
         syncFiles();
         notify();
@@ -78,8 +94,34 @@ Session::Session(QObject *parent, AddOnBackend *backend)
     connect(this, &Session::changed, this, &Session::commandsChanged);
     connect(this, &Session::settingsChanged, this, &Session::commandsChanged);
     connect(&m_documentView, &DocumentView::changed, this, &Session::commandsChanged);
-    // Space settings list the organization's spaces.
-    connect(&m_spaces, &SpaceModel::changed, &m_spaceAccess, &SpaceAccess::changed);
+    connect(&m_permissions, &Permissions::changed, this, &Session::commandsChanged);
+    // Settings opens what the catalog lets the person administer.
+    connect(&m_permissions, &Permissions::changed, this, [this] {
+        if (m_settingsActive) {
+            m_orgAdmin.open();
+            m_orgBilling.open();
+        }
+    });
+    // Members named by access pages came or left.
+    connect(&m_orgAdmin, &OrgAdmin::changeSaved, this, [this](const QString &notice) {
+        if (m_accessDirectory.active() && (notice == QLatin1String("removed") || notice == QLatin1String("member_created")))
+            m_accessDirectory.open();
+    });
+    // Organization roles show on the people lists, and the signed-in
+    // person's own decide what they may administer.
+    const auto rolesChanged = [this] {
+        if (m_accessDirectory.active()) m_accessDirectory.open();
+        m_orgAdmin.refresh();
+        refreshOrganizations();
+    };
+    connect(&m_principalAccess, &PrincipalAccess::rolesChanged, this, rolesChanged);
+    connect(&m_roleHolders, &RoleHolders::rolesChanged, this, rolesChanged);
+    connect(&m_spaces, &SpaceModel::created, &m_addOns, &AddOnManager::refresh);
+    // Settings renamed or archived a space.
+    connect(&m_accessDirectory, &AccessDirectory::saved, this, [this](const QString &notice) {
+        if (notice.startsWith(QLatin1String("space_")))
+            m_spaces.reload();
+    });
     connect(&m_controlledDocs, &ControlledDocs::changed, this, &Session::commandsChanged);
     connect(&m_documents, &DocumentModel::downloadReady, this, &Session::downloadReady);
     connect(&m_documents, &DocumentModel::trashed, this, [this](const QString &id, int revision) {
@@ -107,6 +149,8 @@ void Session::closeSettings()
     m_settingsActive = false;
     m_orgAdmin.close();
     m_orgBilling.close();
+    // What changed there may change what the person may do.
+    m_permissions.reload();
     emit settingsChanged();
 }
 
@@ -271,14 +315,14 @@ void Session::navigate(const QString &kind, const QString &id)
     go(to);
 }
 
-void Session::createHere(const QString &name)
+void Session::createHere(const QString &name, const QString &visibility)
 {
     switch (where()) {
     case Level::Orgs:
         m_orgs.create(name);
         break;
     case Level::Spaces:
-        m_spaces.create(name);
+        m_spaces.create(name, visibility);
         break;
     case Level::Files:
         m_folders.create(name);
@@ -476,25 +520,51 @@ void Session::setLastOrgId(const QString &id)
     notify();
 }
 
-void Session::signIn(const QString &email, const QString &password, const QString &apiBaseUrl)
+void Session::signIn(const QString &identifier, const QString &password, const QString &apiBaseUrl)
 {
-    if (!requireEmailPassword(email, password, apiBaseUrl))
+    if (!requireCredentials(identifier, password, apiBaseUrl))
         return;
-    QJsonObject body;
-    body.insert(QStringLiteral("email"), m_email);
-    body.insert(QStringLiteral("password"), password);
-    postAuth(QStringLiteral("/api/auth/login"), body);
+    postAuth(QStringLiteral("/api/auth/login"),
+             {{QStringLiteral("identifier"), m_identifier}, {QStringLiteral("password"), password}});
+}
+
+void Session::setUpAccount(const QString &identifier, const QString &code, const QString &password,
+                           const QString &apiBaseUrl)
+{
+    if (!requireCredentials(identifier, password, apiBaseUrl))
+        return;
+    if (code.trimmed().isEmpty()) {
+        fail(QStringLiteral("invalid_request"));
+        return;
+    }
+    postAuth(QStringLiteral("/api/auth/setup"), {{QStringLiteral("identifier"), m_identifier},
+                                                 {QStringLiteral("code"), code.trimmed()},
+                                                 {QStringLiteral("password"), password}});
 }
 
 void Session::registerAccount(const QString &email, const QString &password,
                               const QString &apiBaseUrl)
 {
-    if (!requireEmailPassword(email, password, apiBaseUrl))
+    if (!requireCredentials(email, password, apiBaseUrl))
         return;
-    QJsonObject body;
-    body.insert(QStringLiteral("email"), m_email);
-    body.insert(QStringLiteral("password"), password);
-    postAuth(QStringLiteral("/api/auth/register"), body);
+    m_client.abortAll();
+    clearTokens();
+    m_signedIn = false;
+    m_confirmationPending = false;
+    m_confirmationResent = false;
+    setBusy();
+    m_client.post(QStringLiteral("/api/auth/register"),
+                  {{QStringLiteral("email"), m_identifier}, {QStringLiteral("password"), password}},
+                  [this](const Client::Reply &reply) {
+                      if (!reply.ok) {
+                          failReply(reply);
+                          return;
+                      }
+                      m_busy = false;
+                      m_confirmationPending = true;
+                      clearError();
+                      notify();
+                  });
 }
 
 void Session::resendConfirmation()
@@ -503,17 +573,18 @@ void Session::resendConfirmation()
         return;
     m_confirmationResent = false;
     setBusy();
-    authedPost(QStringLiteral("/api/auth/resend-confirmation"), {}, {},
-               [this](const Client::Reply &reply) {
-                   if (!reply.ok) {
-                       failConfirmation(reply);
-                       return;
-                   }
-                   m_busy = false;
-                   m_confirmationResent = true;
-                   clearError();
-                   notify();
-               });
+    m_client.post(QStringLiteral("/api/auth/resend-confirmation"), {{QStringLiteral("email"), m_identifier}},
+                  [this](const Client::Reply &reply) {
+                      m_busy = false;
+                      if (reply.ok)
+                          clearError();
+                      else {
+                          m_errorCode = failCode(reply);
+                          m_errorFields = reply.json.value(QStringLiteral("details")).toObject().keys();
+                      }
+                      m_confirmationResent = reply.ok;
+                      notify();
+                  });
 }
 
 void Session::requestPasswordReset(const QString &email, const QString &apiBaseUrl)
@@ -525,7 +596,7 @@ void Session::requestPasswordReset(const QString &email, const QString &apiBaseU
         fail(QStringLiteral("invalid_request"));
         return;
     }
-    m_email = trimmedEmail;
+    m_identifier = trimmedEmail;
     persistIdentity();
     m_resetSent = false;
     m_client.abortAll();
@@ -596,9 +667,10 @@ void Session::authedPatch(const QString &path, const QJsonObject &body, const Cl
     authed("PATCH", path, body, headers, std::move(done), false);
 }
 
-void Session::authedDelete(const QString &path, const Client::Headers &headers, Client::Done done)
+void Session::authedDelete(const QString &path, const Client::Headers &headers, Client::Done done,
+                           const QJsonObject &body)
 {
-    authed("DELETE", path, {}, headers, std::move(done), false);
+    authed("DELETE", path, body, headers, std::move(done), false);
 }
 
 void Session::authedList(const QString &path, const QString &key, Live live, ListDone done)
@@ -631,13 +703,13 @@ bool Session::bindOrigin(const QString &apiBaseUrl)
     return true;
 }
 
-bool Session::requireEmailPassword(const QString &email, const QString &password,
-                                   const QString &apiBaseUrl)
+bool Session::requireCredentials(const QString &identifier, const QString &secret,
+                                 const QString &apiBaseUrl)
 {
     if (m_busy)
         return false;
-    const QString trimmedEmail = email.trimmed();
-    if (trimmedEmail.isEmpty() || password.isEmpty()) {
+    const QString trimmed = identifier.trimmed();
+    if (trimmed.isEmpty() || secret.isEmpty()) {
         fail(QStringLiteral("invalid_request"));
         return false;
     }
@@ -645,7 +717,7 @@ bool Session::requireEmailPassword(const QString &email, const QString &password
         fail(QStringLiteral("network"));
         return false;
     }
-    m_email = trimmedEmail;
+    m_identifier = trimmed;
     persistIdentity();
     return true;
 }
@@ -665,12 +737,12 @@ void Session::load()
 {
     QSettings settings;
     settings.beginGroup(QStringLiteral("session"));
-    const QString email = settings.value(QStringLiteral("email")).toString();
+    const QString identifier = settings.value(QStringLiteral("identifier")).toString();
     const QString url = settings.value(QStringLiteral("apiBaseUrl")).toString();
     const QString org = settings.value(QStringLiteral("lastOrgId")).toString();
     settings.endGroup();
-    if (!email.isEmpty())
-        m_email = email;
+    if (!identifier.isEmpty())
+        m_identifier = identifier;
     if (!url.isEmpty())
         m_apiBaseUrl = url;
     if (!org.isEmpty())
@@ -681,7 +753,7 @@ void Session::persistIdentity()
 {
     QSettings settings;
     settings.beginGroup(QStringLiteral("session"));
-    settings.setValue(QStringLiteral("email"), m_email);
+    settings.setValue(QStringLiteral("identifier"), m_identifier);
     settings.setValue(QStringLiteral("apiBaseUrl"), m_apiBaseUrl);
     settings.setValue(QStringLiteral("lastOrgId"), m_lastOrgId);
     settings.endGroup();
@@ -720,18 +792,42 @@ void Session::failReply(const Client::Reply &reply)
     fail(failCode(reply), reply.json.value(QStringLiteral("details")).toObject().keys());
 }
 
-void Session::failConfirmation(const Client::Reply &reply)
-{
-    m_busy = false;
-    m_errorCode = failCode(reply);
-    m_errorFields = reply.json.value(QStringLiteral("details")).toObject().keys();
-    notify();
-}
-
 void Session::clearTokens()
 {
     m_client.setAccessToken(QString());
     m_refreshToken.clear();
+    m_signedInAt = {};
+}
+
+bool Session::recentlySignedIn() const
+{
+    // A minute short of Core's window, so a form filled near its end still passes.
+    return m_signedInAt.isValid() && m_signedInAt.secsTo(QDateTime::currentDateTimeUtc()) < 14 * 60;
+}
+
+void Session::reauthenticate(const QString &password, const std::function<void(const QString &)> &done)
+{
+    if (!m_signedIn || password.isEmpty()) {
+        done(QStringLiteral("password_required"));
+        return;
+    }
+    const QJsonObject body{{QStringLiteral("identifier"), m_identifier}, {QStringLiteral("password"), password}};
+    m_client.post(QStringLiteral("/api/auth/login"), body, [this, done](const Client::Reply &reply) {
+        const QString access = reply.json.value(QStringLiteral("access_token")).toString();
+        const QString refresh = reply.json.value(QStringLiteral("refresh_token")).toString();
+        if (!reply.ok || access.isEmpty() || refresh.isEmpty()) {
+            done(reply.ok ? QStringLiteral("invalid_request") : failCode(reply));
+            return;
+        }
+        // The replaced session is revoked so only one stays live.
+        QJsonObject previous;
+        previous.insert(QStringLiteral("refresh_token"), m_refreshToken);
+        m_client.post(QStringLiteral("/api/auth/logout"), previous, [](const Client::Reply &) {});
+        m_client.setAccessToken(access);
+        m_refreshToken = refresh;
+        m_signedInAt = QDateTime::currentDateTimeUtc();
+        done({});
+    });
 }
 
 void Session::clearContent()
@@ -743,6 +839,7 @@ void Session::clearContent()
     m_history.clear();
     m_historyIndex = -1;
     m_uploads.clear();
+    m_staged.clear();
     ++m_uploadRun;
     m_uploadDone = 0;
     m_uploadProgress = 0;
@@ -751,42 +848,49 @@ void Session::clearContent()
 
 void Session::applyAuth(const Client::Reply &reply)
 {
+    // A personal account whose email is unconfirmed signs in once its link
+    // is opened: the form waits on that link, as after registering.
+    if (reply.code == QLatin1String("email_not_confirmed")) {
+        fail({});
+        m_confirmationPending = true;
+        notify();
+        return;
+    }
     if (!reply.ok) {
         failReply(reply);
         return;
     }
 
     const QJsonObject user = reply.json.value(QStringLiteral("user")).toObject();
-    const QJsonValue confirmed = user.value(QStringLiteral("email_confirmed"));
-    const QString email = user.value(QStringLiteral("email")).toString();
+    const QString identifier = user.value(QStringLiteral("identifier")).toString();
     const QString access = reply.json.value(QStringLiteral("access_token")).toString();
     const QString refresh = reply.json.value(QStringLiteral("refresh_token")).toString();
-    if (access.isEmpty() || !confirmed.isBool()) {
+    if (access.isEmpty()) {
         fail(QStringLiteral("invalid_request"));
         return;
     }
 
     m_client.setAccessToken(access);
     m_refreshToken = refresh;
-    if (!email.isEmpty())
-        m_email = email;
+    m_signedInAt = QDateTime::currentDateTimeUtc();
+    m_userId = jsonId(user.value(QStringLiteral("id")));
+    if (!identifier.isEmpty())
+        m_identifier = identifier;
     persistIdentity();
     m_busy = false;
-    m_signedIn = confirmed.toBool();
-    m_confirmationPending = !m_signedIn;
+    m_signedIn = true;
+    m_confirmationPending = false;
     m_confirmationResent = false;
     m_resetSent = false;
     clearError();
-    if (m_signedIn)
-        m_orgs.reload();
+    m_orgs.reload();
     notify();
 }
 
 void Session::authed(const QByteArray &method, const QString &path, const QJsonObject &body,
                      const Client::Headers &headers, Client::Done done, bool retried)
 {
-    const bool confirmationRoute = path == QLatin1String("/api/auth/resend-confirmation");
-    if (!m_signedIn && !(m_confirmationPending && confirmationRoute)) {
+    if (!m_signedIn) {
         Client::Reply reply;
         reply.code = QStringLiteral("unauthenticated");
         done(reply);
@@ -817,7 +921,7 @@ void Session::authed(const QByteArray &method, const QString &path, const QJsonO
     else if (method == "PUT")
         m_client.put(path, body, finish, headers);
     else if (method == "DELETE")
-        m_client.del(path, finish, headers);
+        m_client.del(path, finish, headers, body);
     else
         m_client.post(path, body, finish, headers);
 }

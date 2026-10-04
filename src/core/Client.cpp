@@ -14,13 +14,19 @@ namespace {
 constexpr qint64 kMaxJsonBytes = 1024 * 1024;
 constexpr qint64 kMaxFileBytes = 32 * 1024 * 1024;
 constexpr qint64 kMaxDiffJsonBytes = 12 * 1024 * 1024 + 4096;
+// A rate limit asking for longer than this is answered, not waited out.
+constexpr int kMaxRetryWaitSeconds = 2;
 
 QString mapStatus(int status, const QString &server)
 {
+    // Refusals the person can act on keep Core's code; any other 401 or 403
+    // reads as a missing session or permission.
     if (status == 401)
-        return QStringLiteral("unauthenticated");
+        return server == QLatin1String("invalid_setup_code") ? server : QStringLiteral("unauthenticated");
     if (status == 403)
-        return QStringLiteral("forbidden");
+        return server == QLatin1String("email_not_confirmed") || server == QLatin1String("capability_missing")
+                       || server == QLatin1String("managed_account")
+                ? server : QStringLiteral("forbidden");
     if (status == 404)
         return QStringLiteral("not_found");
     if (status >= 200 && status < 300)
@@ -80,9 +86,9 @@ void Client::patch(const QString &path, const QJsonObject &body, Done done, cons
     send("PATCH", path, body, headers, std::move(done));
 }
 
-void Client::del(const QString &path, Done done, const Headers &headers)
+void Client::del(const QString &path, Done done, const Headers &headers, const QJsonObject &body)
 {
-    send("DELETE", path, {}, headers, std::move(done));
+    send("DELETE", path, body, headers, std::move(done));
 }
 
 void Client::put(const QString &path, const QJsonObject &body, Done done, const Headers &headers)
@@ -110,16 +116,30 @@ void Client::abortAll()
 }
 
 void Client::send(const QByteArray &method, const QString &path, const QJsonObject &body,
-                  const Headers &headers, Done done)
+                  const Headers &headers, Done done, int retries)
 {
     Headers all = headers;
     if (!m_accessToken.isEmpty())
         all.prepend({QByteArrayLiteral("Authorization"),
                      QByteArrayLiteral("Bearer ") + m_accessToken.toUtf8()});
     QByteArray payload;
-    if (method != "GET" && method != "DELETE")
+    if (method != "GET" && (method != "DELETE" || !body.isEmpty()))
         payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
-    sendRaw(method, join(m_baseUrl, path), payload, all, true, std::move(done));
+    const int generation = m_generation;
+    sendRaw(method, join(m_baseUrl, path), payload, all, true,
+            [this, method, path, body, headers, done, retries, generation](const Reply &reply) {
+        // Core refuses a rate-limited call before handling it, so the same call
+        // (its Idempotency-Key included) is sent again after the wait.
+        const int wait = reply.json.value(QStringLiteral("retry_after")).toInt();
+        if (reply.status != 429 || retries == 0 || wait < 1 || wait > kMaxRetryWaitSeconds) {
+            done(reply);
+            return;
+        }
+        QTimer::singleShot(wait * 1000, this, [this, method, path, body, headers, done, retries, generation] {
+            if (generation == m_generation)
+                send(method, path, body, headers, done, retries - 1);
+        });
+    });
 }
 
 void Client::sendRaw(const QByteArray &method, const QUrl &url, const QByteArray &bytes,

@@ -14,8 +14,8 @@ void AddOnManager::setContext(const QString &orgId, bool canRead, bool canInstal
     m_canRead = canRead;
     m_canInstall = canInstall;
     m_pending = 0;
-    m_saving = m_loaded = false;
-    m_catalog = m_products = m_spaces = {};
+    m_saving = m_loaded = m_again = false;
+    m_catalog = m_products = m_spaces = m_members = {};
     m_entitlements = {};
     m_errorCode.clear();
     m_notice.clear();
@@ -27,11 +27,17 @@ bool AddOnManager::live(int generation) const
     return generation == m_generation && !m_orgId.isEmpty();
 }
 
+// A refresh asked for while a load or a change runs comes once that ends.
 void AddOnManager::refresh()
 {
-    if (m_orgId.isEmpty() || busy() || !m_canRead) return;
+    if (m_orgId.isEmpty() || !m_canRead) return;
+    if (busy()) {
+        m_again = true;
+        return;
+    }
+    m_again = false;
     const int generation = ++m_generation;
-    m_pending = m_canInstall ? 4 : 3;
+    m_pending = m_canInstall ? 5 : 3;
     m_loaded = false;
     m_errorCode.clear();
     emit changed();
@@ -39,33 +45,46 @@ void AddOnManager::refresh()
     const auto isLive = [self, generation] { return self && self->live(generation); };
     const auto list = [this, isLive](const QString &path, const QString &key, QJsonArray &data) {
         m_backend.list(path, key, isLive,
-                [this, isLive, &data](const Client::Reply &reply, const QJsonArray &rows) {
-            if (!isLive()) return;
+                [this, &data](const Client::Reply &reply, const QJsonArray &rows) {
             data = reply.ok ? rows : QJsonArray();
-            if (!reply.ok) m_errorCode = failCode(reply);
-            --m_pending;
-            m_loaded = m_pending == 0 && m_errorCode.isEmpty();
-            emit changed();
+            loaded(reply);
         });
     };
     list(QStringLiteral("/api/v1/add-ons"), QStringLiteral("products"), m_catalog);
     list(orgPath(m_orgId, QStringLiteral("add-ons")), QStringLiteral("products"), m_products);
-    if (m_canInstall) list(orgPath(m_orgId, QStringLiteral("spaces")), QStringLiteral("spaces"), m_spaces);
+    if (m_canInstall) {
+        list(orgPath(m_orgId, QStringLiteral("spaces")), QStringLiteral("spaces"), m_spaces);
+        list(orgPath(m_orgId, QStringLiteral("members")), QStringLiteral("members"), m_members);
+    }
     m_backend.request("GET", orgPath(m_orgId, QStringLiteral("entitlements")), {}, {},
             [this, isLive](const Client::Reply &reply) {
         if (!isLive()) return;
         m_entitlements = reply.ok ? reply.json.value(QStringLiteral("entitlements")).toObject() : QJsonObject();
-        if (!reply.ok) m_errorCode = failCode(reply);
-        --m_pending;
-        m_loaded = m_pending == 0 && m_errorCode.isEmpty();
-        emit changed();
+        loaded(reply);
     });
 }
 
+void AddOnManager::loaded(const Client::Reply &reply)
+{
+    if (!reply.ok) m_errorCode = failCode(reply);
+    --m_pending;
+    m_loaded = m_pending == 0 && m_errorCode.isEmpty();
+    emit changed();
+    if (m_pending == 0 && m_again) refresh();
+}
+
+// An uninstalled installation is kept by Core for a reinstall; here it is
+// no installation at all.
 QJsonObject AddOnManager::product(const QString &key) const
 {
-    for (const auto &value : m_products)
-        if (value.toObject().value(QStringLiteral("key")).toString() == key) return value.toObject();
+    for (const auto &value : m_products) {
+        auto row = value.toObject();
+        if (row.value(QStringLiteral("key")).toString() != key) continue;
+        if (row.value(QStringLiteral("installation")).toObject().value(QStringLiteral("status")).toString()
+            == QLatin1String("uninstalled"))
+            row.insert(QStringLiteral("installation"), QJsonValue::Null);
+        return row;
+    }
     return {};
 }
 
@@ -82,7 +101,7 @@ QJsonArray AddOnManager::products() const
         result.append(row);
     }
     for (const auto &value : m_products) {
-        auto row = value.toObject();
+        auto row = product(value.toObject().value(QStringLiteral("key")).toString());
         bool found = false;
         for (const auto &listed : result)
             found |= listed.toObject().value(QStringLiteral("key")) == row.value(QStringLiteral("key"));
@@ -95,6 +114,18 @@ QJsonArray AddOnManager::products() const
         }
     }
     return result;
+}
+
+QVariantList AddOnManager::members() const
+{
+    QVariantList list;
+    for (const auto &value : m_members) {
+        const auto row = value.toObject();
+        if (row.value(QStringLiteral("status")).toString() != QLatin1String("active")) continue;
+        list.append(QVariantMap{{QStringLiteral("value"), jsonId(row.value(QStringLiteral("id")))},
+                                {QStringLiteral("label"), memberLabel(row)}});
+    }
+    return list;
 }
 
 bool AddOnManager::catalogued(const QString &key) const
@@ -114,19 +145,13 @@ bool AddOnManager::entitled(const QString &key) const
     return m_entitlements.value(QStringLiteral("capabilities")).toObject().value(capability).toBool();
 }
 
-QVariantMap AddOnManager::state(const QString &key, const QString &spaceId) const
+QVariantMap AddOnManager::state(const QString &key) const
 {
-    const auto row = product(key);
-    const auto installation = row.value(QStringLiteral("installation")).toObject();
-    const auto ids = installation.value(QStringLiteral("space_ids")).toArray();
-    bool covered = ids.isEmpty();
-    for (const auto &id : ids) covered |= jsonId(id) == spaceId;
+    const QString status = product(key).value(QStringLiteral("installation")).toObject().value(QStringLiteral("status")).toString();
     const bool allowed = entitled(key);
     return {{QStringLiteral("known"), m_loaded}, {QStringLiteral("entitled"), allowed},
-            {QStringLiteral("status"), installation.value(QStringLiteral("status")).toString()},
-            {QStringLiteral("covered"), covered},
-            {QStringLiteral("available"), m_loaded && allowed && covered && catalogued(key)
-                && installation.value(QStringLiteral("status")).toString() == QLatin1String("active")}};
+            {QStringLiteral("status"), status},
+            {QStringLiteral("available"), m_loaded && allowed && catalogued(key) && status == QLatin1String("active")}};
 }
 
 void AddOnManager::mutate(const QByteArray &method, const QString &key, const QString &suffix,
@@ -146,6 +171,7 @@ void AddOnManager::mutate(const QByteArray &method, const QString &key, const QS
         if (!reply.ok) {
             m_errorCode = failCode(reply);
             emit changed();
+            if (m_again) refresh();
             return;
         }
         m_notice = notice;
@@ -153,18 +179,37 @@ void AddOnManager::mutate(const QByteArray &method, const QString &key, const QS
     });
 }
 
-void AddOnManager::install(const QString &key, const QVariantList &spaceIds)
+void AddOnManager::install(const QString &key, const QVariantMap &settings)
 {
     if (!entitled(key) || !catalogued(key)) return;
-    for (const auto &id : spaceIds) {
-        bool found = false;
-        for (const auto &space : m_spaces) found |= jsonId(space.toObject().value(QStringLiteral("id"))) == id.toString();
-        if (!found) { m_errorCode = QStringLiteral("invalid_space"); emit changed(); return; }
-    }
+    auto merged = product(key).value(QStringLiteral("installation")).toObject().value(QStringLiteral("settings")).toObject();
+    for (auto it = settings.begin(); it != settings.end(); ++it) merged.insert(it.key(), QJsonValue::fromVariant(it.value()));
+    mutate("PUT", key, {}, {{QStringLiteral("settings"), merged}}, idempotencyHeader(), QStringLiteral("installation_saved"));
+}
+
+// Core resumes on PUT, which replaces the settings: the saved ones go back unchanged.
+void AddOnManager::resume(const QString &key)
+{
     const auto installation = product(key).value(QStringLiteral("installation")).toObject();
-    mutate("PUT", key, {}, {{QStringLiteral("settings"), installation.value(QStringLiteral("settings")).toObject()},
-           {QStringLiteral("space_ids"), QJsonArray::fromVariantList(spaceIds)}},
-           idempotencyHeader(), QStringLiteral("installation_saved"));
+    if (installation.value(QStringLiteral("status")).toString() != QLatin1String("paused") || !entitled(key)) return;
+    mutate("PUT", key, {}, {{QStringLiteral("settings"), installation.value(QStringLiteral("settings")).toObject()}},
+           idempotencyHeader(), QStringLiteral("installation_resumed"));
+}
+
+void AddOnManager::saveSettings(const QString &key, const QVariantMap &settings)
+{
+    if (settings.isEmpty() || product(key).value(QStringLiteral("installation")).toObject().isEmpty()) return;
+    mutate("PATCH", key, {}, {{QStringLiteral("settings"), QJsonObject::fromVariantMap(settings)}},
+           idempotencyHeader(), QStringLiteral("settings_saved"));
+}
+
+void AddOnManager::assign(const QString &key, const QString &membershipId)
+{
+    const auto installation = product(key).value(QStringLiteral("installation")).toObject();
+    if (installation.isEmpty() || membershipId.isEmpty()
+            || jsonId(installation.value(QStringLiteral("responsible_membership_id"))) == membershipId) return;
+    mutate("PATCH", key, {}, {{QStringLiteral("responsible_membership_id"), membershipId}},
+           idempotencyHeader(), QStringLiteral("responsibility_saved"));
 }
 
 void AddOnManager::pause(const QString &key)
@@ -174,16 +219,15 @@ void AddOnManager::pause(const QString &key)
     mutate("POST", key, QStringLiteral("/pause"), {}, idempotencyHeader(), QStringLiteral("installation_paused"));
 }
 
-void AddOnManager::uninstallControlledDocs(const QString &reason)
+void AddOnManager::uninstall(const QString &key, const QString &reason)
 {
-    if (!validReason(reason)) {
+    const bool controlled = key == QLatin1String("controlled_docs");
+    if (controlled && !validReason(reason)) {
         m_errorCode = QStringLiteral("reason_required"); emit changed(); return;
     }
-    const auto installation = product(QStringLiteral("controlled_docs")).value(QStringLiteral("installation")).toObject();
+    const auto installation = product(key).value(QStringLiteral("installation")).toObject();
     if (installation.isEmpty()) return;
-    auto headers = idempotentMatchHeader(installation.value(QStringLiteral("revision")).toInt());
-    // The DELETE contract accepts a removal reason in its query parameters.
-    const QString suffix = QStringLiteral("?reason=") + QString::fromLatin1(QUrl::toPercentEncoding(reason.trimmed()));
-    mutate("DELETE", QStringLiteral("controlled_docs"), suffix, {}, headers, QStringLiteral("installation_removed"));
+    mutate("DELETE", key, {}, controlled ? QJsonObject{{QStringLiteral("reason"), reason.trimmed()}} : QJsonObject(),
+           idempotentMatchHeader(installation.value(QStringLiteral("revision")).toInt()), QStringLiteral("installation_removed"));
 }
 }

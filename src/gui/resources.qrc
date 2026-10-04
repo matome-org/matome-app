@@ -21,7 +21,6 @@
         <file>qml/chrome/CommandButton.qml</file>
         <file>qml/chrome/CommandRow.qml</file>
         <file>qml/chrome/Commands.js</file>
-        <file>qml/chrome/Confirm.qml</file>
         <file>qml/chrome/CommandSheet.qml</file>
         <file>qml/chrome/ContextMenu.qml</file>
         <file>qml/chrome/CursorList.qml</file>
@@ -51,10 +50,53 @@
         <file>qml/screens/Auth.qml</file>
         <file>qml/screens/Settings.qml</file>
         <file>qml/screens/OrgCommerce.qml</file>
-        <file>qml/screens/OrgAdminPeople.qml</file>
-        <file>qml/chrome/RolePicker.qml</file>
+        <file>qml/screens/AddOnSetting.qml</file>
+        <file>qml/screens/Drafts.js</file>
+        <file>qml/screens/PanelBody.qml</file>
+        <file>qml/screens/PrincipalRoles.qml</file>
+        <file>qml/screens/AccessAdmin.qml</file>
+        <file>qml/screens/Checklist.qml</file>
+        <file>qml/screens/AddPeoplePanel.qml</file>
+        <file>qml/screens/ConfirmPanel.qml</file>
+        <file>qml/screens/PanelHost.qml</file>
+        <file>qml/screens/Facts.qml</file>
+        <file>qml/screens/GroupMembersPanel.qml</file>
+        <file>qml/screens/NamePanel.qml</file>
+        <file>qml/screens/HeldRoles.qml</file>
+        <file>qml/screens/HeldPlaces.qml</file>
+        <file>qml/screens/GroupPage.qml</file>
+        <file>qml/screens/InvitationPage.qml</file>
+        <file>qml/screens/InvitePanel.qml</file>
+        <file>qml/screens/MemberGroupsPanel.qml</file>
+        <file>qml/screens/NewUserPanel.qml</file>
+        <file>qml/screens/RolePage.qml</file>
+        <file>qml/screens/RolePanel.qml</file>
+        <file>qml/screens/RolesPanel.qml</file>
+        <file>qml/screens/SetupCode.qml</file>
+        <file>qml/screens/SetupCodePanel.qml</file>
+        <file>qml/screens/UserPage.qml</file>
+        <file>qml/screens/TagEditor.qml</file>
+        <file>qml/screens/AddOnPage.qml</file>
+        <file>qml/screens/AddOnSettingsPanel.qml</file>
+        <file>qml/screens/PlanPanel.qml</file>
+        <file>qml/screens/ResponsiblePanel.qml</file>
+        <file>qml/screens/ActivationPanel.qml</file>
+        <file>qml/screens/AccessView.qml</file>
+        <file>qml/screens/GrantPanel.qml</file>
+        <file>qml/screens/HolderRolesPanel.qml</file>
+        <file>qml/screens/InheritancePanel.qml</file>
+        <file>qml/screens/CheckAccessPanel.qml</file>
+        <file>qml/screens/PlacePage.qml</file>
+        <file>qml/screens/PlacePicker.qml</file>
+        <file>qml/screens/PlaceGrantPanel.qml</file>
+        <file>qml/screens/SpacePage.qml</file>
+        <file>qml/screens/TagPage.qml</file>
+        <file>qml/screens/ApiTokens.qml</file>
+        <file>qml/chrome/SidePanel.qml</file>
         <file>qml/chrome/Card.qml</file>
         <file>qml/chrome/Label.qml</file>
+        <file>qml/chrome/Notice.qml</file>
+        <file>qml/chrome/Gate.qml</file>
         <file>qml/chrome/NavigationDrawer.qml</file>
         <file>qml/chrome/NavigationRow.qml</file>
         <file>qml/chrome/Page.qml</file>
@@ -63,12 +105,14 @@
         <file>qml/chrome/Scroll.js</file>
         <file>qml/chrome/BarRule.qml</file>
         <file>qml/chrome/CommandBar.qml</file>
-        <file>qml/chrome/Dialog.qml</file>
         <file>qml/chrome/ListRow.qml</file>
         <file>qml/chrome/SectionHead.qml</file>
+        <file>qml/chrome/Table.qml</file>
         <file>qml/chrome/Tile.qml</file>
         <file>qml/chrome/TileGrid.qml</file>
         <file>qml/chrome/ViewTab.qml</file>
+        <file>qml/chrome/DetailPage.qml</file>
+        <file>qml/chrome/DetailTab.qml</file>
         <file>qml/documents/DocumentScreen.qml</file>
         <file>qml/documents/DiffView.qml</file>
         <file>qml/documents/MarkdownEditor.qml</file>

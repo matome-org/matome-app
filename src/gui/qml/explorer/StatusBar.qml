@@ -18,7 +18,7 @@ Rectangle {
 
     readonly property string failure: status.errorText !== ""
                                       ? status.errorText
-                                      : Messages.uploadFailure(Session.uploadError, Session.uploadErrorName)
+                                      : Messages.uploadFailure(Session.uploadError, Session.uploadErrorName, Session.uploadLanded)
     readonly property string message: {
         if (status.failure !== "")
             return status.failure
@@ -95,8 +95,8 @@ Rectangle {
             objectName: "accountButton"
             implicitHeight: status.touch ? Theme.controlL : Theme.controlS
             icon: "user"
-            text: Session.email
-            Accessible.name: qsTr("Account, theme, and language: %1").arg(Session.email)
+            text: Session.identifier
+            Accessible.name: qsTr("Account, theme, and language: %1").arg(Session.identifier)
             onActivated: status.accountMenuRequested(account)
         }
     }

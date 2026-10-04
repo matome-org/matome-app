@@ -40,6 +40,18 @@ Window {
             auth.focusDefault()
     }
 
+    // Opens Settings at the page of space `id`, where its access is given.
+    function openSpaceSettings(id, name) {
+        Session.openSettings()
+        settingsScreen.openEntry("spaces", id, name, "access")
+    }
+
+    // Opens Settings where a refusal (Permissions' `explain`) is fixed.
+    function fix(answer) {
+        Session.openSettings()
+        settingsScreen.fix(answer)
+    }
+
     function perform(id) {
         commandSheet.close()
         keymap.close()
@@ -83,10 +95,6 @@ Window {
             target: Session
             function onShowKeymap() { keymap.open() }
             function onShowSheet() { commandSheet.open() }
-            function onPromptDelete(folderName) {
-                deleteConfirm.title = qsTr("Delete folder “%1”?").arg(folderName)
-                deleteConfirm.open()
-            }
         }
 
         Auth {
@@ -104,6 +112,7 @@ Window {
             visible: Session.signedIn && !Session.settingsActive && !Session.documentView.active
             enabled: explorer.visible
             onCommandChosen: function (id) { win.perform(id) }
+            onSpaceSettingsRequested: function (id, name) { win.openSpaceSettings(id, name) }
         }
 
         Settings {
@@ -123,6 +132,7 @@ Window {
             visible: Session.signedIn && !Session.settingsActive && Session.documentView.active
             enabled: visible
             onVisibleChanged: if (!visible && explorer.visible) explorer.focusDefault()
+            onFixRequested: function (answer) { win.fix(answer) }
         }
 
         CommandSheet {
@@ -139,17 +149,6 @@ Window {
             anchors.fill: parent
             commands: Session.commandList
             onVisibleChanged: if (!keymap.visible)
-                win.restoreFocus()
-        }
-
-        Confirm {
-            id: deleteConfirm
-            objectName: "deleteConfirm"
-            anchors.fill: parent
-            detail: qsTr("This cannot be undone.")
-            action: qsTr("Delete")
-            onAccepted: Session.deleteFocusedFolder()
-            onVisibleChanged: if (!deleteConfirm.visible)
                 win.restoreFocus()
         }
     }

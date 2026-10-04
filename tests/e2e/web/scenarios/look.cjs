@@ -155,7 +155,7 @@ module.exports = (scenario) => {
 
     await studio.useServer();
     await studio.submit({ password: "wrong" });
-    await studio.untilProp("statusMessage", "text", "E-mail ou senha incorretos.");
+    await studio.untilProp("statusMessage", "text", "E-mail, nome de usuário ou senha incorretos.");
     await studio.activate("language_en");
     await studio.untilProp("statusMessage", "text", MESSAGES.wrongPassword);
 

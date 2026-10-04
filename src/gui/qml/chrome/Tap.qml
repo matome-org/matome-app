@@ -14,7 +14,7 @@ TapHandler {
     // Whether the press under way landed on a popup its item is not part of.
     property bool popupPress: false
 
-    signal hit(point position, int button, bool touch)
+    signal hit(point position, int button, bool touch, int modifiers)
     signal doubleHit(int button)
     signal held(point position)
 
@@ -38,7 +38,7 @@ TapHandler {
         tap.popupPress = tap.onPopup(tap.point.position)
     onTapped: function (eventPoint, button) {
         if (!tap.popupPress)
-            tap.hit(eventPoint.position, button, eventPoint.device.type === PointerDevice.TouchScreen)
+            tap.hit(eventPoint.position, button, eventPoint.device.type === PointerDevice.TouchScreen, tap.point.modifiers)
     }
     onDoubleTapped: function (eventPoint, button) {
         if (!tap.popupPress)

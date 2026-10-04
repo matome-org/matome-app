@@ -4,6 +4,8 @@
 #include <QCryptographicHash>
 #include <QUrlQuery>
 
+#include <memory>
+
 namespace matome {
 CoreAddOnBackend::CoreAddOnBackend(Session &session) : AddOnBackend(&session), m_session(session) {}
 
@@ -12,8 +14,9 @@ void CoreAddOnBackend::request(const QByteArray &method, const QString &path,
 {
     if (method == "GET") m_session.authedGet(path, std::move(done));
     else if (method == "PUT") m_session.authedPut(path, body, headers, std::move(done));
+    else if (method == "PATCH") m_session.authedPatch(path, body, headers, std::move(done));
     else if (method == "POST") m_session.authedPost(path, body, headers, std::move(done));
-    else if (method == "DELETE") m_session.authedDelete(path, headers, std::move(done));
+    else if (method == "DELETE") m_session.authedDelete(path, headers, std::move(done), body);
 }
 
 void CoreAddOnBackend::putFile(const QUrl &url, const QByteArray &bytes, const Client::Headers &headers,
@@ -30,6 +33,28 @@ void CoreAddOnBackend::getFile(const QUrl &url, Client::Done done)
 void AddOnBackend::list(const QString &path, const QString &key, Live live, ListDone done)
 {
     page(path, key, {}, {}, std::move(live), std::move(done));
+}
+
+void AddOnBackend::requestAll(const QList<Step> &steps, Live live, StepDone each, BatchDone done)
+{
+    struct Run { qsizetype waiting = 0; QString failure; };
+    auto run = std::make_shared<Run>();
+    run->waiting = steps.size();
+    for (qsizetype at = 0; at < steps.size(); ++at)
+        request(steps.at(at).method, steps.at(at).path, steps.at(at).body, idempotencyHeader(),
+                [live, each, done, run, at](const Client::Reply &reply) {
+            if (!live()) return;
+            if (!reply.ok && run->failure.isEmpty()) run->failure = failCode(reply);
+            each(at, reply);
+            if (--run->waiting == 0) done(run->failure);
+        });
+}
+
+void AddOnBackend::requestAll(const QList<Step> &steps, Live live, Landed done)
+{
+    auto landed = std::make_shared<bool>(false);
+    requestAll(steps, live, [landed](qsizetype, const Client::Reply &reply) { *landed = *landed || reply.ok; },
+               [landed, done](const QString &failure) { done(failure, *landed); });
 }
 
 void AddOnBackend::page(const QString &path, const QString &key, const QString &cursor,

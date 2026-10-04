@@ -1,11 +1,14 @@
 # Organization billing and add-ons
 
 Open the account menu, choose Settings, and expand an organization in the
-sidebar. Plan and billing, Add-ons, and Usage are available to owners,
-admins, and billing members. Owners and billing members can change
-billing; owners and admins can configure installations. Core authorizes
-every request. Custom role grants are not yet reflected in the client
-navigation, which follows the organization's built-in membership role.
+sidebar. Plan and billing, Add-ons, and Usage open for whoever holds
+`billing.read`, `add_on.read`, and `usage.read` in the organization's action
+catalog, through any role: owners, admins, and billing members by default.
+Changing billing needs `billing.manage` (owners and billing members), and
+configuring installations `add_on.install` (owners and admins); without
+them the commands stay, unusable, saying what is missing (see
+[What Settings opens](organization-administration.md#what-settings-opens)).
+Core authorizes every request.
 
 Plan and billing shows the effective plan and the subscription status,
 period end, scheduled cancellation, and pending payment. Manage billing
@@ -25,11 +28,12 @@ shows these offers without prices. Subscribe creates a checkout session;
 Switch package submits the selected key and version to the subscription
 update endpoint. A package replaces the plan and all purchased items with
 its exact composition. Independent grants are preserved. Both actions
-require confirmation and an idempotency key. Returning from checkout does
+ask first in a side panel (**Select package**, refusals shown there) and
+send an idempotency key. Returning from checkout does
 not grant entitlements; refresh after the verified payment notification.
 The shipped Core catalog has no paid packages. The UI shows an empty
 catalog message until offers are published on the server.
-Package cards and confirmations show the package version and its exact
+Package cards and the side panel show the package version and its exact
 component versions. Checkout links are cleared when the server-provided
 `expires_at` deadline passes. Select the package again to request a new
 session. Portal links do not use a checkout deadline.
@@ -49,12 +53,13 @@ read the effective subscription and entitlements. Pending payment blocks
 further quantity edits. Stripe owns amounts, currencies, proration and tax;
 the client does not calculate or display a fabricated price.
 
-Install or resume selects the spaces where an entitled product runs. An
-empty selection applies to all spaces. Saving preserves the installation's
-existing settings, because the catalog does not expose its settings schema.
-Pause installation stops processing without canceling a purchased SKU.
+Installing selects the spaces where an entitled product runs; an empty
+selection applies to all spaces. Resume sends the saved spaces and settings
+back unchanged. Pause stops processing without canceling a purchased SKU.
 It uses Core's pause endpoint rather than destructive uninstall, which can
-require additional product-specific lifecycle decisions.
+require additional product-specific lifecycle decisions. The SKU, its
+version and the purchased and assigned quantities sit behind **Details** on
+the add-on's page.
 
 Installation state and operations live in the shared [add-on module](add-ons.md).
 Controlled documents also supports explicit destructive uninstall; see the

@@ -48,19 +48,28 @@ The preview server also requires these assets to revalidate their cache.
 
 ## Client behavior
 
-The client signs in, registers accounts, resends confirmation links, and
-requests password resets. Confirmation and password changes finish in the
-browser; the user then signs in to the client. A pending account remains on
-the confirmation screen until the user returns to sign-in. Invitation links
+The client signs in with an email, or `org-slug/username` for an account an
+organization manages (`identifier` on `POST /api/auth/login`), sets up such
+an account with the one-time code an administrator gave
+(`POST /api/auth/setup`), registers accounts, resends confirmation links,
+and requests password resets. Registering starts no session: the client
+shows that a confirmation link was emailed, and signing in before confirming
+returns there (`403 email_not_confirmed`). Resending the link sends the
+email (`POST /api/auth/resend-confirmation`) without a session.
+Confirmation and password changes finish in the browser; the user then
+signs in to the client. A pending account remains on the confirmation
+screen until the user returns to sign-in. Invitation links
 are accepted in the browser; the client reloads organizations when active.
 
 After sign-in, the client lists organizations, spaces, folders, and
 documents. Downloads write signed files to disk. Dragging, clicking, or
 Ctrl+X/Ctrl+V moves an item; F2 renames, Del trashes a document or deletes
-an empty folder after confirmation, `u` uploads, and `?` and `:` open the
+an empty folder once its side panel confirms, `u` uploads, and `?` and `:` open the
 keymap and command sheet. Keyboard navigation reaches every control.
 Tokens stay in memory; the email, API URL, and last organization stay in
-QSettings. Sign out posts logout.
+QSettings. Sign out posts logout. A Core call refused as rate limited with a
+`retry_after` of at most 2 seconds is sent again after that wait, twice at
+most; a longer wait is reported to the user.
 
 ## Android emulator
 

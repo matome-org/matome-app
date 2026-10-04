@@ -20,11 +20,11 @@ class OrgBilling : public QObject
     Q_PROPERTY(bool canManage READ canManage NOTIFY changed)
     Q_PROPERTY(QString name READ name NOTIFY changed)
     Q_PROPERTY(QString plan READ plan NOTIFY changed)
-    Q_PROPERTY(QVariantMap subscription READ subscription NOTIFY changed)
-    Q_PROPERTY(QVariantList packages READ packages NOTIFY changed)
+    Q_PROPERTY(QVariantMap subscription READ subscription NOTIFY listsChanged)
+    Q_PROPERTY(QVariantList packages READ packages NOTIFY listsChanged)
     Q_PROPERTY(QString packagesError READ packagesError NOTIFY changed)
-    Q_PROPERTY(QVariantList products READ products NOTIFY changed)
-    Q_PROPERTY(QVariantList usage READ usage NOTIFY changed)
+    Q_PROPERTY(QVariantList products READ products NOTIFY listsChanged)
+    Q_PROPERTY(QVariantList usage READ usage NOTIFY listsChanged)
     Q_PROPERTY(QString billingError READ billingError NOTIFY changed)
     Q_PROPERTY(QString usageError READ usageError NOTIFY changed)
     Q_PROPERTY(QString errorCode READ errorCode NOTIFY changed)
@@ -59,6 +59,8 @@ public:
 
 signals:
     void changed();
+    /// The subscription, packages, products, or usage differ from before.
+    void listsChanged();
 
 private:
     bool live(int generation) const;
@@ -80,5 +82,7 @@ private:
     QString m_packagesError;
     QDateTime m_checkoutExpiresAt;
     QTimer m_paymentExpiry;
+    /// The lists last notified, as compact JSON.
+    QByteArray m_listed;
 };
 }
