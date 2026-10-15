@@ -2717,12 +2717,12 @@ void TestCore::fakeCoreKeepsNamesAndRevisions()
     // Restore and purge name the trashed revision.
     QVERIFY(send("PATCH", draftPath, {{QStringLiteral("state"), QStringLiteral("active")}}, idempotencyHeader()));
     QCOMPARE(reply.status, 428);
-    QCOMPARE(reply.code, QStringLiteral("precondition_required"));
+    QCOMPARE(reply.code, QStringLiteral("revision_required"));
     QVERIFY(call("PATCH", draftPath, {{QStringLiteral("state"), QStringLiteral("active")}}, 1));
     QCOMPARE(reply.code, QStringLiteral("revision_conflict"));
     QVERIFY(send("DELETE", draftPath, {}, idempotencyHeader()));
     QCOMPARE(reply.status, 428);
-    QCOMPARE(reply.code, QStringLiteral("precondition_required"));
+    QCOMPARE(reply.code, QStringLiteral("revision_required"));
     QVERIFY(call("DELETE", draftPath, {}, 1));
     QCOMPARE(reply.code, QStringLiteral("revision_conflict"));
     QCOMPARE(trashSize(), 1);

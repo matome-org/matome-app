@@ -2767,6 +2767,16 @@
     </message>
     <message>
         <location line="+1"/>
+        <source>This document is in the trash.</source>
+        <translation>Este documento está na lixeira.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This space is closed.</source>
+        <translation>Este espaço está fechado.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Enter a valid email address.</source>
         <translation>Informe um endereço de email válido.</translation>
     </message>
@@ -4015,12 +4025,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+190"/>
+        <location line="+189"/>
         <source>Tags</source>
         <translation>Tags</translation>
     </message>
     <message>
-        <location line="-510"/>
+        <location line="-509"/>
         <location line="+62"/>
         <location line="+260"/>
         <source>Organization</source>
@@ -4138,7 +4148,7 @@
         <translation>Esta revisão é grande demais para ser combinada aqui. Baixe a proposta, aplique suas alterações à versão publicada e envie novamente.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+6"/>
         <source>Upload a Markdown version before managing this document with reviews.</source>
         <translation>Envie uma versão Markdown antes de gerenciar este documento com revisões.</translation>
     </message>
@@ -4178,7 +4188,7 @@
         <translation>Outra revisão foi aprovada depois desta. O autor precisa atualizá-la antes que possa ser aprovada; ela ainda pode ser rejeitada.</translation>
     </message>
     <message>
-        <location line="-317"/>
+        <location line="-316"/>
         <location line="+44"/>
         <source>Members</source>
         <translation>Membros</translation>
@@ -4196,7 +4206,7 @@
         <translation>Espaços</translation>
     </message>
     <message>
-        <location line="-628"/>
+        <location line="-630"/>
         <source>You no longer have access here. Ask someone who manages it.</source>
         <translation>Você não tem mais acesso aqui. Peça a quem gerencia.</translation>
     </message>
@@ -4206,7 +4216,7 @@
         <translation>Isto não está mais disponível para você. Volte e atualize.</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+72"/>
         <source>That is no longer available. Refresh and try again.</source>
         <translation>Isso não está mais disponível. Atualize e tente novamente.</translation>
     </message>
@@ -4434,7 +4444,7 @@
         <translation>O servidor recusou estas configurações. Verifique os valores permitidos e tente novamente.</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+25"/>
         <source>Require pinned versions</source>
         <translation>Exigir versões fixadas</translation>
     </message>
@@ -4529,17 +4539,17 @@
         <translation>Informe um motivo de até 500 caracteres.</translation>
     </message>
     <message>
-        <location line="-71"/>
+        <location line="-70"/>
         <source>This review is not based on the published version. Its author must update it before it can be approved.</source>
         <translation>Esta revisão não se baseia na versão publicada. O autor precisa atualizá-la antes que possa ser aprovada.</translation>
     </message>
     <message>
-        <location line="-789"/>
+        <location line="-791"/>
         <source>That email, username, or password is wrong.</source>
         <translation>E-mail, nome de usuário ou senha incorretos.</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+139"/>
         <source>A chosen space or role is no longer available. Refresh and choose again.</source>
         <translation>Um espaço ou papel escolhido não está mais disponível. Atualize e escolha de novo.</translation>
     </message>
@@ -4713,7 +4723,7 @@
         <translation>O documento, a revisão ou as configurações do espaço mudaram. Atualize e confira o estado atual antes de tentar de novo.</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
         <source>Use a decision comment of at most 2,000 characters without NUL characters.</source>
         <translation>Use um comentário de decisão de até 2.000 caracteres, sem caracteres NUL.</translation>
     </message>

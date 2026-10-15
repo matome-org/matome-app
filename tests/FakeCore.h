@@ -2801,7 +2801,7 @@ private:
     // the name, destination, inheritance, metadata, and tags of an active item.
     std::optional<QByteArray> patchItem(const QString &orgId, const QJsonObject &item, const QJsonObject &json)
     {
-        if (const std::optional<QByteArray> refused = refuseItemRevision(item, json, QStringLiteral("precondition_required")))
+        if (const std::optional<QByteArray> refused = refuseItemRevision(item, json))
             return *refused;
         const QString itemId = jsonId(item.value(QStringLiteral("id")));
         const QString spaceId = item.value(QStringLiteral("space_id")).toString();
@@ -2947,7 +2947,7 @@ private:
     {
         if (item.value(QStringLiteral("state")).toString() != QLatin1String("trashed"))
             return errorReply(409, QStringLiteral("invalid_transition"));
-        if (const std::optional<QByteArray> refused = refuseItemRevision(item, json, QStringLiteral("precondition_required")))
+        if (const std::optional<QByteArray> refused = refuseItemRevision(item, json))
             return *refused;
         QJsonArray &list = m_items[item.value(QStringLiteral("space_id")).toString()];
         for (const QString &id : groupIds(list, item.value(QStringLiteral("trash_group_id")).toString())) {
@@ -3066,17 +3066,15 @@ private:
         return {};
     }
 
-    // 428 `code` (revision_required, or precondition_required for items)
-    // unless If-Match or the body names a revision; 409 revision_conflict
-    // unless it names the stored revision of `item`.
-    std::optional<QByteArray> refuseItemRevision(const QJsonObject &item, const QJsonObject &json,
-                                                 const QString &code = QStringLiteral("revision_required")) const
+    // 428 revision_required unless If-Match or the body names a revision;
+    // 409 revision_conflict unless it names the stored revision of `item`.
+    std::optional<QByteArray> refuseItemRevision(const QJsonObject &item, const QJsonObject &json) const
     {
         const QString given = !m_lastMatch.isEmpty() ? m_lastMatch
                             : json.contains(QStringLiteral("revision")) ? QString::number(json.value(QStringLiteral("revision")).toInt())
                                                                         : QString();
         if (given.isEmpty())
-            return errorReply(428, code);
+            return errorReply(428, QStringLiteral("revision_required"));
         if (given != QString::number(item.value(QStringLiteral("revision")).toInt()))
             return errorReply(409, QStringLiteral("revision_conflict"));
         return std::nullopt;

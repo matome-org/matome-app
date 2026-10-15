@@ -2751,6 +2751,16 @@
     </message>
     <message>
         <location line="+1"/>
+        <source>This document is in the trash.</source>
+        <translation>このドキュメントはゴミ箱にあります。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This space is closed.</source>
+        <translation>このスペースは閉じられています。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Enter a valid email address.</source>
         <translation>有効なメールアドレスを入力してください。</translation>
     </message>
@@ -3997,12 +4007,12 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+190"/>
+        <location line="+189"/>
         <source>Tags</source>
         <translation>タグ</translation>
     </message>
     <message>
-        <location line="-510"/>
+        <location line="-509"/>
         <location line="+62"/>
         <location line="+260"/>
         <source>Organization</source>
@@ -4118,7 +4128,7 @@
         <translation>このレビューは大きすぎてここでは統合できません。提案をダウンロードし、公開バージョンに変更を適用して、もう一度送信してください。</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+6"/>
         <source>Upload a Markdown version before managing this document with reviews.</source>
         <translation>このドキュメントをレビューで管理する前に、Markdown のバージョンをアップロードしてください。</translation>
     </message>
@@ -4158,7 +4168,7 @@
         <translation>このレビューの後に別のレビューが承認されました。承認する前に作成者が更新する必要があります。却下は引き続き可能です。</translation>
     </message>
     <message>
-        <location line="-317"/>
+        <location line="-316"/>
         <location line="+44"/>
         <source>Members</source>
         <translation>メンバー</translation>
@@ -4176,7 +4186,7 @@
         <translation>スペース</translation>
     </message>
     <message>
-        <location line="-628"/>
+        <location line="-630"/>
         <source>You no longer have access here. Ask someone who manages it.</source>
         <translation>ここへのアクセス権がなくなりました。管理者に依頼してください。</translation>
     </message>
@@ -4186,7 +4196,7 @@
         <translation>これは利用できなくなりました。戻って更新してください。</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+72"/>
         <source>That is no longer available. Refresh and try again.</source>
         <translation>それは利用できなくなりました。更新して再試行してください。</translation>
     </message>
@@ -4413,7 +4423,7 @@
         <translation>サーバーがこの設定を拒否しました。使用できる値を確認して、もう一度お試しください。</translation>
     </message>
     <message>
-        <location line="+26"/>
+        <location line="+25"/>
         <source>Require pinned versions</source>
         <translation>固定バージョンを必須にする</translation>
     </message>
@@ -4508,17 +4518,17 @@
         <translation>500文字以内で理由を入力してください。</translation>
     </message>
     <message>
-        <location line="-71"/>
+        <location line="-70"/>
         <source>This review is not based on the published version. Its author must update it before it can be approved.</source>
         <translation>このレビューは公開版に基づいていません。承認するには作成者による更新が必要です。</translation>
     </message>
     <message>
-        <location line="-789"/>
+        <location line="-791"/>
         <source>That email, username, or password is wrong.</source>
         <translation>メールアドレス、ユーザー名、またはパスワードが正しくありません。</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+139"/>
         <source>A chosen space or role is no longer available. Refresh and choose again.</source>
         <translation>選んだスペースまたは役割は利用できなくなりました。更新して選び直してください。</translation>
     </message>
@@ -4691,7 +4701,7 @@
         <translation>ドキュメント、レビュー、またはスペースの設定が変更されました。更新して現在の状態を確認してから、もう一度お試しください。</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
         <source>Use a decision comment of at most 2,000 characters without NUL characters.</source>
         <translation>判断のコメントはNUL文字なしで2,000文字以内にしてください。</translation>
     </message>

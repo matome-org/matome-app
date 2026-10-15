@@ -124,6 +124,8 @@ function adminFailure(code) {
     case "": return ""
     case "forbidden":
     case "organization_access_denied": return qsTr("You do not have permission for this action.")
+    case "document_trashed": return qsTr("This document is in the trash.")
+    case "space_closed": return qsTr("This space is closed.")
     case "invalid_email": return qsTr("Enter a valid email address.")
     case "invalid_request": return qsTr("Check the required fields.")
     case "last_owner": return qsTr("The organization must keep at least one owner.")
@@ -807,8 +809,7 @@ function controlledFailure(code) {
     case "already_approved": return qsTr("You already approved this version. Another reviewer must approve it too.")
     case "invalid_settings": return qsTr("The server refused these settings. Check the allowed values and try again.")
     case "revision_conflict": return qsTr("The document, review, or space settings changed. Refresh and inspect the current state before trying again.")
-    case "revision_required":
-    case "precondition_required": return qsTr("Refresh to obtain the current revision before saving.")
+    case "revision_required": return qsTr("Refresh to obtain the current revision before saving.")
     case "published_version_required": return qsTr("Upload a Markdown version before managing this document with reviews.")
     case "diff_too_large": return qsTr("This diff exceeds the server limit. Download the proposal to inspect it.")
     case "candidate_unavailable": return qsTr("The proposal is unavailable. Refresh this review.")
