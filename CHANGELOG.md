@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.0](https://github.com/matome-org/matome-app/compare/v0.8.0...v0.9.0) (2026-10-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **core:** requires matome-core with the unified item contract (7e80231 and later); integer document links (matome:doc/<n>) are no longer read, and folder delete moves the folder to the trash.
+
+### Code Refactoring
+
+* **core:** align the app with the unified Core contract ([#62](https://github.com/matome-org/matome-app/issues/62)) ([4642fa9](https://github.com/matome-org/matome-app/commit/4642fa904398f5a32a48417abb04ea152761c3b5))
+
 ## [0.8.0](https://github.com/matome-org/matome-app/compare/v0.7.0...v0.8.0) (2026-10-04)
 
 
