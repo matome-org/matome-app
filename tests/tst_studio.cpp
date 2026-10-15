@@ -13,6 +13,7 @@
 #include <QFontInfo>
 #include <QGuiApplication>
 #include <QMimeData>
+#include <QPointer>
 #include <QPointingDevice>
 #include <QQmlApplicationEngine>
 #include <QQmlExpression>
@@ -461,8 +462,13 @@ void TestStudio::clicks(QQuickItem *item, const QString &text)
 void TestStudio::clickItem(QQuickItem *item, Qt::MouseButton button, Qt::KeyboardModifiers mods)
 {
     QVERIFY(item);
+    // A reload while settling may build the item again under its name.
+    const QPointer<QQuickItem> held(item);
+    const QString name = item->objectName();
     settle();
-    const QPoint scene = centreOf(item);
+    QQuickItem *target = held ? held.data() : name.isEmpty() ? nullptr : itemNamed(name);
+    QVERIFY(target);
+    const QPoint scene = centreOf(target);
     QTest::mouseMove(window(), scene);
     settle();
     QTest::mouseClick(window(), button, mods, scene);
