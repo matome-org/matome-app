@@ -1,7 +1,7 @@
 # Controlled documents
 
-The app consumes the controlled-document API merged in matome-core PR #1,
-with the add-on settings and approval policy of PR #4.
+The app needs matome-core with the unified item contract (7e80231 or later)
+and the controlled-document add-on's settings and approval policy.
 The product key is `controlled_docs`; its entitlement capability is
 `addon.controlled_docs`. Core keeps two states apart. **Installed** in the
 organization, the add-on is available in every space, including spaces
@@ -70,10 +70,10 @@ work. Installation alone does not put any document under control.
    reviewer** for someone who only reads reviews. Check **Content reader**
    or **Content contributor** beside it so they also see the space's
    content.
-5. Open a Markdown document and choose **Manage with reviews** on its
-   Preview tab, or from the document's menu in the explorer, which opens the
+5. Open a Markdown document and choose **Manage with reviews** in its
+   command bar, or from the document's menu in the explorer, which opens the
    document first. It asks Core at once
-   (`PUT …/documents/:id/controlled-docs` with the document's revision).
+   (`PUT …/items/:id/controlled-docs` with the document's revision).
    The command shows its state in the bar before that: usable when the
    space's action catalog grants `addon.controlled_docs.document_manage`;
    otherwise unusable, saying what is missing, as
@@ -88,7 +88,7 @@ work. Installation alone does not put any document under control.
    document's **Manage with reviews** says it is managed already, and
    **Stop managing** says when it is not. A refusal Core still gives is
    said the same way, Core's own text last. The explorer shows "Managed"
-   beside a managed document. **Stop managing**, on the Preview tab or the
+   beside a managed document. **Stop managing**, in the document's bar or the
    explorer menu, asks for a reason and cancels open reviews.
    Core requires a published Markdown version, valid UTF-8 without NUL
    characters, of at most 1 MiB.
@@ -101,7 +101,7 @@ work. Installation alone does not put any document under control.
    the files upload unmanaged unless the user turns it on. Turned on, each file is managed
    once it lands, as the document's own **Manage with reviews** does (the
    app reads the document's revision back, then sends
-   `PUT …/documents/:id/controlled-docs` with it). Cancel or Escape drops
+   `PUT …/items/:id/controlled-docs` with it). Cancel or Escape drops
    them. Other files upload at once. A file that landed but that Core
    refused to manage is named in the status line with Core's reason, the
    way a failed upload is.
@@ -125,21 +125,24 @@ grant commercial allowances.
 The screens use one term: a **review** holds a **proposal**. "Candidate"
 is Core's name for the proposal's version (`candidate_version_id`) and
 stays out of the screens; "publish" only names what an approval does. The
-document page has one **Edit** control, its Edit tab.
+document page has one **Edit** command, which opens the editor.
 
 A managed document opens in the same document screen as any other file (see
-[Documents](documents.md)). Editing it and choosing **Submit for review**
-asks for a summary and uploads the text as the review's proposal. The
+[Documents](documents.md)). Editing it and choosing **Propose change** (its
+**Save**) asks in a side panel for a comment and uploads the text as the
+review's proposal; the comment is the review's summary. The
 published version stays available until approval. Each submission opens its own review, so
 several can be open at once and each is decided, or cancelled, on its own.
 The upload names the published version the edit started from, so approving
 it can never silently undo a change published meanwhile.
 
-The Reviews tab lists the document's reviews, open ones first and then the
-closed ones, newest first, with their summary, status, author, date and the
-version they were based on. The caption beside the document counts its open
-reviews. The list only shows the reviews: select one and choose **Open
-review**, or press Enter, double-click, or double-tap it.
+The Reviews tab lists the document's reviews in one table, open ones first
+and then the closed ones, newest first: Review (its summary), Author, State,
+and, for an open one, Approvals ("0/1"). Select one and choose **Open**, or
+press Enter, double-click, or double-tap it. While a review is open, the
+document shows **Review open** beside its name and a line under the top
+("Review open · 0/1 approvals"); **Open review** in its bar opens the first
+open review from any tab.
 
 Core reports how an open review relates to the published version:
 
@@ -148,7 +151,8 @@ Core reports how an open review relates to the published version:
 - **Behind the published version** (`behind`): another review was approved
   since, but the changes combine without conflicts. Its author chooses
   **Update review**: the app asks Core to merge the proposal over the
-  published version and submits the result as the review's next revision,
+  published version (`GET …/reviews/:id/merge`) and submits the result as
+  the review's next revision,
   keeping its summary. It can then be approved.
 - **Conflicts with the published version** (`dirty`): the proposal and the
   published version change the same lines. Its author chooses **Resolve
@@ -158,32 +162,91 @@ Core reports how an open review relates to the published version:
   review** submits it as the review's next revision.
 
 Reviewers can reject a review in any state but cannot approve one that is
-behind or has conflicts; the page tells them the author must update it
-first. The author can also choose **Edit proposal** on a review without
-conflicts to rework its text in the editor, then **Update review**. An open
-review's bar always shows **Edit proposal**, **Resolve conflicts**, and
-**Update review**; one that does not apply is unusable and says why (only
-its author acts on it, it has no conflicts, it is based on the published
-version).
+behind or has conflicts; **Approve** says the author must update it first.
+The author can also choose **Edit proposal** on a review without conflicts
+to rework its text in the editor, then **Update review**.
 Discarding the edit returns to the published text without touching the
 review. Each update keeps the review, its summary and its history; the
 previous proposal is replaced.
 
-An opened review takes the screen one level below the document. The header
-reads `space › document › Reviews` over the review's summary, and **Back to
-reviews** or Escape returns to the list. The page shows who submitted it,
-when, the version it changes, and any decision with its comment. Document
-renders the proposal, images included; Changes shows the server's unified
-diff and the images and linked files it adds, removes, or changes. The
-command bar offers **Download proposal** and, while the review is open,
-**Cancel review**, **Reject** and **Approve**. The page explains when the
-reader cannot decide, for example on their own proposal.
+### Review page
 
-A review keeps the settings in effect when it was submitted. When it needs
-more than one approval, the page shows "Approvals: 1 of 2" and who approved
-the current proposal. An approval short of the count keeps the review open
-and hides **Approve** from that reviewer; the approval that reaches it
-publishes that exact proposal. Updating the review replaces its proposal,
+An opened review takes the screen one level below the document
+(`src/gui/qml/controlled_docs/ReviewPage.qml`). The top holds the way back, named after
+the document (Escape), the review's summary, and its state as chips: Open,
+Approved, Rejected, or Cancelled and, while open, **Current**, **Behind**,
+or **Conflicts** and its approvals ("0/1 approvals"). Under it: who
+submitted it, when, and the version it changes; once it is decided, who
+decided it, when, and the decision comment; and what an open review that is
+behind or conflicts asks of its author.
+
+One command bar holds **Approve**, **Reject**, **Update review**, **Resolve
+conflicts**, **Edit proposal**, **Cancel review**, and **Download
+proposal**. Every one shows whether it applies or not; one that does not is
+unusable and says why: the review is closed, only another reviewer approves
+or rejects it, it was approved already, its author must update it first,
+only its author updates it, it has no conflicts, it is based on the
+published version, or review permission is missing. **Approve**,
+**Reject**, and **Cancel review** ask in a side panel, with a comment Core
+recorded as the decision comment (optional for Approve and Reject, required
+to cancel).
+
+The tabs are:
+
+- **Changes** (the default): the review's base version against its
+  proposal; see [Changes](#changes).
+- **Document**: the proposal rendered, images included.
+- **References**: one table, Reference and Change (Added, Removed,
+  Changed), of the links and images the proposal adds, removes, or repins.
+  A reference is named by the text that links it, else its path, else its
+  document. **Open**, Enter, or a double click opens it.
+
+### Changes
+
+The Changes tab (`src/gui/qml/documents/ChangesTab.qml`) compares two Markdown texts.
+Its summary counts the lines added and removed and the sections (headings)
+the changes touch: "+12 −4 · 3 sections". Its bar holds **Previous change**
+(P), **Next change** (N), and the **Rendered** / **Source** switch, the view
+shown filled and outlined; Left and Right move between the two once it
+has the keyboard. Next and Previous glide to each change in turn, frame
+it, and put the keyboard on the view.
+
+- **Rendered** shows the later document block by block with the same
+  blocks as the preview. A block added sits on a green wash with a green
+  bar; a removed one on a red wash, struck through, with a red bar; a
+  changed one keeps a bar and marks the words removed (red, struck) and
+  added (green) inside it, a table row by row and code word by word.
+  Unchanged runs fold into "⋯ 8 unchanged blocks", which a click or Enter
+  opens; one block of context stays on each side of a change.
+- **Source** shows both texts side by side, base on the left, proposal on
+  the right, each line with its number and aligned with its counterpart.
+  Removed lines sit on a red wash, added ones on a green wash, and a
+  changed line marks the words that changed; a side without the line stays
+  blank. Unchanged runs fold, three lines of context kept, and a click or
+  Enter opens them. Both sides are one row each, so they scroll together.
+
+Both views build only the rows in sight and scroll like the preview.
+
+The comparison runs in the app (`MarkdownDiff` in
+`src/gui/documents/MarkdownDiff.h`). Each text is parsed into blocks
+(`parseMarkdown`); the blocks are aligned with Myers' shortest edit script
+on their kind and content, and within each run of removals and additions a
+removed block is paired with an added one of the same kind that keeps
+enough of its words (a quarter when the run is one-for-one, else half), a
+table that keeps its columns, or an image. Paired blocks are compared word
+by word; ideographs count as a word each. The source view aligns lines the
+same way.
+
+The texts come from routes Core exposes: the proposal from
+`GET …/reviews/:id/candidate/download`, the base version from
+`GET …/items/:id/download?version_id=<base_version_id>`, both through their
+signed links. `GET …/reviews/:id/diff` supplies the
+reference changes for References; its unified diff is not used.
+
+A review keeps the settings in effect when it was submitted. An approval
+short of the count keeps the review open, and **Approve** then says that
+reviewer approved it already; the approval that reaches it publishes that
+exact proposal. Updating the review replaces its proposal,
 so earlier approvals no longer count. The author can never reject, and can
 approve only when the review's settings let authors approve. Reject and
 cancel keep the published version.
@@ -193,12 +256,16 @@ settings from the activation (`GET …/spaces/:id/add-ons`). Anyone else pins
 links when an open review's settings or the organization's require it; a
 pinned link is always accepted.
 
-Decisions carry the expected review revision, the proposal's
-`candidate_version_id` and an idempotency key. After a decision the review
-stays open on screen with its new status. Conflicts refresh the records and keep the explanation; an
-approval refused because the published version moved on shows the review as
-behind, ready for its author to update.
-Leaving the Reviews tab closes the review.
+A decision is `POST …/reviews/:id/approve`, `…/reject`, or `…/cancel`. Its
+body carries the proposal's `candidate_version_id` and the `comment`; its
+`If-Match` header carries the review's revision, with an `Idempotency-Key`.
+The review itself holds the outcome: `status`,
+`closed_at`, `deciding_membership_id`, and `decision_comment`, and the
+approvals are its `approvals` list. After a decision the review stays open
+on screen with its new status. Conflicts refresh the records and keep the
+explanation; an approval refused because the published version moved on
+shows the review as behind, ready for its author to update. Once a decision publishes a
+version, the document shows it. Leaving the Reviews tab closes the review.
 
 ## Pause, resume and uninstall
 

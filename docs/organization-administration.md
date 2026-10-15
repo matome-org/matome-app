@@ -182,7 +182,7 @@ role**, or **New tag** beside **Open**, which open a
 - Roles: name, type, and where it applies; see [Roles](#roles).
 - Spaces: name and whether the space is archived. A space's page:
   - commands: **Rename** (`PATCH spaces/:id` with the name) and
-    **Archive**, which asks, then sends `POST spaces/:id/archive`; an
+    **Archive**, which asks, then sends `PATCH spaces/:id` with `status: archived`; an
     archived space stays listed and readable, and both commands then say
     **It is archived.** Core has no route that the app uses to reactivate
     one here;
@@ -371,7 +371,7 @@ and member count), **Members** (a table with **Open**), and **Roles** and
   exactly the checked ones in the group, adding and removing only what
   changed.
 - **Rename**: the name, saved with `PATCH groups/:id`.
-- **Archive**: asks, then sends `POST groups/:id/archive` and returns to
+- **Archive**: asks, then sends `PATCH groups/:id` with `status: archived` and returns to
   the list.
 
 **New group** asks only the name; once created, the group's page opens.
@@ -383,23 +383,23 @@ custom), and where it applies (organization or spaces). Settings' command
 bar holds **New role** and **Open**; Copy and Archive are on the role's
 page. A holder count is not shown: Core lists a
 role's holders only one role at a time (`GET roles/:id/holders`), so the
-table would read every role on each visit. Organization roles are the built-in Owner,
-Administrator, Member, Billing, and Guest, and the custom and add-on roles
-holding an organization permission; they are given to people and groups
-across the organization. Space roles are Core's built-in atomic and broad
-roles and the custom and add-on roles holding only space permissions; they
-are granted on spaces, folders, documents, and tags.
+table would read every role on each visit. Organization roles are the roles Core lists as
+assignable to the organization: the built-in Owner, Administrator, Member,
+Billing, and Guest, and the custom and add-on roles holding an organization
+permission. They are given to people and groups across the organization.
+Space roles are the others, Core's built-in atomic and broad roles and the
+custom and add-on roles holding only space permissions; they are granted on
+spaces, folders, documents, and tags.
 
-Each role is offered only where it works. Core reads an action the catalog
-marks `resource_grant` only from a grant on the place, so a role holding
-one and no organization action, every add-on role among them, is
-place-only: it is not offered in Manage roles or in a role's Add people
-across the organization, only in Grant access on a space, folder,
-document, or tag. Decided from the catalog, not by name; the built-in
-organization roles always work across it. A place-only role Core still
-lists as given across the organization shows **Organization · no effect
-there** as where it holds, on the person's or group's Roles tab and the
-role's Assigned to, so it can be removed.
+Each role is offered only where Core says it can be given, by its
+`assignable` list: `organization` for a role given across the organization,
+`resource` for one granted on a space, folder, document, or tag. A role
+with `resource` alone is place-only: it is not offered in Manage roles or in
+a role's Add people across the organization, only in Grant access on a
+space, folder, document, or tag. A place-only role a person or group still
+holds across the organization shows **Organization · no effect there** as
+where it holds, on the person's or group's Roles tab and the role's
+Assigned to, so it can be removed.
 
 A role's page has the commands **Edit permissions**, **Copy**, and
 **Archive**, and the tabs **Details** (type, where it applies, how many
@@ -417,15 +417,16 @@ holds it through a group is not shown. The commands:
 - **Copy**: opens **New role** with the role's permissions and **Copy of**
   its name.
 - **Archive**, usable for custom roles only: asks, then sends
-  `POST roles/:id/archive` and returns to the list.
+  `PATCH roles/:id` with `status: archived` and returns to the list.
 
 The **Assigned to** tab's commands:
 
-- **Add people**: a searchable checklist of people and groups. A role that
-  applies to the organization lists those not holding it, and **Add**
-  sends one `POST principal-roles` for each. A role that applies to spaces,
-  or a place-only one, add-on roles included, asks next for the space (**Next**), and **Add**
-  sends one `POST spaces/:id/grants` for each person or group not holding
+- **Add people**: a searchable checklist of people and groups. A role
+  assignable to the organization lists those not holding it, and **Add**
+  sends one `POST principal-roles` for each. A role not assignable to
+  the organization, add-on roles included, asks next for the space
+  (**Next**), and **Add** sends one
+  `POST spaces/:id/grants` for each person or group not holding
   it there yet. Folders and documents are given from their own access page.
 - **Remove**: names how many holders lose it, then sends
   `DELETE principal-roles/:id` for a role given across the organization and
@@ -462,7 +463,8 @@ signed-in person may read; a member's include their groups' grants and the
 tag grants of roles they hold. The source is **Direct**, **Through the
 group** or **Through the role**, or **Open to members**. Folders and
 documents are named in their space; a name Core does not give is read once
-with `GET spaces/:space_id/folders/:id` or `…/documents/:id`. **Open**
+with `GET items/:id`. When Core gives no name, for example for a place the
+reader cannot read, it shows as **A file or folder**. **Open**
 opens a role's page, or a place's access: a space or a tag on its Access
 tab under Spaces or Tags, a folder or document as a page whose way back,
 named after the person or group, returns to their page.
@@ -546,7 +548,7 @@ The commands, those on rows being the Access tab's:
   member's groups, their built-in organization roles and those of their
   groups (`GET principal-roles?group_id=` for each group, once per open
   place), and the roles' actions. On a document, each restricted tag on it
-  counts too: the document's `tag_assignments` (`GET …/documents/:id`) and
+  counts too: the document's `tag_assignments` (`GET …/items/:id`, in its `document`) and
   each tag's grants (`GET tags/:id/grants`), read with the access. A grant
   on the tag reaches the member when it names them, a group of theirs, or
   a role they hold (their own organization roles read with

@@ -63,9 +63,10 @@ are accepted in the browser; the client reloads organizations when active.
 
 After sign-in, the client lists organizations, spaces, folders, and
 documents. Downloads write signed files to disk. Dragging, clicking, or
-Ctrl+X/Ctrl+V moves an item; F2 renames, Del trashes a document or deletes
-an empty folder once its side panel confirms, `u` uploads, and `?` and `:` open the
-keymap and command sheet. Keyboard navigation reaches every control.
+Ctrl+X/Ctrl+V moves an item; F2 renames, Del moves a document to the trash,
+or a folder and its contents once its side panel confirms, Ctrl+Z restores
+the last trashed item, `u` uploads, and `?` and `:` open the keymap and
+command sheet. See [Documents](documents.md#trash) for the trash. Keyboard navigation reaches every control.
 Tokens stay in memory; the email, API URL, and last organization stay in
 QSettings. Sign out posts logout. A Core call refused as rate limited with a
 `retry_after` of at most 2 seconds is sent again after that wait, twice at
