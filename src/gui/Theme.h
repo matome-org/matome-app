@@ -56,6 +56,7 @@ class Theme : public QObject
     Q_PROPERTY(QFont body READ body NOTIFY typeChanged)
     Q_PROPERTY(QFont bodyLarge READ bodyLarge NOTIFY typeChanged)
     Q_PROPERTY(QFont mono READ mono NOTIFY typeChanged)
+    Q_PROPERTY(QFont editor READ editor NOTIFY typeChanged)
     Q_PROPERTY(QFont button READ button NOTIFY typeChanged)
     Q_PROPERTY(QFont link READ link NOTIFY typeChanged)
     Q_PROPERTY(QFont heading READ heading NOTIFY typeChanged)
@@ -90,6 +91,7 @@ class Theme : public QObject
     Q_PROPERTY(int rowDense READ rowDense CONSTANT)
     Q_PROPERTY(int rowTouch READ rowTouch CONSTANT)
     Q_PROPERTY(int measure READ measure CONSTANT)
+    Q_PROPERTY(int reading READ reading CONSTANT)
     Q_PROPERTY(int column READ column CONSTANT)
 
     // Shape follows the desktop in every colour mode: on Omarchy its
@@ -163,6 +165,8 @@ public:
     /// Fixed-width text for diffs and source: the platform fixed font,
     /// which WebAssembly provides too.
     QFont mono() const;
+    /// The editor's text: the fixed font at a size to write at length in.
+    QFont editor() const;
     QFont button() const;
     QFont link() const;
     QFont heading() const;
@@ -171,6 +175,8 @@ public:
     QFont display() const;
     /// `font` one step heavier (Medium): selection, the current crumb.
     Q_INVOKABLE QFont strong(const QFont &font) const;
+    /// `font` at `pixelSize`: a rendered document's headings.
+    Q_INVOKABLE QFont sized(const QFont &font, int pixelSize) const;
 
     bool reduceMotion() const { return m_reduceMotion; }
     int fast() const { return m_reduceMotion ? 0 : kFast; }
@@ -197,6 +203,8 @@ public:
     /// The widest a centred column of words runs: the sign-in form, a
     /// list's empty state.
     int measure() const { return 360; }
+    /// The widest a rendered document's column of text runs.
+    int reading() const { return 760; }
     /// A side column's width: the sidebar at rest, a menu, the filter.
     int column() const { return 248; }
 

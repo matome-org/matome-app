@@ -4,9 +4,12 @@ import QtQuick
 import QtQuick.Controls.Basic as C
 import matome
 
-// A slim Theme-tinted scroll bar that shows while scrolling or hovered.
+// A slim Theme-tinted scroll bar that shows while scrolling or hovered,
+// or all along while it is `shown`.
 C.ScrollBar {
     id: bar
+
+    property bool shown: false
 
     padding: 2
     minimumSize: 0.08
@@ -16,7 +19,7 @@ C.ScrollBar {
         implicitHeight: 6
         radius: width / 2
         color: Theme.fill(Theme.textPrimary, bar.pressed ? 0.45 : 0.28)
-        opacity: bar.size < 1 && (bar.active || bar.hovered) ? 1 : 0
+        opacity: bar.size < 1 && (bar.shown || bar.active || bar.hovered) ? 1 : 0
 
         Behavior on opacity { Ease { duration: Theme.fast } }
     }

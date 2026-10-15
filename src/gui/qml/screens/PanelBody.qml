@@ -6,14 +6,16 @@ import matome
 
 // The body of a SidePanel: what heads it, what its footer offers, and the
 // `step` it is at ("" the first, else a confirmation or a picker). The
-// footer's Save asks `saveRequested`; Cancel and Esc go `back` a step
-// first. `finished` follows a change that landed and closes the panel.
+// footer's Save asks `saveRequested`, its `otherText` `otherRequested`;
+// Cancel and Esc go `back` a step first. `finished` follows a change that
+// landed and closes the panel.
 ColumnLayout {
     id: body
 
     property string title
     property string subtitle
     property string saveText
+    property string otherText
     property bool saveUsable: true
     property string cancelText: body.step !== "" ? qsTr("Back") : qsTr("Cancel")
     property Item initialFocus: null
@@ -21,6 +23,7 @@ ColumnLayout {
     property bool narrow: false
 
     signal saveRequested()
+    signal otherRequested()
     signal finished()
 
     // Steps back to the first step; false when already there.
