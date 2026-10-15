@@ -81,8 +81,8 @@ class Core:
     def _find(self, kind: str, key: str, value: str) -> dict | None:
         return next((item for item in self.state()[kind] if item[key] == value), None)
 
-    def document(self, title: str) -> dict | None:
-        return self._find("documents", "title", title)
+    def document(self, name: str) -> dict | None:
+        return self._find("documents", "name", name)
 
     def folder(self, name: str) -> dict | None:
         return self._find("folders", "name", name)

@@ -216,7 +216,7 @@ module.exports = (scenario) => {
       assert.equal(await studio.prop("emptyText", "color"), await studio.theme("accentText"));
       assert.equal((await studio.prop("emptyText", "font")).italic, true);
 
-      await core.fail({ method: "GET", path: "/documents$", mode: "hold" });
+      await core.fail({ method: "GET", path: "/items$", mode: "hold" });
       await studio.press("F5");
       await studio.untilHeld(core);
       assert.equal(await studio.prop("emptyState", "mode"), "loading");
@@ -228,7 +228,7 @@ module.exports = (scenario) => {
       assert.equal(await studio.prop("emptyState", "first"), 1);
       assert.equal(await studio.shown("itemCount"), true);
 
-      await core.fail({ method: "GET", path: "/folders", status: 500 });
+      await core.fail({ method: "GET", path: "/items$", status: 500 });
       await studio.press("F5");
       await studio.untilProp("emptyState", "mode", "error");
       assert.equal(await studio.prop("emptyText", "text"), MESSAGES.server);

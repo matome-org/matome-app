@@ -11,7 +11,7 @@ const SPACE = {
     spaces: [{
       name: "Docs",
       folders: [{ name: "Contracts", folders: [{ name: "Signed" }] }],
-      documents: [{ title: "Notes", content: "notes" }],
+      documents: [{ name: "Notes", content: "notes" }],
     }],
   }],
 };
@@ -228,7 +228,7 @@ module.exports = (scenario) => {
         "the explorer names");
       const explorer = await labels(page);
       for (const name of ["Back", "Up one level", "Filter", "New folder", "Upload file", "Download", "Rename",
-        "Delete folder", "Refresh"])
+        "Move to trash", "Refresh"])
         assert.ok(explorer.has(name), `${name} in ${[...explorer]}`);
       const home = await studio.item("homeLink");
       assert.deepEqual([home.a11y.name, home.a11y.role], ["Matome", "Button"]);

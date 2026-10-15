@@ -423,6 +423,7 @@ public:
         m_nextSpace = 0;
         m_nextUpload = 0;
         m_nextVersion = 0;
+        m_nextItem = 0;
         m_uploads.clear();
         m_blobs.clear();
         m_reviews.clear();
@@ -2462,10 +2463,13 @@ private:
     }
 
     // An active folder or document `kind` named `name` under `parentId` (the
-    // space root when empty), at revision 1 and not in any trash group.
-    static QJsonObject newItem(const QString &spaceId, const QString &kind, const QString &parentId, const QString &name)
+    // space root when empty), at revision 1 and not in any trash group. Ids
+    // are UUIDs counted from the last reset, so seeding the same state again
+    // gives the same ids, as a restarted Core keeps them.
+    QJsonObject newItem(const QString &spaceId, const QString &kind, const QString &parentId, const QString &name)
     {
-        return {{QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces)},
+        const QUuid id = QUuid::createUuidV5(QUuid(), QString::number(++m_nextItem));
+        return {{QStringLiteral("id"), id.toString(QUuid::WithoutBraces)},
                 {QStringLiteral("kind"), kind},
                 {QStringLiteral("space_id"), spaceId},
                 {QStringLiteral("parent_id"), nullable(parentId)},
@@ -3422,6 +3426,7 @@ private:
     int m_nextSpace = 0;
     int m_nextUpload = 0;
     int m_nextVersion = 0;
+    int m_nextItem = 0;
     QHash<QString, QJsonObject> m_uploads;
     QHash<QString, QByteArray> m_blobs;
     // The reviews each managed document's uploads opened, newest first.

@@ -49,7 +49,7 @@ def core_dies(app: App) -> None:
 def server_errors(app: App) -> None:
     d = app.device
     app.start(ACME)
-    for path, where in (("^/api/v1/organizations$", None), ("/spaces$", "Acme"), ("/folders$", "Inbox")):
+    for path, where in (("^/api/v1/organizations$", None), ("/spaces$", "Acme"), ("/items$", "Inbox")):
         if where:
             app.open(where)
         rows = app.rows(d.dump())
@@ -60,7 +60,7 @@ def server_errors(app: App) -> None:
         app.menu(None, "refresh")
         recovered(app)
     app.open("Docs", "Deep")
-    app.core.fail("/documents$", method="GET")
+    app.core.fail("/items$", method="GET")
     app.menu(None, "refresh")
     d.label("emptyState", SERVER)
     app.menu(None, "refresh")
@@ -84,7 +84,7 @@ def visible(app: App) -> list[Node]:
 def long_list(app: App) -> None:
     d = app.device
     app.start({"organizations": [{"name": "Acme", "spaces": [{"name": "Inbox", "documents": [
-        {"title": "Row", "repeat": 200}]}]}]})
+        {"name": "Row", "repeat": 200}]}]}]})
     app.open("Acme", "Inbox")
     rows = visible(app)
     expect(rows[0].label == "Row 001", f"the list starts at {rows[0].label}")
@@ -130,7 +130,7 @@ def elided(app: App, row: Node) -> bool:
 def long_names(app: App) -> None:
     d = app.device
     app.start({"organizations": [{"name": "Acme", "spaces": [{"name": "Inbox", "documents": [
-        {"title": "a.txt"}] + [{"title": name, "content": "x"} for name in LONG_NAMES]}]}]})
+        {"name": "a.txt"}] + [{"name": name, "content": "x"} for name in LONG_NAMES]}]}]})
     app.open("Acme", "Inbox")
     app.wait_rows(["a.txt", *LONG_NAMES])
     for name in LONG_NAMES:

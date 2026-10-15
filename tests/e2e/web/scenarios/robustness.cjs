@@ -98,12 +98,12 @@ module.exports = (scenario) => {
       await studio.click(studio.row("Beta", "orgRow"));
       await studio.untilHere("Beta");
       await studio.open("Docs");
-      await core.fail({ method: "GET", path: "/folders", status: 500 });
+      await core.fail({ method: "GET", path: "/items$", status: 500 });
       await studio.press("F5");
       await studio.untilStatus(MESSAGES.server);
       assert.equal(await studio.prop("explorerStatus", "color"), await studio.theme("failed"));
       await studio.open("Contracts");
-      await core.fail({ method: "GET", path: "/folders", status: 500 });
+      await core.fail({ method: "GET", path: "/items$", status: 500 });
       await studio.press("F5");
       await studio.untilProp("emptyState", "mode", "error");
       assert.equal(await studio.prop("emptyText", "text"), MESSAGES.server);
@@ -114,7 +114,7 @@ module.exports = (scenario) => {
   scenario("7.3", "two hundred rows scroll, and every cursor key keeps its row in sight", BOTH,
     async ({ studio, core }) => {
       await core.seed({ organizations: [{ name: "Acme", spaces: [{ name: "Docs",
-        documents: [{ title: "Row", repeat: 200 }] }] }] });
+        documents: [{ name: "Row", repeat: 200 }] }] }] });
       await studio.enter("Acme", "Docs");
       await studio.untilProp("itemCount", "text", "200 items");
       assert.ok(await cursorInSight(studio));
@@ -162,7 +162,7 @@ module.exports = (scenario) => {
       const japanese = "とても長い日本語の書類名です".repeat(12);
       const folder = "とても長い日本語のフォルダ名です".repeat(12);
       await core.seed({ organizations: [{ name: "Acme", spaces: [{ name: "Docs", folders: [{ name: folder }],
-        documents: [{ title: latin, content: "x" }, { title: japanese, content: "y" }] }] }] });
+        documents: [{ name: latin, content: "x" }, { name: japanese, content: "y" }] }] }] });
       await studio.enter("Acme", "Docs");
       await studio.untilNames([folder, latin, japanese]);
       const list = await studio.locate("entryList");

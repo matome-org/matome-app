@@ -10,7 +10,7 @@ const MOBILE = ["mobile"];
 const SPACE = {
   organizations: [{
     name: "Acme",
-    spaces: [{ name: "Docs", folders: [{ name: "Contracts" }], documents: [{ title: "Notes", content: "notes" }] }],
+    spaces: [{ name: "Docs", folders: [{ name: "Contracts" }], documents: [{ name: "Notes", content: "notes" }] }],
   }],
 };
 

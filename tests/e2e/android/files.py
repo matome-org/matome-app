@@ -26,7 +26,7 @@ def upload_one(app: App) -> None:
     app.pick(name)
     app.wait_rows(["Docs", "root.txt", name])
     landed(app, name, BINARY)
-    expect(app.core.document(name)["folder_id"] is None, "the upload missed the open folder")
+    expect(app.core.document(name)["parent_id"] is None, "the upload missed the open folder")
 
 
 @scenario("3.2", title="upload several files at once: a long press selects in the picker")
@@ -41,7 +41,7 @@ def upload_many(app: App) -> None:
     folder = app.core.folder("Docs")["id"]
     for name, i in files.items():
         landed(app, name, f"file {i}\n".encode() * (i + 1))
-        expect(app.core.document(name)["folder_id"] == folder, f"{name} is not in Docs")
+        expect(app.core.document(name)["parent_id"] == folder, f"{name} is not in Docs")
 
 
 @scenario("3.4", title="uploads show which file of how many and its progress")
@@ -110,7 +110,7 @@ def rename(app: App) -> None:
         d.gone("rowEditor")
         app.row(new)
         state = app.core.state()
-        names = [doc["title"] for doc in state["documents"]] if kind == "document" \
+        names = [doc["name"] for doc in state["documents"]] if kind == "document" \
             else [f["name"] for f in state["folders"]]
         expect(new in names and old not in names, f"Core still names the {kind} {old}")
     app.wait_rows(["Papers", "notes.txt"])
@@ -122,7 +122,7 @@ def trash(app: App) -> None:
     app.inbox()
     app.menu("root.txt", "trash")
     app.wait_rows(["Docs"])
-    expect([doc["title"] for doc in app.core.state()["trash"]] == ["root.txt"], "root.txt is not in the trash")
+    expect([doc["name"] for doc in app.core.state()["trash"]] == ["root.txt"], "root.txt is not in the trash")
     app.status("Moved to trash. Restore brings it back.")
 
     app.menu(None, "restore")
@@ -150,7 +150,7 @@ def cut_and_paste(app: App) -> None:
     app.fab("paste")
     app.wait_rows(["Deep", "a.txt", "root.txt"])
     docs = app.core.folder("Docs")["id"]
-    expect(app.core.document("root.txt")["folder_id"] == docs, "root.txt did not move into Docs")
+    expect(app.core.document("root.txt")["parent_id"] == docs, "root.txt did not move into Docs")
 
     app.menu("Deep", "cut")
     app.device.tap("upButton")
